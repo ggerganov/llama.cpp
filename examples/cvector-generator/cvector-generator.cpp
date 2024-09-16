@@ -50,7 +50,7 @@ static void print_usage(int, char ** argv) {
 
 
 // cb_eval is reused for each pair of positive - negative prompt
-struct callback_data {
+struct callback_context {
     ggml_context * ctx_ggml = nullptr;   // holds v_pos, v_neg, v_diff_filtered
 
     int n_layers = 0;
@@ -155,7 +155,7 @@ struct callback_data {
         return diff_filtered;
     }
 
-    // we don't implement destructor, because we want to reuse callback_data. we just want to free the tensors
+    // we don't implement destructor, because we want to reuse callback_context. we just want to free the tensors
     void reset() {
         for (auto ptr : v_pos) free(ptr->data);
         for (auto ptr : v_neg) free(ptr->data);
@@ -320,7 +320,7 @@ static std::vector<std::string> ctrlvec_load_prompt_file(std::string path, bool 
 //////////////////////////////////////////////////
 
 static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
-    auto * cb_data = (callback_data *) user_data;
+    auto * cb_ctx = (callback_context *) user_data;
     static const char * l_out_name = "l_out";
     const bool is_l_out = strncmp(t->name, l_out_name, strlen(l_out_name)) == 0;
 
@@ -328,12 +328,12 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
         return is_l_out;
     }
 
-    if (!is_l_out || t->ne[1] != cb_data->n_tokens) {
+    if (!is_l_out || t->ne[1] != cb_ctx->n_tokens) {
         return true;
     }
 
     // save the tensor to current context
-    cb_data->save_tensor_for_layer(t);
+    cb_ctx->save_tensor_for_layer(t);
     return true;
 }
 
@@ -400,12 +400,12 @@ int main(int argc, char ** argv) {
     }
 
 
-    callback_data cb_data;
+    callback_context cb_ctx;
 
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
     params.cb_eval = cb_eval;
-    params.cb_eval_user_data = &cb_data;
+    params.cb_eval_ctx = &cb_ctx;
     params.warmup = false;
 
     print_build_info();
@@ -445,8 +445,8 @@ int main(int argc, char ** argv) {
     for(size_t i = 0; i < ctx_train.positive_entries.size(); ++i) {
         bool success = false;
         tokenized_prompt t = tokenized_prompts[i];
-        cb_data.n_layers = n_layers;
-        cb_data.n_tokens = t.max_seq_len;
+        cb_ctx.n_layers = n_layers;
+        cb_ctx.n_tokens = t.max_seq_len;
 
         printf("Evaluating prompt[%d/%d]: \"%s\" - \"%s\" (%d tokens)\n",
             (int) i+1, (int) ctx_train.positive_entries.size(),
@@ -454,22 +454,22 @@ int main(int argc, char ** argv) {
             tokens_to_str(ctx, t.tokens_neg.cbegin(), t.tokens_neg.cend()).c_str(),
             (int) t.max_seq_len);
 
-        cb_data.is_eval_pos = true;
+        cb_ctx.is_eval_pos = true;
         success = get_hidden_layers(ctx, t.tokens_pos);
         if (!success) break;
 
-        cb_data.is_eval_pos = false;
+        cb_ctx.is_eval_pos = false;
         success = get_hidden_layers(ctx, t.tokens_neg);
         if (!success) break;
 
         // calculate diff and remove all zero rows
-        auto v_diff_filtered = cb_data.calc_diff();
+        auto v_diff_filtered = cb_ctx.calc_diff();
 
         // save & concat the filtered v_diff to ctx_train
         ctx_train.concat_diff_tmp(v_diff_filtered);
 
         // reset for next iteration
-        cb_data.reset();
+        cb_ctx.reset();
     }
 
     // done with the model, we can now free it to make gain some memory

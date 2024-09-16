@@ -221,7 +221,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef bool (*llama_progress_callback)(float progress, void * user_data);
+    typedef bool (*llama_progress_callback)(float progress, void * cb_ctx);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
@@ -290,12 +290,10 @@ extern "C" {
         const char * rpc_servers;
 
         // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
-        // If the provided progress_callback returns true, model loading continues.
+        // If the provided cb_progress returns true, model loading continues.
         // If it returns false, model loading is immediately aborted.
-        llama_progress_callback progress_callback;
-
-        // context pointer passed to the progress callback
-        void * progress_callback_user_data;
+        llama_progress_callback cb_progress;
+        void *                  cb_progress_ctx;
 
         // override key-value pairs of the model meta data
         const struct llama_model_kv_override * kv_overrides;
@@ -331,25 +329,24 @@ extern "C" {
         uint32_t yarn_orig_ctx;    // YaRN original context size
         float    defrag_thold;     // defragment the KV cache if holes/size > thold, < 0 disabled (default)
 
-        ggml_backend_sched_eval_callback cb_eval;
-        void * cb_eval_user_data;
-
         enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
         enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
-        // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
-        // TODO: move at the end of the struct
-        bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
-        bool embeddings;  // if true, extract embeddings (together with logits)
-        bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-        bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
-        bool no_perf;     // whether to measure performance timings
+        ggml_backend_sched_eval_callback cb_eval;
+        void *                           cb_eval_ctx;
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
         // currently works only with CPU execution
-        ggml_abort_callback abort_callback;
-        void *              abort_callback_data;
+        ggml_abort_callback cb_abort;
+        void *              cb_abort_ctx;
+
+        // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
+        bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        bool embeddings;  // if true, extract embeddings (together with logits)
+        bool offload_kqv; // offload the KQV ops (including the KV cache) to GPU
+        bool flash_attn;  // enable flash attention [EXPERIMENTAL]
+        bool no_perf;     // disable performance timings
     };
 
     // model quantization parameters
@@ -373,7 +370,7 @@ extern "C" {
     } llama_logit_bias;
 
     typedef struct llama_sampler_chain_params {
-        bool no_perf; // whether to measure performance timings
+        bool no_perf; // disable performance timings
     } llama_sampler_chain_params;
 
     // used in chat template
@@ -833,7 +830,7 @@ extern "C" {
     LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
 
     // Set abort callback
-    LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
+    LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback cb, void * cb_ctx);
 
     // Wait until all computations are finished
     // This is automatically done when using one of the functions below to obtain the computation results
@@ -1168,7 +1165,7 @@ extern "C" {
 
     // Set callback for all future logging events.
     // If this is not called, or NULL is supplied, everything is output on stderr.
-    LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
+    LLAMA_API void llama_log_set(ggml_log_callback cb, void * cb_ctx);
 
     //
     // Performance utils

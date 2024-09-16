@@ -728,8 +728,8 @@ struct ggml_backend_cpu_context {
     void *              work_data;
     size_t              work_size;
 
-    ggml_abort_callback abort_callback;
-    void *              abort_callback_data;
+    ggml_abort_callback cb_abort;
+    void *              cb_abort_ctx;
 };
 
 GGML_CALL static const char * ggml_backend_cpu_name(ggml_backend_t backend) {
@@ -772,8 +772,8 @@ GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(gg
         }
     }
 
-    cpu_plan->cplan.abort_callback      = cpu_ctx->abort_callback;
-    cpu_plan->cplan.abort_callback_data = cpu_ctx->abort_callback_data;
+    cpu_plan->cplan.cb_abort     = cpu_ctx->cb_abort;
+    cpu_plan->cplan.cb_abort_ctx = cpu_ctx->cb_abort_ctx;
 
     return cpu_plan;
 }
@@ -811,8 +811,8 @@ GGML_CALL static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t 
     }
     cplan.work_data = cpu_ctx->work_data;
 
-    cplan.abort_callback      = cpu_ctx->abort_callback;
-    cplan.abort_callback_data = cpu_ctx->abort_callback_data;
+    cplan.cb_abort     = cpu_ctx->cb_abort;
+    cplan.cb_abort_ctx = cpu_ctx->cb_abort_ctx;
 
     return ggml_graph_compute(cgraph, &cplan);
 }
@@ -878,12 +878,12 @@ ggml_backend_t ggml_backend_cpu_init(void) {
         return NULL;
     }
 
-    ctx->n_threads           = GGML_DEFAULT_N_THREADS;
-    ctx->threadpool          = NULL;
-    ctx->work_data           = NULL;
-    ctx->work_size           = 0;
-    ctx->abort_callback      = NULL;
-    ctx->abort_callback_data = NULL;
+    ctx->n_threads     = GGML_DEFAULT_N_THREADS;
+    ctx->threadpool    = NULL;
+    ctx->work_data     = NULL;
+    ctx->work_size     = 0;
+    ctx->cb_abort      = NULL;
+    ctx->cb_abort_ctx  = NULL;
 
     ggml_backend_t cpu_backend = malloc(sizeof(struct ggml_backend));
     if (cpu_backend == NULL) {
@@ -922,12 +922,12 @@ void ggml_backend_cpu_set_threadpool(ggml_backend_t backend_cpu, ggml_threadpool
     ctx->threadpool = threadpool;
 }
 
-void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback abort_callback, void * abort_callback_data) {
+void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback cb, void * cb_ctx) {
     GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));
 
     struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
-    ctx->abort_callback = abort_callback;
-    ctx->abort_callback_data = abort_callback_data;
+    ctx->cb_abort     = cb;
+    ctx->cb_abort_ctx = cb_ctx;
 }
 
 GGML_CALL ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) {
@@ -1093,8 +1093,8 @@ struct ggml_backend_sched {
 
     struct ggml_context * ctx;
 
-    ggml_backend_sched_eval_callback callback_eval;
-    void * callback_eval_user_data;
+    ggml_backend_sched_eval_callback cb_eval;
+    void *                           cb_eval_ctx;
 
     char * context_buffer;
     size_t context_buffer_size;
@@ -1814,7 +1814,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
             }
         }
 
-        if (!sched->callback_eval) {
+        if (!sched->cb_eval) {
             enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &split->graph);
             if (ec != GGML_STATUS_SUCCESS) {
                 return ec;
@@ -1825,14 +1825,14 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                 struct ggml_tensor * t = split->graph.nodes[j0];
 
                 // check if the user needs data from this node
-                bool need = sched->callback_eval(t, true, sched->callback_eval_user_data);
+                bool need = sched->cb_eval(t, true, sched->cb_eval_ctx);
 
                 int j1 = j0;
 
                 // determine the range [j0, j1] of nodes that can be computed together
                 while (!need && j1 < split->graph.n_nodes - 1) {
                     t = split->graph.nodes[++j1];
-                    need = sched->callback_eval(t, true, sched->callback_eval_user_data);
+                    need = sched->cb_eval(t, true, sched->cb_eval_ctx);
                 }
 
                 struct ggml_cgraph gv = ggml_graph_view(&split->graph, j0, j1 + 1);
@@ -1845,7 +1845,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                 // TODO: pass backend to the callback, then the user can decide if they want to synchronize
                 ggml_backend_synchronize(split_backend);
 
-                if (need && !sched->callback_eval(t, false, sched->callback_eval_user_data)) {
+                if (need && !sched->cb_eval(t, false, sched->cb_eval_ctx)) {
                     break;
                 }
 
@@ -2012,9 +2012,9 @@ void ggml_backend_sched_synchronize(ggml_backend_sched_t sched) {
     }
 }
 
-void ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data) {
-    sched->callback_eval = callback;
-    sched->callback_eval_user_data = user_data;
+void ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback cb, void * cb_ctx) {
+    sched->cb_eval = cb;
+    sched->cb_eval_ctx = cb_ctx;
 }
 
 int ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched) {
@@ -2229,7 +2229,7 @@ void ggml_backend_graph_copy_free(struct ggml_backend_graph_copy copy) {
     ggml_free(copy.ctx_unallocated);
 }
 
-bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t backend2, struct ggml_cgraph * graph, ggml_backend_eval_callback callback, void * user_data) {
+bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t backend2, struct ggml_cgraph * graph, ggml_backend_eval_callback cb_eval, void * cb_eval_ctx) {
     struct ggml_backend_graph_copy copy = ggml_backend_graph_copy(backend2, graph);
     if (copy.buffer == NULL) {
         return false;
@@ -2258,7 +2258,7 @@ bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t 
         }
 
         // compare results, calculate rms etc
-        if (!callback(i, t1, t2, user_data)) {
+        if (!cb_eval(i, t1, t2, cb_eval_ctx)) {
             break;
         }
     }

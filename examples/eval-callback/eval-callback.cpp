@@ -12,7 +12,7 @@
  * This the arbitrary data which will be passed to each callback.
  * Later on we can for example add operation or tensor name filter from the CLI arg, or a file descriptor to dump the tensor.
  */
-struct callback_data {
+struct callback_context {
     std::vector<uint8_t> data;
 };
 
@@ -27,7 +27,7 @@ static std::string ggml_ne_string(const ggml_tensor * t) {
     return str;
 }
 
-static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne, const size_t * nb, int64_t n) {
+static void ggml_print_tensor(const uint8_t * data, ggml_type type, const int64_t * ne, const size_t * nb, int64_t n) {
     GGML_ASSERT(n > 0);
     float sum = 0;
     for (int64_t i3 = 0; i3 < ne[3]; i3++) {
@@ -52,15 +52,15 @@ static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne
                     size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 * nb[0];
                     float v;
                     if (type == GGML_TYPE_F16) {
-                        v = ggml_fp16_to_fp32(*(ggml_fp16_t *) &data[i]);
+                        v = ggml_fp16_to_fp32(*(const ggml_fp16_t *) &data[i]);
                     } else if (type == GGML_TYPE_F32) {
-                        v = *(float *) &data[i];
+                        v = *(const float *) &data[i];
                     } else if (type == GGML_TYPE_I32) {
-                        v = (float) *(int32_t *) &data[i];
+                        v = (float) *(const int32_t *) &data[i];
                     } else if (type == GGML_TYPE_I16) {
-                        v = (float) *(int16_t *) &data[i];
+                        v = (float) *(const int16_t *) &data[i];
                     } else if (type == GGML_TYPE_I8) {
-                        v = (float) *(int8_t *) &data[i];
+                        v = (float) *(const int8_t *) &data[i];
                     } else {
                         GGML_ABORT("fatal error");
                     }
@@ -88,7 +88,7 @@ static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne
  * @return true to receive data or continue the graph, false otherwise
  */
 static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
-    auto * cb_data = (callback_data *) user_data;
+    auto * cb_ctx = (callback_context *) user_data;
 
     const struct ggml_tensor * src0 = t->src[0];
     const struct ggml_tensor * src1 = t->src[1];
@@ -114,12 +114,12 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 
     if (!is_host) {
         auto n_bytes = ggml_nbytes(t);
-        cb_data->data.resize(n_bytes);
-        ggml_backend_tensor_get(t, cb_data->data.data(), 0, n_bytes);
+        cb_ctx->data.resize(n_bytes);
+        ggml_backend_tensor_get(t, cb_ctx->data.data(), 0, n_bytes);
     }
 
     if (!ggml_is_quantized(t->type)) {
-        uint8_t * data = is_host ? (uint8_t *) t->data : cb_data->data.data();
+        uint8_t * data = is_host ? (uint8_t *) t->data : cb_ctx->data.data();
         ggml_print_tensor(data, t->type, t->ne, t->nb, 3);
     }
 
@@ -140,7 +140,7 @@ static bool run(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-    callback_data cb_data;
+    callback_context cb_ctx;
 
     gpt_params params;
 
@@ -156,7 +156,7 @@ int main(int argc, char ** argv) {
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
     params.cb_eval = ggml_debug;
-    params.cb_eval_user_data = &cb_data;
+    params.cb_eval_ctx = &cb_ctx;
     params.warmup = false;
 
     // init

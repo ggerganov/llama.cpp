@@ -1018,7 +1018,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.attention_type    = params.attention_type;
     cparams.defrag_thold      = params.defrag_thold;
     cparams.cb_eval           = params.cb_eval;
-    cparams.cb_eval_user_data = params.cb_eval_user_data;
+    cparams.cb_eval_ctx       = params.cb_eval_ctx;
     cparams.offload_kqv       = !params.no_kv_offload;
     cparams.flash_attn        = params.flash_attn;
     cparams.no_perf           = params.no_perf;

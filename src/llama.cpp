@@ -2230,17 +2230,17 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
 struct llama_state {
     llama_state() {
 #ifdef GGML_USE_METAL
-        ggml_backend_metal_log_set_callback(log_callback, log_callback_user_data);
+        ggml_backend_metal_log_set_callback(cb_log, cb_log_ctx);
 #elif defined(GGML_USE_CUDA)
-        ggml_backend_cuda_log_set_callback(log_callback, log_callback_user_data);
+        ggml_backend_cuda_log_set_callback(cb_log, cb_log_ctx);
 #elif defined(GGML_USE_CANN)
-        ggml_backend_cann_log_set_callback(log_callback, log_callback_user_data);
+        ggml_backend_cann_log_set_callback(cb_log, cb_log_ctx);
 #endif
     }
 
     // We save the log callback globally
-    ggml_log_callback log_callback = llama_log_callback_default;
-    void * log_callback_user_data = nullptr;
+    ggml_log_callback cb_log     = llama_log_callback_default;
+    void *            cb_log_ctx = nullptr;
 };
 
 static llama_state g_state;
@@ -2539,7 +2539,7 @@ struct llama_cparams {
     enum llama_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
-    void * cb_eval_user_data;
+    void *                           cb_eval_ctx;
 };
 
 // TODO: separate into "llama_layer_enc" and "llama_layer_dec"
@@ -3311,8 +3311,8 @@ struct llama_context {
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
 
-    ggml_abort_callback abort_callback      = nullptr;
-    void *              abort_callback_data = nullptr;
+    ggml_abort_callback cb_abort     = nullptr;
+    void *              cb_abort_ctx = nullptr;
 
     // input tensors
     struct ggml_tensor * inp_tokens;      // I32 [n_batch]
@@ -4949,13 +4949,13 @@ struct llama_model_loader {
     size_t size_data = 0;
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
-    // Returns false if cancelled by progress_callback
+    // Returns false if cancelled by cb_progress
     bool load_all_data(
             struct ggml_context * ctx,
             llama_buf_map & bufs_mmap,
             llama_mlocks * lmlocks,
-            llama_progress_callback progress_callback,
-            void * progress_callback_user_data) {
+            llama_progress_callback cb_progress,
+            void * cb_progress_ctx) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
@@ -5006,8 +5006,8 @@ struct llama_model_loader {
                 continue;
             }
 
-            if (progress_callback) {
-                if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
+            if (cb_progress) {
+                if (!cb_progress((float) size_done / size_data, cb_progress_ctx)) {
                     return false;
                 }
             }
@@ -5129,10 +5129,10 @@ struct llama_model_loader {
                     }
                 }
             }
-            if (progress_callback) {
+            if (cb_progress) {
                 // Even though the model is done loading, we still honor
                 // cancellation since we need to free allocations.
-                return progress_callback(1.0f, progress_callback_user_data);
+                return cb_progress(1.0f, cb_progress_ctx);
             }
         }
 
@@ -6719,7 +6719,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     }
 }
 
-// Returns false if cancelled by progress_callback
+// Returns false if cancelled by cb_progress
 static bool llm_load_tensors(
         llama_model_loader & ml,
         llama_model & model,
@@ -6728,8 +6728,8 @@ static bool llm_load_tensors(
         int main_gpu,
         const float * tensor_split,
         bool use_mlock,
-        llama_progress_callback progress_callback,
-        void * progress_callback_user_data) {
+        llama_progress_callback cb_progress,
+        void * cb_progress_ctx) {
     auto & hparams = model.hparams;
 
     model.split_mode   = split_mode;
@@ -8735,7 +8735,7 @@ static bool llm_load_tensors(
     for (auto & it : ctx_bufs) {
         ggml_context * ctx = it.first;
         auto & bufs = it.second;
-        if (!ml.load_all_data(ctx, bufs, use_mlock ? &model.mlock_mmaps : NULL, progress_callback, progress_callback_user_data)) {
+        if (!ml.load_all_data(ctx, bufs, use_mlock ? &model.mlock_mmaps : NULL, cb_progress, cb_progress_ctx)) {
             return false;
         }
     }
@@ -8749,7 +8749,7 @@ static bool llm_load_tensors(
     return true;
 }
 
-// Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
+// Returns 0 on success, -1 on error, and -2 on cancellation via llama_cb_progress
 static int llama_model_load(const std::string & fname, llama_model & model, llama_model_params & params) {
     model.t_start_us = ggml_time_us();
 
@@ -8805,7 +8805,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 
         if (!llm_load_tensors(
             ml, model, params.n_gpu_layers, params.split_mode,  params.main_gpu, params.tensor_split, params.use_mlock,
-            params.progress_callback, params.progress_callback_user_data
+            params.cb_progress, params.cb_progress_ctx
         )) {
             return -2;
         }
@@ -16545,9 +16545,9 @@ static void llama_graph_compute(
 #endif
 
     if (lctx.backend_cpu != nullptr) {
-        ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
-        ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
-        ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
+        ggml_backend_cpu_set_n_threads     (lctx.backend_cpu, n_threads);
+        ggml_backend_cpu_set_threadpool    (lctx.backend_cpu, threadpool);
+        ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.cb_abort, lctx.cb_abort_ctx);
     }
 #ifdef GGML_USE_BLAS
     if (lctx.backend_blas != nullptr) {
@@ -16707,7 +16707,7 @@ static int llama_decode_internal(
         //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
         ggml_backend_sched_reset(lctx.sched);
-        ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
+        ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_ctx);
 
         ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
 
@@ -16931,7 +16931,7 @@ static int llama_encode_internal(
     GGML_ASSERT(n_threads > 0);
 
     ggml_backend_sched_reset(lctx.sched);
-    ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
+    ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_ctx);
 
     ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
 
@@ -18406,8 +18406,8 @@ struct llama_model_params llama_model_default_params() {
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.rpc_servers                 =*/ nullptr,
-        /*.progress_callback           =*/ nullptr,
-        /*.progress_callback_user_data =*/ nullptr,
+        /*.cb_progress                 =*/ nullptr,
+        /*.cb_progress_ctx             =*/ nullptr,
         /*.kv_overrides                =*/ nullptr,
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
@@ -18442,17 +18442,17 @@ struct llama_context_params llama_context_default_params() {
         /*.yarn_beta_slow              =*/ 1.0f,
         /*.yarn_orig_ctx               =*/ 0,
         /*.defrag_thold                =*/ -1.0f,
-        /*.cb_eval                     =*/ nullptr,
-        /*.cb_eval_user_data           =*/ nullptr,
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
+        /*.cb_eval                     =*/ nullptr,
+        /*.cb_eval_ctx                 =*/ nullptr,
+        /*.cb_abort                    =*/ nullptr,
+        /*.cb_abort_ctx                =*/ nullptr,
         /*.logits_all                  =*/ false,
         /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.flash_attn                  =*/ false,
         /*.no_perf                     =*/ true,
-        /*.abort_callback              =*/ nullptr,
-        /*.abort_callback_data         =*/ nullptr,
     };
 
     return result;
@@ -18566,9 +18566,9 @@ struct llama_model * llama_load_model_from_file(
     llama_model * model = new llama_model;
 
     unsigned cur_percentage = 0;
-    if (params.progress_callback == NULL) {
-        params.progress_callback_user_data = &cur_percentage;
-        params.progress_callback = [](float progress, void * ctx) {
+    if (params.cb_progress == NULL) {
+        params.cb_progress_ctx = &cur_percentage;
+        params.cb_progress = [](float progress, void * ctx) {
             unsigned * cur_percentage_p = (unsigned *) ctx;
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
@@ -18688,8 +18688,8 @@ struct llama_context * llama_new_context_with_model(
                                hparams.n_ctx_orig_yarn != 0 ? hparams.n_ctx_orig_yarn :
                                                               hparams.n_ctx_train;
 
-    cparams.cb_eval           = params.cb_eval;
-    cparams.cb_eval_user_data = params.cb_eval_user_data;
+    cparams.cb_eval     = params.cb_eval;
+    cparams.cb_eval_ctx = params.cb_eval_ctx;
 
     auto rope_scaling_type = params.rope_scaling_type;
     if (rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED) {
@@ -18727,8 +18727,8 @@ struct llama_context * llama_new_context_with_model(
     LLAMA_LOG_INFO("%s: freq_base  = %.1f\n",   __func__, cparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale = %g\n",     __func__, cparams.rope_freq_scale);
 
-    ctx->abort_callback      = params.abort_callback;
-    ctx->abort_callback_data = params.abort_callback_data;
+    ctx->cb_abort     = params.cb_abort;
+    ctx->cb_abort_ctx = params.cb_abort_ctx;
 
     ctx->logits_all = params.logits_all;
 
@@ -20472,9 +20472,9 @@ int32_t llama_n_threads_batch(struct llama_context * ctx) {
     return ctx->cparams.n_threads_batch;
 }
 
-void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
-    ctx->abort_callback      = abort_callback;
-    ctx->abort_callback_data = abort_callback_data;
+void llama_set_abort_callback(struct llama_context * ctx, bool (*cb)(void * data), void * cb_ctx) {
+    ctx->cb_abort     = cb;
+    ctx->cb_abort_ctx = cb_ctx;
 }
 
 void llama_set_embeddings(struct llama_context * ctx, bool embeddings) {
@@ -21262,15 +21262,15 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
     return ctx->model.tensors_by_name;
 }
 
-void llama_log_set(ggml_log_callback log_callback, void * user_data) {
-    g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
-    g_state.log_callback_user_data = user_data;
+void llama_log_set(ggml_log_callback cb, void * cb_ctx) {
+    g_state.cb_log     = cb ? cb : llama_log_callback_default;
+    g_state.cb_log_ctx = cb_ctx;
 #ifdef GGML_USE_METAL
-    ggml_backend_metal_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
+    ggml_backend_metal_log_set_callback(g_state.cb_log, g_state.cb_log_ctx);
 #elif defined(GGML_USE_CUDA)
-    ggml_backend_cuda_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
+    ggml_backend_cuda_log_set_callback(g_state.cb_log, g_state.cb_log_ctx);
 #elif defined(GGML_USE_CANN)
-    ggml_backend_cann_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
+    ggml_backend_cann_log_set_callback(g_state.cb_log, g_state.cb_log_ctx);
 #endif
 }
 
@@ -21280,12 +21280,12 @@ static void llama_log_internal_v(ggml_log_level level, const char * format, va_l
     char buffer[128];
     int len = vsnprintf(buffer, 128, format, args);
     if (len < 128) {
-        g_state.log_callback(level, buffer, g_state.log_callback_user_data);
+        g_state.cb_log(level, buffer, g_state.cb_log_ctx);
     } else {
         char * buffer2 = new char[len + 1];
         vsnprintf(buffer2, len + 1, format, args_copy);
         buffer2[len] = 0;
-        g_state.log_callback(level, buffer2, g_state.log_callback_user_data);
+        g_state.cb_log(level, buffer2, g_state.cb_log_ctx);
         delete[] buffer2;
     }
     va_end(args_copy);
@@ -21298,9 +21298,9 @@ void llama_log_internal(ggml_log_level level, const char * format, ...) {
     va_end(args);
 }
 
-void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
+void llama_log_callback_default(ggml_log_level level, const char * text, void * cb_ctx) {
     (void) level;
-    (void) user_data;
+    (void) cb_ctx;
     fputs(text, stderr);
     fflush(stderr);
 }

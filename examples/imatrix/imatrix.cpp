@@ -602,7 +602,7 @@ int main(int argc, char ** argv) {
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
     params.cb_eval = ik_collect_imatrix;
-    params.cb_eval_user_data = NULL;
+    params.cb_eval_ctx = NULL;
     params.warmup = false;
 
     // init
