@@ -101,20 +101,21 @@ class Keys:
         EMBEDDING_SCALE                   = "{arch}.embedding_scale"
 
     class Attention:
-        HEAD_COUNT        = "{arch}.attention.head_count"
-        HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
-        MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
-        CLAMP_KQV         = "{arch}.attention.clamp_kqv"
-        KEY_LENGTH        = "{arch}.attention.key_length"
-        VALUE_LENGTH      = "{arch}.attention.value_length"
-        LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
-        LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
-        CAUSAL            = "{arch}.attention.causal"
-        Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
-        KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
-        REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
-        SLIDING_WINDOW    = "{arch}.attention.sliding_window"
-        SCALE             = "{arch}.attention.scale"
+        HEAD_COUNT            = "{arch}.attention.head_count"
+        HEAD_COUNT_KV         = "{arch}.attention.head_count_kv"
+        MAX_ALIBI_BIAS        = "{arch}.attention.max_alibi_bias"
+        CLAMP_KQV             = "{arch}.attention.clamp_kqv"
+        KEY_LENGTH            = "{arch}.attention.key_length"
+        VALUE_LENGTH          = "{arch}.attention.value_length"
+        LAYERNORM_EPS         = "{arch}.attention.layer_norm_epsilon"
+        LAYERNORM_RMS_EPS     = "{arch}.attention.layer_norm_rms_epsilon"
+        CAUSAL                = "{arch}.attention.causal"
+        Q_LORA_RANK           = "{arch}.attention.q_lora_rank"
+        KV_LORA_RANK          = "{arch}.attention.kv_lora_rank"
+        REL_BUCKETS_COUNT     = "{arch}.attention.relative_buckets_count"
+        SLIDING_WINDOW        = "{arch}.attention.sliding_window"
+        SCALE                 = "{arch}.attention.scale"
+        BLOCK_SKIP_CONNECTION = "{arch}.attention.block_skip_connection.{n}"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -235,6 +236,7 @@ class MODEL_ARCH(IntEnum):
     NEMOTRON     = auto()
     EXAONE       = auto()
     GRANITE      = auto()
+    SOLAR        = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -342,6 +344,7 @@ class MODEL_TENSOR(IntEnum):
     ENC_FFN_DOWN         = auto()
     ENC_FFN_UP           = auto()
     ENC_OUTPUT_NORM      = auto()
+    BSKCN_TV             = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -392,6 +395,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.NEMOTRON:       "nemotron",
     MODEL_ARCH.EXAONE:         "exaone",
     MODEL_ARCH.GRANITE:        "granite",
+    MODEL_ARCH.SOLAR:          "solar",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -499,6 +503,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ENC_FFN_DOWN:              "enc.blk.{bid}.ffn_down",
     MODEL_TENSOR.ENC_FFN_UP:                "enc.blk.{bid}.ffn_up",
     MODEL_TENSOR.ENC_OUTPUT_NORM:           "enc.output_norm",
+    MODEL_TENSOR.BSKCN_TV:                  "bskcn_tv",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -521,6 +526,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_EXP,
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.BSKCN_TV,
     ],
     MODEL_ARCH.GROK: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -1241,6 +1247,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.SOLAR: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.BSKCN_TV,
     ],
     # TODO
 }

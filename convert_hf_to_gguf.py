@@ -4079,6 +4079,25 @@ class ExaoneModel(Model):
 
         super().prepare_tensors()
 
+@Model.register("SolarForCausalLM")
+class SolarModel(LlamaModel):
+    model_arch = gguf.MODEL_ARCH.SOLAR
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+
+        for i, bskcn in enumerate(self.hparams[k] for k in self.hparams.keys() if k.startswith("bskcn_") and k != 'bskcn_tv'):
+            # store the skip connections as a layer index where a non-zero value indicates a skip connection
+            # this approach simplifies lookup at inference time
+            self.gguf_writer.add_block_skip_connection(i, [1 if n in bskcn else 0 for n in range(self.block_count)])
+
+    def prepare_tensors(self):
+        if bskcn_tv := self.find_hparam(['bskcn_tv'], optional=True):
+          # use bskcn_tv[1] for inference since bskcn_tv[0] is for training
+          self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.BSKCN_TV), np.array([bskcn_tv[1], 1 - bskcn_tv[1]], dtype=np.float32))
+
+        super().prepare_tensors()
+
 
 @Model.register("GraniteForCausalLM")
 class GraniteModel(LlamaModel):
