@@ -1841,6 +1841,60 @@ class MiniCPMModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
+@Model.register("MiniCPM3ForCausalLM")
+class MiniCPM3Model(Model):
+    model_arch = gguf.MODEL_ARCH.MINICPM3
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+
+        rope_dims = hparams["qk_rope_head_dim"]
+
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(hparams["num_key_value_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
+        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+        if "q_lora_rank" in hparams and hparams["q_lora_rank"] is not None:
+            self.gguf_writer.add_q_lora_rank(hparams["q_lora_rank"])
+        self.gguf_writer.add_kv_lora_rank(hparams["kv_lora_rank"])
+        self.gguf_writer.add_key_length(hparams["qk_nope_head_dim"] + hparams["qk_rope_head_dim"])
+        self.gguf_writer.add_rope_dimension_count(hparams["qk_rope_head_dim"])
+
+        rope_scaling = self.find_hparam(['rope_scaling'], True)
+        if rope_scaling is None:
+            return
+
+        long_factors = rope_scaling.get('long_factor', None)
+        short_factors = rope_scaling.get('short_factor', None)
+
+        if long_factors is None or short_factors is None:
+            raise KeyError('Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
+
+        if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
+            raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
+
+        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_LONG]  + ".weight", np.array(long_factors, dtype=np.float32))
+        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT] + ".weight", np.array(short_factors, dtype=np.float32))
+
+    def set_vocab(self):
+        self._set_vocab_llama_hf()
+
+    def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
+        if n_kv_head is not None and n_head != n_kv_head:
+            n_head //= n_kv_head
+
+        return (
+            weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+            .swapaxes(1, 2)
+            .reshape(weights.shape)
+        )
+
+
 @Model.register("QWenLMHeadModel")
 class QwenModel(Model):
     model_arch = gguf.MODEL_ARCH.QWEN
