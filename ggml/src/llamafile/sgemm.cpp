@@ -50,6 +50,7 @@
 
 #include "sgemm.h"
 #include "ggml-impl.h"
+#include "ggml-cpu-impl.h"
 #include "ggml-quants.h"
 
 #ifdef _MSC_VER
