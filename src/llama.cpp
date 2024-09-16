@@ -6062,8 +6062,9 @@ static void llm_load_vocab(
             vocab.linefeed_id     = -1;
 
             // read vocab size from metadata
-            ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab);
-
+            if (!ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab, false)) {
+                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata, vocab.n_vocab will be set to 0\n", __func__);
+            }
             return;
         }
 
