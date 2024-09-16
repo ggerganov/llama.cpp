@@ -19963,12 +19963,14 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
 #ifndef GGML_USE_OPENMP
 
+// check if thread is active
 static inline bool ggml_graph_compute_thread_active(struct ggml_compute_state * state) {
     struct ggml_threadpool * threadpool = state->threadpool;
     int n_threads = atomic_load_explicit(&threadpool->n_threads_cur, memory_order_relaxed);
     return (state->ith < n_threads);
 }
 
+// check if thread is ready to proceed (exit from polling or sleeping)
 static inline bool ggml_graph_compute_thread_ready(struct ggml_compute_state * state) {
     struct ggml_threadpool * threadpool = state->threadpool;
 
@@ -19982,6 +19984,14 @@ static inline bool ggml_graph_compute_thread_ready(struct ggml_compute_state * s
     }
 
     return state->pending;
+}
+
+// sync thread state after polling
+static inline void ggml_graph_compute_thread_sync(struct ggml_compute_state * state) {
+    struct ggml_threadpool * threadpool = state->threadpool;
+    // this should just be atomic_thread_fence(seq_cst) but it confuses thread-sanitizer
+    // so instead we just use a dummy read-modify-write
+    atomic_fetch_add_explicit(&threadpool->n_graph, 0, memory_order_seq_cst);
 }
 
 static inline bool ggml_graph_compute_poll_for_work(struct ggml_compute_state * state) {
@@ -20008,6 +20018,7 @@ static inline bool ggml_graph_compute_check_for_work(struct ggml_compute_state *
     struct ggml_threadpool * threadpool = state->threadpool;
 
     if (ggml_graph_compute_poll_for_work(state)) {
+        ggml_graph_compute_thread_sync(state);
         return state->pending;
     }
 
@@ -20063,7 +20074,7 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
 // Start processing new graph
 static void ggml_graph_compute_kickoff(struct ggml_threadpool * threadpool, int n_threads)
 {
-    // always take the mutex here because the worker threads are doing hybrid poll/wait
+    // Always take the mutex here because the worker threads are doing hybrid poll/wait
 
     ggml_mutex_lock(&threadpool->mutex);
 
@@ -20072,7 +20083,9 @@ static void ggml_graph_compute_kickoff(struct ggml_threadpool * threadpool, int 
     // Update the number of active threads
     atomic_store_explicit(&threadpool->n_threads_cur, n_threads, memory_order_relaxed);
 
-    atomic_fetch_add_explicit(&threadpool->n_graph, 1, memory_order_relaxed);
+    // Indicate the graph is ready to be processed
+    // We need the full seq-cst fence here because of the polling threads (used in thread_sync)
+    atomic_fetch_add_explicit(&threadpool->n_graph, 1, memory_order_seq_cst);
 
     if (threadpool->pause) {
        // Update main thread prio and affinity to match the threadpool settings
