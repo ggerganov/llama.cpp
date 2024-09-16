@@ -305,8 +305,8 @@ enum llm_kv {
     LLM_KV_RESCALE_EVERY_N_LAYERS,
     LLM_KV_TIME_MIX_EXTRA_DIM,
     LLM_KV_TIME_DECAY_EXTRA_DIM,
-    LLM_KV_RESIDUAL_MULTIPLIER,
-    LLM_KV_EMBEDDING_MULTIPLIER,
+    LLM_KV_RESIDUAL_SCALE,
+    LLM_KV_EMBEDDING_SCALE,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -321,7 +321,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_KV_LORA_RANK,
     LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT,
     LLM_KV_ATTENTION_SLIDING_WINDOW,
-    LLM_KV_ATTENTION_MULTIPLIER,
+    LLM_KV_ATTENTION_SCALE,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -412,8 +412,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_RESCALE_EVERY_N_LAYERS,            "%s.rescale_every_n_layers"            },
     { LLM_KV_TIME_MIX_EXTRA_DIM,                "%s.time_mix_extra_dim"                },
     { LLM_KV_TIME_DECAY_EXTRA_DIM,              "%s.time_decay_extra_dim"              },
-    { LLM_KV_RESIDUAL_MULTIPLIER,               "%s.residual_multiplier"               },
-    { LLM_KV_EMBEDDING_MULTIPLIER,              "%s.embedding_multiplier"              },
+    { LLM_KV_RESIDUAL_SCALE,                    "%s.residual_scale"                    },
+    { LLM_KV_EMBEDDING_SCALE,                   "%s.embedding_scale"                   },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,             "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,          "%s.attention.head_count_kv"          },
@@ -428,7 +428,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_KV_LORA_RANK,           "%s.attention.kv_lora_rank"           },
     { LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT, "%s.attention.relative_buckets_count" },
     { LLM_KV_ATTENTION_SLIDING_WINDOW,         "%s.attention.sliding_window"         },
-    { LLM_KV_ATTENTION_MULTIPLIER,             "%s.attention.multiplier"             },
+    { LLM_KV_ATTENTION_SCALE,                  "%s.attention.scale"                  },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
@@ -2396,10 +2396,10 @@ struct llama_hparams {
     float f_max_alibi_bias = 0.0f;
     float f_logit_scale    = 0.0f;
 
-    // For Granite architecture
-    float f_residual_multiplier = 0.0f;
-    float f_embedding_multiplier = 0.0f;
-    float f_attention_multiplier = 0.0f;
+    // Additional scale factors (Granite)
+    float f_residual_scale  = 0.0f;
+    float f_embedding_scale = 0.0f;
+    float f_attention_scale = 0.0f;
 
     bool causal_attn   = true;
     bool use_alibi     = false;
@@ -2456,16 +2456,16 @@ struct llama_hparams {
 
         const float EPSILON = 1e-9f;
 
-        if (!is_float_close(this->f_norm_eps,             other.f_norm_eps,             EPSILON)) return true;
-        if (!is_float_close(this->f_norm_rms_eps,         other.f_norm_rms_eps,         EPSILON)) return true;
-        if (!is_float_close(this->rope_attn_factor,       other.rope_attn_factor,       EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_base_train,   other.rope_freq_base_train,   EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_scale_train,  other.rope_freq_scale_train,  EPSILON)) return true;
-        if (!is_float_close(this->expert_weights_scale,   other.expert_weights_scale,   EPSILON)) return true;
-        if (!is_float_close(this->rope_yarn_log_mul,      other.rope_yarn_log_mul,      EPSILON)) return true;
-        if (!is_float_close(this->f_residual_multiplier,  other.f_residual_multiplier,  EPSILON)) return true;
-        if (!is_float_close(this->f_embedding_multiplier, other.f_embedding_multiplier, EPSILON)) return true;
-        if (!is_float_close(this->f_attention_multiplier, other.f_attention_multiplier, EPSILON)) return true;
+        if (!is_float_close(this->f_norm_eps,            other.f_norm_eps,            EPSILON)) return true;
+        if (!is_float_close(this->f_norm_rms_eps,        other.f_norm_rms_eps,        EPSILON)) return true;
+        if (!is_float_close(this->rope_attn_factor,      other.rope_attn_factor,      EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_base_train,  other.rope_freq_base_train,  EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
+        if (!is_float_close(this->expert_weights_scale,  other.expert_weights_scale,  EPSILON)) return true;
+        if (!is_float_close(this->rope_yarn_log_mul,     other.rope_yarn_log_mul,     EPSILON)) return true;
+        if (!is_float_close(this->f_residual_scale,      other.f_residual_scale,      EPSILON)) return true;
+        if (!is_float_close(this->f_embedding_scale,     other.f_embedding_scale,     EPSILON)) return true;
+        if (!is_float_close(this->f_attention_scale,     other.f_attention_scale,     EPSILON)) return true;
 
         return false;
     }
@@ -5465,9 +5465,9 @@ static void llm_load_hparams(
                 // Extra multipliers for Granite architecture
                 if (model.arch == LLM_ARCH_GRANITE) {
                     ml.get_key(LLM_KV_LOGIT_SCALE, hparams.f_logit_scale);
-                    ml.get_key(LLM_KV_RESIDUAL_MULTIPLIER, hparams.f_residual_multiplier);
-                    ml.get_key(LLM_KV_EMBEDDING_MULTIPLIER, hparams.f_embedding_multiplier);
-                    ml.get_key(LLM_KV_ATTENTION_MULTIPLIER, hparams.f_attention_multiplier);
+                    ml.get_key(LLM_KV_RESIDUAL_SCALE, hparams.f_residual_scale);
+                    ml.get_key(LLM_KV_EMBEDDING_SCALE, hparams.f_embedding_scale);
+                    ml.get_key(LLM_KV_ATTENTION_SCALE, hparams.f_attention_scale);
                 }
             } break;
         case LLM_ARCH_MINICPM:
@@ -6759,9 +6759,9 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     }
 
     if (model.arch == LLM_ARCH_GRANITE) {
-        LLAMA_LOG_INFO("%s: f_embedding_multiplier = %f\n", __func__, hparams.f_embedding_multiplier);
-        LLAMA_LOG_INFO("%s: f_residual_multiplier  = %f\n", __func__, hparams.f_residual_multiplier);
-        LLAMA_LOG_INFO("%s: f_attention_multiplier = %f\n", __func__, hparams.f_attention_multiplier);
+        LLAMA_LOG_INFO("%s: f_embedding_scale = %f\n", __func__, hparams.f_embedding_scale);
+        LLAMA_LOG_INFO("%s: f_residual_scale  = %f\n", __func__, hparams.f_residual_scale);
+        LLAMA_LOG_INFO("%s: f_attention_scale = %f\n", __func__, hparams.f_attention_scale);
     }
 }
 
@@ -8916,8 +8916,8 @@ static struct ggml_tensor * llm_build_inp_embd(
     }
 
     // For Granite architecture
-    if (hparams.f_embedding_multiplier != 0.0f) {
-        inpL = ggml_scale(ctx, inpL, hparams.f_embedding_multiplier);
+    if (hparams.f_embedding_scale != 0.0f) {
+        inpL = ggml_scale(ctx, inpL, hparams.f_embedding_scale);
     }
 
     cb(inpL, "inp_embd", -1);
@@ -10198,7 +10198,7 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        const float kq_scale = hparams.f_attention_multiplier == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_multiplier;
+        const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
@@ -10263,8 +10263,8 @@ struct llm_build_context {
             }
 
             // For Granite architecture
-            if (hparams.f_residual_multiplier) {
-                cur = ggml_scale(ctx0, cur, hparams.f_residual_multiplier);
+            if (hparams.f_residual_scale) {
+                cur = ggml_scale(ctx0, cur, hparams.f_residual_scale);
             }
 
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
@@ -10304,8 +10304,8 @@ struct llm_build_context {
             }
 
             // For Granite architecture
-            if (hparams.f_residual_multiplier) {
-                cur = ggml_scale(ctx0, cur, hparams.f_residual_multiplier);
+            if (hparams.f_residual_scale) {
+                cur = ggml_scale(ctx0, cur, hparams.f_residual_scale);
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
