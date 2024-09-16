@@ -1312,7 +1312,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params, int value) {
             params.n_parallel = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_N_PARALLEL"));
     add_opt(llama_arg(
         {"-ns", "--sequences"}, "N",
         format("number of sequences to decode (default: %d)", params.n_sequences),
