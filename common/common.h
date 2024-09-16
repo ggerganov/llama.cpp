@@ -173,8 +173,8 @@ struct gpt_params {
     struct cpu_params draft_cpuparams;
     struct cpu_params draft_cpuparams_batch;
 
-    ggml_backend_sched_eval_callback cb_eval = nullptr;
-    void * cb_eval_user_data                 = nullptr;
+    ggml_backend_sched_eval_callback cb_eval     = nullptr;
+    void *                           cb_eval_ctx = nullptr;
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 

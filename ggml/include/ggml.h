@@ -620,7 +620,7 @@ extern "C" {
     // Abort callback
     // If not NULL, called before ggml computation
     // If it returns true, the computation is aborted
-    typedef bool (*ggml_abort_callback)(void * data);
+    typedef bool (*ggml_abort_callback)(void * cb_ctx);
 
     // Scheduling priorities
     enum ggml_sched_priority {
@@ -655,8 +655,8 @@ extern "C" {
         struct ggml_threadpool * threadpool;
 
         // abort ggml_graph_compute when true
-        ggml_abort_callback abort_callback;
-        void *              abort_callback_data;
+        ggml_abort_callback cb_abort;
+        void *              cb_abort_ctx;
     };
 
     // scratch buffer
@@ -2143,8 +2143,8 @@ extern "C" {
         GGML_LINESEARCH_INVALID_PARAMETERS,
     };
 
-    typedef void (*ggml_opt_callback)(void * data, int accum_step, float * sched, bool * cancel);
-    typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
+    typedef void (*ggml_opt_callback)(void * cb_ctx, int accum_step, float * sched, bool * cancel);
+    typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, void * cb_ctx);
 
     // optimization parameters
     //
@@ -2281,8 +2281,8 @@ extern "C" {
             struct ggml_tensor * f,
             struct ggml_cgraph * gf,
             struct ggml_cgraph * gb,
-            ggml_opt_callback callback,
-            void * callback_data);
+            ggml_opt_callback cb_opt,
+            void * cb_opt_ctx);
 
     //
     // tensor flags

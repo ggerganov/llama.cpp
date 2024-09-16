@@ -184,7 +184,7 @@ struct backtrace_state {
     void ** end;
 };
 
-static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void* arg) {
+static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context * context, void * arg) {
     struct backtrace_state * state = (struct backtrace_state *)arg;
     uintptr_t pc = _Unwind_GetIP(context);
     if (pc) {
@@ -19951,7 +19951,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         ggml_compute_forward(&params, node);
 
-        if (state->ith == 0 && cplan->abort_callback && cplan->abort_callback(cplan->abort_callback_data)) {
+        if (state->ith == 0 && cplan->cb_abort && cplan->cb_abort(cplan->cb_abort_ctx)) {
             state->threadpool->ec = GGML_STATUS_ABORTED;
         }
 
@@ -21011,8 +21011,8 @@ static enum ggml_opt_result ggml_opt_adam(
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
-        ggml_opt_callback callback,
-        void * callback_data) {
+        ggml_opt_callback cb_opt,
+        void * cb_opt_ctx) {
     GGML_ASSERT(ggml_is_scalar(f));
     GGML_ASSERT(f->type == GGML_TYPE_F32);
 
@@ -21066,8 +21066,8 @@ static enum ggml_opt_result ggml_opt_adam(
     float fx = 0;
     ggml_set_zero(opt->adam.g);
     for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
-        if (callback) {
-            callback(callback_data, accum_step, &sched, &cancel);
+        if (cb_opt) {
+            cb_opt(cb_opt_ctx, accum_step, &sched, &cancel);
             if (cancel) {
                 return GGML_OPT_RESULT_CANCEL;
             }
@@ -21157,8 +21157,8 @@ static enum ggml_opt_result ggml_opt_adam(
         fx = 0;
         ggml_set_zero(opt->adam.g);
         for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
-            if (callback) {
-                callback(callback_data, accum_step, &sched, &cancel);
+            if (cb_opt) {
+                cb_opt(cb_opt_ctx, accum_step, &sched, &cancel);
                 if (cancel) {
                     return GGML_OPT_RESULT_CANCEL;;
                 }
@@ -21254,8 +21254,8 @@ static enum ggml_opt_result linesearch_backtracking(
         const int np,
         struct ggml_tensor * ps[],
         bool * cancel,
-        ggml_opt_callback callback,
-        void * callback_data) {
+        ggml_opt_callback cb_opt,
+        void * cb_opt_ctx) {
     int count = 0;
 
     float width  = 0.0f;
@@ -21297,10 +21297,10 @@ static enum ggml_opt_result linesearch_backtracking(
             *fx = 0;
             memset(g, 0, sizeof(float)*nx);
             for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
-                if (callback) {
+                if (cb_opt) {
                     // LBFG-S does not support learning rate -> ignore learning schedule
                     float sched = 0;
-                    callback(callback_data, accum_step, &sched, cancel);
+                    cb_opt(cb_opt_ctx, accum_step, &sched, cancel);
                     if (*cancel) {
                         return GGML_OPT_RESULT_CANCEL;
                     }
@@ -21370,8 +21370,8 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
-        ggml_opt_callback callback,
-        void * callback_data) {
+        ggml_opt_callback cb_opt,
+        void * cb_opt_ctx) {
     if (params.lbfgs.linesearch == GGML_LINESEARCH_BACKTRACKING_WOLFE ||
         params.lbfgs.linesearch == GGML_LINESEARCH_BACKTRACKING_STRONG_WOLFE) {
         if (params.lbfgs.wolfe <= params.lbfgs.ftol || 1.f <= params.lbfgs.wolfe) {
@@ -21440,10 +21440,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         fx = 0;
         memset(g, 0, sizeof(float)*nx);
         for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
-            if (callback) {
+            if (cb_opt) {
                 // LBFG-S does not support learning rate -> ignore learning schedule
                 float sched = 0;
-                callback(callback_data, accum_step, &sched, &cancel);
+                cb_opt(cb_opt_ctx, accum_step, &sched, &cancel);
                 if (cancel) {
                     return GGML_OPT_RESULT_CANCEL;
                 }
@@ -21516,7 +21516,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         //       to determine if the optimization should be cancelled
         //       this is a simple change, but not doing this atm, since I don't have a nice
         //       way to test and don't want to break something with so many changes lined up
-        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, callback, callback_data);
+        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, cb_opt, cb_opt_ctx);
         if (cancel) {
             return GGML_OPT_RESULT_CANCEL;
         }
@@ -21834,8 +21834,8 @@ enum ggml_opt_result ggml_opt_resume_g(
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
-        ggml_opt_callback callback,
-        void * callback_data) {
+        ggml_opt_callback cb_opt,
+        void * cb_opt_ctx) {
 
     GGML_ASSERT(f->grad && "ggml_set_param must be called for at least one ancestor");
 
@@ -21845,11 +21845,11 @@ enum ggml_opt_result ggml_opt_resume_g(
     switch (opt->params.type) {
         case GGML_OPT_TYPE_ADAM:
             {
-                result = ggml_opt_adam(ctx, opt, opt->params, f, gf, gb, callback, callback_data);
+                result = ggml_opt_adam(ctx, opt, opt->params, f, gf, gb, cb_opt, cb_opt_ctx);
             } break;
         case GGML_OPT_TYPE_LBFGS:
             {
-                result = ggml_opt_lbfgs(ctx, opt, opt->params, f, gf, gb, callback, callback_data);
+                result = ggml_opt_lbfgs(ctx, opt, opt->params, f, gf, gb, cb_opt, cb_opt_ctx);
             } break;
     }
 
