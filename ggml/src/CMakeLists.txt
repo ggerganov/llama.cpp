@@ -329,7 +329,7 @@ if (GGML_CUDA)
         add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
-        if (GGML_CUDA_USE_GRAPHS)
+        if (GGML_CUDA_GRAPHS)
             add_compile_definitions(GGML_CUDA_USE_GRAPHS)
         endif()
 
