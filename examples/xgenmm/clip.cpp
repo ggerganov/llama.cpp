@@ -40,6 +40,139 @@
 #include <cinttypes>
 #include <limits>
 
+void print_my_tensor(ggml_tensor *tensor, const char *name = "", int verbosity = 0)
+{
+    if (tensor->ne[2] == 1)
+    {
+        printf("---> %s: (%ld, %ld)\n", name, tensor->ne[0], tensor->ne[1]);
+    }
+    else if (ggml_is_3d(tensor))
+    {
+        printf("---> %s: (%ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2]);
+    }
+    else
+    {
+        printf("---> %s: (%ld, %ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+    }
+    if (verbosity == 1)
+    {
+        printf("*********************************************************************\n");
+        if (tensor->ne[2] == 1)
+        {
+            const float *mat = (float *)tensor->data;
+            int          dim0 = tensor->ne[1];
+            int          dim1 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        printf("%+.4f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("... ");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                if (dim0 > 3)
+                {
+                    printf("...................... omit ......................\n");
+                    for (int i = dim0 - 3; i < dim0; i++)
+                    {
+                        for (int j = 0; j < std::min(dim1, 3); j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("... ");
+                        for (int j = dim1 - 3; j < dim1; j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("\n");
+                    }
+                }
+            }
+        }
+        else if (ggml_is_3d(tensor))
+        {
+            const float *data = (float *)tensor->data;
+            int          dim0 = tensor->ne[2];
+            int          dim1 = tensor->ne[1];
+            int          dim2 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6 && dim2 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        for (int k = 0; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("........................\n");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("---------------------------------------------------\n");
+                }
+                printf("\n");
+            }
+        }
+    }
+    printf("*********************************************************************\n");
+    printf("\n");
+}
+
 //#define CLIP_DEBUG_FUNCTIONS
 
 // RGB uint8 image
@@ -602,7 +735,7 @@ struct clip_ctx {
     struct clip_image_size * load_image_size;
 };
 
-static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct clip_image_size * load_image_size, bool is_inf = false, ggml_tensor *attn_bias_input = nullptr) {
+static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct clip_image_size * load_image_size, bool is_inf = false) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
         return nullptr;
@@ -1047,7 +1180,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 }
 
 
-static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct clip_image_size * load_image_size, bool is_inf = false, ggml_tensor *attn_bias_input = nullptr) {
+static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image_f32_batch * imgs) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
         return nullptr;
@@ -1119,9 +1252,7 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
     // loop over layers
-    if (ctx->has_minicpmv_projector) {
-        n_layer += 1;
-    }
+    n_layer += 1;
     for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
@@ -1218,7 +1349,7 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
 static ggml_cgraph *clip_build_graph_xgenmm_projector(clip_ctx *ctx, int batch_size, ggml_tensor *img_embeddings, ggml_tensor *attn_bias_input = nullptr)
 {
     const auto & model = ctx->vision_model;
-    const auto & hparams = model.hparams;
+    // const auto & hparams = model.hparams;
     // const float eps                 = hparams.eps;  // double check this value
     const float eps  = 1e-5;
 
@@ -2493,7 +2624,7 @@ ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx) {
 void clip_free(clip_ctx * ctx) {
     ggml_free(ctx->ctx_data);
     gguf_free(ctx->ctx_gguf);
-
+    
     ggml_backend_buffer_free(ctx->params_buffer);
     ggml_backend_free(ctx->backend);
     ggml_gallocr_free(ctx->compute_alloc);
@@ -2676,12 +2807,10 @@ bool clip_image_encode_tokenizer(struct clip_ctx * ctx, int batch_size, ggml_ten
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
     ggml_backend_graph_compute(ctx->backend, gf);
     struct ggml_tensor * llm_inputs = gf->nodes[gf->n_nodes - 1];
+    print_my_tensor(llm_inputs, "llm_inputs", 1);
+    // exit(0);
     ggml_backend_tensor_get(llm_inputs, image_embd, 0, ggml_nbytes(llm_inputs));
     clip_free(ctx);
-    // ggml_free(tensor.ctx);
-    // if (ctx0){
-    //     ggml_free(ctx0);
-    // }
     return true;
 }
 
@@ -3029,7 +3158,7 @@ bool clip_image_batch_encode_vit(clip_ctx * ctx, const int n_threads, const clip
     GGML_ASSERT(batch_size == 1); // TODO: support multiple images
 
     // build the inference graph
-    ggml_cgraph * gf = clip_image_build_graph_vit(ctx, imgs, ctx->load_image_size, true);
+    ggml_cgraph * gf = clip_image_build_graph_vit(ctx, imgs);
 
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
     // set inputs
@@ -3039,8 +3168,8 @@ bool clip_image_batch_encode_vit(clip_ctx * ctx, const int n_threads, const clip
     int image_size_width  = image_size;
     int image_size_height = image_size;
     const int patch_size    = hparams.patch_size;
-    const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
-    const int num_positions = num_patches + (ctx->has_class_embedding ? 1 : 0);
+    // const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
+    // const int num_positions = num_patches + (ctx->has_class_embedding ? 1 : 0);
     if(ctx->load_image_size==nullptr){
         ctx->load_image_size= clip_image_size_init();
     }

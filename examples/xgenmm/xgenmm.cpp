@@ -14,6 +14,162 @@
 #include "llama.h"
 #include "xgenmm.h"
 
+struct tensor_from_gguf
+{
+    struct ggml_tensor  *data;
+    struct ggml_context *ctx;
+};
+
+bool load_tensor_from_file(const char *filename, tensor_from_gguf &tensor)
+{
+    struct gguf_init_params params = {
+        /*.no_alloc   =*/false,
+        /*.ctx        =*/&tensor.ctx,
+    };
+    gguf_context *ctx = gguf_init_from_file(filename, params);
+    if (!ctx)
+    {
+        fprintf(stderr, "%s: gguf_init_from_file() failed\n", __func__);
+        return false;
+    }
+    tensor.data = ggml_get_tensor(tensor.ctx, "data");
+
+    return true;
+}
+
+
+void print_tensor(ggml_tensor *tensor, const char *name = "", int verbosity = 0)
+{
+    if (tensor->ne[2] == 1)
+    {
+        printf("---> %s: (%ld, %ld)\n", name, tensor->ne[0], tensor->ne[1]);
+    }
+    else if (ggml_is_3d(tensor))
+    {
+        printf("---> %s: (%ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2]);
+    }
+    else
+    {
+        printf("---> %s: (%ld, %ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+    }
+    if (verbosity == 1)
+    {
+        printf("*********************************************************************\n");
+        if (tensor->ne[2] == 1)
+        {
+            const float *mat = (float *)tensor->data;
+            int          dim0 = tensor->ne[1];
+            int          dim1 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        printf("%+.4f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("... ");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                if (dim0 > 3)
+                {
+                    printf("...................... omit ......................\n");
+                    for (int i = dim0 - 3; i < dim0; i++)
+                    {
+                        for (int j = 0; j < std::min(dim1, 3); j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("... ");
+                        for (int j = dim1 - 3; j < dim1; j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("\n");
+                    }
+                }
+            }
+        }
+        else if (ggml_is_3d(tensor))
+        {
+            const float *data = (float *)tensor->data;
+            int          dim0 = tensor->ne[2];
+            int          dim1 = tensor->ne[1];
+            int          dim2 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6 && dim2 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        for (int k = 0; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("........................\n");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("---------------------------------------------------\n");
+                }
+                printf("\n");
+            }
+        }
+    }
+    printf("*********************************************************************\n");
+    printf("\n");
+}
 // RGB uint8 image
 struct clip_image_u8
 {
@@ -418,6 +574,33 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
     ggml_graph_compute_with_ctx(mask.ctx, gf, 1);
     attention_mask = gf->nodes[gf->n_nodes - 1];
     // memcpy(image_embd_v_m_mask_out, (float *)attention_mask->data, ggml_nbytes(attention_mask));
+    
+    {
+        printf((" =========================     DEBUG  =========================\n"));
+        printf("Load pre-computed image embeddings and attention_mask\n");
+        std::string      filename = "/export/home/ggml/examples/projectors/receipt_5patches_vision_features.gguf";
+        tensor_from_gguf tensor;
+        bool             is_successful = load_tensor_from_file(filename.c_str(), tensor);
+        if (!is_successful)
+        {
+            fprintf(stderr, "%s: load_tensor_from_file() failed\n", __func__);
+            return 1;
+        }
+        result = tensor.data;
+        // print_tensor(result, "result", 1);
+        filename = "/export/home/ggml/examples/projectors/receipt_5patches_vision_attn_masks.gguf";
+        is_successful = load_tensor_from_file(filename.c_str(), tensor);
+        if (!is_successful)
+        {
+            fprintf(stderr, "%s: load_tensor_from_file() failed\n", __func__);
+            return 1;
+        }
+        attention_mask = tensor.data;
+        // print_tensor(attention_mask, "attention_mask", 1);
+        num_patches_width = 2;
+        num_patches_height = 2;
+    }
+    
 
     // compute attnetion masks outside of the graph
     struct ggml_tensor * attn_bias_input;
@@ -463,10 +646,19 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
         ggml_build_forward_expand(gf_temp, attn_bias);
         ggml_graph_compute_with_ctx(ctx0, gf_temp, 1);
         attn_bias_input = attn_bias;
+    }else{
+        attn_bias_input = NULL;
     }
     int batch_size = num_patches_width * num_patches_height + 1;
+    // print_tensor(attn_bias_input, "attn_bias_input", 1);
+    // print_tensor(result, "result", 1);
+    printf("batch_size: %d\n", batch_size);
     const bool encoded = clip_image_encode_tokenizer(
         ctx_clip, batch_size, result, attn_bias_input, image_embd);
+    if (!encoded){
+        LOG_TEE("%s: failed at image tokenizer (projector step failed)\n", __func__);
+        return false;
+    }
 
     ggml_free(model.ctx);
     ggml_free(mask.ctx);

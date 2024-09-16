@@ -92,8 +92,9 @@ if __name__ == "__main__":
     torch.save(projector_tensors, save_path)
     
     # processors
-    tokenizer.save_pretrained(f"{save_dir}/tokenizer")
-    # will hard code the image_processor in the convert_image_encoder_to_gguf.py
+    
+    # put the tokenizer in the same dir as the lang model
+    tokenizer.save_pretrained(f"{save_dir}/llm")
     
     end = time.time()
     print(f"🟢 time used: [{end-start:.3f} s]")
