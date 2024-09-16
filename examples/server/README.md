@@ -121,7 +121,6 @@ The project is under active development, and we are [looking for feedback and co
 | `-to, --timeout N` | server read/write timeout in seconds (default: 600) |
 | `--threads-http N` | number of threads used to process HTTP requests (default: -1)<br/>(env: LLAMA_ARG_THREADS_HTTP) |
 | `-spf, --system-prompt-file FNAME` | set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications |
-| `--log-format {text, json}` | log output format: json or text (default: json) |
 | `--metrics` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
 | `--no-slots` | disables slots monitoring endpoint (default: enabled)<br/>(env: LLAMA_ARG_NO_ENDPOINT_SLOTS) |
 | `--slot-save-path PATH` | path to save slot kv cache (default: disabled) |

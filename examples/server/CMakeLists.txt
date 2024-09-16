@@ -1,6 +1,6 @@
 set(TARGET llama-server)
-option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
-option(LLAMA_SERVER_SSL     "Build SSL support for the server"        OFF)
+
+option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -46,9 +46,6 @@ endforeach()
 
 add_executable(${TARGET} ${TARGET_SRCS})
 install(TARGETS ${TARGET} RUNTIME)
-target_compile_definitions(${TARGET} PRIVATE
-    SERVER_VERBOSE=$<BOOL:${LLAMA_SERVER_VERBOSE}>
-)
 
 target_link_libraries(${TARGET} PRIVATE common ${CMAKE_THREAD_LIBS_INIT})
 

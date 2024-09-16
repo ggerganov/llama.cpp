@@ -1,5 +1,6 @@
 #include "arg.h"
 #include "common.h"
+#include "log.h"
 #include "llama.h"
 
 #include <cmath>
@@ -8,9 +9,9 @@
 #include <vector>
 
 static void print_usage(int, char ** argv) {
-    LOG_TEE("\nexample usage:\n");
-    LOG_TEE("\n    %s -m model.gguf --junk 250 --pos 90 --keep 32 --grp-attn-n 2 [--seed 1234]\n", argv[0]);
-    LOG_TEE("\n");
+    LOG("\nexample usage:\n");
+    LOG("\n    %s -m model.gguf --junk 250 --pos 90 --keep 32 --grp-attn-n 2 [--seed 1234]\n", argv[0]);
+    LOG("\n");
 }
 
 int main(int argc, char ** argv) {
@@ -23,6 +24,8 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PASSKEY, print_usage)) {
         return 1;
     }
+
+    gpt_init();
 
     int n_junk = params.n_junk;
     int n_keep = params.n_keep;
@@ -63,7 +66,7 @@ int main(int argc, char ** argv) {
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
     if (model == NULL) {
-        fprintf(stderr , "%s: error: unable to load model\n" , __func__);
+        LOG_ERR("%s: unable to load model\n" , __func__);
         return 1;
     }
 
@@ -77,7 +80,7 @@ int main(int argc, char ** argv) {
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
     if (ctx == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
+        LOG_ERR("%s: failed to create the llama_context\n" , __func__);
         return 1;
     }
 
@@ -107,14 +110,14 @@ int main(int argc, char ** argv) {
     const int n_batch     = ctx_params.n_batch;
     const int n_batch_grp = ctx_params.n_batch/n_grp;
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d, n_grp = %d, n_batch = %d, n_junk = %d, i_pos = %d\n", __func__, n_len, n_ctx, n_kv_req, n_grp, n_batch, n_junk, i_pos);
+    LOG_INF("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d, n_grp = %d, n_batch = %d, n_junk = %d, i_pos = %d\n", __func__, n_len, n_ctx, n_kv_req, n_grp, n_batch, n_junk, i_pos);
 
     // print the prompt token-by-token
 
-    LOG_TEE("\n");
-    LOG_TEE("prefix tokens: %d\n", n_tokens_prefix);
-    LOG_TEE("prompt tokens: %d\n", n_tokens_all);
-    //LOG_TEE("prompt: %s\n", params.prompt.c_str());
+    LOG_INF("\n");
+    LOG_INF("prefix tokens: %d\n", n_tokens_prefix);
+    LOG_INF("prompt tokens: %d\n", n_tokens_all);
+    //LOG_INF("prompt: %s\n", params.prompt.c_str());
 
     llama_batch batch = llama_batch_init(params.n_batch, 0, 1);
 
@@ -145,11 +148,11 @@ int main(int argc, char ** argv) {
         }
 
         if (llama_decode(ctx, batch) != 0) {
-            LOG_TEE("%s: llama_decode() failed\n", __func__);
+            LOG_INF("%s: llama_decode() failed\n", __func__);
             return 1;
         }
 
-        LOG_TEE("%s: processed: [%6d, %6d)\n", __func__, i, std::min(i + n_batch, n_tokens_all));
+        LOG_INF("%s: processed: [%6d, %6d)\n", __func__, i, std::min(i + n_batch, n_tokens_all));
 
         if (i + n_batch >= n_tokens_all) {
             break;
@@ -159,7 +162,7 @@ int main(int argc, char ** argv) {
     for (int i = n_ctx; i < n_tokens_all; i += n_batch) {
         const int n_discard = n_batch;
 
-        LOG_TEE("%s: shifting KV cache with %d\n", __func__, n_discard);
+        LOG_INF("%s: shifting KV cache with %d\n", __func__, n_discard);
 
         llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
         llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
@@ -179,18 +182,18 @@ int main(int argc, char ** argv) {
         }
 
         if (llama_decode(ctx, batch) != 0) {
-            LOG_TEE("%s: llama_decode() failed\n", __func__);
+            LOG_ERR("%s: llama_decode() failed\n", __func__);
             return 1;
         }
 
-        LOG_TEE("%s: processed: [%6d, %6d)\n", __func__, i, std::min(i + n_batch, n_tokens_all));
+        LOG_INF("%s: processed: [%6d, %6d)\n", __func__, i, std::min(i + n_batch, n_tokens_all));
     }
 
     {
         const int n_discard = n_past - n_ctx + n_predict;
 
         if (n_discard > 0) {
-            LOG_TEE("%s: shifting KV cache with %d to free space for the answer\n", __func__, n_discard);
+            LOG_INF("%s: shifting KV cache with %d to free space for the answer\n", __func__, n_discard);
 
             llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
             llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
@@ -201,17 +204,16 @@ int main(int argc, char ** argv) {
         }
     }
 
-    LOG_TEE("\n");
-    LOG_TEE("%s: passkey = %d, inserted at position %d / %d (token pos: ~%d)\n", __func__, passkey, i_pos, n_junk, (i_pos * n_tokens_all) / n_junk);
-    LOG_TEE("\n");
+    LOG_INF("\n");
+    LOG_INF("%s: passkey = %d, inserted at position %d / %d (token pos: ~%d)\n", __func__, passkey, i_pos, n_junk, (i_pos * n_tokens_all) / n_junk);
+    LOG_INF("\n");
 
     // main loop
 
     int n_cur    = n_tokens_all;
     int n_decode = 0;
 
-    LOG_TEE("%s", prompt_suffix.c_str());
-    fflush(stdout);
+    LOG_INF("%s", prompt_suffix.c_str());
 
     const auto t_main_start = ggml_time_us();
 
@@ -222,13 +224,12 @@ int main(int argc, char ** argv) {
 
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
-                LOG_TEE("\n");
+                LOG("\n");
 
                 break;
             }
 
-            LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
-            fflush(stdout);
+            LOG("%s", llama_token_to_piece(ctx, new_token_id).c_str());
 
             n_decode += 1;
 
@@ -243,22 +244,22 @@ int main(int argc, char ** argv) {
 
         // evaluate the current batch with the transformer model
         if (llama_decode(ctx, batch)) {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
+            LOG_ERR("%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
     }
 
-    LOG_TEE("\n");
+    LOG("\n");
 
     const auto t_main_end = ggml_time_us();
 
-    LOG_TEE("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
+    LOG_INF("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
-    LOG_TEE("\n");
+    LOG("\n");
     llama_perf_context_print(ctx);
 
-    fprintf(stderr, "\n");
+    LOG("\n");
 
     llama_sampler_free(smpl);
 

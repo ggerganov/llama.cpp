@@ -85,7 +85,7 @@ int main(void) {
 
     argv = {"binary_name", "--verbose"};
     assert(true == gpt_params_parse(argv.size(), list_str_to_char(argv).data(), params, LLAMA_EXAMPLE_COMMON));
-    assert(params.verbosity == 1);
+    assert(params.verbosity > 1);
 
     argv = {"binary_name", "-m", "abc.gguf", "--predict", "6789", "--batch-size", "9090"};
     assert(true == gpt_params_parse(argv.size(), list_str_to_char(argv).data(), params, LLAMA_EXAMPLE_COMMON));

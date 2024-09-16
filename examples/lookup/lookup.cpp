@@ -3,6 +3,7 @@
 #include "common.h"
 #include "ngram-cache.h"
 #include "sampling.h"
+#include "log.h"
 #include "llama.h"
 
 #include <cstdint>
@@ -18,16 +19,12 @@ int main(int argc, char ** argv){
         return 1;
     }
 
+    gpt_init();
+
     // max. number of additional tokens to draft if match is found
     const int n_draft = params.n_draft;
 
     const bool dump_kv_cache = params.dump_kv_cache;
-
-#ifndef LOG_DISABLE_LOGS
-    log_set_target(log_filename_generator("lookup", "log"));
-    LOG_TEE("Log start\n");
-    log_dump_cmdline(argc, argv);
-#endif // LOG_DISABLE_LOGS
 
     // init llama.cpp
     llama_backend_init();
@@ -58,7 +55,7 @@ int main(int argc, char ** argv){
             try {
                 ngram_cache_static = llama_ngram_cache_load(params.lookup_cache_static);
             } catch (std::ifstream::failure const &) {
-                fprintf(stderr, "error: failed to open static lookup cache: %s", params.lookup_cache_static.c_str());
+                LOG_ERR("failed to open static lookup cache: %s", params.lookup_cache_static.c_str());
                 exit(1);
             }
         }
@@ -76,14 +73,14 @@ int main(int argc, char ** argv){
     const int max_tokens_list_size = max_context_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
-        fprintf(stderr, "%s: error: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), max_tokens_list_size);
+        LOG_ERR("%s: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), max_tokens_list_size);
         return 1;
     }
 
-    fprintf(stderr, "\n\n");
+    LOG("\n\n");
 
     for (auto id : inp) {
-        fprintf(stderr, "%s", llama_token_to_piece(ctx, id).c_str());
+        LOG("%s", llama_token_to_piece(ctx, id).c_str());
     }
 
     fflush(stderr);
@@ -124,7 +121,7 @@ int main(int argc, char ** argv){
         }
 
         // print current draft sequence
-        LOG("drafted %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, draft).c_str());
+        LOG_DBG("drafted %s\n", string_from(ctx, draft).c_str());
 
         int i_dft = 0;
         while (true) {
@@ -136,7 +133,7 @@ int main(int argc, char ** argv){
             const std::string token_str = llama_token_to_piece(ctx, id);
 
             if (!params.use_color) {
-                printf("%s", token_str.c_str());
+                LOG("%s", token_str.c_str());
             }
 
             if (llama_token_is_eog(model, id)) {
@@ -147,7 +144,7 @@ int main(int argc, char ** argv){
 
             // check if the target token matches the draft
             if (i_dft < (int) draft.size() && id == draft[i_dft]) {
-                LOG("the sampled target token matches the %dth drafted token (%d, '%s') - accepted\n", i_dft, id, token_str.c_str());
+                LOG_DBG("the sampled target token matches the %dth drafted token (%d, '%s') - accepted\n", i_dft, id, token_str.c_str());
                 ++n_accept;
                 ++n_past;
                 ++i_dft;
@@ -161,19 +158,19 @@ int main(int argc, char ** argv){
 
                 if (params.use_color) {
                     // color accepted draft token
-                    printf("\033[34m%s\033[0m", token_str.c_str());
+                    LOG("\033[34m%s\033[0m", token_str.c_str());
                     fflush(stdout);
                 }
                 continue;
             }
 
             if (params.use_color) {
-                printf("%s", token_str.c_str());
+                LOG("%s", token_str.c_str());
             }
             fflush(stdout);
 
 
-            LOG("the sampled target token (%d, '%s') did not match, or we ran out of drafted tokens\n", id, token_str.c_str());
+            LOG_DBG("the sampled target token (%d, '%s') did not match, or we ran out of drafted tokens\n", id, token_str.c_str());
 
             draft.clear();
             draft.push_back(id);
@@ -224,22 +221,22 @@ int main(int argc, char ** argv){
     llama_ngram_cache_merge(ngram_cache_dynamic, ngram_cache_context);
     llama_ngram_cache_save(ngram_cache_dynamic, params.lookup_cache_dynamic);
 
-    LOG_TEE("\n\n");
+    LOG("\n\n");
 
-    LOG_TEE("encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f));
-    LOG_TEE("decoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_predict, (t_dec_end - t_dec_start) / 1e6f, n_predict  / ((t_dec_end - t_dec_start) / 1e6f));
+    LOG_INF("encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f));
+    LOG_INF("decoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_predict, (t_dec_end - t_dec_start) / 1e6f, n_predict  / ((t_dec_end - t_dec_start) / 1e6f));
 
-    LOG_TEE("\n");
-    LOG_TEE("n_draft      = %d\n", n_draft);
-    LOG_TEE("n_predict    = %d\n", n_predict);
-    LOG_TEE("n_drafted    = %d\n", n_drafted);
-    LOG_TEE("t_draft_flat = %.2f ms\n", t_draft_flat_us*1e-3);
-    LOG_TEE("t_draft      = %.2f ms, %.2f us per token, %.2f tokens per second\n",
+    LOG_INF("\n");
+    LOG_INF("n_draft      = %d\n", n_draft);
+    LOG_INF("n_predict    = %d\n", n_predict);
+    LOG_INF("n_drafted    = %d\n", n_drafted);
+    LOG_INF("t_draft_flat = %.2f ms\n", t_draft_flat_us*1e-3);
+    LOG_INF("t_draft      = %.2f ms, %.2f us per token, %.2f tokens per second\n",
             t_draft_us*1e-3, 1.0f*t_draft_us/n_drafted, n_drafted/(1e-6*t_draft_us));
-    LOG_TEE("n_accept     = %d\n", n_accept);
-    LOG_TEE("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
+    LOG_INF("n_accept     = %d\n", n_accept);
+    LOG_INF("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
-    LOG_TEE("\ntarget:\n\n");
+    LOG_INF("\ntarget:\n\n");
     gpt_perf_print(ctx, smpl);
 
     gpt_sampler_free(smpl);
@@ -251,7 +248,7 @@ int main(int argc, char ** argv){
 
     llama_backend_free();
 
-    fprintf(stderr, "\n\n");
+    LOG("\n\n");
 
     return 0;
 }

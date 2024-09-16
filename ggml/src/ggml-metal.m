@@ -13,13 +13,16 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #ifdef GGML_METAL_NDEBUG
+#define GGML_METAL_LOG(...)
 #define GGML_METAL_LOG_INFO(...)
 #define GGML_METAL_LOG_WARN(...)
 #define GGML_METAL_LOG_ERROR(...)
 #else
+#define GGML_METAL_LOG(...)       ggml_metal_log(GGML_LOG_LEVEL_NONE,  __VA_ARGS__)
 #define GGML_METAL_LOG_INFO(...)  ggml_metal_log(GGML_LOG_LEVEL_INFO,  __VA_ARGS__)
 #define GGML_METAL_LOG_WARN(...)  ggml_metal_log(GGML_LOG_LEVEL_WARN,  __VA_ARGS__)
 #define GGML_METAL_LOG_ERROR(...) ggml_metal_log(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
+#define GGML_METAL_LOG_DEBUG(...) ggml_metal_log(GGML_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #endif
 
 #define UNUSED(x) (void)(x)
@@ -3183,7 +3186,7 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t s
 #ifndef GGML_METAL_NDEBUG
 #if TARGET_OS_OSX || (TARGET_OS_IOS && __clang_major__ >= 15)
     if (@available(macOS 10.12, iOS 16.0, *)) {
-        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, (%8.2f / %8.2f)",
+        GGML_METAL_LOG_DEBUG("%s: allocated buffer, size = %8.2f MiB, (%8.2f / %8.2f)\n",
                 __func__,
                 size_aligned / 1024.0 / 1024.0,
                 device.currentAllocatedSize / 1024.0 / 1024.0,
@@ -3191,8 +3194,6 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t s
 
         if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
             GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
-        } else {
-            GGML_METAL_LOG_INFO("\n");
         }
     } else {
         GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, (%8.2f)\n",

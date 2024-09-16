@@ -54,6 +54,7 @@ TEST_TARGETS = \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
 	tests/test-llama-grammar \
+	tests/test-log \
 	tests/test-model-load-cancel \
 	tests/test-opt \
 	tests/test-quantize-fns \
@@ -146,6 +147,14 @@ endif
 ifdef LLAMA_NO_METAL
 GGML_NO_METAL := 1
 DEPRECATE_WARNING := 1
+endif
+
+ifdef LLAMA_DISABLE_LOGS
+REMOVE_WARNING := 1
+endif
+
+ifdef LLAMA_SERVER_VERBOSE
+REMOVE_WARNING := 1
 endif
 
 ifndef UNAME_S
@@ -351,18 +360,10 @@ ifdef LLAMA_SANITIZE_UNDEFINED
 	MK_LDFLAGS  += -fsanitize=undefined -g
 endif
 
-ifdef LLAMA_SERVER_VERBOSE
-	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
-endif
-
 ifdef LLAMA_SERVER_SSL
 	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
 	MK_LDFLAGS += -lssl -lcrypto
 endif
-
-ifdef LLAMA_DISABLE_LOGS
-	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
 
 # warnings
 WARN_FLAGS = \
@@ -931,6 +932,7 @@ OBJ_LLAMA = \
 OBJ_COMMON = \
 	common/common.o \
 	common/arg.o \
+	common/log.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
@@ -1024,6 +1026,14 @@ $(info   - LLAMA_NO_ACCELERATE)
 $(info   - LLAMA_NO_OPENMP)
 $(info   - LLAMA_NO_METAL)
 $(info   - LLAMA_NO_CCACHE)
+$(info )
+endif
+
+ifdef REMOVE_WARNING
+$(info !!! REMOVAL WARNING !!!)
+$(info The following LLAMA_ options have been removed and are no longer supported)
+$(info   - LLAMA_DISABLE_LOGS   (https://github.com/ggerganov/llama.cpp/pull/9418))
+$(info   - LLAMA_SERVER_VERBOSE (https://github.com/ggerganov/llama.cpp/pull/9418))
 $(info )
 endif
 
@@ -1166,6 +1176,11 @@ common/common.o: \
 common/arg.o: \
 	common/arg.cpp \
 	common/arg.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/log.o: \
+	common/log.cpp \
+	common/log.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/sampling.o: \
@@ -1346,7 +1361,7 @@ llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp \
-	$(OBJ_GGML) $(OBJ_LLAMA)
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1524,6 +1539,11 @@ tests/test-arg-parser: tests/test-arg-parser.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-log: tests/test-log.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)

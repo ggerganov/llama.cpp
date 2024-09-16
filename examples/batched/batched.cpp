@@ -1,5 +1,6 @@
 #include "arg.h"
 #include "common.h"
+#include "log.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -8,9 +9,9 @@
 #include <vector>
 
 static void print_usage(int, char ** argv) {
-    LOG_TEE("\nexample usage:\n");
-    LOG_TEE("\n    %s -m model.gguf -p \"Hello my name is\" -n 32 -np 4\n", argv[0]);
-    LOG_TEE("\n");
+    LOG("\nexample usage:\n");
+    LOG("\n    %s -m model.gguf -p \"Hello my name is\" -n 32 -np 4\n", argv[0]);
+    LOG("\n");
 }
 
 int main(int argc, char ** argv) {
@@ -23,6 +24,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    gpt_init();
 
     // number of parallel batches
     int n_parallel = params.n_parallel;
@@ -42,7 +44,7 @@ int main(int argc, char ** argv) {
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
     if (model == NULL) {
-        fprintf(stderr , "%s: error: unable to load model\n" , __func__);
+        LOG_ERR("%s: error: unable to load model\n" , __func__);
         return 1;
     }
 
@@ -72,30 +74,28 @@ int main(int argc, char ** argv) {
     llama_sampler_chain_add(smpl, llama_sampler_init_dist (params.sparams.seed));
 
     if (ctx == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
+        LOG_ERR("%s: error: failed to create the llama_context\n" , __func__);
         return 1;
     }
 
     const int n_ctx = llama_n_ctx(ctx);
 
-    LOG_TEE("\n%s: n_predict = %d, n_ctx = %d, n_batch = %u, n_parallel = %d, n_kv_req = %d\n", __func__, n_predict, n_ctx, ctx_params.n_batch, n_parallel, n_kv_req);
+    LOG_INF("\n%s: n_predict = %d, n_ctx = %d, n_batch = %u, n_parallel = %d, n_kv_req = %d\n", __func__, n_predict, n_ctx, ctx_params.n_batch, n_parallel, n_kv_req);
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
-        LOG_TEE("%s: error: n_kv_req (%d) > n_ctx, the required KV cache size is not big enough\n", __func__,  n_kv_req);
-        LOG_TEE("%s:        either reduce n_parallel or increase n_ctx\n", __func__);
+        LOG_ERR("%s: error: n_kv_req (%d) > n_ctx, the required KV cache size is not big enough\n", __func__,  n_kv_req);
+        LOG_ERR("%s:        either reduce n_parallel or increase n_ctx\n", __func__);
         return 1;
     }
 
     // print the prompt token-by-token
 
-    fprintf(stderr, "\n");
+    LOG("\n");
 
     for (auto id : tokens_list) {
-        fprintf(stderr, "%s", llama_token_to_piece(ctx, id).c_str());
+        LOG("%s", llama_token_to_piece(ctx, id).c_str());
     }
-
-    fflush(stderr);
 
     // create a llama_batch
     // we use this object to submit token data for decoding
@@ -114,7 +114,7 @@ int main(int argc, char ** argv) {
 
     if (llama_model_has_encoder(model)) {
         if (llama_encode(ctx, batch)) {
-            LOG_TEE("%s : failed to eval\n", __func__);
+            LOG_ERR("%s : failed to eval\n", __func__);
             return 1;
         }
 
@@ -131,7 +131,7 @@ int main(int argc, char ** argv) {
     batch.logits[batch.n_tokens - 1] = true;
 
     if (llama_decode(ctx, batch) != 0) {
-        LOG_TEE("%s: llama_decode() failed\n", __func__);
+        LOG_ERR("%s: llama_decode() failed\n", __func__);
         return 1;
     }
 
@@ -142,7 +142,7 @@ int main(int argc, char ** argv) {
     //}
 
     if (n_parallel > 1) {
-        LOG_TEE("\n\n%s: generating %d sequences ...\n", __func__, n_parallel);
+        LOG("\n\n%s: generating %d sequences ...\n", __func__, n_parallel);
     }
 
     // main loop
@@ -175,9 +175,9 @@ int main(int argc, char ** argv) {
             // is it an end of generation? -> mark the stream as finished
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
                 i_batch[i] = -1;
-                LOG_TEE("\n");
+                LOG("\n");
                 if (n_parallel > 1) {
-                    LOG_TEE("%s: stream %d finished at n_cur = %d", __func__, i, n_cur);
+                    LOG_INF("%s: stream %d finished at n_cur = %d", __func__, i, n_cur);
                 }
 
                 continue;
@@ -185,8 +185,7 @@ int main(int argc, char ** argv) {
 
             // if there is only one stream, we print immediately to stdout
             if (n_parallel == 1) {
-                LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
-                fflush(stdout);
+                LOG("%s", llama_token_to_piece(ctx, new_token_id).c_str());
             }
 
             streams[i] += llama_token_to_piece(ctx, new_token_id);
@@ -208,27 +207,25 @@ int main(int argc, char ** argv) {
 
         // evaluate the current batch with the transformer model
         if (llama_decode(ctx, batch)) {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
+            LOG_ERR("%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
     }
 
-    LOG_TEE("\n");
-
     if (n_parallel > 1) {
-        LOG_TEE("\n");
+        LOG("\n");
 
         for (int32_t i = 0; i < n_parallel; ++i) {
-            LOG_TEE("sequence %d:\n\n%s%s\n\n", i, params.prompt.c_str(), streams[i].c_str());
+            LOG("sequence %d:\n\n%s%s\n\n", i, params.prompt.c_str(), streams[i].c_str());
         }
     }
 
     const auto t_main_end = ggml_time_us();
 
-    LOG_TEE("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
+    LOG_INF("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
-    LOG_TEE("\n");
+    LOG("\n");
     llama_perf_sampler_print(smpl);
     llama_perf_context_print(ctx);
 

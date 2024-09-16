@@ -158,6 +158,8 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
+    gpt_init();
+
     llama_model_params mparams = llama_model_params_from_gpt_params(params);
     llama_context_params cparams = llama_context_params_from_gpt_params(params);
 
