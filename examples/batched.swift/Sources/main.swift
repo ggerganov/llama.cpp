@@ -140,8 +140,6 @@ while n_cur <= n_len {
 
         let new_token_id = llama_sampler_sample(smpl, context, i_batch[i])
 
-        llama_sampler_accept(smpl, new_token_id)
-
         // is it an end of stream? -> mark the stream as finished
         if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
             i_batch[i] = -1
@@ -202,8 +200,8 @@ let t_main_end = ggml_time_us()
 
 print("decoded \(n_decode) tokens in \(String(format: "%.2f", Double(t_main_end - t_main_start) / 1_000_000.0)) s, speed: \(String(format: "%.2f", Double(n_decode) / (Double(t_main_end - t_main_start) / 1_000_000.0))) t/s\n\n")
 
-llama_perf_print(UnsafeRawPointer(context), LLAMA_PERF_TYPE_CONTEXT)
-llama_perf_print(UnsafeRawPointer(smpl),    LLAMA_PERF_TYPE_SAMPLER_CHAIN)
+llama_perf_sampler_print(smpl)
+llama_perf_context_print(context)
 
 private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
     let utf8Count = text.utf8.count

@@ -2,6 +2,9 @@
 
 #include "common.h"
 
+#include <cmath>
+#include <unordered_map>
+
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 // TODO: deduplicate with llama-impl.h
 template<typename T>
@@ -139,7 +142,7 @@ std::string gpt_sampler_params::print() const {
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
-    lparams.no_perf = false; // TODO: control via params
+    lparams.no_perf = params.no_perf;
 
     auto * result = new gpt_sampler {
         /* .params = */ params,
@@ -254,10 +257,10 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
     // TODO: measure grammar performance
 
     if (gsmpl) {
-        llama_perf_print(gsmpl->chain, LLAMA_PERF_TYPE_SAMPLER_CHAIN);
+        llama_perf_sampler_print(gsmpl->chain);
     }
     if (ctx) {
-        llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+        llama_perf_context_print(ctx);
     }
 }
 
@@ -307,6 +310,10 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     return cur_p.data[cur_p.selected].id;
 }
 
+uint32_t gpt_sampler_get_seed(const struct gpt_sampler * gsmpl) {
+    return llama_sampler_get_seed(gsmpl->chain);
+}
+
 // helpers
 
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl) {
@@ -318,7 +325,7 @@ llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
 }
 
 std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
-    std::string result = "\tlogits ";
+    std::string result = "logits ";
 
     for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
         const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);
@@ -420,7 +427,7 @@ std::vector<gpt_sampler_type> gpt_sampler_types_from_names(const std::vector<std
 }
 
 std::vector<gpt_sampler_type> gpt_sampler_types_from_chars(const std::string & chars) {
-    std::unordered_map<char, gpt_sampler_type> sampler_name_map {
+    std::unordered_map<char, gpt_sampler_type> sampler_name_map = {
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TOP_K),       GPT_SAMPLER_TYPE_TOP_K },
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TFS_Z),       GPT_SAMPLER_TYPE_TFS_Z },
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TYPICAL_P),   GPT_SAMPLER_TYPE_TYPICAL_P },
