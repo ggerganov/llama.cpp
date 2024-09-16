@@ -97,8 +97,8 @@ class Keys:
         RESCALE_EVERY_N_LAYERS            = "{arch}.rescale_every_n_layers"
         TIME_MIX_EXTRA_DIM                = "{arch}.time_mix_extra_dim"
         TIME_DECAY_EXTRA_DIM              = "{arch}.time_decay_extra_dim"
-        RESIDUAL_MULTIPLIER               = "{arch}.residual_multiplier"
-        EMBEDDING_MULTIPLIER              = "{arch}.embedding_multiplier"
+        RESIDUAL_SCALE                    = "{arch}.residual_scale"
+        EMBEDDING_SCALE                   = "{arch}.embedding_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -114,7 +114,7 @@ class Keys:
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
         REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
         SLIDING_WINDOW    = "{arch}.attention.sliding_window"
-        MULTIPLIER        = "{arch}.attention.multiplier"
+        SCALE             = "{arch}.attention.scale"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
