@@ -2,6 +2,7 @@
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
 #include "ggml-impl.h"
+#include "ggml-cpu-impl.h"
 #include "ggml-quants.h"
 #include "ggml.h"
 #include "ggml-aarch64.h"
