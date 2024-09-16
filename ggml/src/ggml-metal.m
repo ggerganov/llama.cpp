@@ -3225,15 +3225,19 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buff
     ctx->n_buffers = 1;
 
     if (ctx->all_data != NULL) {
-        ctx->buffers[0].data = ctx->all_data;
-        ctx->buffers[0].size = size;
-        ctx->buffers[0].metal = [device newBufferWithBytesNoCopy:ctx->all_data
-                        length:size_aligned
-                        options:MTLResourceStorageModeShared
-                        deallocator:nil];
+        ctx->buffers[0].data  = ctx->all_data;
+        ctx->buffers[0].size  = size;
+        ctx->buffers[0].metal = nil;
+
+        if (size_aligned > 0) {
+            ctx->buffers[0].metal = [device newBufferWithBytesNoCopy:ctx->all_data
+                            length:size_aligned
+                            options:MTLResourceStorageModeShared
+                            deallocator:nil];
+        }
     }
 
-    if (ctx->all_data == NULL || ctx->buffers[0].metal == nil) {
+    if (size_aligned > 0 && (ctx->all_data == NULL || ctx->buffers[0].metal == nil)) {
         GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
         free(ctx);
         ggml_backend_metal_free_device();
@@ -3310,14 +3314,17 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, 
 
     // the buffer fits into the max buffer size allowed by the device
     if (size_aligned <= device.maxBufferLength) {
-        ctx->buffers[ctx->n_buffers].data = data;
-        ctx->buffers[ctx->n_buffers].size = size;
+        ctx->buffers[ctx->n_buffers].data  = data;
+        ctx->buffers[ctx->n_buffers].size  = size;
+        ctx->buffers[ctx->n_buffers].metal = nil;
 
-        ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
+        if (size_aligned > 0) {
+            ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
-        if (ctx->buffers[ctx->n_buffers].metal == nil) {
-            GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
-            return false;
+            if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
+                return false;
+            }
         }
 
         ggml_backend_metal_log_allocated_size(device, size_aligned);
@@ -3333,14 +3340,17 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, 
         for (size_t i = 0; i < size; i += size_step) {
             const size_t size_step_aligned = (i + size_view <= size) ? size_view : (size_aligned - i);
 
-            ctx->buffers[ctx->n_buffers].data = (void *) ((uint8_t *) data + i);
-            ctx->buffers[ctx->n_buffers].size = size_step_aligned;
+            ctx->buffers[ctx->n_buffers].data  = (void *) ((uint8_t *) data + i);
+            ctx->buffers[ctx->n_buffers].size  = size_step_aligned;
+            ctx->buffers[ctx->n_buffers].metal = nil;
 
-            ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
+            if (size_step_aligned > 0) {
+                ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
-            if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_step_aligned / 1024.0 / 1024.0);
-                return false;
+                if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                    GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_step_aligned / 1024.0 / 1024.0);
+                    return false;
+                }
             }
 
             ggml_backend_metal_log_allocated_size(device, size_step_aligned);
