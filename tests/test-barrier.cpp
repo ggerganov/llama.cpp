@@ -86,8 +86,8 @@ int main(int argc, char *argv[]) {
               << "\n " << (float) nsec / (n_rounds * n_nodes) << " nsec per-node"
               << "\n";
 
-    ggml_free(ctx);
     ggml_threadpool_free(threadpool);
+    ggml_free(ctx);
 
     return 0;
 }
