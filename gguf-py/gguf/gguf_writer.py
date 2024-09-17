@@ -679,6 +679,12 @@ class GGUFWriter:
     def add_time_decay_extra_dim(self, dim: int) -> None:
         self.add_uint32(Keys.LLM.TIME_DECAY_EXTRA_DIM.format(arch=self.arch), dim)
 
+    def add_residual_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.RESIDUAL_SCALE.format(arch=self.arch), value)
+
+    def add_embedding_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.EMBEDDING_SCALE.format(arch=self.arch), value)
+
     def add_wkv_head_size(self, size: int) -> None:
         self.add_uint32(Keys.WKV.HEAD_SIZE.format(arch=self.arch), size)
 
@@ -702,6 +708,9 @@ class GGUFWriter:
 
     def add_sliding_window(self, value: int) -> None:
         self.add_uint32(Keys.Attention.SLIDING_WINDOW.format(arch=self.arch), value)
+
+    def add_attention_scale(self, value: float) -> None:
+        self.add_float32(Keys.Attention.SCALE.format(arch=self.arch), value)
 
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
