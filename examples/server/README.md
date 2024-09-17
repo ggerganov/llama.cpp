@@ -87,7 +87,7 @@ The project is under active development, and we are [looking for feedback and co
 | `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16) |
 | `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16) |
 | `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: -1.0, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
-| `-np, --parallel N` | number of parallel sequences to decode (default: 1) |
+| `-np, --parallel N` | number of parallel sequences to decode (default: 1)<br/>(env:  LLAMA_ARG_N_PARALLEL) |
 | `-cb, --cont-batching` | enable continuous batching (a.k.a dynamic batching) (default: enabled)<br/>(env: LLAMA_ARG_CONT_BATCHING) |
 | `-nocb, --no-cont-batching` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
 | `--mlock` | force system to keep model in RAM rather than swapping or compressing |
