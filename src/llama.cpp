@@ -6107,8 +6107,15 @@ static void llm_load_vocab(
             vocab.special_mask_id = -1;
             vocab.linefeed_id     = -1;
 
+            // read vocab size from metadata
+            if (!ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab, false)) {
+                vocab.n_vocab = 0;
+                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata, vocab.n_vocab will be set to %u\n", __func__, vocab.n_vocab);
+            }
             return;
-        } else if (tokenizer_model == "llama") {
+        }
+
+        if (tokenizer_model == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
@@ -16653,7 +16660,7 @@ static int llama_decode_internal(
     const uint32_t n_tokens_all = batch_all.n_tokens;
 
     if (n_tokens_all == 0) {
-        LLAMA_LOG_ERROR("%s: n_tokens == 0", __func__);
+        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
     }
 
@@ -16666,7 +16673,7 @@ static int llama_decode_internal(
     if (batch_all.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
             if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch_all.token[i]);
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch_all.token[i]);
                 return -1;
             }
         }
@@ -16954,7 +16961,7 @@ static int llama_encode_internal(
     const uint32_t n_tokens = batch.n_tokens;
 
     if (n_tokens == 0) {
-        LLAMA_LOG_ERROR("%s: n_tokens == 0", __func__);
+        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
     }
 
@@ -16967,7 +16974,7 @@ static int llama_encode_internal(
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens; ++i) {
             if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch.token[i]);
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
         }
