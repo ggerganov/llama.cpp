@@ -163,7 +163,7 @@ static std::vector<clip_image_u8 *> extract_frames(const std::string& video_path
 #else
 
 static std::vector<clip_image_u8 *> extract_frames(const std::string& video_path, const int frame_num) {
-    LOG_TEE("%s: llama.cpp built without ffmpeg, processing video files is not supported.\n", __func__);
+    LOG_TEE("%s: llama.cpp built without ffmpeg, processing video files is not supported. Please recompile with LLAMA_FFMPEG=1 to add video support.\n", __func__);
     return {};
 }
 
