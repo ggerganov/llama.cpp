@@ -439,6 +439,9 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 }
                 types.push_back(gt);
             }
+            if (invalid_param) {
+                break;
+            }
             params.type_k.insert(params.type_k.end(), types.begin(), types.end());
         } else if (arg == "-ctv" || arg == "--cache-type-v") {
             if (++i >= argc) {
@@ -454,6 +457,9 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                     break;
                 }
                 types.push_back(gt);
+            }
+            if (invalid_param) {
+                break;
             }
             params.type_v.insert(params.type_v.end(), types.begin(), types.end());
         } else if (arg == "-t" || arg == "--threads") {
@@ -519,6 +525,9 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                     break;
                 }
                 modes.push_back(mode);
+            }
+            if (invalid_param) {
+                break;
             }
             params.split_mode.insert(params.split_mode.end(), modes.begin(), modes.end());
         } else if (arg == "-mg" || arg == "--main-gpu") {
