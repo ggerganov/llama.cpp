@@ -636,7 +636,7 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 
   It's same for other projects including llama.cpp SYCL backend.
 
-- Meet issue: `Native API failed. Native API returns: -6 (PI_ERROR_OUT_OF_HOST_MEMORY) -6 (PI_ERROR_OUT_OF_HOST_MEMORY)` or `failed to allocate SYCL0 buffer`
+- Meet issue: `Native API failed. Native API returns: -6 (PI_ERROR_OUT_OF_HOST_MEMORY) -6 (PI_ERROR_OUT_OF_HOST_MEMORY) -999 (UNKNOWN PI error)` or `failed to allocate SYCL0 buffer`
 
   Device Memory is not enough.
 
