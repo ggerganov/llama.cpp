@@ -2701,15 +2701,15 @@ class XLMRobertaModel(BertModel):
         self.gguf_writer.add_add_eos_token(True)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # position embeddings start at pad_token_id + 1, so just chop down the weight tensor
-        if name == "embeddings.position_embeddings.weight":
-            if self._position_offset is not None:
-                data_torch = data_torch[self._position_offset:,:]
-
         # if name starts with "roberta.", remove the prefix
         # e.g. https://huggingface.co/BAAI/bge-reranker-v2-m3/tree/main
         if name.startswith("roberta."):
             name = name[8:]
+
+        # position embeddings start at pad_token_id + 1, so just chop down the weight tensor
+        if name == "embeddings.position_embeddings.weight":
+            if self._position_offset is not None:
+                data_torch = data_torch[self._position_offset:,:]
 
         return super().modify_tensors(data_torch, name, bid)
 
