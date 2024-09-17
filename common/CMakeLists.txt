@@ -83,6 +83,19 @@ if (LLAMA_CURL)
     set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARY})
 endif ()
 
+# Use ffmpeg to load video files
+if (LLAMA_FFMPEG)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FFMPEG REQUIRED
+        libavformat
+        libavcodec
+        libavutil
+    )
+    add_definitions(-DLLAMA_USE_FFMPEG)
+    include_directories(${FFMPEG_INCLUDE_DIRS})
+    set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${FFMPEG_LIBRARIES})
+endif ()
+
 target_include_directories(${TARGET} PUBLIC .)
 target_compile_features   (${TARGET} PUBLIC cxx_std_11)
 target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)

@@ -9,12 +9,14 @@
 #include <cstdlib>
 #include <vector>
 
+#if defined(LLAMA_USE_FFMPEG)
 extern "C" {
     #include <libavcodec/avcodec.h>
     #include <libavformat/avformat.h>
     #include <libavutil/imgutils.h>
     #include <libswscale/swscale.h>
 }
+#endif // LLAMA_USE_FFMPEG
 
 struct llava_context {
     struct clip_ctx * ctx_clip = NULL;
@@ -27,6 +29,8 @@ struct clip_image_u8 {
     int ny;
     std::vector<uint8_t> buf;
 };
+
+#if defined(LLAMA_USE_FFMPEG)
 
 static std::vector<clip_image_u8 *> extract_frames(const std::string& video_path, const int frame_num) {
     AVFormatContext* format_ctx = nullptr;
@@ -155,6 +159,15 @@ static std::vector<clip_image_u8 *> extract_frames(const std::string& video_path
 
     return frames;
 }
+
+#else
+
+static std::vector<clip_image_u8 *> extract_frames(const std::string& video_path, const int frame_num) {
+    LOG_TEE("%s: llama.cpp built without ffmpeg, processing video files is not supported.\n", __func__);
+    return {};
+}
+
+#endif // LLAMA_USE_FFMPEG
 
 static void show_additional_info(int /*argc*/, char ** argv) {
     LOG_TEE("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> [--video <path/to/an/video.mp4>] [--image <path/to/an/image.jpg>] [--image <path/to/another/image.jpg>] [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
