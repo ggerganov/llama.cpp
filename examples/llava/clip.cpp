@@ -1283,7 +1283,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 throw std::invalid_argument("Invalid hyperparameter values");
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error while loading hyperparameters: " << e.what() << std::endl;
+            fprintf(stderr, "Error while loading hyperparameters: %s\n", e.what());
             return false;
         }
         try {
