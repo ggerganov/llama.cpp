@@ -23,6 +23,9 @@ env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
+  LLAMA_LOG_COLORS: 1
+  LLAMA_LOG_PREFIX: 1
+  LLAMA_LOG_TIMESTAMPS: 1
 
 jobs:
   macOS-latest-cmake-arm64:
@@ -375,7 +378,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -401,7 +404,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: add oneAPI to apt
         shell: bash
@@ -442,7 +445,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: add oneAPI to apt
         shell: bash
@@ -546,7 +549,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -576,7 +579,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -610,7 +613,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -857,7 +860,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON
+          cmake .. -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON -DGGML_RPC=ON
           cmake --build . --config Release -j $((${env:NUMBER_OF_PROCESSORS} - 1)) -t ggml
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
@@ -969,14 +972,14 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install
         id: depends
         run: |
           $ErrorActionPreference = "Stop"
           write-host "Downloading AMD HIP SDK Installer"
-          Invoke-WebRequest -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-23.Q4-WinSvr2022-For-HIP.exe" -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
+          Invoke-WebRequest -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-24.Q3-WinSvr2022-For-HIP.exe" -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
           write-host "Installing AMD HIP SDK"
           Start-Process "${env:RUNNER_TEMP}\rocm-install.exe" -ArgumentList '-install' -NoNewWindow -Wait
           write-host "Completed AMD HIP SDK installation"

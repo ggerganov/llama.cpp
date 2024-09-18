@@ -81,6 +81,13 @@ ggml_backend_cann_buffer_type(int32_t device);
 GGML_API GGML_CALL int32_t ggml_backend_cann_get_device_count(void);
 
 /**
+ * @brief pinned host buffer for use with the CPU backend for faster copies between CPU and NPU.
+ *
+ * @return A pointer to the host buffer type interface.
+ */
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cann_host_buffer_type(void);
+
+/**
  * @brief Retrieves the description of a specific CANN device.
  *
  * This function sets the specified device, retrieves the SoC name,

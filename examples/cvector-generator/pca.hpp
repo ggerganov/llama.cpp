@@ -12,12 +12,9 @@
 
 #include <cstdio>
 #include <ctime>
+#include <random>
 #include <string>
-#include <tuple>
 #include <vector>
-#include <algorithm>
-#include <iostream>
-#include <fstream>
 
 #define DEBUG_POS 5
 
@@ -229,8 +226,8 @@ static ggml_status compute_piter(
         result.eigenvectors.resize(params.n_batch);
         result.distances.resize(params.n_batch);
         // get output nodes
-        for (int i = 0; i < gf->n_nodes; ++i) {
-            auto node = gf->nodes[i];
+        for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
+            auto node = ggml_graph_node(gf, i);
             int iter = -1;
             // find b_tensor (without copying data from device)
             if ((iter = extract_i("b_tensor_norm_", node->name)) > -1) {
