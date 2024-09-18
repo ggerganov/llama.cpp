@@ -20239,6 +20239,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
             ggml_graph_compute_thread(&threadpool->workers[omp_get_thread_num()]);
         }
     } else {
+        atomic_store_explicit(&threadpool->n_threads_cur, 1, memory_order_relaxed);
         ggml_graph_compute_thread(&threadpool->workers[0]);
     }
 #else
