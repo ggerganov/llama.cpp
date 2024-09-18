@@ -1270,6 +1270,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         // load vision model
         auto & vision_model = new_clip->vision_model;
         auto & hparams = vision_model.hparams;
+        try{
             hparams.hidden_size    = get_u32(ctx, format(KEY_N_EMBD, "vision"));
             hparams.n_head         = get_u32(ctx, format(KEY_N_HEAD, "vision"));
             hparams.n_intermediate = get_u32(ctx, format(KEY_N_FF, "vision"));
@@ -1278,11 +1279,24 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             hparams.patch_size     = get_u32(ctx, KEY_PATCH_SIZE);
             hparams.projection_dim = get_u32(ctx, format(KEY_PROJ_DIM, "vision"));
             hparams.eps            = get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision"));
-            if (hparams.hidden_size == 0 || hparams.n_head == 0 || hparams.n_layer == 0 || hparams.n_intermediate == 0 || hparams.image_size == 0 || hparams.patch_size == 0 || hparams.projection_dim == 0 || hparams.eps == 0) {
-                fprintf(stderr, "Error: Invalid hyperparameter values\n");
+            if (hparams.hidden_size <= 0 || hparams.n_head <= 0 || hparams.n_layer <= 0 || hparams.n_intermediate <= 0 || hparams.image_size <= 0 || hparams.patch_size <= 0 || hparams.projection_dim <= 0 || hparams.eps <= 0) {
+                LOG_TEE("Error: Invalid hyperparameter values\n");
                 return false;
             }
-        }
+             // Optionally log loaded hyperparameters for debugging
+            LOG_TEE("Loaded hyperparameters:\n");
+            LOG_TEE("Hidden size: %d\n", hparams.hidden_size);
+            LOG_TEE("Number of heads: %d\n", hparams.n_head);
+            LOG_TEE("Number of intermediate units: %d\n", hparams.n_intermediate);
+            LOG_TEE("Number of layers: %d\n", hparams.n_layer);
+            LOG_TEE("Image size: %d\n", hparams.image_size);
+            LOG_TEE("Patch size: %d\n", hparams.patch_size);
+            LOG_TEE("Projection dimension: %d\n", hparams.projection_dim);
+            LOG_TEE("Layer norm epsilon: %f\n", hparams.eps);
+        } catch (const std::exception& e) {
+            LOG_TEE("Error while loading hyperparameters: %s\n", e.what());
+        }
+        
         try {
             int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
             int n = gguf_get_arr_n(ctx, idx);
