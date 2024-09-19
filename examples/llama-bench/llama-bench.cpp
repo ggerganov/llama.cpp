@@ -1557,6 +1557,8 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             prev_inst = &inst;
+        } else {
+            llama_model_reset_time(lmodel);
         }
 
         llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());

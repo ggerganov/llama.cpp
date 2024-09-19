@@ -414,6 +414,8 @@ extern "C" {
                              const char * path_model,
               struct llama_model_params   params);
 
+    LLAMA_API void llama_model_reset_time(struct llama_model * model);
+
     LLAMA_API void llama_free_model(struct llama_model * model);
 
     // TODO: rename to llama_init_from_model
