@@ -1558,7 +1558,8 @@ int main(int argc, char ** argv) {
             }
             prev_inst = &inst;
         } else {
-            llama_model_reset_time(lmodel);
+            // ensure load_time dost not accumulate in llama_bench when not loading the same model
+            llama_reset_model_time(lmodel);
         }
 
         llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());

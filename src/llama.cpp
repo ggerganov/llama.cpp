@@ -8809,11 +8809,6 @@ static bool llm_load_tensors(
     return true;
 }
 
-void llama_model_reset_time(llama_model * model) {
-    model->t_start_us = ggml_time_us();
-    model->t_load_us = ggml_time_us() - model->t_start_us;
-}
-
 // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
 static int llama_model_load(const std::string & fname, llama_model & model, llama_model_params & params) {
     model.t_start_us = ggml_time_us();
@@ -18693,6 +18688,10 @@ struct llama_model * llama_load_model_from_file(
     }
 
     return model;
+}
+
+void llama_reset_model_time(llama_model * model) {
+    model->t_start_us = ggml_time_us() - model->t_load_us;
 }
 
 void llama_free_model(struct llama_model * model) {
