@@ -18690,7 +18690,7 @@ struct llama_model * llama_load_model_from_file(
     return model;
 }
 
-void llama_reset_model_time(llama_model * model) {
+void llama_reset_model_time(struct llama_model * model) {
     model->t_start_us = ggml_time_us() - model->t_load_us;
 }
 
