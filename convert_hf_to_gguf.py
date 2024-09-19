@@ -263,6 +263,9 @@ class Model:
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
+            # added for xgenmm
+            if name.endswith((".additional_embedding.weight", ".additional_fc.bias", "additional_fc.weight")):
+                continue
 
             old_dtype = data_torch.dtype
 
@@ -2069,6 +2072,8 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_token_types(toktypes)
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.special_token_ids['eos'] = 32007
+        print("YD: set special_vocab.special_token_ids['eos'] = 32007")
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):

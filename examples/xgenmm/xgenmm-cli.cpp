@@ -12,6 +12,8 @@
 static bool eval_tokens(struct llama_context *ctx_llama, std::vector<llama_token> tokens, int n_batch, int *n_past)
 {
     int N = (int)tokens.size();
+    // printf("token.size(): %d\n", N);
+    // printf("n_batch: %d\n", n_batch);
     for (int i = 0; i < N; i += n_batch)
     {
         int n_eval = (int)tokens.size() - i;
@@ -19,6 +21,7 @@ static bool eval_tokens(struct llama_context *ctx_llama, std::vector<llama_token
         {
             n_eval = n_batch;
         }
+        // printf("n_eval: %d, n_past: %d\n", n_eval, *n_past);
         if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval, *n_past, 0)))
         {
             LOG_TEE("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
@@ -41,12 +44,14 @@ static bool eval_string(struct llama_context *ctx_llama, const char *str, int n_
 
     std::string              str2 = str;
     std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
-    printf("prompt: %s", str);
-    for (auto token : embd_inp){
-        printf("%6d, ", token);
-    }
+    printf("!!prompt to eval!!: %s", str);
+    printf("----------------------\n");
+    // for (auto token : embd_inp){
+    //     printf("%6d, ", token);
+    // }
     printf("\n");
-    return eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
+    eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
+    return true;
 }
 
 static const char *sample(struct llama_sampling_context *ctx_sampling, struct llama_context *ctx_llama, int *n_past)
@@ -56,7 +61,7 @@ static const char *sample(struct llama_sampling_context *ctx_sampling, struct ll
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id))
     {
-        ret = "</s>";
+        ret = "<|end|>";
     }
     else
     {
@@ -247,6 +252,12 @@ static void process_prompt(struct llava_context *ctx_llava, struct llava_image_e
         }
     }
     eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, true);
+    // image_embed
+    // struct llava_image_embed
+    // {
+    //     float *embed;
+    //     int    n_image_pos;
+    // };
     llava_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past);
     eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
 

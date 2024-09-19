@@ -14,10 +14,14 @@ conda activate xgenmm-flamingo
 
 # step 3:  convert llm to gguf
 # https://github.com/ggerganov/llama.cpp/discussions/7927
-HF_TOKEN=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
-LLM_PATH=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct/llm
-# LLM_OUTPUT_FILE=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct/gguf/phi3_.gguf
+cd ../../
+# HF_TOKEN=<PUT YOUR TOKEN HERE>
 # downloads the tokenizer models of the specified models from Huggingface; generates the get_vocab_base_pre() function for convert_hf_to_gguf.py
-cd ../..
 # python convert_hf_to_gguf_update.py $HF_TOKEN
-python convert_hf_to_gguf.py $LLM_PATH
+
+
+LLM_PATH=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct/llm
+outtype=f32
+LLM_OUTPUT_FILE=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct/gguf/phi3_mini_4k_instruct_$outtype.gguf
+echo $LLM_OUTPUT_FILE
+python convert_hf_to_gguf.py $LLM_PATH --outfile $LLM_OUTPUT_FILE --outtype $outtype

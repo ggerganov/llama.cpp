@@ -1005,7 +1005,7 @@ bool llava_eval_image_embed(llama_context *ctx_llama, const struct llava_image_e
                             int *n_past)
 {
     int n_embd = llama_n_embd(llama_get_model(ctx_llama));
-
+    // printf("n_embd: %d\n", n_embd);
     for (int i = 0; i < image_embed->n_image_pos; i += n_batch)
     {
         int n_eval = image_embed->n_image_pos - i;
@@ -1013,17 +1013,18 @@ bool llava_eval_image_embed(llama_context *ctx_llama, const struct llava_image_e
         {
             n_eval = n_batch;
         }
+        // printf("(llava_eval_image_embed) n_eval: %d\n", n_eval);
         llama_batch batch = {
-            int32_t(n_eval),
-            nullptr,
-            (image_embed->embed + i * n_embd),
-            nullptr,
-            nullptr,
+            /* n_tokens */ int32_t(n_eval),
+            /* llama_token */ nullptr,
+            /* embed */ (image_embed->embed + i * n_embd),
             nullptr,
             nullptr,
-            *n_past,
-            1,
-            0,
+            nullptr,
+            nullptr,
+            /* all_pos_0 */ *n_past,
+            /* all_pos_1 */ 1,
+            /* all_seq_id */ 0,
         };
         if (llama_decode(ctx_llama, batch))
         {
@@ -1031,6 +1032,8 @@ bool llava_eval_image_embed(llama_context *ctx_llama, const struct llava_image_e
             return false;
         }
         *n_past += n_eval;
+        // printf("exit from llava_eval_image_embed\n");
+        // exit(-1);
     }
     return true;
 }

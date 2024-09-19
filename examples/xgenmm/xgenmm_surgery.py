@@ -70,8 +70,6 @@ if __name__ == "__main__":
                                         tokenizer_path=cfg.lm_path,
                                         model_family=cfg.model_family,
                                         **additional_kwargs)
-    print(model)
-    exit(1)
     model.load_state_dict(ckpt, strict=True)
     end = time.time()
     print(f"🟢 time used: [{end-start:.3f} s] | Done with instaiating the model.")
@@ -95,6 +93,7 @@ if __name__ == "__main__":
     
     # put the tokenizer in the same dir as the lang model
     tokenizer.save_pretrained(f"{save_dir}/llm")
+    print("❗❗❗ Please also download tokenizer.json mannually from https://huggingface.co/Salesforce/xgen-mm-phi3-mini-instruct-interleave-r-v1.5/resolve/main/tokenizer.json and put it in the same dir as the lang model.")
     
     end = time.time()
     print(f"🟢 time used: [{end-start:.3f} s]")
