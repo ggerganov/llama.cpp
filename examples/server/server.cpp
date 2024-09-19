@@ -1815,6 +1815,13 @@ struct server_context {
         for (server_slot & slot : slots) {
             if (slot.ga_n == 1) {
                 if (slot.is_processing() && (int) system_tokens.size() + slot.n_past >= slot.n_ctx - 1) {
+                    if (!params.ctx_shift){
+                        slot.release();
+                        slot.print_timings();
+                        send_final_response(slot);
+                        metrics.on_prediction(slot);
+                        continue;
+                    }
                     // Shift context
                     const int n_keep    = slot.params.n_keep + add_bos_token;
                     const int n_left    = (int) system_tokens.size() + slot.n_past - n_keep;
@@ -1938,6 +1945,12 @@ struct server_context {
                             slot.release();
                             slot.print_timings();
                             send_final_response(slot);
+                            continue;
+                        }
+                        // context shift is disabled and prompt is too large - discard it
+                        if (!params.ctx_shift && slot.n_prompt_tokens > slot.n_ctx ){
+                            slot.release();
+                            send_error(slot, "Input is too large to process. Either disable context shift or increase context length. ", ERROR_TYPE_SERVER);
                             continue;
                         }
 
