@@ -572,6 +572,7 @@ int main(int argc, char ** argv) {
 
     params.n_ctx = 512;
     params.logits_all = true;
+    params.escape = false;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_IMATRIX, print_usage)) {
         return 1;
