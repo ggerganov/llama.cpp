@@ -105,7 +105,7 @@ struct llama_hparams_lora {
     }
 };
 
-struct llama_layer {
+struct baby_llama_layer {
     // normalization
     struct ggml_tensor * attention_norm;
 
@@ -169,7 +169,7 @@ struct llama_model {
     struct ggml_tensor * norm;
     struct ggml_tensor * output;
 
-    std::vector<llama_layer> layers;
+    std::vector<baby_llama_layer> layers;
 };
 
 struct llama_model_lora {
