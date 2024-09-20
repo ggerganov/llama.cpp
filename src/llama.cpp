@@ -2846,9 +2846,8 @@ struct llama_model {
 
     std::string name = "n/a";
 
-    llama_hparams   hparams = {};
-    llama_vocab     vocab;
-    llm_tokenizer * tokenizer;
+    llama_hparams hparams = {};
+    llama_vocab   vocab;
 
     struct ggml_tensor * tok_embd;
     struct ggml_tensor * type_embd;
@@ -2924,8 +2923,6 @@ struct llama_model {
         while (!lora_adapters.empty()) {
             llama_lora_adapter_free(*lora_adapters.begin());
         }
-
-        delete tokenizer;
     }
 };
 
@@ -6407,7 +6404,7 @@ static void llm_load_vocab(
     }
     GGML_ASSERT(vocab.id_to_token.size() == vocab.token_to_id.size());
 
-    model.tokenizer = llama_create_tokenizer(vocab);
+    vocab.init_tokenizer();
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
@@ -6458,11 +6455,11 @@ static void llm_load_vocab(
     } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
         vocab.linefeed_id = vocab.special_pad_id;
     } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
-        const std::vector<int> ids = llama_tokenize_internal(model.tokenizer, "\n", false);
+        const std::vector<int> ids = llama_tokenize_internal(model.vocab, "\n", false);
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     } else {
-        const std::vector<int> ids = llama_tokenize_internal(model.tokenizer, "\xC4\x8A", false); // U+010A
+        const std::vector<int> ids = llama_tokenize_internal(model.vocab, "\xC4\x8A", false); // U+010A
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     }
@@ -20890,7 +20887,7 @@ int32_t llama_tokenize(
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
-    return llama_tokenize_impl(model->tokenizer, text, text_len, tokens, n_tokens_max, add_special, parse_special);
+    return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
 int32_t llama_token_to_piece(

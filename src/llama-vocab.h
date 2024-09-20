@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <map>
 
+struct llm_tokenizer;
+
 struct llama_vocab {
     using id    = llama_token;
     using token = std::string;
@@ -61,14 +63,14 @@ struct llama_vocab {
 
     std::vector<char> precompiled_charsmap;
 
+    llm_tokenizer * tokenizer = nullptr;
+
+    llama_vocab() = default;
+    ~llama_vocab();
+
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
-};
 
-struct llm_tokenizer {
-   llm_tokenizer(const llama_vocab & vocab) : vocab(vocab) {}
-   virtual ~llm_tokenizer() = default;
-
-   const llama_vocab & vocab;
+    void init_tokenizer();
 };
 
 //
@@ -78,12 +80,10 @@ struct llm_tokenizer {
 // TODO: rename to llama_tokenize_impl
 // TODO: This should probably be in llama.h
 std::vector<llama_vocab::id> llama_tokenize_internal(
-        const llm_tokenizer * tokenizer,
+        const llama_vocab & vocab,
         std::string raw_text,
         bool add_special,
         bool parse_special = false);
-
-llm_tokenizer * llama_create_tokenizer(const llama_vocab & vocab);
 
 // TODO: move the API below as member functions of llama_vocab
 llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch);
@@ -115,13 +115,13 @@ llama_token llama_token_eot_impl   (const struct llama_vocab & vocab);
 llama_token llama_token_eom_impl   (const struct llama_vocab & vocab);
 
 int32_t llama_tokenize_impl(
-                 const llm_tokenizer * tokenizer,
-                          const char * text,
-                             int32_t   text_len,
-                         llama_token * tokens,
-                             int32_t   n_tokens_max,
-                                bool   add_special,
-                                bool   parse_special);
+        const struct llama_vocab & vocab,
+                      const char * text,
+                         int32_t   text_len,
+                     llama_token * tokens,
+                         int32_t   n_tokens_max,
+                            bool   add_special,
+                            bool   parse_special);
 
 // does not write null-terminator to buf
 int32_t llama_token_to_piece_impl(
