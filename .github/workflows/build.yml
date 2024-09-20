@@ -912,7 +912,7 @@ jobs:
         shell: bash
 
     env:
-      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7dff44ba-e3af-4448-841c-0d616c8da6e7/w_BaseKit_p_2024.1.0.595_offline.exe
+      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d91caaa0-7306-46ea-a519-79a0423e1903/w_BaseKit_p_2024.2.1.101_offline.exe
       WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel
       ONEAPI_ROOT: "C:/Program Files (x86)/Intel/oneAPI"
     steps:
@@ -956,6 +956,7 @@ jobs:
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/sycl7.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/svml_dispmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libmmd.dll" ./build/bin
+          cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libiomp5md.dll" ./build/bin
           echo "cp oneAPI running time dll files to ./build/bin done"
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
 
