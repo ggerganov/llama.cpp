@@ -38,15 +38,16 @@ extern "C" {
     typedef void * ggml_backend_buffer_context_t;
 
     struct ggml_backend_buffer_i {
-        const char * (*GGML_CALL get_name)   (ggml_backend_buffer_t buffer);
-        void         (*GGML_CALL free_buffer)(ggml_backend_buffer_t buffer);
-        void *       (*GGML_CALL get_base)   (ggml_backend_buffer_t buffer);
-        void         (*GGML_CALL init_tensor)(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
-        void         (*GGML_CALL set_tensor) (ggml_backend_buffer_t buffer,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
-        void         (*GGML_CALL get_tensor) (ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
-        bool         (*GGML_CALL cpy_tensor) (ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst); // dst is in the buffer, src may be in any buffer
-        void         (*GGML_CALL clear)      (ggml_backend_buffer_t buffer, uint8_t value);
-        void         (*GGML_CALL reset)      (ggml_backend_buffer_t buffer); // reset any internal state due to tensor initialization, such as tensor extras
+        const char * (*GGML_CALL get_name)      (ggml_backend_buffer_t buffer);
+        void         (*GGML_CALL free_buffer)   (ggml_backend_buffer_t buffer);
+        void *       (*GGML_CALL get_base)      (ggml_backend_buffer_t buffer);
+        void         (*GGML_CALL init_tensor)   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+        void         (*GGML_CALL memset_tensor) (ggml_backend_buffer_t buffer,       struct ggml_tensor * tensor,     uint8_t value, size_t offset, size_t size);
+        void         (*GGML_CALL set_tensor)    (ggml_backend_buffer_t buffer,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
+        void         (*GGML_CALL get_tensor)    (ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
+        bool         (*GGML_CALL cpy_tensor)    (ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst); // dst is in the buffer, src may be in any buffer
+        void         (*GGML_CALL clear)         (ggml_backend_buffer_t buffer, uint8_t value);
+        void         (*GGML_CALL reset)         (ggml_backend_buffer_t buffer); // reset any internal state due to tensor initialization, such as tensor extras
     };
 
     struct ggml_backend_buffer {
