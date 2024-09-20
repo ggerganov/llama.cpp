@@ -1,5 +1,4 @@
 #include "out-prod.cuh"
-#include "vendors/cuda.h"
 
 #include <cstdint>
 
