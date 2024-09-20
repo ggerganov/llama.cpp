@@ -1950,7 +1950,7 @@ struct server_context {
                         // context shift is disabled and prompt is too large - discard it
                         if (!params.ctx_shift && slot.n_prompt_tokens > slot.n_ctx ){
                             slot.release();
-                            send_error(slot, "Input is too large to process. Either disable context shift or increase context length. ", ERROR_TYPE_SERVER);
+                            send_error(slot, "input is too large to process. enable context shift or increase the context length", ERROR_TYPE_SERVER);
                             continue;
                         }
 
