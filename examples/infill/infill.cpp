@@ -97,6 +97,11 @@ static void sigint_handler(int signo) {
             LOG("\n");
             gpt_perf_print(*g_ctx, *g_smpl);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
+
+            // make sure all logs are flushed
+            LOG("Interrupted by user\n");
+            gpt_log_pause(gpt_log_main());
+
             _exit(130);
         }
     }
