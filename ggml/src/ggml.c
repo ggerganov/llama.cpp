@@ -313,7 +313,6 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 #define GGML_DEBUG 0
 #define GGML_GELU_FP16
 #define GGML_GELU_QUICK_FP16
-#define GGML_N_TASKS_MAX (-1)
 
 #define GGML_SOFT_MAX_UNROLL 4
 #define GGML_VEC_DOT_UNROLL  2
