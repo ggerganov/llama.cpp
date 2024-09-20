@@ -1464,11 +1464,10 @@ struct server_context {
         std::vector<server_task_result> results(id_tasks.size());
         for (size_t i = 0; i < id_tasks.size(); i++) {
             server_task_result result = queue_results.recv(id_tasks);
-
             if (result.error) {
                 error_handler(result.data);
                 cancel_tasks(id_tasks);
-                break;
+                return;
             }
 
             size_t idx = result.data["index"];
@@ -1948,9 +1947,9 @@ struct server_context {
                             continue;
                         }
                         // context shift is disabled and prompt is too large - discard it
-                        if (!params.ctx_shift && slot.n_prompt_tokens > slot.n_ctx ){
+                        if (!params.ctx_shift && (slot.n_prompt_tokens > slot.n_ctx) ){
                             slot.release();
-                            send_error(slot, "input is too large to process. enable context shift or increase the context length", ERROR_TYPE_SERVER);
+                            send_error(slot, "Input is too large to process. Enable context shift or increase the context length", ERROR_TYPE_SERVER);
                             continue;
                         }
 
