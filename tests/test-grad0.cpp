@@ -240,7 +240,7 @@ static bool check_gradient(
     struct ggml_cgraph * gb = ggml_new_graph_custom(ctx0, GGML_DEFAULT_GRAPH_SIZE, true);
     ggml_build_forward_expand(gf, f);
     ggml_graph_cpy(gf, gb);
-    ggml_build_backward_expand(ctx0, gf, gb, false);
+    ggml_build_backward_expand(ctx0, gf, gb, false, false);
 
     ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
 
