@@ -11,6 +11,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+namespace {
+
 #ifdef LLAMA_DEFAULT_RMS_EPS
 constexpr float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 #else
@@ -105,7 +107,7 @@ struct llama_hparams_lora {
     }
 };
 
-struct gpt_layer {
+struct llama_layer {
     // normalization
     struct ggml_tensor * attention_norm;
 
@@ -169,7 +171,7 @@ struct llama_model {
     struct ggml_tensor * norm;
     struct ggml_tensor * output;
 
-    std::vector<gpt_layer> layers;
+    std::vector<llama_layer> layers;
 };
 
 struct llama_model_lora {
@@ -1432,7 +1434,7 @@ static struct ggml_tensor * cross_entropy_loss(
                                 ggml_new_f32(ctx, eps)))))));
 }
 
-int main(int argc, char ** argv) {
+int baby_llama_main(int argc, char ** argv) {
     if (argc < 1) {
         fprintf(stderr, "usage: %s\n", argv[0]);
 
@@ -1636,4 +1638,10 @@ int main(int argc, char ** argv) {
     ggml_free(model.ctx);
 
     return 0;
+}
+
+}
+
+int main(int argc, char ** argv) {
+    return baby_llama_main(argc, argv);
 }
