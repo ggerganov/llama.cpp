@@ -1976,6 +1976,32 @@ class Qwen2Model(Model):
             self._set_vocab_gpt2()
 
 
+@Model.register("Qwen2VLForConditionalGeneration")
+class Qwen2VLModel(Model):
+    model_arch = gguf.MODEL_ARCH.QWEN2
+
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_gpt2()
+    
+    # def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
+    #     new_name = self.tensor_map.get_name(key=name, try_suffixes=try_suffixes)
+    #     if name.startswith("visual."):
+    #         breakpoint()
+    #         return ""
+    #     if new_name is None:
+    #         raise ValueError(f"Can not map tensor {name!r}")
+    #     return new_name
+    
+    def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
+        for name, data in super().get_tensors():
+            if name.startswith("visual."):
+                continue
+            yield name, data
+
+
 @Model.register("Qwen2MoeForCausalLM")
 class Qwen2MoeModel(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2MOE
