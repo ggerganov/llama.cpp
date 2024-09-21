@@ -569,6 +569,7 @@ struct ggml_graph_node_properties {
     int64_t ne[GGML_MAX_DIMS];
     size_t nb[GGML_MAX_DIMS];
     void * src_address[GGML_MAX_SRC];
+    int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(int32_t)];
 };
 
 struct ggml_cuda_graph {
