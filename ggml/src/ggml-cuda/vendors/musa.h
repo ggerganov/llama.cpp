@@ -56,6 +56,7 @@
 #define cudaLaunchHostFunc musaLaunchHostFunc
 #define cudaMalloc musaMalloc
 #define cudaMallocHost musaMallocHost
+#define cudaMallocManaged musaMallocManaged
 #define cudaMemcpy musaMemcpy
 #define cudaMemcpyAsync musaMemcpyAsync
 #define cudaMemcpyPeerAsync musaMemcpyPeerAsync
