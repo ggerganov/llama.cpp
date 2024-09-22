@@ -1020,6 +1020,8 @@ async def oai_chat_completions(user_prompt,
                             event_data = line.split(': ', 1)
                             assert event_data[0] == 'data', f'Bad event code received: ```{event_data}```'
                             chunk_raw = event_data[1]
+                            if chunk_raw == '[DONE]':
+                                break
 
                             chunk = json.loads(chunk_raw)
                             assert len(chunk['choices']) == 1, f"no choices provided, line ```{line}```"
@@ -1370,8 +1372,6 @@ def start_server_background(context):
         server_args.append('--verbose')
     if context.lora_file:
         server_args.extend(['--lora', context.lora_file])
-    if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
-        server_args.extend(['--log-format', "text"])
 
     args = [str(arg) for arg in [context.server_path, *server_args]]
     print(f"bench: starting server with: {' '.join(args)}")

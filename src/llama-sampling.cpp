@@ -236,9 +236,10 @@ llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_conte
     const int n_vocab = llama_n_vocab(llama_get_model(ctx));
 
     // TODO: do not allocate each time
-    std::vector<llama_token_data> cur(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
+        cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
     }
 
     llama_token_data_array cur_p = {
@@ -349,11 +350,24 @@ void llama_sampler_chain_add(struct llama_sampler * chain, struct llama_sampler 
 struct llama_sampler * llama_sampler_chain_get(const struct llama_sampler * chain, int32_t i) {
     const auto * p = (const llama_sampler_chain *) chain->ctx;
 
-    if (i < 0 || i >= (int32_t) p->samplers.size()) {
+    if (i < 0 || (size_t) i >= p->samplers.size()) {
         return nullptr;
     }
 
     return p->samplers[i];
+}
+
+struct llama_sampler * llama_sampler_chain_remove(struct llama_sampler * chain, int32_t i) {
+    auto * p = (llama_sampler_chain *) chain->ctx;
+
+    if (i < 0 || (size_t) i >= p->samplers.size()) {
+        return nullptr;
+    }
+
+    auto * result = p->samplers[i];
+    p->samplers.erase(p->samplers.begin() + i);
+
+    return result;
 }
 
 int llama_sampler_chain_n(const struct llama_sampler * chain) {
@@ -1655,4 +1669,38 @@ uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl) {
     }
 
     return LLAMA_DEFAULT_SEED;
+}
+
+// perf
+
+struct llama_perf_sampler_data llama_perf_sampler(const struct llama_sampler * chain) {
+    struct llama_perf_sampler_data data = {};
+
+    if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
+        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with llama_sampler_chain_init()\n", __func__);
+    }
+
+    const auto * ctx = (const struct llama_sampler_chain *) chain->ctx;
+
+    data.t_sample_ms = 1e-3 * ctx->t_sample_us;
+    data.n_sample    = std::max(0, ctx->n_sample);
+
+    return data;
+}
+
+void llama_perf_sampler_print(const struct llama_sampler * chain) {
+    const auto data = llama_perf_sampler(chain);
+
+    LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+            __func__, data.t_sample_ms, data.n_sample, data.t_sample_ms / data.n_sample, 1e3 / data.t_sample_ms * data.n_sample);
+}
+
+void llama_perf_sampler_reset(struct llama_sampler * chain) {
+    if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
+        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with llama_sampler_chain_init()\n", __func__);
+    }
+
+    auto * ctx = (struct llama_sampler_chain *) chain->ctx;
+
+    ctx->t_sample_us = ctx->n_sample = 0;
 }

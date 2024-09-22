@@ -142,7 +142,7 @@ std::string gpt_sampler_params::print() const {
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
-    lparams.no_perf = false; // TODO: control via params
+    lparams.no_perf = params.no_perf;
 
     auto * result = new gpt_sampler {
         /* .params = */ params,
@@ -257,10 +257,10 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
     // TODO: measure grammar performance
 
     if (gsmpl) {
-        llama_perf_print(gsmpl->chain, LLAMA_PERF_TYPE_SAMPLER_CHAIN);
+        llama_perf_sampler_print(gsmpl->chain);
     }
     if (ctx) {
-        llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+        llama_perf_context_print(ctx);
     }
 }
 
@@ -325,7 +325,7 @@ llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
 }
 
 std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
-    std::string result = "\tlogits ";
+    std::string result = "logits ";
 
     for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
         const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);

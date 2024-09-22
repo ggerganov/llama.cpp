@@ -97,6 +97,8 @@ class Keys:
         RESCALE_EVERY_N_LAYERS            = "{arch}.rescale_every_n_layers"
         TIME_MIX_EXTRA_DIM                = "{arch}.time_mix_extra_dim"
         TIME_DECAY_EXTRA_DIM              = "{arch}.time_decay_extra_dim"
+        RESIDUAL_SCALE                    = "{arch}.residual_scale"
+        EMBEDDING_SCALE                   = "{arch}.embedding_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -112,6 +114,7 @@ class Keys:
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
         REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
         SLIDING_WINDOW    = "{arch}.attention.sliding_window"
+        SCALE             = "{arch}.attention.scale"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -210,6 +213,7 @@ class MODEL_ARCH(IntEnum):
     ORION        = auto()
     INTERNLM2    = auto()
     MINICPM      = auto()
+    MINICPM3     = auto()
     GEMMA        = auto()
     GEMMA2       = auto()
     STARCODER2   = auto()
@@ -219,6 +223,7 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R    = auto()
     DBRX         = auto()
     OLMO         = auto()
+    OLMOE        = auto()
     OPENELM      = auto()
     ARCTIC       = auto()
     DEEPSEEK2    = auto()
@@ -229,6 +234,7 @@ class MODEL_ARCH(IntEnum):
     JAIS         = auto()
     NEMOTRON     = auto()
     EXAONE       = auto()
+    GRANITE      = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -364,6 +370,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.ORION:          "orion",
     MODEL_ARCH.INTERNLM2:      "internlm2",
     MODEL_ARCH.MINICPM:        "minicpm",
+    MODEL_ARCH.MINICPM3:       "minicpm3",
     MODEL_ARCH.GEMMA:          "gemma",
     MODEL_ARCH.GEMMA2:         "gemma2",
     MODEL_ARCH.STARCODER2:     "starcoder2",
@@ -373,6 +380,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.OLMOE:          "olmoe",
     MODEL_ARCH.OPENELM:        "openelm",
     MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
@@ -383,6 +391,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.JAIS:           "jais",
     MODEL_ARCH.NEMOTRON:       "nemotron",
     MODEL_ARCH.EXAONE:         "exaone",
+    MODEL_ARCH.GRANITE:        "granite",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -867,6 +876,23 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
     ],
+    MODEL_ARCH.MINICPM3: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q_A,
+        MODEL_TENSOR.ATTN_Q_B,
+        MODEL_TENSOR.ATTN_KV_A_MQA,
+        MODEL_TENSOR.ATTN_KV_B,
+        MODEL_TENSOR.ATTN_Q_A_NORM,
+        MODEL_TENSOR.ATTN_KV_A_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.GEMMA: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -1007,6 +1033,23 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.OLMOE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
     ],
     MODEL_ARCH.OPENELM: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -1181,6 +1224,19 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GRANITE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
