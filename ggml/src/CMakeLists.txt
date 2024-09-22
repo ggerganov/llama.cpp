@@ -364,7 +364,7 @@ if (GGML_CUDA)
         if (GGML_MUSA)
             set_source_files_properties(${GGML_SOURCES_CUDA} PROPERTIES LANGUAGE CXX)
             foreach(SOURCE ${GGML_SOURCES_CUDA})
-                set_property(SOURCE ${SOURCE} PROPERTY COMPILE_FLAGS "-x musa -mtgpu --cuda-gpu-arch=mp_22")
+                set_property(SOURCE ${SOURCE} PROPERTY COMPILE_FLAGS "-x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22")
             endforeach()
         endif()
 

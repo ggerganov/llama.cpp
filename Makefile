@@ -611,7 +611,7 @@ ifdef GGML_CUDA
 
 		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include
 		MK_LDFLAGS   += -lmusa -lmublas -lmusart -lpthread -ldl -lrt -L$(CUDA_PATH)/lib -L/usr/lib64
-		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_22
+		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22
 	else
 		ifneq ('', '$(wildcard /opt/cuda)')
 			CUDA_PATH ?= /opt/cuda
