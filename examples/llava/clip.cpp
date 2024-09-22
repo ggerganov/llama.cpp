@@ -460,6 +460,7 @@ struct clip_vision_model {
     // embeddings
     struct ggml_tensor * class_embedding;
     struct ggml_tensor * patch_embeddings;
+    struct ggml_tensor * patch_embeddings_t1;  // second kernel of Conv3D when we decouple along temproal dimension
     struct ggml_tensor * patch_bias;
     struct ggml_tensor * position_embeddings;
 
@@ -2404,9 +2405,9 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             auto pos_embed_t = get_2d_sincos_pos_embed(embed_dim, std::make_pair(pos_w, pos_h));
 
             float * pos_embed_data = (float *)malloc(ggml_nbytes(pos_embed));
-            for(int i=0;i<pos_w * pos_h;++i){
-                for(int j=0;j<embed_dim;++j){
-                    pos_embed_data[i*embed_dim+j]=pos_embed_t[i][j];
+            for(int i=0;i < pos_w * pos_h; ++i){
+                for(int j=0; j < embed_dim; ++j){
+                    pos_embed_data[i * embed_dim + j] = pos_embed_t[i][j];
                 }
             }
 
