@@ -3056,18 +3056,14 @@ struct llama_sbatch {
         } else {
             // simple split
             if (batch->n_seq_id) {
-                for (size_t i = 0; i < length; ++i) {
-                    ubatch.n_seq_id = batch->n_seq_id + seq.offset;
-                }
+                ubatch.n_seq_id = batch->n_seq_id + seq.offset;
             } else {
                 for (size_t i = 0; i < length; ++i) {
                     ubatch.n_seq_id[ubatch.n_seqs + i] = 1;
                 }
             }
             if (batch->seq_id) {
-                for (size_t i = 0; i < length; ++i) {
-                    ubatch.seq_id = batch->seq_id + seq.offset;
-                }
+                ubatch.seq_id = batch->seq_id + seq.offset;
             } else {
                 for (size_t i = 0; i < length; ++i) {
                     ubatch.seq_id[ubatch.n_seqs + i] = &seq.all_seq_id;
