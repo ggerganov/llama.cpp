@@ -2829,6 +2829,12 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                 if (op->op == GGML_OP_MUL_MAT && a->ne[3] != b->ne[3]) {
                     return false;
                 }
+#ifdef GGML_USE_MUSA
+                if (b->type == GGML_TYPE_F16 && b->ne[2]*b->ne[3] > 1 &&
+                    !ggml_is_transposed(a) && !ggml_is_transposed(b)) {
+                    return false;
+                }
+#endif // GGML_USE_MUSA
                 switch (a->type) {
                     case GGML_TYPE_F32:
                     case GGML_TYPE_F16:
@@ -2852,6 +2858,11 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                     case GGML_TYPE_IQ3_XXS:
                     case GGML_TYPE_IQ4_NL:
                     case GGML_TYPE_IQ4_XS:
+#ifdef GGML_USE_MUSA
+                        if (a->type == GGML_TYPE_Q3_K) {
+                            return false;
+                        }
+#endif // GGML_USE_MUSA
                         return true;
                     default:
                         return false;
@@ -2977,6 +2988,9 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_RWKV_WKV:
             return true;
         case GGML_OP_FLASH_ATTN_EXT: {
+#ifndef FLASH_ATTN_AVAILABLE
+            return false;
+#endif
             if (op->src[0]->ne[0] ==  64 && op->src[1]->type == GGML_TYPE_F16) {
                 return true;
             }
