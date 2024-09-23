@@ -63,6 +63,25 @@ int ggml_sve_cnt_b = 0;
 #pragma warning(disable: 4702)
 #endif
 
+// Note: once we move threading into a separate C++ file
+// will use std::hardware_destructive_interference_size instead of hardcoding it here
+// and we'll use C++ attribute syntax.
+#define GGML_CACHE_LINE  64
+
+#if defined(__clang__) || defined(__GNUC__)
+#define GGML_CACHE_ALIGN __attribute__((aligned(GGML_CACHE_LINE)))
+#endif
+
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define GGML_TSAN_ENABLED 1
+#endif
+#else  // __has_feature
+#if defined(__SANITIZE_THREAD__)
+#define GGML_TSAN_ENABLED 1
+#endif
+#endif // __has_feature
+
 #if defined(_WIN32)
 
 #define WIN32_LEAN_AND_MEAN
@@ -72,6 +91,8 @@ int ggml_sve_cnt_b = 0;
 #include <windows.h>
 
 #if !defined(__clang__)
+#define GGML_CACHE_ALIGN __declspec(align(GGML_CACHE_LINE))
+
 typedef volatile LONG atomic_int;
 typedef atomic_int atomic_bool;
 typedef atomic_int atomic_flag;
@@ -2007,8 +2028,8 @@ struct ggml_threadpool {
 
     // synchronization primitives
     atomic_int n_graph;       // incremented when there is work to be done (i.e each graph)
-    atomic_int n_barrier;
-    atomic_int n_barrier_passed;
+    atomic_int GGML_CACHE_ALIGN n_barrier;
+    atomic_int GGML_CACHE_ALIGN n_barrier_passed;
     atomic_int current_chunk; // currently processing chunk during Mat_Mul, shared between all the threads.
 
     // these are atomic as an annotation for thread-sanitizer
@@ -3196,20 +3217,27 @@ static void ggml_barrier(struct ggml_threadpool * tp) {
     // enter barrier (full seq-cst fence)
     int n_barrier = atomic_fetch_add_explicit(&tp->n_barrier, 1, memory_order_seq_cst);
 
-    int last = 0;
     if (n_barrier == (n_threads - 1)) {
         // last thread
         atomic_store_explicit(&tp->n_barrier, 0, memory_order_relaxed);
-        last = 1;
-    } else {
-        // wait for other threads
-        while (atomic_load_explicit(&tp->n_barrier_passed, memory_order_relaxed) == n_passed) {
-            ggml_thread_cpu_relax();
-        }
+
+        // exit barrier (fill seq-cst fence)
+        atomic_fetch_add_explicit(&tp->n_barrier_passed, 1, memory_order_seq_cst);
+        return;
+    }
+
+    // wait for other threads
+    while (atomic_load_explicit(&tp->n_barrier_passed, memory_order_relaxed) == n_passed) {
+        ggml_thread_cpu_relax();
     }
 
     // exit barrier (full seq-cst fence)
-    atomic_fetch_add_explicit(&tp->n_barrier_passed, last, memory_order_seq_cst);
+    // TSAN doesn't support standalone fence yet, we use a dummy read-modify-write instead
+    #ifdef GGML_TSAN_ENABLED
+    atomic_fetch_add_explicit(&tp->n_barrier_passed, 0, memory_order_seq_cst);
+    #else
+    atomic_thread_fence(memory_order_seq_cst);
+    #endif
 #endif
 }
 
@@ -20240,10 +20268,13 @@ static inline bool ggml_graph_compute_thread_ready(struct ggml_compute_state * s
 
 // sync thread state after polling
 static inline void ggml_graph_compute_thread_sync(struct ggml_compute_state * state) {
-    struct ggml_threadpool * threadpool = state->threadpool;
-    // this should just be atomic_thread_fence(seq_cst) but it confuses thread-sanitizer
-    // so instead we just use a dummy read-modify-write
-    atomic_fetch_add_explicit(&threadpool->n_graph, 0, memory_order_seq_cst);
+    // TSAN doesn't support standalone fence yet, we use a dummy read-modify-write instead
+    #ifdef GGML_TSAN_ENABLED
+    atomic_fetch_add_explicit(&state->threadpool->n_graph, 0, memory_order_seq_cst);
+    #else
+    atomic_thread_fence(memory_order_seq_cst);
+    #endif
+    UNUSED(state);
 }
 
 static inline bool ggml_graph_compute_poll_for_work(struct ggml_compute_state * state) {
