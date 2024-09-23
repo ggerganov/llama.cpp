@@ -4122,7 +4122,7 @@ class GraniteMoeModel(GraniteModel):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         """In modeling_granitemoe, the JetMoe implementation of parallel experts
         is used. This essentially merges w1 and w3 into a single tensor with 2x
-        the hidden size that is then split during forward. To keep compativility
+        the hidden size that is then split during forward. To keep compatibility
         with existing mixtral support, we pull them apart here.
         """
 
