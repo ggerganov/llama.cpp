@@ -2510,7 +2510,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         }
 
         // Take group of two block_q4_0x8 structures at each pass of the loop and perform dot product operation
-        for (int64_t x = xstart; x < anc / 8; x += 2) {
+        for (int64_t x = 0; x < anc / 8; x += 2) {
 
             const block_q4_0x8 * b_ptr_0 = b_ptr_start + ((x)     * b_nb);
             const block_q4_0x8 * b_ptr_1 = b_ptr_start + ((x + 1) * b_nb);
