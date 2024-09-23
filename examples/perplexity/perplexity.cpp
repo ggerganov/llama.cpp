@@ -444,7 +444,6 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
             }
             LOG("%.2f minutes\n", total_seconds / 60.0);
         }
-        LOG("\n");
 
         //LOG_DBG("%s: using tokens %d...%d\n",__func__,params.n_ctx - params.ppl_stride + start, params.n_ctx + start);
         for (int j = n_ctx - params.ppl_stride - 1; j < n_ctx - 1; ++j) {
@@ -638,7 +637,6 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
             }
             LOG("%.2f minutes\n", total_seconds / 60.0);
         }
-        LOG("\n");
 
         for (int seq = 0; seq < n_seq_batch; seq++) {
             const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits_ith(ctx, seq*n_ctx + first);
