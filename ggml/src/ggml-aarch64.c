@@ -2489,11 +2489,11 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     __m256i signextendlut = _mm256_castsi128_si256(_mm_set_epi8(-1, -2, -3, -4, -5, -6, -7, -8, 7, 6, 5, 4, 3, 2, 1, 0));
     signextendlut = _mm256_permute2f128_si256(signextendlut, signextendlut, 0);
     // Permute mask used for easier vector processing at later stages
-    __m256i requiredOrder = _mm256_set_epi32(3 ,2 ,1 ,0, 7 ,6, 5, 4);
+    __m256i requiredOrder = _mm256_set_epi32(3, 2, 1, 0, 7, 6, 5, 4);
     int64_t xstart = 0;
-    int anr = nr - nr %16; // Used to align nr with boundary of 16
+    int anr = nr - nr%16; // Used to align nr with boundary of 16
 #ifdef __AVX512F__
-    int anc = nc - nc %16; // Used to align nc with boundary of 16
+    int anc = nc - nc%16; // Used to align nc with boundary of 16
     // Mask to mask out nibbles from packed bytes expanded to 512 bit length
     const __m512i m4bexpanded = _mm512_set1_epi8(0x0F);
     // Lookup table to convert signed nibbles to signed bytes expanded to 512 bit length
@@ -2510,9 +2510,9 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         }
 
         // Take group of two block_q4_0x8 structures at each pass of the loop and perform dot product operation
-        for (int64_t x = xstart; x < anc / 8; x+=2) {
+        for (int64_t x = xstart; x < anc / 8; x += 2) {
 
-            const block_q4_0x8 * b_ptr_0 = b_ptr_start + (x * b_nb);
+            const block_q4_0x8 * b_ptr_0 = b_ptr_start + ((x)     * b_nb);
             const block_q4_0x8 * b_ptr_1 = b_ptr_start + ((x + 1) * b_nb);
 
             // Master FP accumulators
@@ -2703,9 +2703,9 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         const block_q8_0x4 * a_ptr = a_ptr_start + (y * nb);
 
         // Take group of two block_q4_0x8 structures at each pass of the loop and perform dot product operation
-        for (int64_t x = 0; x < anc / 8; x+=2) {
+        for (int64_t x = 0; x < anc / 8; x += 2) {
 
-            const block_q4_0x8 * b_ptr_0 = b_ptr_start + (x * b_nb);
+            const block_q4_0x8 * b_ptr_0 = b_ptr_start + ((x)     * b_nb);
             const block_q4_0x8 * b_ptr_1 = b_ptr_start + ((x + 1) * b_nb);
 
             // Master FP accumulators
@@ -2887,11 +2887,11 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
             }
         }
     }
-    if(anc != nc) {
+    if (anc != nc) {
         xstart = anc/8;
         y = 0;
     }
-#endif
+#endif // __AVX512F__
 
     // Take group of four block_q8_0x4 structures at each pass of the loop and perform dot product operation
 
