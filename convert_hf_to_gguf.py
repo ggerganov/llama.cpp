@@ -4127,7 +4127,9 @@ class GraniteMoeModel(GraniteModel):
         """
 
         if name.endswith("block_sparse_moe.input_linear.weight"):
-            gate, up = data_torch.chunk(2, dim=-2)
+            ffn_dim = self.hparams["intermediate_size"]
+            assert data_torch.shape[-2] == 2 * ffn_dim, "Merged FFN tensor size must be 2 * intermediate_size"
+            gate, up = data_torch[..., :ffn_dim, :], data_torch[..., ffn_dim:, :]
             return [
                 (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE_EXP, bid), gate),
                 (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP_EXP, bid), up),
