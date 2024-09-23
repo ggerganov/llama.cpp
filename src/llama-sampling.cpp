@@ -756,20 +756,22 @@ static void llama_sampler_tail_free_apply(struct llama_sampler * smpl, llama_tok
         }
     }
 
+    assert(cur_p->size > 0); // guaranteed earlier
+    size_t last_idx = cur_p->size - 1;
+
     float cum_sum = 0.0f;
-    size_t last_idx = cur_p->size;
     for (size_t i = 0; i < second_derivatives.size(); ++i) {
         cum_sum += second_derivatives[i];
 
         // Check if the running sum is greater than z or if we have kept at least min_keep tokens
-        if (cum_sum > ctx->z && i >= ctx->min_keep) {
+        if (cum_sum > ctx->z && (i + 1) >= ctx->min_keep) {
             last_idx = i;
             break;
         }
     }
 
     // Resize the output vector to keep only the tokens above the tail location
-    cur_p->size = last_idx;
+    cur_p->size = last_idx + 1;
 }
 
 static struct llama_sampler * llama_sampler_tail_free_clone(const struct llama_sampler * smpl) {
