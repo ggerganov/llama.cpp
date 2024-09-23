@@ -4129,8 +4129,8 @@ class GraniteMoeModel(GraniteModel):
         if name.endswith("block_sparse_moe.input_linear.weight"):
             gate, up = data_torch.chunk(2, dim=-2)
             return [
-                (self.map_tensor_name(f"model.layers.{bid}.block_sparse_moe.input_linear.gate.weight"), gate),
-                (self.map_tensor_name(f"model.layers.{bid}.block_sparse_moe.input_linear.up.weight"), up),
+                (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE_EXP, bid), gate),
+                (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP_EXP, bid), up),
             ]
 
         return super().modify_tensors(data_torch, name, bid)
