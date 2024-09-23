@@ -209,7 +209,10 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             GGML_ASSERT(false && "unknown mirostat version");
         }
     } else {
-        llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+        if (params.n_probs > 0) {
+            llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.n_probs));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+        }
         llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
     }
 
