@@ -135,6 +135,9 @@ static atomic_bool atomic_flag_test_and_set(atomic_flag * ptr) {
 static void atomic_flag_clear(atomic_flag * ptr) {
     InterlockedExchange(ptr, 0);
 }
+static void atomic_thread_fence(memory_order mo) {
+    MemoryBarrier();
+}
 #else // clang
 #include <stdatomic.h>
 #endif
