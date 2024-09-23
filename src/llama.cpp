@@ -10243,9 +10243,6 @@ struct llm_build_context {
                     cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls, inp), model.cls_b);
                     cur = ggml_tanh(ctx0, cur);
                     cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls_out, cur), model.cls_out_b);
-
-                    // broadcast across the embedding size to make it compatible with the llama_get_embeddings API
-                    cur = ggml_repeat(ctx0, cur, inp);
                 } break;
             default:
                 {
@@ -16997,7 +16994,6 @@ static int llama_decode_internal(
                 case LLAMA_POOLING_TYPE_MEAN:
                 case LLAMA_POOLING_TYPE_CLS:
                 case LLAMA_POOLING_TYPE_LAST:
-                case LLAMA_POOLING_TYPE_RANK:
                     {
                         // extract sequence embeddings (cleared before processing each batch)
                         auto & embd_seq_out = lctx.embd_seq;
@@ -17009,6 +17005,20 @@ static int llama_decode_internal(
                             }
                             embd_seq_out[seq_id].resize(n_embd);
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_seq_out[seq_id].data(), (n_embd*seq_id)*sizeof(float), n_embd*sizeof(float));
+                        }
+                    } break;
+                case LLAMA_POOLING_TYPE_RANK:
+                    {
+                        // extract the rank score - a single float per sequence
+                        auto & embd_seq_out = lctx.embd_seq;
+
+                        for (uint32_t s = 0; s < ubatch.n_seqs; ++s) {
+                            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+                            if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
+                                continue;
+                            }
+                            embd_seq_out[seq_id].resize(1);
+                            ggml_backend_tensor_get_async(backend_embd, embd, embd_seq_out[seq_id].data(), (seq_id)*sizeof(float), sizeof(float));
                         }
                     } break;
                 case LLAMA_POOLING_TYPE_UNSPECIFIED:
