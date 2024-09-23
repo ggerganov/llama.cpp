@@ -385,9 +385,9 @@ int main(int argc, char ** argv) {
         if (params.n_keep > add_bos) {
             LOG_INF("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                LOG("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
+                LOG_CNT("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
             }
-            LOG("'\n");
+            LOG_CNT("'\n");
         }
         LOG_INF("\n");
     }
@@ -409,40 +409,40 @@ int main(int argc, char ** argv) {
     }
 
     if (params.interactive) {
-        LOG("%s: interactive mode on.\n", __func__);
+        LOG_INF("%s: interactive mode on.\n", __func__);
 
         if (!params.antiprompt.empty()) {
             for (const auto & antiprompt : params.antiprompt) {
-                LOG("Reverse prompt: '%s'\n", antiprompt.c_str());
+                LOG_INF("Reverse prompt: '%s'\n", antiprompt.c_str());
                 if (params.verbose_prompt) {
                     auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
                     for (int i = 0; i < (int) tmp.size(); i++) {
-                        LOG("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                        LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
                     }
                 }
             }
         }
 
         if (params.input_prefix_bos) {
-            LOG("Input prefix with BOS\n");
+            LOG_INF("Input prefix with BOS\n");
         }
 
         if (!params.input_prefix.empty()) {
-            LOG("Input prefix: '%s'\n", params.input_prefix.c_str());
+            LOG_INF("Input prefix: '%s'\n", params.input_prefix.c_str());
             if (params.verbose_prompt) {
                 auto tmp = ::llama_tokenize(ctx, params.input_prefix, true, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
-                    LOG("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                    LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
                 }
             }
         }
 
         if (!params.input_suffix.empty()) {
-            LOG("Input suffix: '%s'\n", params.input_suffix.c_str());
+            LOG_INF("Input suffix: '%s'\n", params.input_suffix.c_str());
             if (params.verbose_prompt) {
                 auto tmp = ::llama_tokenize(ctx, params.input_suffix, false, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
-                    LOG("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                    LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
                 }
             }
         }
@@ -474,7 +474,7 @@ int main(int argc, char ** argv) {
       //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * grp_attn_n"); // NOLINT
         LOG_INF("self-extend: n_ctx_train = %d, grp_attn_n = %d, grp_attn_w = %d\n", n_ctx_train, ga_n, ga_w);
     }
-    LOG("\n");
+    LOG_INF("\n");
 
     if (params.interactive) {
         const char * control_message;
@@ -486,11 +486,11 @@ int main(int argc, char ** argv) {
                               " - To return control without starting a new line, end your input with '/'.\n"
                               " - If you want to submit another line, end your input with '\\'.\n";
         }
-        LOG("== Running in interactive mode. ==\n");
+        LOG_INF("== Running in interactive mode. ==\n");
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-        LOG(       " - Press Ctrl+C to interject at any time.\n");
+        LOG_INF(       " - Press Ctrl+C to interject at any time.\n");
 #endif
-        LOG(       "%s\n", control_message);
+        LOG_INF(       "%s\n", control_message);
 
         is_interacting = params.interactive_first;
     }

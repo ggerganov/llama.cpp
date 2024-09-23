@@ -570,6 +570,7 @@ extern "C" {
         GGML_LOG_LEVEL_WARN  = 2,
         GGML_LOG_LEVEL_ERROR = 3,
         GGML_LOG_LEVEL_DEBUG = 4,
+        GGML_LOG_LEVEL_CONT  = 5, // continue previous log
     };
 
     // this tensor...
