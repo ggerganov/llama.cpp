@@ -182,7 +182,7 @@ def step_server_metrics(context):
     context.server_metrics = True
 
 @step('disable context shifting')
-def step_server_metrics(context):
+def step_server_disable_ctx_shift(context):
     context.disable_ctx_shift = True
 
 @step("the server is starting")
