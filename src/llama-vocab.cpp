@@ -201,8 +201,7 @@ struct llm_tokenizer_spm : llm_tokenizer {
 };
 
 struct llm_tokenizer_spm_session {
-    llm_tokenizer_spm_session(const llama_vocab & vocab) : vocab(vocab),
-        spm_tokenizer(static_cast<const llm_tokenizer_spm *>(vocab.tokenizer)) {}
+    llm_tokenizer_spm_session(const llama_vocab & vocab) : vocab(vocab) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
 
@@ -320,7 +319,8 @@ private:
     }
 
     const llama_vocab & vocab;
-    const llm_tokenizer_spm * spm_tokenizer; // currently unused
+    // currently unused
+    // const llm_tokenizer_spm * spm_tokenizer;
 
     std::vector<llm_symbol> symbols;
     llm_bigram_spm::queue work_queue;
@@ -668,8 +668,7 @@ struct llm_tokenizer_wpm : llm_tokenizer {
 };
 
 struct llm_tokenizer_wpm_session {
-    llm_tokenizer_wpm_session(const llama_vocab & vocab) : vocab(vocab),
-        wpm_tokenizer(static_cast<const llm_tokenizer_wpm *>(vocab.tokenizer)) {}
+    llm_tokenizer_wpm_session(const llama_vocab & vocab) : vocab(vocab) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         const auto & token_map = vocab.token_to_id;
@@ -773,7 +772,8 @@ struct llm_tokenizer_wpm_session {
 
 private:
     const llama_vocab & vocab;
-    const llm_tokenizer_wpm * wpm_tokenizer;
+    // currently unused
+    // const llm_tokenizer_wpm * wpm_tokenizer;
 };
 
 //
