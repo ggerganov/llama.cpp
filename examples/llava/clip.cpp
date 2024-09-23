@@ -1283,16 +1283,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 LOG_TEE("Error: Invalid hyperparameter values\n");
                 return false;
             }
-             // Optionally log loaded hyperparameters for debugging
-            LOG_TEE("Loaded hyperparameters:\n");
-            LOG_TEE("Hidden size: %d\n", hparams.hidden_size);
-            LOG_TEE("Number of heads: %d\n", hparams.n_head);
-            LOG_TEE("Number of intermediate units: %d\n", hparams.n_intermediate);
-            LOG_TEE("Number of layers: %d\n", hparams.n_layer);
-            LOG_TEE("Image size: %d\n", hparams.image_size);
-            LOG_TEE("Patch size: %d\n", hparams.patch_size);
-            LOG_TEE("Projection dimension: %d\n", hparams.projection_dim);
-            LOG_TEE("Layer norm epsilon: %f\n", hparams.eps);
         } catch (const std::exception& e) {
             LOG_TEE("Error while loading hyperparameters: %s\n", e.what());
         }
