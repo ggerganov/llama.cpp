@@ -1837,10 +1837,8 @@ struct server_context {
             if (slot.ga_n == 1) {
                 if (slot.is_processing() && (int) system_tokens.size() + slot.n_past >= slot.n_ctx - 1) {
                     if (!params.ctx_shift) {
-                        // this check is redundant (for good)
-                        // we should never get here, since n_predict is already limited
-                        slot.release();
-                        send_error(slot, "context shift is disabled", ERROR_TYPE_SERVER);
+                        // we should never get here, because generation should already stopped in process_token()
+                        GGML_ASSERT(false && "context shifting is disabled");
                         continue;
                     }
 
