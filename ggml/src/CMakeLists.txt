@@ -1186,6 +1186,7 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
         endif()
         if (GGML_AVX512)
             list(APPEND ARCH_FLAGS -mavx512f)
+            list(APPEND ARCH_FLAGS -mavx512dq)
             list(APPEND ARCH_FLAGS -mavx512bw)
         endif()
         if (GGML_AVX512_VBMI)
