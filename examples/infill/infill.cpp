@@ -263,9 +263,9 @@ int main(int argc, char ** argv) {
         if (params.n_keep > 0) {
         LOG_INF("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                LOG("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
+                LOG_CNT("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
             }
-            LOG("'\n");
+            LOG_CNT("'\n");
         }
         LOG_INF("\n");
     }
@@ -306,8 +306,8 @@ int main(int argc, char ** argv) {
 
     LOG_INF("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
-    LOG("\n");
-    LOG("\n#####  Infill mode  #####\n\n");
+    LOG_INF("\n");
+    LOG_INF("\n#####  Infill mode  #####\n\n");
     if (params.interactive) {
         const char *control_message;
         if (params.multiline_input) {
@@ -318,11 +318,11 @@ int main(int argc, char ** argv) {
                               " - To return control without starting a new line, end your input with '/'.\n"
                               " - If you want to submit another line, end your input with '\\'.\n";
         }
-        LOG("== Running in interactive mode. ==\n");
+        LOG_INF("== Running in interactive mode. ==\n");
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-        LOG(       " - Press Ctrl+C to interject at any time.\n");
+        LOG_INF(       " - Press Ctrl+C to interject at any time.\n");
 #endif
-        LOG(       "%s\n", control_message);
+        LOG_INF(       "%s\n", control_message);
 
         is_interacting = params.interactive_first;
     }
