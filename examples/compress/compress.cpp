@@ -133,14 +133,13 @@ std::vector<uint8_t> encode(llama_context *ctx, std::vector<llama_token> inp, gp
                 int block_size = (bit_offset + PAD) / 8 - block_start;
                 if (block_size >= 256)
                 {
-                    // TODO: figure it out
-                    LOG_ERR("OOPS");
+                    // TODO: handle more than 256 bytes of block data 
+                    // (maybe allow multiple blocks in a row)
+                    LOG_ERR("Block too big %d >= 256", block_size);
                     exit(-1);
                 }
                 sample_ids_bitpacked[block_start + 1] = block_size & 0xff;
 
-                // TODO: handle more than 256 bits of block data (multiple blocks or bigger header?)
-                //  sample_ids_bitpacked[block_start + 2] = block_size >> 8;
 
                 // put last bytes
                 if (PAD)
