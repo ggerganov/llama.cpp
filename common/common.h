@@ -80,6 +80,7 @@ enum llama_example {
     LLAMA_EXAMPLE_PARALLEL,
 
     LLAMA_EXAMPLE_COUNT,
+    LLAMA_EXAMPLE_COMPRESS
 };
 
 enum gpt_sampler_type {
@@ -340,6 +341,9 @@ struct gpt_params {
 
     // batched-bench params
     bool batched_bench_output_jsonl = false;
+
+    int num_tokens_header = 1;
+    int compress_mode = 0;
 };
 
 // call once at the start of a program if it uses libcommon
