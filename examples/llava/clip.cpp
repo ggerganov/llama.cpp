@@ -1285,6 +1285,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             }
         } catch (const std::exception& e) {
             LOG_TEE("Error while loading hyperparameters: %s\n", e.what());
+            return false;
         }
         
         try {
