@@ -1270,7 +1270,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         // load vision model
         auto & vision_model = new_clip->vision_model;
         auto & hparams = vision_model.hparams;
-        try{
+        try {
             hparams.hidden_size    = get_u32(ctx, format(KEY_N_EMBD, "vision"));
             hparams.n_head         = get_u32(ctx, format(KEY_N_HEAD, "vision"));
             hparams.n_intermediate = get_u32(ctx, format(KEY_N_FF, "vision"));
