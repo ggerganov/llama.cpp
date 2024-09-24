@@ -73,13 +73,13 @@ std::vector<uint8_t> encode(llama_context *ctx, std::vector<llama_token> inp, gp
             llama_token candidate = tok.id;
             if (candidate == inp[index])
             {
-                LOG("%s", llama_token_to_piece(ctx, candidate));
+                LOG("%s", llama_token_to_piece(ctx, candidate).c_str());
                 match = i;
                 break;
             }
         }
         if(match<0){
-            LOG_ERR("\n couldn't match %s", llama_token_to_piece(ctx, inp[index]));
+            LOG_ERR("\n couldn't match %s", llama_token_to_piece(ctx, inp[index]).c_str());
             exit(1);
         }
         sample_ids.push_back(match);
