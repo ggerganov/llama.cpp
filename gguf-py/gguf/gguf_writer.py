@@ -712,6 +712,9 @@ class GGUFWriter:
     def add_attention_scale(self, value: float) -> None:
         self.add_float32(Keys.Attention.SCALE.format(arch=self.arch), value)
 
+    def add_block_skip_connection(self, n: int, value: list[int]) -> None:
+        self.add_array(Keys.Attention.BLOCK_SKIP_CONNECTION.format(arch=self.arch, n=n), value)
+
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
 
