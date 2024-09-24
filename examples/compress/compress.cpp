@@ -488,7 +488,8 @@ int main(int argc, char **argv)
     params.sparams.min_p = 0;
     params.sparams.top_p = 1;
     params.sparams.top_k = -1;
-    params.sparams.temp = 0;
+    // Avoid temp=0 because greedy sampling breaks stuff
+    params.sparams.temp = 1.; 
 
     gpt_init();
 
