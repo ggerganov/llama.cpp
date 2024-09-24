@@ -80,6 +80,8 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
     bool invalid_param = false;
 
     int arg_idx = 1;
+    bool is_op_set = false;
+    bool is_mode_set = false;
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         arg = argv[arg_idx];
         if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
@@ -87,8 +89,6 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
         }
 
         bool arg_found = false;
-        bool is_op_set = false;
-        bool is_mode_set = false;
         if (arg == "-h" || arg == "--help") {
             split_print_usage(argv[0]);
             exit(0);
