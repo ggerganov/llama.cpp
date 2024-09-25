@@ -111,7 +111,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
         del new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE]
 
     if gguf.Keys.Tokenizer.INVERSE_TEMPLATE in new_metadata:
-        logger.debug('Adding inverse template(s)')
+        logger.debug('Adding inverse template')
         writer.add_inverse_template(new_metadata[gguf.Keys.Tokenizer.INVERSE_TEMPLATE].value)
         del new_metadata[gguf.Keys.Tokenizer.INVERSE_TEMPLATE]
 
