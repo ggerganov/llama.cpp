@@ -597,6 +597,9 @@ class Model:
         if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
             # ref: https://huggingface.co/databricks/dbrx-base
             res = "dbrx"
+        if chkhsh == "c7699093ba4255a91e702aa38a596aa81669f3525dae06c2953267dde580f448":
+            # ref: https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
+            res = "jina-v1-en"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
             res = "jina-v2-en"
@@ -3117,6 +3120,13 @@ class JinaBertV2Model(BertModel):
         self.gguf_writer.add_add_bos_token(True)
         self.gguf_writer.add_add_eos_token(True)
 
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # if name starts with "bert.", remove the prefix
+        # e.g. https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
+        if name.startswith("bert."):
+            name = name[5:]
+
+        return super().modify_tensors(data_torch, name, bid)
 
 @Model.register("OpenELMForCausalLM")
 class OpenELMModel(Model):

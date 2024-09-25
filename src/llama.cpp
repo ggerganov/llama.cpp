@@ -828,6 +828,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_CLS,             "cls" },
         },
     },
     {
@@ -5590,11 +5591,11 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
-                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type);
+                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type, false);
                 hparams.f_max_alibi_bias = 8.0f;
 
                 switch (hparams.n_layer) {
-                    case 4: model.type = e_model::MODEL_33M; break; // jina-embeddings-small
+                    case 4:  model.type = e_model::MODEL_33M;  break; // jina-embeddings-small
                     case 12: model.type = e_model::MODEL_137M; break; // jina-embeddings-base
                 }
             } break;
@@ -6287,6 +6288,7 @@ static void llm_load_vocab(
                     tokenizer_pre == "phi-2"   ||
                     tokenizer_pre == "jina-es" ||
                     tokenizer_pre == "jina-de" ||
+                    tokenizer_pre == "jina-v1-en" ||
                     tokenizer_pre == "jina-v2-es" ||
                     tokenizer_pre == "jina-v2-de" ||
                     tokenizer_pre == "jina-v2-code") {
@@ -6408,7 +6410,12 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
+
+        //GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
+        if (word.empty()) {
+            LLAMA_LOG_WARN("%s: empty token at index %u\n", __func__, i);
+            word = "[EMPTY_" + std::to_string(i) + "]";
+        }
 
         vocab.token_to_id[word] = i;
         vocab.max_token_len = std::max(vocab.max_token_len, (int) word.size());
@@ -6487,8 +6494,14 @@ static void llm_load_vocab(
         vocab.linefeed_id = ids[0];
     } else {
         const std::vector<int> ids = llama_tokenize_internal(vocab, "\xC4\x8A", false); // U+010A
-        GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
-        vocab.linefeed_id = ids[0];
+
+        //GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
+        if (ids.empty()) {
+            LLAMA_LOG_WARN("%s: model vocab missing newline token, using special_pad_id instead\n", __func__);
+            vocab.linefeed_id = vocab.special_pad_id;
+        } else {
+            vocab.linefeed_id = ids[0];
+        }
     }
 
     // special tokens
@@ -7419,6 +7432,8 @@ static bool llm_load_tensors(
                     model.tok_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd}); // LayerNorm
                     model.tok_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd}); //LayerNorm bias
 
+                    model.cls   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "weight"), {n_embd, 1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.cls_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "bias"),   {1},         llama_model_loader::TENSOR_NOT_REQUIRED);
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
                         ggml_context * ctx_split = ctx_for_layer_split(i);
@@ -10237,12 +10252,15 @@ struct llm_build_context {
                     // https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/roberta/modeling_roberta.py#L1566
                     GGML_ASSERT(model.cls       != nullptr);
                     GGML_ASSERT(model.cls_b     != nullptr);
-                    GGML_ASSERT(model.cls_out   != nullptr);
-                    GGML_ASSERT(model.cls_out_b != nullptr);
 
                     cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls, inp), model.cls_b);
                     cur = ggml_tanh(ctx0, cur);
-                    cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls_out, cur), model.cls_out_b);
+
+                    if (model.cls_out) {
+                        GGML_ASSERT(model.cls_out_b != nullptr);
+
+                        cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls_out, cur), model.cls_out_b);
+                    }
                 } break;
             default:
                 {

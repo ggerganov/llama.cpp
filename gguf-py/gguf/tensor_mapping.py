@@ -681,6 +681,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.CLS: (
+            "classifier",       # jina
             "classifier.dense", # roberta
         ),
 
