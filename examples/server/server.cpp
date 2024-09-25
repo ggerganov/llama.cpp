@@ -3296,6 +3296,7 @@ int main(int argc, char ** argv) {
     svr->Post("/embedding",           handle_embeddings); // legacy
     svr->Post("/embeddings",          handle_embeddings);
     svr->Post("/v1/embeddings",       handle_embeddings);
+    svr->Post("/rerank",              handle_rerank);
     svr->Post("/v1/rerank",           handle_rerank);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
