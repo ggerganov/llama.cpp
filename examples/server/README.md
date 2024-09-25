@@ -602,6 +602,41 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
     }'
     ```
 
+    <details>
+    <summary>Show output</summary>
+
+    ```json
+    {
+      "choices": [
+        {
+          "finish_reason": "tool",
+          "index": 0,
+          "message": {
+            "content": null,
+            "tool_calls": [
+              {
+                "name": "ipython",
+                "arguments": "{\"code\":\" \\nprint(\\\"Hello, World!\\\")\"}"
+              }
+            ],
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": 1727287211,
+      "model": "gpt-3.5-turbo",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 16,
+        "prompt_tokens": 44,
+        "total_tokens": 60
+      },
+      "id": "chatcmpl-Htbgh9feMmGM0LEH2hmQvwsCxq3c6Ni8"
+    }
+    ```
+
+    </details>
+
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
     *Options:*
