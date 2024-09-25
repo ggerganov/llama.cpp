@@ -6455,7 +6455,7 @@ static void llm_load_vocab(
     } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
         vocab.linefeed_id = vocab.special_pad_id;
     } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
-        const std::vector<int> ids = llama_tokenize_internal(model.vocab, "\n", false);
+        const std::vector<int> ids = llama_tokenize_internal(vocab, "\n", false);
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     } else {
