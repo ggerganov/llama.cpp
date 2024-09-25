@@ -32,13 +32,37 @@ model_ids = [
     "meetkai/functionary-medium-v3.2",
     "Qwen/Qwen2-7B-Instruct",
     "Qwen/Qwen2-VL-7B-Instruct",
-    "Qwen/Qwen2.5-7B-Instruct", # "Qwen/Qwen2.5-72B-Instruct", "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "Qwen/Qwen2.5-Math-7B-Instruct", # "Qwen/Qwen2.5-Math-72B-Instruct",
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen2.5-Math-7B-Instruct", 
+    "microsoft/Phi-3-mini-4k-instruct",
+    "microsoft/Phi-3-small-8k-instruct",
+    "microsoft/Phi-3-medium-4k-instruct",
     "microsoft/Phi-3.5-mini-instruct",
-
+    "indischepartij/MiniCPM-3B-OpenHermes-2.5-v2", 
+    "teknium/OpenHermes-2.5-Mistral-7B",
+    "TheBloke/FusionNet_34Bx2_MoE-AWQ",
+    "bofenghuang/vigogne-2-70b-chat",
+    "mlabonne/AlphaMonarch-7B",
+    "OrionStarAI/Orion-14B-Chat",
+    "openchat/openchat-3.5-0106",
+    "deepseek-ai/deepseek-coder-33b-instruct",
+    "abacusai/Fewshot-Metamath-OrcaVicuna-Mistral", 
+    "CohereForAI/c4ai-command-r-plus",
+    "THUDM/chatglm3-6b", 
+    "derek33125/project-angel-chatglm4", 
+    "deepseek-ai/DeepSeek-Coder-V2-Instruct", 
+    "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+    "deepseek-ai/DeepSeek-V2.5",
+    
+    # Needs debugging:
+    # "eachadea/vicuna-13b-1.1",
+    # "microsoft/Phi-3-vision-instruct",
+    
     # Gated models:
     "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "google/gemma-7b-it",
     "google/gemma-2-2b-it",
+    "mistralai/Mistral-7B-Instruct-v0.2",
     "mistralai/Mixtral-8x7B-Instruct-v0.1",
 ]
 
@@ -52,7 +76,7 @@ def strftime_now(format):
     return datetime.now().strftime(format)
 
 def handle_chat_template(model_id, variant, template_src):
-    print(f"# {model_id} @ {variant}")
+    print(f"# {model_id} @ {variant}", flush=True)
     model_name = model_id.replace("/", "-")
     base_name = f'{model_name}-{variant}' if variant else model_name
     template_file = f'tests/chat/templates/{base_name}.jinja'
@@ -60,7 +84,7 @@ def handle_chat_template(model_id, variant, template_src):
     with open(template_file, 'w') as f:
         f.write(template_src)
         
-    print(f"- {template_file}")
+    print(f"- {template_file}", flush=True)
     
     env = jinja2.Environment(
       trim_blocks=True,
@@ -91,7 +115,7 @@ def handle_chat_template(model_id, variant, template_src):
             continue
         
         output_file = f'tests/chat/goldens/{base_name}-{context_name}.txt'
-        print(f"- {output_file}")
+        print(f"- {output_file}", flush=True)
         try:
             output = template.render(**context)  
         except:
@@ -103,7 +127,7 @@ def handle_chat_template(model_id, variant, template_src):
             try:
                 output = template.render(**context)
             except Exception as e:
-                print(f"  ERROR: {e}")
+                print(f"  ERROR: {e}", flush=True)
                 output = f"ERROR: {e}"
 
         with open(output_file, 'w') as f:
