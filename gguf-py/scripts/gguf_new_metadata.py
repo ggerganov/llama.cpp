@@ -85,7 +85,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
             continue
 
         # Skip old chat templates if we have new ones
-        if field.name.startswith(gguf.Keys.Tokenizer.CHAT_TEMPLATE) and gguf.Keys.Tokenizer.CHAT_TEMPLATE in new_metadata:
+        if (field.name.startswith(gguf.Keys.Tokenizer.CHAT_TEMPLATE) and gguf.Keys.Tokenizer.CHAT_TEMPLATE in new_metadata) or (field.name.startswith(gguf.Keys.Tokenizer.INVERSE_TEMPLATE) and gguf.Keys.Tokenizer.INVERSE_TEMPLATE in new_metadata):
             logger.debug(f'Skipping {field.name}')
             continue
 
@@ -109,6 +109,11 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
         logger.debug('Adding chat template(s)')
         writer.add_chat_template(new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE].value)
         del new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE]
+
+    if gguf.Keys.Tokenizer.INVERSE_TEMPLATE in new_metadata:
+        logger.debug('Adding inverse template(s)')
+        writer.add_inverse_template(new_metadata[gguf.Keys.Tokenizer.INVERSE_TEMPLATE].value)
+        del new_metadata[gguf.Keys.Tokenizer.INVERSE_TEMPLATE]
 
     for key, val in new_metadata.items():
         logger.debug(f'Adding {key}: "{val.value}" {val.description}')
@@ -143,7 +148,8 @@ def main() -> None:
     parser.add_argument("--general-name",                              type=str,  help="The models general.name", metavar='"name"')
     parser.add_argument("--general-description",                       type=str,  help="The models general.description", metavar='"Description ..."')
     parser.add_argument("--chat-template",                             type=str,  help="Chat template string (or JSON string containing templates)", metavar='"{% ... %} ..."')
-    parser.add_argument("--chat-template-config",                      type=Path, help="Config file containing chat template(s)", metavar='tokenizer_config.json')
+    parser.add_argument("--inverse-template",                          type=str,  help="Inverse template string", metavar='"{% ... %} ..."')
+    parser.add_argument("--chat-template-config",                      type=Path, help="Config file containing chat and/or inverse template(s)", metavar='tokenizer_config.json')
     parser.add_argument("--pre-tokenizer",                             type=str,  help="The models tokenizer.ggml.pre", metavar='"pre tokenizer"')
     parser.add_argument("--remove-metadata",      action="append",     type=str,  help="Remove metadata (by key name) from output model", metavar='general.url')
     parser.add_argument("--special-token",        action="append",     type=str,  help="Special token by value", nargs=2, metavar=(' | '.join(token_names.keys()), '"<token>"'))
@@ -166,12 +172,18 @@ def main() -> None:
     if args.chat_template:
         new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, json.loads(args.chat_template) if args.chat_template.startswith('[') else args.chat_template)
 
+    if args.inverse_template:
+        new_metadata[gguf.Keys.Tokenizer.INVERSE_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, args.inverse_template)
+
     if args.chat_template_config:
         with open(args.chat_template_config, 'r') as fp:
             config = json.load(fp)
-            template = config.get('chat_template')
-            if template:
-                new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, template)
+            chat_template = config.get('chat_template')
+            inverse_template = config.get('inverse_template')
+            if chat_template:
+                new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, chat_template)
+            if inverse_template:
+                new_metadata[gguf.Keys.Tokenizer.INVERSE_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, inverse_template)
 
     if args.pre_tokenizer:
         new_metadata[gguf.Keys.Tokenizer.PRE] = MetadataDetails(gguf.GGUFValueType.STRING, args.pre_tokenizer)
