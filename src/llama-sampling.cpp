@@ -1674,7 +1674,7 @@ struct llama_sampler * llama_sampler_init_penalties(
             /* .penalty_repeat  = */ penalty_repeat,
             /* .penalty_freq    = */ penalty_freq,
             /* .penalty_present = */ penalty_present,
-            /* .penalty_repeat_sigmoid_growth */ penalty_repeat_sigmoid_growth,
+            /* .penalty_repeat_sigmoid_growth = */ penalty_repeat_sigmoid_growth,
             /* .penalize_nl     = */ penalize_nl,
             /* .ignore_eos      = */ ignore_eos,
             /* .prev            = */ ring_buffer<llama_token>(penalty_last_n),
