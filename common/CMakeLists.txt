@@ -67,6 +67,7 @@ add_library(${TARGET} STATIC
     ngram-cache.h
     sampling.cpp
     sampling.h
+    tool-call.cpp
     train.cpp
     train.h
     )

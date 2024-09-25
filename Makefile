@@ -55,6 +55,7 @@ TEST_TARGETS = \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
 	tests/test-minja \
+	tests/test-tool-call \
 	tests/test-llama-grammar \
 	tests/test-log \
 	tests/test-model-load-cancel \
@@ -940,7 +941,8 @@ OBJ_COMMON = \
 	common/sampling.o \
 	common/train.o \
 	common/build-info.o \
-	common/json-schema-to-grammar.o
+	common/json-schema-to-grammar.o \
+	common/tool-call.o
 
 OBJ_ALL = $(OBJ_GGML) $(OBJ_LLAMA) $(OBJ_COMMON)
 
@@ -1199,6 +1201,11 @@ common/console.o: \
 common/json-schema-to-grammar.o: \
 	common/json-schema-to-grammar.cpp \
 	common/json-schema-to-grammar.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/tool-call.o: \
+	common/tool-call.cpp \
+	common/tool-call.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/train.o: \
@@ -1570,6 +1577,11 @@ tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-antiprompts: tests/test-antiprompts.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-tool-call: tests/test-tool-call.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
