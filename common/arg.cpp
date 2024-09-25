@@ -1102,7 +1102,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else if (value == "last") { params.pooling_type = LLAMA_POOLING_TYPE_LAST; }
             else { throw std::invalid_argument("invalid value"); }
         }
-    ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_RETRIEVAL, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_POOLING"));
     add_opt(llama_arg(
         {"--attention"}, "{causal,non,causal}",
         "attention type for embeddings, use model default if unspecified",
@@ -1121,77 +1121,77 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else if (value == "yarn") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
             else { throw std::invalid_argument("invalid value"); }
         }
-    ));
+    ).set_env("LLAMA_ARG_ROPE_SCALING_TYPE"));
     add_opt(llama_arg(
         {"--rope-scale"}, "N",
         "RoPE context scaling factor, expands context by a factor of N",
         [](gpt_params & params, const std::string & value) {
             params.rope_freq_scale = 1.0f / std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_ROPE_SCALE"));
     add_opt(llama_arg(
         {"--rope-freq-base"}, "N",
         "RoPE base frequency, used by NTK-aware scaling (default: loaded from model)",
         [](gpt_params & params, const std::string & value) {
             params.rope_freq_base = std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_ROPE_FREQ_BASE"));
     add_opt(llama_arg(
         {"--rope-freq-scale"}, "N",
         "RoPE frequency scaling factor, expands context by a factor of 1/N",
         [](gpt_params & params, const std::string & value) {
             params.rope_freq_scale = std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_ROPE_FREQ_SCALE"));
     add_opt(llama_arg(
         {"--yarn-orig-ctx"}, "N",
         format("YaRN: original context size of model (default: %d = model training context size)", params.yarn_orig_ctx),
         [](gpt_params & params, int value) {
             params.yarn_orig_ctx = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_YARN_ORIG_CTX"));
     add_opt(llama_arg(
         {"--yarn-ext-factor"}, "N",
         format("YaRN: extrapolation mix factor (default: %.1f, 0.0 = full interpolation)", (double)params.yarn_ext_factor),
         [](gpt_params & params, const std::string & value) {
             params.yarn_ext_factor = std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_YARN_EXT_FACTOR"));
     add_opt(llama_arg(
         {"--yarn-attn-factor"}, "N",
         format("YaRN: scale sqrt(t) or attention magnitude (default: %.1f)", (double)params.yarn_attn_factor),
         [](gpt_params & params, const std::string & value) {
             params.yarn_attn_factor = std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_YARN_ATTN_FACTOR"));
     add_opt(llama_arg(
         {"--yarn-beta-slow"}, "N",
         format("YaRN: high correction dim or alpha (default: %.1f)", (double)params.yarn_beta_slow),
         [](gpt_params & params, const std::string & value) {
             params.yarn_beta_slow = std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_YARN_BETA_SLOW"));
     add_opt(llama_arg(
         {"--yarn-beta-fast"}, "N",
         format("YaRN: low correction dim or beta (default: %.1f)", (double)params.yarn_beta_fast),
         [](gpt_params & params, const std::string & value) {
             params.yarn_beta_fast = std::stof(value);
         }
-    ));
+    ).set_env("LLAMA_ARG_YARN_BETA_FAST"));
     add_opt(llama_arg(
         {"-gan", "--grp-attn-n"}, "N",
         format("group-attention factor (default: %d)", params.grp_attn_n),
         [](gpt_params & params, int value) {
             params.grp_attn_n = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_GRP_ATTN_N"));
     add_opt(llama_arg(
         {"-gaw", "--grp-attn-w"}, "N",
         format("group-attention width (default: %.1f)", (double)params.grp_attn_w),
         [](gpt_params & params, int value) {
             params.grp_attn_w = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_GRP_ATTN_W"));
     add_opt(llama_arg(
         {"-dkvc", "--dump-kv-cache"},
         "verbose print of the KV cache",
@@ -1205,7 +1205,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params) {
             params.no_kv_offload = true;
         }
-    ));
+    ).set_env("LLAMA_ARG_NO_KV_OFFLOAD"));
     add_opt(llama_arg(
         {"-ctk", "--cache-type-k"}, "TYPE",
         format("KV cache data type for K (default: %s)", params.cache_type_k.c_str()),
@@ -1213,7 +1213,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             // TODO: get the type right here
             params.cache_type_k = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(llama_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
         format("KV cache data type for V (default: %s)", params.cache_type_v.c_str()),
@@ -1221,7 +1221,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             // TODO: get the type right here
             params.cache_type_v = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(llama_arg(
         {"--perplexity", "--all-logits"},
         format("return logits for all tokens in the batch (default: %s)", params.logits_all ? "true" : "false"),
@@ -1355,7 +1355,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params, const std::string & value) {
             params.rpc_servers = value;
         }
-    ));
+    ).set_env("LLAMA_ARG_RPC"));
 #endif
     add_opt(llama_arg(
         {"--mlock"},
@@ -1363,14 +1363,14 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params) {
             params.use_mlock = true;
         }
-    ));
+    ).set_env("LLAMA_ARG_MLOCK"));
     add_opt(llama_arg(
         {"--no-mmap"},
         "do not memory-map model (slower load but may reduce pageouts if not using mlock)",
         [](gpt_params & params) {
             params.use_mmap = false;
         }
-    ));
+    ).set_env("LLAMA_ARG_NO_MMAP"));
     add_opt(llama_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"
@@ -1385,7 +1385,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
             else { throw std::invalid_argument("invalid value"); }
         }
-    ));
+    ).set_env("LLAMA_ARG_NUMA"));
     add_opt(llama_arg(
         {"-ngl", "--gpu-layers", "--n-gpu-layers"}, "N",
         "number of layers to store in VRAM",
@@ -1433,7 +1433,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
                 fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting the split mode has no effect.\n");
             }
         }
-    ));
+    ).set_env("LLAMA_ARG_SPLIT_MODE"));
     add_opt(llama_arg(
         {"-ts", "--tensor-split"}, "N0,N1,N2,...",
         "fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1",
@@ -1460,7 +1460,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
                 fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting a tensor split has no effect.\n");
             }
         }
-    ));
+    ).set_env("LLAMA_ARG_TENSOR_SPLIT"));
     add_opt(llama_arg(
         {"-mg", "--main-gpu"}, "INDEX",
         format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
@@ -1470,7 +1470,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
                 fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting the main GPU has no effect.\n");
             }
         }
-    ));
+    ).set_env("LLAMA_ARG_MAIN_GPU"));
     add_opt(llama_arg(
         {"--check-tensors"},
         format("check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false"),
@@ -1533,7 +1533,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params, const std::string & value) {
             params.model_alias = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ALIAS"));
     add_opt(llama_arg(
         {"-m", "--model"}, "FNAME",
         ex == LLAMA_EXAMPLE_EXPORT_LORA
@@ -1741,7 +1741,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params, const std::string & value) {
             params.public_path = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_STATIC_PATH"));
     add_opt(llama_arg(
         {"--embedding", "--embeddings"},
         format("restrict to only support embedding use case; use only with dedicated embedding models (default: %s)", params.embedding ? "enabled" : "disabled"),
@@ -1779,14 +1779,14 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params, const std::string & value) {
             params.ssl_file_key = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SSL_KEY_FILE"));
     add_opt(llama_arg(
         {"--ssl-cert-file"}, "FNAME",
         "path to file a PEM-encoded SSL certificate",
         [](gpt_params & params, const std::string & value) {
             params.ssl_file_cert = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SSL_CERT_FILE"));
     add_opt(llama_arg(
         {"-to", "--timeout"}, "N",
         format("server read/write timeout in seconds (default: %d)", params.timeout_read),
@@ -1794,7 +1794,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             params.timeout_read  = value;
             params.timeout_write = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_TIMEOUT"));
     add_opt(llama_arg(
         {"--threads-http"}, "N",
         format("number of threads used to process HTTP requests (default: %d)", params.n_threads_http),
