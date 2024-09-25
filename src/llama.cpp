@@ -6459,7 +6459,7 @@ static void llm_load_vocab(
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     } else {
-        const std::vector<int> ids = llama_tokenize_internal(model.vocab, "\xC4\x8A", false); // U+010A
+        const std::vector<int> ids = llama_tokenize_internal(vocab, "\xC4\x8A", false); // U+010A
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     }
