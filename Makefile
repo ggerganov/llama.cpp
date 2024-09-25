@@ -54,6 +54,7 @@ TEST_TARGETS = \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
+	tests/test-minja \
 	tests/test-llama-grammar \
 	tests/test-log \
 	tests/test-model-load-cancel \
@@ -1569,6 +1570,11 @@ tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-antiprompts: tests/test-antiprompts.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-minja: tests/test-minja.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
