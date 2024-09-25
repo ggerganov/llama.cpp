@@ -840,6 +840,9 @@ class GGUFWriter:
 
         self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
 
+    def add_inverse_template(self, value: str) -> None:
+        self.add_string(Keys.Tokenizer.INVERSE_TEMPLATE, value)
+
     def add_prefix_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.PREFIX_ID, id)
 

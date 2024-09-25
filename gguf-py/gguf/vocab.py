@@ -21,6 +21,7 @@ class SpecialVocab:
     add_special_token: dict[str, bool]
     special_token_ids: dict[str, int]
     chat_template: str | Sequence[Mapping[str, str]] | None
+    inverse_template: str | None
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
@@ -33,6 +34,7 @@ class SpecialVocab:
         self.load_merges = load_merges
         self.merges = []
         self.chat_template = None
+        self.inverse_template = None
         if special_token_types is not None:
             self.special_token_types = special_token_types
         else:
@@ -71,6 +73,10 @@ class SpecialVocab:
             if not quiet:
                 logger.info(f'Setting chat_template to {self.chat_template}')
             gw.add_chat_template(self.chat_template)
+        if self.inverse_template is not None:
+            if not quiet:
+                logger.info(f'Setting inverse_template to {self.inverse_template}')
+            gw.add_inverse_template(self.inverse_template)
 
     def _load(self, path: Path) -> None:
         self._try_load_from_tokenizer_json(path)
@@ -137,6 +143,11 @@ class SpecialVocab:
             self.chat_template = chat_template
         else:
             logger.warning(f'Bad type for chat_template field in {tokenizer_config_file!r} - ignoring')
+        inverse_template = tokenizer_config.get('inverse_template')
+        if inverse_template is None or isinstance(inverse_template, str):
+            self.inverse_template = inverse_template
+        else:
+            logger.warning(f'Bad type for inverse_template field in {tokenizer_config_file!r} - ignoring')
         for typ in self.special_token_types:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
