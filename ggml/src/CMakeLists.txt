@@ -7,6 +7,10 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     add_compile_definitions($<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>)
 endif()
 
+if (GGML_GRAPH_PROFILER)
+    add_compile_definitions(GGML_GRAPH_PROFILER)
+endif()
+
 if (NOT MSVC)
     if (GGML_SANITIZE_THREAD)
         add_compile_options(-fsanitize=thread)
@@ -215,7 +219,9 @@ add_library(ggml-base
             ggml-threading.cpp
             ggml-threading.h
             ggml-quants.c
-            ggml-quants.h)
+            ggml-quants.h
+            ggml-profile.h
+            ggml-profile.cpp)
 
 target_include_directories(ggml-base PRIVATE .)
 
