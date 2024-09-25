@@ -1313,6 +1313,7 @@ add_library(ggml
             ggml-backend.c
             ggml-quants.c
             ggml-quants.h
+            ggml-profile.cpp
             ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_RPC}       ${GGML_HEADERS_RPC}
