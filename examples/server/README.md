@@ -72,6 +72,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--grammar GRAMMAR` | BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '') |
 | `--grammar-file FNAME` | file to read grammar from |
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
+| `--jinja` | Enable (limited) Jinja templating engine, which is needed for tool use. |
 | `--rope-scaling {none,linear,yarn}` | RoPE frequency scaling method, defaults to linear unless specified by the model |
 | `--rope-scale N` | RoPE context scaling factor, expands context by a factor of N |
 | `--rope-freq-base N` | RoPE base frequency, used by NTK-aware scaling (default: loaded from model) |
@@ -505,6 +506,8 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 
     The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
 
+    The `tools` / `tool_choice` parameters are only supported if the server is started with `--jinja`. The template included in the GGUF may not support tools, in that case you may want to override it w/ `--chat-template-file ...`.
+
     *Examples:*
 
     You can use either Python `openai` library with appropriate checkpoints:
@@ -544,6 +547,42 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
     {
         "role": "user",
         "content": "Write a limerick about python exceptions"
+    }
+    ]
+    }'
+    ```
+
+    ... and even tool usage (needs `--jinja` flag):
+
+    ```shell
+    llama-server --jinja -hfr lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF -hff Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf -fa
+
+    curl http://localhost:8080/v1/chat/completions \
+    -d '{
+    "model": "gpt-3.5-turbo",
+    "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "ipython",
+        "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "The code to run in the ipython interpreter."
+            }
+          },
+          "required": ["code"]
+        }
+      }
+    }
+    ],
+    "messages": [
+    {
+      "role": "user",
+      "content": "Print a hello world message with python."
     }
     ]
     }'
