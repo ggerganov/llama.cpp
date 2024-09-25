@@ -236,7 +236,7 @@ int main(int argc, char ** argv) {
             }
         } else if (pooling_type == LLAMA_POOLING_TYPE_RANK) {
             for (int j = 0; j < n_embd_count; j++) {
-                LOG("rank score %d: %8.3f\n", j, emb[j * n_embd]);
+                LOG("rerank score %d: %8.3f\n", j, emb[j * n_embd]);
             }
         } else {
             // print the first part of the embeddings or for a single prompt, the full embedding

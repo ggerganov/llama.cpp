@@ -17009,7 +17009,7 @@ static int llama_decode_internal(
                     } break;
                 case LLAMA_POOLING_TYPE_RANK:
                     {
-                        // extract the rank score - a single float per sequence
+                        // extract the rerank score - a single float per sequence
                         auto & embd_seq_out = lctx.embd_seq;
 
                         for (uint32_t s = 0; s < ubatch.n_seqs; ++s) {
@@ -17211,7 +17211,6 @@ static int llama_encode_internal(
                 case LLAMA_POOLING_TYPE_MEAN:
                 case LLAMA_POOLING_TYPE_CLS:
                 case LLAMA_POOLING_TYPE_LAST:
-                case LLAMA_POOLING_TYPE_RANK:
                     {
                         // extract sequence embeddings
                         auto & embd_seq_out = lctx.embd_seq;
@@ -17228,6 +17227,13 @@ static int llama_encode_internal(
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_seq_out[seq_id].data(), (n_embd*seq_id)*sizeof(float), n_embd*sizeof(float));
                         }
                     } break;
+                case LLAMA_POOLING_TYPE_RANK:
+                    {
+                        // TODO: this likely should be the same logic as in llama_decoder_internal, but better to
+                        //       wait for an encoder model that requires this pooling type in order to test it
+                        //       https://github.com/ggerganov/llama.cpp/pull/9510
+                        GGML_ABORT("RANK pooling not implemented yet");
+                    }
                 case LLAMA_POOLING_TYPE_UNSPECIFIED:
                     {
                         GGML_ABORT("unknown pooling type");

@@ -1419,7 +1419,7 @@ struct server_context {
         queue_results.send(res);
     }
 
-    void send_rank(const server_slot & slot, const llama_batch & batch) {
+    void send_rerank(const server_slot & slot, const llama_batch & batch) {
         server_task_result res;
         res.id       = slot.id_task;
         res.error    = false;
@@ -1440,7 +1440,7 @@ struct server_context {
 
                 res.data = json {
                     {"index", slot.index},
-                    {"rank",  -1e6},
+                    {"score", -1e6},
                 };
 
                 continue;
@@ -1448,11 +1448,11 @@ struct server_context {
 
             res.data = json {
                 {"index", slot.index},
-                {"rank",  embd[0]},
+                {"score", embd[0]},
             };
         }
 
-        SLT_DBG(slot, "sending rank, res = '%s'\n", res.data.dump().c_str());
+        SLT_DBG(slot, "sending rerank result, res = '%s'\n", res.data.dump().c_str());
 
         queue_results.send(res);
     }
@@ -1493,6 +1493,9 @@ struct server_context {
         else if (prompt.is_array()) {
             std::vector<json> prompts = prompt;
             if (cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
+                // prompts[0] is the question
+                // the rest are the answers/documents
+                SRV_DBG("creating rerank tasks, n_prompts = %d\n", (int) prompts.size() - 1);
                 for (size_t i = 1; i < prompts.size(); i++) {
                     json qd;
                     qd.push_back(prompts[0]);
@@ -1501,6 +1504,7 @@ struct server_context {
                     create_task(data, true, qd);
                 }
             } else {
+                SRV_DBG("creating multi-prompt tasks, n_prompts = %d\n", (int) prompts.size());
                 for (size_t i = 0; i < prompts.size(); i++) {
                     const auto & e = prompts[i];
                     if (e.is_string() || json_is_array_of_numbers(e)) {
@@ -1965,6 +1969,7 @@ struct server_context {
         // track if this is an embedding or non-embedding batch
         // if we've added sampled tokens above, we are in non-embedding mode
         // -1: none, 0: non-embedding, 1: embedding
+        // TODO: make enum
         int32_t batch_type = batch.n_tokens > 0 ? 0 : -1;
 
         // next, batch any pending prompts without exceeding n_batch
@@ -2133,6 +2138,7 @@ struct server_context {
                         slot.n_prompt_tokens_processed = 0;
                     }
 
+                    // non-causal tasks require to fit the entire prompt in the physical batch
                     if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_EMBEDDING || slot.cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
                         // cannot fit the prompt in the current batch - will try next iter
                         if (batch.n_tokens + slot.n_prompt_tokens > n_batch) {
@@ -2318,7 +2324,7 @@ struct server_context {
                     }
 
                     if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
-                        send_rank(slot, batch_view);
+                        send_rerank(slot, batch_view);
                         slot.release();
                         slot.i_batch = -1;
                         continue; // continue loop of slots

@@ -553,7 +553,7 @@ static json format_response_rerank(const json & request, const json & ranks) {
     for (const auto & rank : ranks) {
         data.push_back(json{
             {"index",    i++},
-            {"relevance_score", json_value(rank, "rank", 0.0)},
+            {"relevance_score", json_value(rank, "score", 0.0)},
         });
     }
 
