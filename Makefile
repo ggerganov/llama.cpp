@@ -44,6 +44,7 @@ BUILD_TARGETS = \
 
 # Binaries only useful for tests
 TEST_TARGETS = \
+	tests/test-antiprompts \
 	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
@@ -1563,6 +1564,11 @@ tests/test-double-float: tests/test-double-float.cpp
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-antiprompts: tests/test-antiprompts.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)

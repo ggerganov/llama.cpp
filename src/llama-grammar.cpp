@@ -1121,7 +1121,10 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
     }
 
     const std::string & piece = grammar.vocab->cache_token_to_piece.at(token);
+    llama_grammar_accept_str(grammar, piece);
+}
 
+void llama_grammar_accept_str(struct llama_grammar & grammar, const std::string & piece) {
     // Note terminating 0 in decoded string
     const auto   decoded     = decode_utf8(piece, grammar.partial_utf8);
     const auto & code_points = decoded.first;
