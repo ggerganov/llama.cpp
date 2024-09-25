@@ -15,10 +15,16 @@ on:
     branches:
       - master
     paths: ['.github/workflows/docker.yml', '.devops/*.Dockerfile', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.cuh', '**/*.swift', '**/*.m', '**/*.metal']
+  workflow_dispatch: # allows manual triggering, useful for debugging
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
   cancel-in-progress: true
+
+# Fine-grant permission
+# https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token
+permissions:
+  packages: write
 
 jobs:
   push_to_registry:
@@ -46,6 +52,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # preserve git history, so we can determine the build number
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -59,6 +67,34 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER@L}"  # to lower case
+          REPO_NAME="${{ github.event.repository.name }}"
+
+          # determine tag name postfix (build number, commit hash)
+          if [[ "${{ env.GITHUB_BRANCH_NAME }}" == "master" ]]; then
+            TAG_POSTFIX="b${BUILD_NUMBER}"
+          else
+            SAFE_NAME=$(echo "${{ env.GITHUB_BRANCH_NAME }}" | tr '/' '-')
+            TAG_POSTFIX="${SAFE_NAME}-${SHORT_HASH}"
+          fi
+
+          # list all tags possible
+          TAGS=""
+          TAGS="${TAGS}ghcr.io/${REPO_OWNER}/${REPO_NAME}:${{ matrix.config.tag }},"
+          TAGS="${TAGS}ghcr.io/${REPO_OWNER}/${REPO_NAME}:${{ matrix.config.tag }}-${TAG_POSTFIX}"
+
+          echo "output_tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "output_tags=$TAGS"  # print out for debugging
+        env:
+          GITHUB_BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          GITHUB_REPOSITORY_OWNER: '${{ github.repository_owner }}'
 
       # https://github.com/jlumbroso/free-disk-space/tree/54081f138730dfa15788a46383842cd2f914a1be#example
       - name: Free Disk Space (Ubuntu)
@@ -77,25 +113,6 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - name: Determine tag name
-        id: tag
-        shell: bash
-        run: |
-          BUILD_NUMBER="$(git rev-list --count HEAD)"
-          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
-          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
-          else
-            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
-            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Downcase github.repository_owner
-        run: |
-          echo "repository_owner_lowercase=${GITHUB_REPOSITORY_OWNER@L}" >> $GITHUB_ENV
-        env:
-          GITHUB_REPOSITORY_OWNER: '${{ github.repository_owner }}'
-
       - name: Build and push Docker image (tagged + versioned)
         if: github.event_name == 'push'
         uses: docker/build-push-action@v6
@@ -103,5 +120,6 @@ jobs:
           context: .
           push: true
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
+          # tag list is generated from step above
+          tags: ${{ steps.tag.outputs.output_tags }}
           file: ${{ matrix.config.dockerfile }}
