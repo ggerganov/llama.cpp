@@ -493,7 +493,7 @@ std::string llama_chat_apply_template(const struct llama_model * model,
         const std::vector<llama_chat_msg> & chat,
         bool add_ass,
         bool use_jinja = false,
-        const std::string & tools = "",
+        const char * tools = nullptr,
         const char * bos_token = nullptr,
         const char * eos_token = nullptr);
 
@@ -504,7 +504,7 @@ std::string llama_chat_format_single(const struct llama_model * model,
         const llama_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja = false,
-        const std::string & tools = "",
+        const char * tools = nullptr,
         const char * bos_token = nullptr,
         const char * eos_token = nullptr);
 

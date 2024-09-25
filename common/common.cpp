@@ -1521,7 +1521,7 @@ std::string llama_chat_apply_template(const struct llama_model * model,
         const std::vector<llama_chat_msg> & msgs,
         bool add_ass,
         bool use_jinja,
-        const std::string & tools,
+        const char * tools,
         const char * bos_token,
         const char * eos_token) {
     int alloc_size = 0;
@@ -1536,7 +1536,7 @@ std::string llama_chat_apply_template(const struct llama_model * model,
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size(), use_jinja, tools.empty() ? nullptr : tools.data(), bos_token, eos_token);
+    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size(), use_jinja, tools, bos_token, eos_token);
 
     // error: chat template is not supported
     if (res < 0) {
@@ -1546,7 +1546,7 @@ std::string llama_chat_apply_template(const struct llama_model * model,
             throw std::runtime_error("this custom template is not supported");
         } else {
             // If the built-in template is not supported, we default to chatml
-            res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size(), use_jinja, bos_token, eos_token);
+            res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size(), use_jinja, tools, bos_token, eos_token);
             fallback = true;
         }
     }
@@ -1557,7 +1557,7 @@ std::string llama_chat_apply_template(const struct llama_model * model,
         res = llama_chat_apply_template(
             fallback ? nullptr : model,
             fallback ? "chatml" : ptr_tmpl,
-            chat.data(), chat.size(), add_ass, buf.data(), buf.size(), use_jinja, bos_token, eos_token);
+            chat.data(), chat.size(), add_ass, buf.data(), buf.size(), use_jinja, tools, bos_token, eos_token);
     }
 
     std::string formatted_chat(buf.data(), res);
@@ -1570,11 +1570,11 @@ std::string llama_chat_format_single(const struct llama_model * model,
         const llama_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja,
-        const std::string & tools,
+        const char * tools,
         const char * bos_token,
         const char * eos_token) {
     std::ostringstream ss;
-    auto fmt_past_msg = past_msg.empty() ? "" : llama_chat_apply_template(model, tmpl, past_msg, false, use_jinja, bos_token, eos_token);
+    auto fmt_past_msg = past_msg.empty() ? "" : llama_chat_apply_template(model, tmpl, past_msg, false, use_jinja, tools, bos_token, eos_token);
     std::vector<llama_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
     if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
@@ -1582,7 +1582,7 @@ std::string llama_chat_format_single(const struct llama_model * model,
     };
     // format chat with new_msg
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = llama_chat_apply_template(model, tmpl, chat_new, add_ass, use_jinja, bos_token, eos_token);
+    auto fmt_new_msg = llama_chat_apply_template(model, tmpl, chat_new, add_ass, use_jinja, tools, bos_token, eos_token);
     // get the diff part
     ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return ss.str();

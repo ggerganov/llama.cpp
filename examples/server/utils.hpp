@@ -97,7 +97,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat.emplace_back(std::move(msg));
     }
 
-    const auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true, use_jinja, tools.is_null() ? "" : tools.dump());
+    const auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true, use_jinja, tools.is_null() ? nullptr : tools.dump().c_str());
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
