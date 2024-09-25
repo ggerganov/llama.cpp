@@ -5,22 +5,12 @@
 #include "llama.h"
 
 #include <cstdio>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <cassert>
 #include <bitset>
 #include <fstream>
-
-int msb_log2(int x)
-{
-    int ret = 0;
-    while (x > 0)
-    {
-        ret++;
-        x >>= 1;
-    }
-    return ret;
-}
 
 int msB_log256(int x)
 {
@@ -92,7 +82,6 @@ std::vector<uint8_t> encode(llama_context *ctx, std::vector<llama_token> inp, gp
         gpt_sampler_sample(smpl, ctx, 0, true);
     }
 
-    // bit pack sample_ids
     std::vector<uint8_t> sample_ids_bitpacked;
 
     int bit_offset = 0;
