@@ -9,6 +9,10 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     add_compile_definitions($<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>)
 endif()
 
+if (GGML_GRAPH_PROFILER)
+    add_compile_definitions(GGML_GRAPH_PROFILER)
+endif()
+
 if (NOT MSVC)
     if (GGML_SANITIZE_THREAD)
         add_compile_options(-fsanitize=thread)

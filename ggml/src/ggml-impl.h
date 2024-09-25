@@ -157,17 +157,6 @@ static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct g
     GGML_ABORT("fatal error");
 }
 
-// op profile data (per op / per thread)
-enum ggml_profile_event {
-    GGML_PROF_OP_START,
-    GGML_PROF_OP_SYNC,
-    GGML_PROF_OP_END
-};
-
-struct ggml_profile_data {
-    uint64_t nsec[GGML_PROF_OP_END + 1]; // event times in nsec
-};
-
 // computation graph
 
 enum ggml_cgraph_eval_order {
@@ -175,6 +164,8 @@ enum ggml_cgraph_eval_order {
     GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT,
     GGML_CGRAPH_EVAL_ORDER_COUNT
 };
+
+struct ggml_profile_data;
 
 struct ggml_cgraph {
     int size;
@@ -193,12 +184,6 @@ struct ggml_cgraph {
 };
 
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);
-
-void ggml_profile_graph_init(struct ggml_cgraph *cg, int n_threads);
-void ggml_profile_graph_start(struct ggml_cgraph *cg, int n_threads);
-void ggml_profile_graph_finish(struct ggml_cgraph *cg, int n_threads);
-void ggml_profile_graph_free(struct ggml_cgraph *cg);
-void ggml_profile_op_event(const struct ggml_cgraph *cg, enum ggml_profile_event e, int node_n, int ith);
 
 #ifdef __cplusplus
 }

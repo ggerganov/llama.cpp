@@ -1,8 +1,11 @@
-#include "ggml-impl.h"
+#include "ggml-profile.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 
 #include <chrono>
+
+#ifdef GGML_GRAPH_PROFILER
 
 extern "C" void ggml_profile_graph_init(struct ggml_cgraph *cg, int n_threads)
 {
@@ -138,3 +141,5 @@ extern "C" void ggml_profile_op_event(const struct ggml_cgraph *cg, enum ggml_pr
     using clock = std::chrono::high_resolution_clock;
     cg->prof[node_n][ith].nsec[e] = std::chrono::nanoseconds(clock::now().time_since_epoch()).count();
 }
+
+#endif // GGML_GRAPH_PROFILER
