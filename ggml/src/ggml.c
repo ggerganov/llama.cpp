@@ -39,15 +39,6 @@
 #include <unistd.h>
 #endif
 
-#if defined(__ARM_ARCH)
-struct ggml_arm_arch_features_type {
-    int has_neon;
-    int has_i8mm;
-    int has_sve;
-    int sve_cnt;
-} ggml_arm_arch_features = {-1, -1, -1, 0};
-#endif
-
 #if defined(__ARM_FEATURE_SVE) || defined(__ARM_FEATURE_MATMUL_INT8)
 #undef GGML_USE_LLAMAFILE
 #endif
@@ -460,6 +451,15 @@ static ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 
 // precomputed f32 table for f16 (256 KB) (ggml-impl.h)
 float ggml_table_f32_f16[1 << 16];
+
+#if defined(__ARM_ARCH)
+struct ggml_arm_arch_features_type {
+    int has_neon;
+    int has_i8mm;
+    int has_sve;
+    int sve_cnt;
+} ggml_arm_arch_features = {-1, -1, -1, 0};
+#endif
 
 GGML_CALL const char * ggml_status_to_string(enum ggml_status status) {
     switch (status) {
