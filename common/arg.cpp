@@ -1845,12 +1845,20 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
+        {"--jinja"},
+        "use jinja template for chat (default: disabled)",
+        [](gpt_params & params) {
+            params.use_jinja = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(llama_arg(
         {"--chat-template"}, "JINJA_TEMPLATE",
         "set custom jinja chat template (default: template taken from model's metadata)\n"
         "if suffix/prefix are specified, template will be disabled\n"
-        "only commonly used templates are accepted:\nhttps://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
+        "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
+        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
         [](gpt_params & params, const std::string & value) {
-            if (!llama_chat_verify_template(value)) {
+            if (!llama_chat_verify_template(value, params.use_jinja)) {
                 throw std::runtime_error(format(
                     "error: the supplied chat template is not supported: %s\n"
                     "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",

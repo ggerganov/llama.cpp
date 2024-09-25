@@ -380,6 +380,13 @@ extern "C" {
     typedef struct llama_chat_message {
         const char * role;
         const char * content;
+        const char * tool;
+        struct llama_tool_call {
+            const char * name;
+            const char * arguments;
+        };
+        const llama_tool_call * tool_calls;
+        uint32_t n_tool_calls;
     } llama_chat_message;
 
     // lora adapter
@@ -976,7 +983,11 @@ extern "C" {
                                 size_t   n_msg,
                                   bool   add_ass,
                                   char * buf,
-                               int32_t   length);
+                               int32_t   length,
+                                  bool   use_jinja = false,
+                            const char * tools = nullptr,
+                            const char * bos_token = nullptr,
+                            const char * eos_token = nullptr);
 
     //
     // Sampling API
@@ -1024,6 +1035,7 @@ extern "C" {
     struct llama_sampler_i {
         const char *           (*name)  (const struct llama_sampler * smpl);                                 // can be NULL
         void                   (*accept)(      struct llama_sampler * smpl, llama_token token);              // can be NULL
+        void                   (*accept_str)(  struct llama_sampler * smpl, const char * text);              // can be NULL
         void                   (*apply) (      struct llama_sampler * smpl, llama_token_data_array * cur_p); // required
         void                   (*reset) (      struct llama_sampler * smpl);                                 // can be NULL
         struct llama_sampler * (*clone) (const struct llama_sampler * smpl);                                 // can be NULL if ctx is NULL
@@ -1041,6 +1053,7 @@ extern "C" {
     // mirror of llama_sampler_i:
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
+    LLAMA_API void                   llama_sampler_accept_str(  struct llama_sampler * smpl, const char * piece);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
     LLAMA_API void                   llama_sampler_reset (      struct llama_sampler * smpl);
     LLAMA_API struct llama_sampler * llama_sampler_clone (const struct llama_sampler * smpl);

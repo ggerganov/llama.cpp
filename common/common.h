@@ -285,6 +285,7 @@ struct gpt_params {
     std::string public_path   = "";                                                                         // NOLINT
     std::string chat_template = "";                                                                         // NOLINT
     std::string system_prompt = "";                                                                         // NOLINT
+    bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
@@ -469,14 +470,20 @@ std::string llama_detokenize(
 // Chat template utils
 //
 
-// same with llama_chat_message, but uses std::string
+// same as llama_chat_message, but uses std::string and std::vector
 struct llama_chat_msg {
     std::string role;
     std::string content;
+    std::string tool;
+    struct llama_tool_call {
+        std::string name;
+        std::string arguments;
+    };
+    std::vector<llama_tool_call> tool_calls;
 };
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-bool llama_chat_verify_template(const std::string & tmpl);
+bool llama_chat_verify_template(const std::string & tmpl, bool use_jinja = false);
 
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
@@ -484,14 +491,22 @@ bool llama_chat_verify_template(const std::string & tmpl);
 std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & chat,
-        bool add_ass);
+        bool add_ass,
+        bool use_jinja = false,
+        const std::string & tools = "",
+        const char * bos_token = nullptr,
+        const char * eos_token = nullptr);
 
 // Format single message, while taking into account the position of that message in chat history
 std::string llama_chat_format_single(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & past_msg,
         const llama_chat_msg & new_msg,
-        bool add_ass);
+        bool add_ass,
+        bool use_jinja = false,
+        const std::string & tools = "",
+        const char * bos_token = nullptr,
+        const char * eos_token = nullptr);
 
 // Returns an example of formatted chat
 std::string llama_chat_format_example(const struct llama_model * model,

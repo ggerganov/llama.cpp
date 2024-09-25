@@ -22,7 +22,7 @@ add_library(llama
             unicode-data.cpp
             )
 
-target_include_directories(llama PUBLIC . ../include)
+target_include_directories(llama PUBLIC . ../include ../common)
 target_compile_features   (llama PUBLIC cxx_std_11) # don't bump
 
 target_link_libraries(llama PUBLIC ggml)
