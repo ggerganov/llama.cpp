@@ -21,6 +21,7 @@ static void assert_equals(const std::string & expected, const std::string & actu
 */
 
 static void test_parse_tool_call(const json & tools, const std::string & chat_template, const std::string & input, const std::string & expected_content, const json & expected_tool_calls) {
+    std::cout << "# Testing: " << input << std::endl << std::flush;
     auto result = parse_tool_calls(tools, chat_template, input);
     assert_equals(expected_content, result.content);
     auto tool_calls = json::array();
@@ -71,8 +72,8 @@ int main() {
         }}
       }});
    
-    std::string functionary_3_2_like_tmpl = "Functionary 3.2 template should have <|start_header_id|> and then some >>>all inside it";
-    test_parse_tool_call(tools, functionary_3_2_like_tmpl,
+    std::string functionary_v3_like_tmpl = "Functionary 3.2 template should have <|start_header_id|> and then some >>>all inside it";
+    test_parse_tool_call(tools, functionary_v3_like_tmpl,
       ">>>ipython\nprint('Hello, world!')",
       "",
       json {{
@@ -83,6 +84,29 @@ int main() {
           }).dump()}
         }}
       }});
+   
+    std::string functionary_v3_llama_3_1_like_tmpl = "Functionary 3.2 template for llama 3.1 should have <|start_header_id|> and then some <function=foo>{...}</function> inside it";
+    test_parse_tool_call(tools, functionary_v3_llama_3_1_like_tmpl,
+      "Hell<function=foo>{\"arg1\": 1}</function>o, world<function=bar>{\"arg2\": 2}</function>!",
+      "Hello, world!",
+      json {
+        {
+          {"function", {
+            {"name", "foo"},
+            {"arguments", (json {
+              {"arg1", 1}
+            }).dump()}
+          }}
+        },
+        {
+          {"function", {
+            {"name", "bar"},
+            {"arguments", (json {
+              {"arg2", 2}
+            }).dump()}
+          }}
+        },
+      });
    
     std::string llama_3_1_like_tmpl = "Llama 3.1 template should have <|start_header_id|> and <|python_tag|> inside it";
     test_parse_tool_call(tools, llama_3_1_like_tmpl,
