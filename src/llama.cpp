@@ -21081,8 +21081,8 @@ static int32_t llama_chat_apply_template_internal(
             context->set("tools", tools_val);
         }
         auto tmpl_root = minja::Parser::parse(tmpl, {
-            .lstrip_blocks = true,
             .trim_blocks = true,
+            .lstrip_blocks = true,
         });
         try {
             dest = tmpl_root->render(context);

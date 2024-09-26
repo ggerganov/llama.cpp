@@ -376,38 +376,6 @@ public:
     throw std::runtime_error("get<T> not defined for this value type: " + dump());
   }
 
-  template <>
-  json get<json>() const {
-    if (is_primitive()) return primitive_;
-    if (is_null()) return json();
-    if (array_) {
-      std::vector<json> res;
-      for (const auto& item : *array_) {
-        res.push_back(item.get<json>());
-      }
-      return res;
-    }
-    if (object_) {
-      json res = json::object();
-      for (const auto& item : *object_) {
-        const auto & key = item.first;
-        auto json_value = item.second.get<json>();
-        if (key.is_string()) {
-          res[key.get<std::string>()] = json_value;
-        } else if (key.is_primitive()) {
-          res[key.dump()] = json_value;
-        } else {
-          throw std::runtime_error("Invalid key type for conversion to JSON: " + key.dump());
-        }
-      }
-      if (is_callable()) {
-        res["__callable__"] = true;
-      }
-      return res;
-    }
-    throw std::runtime_error("get<json> not defined for this value type: " + dump());
-  }
-
   std::string dump(int indent=-1, bool to_json=false) const {
     std::ostringstream out;
     dump(out, indent, 0, to_json ? '"' : '\'');
@@ -465,6 +433,38 @@ public:
     return get<int64_t>() % rhs.get<int64_t>();
   }
 };
+
+template <>
+json Value::get<json>() const {
+  if (is_primitive()) return primitive_;
+  if (is_null()) return json();
+  if (array_) {
+    std::vector<json> res;
+    for (const auto& item : *array_) {
+      res.push_back(item.get<json>());
+    }
+    return res;
+  }
+  if (object_) {
+    json res = json::object();
+    for (const auto& item : *object_) {
+      const auto & key = item.first;
+      auto json_value = item.second.get<json>();
+      if (key.is_string()) {
+        res[key.get<std::string>()] = json_value;
+      } else if (key.is_primitive()) {
+        res[key.dump()] = json_value;
+      } else {
+        throw std::runtime_error("Invalid key type for conversion to JSON: " + key.dump());
+      }
+    }
+    if (is_callable()) {
+      res["__callable__"] = true;
+    }
+    return res;
+  }
+  throw std::runtime_error("get<json> not defined for this value type: " + dump());
+}
 
 } // namespace minja
 
