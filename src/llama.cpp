@@ -2875,6 +2875,7 @@ struct llama_model {
     llama_hparams hparams = {};
     llama_vocab   vocab;
 
+    // TODO: should init all tensors to nullptr
     struct ggml_tensor * tok_embd;
     struct ggml_tensor * type_embd;
     struct ggml_tensor * pos_embd;
@@ -2890,8 +2891,8 @@ struct llama_model {
     // classifier
     struct ggml_tensor * cls;
     struct ggml_tensor * cls_b;
-    struct ggml_tensor * cls_out;
-    struct ggml_tensor * cls_out_b;
+    struct ggml_tensor * cls_out   = nullptr;
+    struct ggml_tensor * cls_out_b = nullptr;
 
     std::vector<llama_layer> layers;
 
