@@ -454,13 +454,19 @@ static json format_final_response_oaicompat(const json & request, const json & r
     json message_content;
     if (json_value(request, "parse_tool_calls", false)
             && !(parsed_tool_calls = parse_tool_calls(tmpl.tool_call_style(), tools, content)).tool_calls.empty()) {
-        finish_reason = "tool";
+        finish_reason = "tool_calls";
         if (!parsed_tool_calls.content.empty()) {
             message_content = parsed_tool_calls.content;
         }
         tool_calls = json::array();
         for (const auto & tc : parsed_tool_calls.tool_calls) {
-            tool_calls.push_back({{"name", tc.name}, {"arguments", tc.arguments}});
+            tool_calls.push_back({
+                {"type", "function"},
+                {"function", {
+                    {"name", tc.name},
+                    {"arguments", tc.arguments},
+                }}
+            });
         }
     } else {
         message_content = content;

@@ -52,8 +52,8 @@ model_ids = [
     "TheBloke/FusionNet_34Bx2_MoE-AWQ",
 
     # Python update goldens broken:
-    # "meetkai/functionary-medium-v3.2",
-    # "meetkai/functionary-medium-v3.1",
+    "meetkai/functionary-medium-v3.2",
+    "meetkai/functionary-medium-v3.1",
 
     # C++ minja templating broken:
     # "CohereForAI/c4ai-command-r-plus",

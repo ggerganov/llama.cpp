@@ -2879,7 +2879,7 @@ int main(int argc, char ** argv) {
         json data;
         try {
             data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), chat_template, params.use_jinja);
-        } catch (const std::runtime_error & e) {
+        } catch (const std::exception & e) {
             res_error(res, format_error_response(e.what(), ERROR_TYPE_NOT_SUPPORTED));
             return;
         }

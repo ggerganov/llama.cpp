@@ -661,8 +661,8 @@ async def step_tool_called(context, expected_name, expected_arguments):
         else:
             assert len(tool_calls) == 1, f"tool calls: {tool_calls}"
             tool_call = tool_calls[0]
-            actual_name = tool_call.name
-            actual_arguments = json.loads(tool_call.arguments)
+            actual_name = tool_call.function.name
+            actual_arguments = json.loads(tool_call.function.arguments)
             assert expected_name == actual_name, f"tool name: {actual_name}, expected: {expected_name}"
             assert json.dumps(expected_arguments) == json.dumps(actual_arguments), f"tool arguments: {json.dumps(actual_arguments)}, expected: {json.dumps(expected_arguments)}"
 
