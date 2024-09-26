@@ -1234,6 +1234,11 @@ public:
           if (method->get_name() == "strip") {
             args.expectArgs("strip method", {0, 0}, {0, 0});
             return Value(strip(obj.get<std::string>()));
+          } else if (method->get_name() == "endswith") {
+            args.expectArgs("endswith method", {1, 1}, {0, 0});
+            auto str = obj.get<std::string>();
+            auto suffix = args.args[0]->evaluate(context).get<std::string>();
+            return suffix.length() <= str.length() && std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
           }
         }
         throw std::runtime_error("Unknown method: " + method->get_name());
