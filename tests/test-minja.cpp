@@ -149,6 +149,7 @@ static void test_error_contains(const std::string & template_str, const json & b
 }
 
 static void test_template_features() {
+    test_render(R"({{ 'foo bar'.title() }})", {}, {}, "Foo Bar");
     test_render(R"({{ 1 | safe }})", {}, {}, "1");
     test_render(R"({{ 'abc'.endswith('bc') }},{{ ''.endswith('a') }})", {}, {}, "True,False");
     test_render(R"({{ none | selectattr("foo", "equalto", "bar") | list }})", {}, {}, "[]");

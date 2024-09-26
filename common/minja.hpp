@@ -100,7 +100,7 @@ private:
     }
     out << string_quote;
   }
-  void dump(std::ostringstream & out, int indent = -1, int level = 0, char string_quote = '\'') const {
+  void dump(std::ostringstream & out, int indent = -1, int level = 0, bool to_json = false) const {
     auto print_indent = [&](int level) {
       if (indent > 0) {
           out << "\n";
@@ -113,13 +113,15 @@ private:
       else print_indent(level + 1);
     };
 
+    auto string_quote = to_json ? '"' : '\'';
+
     if (is_null()) out << "null";
     else if (array_) {
       out << "[";
       print_indent(level + 1);
       for (size_t i = 0; i < array_->size(); ++i) {
         if (i) print_sub_sep();
-        (*array_)[i].dump(out, indent, level + 1, string_quote);
+        (*array_)[i].dump(out, indent, level + 1, to_json);
       }
       print_indent(level);
       out << "]";
@@ -134,15 +136,15 @@ private:
           out << string_quote << it->first.dump() << string_quote;
         }
         out << ": ";
-        it->second.dump(out, indent, level + 1, string_quote);
+        it->second.dump(out, indent, level + 1, to_json);
       }
       print_indent(level);
       out << "}";
     } else if (callable_) {
       throw std::runtime_error("Cannot dump callable to JSON");
-    } else if (is_boolean()) {
+    } else if (is_boolean() && !to_json) {
       out << (this->to_bool() ? "True" : "False");
-    } else if (is_string()) {
+    } else if (is_string() && !to_json) {
       dump_string(primitive_, out, string_quote);
     } else {
       out << primitive_.dump();
@@ -378,7 +380,7 @@ public:
 
   std::string dump(int indent=-1, bool to_json=false) const {
     std::ostringstream out;
-    dump(out, indent, 0, to_json ? '"' : '\'');
+    dump(out, indent, 0, to_json);
     return out.str();
   }
 
@@ -1231,14 +1233,22 @@ public:
             return callable.call(context, vargs);
           }
         } else if (obj.is_string()) {
+          auto str = obj.get<std::string>();
           if (method->get_name() == "strip") {
             args.expectArgs("strip method", {0, 0}, {0, 0});
-            return Value(strip(obj.get<std::string>()));
+            return Value(strip(str));
           } else if (method->get_name() == "endswith") {
             args.expectArgs("endswith method", {1, 1}, {0, 0});
-            auto str = obj.get<std::string>();
             auto suffix = args.args[0]->evaluate(context).get<std::string>();
             return suffix.length() <= str.length() && std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+          } else if (method->get_name() == "title") {
+            args.expectArgs("title method", {0, 0}, {0, 0});
+            auto res = str;
+            for (size_t i = 0, n = res.size(); i < n; ++i) {
+              if (i == 0 || std::isspace(res[i - 1])) res[i] = std::toupper(res[i]);
+              else res[i] = std::tolower(res[i]);
+            }
+            return res;
           }
         }
         throw std::runtime_error("Unknown method: " + method->get_name());
@@ -2240,7 +2250,12 @@ inline std::shared_ptr<Context> Context::builtins() {
     auto items = Value::array();
     if (args.contains("object")) {
       auto & obj = args.at("object");
-      if (!obj.is_null()) {
+      if (obj.is_string()) {
+        auto json_obj = json::parse(obj.get<std::string>());
+        for (const auto & kv : json_obj.items()) {
+          items.push_back(Value::array({kv.key(), kv.value()}));
+        }
+      } else if (!obj.is_null()) {
         for (auto & key : obj.keys()) {
           items.push_back(Value::array({key, obj.at(key)}));
         }
