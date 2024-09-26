@@ -353,7 +353,7 @@ static json oaicompat_completion_params_parse(
 
     auto tools = json_value(body, "tools", json());
     auto has_tools = tools.is_array() && !tools.empty();
-    
+
     // Apply chat template to the list of messages
     auto chat_template = chat_template_src.empty() ? llama_model_meta_val_str(model, "tokenizer.chat_template") : chat_template_src;
     llama_params["chat_template"] = chat_template;
@@ -420,7 +420,7 @@ static json oaicompat_completion_params_parse(
         llama_params["parse_tool_calls"] = true;
         llama_params["parallel_tool_calls"] = parallel_tool_calls;
     }
-    
+
     // Handle "n" field
     int n_choices = json_value(body, "n", 1);
     if (n_choices != 1) {

@@ -1516,7 +1516,7 @@ bool llama_chat_verify_template(const std::string & tmpl, bool use_jinja) {
         nullptr,
         tmpl.c_str(),
         chat,
-        1, 
+        1,
         /* add_ass= */ true,
         /* buffer= */ nullptr,
         /* length= */ 0,

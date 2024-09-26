@@ -624,7 +624,7 @@ private:
                     f = f->fail;
                 }
 
-                child.fail = (f == &root && f->children.find(c) == f->children.end()) 
+                child.fail = (f == &root && f->children.find(c) == f->children.end())
                                    ? &root : &f->children[c];
 
                 if (child.fail->output != -1) {
@@ -654,7 +654,7 @@ private:
             },
             stop_words,
             grammar_trigger_words
-        );  
+        );
     }
 
     void build(const std::function<std::vector<llama_token>(const std::string)> & tokenizer, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_trigger_words) {
@@ -708,7 +708,7 @@ private:
     MatchResult findFirstMatch(const std::string& text, size_t offset = 0) {
         TrieNode* current = &root;
         MatchResult partialMatch{std::string::npos, "", true, 0, false};
-        
+
         for (size_t i = offset; i < text.length(); ++i) {
             char c = text[i];
             while (current != &root && current->children.find(c) == current->children.end()) {
@@ -736,12 +736,12 @@ private:
                 partialMatch.is_grammar_trigger = false;
             }
         }
-        
+
         // If we've found a partial match and haven't returned a full match, return the partial match
         if (partialMatch.pos != std::string::npos) {
             return partialMatch;
         }
-        
+
         return {std::string::npos, "", false, 0, false};
     }
 };

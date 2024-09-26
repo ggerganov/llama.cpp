@@ -84,7 +84,7 @@ static llama_tool_calls parse_hermes_tool_calls(const std::string& input) {
         std::regex start_pattern(R"([\n\s]*<tool_call>)");
         std::regex middle_pattern(R"([\n\s]*</tool_call>[\n\s]*<tool_call>)");
         std::regex end_pattern(R"([\n\s]*</tool_call>[\n\s]*$)");
-        
+
         auto end = input.end();
         std::sregex_iterator rend;
         std::sregex_iterator rit(input.begin(), end, start_pattern);
@@ -176,7 +176,7 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::str
         it = rit->suffix().first;
 
         auto name = rit->str(1);
-        
+
         json arguments;
         if (!parse_json(it, end, arguments)) {
             throw std::runtime_error("Failed to parse json tool call arguments");
@@ -229,7 +229,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
     const nlohmann::ordered_json & tools)
 {
     llama_tool_call_handler handler;
-    
+
     if (needs_functionary_v3_tool_call(chat_template)) {
         // MeetKaiFunctionary_3_2
         // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
@@ -312,7 +312,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         handler.grammar_trigger_words.push_back("<|python_tag|>");
                     }
                 } else {
-                    //"<|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"" + name + "\", " + 
+                    //"<|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"" + name + "\", " +
                     tool_rules.push_back(
                         builder.add_rule(
                             name + "-call",

@@ -654,7 +654,7 @@ async def step_tool_called(context, expected_name, expected_arguments):
 
     expected_name = expected_name if expected_name else None
     expected_arguments = json.loads(expected_arguments) if expected_arguments else None
-            
+
     def check(tool_calls):
         if tool_calls is None:
             assert expected_name is None and expected_arguments is None, f'expected_name = {expected_name}, expected_arguments = {expected_arguments}'
@@ -1055,7 +1055,7 @@ async def oai_chat_completions(user_prompt,
     user_api_key = user_api_key if user_api_key is not None else 'nope'
     assert isinstance(seed, int), f'seed: {seed}'
     seed = seed if seed is not None else 42
-    
+
     enable_streaming = enable_streaming if enable_streaming is not None else False
     messages = []
     if system_prompt:

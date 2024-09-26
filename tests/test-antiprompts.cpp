@@ -26,12 +26,12 @@ int main()
     };
     const std::vector<std::string> stop_words { };
     const std::vector<std::string> grammar_trigger_words { };
-    
+
     printf("Testing antiprompts\n");
 
     llama_antiprompts antiprompts;
     antiprompts.build(tokenizer, {"abc", "bcd"}, {"bca", "x"});
-    
+
     assert_equal(antiprompts.findSingleTokenMatch('x'), {
         .pos = 0,
         .pattern = "x",

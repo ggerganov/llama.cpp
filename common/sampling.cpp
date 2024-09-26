@@ -147,7 +147,7 @@ bool gpt_sampler_trigger_grammar(const struct llama_model * model, gpt_sampler *
     llama_sampler_accept_str(gsmpl->grmr, trigger.c_str());
     return true;
 }
-    
+
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 

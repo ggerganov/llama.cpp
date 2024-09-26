@@ -58,7 +58,7 @@ int main() {
     json request = {
       {"tools", tools}
     };
-    
+
     std::string hermes_2_pro_like_tmpl = "Hermes 2 Pro template should have <tool_call> inside it";
     test_parse_tool_call(tools, hermes_2_pro_like_tmpl,
       "<tool_call>{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}</tool_call>",
@@ -71,7 +71,7 @@ int main() {
           }).dump()}
         }}
       }});
-   
+
     std::string functionary_v3_like_tmpl = "Functionary 3.2 template should have <|start_header_id|> and then some >>>all inside it";
     test_parse_tool_call(tools, functionary_v3_like_tmpl,
       ">>>ipython\nprint('Hello, world!')",
@@ -84,7 +84,7 @@ int main() {
           }).dump()}
         }}
       }});
-   
+
     std::string functionary_v3_llama_3_1_like_tmpl = "Functionary 3.2 template for llama 3.1 should have <|start_header_id|> and then some <function=foo>{...}</function> inside it";
     test_parse_tool_call(tools, functionary_v3_llama_3_1_like_tmpl,
       "Hell<function=foo>{\"arg1\": 1}</function>o, world<function=bar>{\"arg2\": 2}</function>!",
@@ -107,7 +107,7 @@ int main() {
           }}
         },
       });
-   
+
     std::string llama_3_1_like_tmpl = "Llama 3.1 template should have <|start_header_id|> and <|python_tag|> inside it";
     test_parse_tool_call(tools, llama_3_1_like_tmpl,
       "<|python_tag|>this could be anything",

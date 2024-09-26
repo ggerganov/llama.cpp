@@ -1,6 +1,6 @@
 /*
   Minimalistic Jinja templating engine for llama.cpp. C++11, no deps (single-header), decent language support but very few functions (easy to extend), just what’s needed for actual prompt templates.
-  
+
   Models have increasingly complex templates (e.g. Llama 3.1, Hermes 2 Pro w/ tool_use), so we need a proper template engine to get the best out of them.
 
   Supports:
@@ -20,7 +20,7 @@
   - No tuples (templates seem to rely on lists only)
   - No `if` expressions w/o `else` (but `if` statements are fine)
   - No `{% raw %}`, `{% block … %}`, `{% include … %}`, `{% extends … %},
-  
+
   Model templates verified to work:
   - Meta-Llama-3.1-8B-Instruct
   - Phi-3.5-mini-instruct
@@ -160,7 +160,7 @@ static void test_template_features() {
     test_render(R"({{ {"a": "b"} | tojson }})", {}, {}, R"({"a": "b"})");
     test_render(R"({{ {"a": "b"} }})", {}, {}, R"({'a': 'b'})");
 
-    std::string trim_tmpl = 
+    std::string trim_tmpl =
         "\n"
         "  {% if true %}Hello{% endif %}  \n"
         "...\n"
@@ -228,7 +228,7 @@ static void test_template_features() {
                 ({{ i }}, {{ loop.cycle('odd', 'even') }}),
             {%- endfor -%}
         )", {}, {}, "(0, odd),(1, even),(2, odd),(3, even),(4, odd),");
-    
+
     test_render(
         "{%- for i in range(5) if i % 2 == 0 -%}\n"
         "{{ i }}, first={{ loop.first }}, last={{ loop.last }}, index={{ loop.index }}, index0={{ loop.index0 }}, revindex={{ loop.revindex }}, revindex0={{ loop.revindex0 }}, prev={{ loop.previtem }}, next={{ loop.nextitem }},\n"
@@ -237,7 +237,7 @@ static void test_template_features() {
         "0, first=True, last=False, index=1, index0=0, revindex=3, revindex0=2, prev=, next=2,\n"
         "2, first=False, last=False, index=2, index0=1, revindex=2, revindex0=1, prev=0, next=4,\n"
         "4, first=False, last=True, index=3, index0=2, revindex=1, revindex0=0, prev=2, next=,\n");
-    
+
     test_render(
         R"(
             {%- set res = [] -%}
@@ -262,7 +262,7 @@ static void test_template_features() {
             {% macro input(name, value='', type='text', size=20) -%}
                 <input type="{{ type }}" name="{{ name }}" value="{{ value|e }}" size="{{ size }}">
             {%- endmacro -%}
-    
+
             <p>{{ input('username') }}</p>
             <p>{{ input('password', type='password') }}</p>)",
         {}, {}, R"(
@@ -314,14 +314,14 @@ static void test_template_features() {
             {{- x }},{{ y -}};
         {%- endfor -%}
     )", {{"z", json({json({1, 10}), json({2, 20})})}}, {}, "1,10;2,20;");
-    
+
     test_render(" a {{  'b' -}} c ", {}, {}, " a bc ");
     test_render(" a {{- 'b'  }} c ", {}, {}, " ab c ");
     test_render("a\n{{- 'b'  }}\nc", {}, {}, "ab\nc");
     test_render("a\n{{  'b' -}}\nc", {}, {}, "a\nbc");
 
     test_error_contains("{{ raise_exception('hey') }}", {}, {}, "hey");
-    
+
     test_render("{{ [] is iterable }}", {}, {}, "True");
     test_render("{{ [] is not number }}", {}, {}, "True");
     test_render("{% set x = [0, 1, 2, 3] %}{{ x[1:] }}{{ x[:2] }}{{ x[1:3] }}", {}, {}, "[1, 2, 3][0, 1][1, 2]");
@@ -343,16 +343,16 @@ static void test_template_features() {
     test_error_contains("{% if 1 %}{% else %}{% elif 1 %}{% endif %}", {}, {}, "Unterminated if");
 
     test_render("{% if 1 %}{% elif 1 %}{% else %}{% endif %}", {}, {}, "");
-    
+
     test_render(
-        "{% set x = [] %}{% set _ = x.append(1) %}{{ x | tojson(indent=2) }}", {}, {}, 
+        "{% set x = [] %}{% set _ = x.append(1) %}{{ x | tojson(indent=2) }}", {}, {},
         "[\n  1\n]");
 
     test_render(
-        "{{ not [] }}", {}, {}, 
+        "{{ not [] }}", {}, {},
         "True");
-    
-    test_render("{{ tool.function.name == 'ipython' }}", 
+
+    test_render("{{ tool.function.name == 'ipython' }}",
         json({{"tool", json({
             {"function", {{"name", "ipython"}}}
         })}}),
@@ -369,7 +369,7 @@ static void test_template_features() {
 static void test_chat_templates_with_common_contexts_against_goldens() {
     auto jinja_template_files = find_files("tests/chat/templates", ".jinja");
     auto context_files = find_files("tests/chat/contexts", ".json");
-    
+
     auto get_golden_file = [&](const std::string & tmpl_file, const std::string & ctx_file) {
         auto tmpl_name = filename_without_extension(tmpl_file);
         auto ctx_name = filename_without_extension(ctx_file);

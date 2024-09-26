@@ -182,7 +182,7 @@ struct server_slot {
     std::string stopping_word;
 
     llama_antiprompts antiprompts;
-        
+
     // sampling
     json json_schema;
 

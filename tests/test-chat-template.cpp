@@ -17,7 +17,7 @@ int main(void) {
         std::string expected_output;
         std::string jinja_expected_output;
     };
-    
+
     std::vector<llama_chat_message> conversation {
         {"system", "You are a helpful assistant"},
         {"user", "Hello"},
@@ -100,7 +100,7 @@ int main(void) {
             .tmpl = "{%- for message in messages %}{%- if message['role'] == 'system' -%}{{- '' + message['content'] + '\n\n' -}}{%- else -%}{%- if message['role'] == 'user' -%}{{-'USER: ' + message['content'] + '\n'-}}{%- else -%}{{-'ASSISTANT: ' + message['content'] + '</s>\n' -}}{%- endif -%}{%- endif -%}{%- endfor -%}{%- if add_generation_prompt -%}{{-'ASSISTANT:'-}}{%- endif -%}",
             .expected_output = "You are a helpful assistant\n\nUSER: Hello\nASSISTANT: Hi there</s>\nUSER: Who are you\nASSISTANT:    I am an assistant   </s>\nUSER: Another question\nASSISTANT:",
         },
-        {   
+        {
             // No template included in tokenizer_config.json, so this template likely needs to be manually set.
             .name = "Orca-Vicuna",
             .tmpl = "{%- for message in messages %}{%- if message['role'] == 'system' -%}{{-'SYSTEM: ' + message['content'] + '\n' -}}{%- else -%}{%- if message['role'] == 'user' -%}{{-'USER: ' + message['content'] + '\n'-}}{%- else -%}{{-'ASSISTANT: ' + message['content'] + '</s>\n' -}}{%- endif -%}{%- endif -%}{%- endfor -%}{%- if add_generation_prompt -%}{{-'ASSISTANT:'-}}{%- endif -%}",
@@ -157,7 +157,7 @@ int main(void) {
             .expected_output = u8"You are a helpful assistant\n\nUser: Hello\n\nAssistant: Hi there<｜end▁of▁sentence｜>User: Who are you\n\nAssistant:    I am an assistant   <｜end▁of▁sentence｜>User: Another question\n\nAssistant:",
         }
     };
-    
+
     std::vector<char> formatted_chat(1024);
     int32_t res;
 

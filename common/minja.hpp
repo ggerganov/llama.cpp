@@ -48,7 +48,7 @@ public:
       }
       return Value();
     }
-    
+
     bool empty() {
       return args.empty() && kwargs.empty();
     }
@@ -61,7 +61,7 @@ public:
       }
     }
   };
-  
+
   using CallableType = std::function<Value(const std::shared_ptr<Context> &, Arguments &)>;
   using FilterType = std::function<Value(const std::shared_ptr<Context> &, Arguments &)>;
 
@@ -143,7 +143,7 @@ private:
     } else if (is_boolean()) {
       out << (this->to_bool() ? "True" : "False");
     } else if (is_string()) {
-      dump_string(primitive_, out, string_quote);  
+      dump_string(primitive_, out, string_quote);
     } else {
       out << primitive_.dump();
     }
@@ -175,7 +175,7 @@ public:
       primitive_ = v;
     }
   }
-  
+
   std::vector<Value> keys() {
     if (!object_) throw std::runtime_error("Value is not an object: " + dump());
     std::vector<Value> res;
@@ -267,7 +267,7 @@ public:
     if (is_string()) return !get<std::string>().empty();
     if (is_array()) return !empty();
     return true;
-  } 
+  }
 
   bool operator<(const Value & other) const {
     if (is_null())
@@ -369,7 +369,7 @@ public:
     if (!contains(key)) return default_value;
     return at(key).get<T>();
   }
-  
+
   template <typename T>
   T get() const {
     if (is_primitive()) return primitive_.get<T>();
@@ -730,7 +730,7 @@ class TemplateNode {
     Location location_;
 protected:
     virtual void do_render(std::ostringstream & out, const std::shared_ptr<Context> & context) const = 0;
-    
+
 public:
     TemplateNode(const Location & location) : location_(location) {}
     void render(std::ostringstream & out, const std::shared_ptr<Context> & context) const {
@@ -817,7 +817,7 @@ public:
     ForNode(const Location & location, std::vector<std::string> && var_names, std::unique_ptr<Expression> && iterable,
       std::unique_ptr<Expression> && condition, std::unique_ptr<TemplateNode> && body, bool recursive, std::unique_ptr<TemplateNode> && else_body)
             : TemplateNode(location), var_names(var_names), iterable(std::move(iterable)), condition(std::move(condition)), body(std::move(body)), recursive(recursive), else_body(std::move(else_body)) {}
-      
+
     void do_render(std::ostringstream & out, const std::shared_ptr<Context> & context) const override {
       // https://jinja.palletsprojects.com/en/3.0.x/templates/#for
 
@@ -920,7 +920,7 @@ public:
                 auto & arg_name = arg.first;
                 auto it = named_param_positions.find(arg_name);
                 if (it == named_param_positions.end()) throw std::runtime_error("Unknown parameter name for macro " + name->get_name() + ": " + arg_name);
-                
+
                 call_context->set(arg_name, arg.second);
                 param_set[it->second] = true;
             }
@@ -1098,7 +1098,7 @@ public:
         : Expression(location), left(std::move(l)), right(std::move(r)), op(o) {}
     Value do_evaluate(const std::shared_ptr<Context> & context) const override {
         auto l = left->evaluate(context);
-        
+
         auto do_eval = [&](const Value & l) -> Value {
           if (op == Op::Is || op == Op::IsNot) {
             auto t = dynamic_cast<VariableExpr*>(right.get());
@@ -1297,7 +1297,7 @@ private:
     std::shared_ptr<std::string> template_str;
     CharIterator start, end, it;
     Options options;
-      
+
     Parser(const std::shared_ptr<std::string>& template_str, const Options & options) : template_str(template_str), options(options) {
       if (!template_str) throw std::runtime_error("Template string is null");
       start = it = this->template_str->begin();
@@ -1326,7 +1326,7 @@ private:
               case 'b': result += '\b'; break;
               case 'f': result += '\f'; break;
               case '\\': result += '\\'; break;
-              default: 
+              default:
                 if (*it == quote) {
                   result += quote;
                 } else {
@@ -1562,7 +1562,7 @@ private:
               if (!identifier) throw std::runtime_error("Expected identifier after 'is' keyword");
 
               return nonstd_make_unique<BinaryOpExpr>(
-                  left->location, 
+                  left->location,
                   std::move(left), std::move(identifier),
                   negated ? BinaryOpExpr::Op::IsNot : BinaryOpExpr::Op::Is);
             }
@@ -1588,7 +1588,7 @@ private:
         if (consumeToken("(").empty()) throw std::runtime_error("Expected opening parenthesis in param list");
 
         Expression::Parameters result;
-        
+
         while (it != end) {
             if (!consumeToken(")").empty()) {
                 return result;
@@ -1622,7 +1622,7 @@ private:
         if (consumeToken("(").empty()) throw std::runtime_error("Expected opening parenthesis in call args");
 
         Expression::Arguments result;
-        
+
         while (it != end) {
             if (!consumeToken(")").empty()) {
                 return result;
@@ -1655,7 +1655,7 @@ private:
         static std::regex ident_regex(R"((?!not|is|and|or|del)[a-zA-Z_]\w*)");
         auto location = get_location();
         auto ident = consumeToken(ident_regex);
-        if (ident.empty()) 
+        if (ident.empty())
           return nullptr;
         return nonstd_make_unique<VariableExpr>(location, ident);
     }
@@ -1699,7 +1699,7 @@ private:
         }
         return left;
     }
-    
+
     std::unique_ptr<Expression> parseMathMulDiv() {
         auto left = parseMathUnaryPlusMinus();
         if (!left) throw std::runtime_error("Expected left side of 'math mul/div' expression");
@@ -1709,9 +1709,9 @@ private:
         while (!(op_str = consumeToken(mul_div_tok)).empty()) {
             auto right = parseMathUnaryPlusMinus();
             if (!right) throw std::runtime_error("Expected right side of 'math mul/div' expression");
-            auto op = op_str == "*" ? BinaryOpExpr::Op::Mul 
-                : op_str == "**" ? BinaryOpExpr::Op::MulMul 
-                : op_str == "/" ? BinaryOpExpr::Op::Div 
+            auto op = op_str == "*" ? BinaryOpExpr::Op::Mul
+                : op_str == "**" ? BinaryOpExpr::Op::MulMul
+                : op_str == "/" ? BinaryOpExpr::Op::Div
                 : op_str == "//" ? BinaryOpExpr::Op::DivDiv
                 : BinaryOpExpr::Op::Mod;
             left = nonstd_make_unique<BinaryOpExpr>(get_location(), std::move(left), std::move(right), op);
@@ -1741,14 +1741,14 @@ private:
         auto op_str = consumeToken(unary_plus_minus_tok);
         auto expr = parseValueExpression();
         if (!expr) throw std::runtime_error("Expected expr of 'unary plus/minus' expression");
-        
+
         if (!op_str.empty()) {
             auto op = op_str == "+" ? UnaryOpExpr::Op::Plus : UnaryOpExpr::Op::Minus;
             return nonstd_make_unique<UnaryOpExpr>(get_location(), std::move(expr), op);
         }
         return expr;
     }
-        
+
     std::unique_ptr<Expression> parseValueExpression() {
       auto parseValue = [&]() -> std::unique_ptr<Expression> {
         auto location = get_location();
@@ -1774,7 +1774,7 @@ private:
       };
 
       auto value = parseValue();
-      
+
       while (it != end && consumeSpaces() && peekSymbols({ "[", "." })) {
         if (!consumeToken("[").empty()) {
             std::unique_ptr<Expression> index;
@@ -1797,7 +1797,7 @@ private:
             }
             if (!index) throw std::runtime_error("Empty index in subscript");
             if (consumeToken("]").empty()) throw std::runtime_error("Expected closing bracket in subscript");
-            
+
             value = nonstd_make_unique<SubscriptExpr>(value->location, std::move(value), std::move(index));
         } else if (!consumeToken(".").empty()) {
             auto identifier = parseIdentifier();
@@ -1825,10 +1825,10 @@ private:
 
     std::unique_ptr<Expression> parseBracedExpressionOrArray() {
         if (consumeToken("(").empty()) return nullptr;
-        
+
         auto expr = parseExpression();
         if (!expr) throw std::runtime_error("Expected expression in braced expression");
-        
+
         if (!consumeToken(")").empty()) {
             return expr;  // Drop the parentheses
         }
@@ -1851,7 +1851,7 @@ private:
 
     std::unique_ptr<Expression> parseArray() {
         if (consumeToken("[").empty()) return nullptr;
-        
+
         std::vector<std::unique_ptr<Expression>> elements;
         if (!consumeToken("]").empty()) {
             return nonstd_make_unique<ArrayExpr>(get_location(), std::move(elements));
@@ -1876,7 +1876,7 @@ private:
 
     std::unique_ptr<Expression> parseDictionary() {
         if (consumeToken("{").empty()) return nullptr;
-        
+
         std::vector<std::pair<std::unique_ptr<Expression>, std::unique_ptr<Expression>>> elements;
         if (!consumeToken("}").empty()) {
             return nonstd_make_unique<DictExpr>(get_location(), std::move(elements));
@@ -1892,7 +1892,7 @@ private:
         };
 
         parseKeyValuePair();
-        
+
         while (it != end) {
             if (!consumeToken(",").empty()) {
                 parseKeyValuePair();
@@ -1950,15 +1950,15 @@ private:
       static std::regex text_regex(R"([\s\S\n]*?($|(?=\{\{|\{%|\{#)))");
       static std::regex expr_close_regex(R"([\s\n]*([-~])?\}\})");
       static std::regex block_close_regex(R"([\s\n]*([-~])?%\})");
-              
+
       TemplateTokenVector tokens;
       std::vector<std::string> group;
       std::string text;
-      
+
       try {
         while (it != end) {
           auto location = get_location();
-      
+
           if (!(group = consumeTokenGroups(comment_tok, SpaceHandling::Keep)).empty()) {
             auto pre_space = parsePreSpace(group[1]);
             auto content = group[2];
@@ -1985,7 +1985,7 @@ private:
             };
 
             if ((keyword = consumeToken(block_keyword_tok)).empty()) throw std::runtime_error("Expected block keyword");
-            
+
             if (keyword == "if") {
               auto condition = parseExpression();
               if (!condition) throw std::runtime_error("Expected condition in if block");
@@ -2019,7 +2019,7 @@ private:
                 condition = parseExpression();
               }
               auto recursive = !consumeToken(recursive_tok).empty();
-            
+
               auto post_space = parseBlockClose();
               tokens.push_back(nonstd_make_unique<ForTemplateToken>(location, pre_space, post_space, std::move(varnames), std::move(iterable), std::move(condition), recursive));
             } else if (keyword == "endfor") {
@@ -2034,7 +2034,7 @@ private:
               if (!(group = consumeTokenGroups(namespaced_var_regex)).empty()) {
                 ns = group[1];
                 var_names.push_back(group[2]);
-                
+
                 if (consumeToken("=").empty()) throw std::runtime_error("Expected equals sign in set block");
 
                 value = parseExpression();
@@ -2115,7 +2115,7 @@ private:
           } else if (auto text_token = dynamic_cast<TextTemplateToken*>(token.get())) {
               SpaceHandling pre_space = (it - 1) != begin ? (*(it - 2))->post_space : SpaceHandling::Keep;
               SpaceHandling post_space = it != end ? (*it)->pre_space : SpaceHandling::Keep;
-  
+
               auto text = text_token->text;
               if (pre_space == SpaceHandling::Strip) {
                 static std::regex leading_space_regex(R"(^(\s|\r|\n)+)");
@@ -2131,7 +2131,7 @@ private:
                 static std::regex trailing_last_line_space_regex(R"((^|\n)[ \t]*$)");
                 text = std::regex_replace(text, trailing_last_line_space_regex, "$1");
               }
-              
+
               if (it == end && !options.keep_trailing_newline) {
                 static std::regex r(R"([\n\r]$)");
                 text = std::regex_replace(text, r, "");  // Strip one trailing newline
@@ -2473,7 +2473,7 @@ inline std::shared_ptr<Context> Context::builtins() {
     int64_t start = param_set[0] ? startEndStep[0] : 0;
     int64_t end = startEndStep[1];
     int64_t step = param_set[2] ? startEndStep[2] : 1;
-    
+
     auto res = Value::array();
     if (step > 0) {
       for (int64_t i = start; i < end; i += step) {
