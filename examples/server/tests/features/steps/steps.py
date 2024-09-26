@@ -736,14 +736,20 @@ async def all_embeddings_are_generated(context):
 def reranking_results_are_returned(context):
     assert len(context.reranking_results) == len(context.reranking_documents)
 
-@step('reranking highest score is index {idx:d}')
-def reranking_results_are_returned(context, idx: int):
+@step('reranking highest score is index {idx_high:d} and lowest score is index {idx_low:d}')
+def reranking_results_are_returned(context, idx_high: int, idx_low: int):
     max_score, max_idx = 0, 0
+    min_score, min_idx = 0, 0
     for res in context.reranking_results:
         if max_score < res['relevance_score']:
             max_score = res['relevance_score']
             max_idx   = res['index']
-    assert max_idx == idx
+        if min_score > res['relevance_score']:
+            min_score = res['relevance_score']
+            min_idx   = res['index']
+    print(context.reranking_results)
+    assert max_idx == idx_high
+    assert min_idx == idx_low
 
 @step('adding special tokens')
 def step_tokenize_set_add_special(context):
