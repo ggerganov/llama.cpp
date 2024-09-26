@@ -26,6 +26,7 @@ import jinja2.ext
 import re
 # import requests
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 model_ids = [
@@ -33,6 +34,7 @@ model_ids = [
     "NousResearch/Hermes-2-Pro-Llama-3-8B",
     "NousResearch/Hermes-2-Pro-Mistral-7B",
     "meetkai/functionary-medium-v3.2",
+    "meetkai/functionary-medium-v3.1",
     "Qwen/Qwen2-7B-Instruct",
     "Qwen/Qwen2-VL-7B-Instruct",
     "Qwen/Qwen2.5-7B-Instruct",

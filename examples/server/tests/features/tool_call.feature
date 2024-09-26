@@ -12,17 +12,16 @@ Feature: llama.cpp server
     And   8192 KV cache size
     And   32 as batch size
     And   2 slots
-    And   64 server max tokens to predict
     And   prometheus compatible metrics exposed
     And   jinja templates are enabled
 
-  @wip
+
   Scenario Outline: OAI Compatibility w/ required tool
     Given a chat template file ../../../tests/chat/templates/<template_name>.jinja
     And   the server is starting
     And   the server is healthy
     And   a model test
-    And   <n> max tokens to predict
+    And   <n_predict> max tokens to predict
     And   a user prompt write a hello world in python
     And   a tool choice <tool_choice>
     And   tools <tools>
@@ -30,11 +29,14 @@ Feature: llama.cpp server
     Then  tool <tool_name> is called with arguments <tool_arguments>
 
     Examples: Prompts
-      | template_name                         | n   | tool_name | tool_arguments       | tool_choice | tools |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64  | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}] |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 16  | ipython   | {"code": "it and "}  | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
-      | meetkai-functionary-medium-v3.2       | 64  | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}] |
-      | meetkai-functionary-medium-v3.2       | 64  | ipython   | {"code": "Yes,"}     | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | template_name                         | n_predict | tool_name | tool_arguments       | tool_choice | tools |
+      | meetkai-functionary-medium-v3.1       | 128       | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
+      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "Yes, you can."}     | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | meetkai-functionary-medium-v3.2       | 128       | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
+      | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}     | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 16        | ipython   | {"code": "it and "}  | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+
 
   Scenario: OAI Compatibility w/ no tool
     Given a chat template file ../../../tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja

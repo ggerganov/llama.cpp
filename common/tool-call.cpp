@@ -191,6 +191,16 @@ static llama_tool_calls parse_functionary_tool_calls(const std::string& input, c
 }
 
 static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::string& input) {
+    // This version of Functionary still supports the llama 3.1 tool call format for the python tool.
+    static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
+    std::smatch match;
+    if (std::regex_search(input, match, python_tag_regex)) {
+        return {
+            match.prefix().str(), {
+                {"ipython", (json {{"code", match[1].str()}}).dump()},
+            }
+        };
+    }
     static std::regex function_regex(R"(<function=(\w+)>)");
     static std::regex close_regex(R"(</function>)");
     return parse_functionary_tool_calls(input, function_regex, close_regex);
@@ -205,12 +215,12 @@ static llama_tool_calls parse_functionary_v3_tool_calls(const std::string& input
 llama_tool_calls parse_tool_calls(const json & tools, const std::string & chat_template, const std::string& input) {
     if (needs_hermes_pro_tool_call(chat_template)) {
         return parse_hermes_tool_calls(input);
-    } else if (needs_llama_3_1_tool_call(chat_template)) {
-        return parse_llama_3_1_tool_calls(tools, input);
     } else if (needs_functionary_v3_tool_call(chat_template)) {
         return parse_functionary_v3_tool_calls(input);
     } else if (needs_functionary_v3_llama_3_1_tool_call(chat_template)) {
         return parse_functionary_v3_llama_3_1_tool_calls(input);
+    } else if (needs_llama_3_1_tool_call(chat_template)) {
+        return parse_llama_3_1_tool_calls(tools, input);
     } else {
         throw std::runtime_error("Unsupported chat template for tool calls");
     }

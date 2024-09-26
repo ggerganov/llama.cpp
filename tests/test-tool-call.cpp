@@ -116,6 +116,15 @@ int main() {
           }}
         },
       });
+    test_parse_tool_call(tools, functionary_v3_llama_3_1_like_tmpl,
+      "<function=test>{ } </function> ",
+      " ",
+      json {{
+        {"function", {
+          {"name", "test"},
+          {"arguments", "{}"}
+        }}
+      }});
 
     std::string llama_3_1_like_tmpl = "Llama 3.1 template should have <|start_header_id|> and <|python_tag|> inside it";
     test_parse_tool_call(tools, llama_3_1_like_tmpl,
