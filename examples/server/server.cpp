@@ -2879,8 +2879,12 @@ int main(int argc, char ** argv) {
         if (!stream) {
             ctx_server.receive_cmpl_results(task_ids, [&](const std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
-                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose);
-                res_ok(res, result_oai);
+                try {
+                    json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose);
+                    res_ok(res, result_oai);
+                } catch (const std::runtime_error & e) {
+                    res_error(res, format_error_response(e.what(), ERROR_TYPE_SERVER));
+                }
             }, [&](const json & error_data) {
                 res_error(res, error_data);
             });
