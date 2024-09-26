@@ -83,6 +83,10 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.concurrent_tasks = []
     context.prompts = []
 
+    context.reranking_query = None
+    context.reranking_documents = []
+    context.reranking_results = None
+
 
 @step('a model file {hf_file} from HF repo {hf_repo}')
 def step_download_hf_model(context, hf_file: str, hf_repo: str):
@@ -452,6 +456,14 @@ def step_impl(context, n_ga_w):
 def step_prompt_passkey(context):
     context.prompt_passkey = context_text(context)
 
+@step('a rerank query')
+def step_set_rerank_query(context):
+    context.reranking_query = context_text(context)
+    context.reranking_documents = []
+
+@step('a rerank document')
+def step_set_rerank_document(context):
+    context.reranking_documents.append(context_text(context))
 
 @step('{n_prompts:d} fixed prompts')
 def step_fixed_prompts(context, n_prompts):
@@ -619,6 +631,22 @@ async def step_compute_embedding(context):
     context.embeddings = await request_embedding(context_text(context), None, base_url=context.base_url)
 
 
+@step('reranking request')
+@async_run_until_complete
+async def step_compute_reranking(context):
+    async with aiohttp.ClientSession(timeout=DEFAULT_TIMEOUT_SECONDS) as session:
+        async with session.post(f'{context.base_url}/reranking',
+                                json={
+                                    "query": context.reranking_query,
+                                    "documents": context.reranking_documents,
+                                }) as response:
+            if response.status == 200:
+                response_json = await response.json()
+                context.reranking_results = response_json['results']
+            else:
+                context.reranking_results = response.status
+
+
 @step('all embeddings are the same')
 @async_run_until_complete
 async def step_all_embeddings_are_the_same(context):
@@ -704,6 +732,18 @@ async def all_embeddings_are_generated(context):
     for i in range(n_embedding_requests):
         assert_embeddings(context.tasks_result.pop().pop())
 
+@step('reranking results are returned')
+def reranking_results_are_returned(context):
+    assert len(context.reranking_results) == len(context.reranking_documents)
+
+@step('reranking highest score is index {idx:d}')
+def reranking_results_are_returned(context, idx: int):
+    max_score, max_idx = 0, 0
+    for res in context.reranking_results:
+        if max_score < res['relevance_score']:
+            max_score = res['relevance_score']
+            max_idx   = res['index']
+    assert max_idx == idx
 
 @step('adding special tokens')
 def step_tokenize_set_add_special(context):
