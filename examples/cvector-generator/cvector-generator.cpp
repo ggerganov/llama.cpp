@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 #include "ggml.h"
@@ -12,14 +13,15 @@
 #include "ggml-metal.h"
 #endif
 
+#include <algorithm>
+#include <climits>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <iostream>
 #include <string>
 #include <tuple>
 #include <vector>
-#include <algorithm>
-#include <iostream>
-#include <fstream>
-#include <climits>
 
 
 //////////////////////////////////////////////////
@@ -35,9 +37,7 @@ static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
     return ret;
 }
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     printf("\nexample usage:\n");
     printf("\n    CPU only:   %s -m ./llama-3.Q4_K_M.gguf\n", argv[0]);
     printf("\n    with GPU:   %s -m ./llama-3.Q4_K_M.gguf -ngl 99\n", argv[0]);
@@ -271,7 +271,7 @@ struct tokenized_prompt {
     size_t max_seq_len;
 
     tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
-        const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+        const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
         tokens_pos = ::llama_tokenize(ctx, pos, add_bos, true);
         tokens_neg = ::llama_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
@@ -390,8 +390,7 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
         return 1;
     }
 
@@ -486,8 +485,8 @@ int main(int argc, char ** argv) {
     if (use_pca) {
         // run PCA
         PCA::pca_params pca_params;
-        pca_params.n_threads = params.n_threads;
-        pca_params.n_batch = params.n_pca_batch;
+        pca_params.n_threads    = params.cpuparams.n_threads;
+        pca_params.n_batch      = params.n_pca_batch;
         pca_params.n_iterations = params.n_pca_iterations;
         PCA::run_pca(pca_params, ctx_train.v_diff, ctx_train.v_final);
     } else {

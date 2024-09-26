@@ -21,7 +21,7 @@
 #endif
 
 static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
-    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads, nullptr);
 
     if (plan.work_size > 0) {
         buf.resize(plan.work_size);
@@ -54,7 +54,7 @@ static void tensor_dump(const ggml_tensor * tensor, const char * name) {
 #define TENSOR_DUMP(tensor) tensor_dump(tensor, #tensor)
 
 struct benchmark_params_struct {
-    int32_t n_threads     = 1;
+    int     n_threads     = 1;
     int32_t n_iterations  = 10;
 };
 
@@ -183,7 +183,7 @@ int main(int argc, char ** argv)  {
 
     ggml_graph_compute_helper(work_buffer, gf, benchmark_params.n_threads);
 
-    TENSOR_DUMP(gf->nodes[0]);
+    TENSOR_DUMP(ggml_graph_node(gf, 0));
 
     printf("\n------ Test 2 - Matrix Mult via %s code\n", ggml_type_name(qtype));
 
@@ -224,7 +224,7 @@ int main(int argc, char ** argv)  {
 
 
     // Let's use the F32 result from above as a reference for the quantized multiplication
-    float sum_of_F32_reference = tensor_sum_elements(gf->nodes[0]);
+    float sum_of_F32_reference = tensor_sum_elements(ggml_graph_node(gf, 0));
 
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; gigaFLOPS\n");
     printf("=====================================================================================\n");
@@ -252,7 +252,7 @@ int main(int argc, char ** argv)  {
 
         // Check that the matrix multiplication result is in the right ballpark
         // We cannot use the exact value from the F32 multiplication because the quantizuation will be slightly different
-        float sum_of_Q4_result = tensor_sum_elements(gf31->nodes[0]);
+        float sum_of_Q4_result = tensor_sum_elements(ggml_graph_node(gf31, 0));
         float delta = std::abs(sum_of_Q4_result - sum_of_F32_reference);
         float allowed_delta = (sum_of_F32_reference) / 1000 / 1000; //  Let's accept an epsilon of 10^-6
 

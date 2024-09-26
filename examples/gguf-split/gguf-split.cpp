@@ -152,7 +152,7 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
         throw std::invalid_argument("error: invalid parameter for argument: " + arg);
     }
 
-    if (argc - arg_idx < 2) {
+    if (argc - arg_idx != 2) {
         throw std::invalid_argument("error: bad arguments");
     }
 
@@ -389,9 +389,16 @@ static void gguf_merge(const split_params & split_params) {
     int n_split = 1;
     int total_tensors = 0;
 
-    auto * ctx_out = gguf_init_empty();
+    // avoid overwriting existing output file
+    if (std::ifstream(split_params.output.c_str())) {
+        fprintf(stderr, "%s: output file %s already exists\n", __func__, split_params.output.c_str());
+        exit(EXIT_FAILURE);
+    }
+
     std::ofstream fout(split_params.output.c_str(), std::ios::binary);
     fout.exceptions(std::ofstream::failbit); // fail fast on write errors
+
+    auto * ctx_out = gguf_init_empty();
 
     std::vector<uint8_t> read_data;
     std::vector<ggml_context *> ctx_metas;
