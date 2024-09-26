@@ -39,6 +39,8 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
         std::size_t position;
         bool found_error;
 
+        json_error_locator() : position(0), found_error(false) {}
+
         bool parse_error(std::size_t position, const std::string & last_token, const json::exception & ex) override {
             // LOG_WARNING("JSON error (Expected)", {{"position", position}, {"last_token", last_token}, {"error", ex.what()}});
             this->position = position - 1;
@@ -67,7 +69,7 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
     } else {
         temptative_end = end;
     }
-    std::string json_sub {it, it + err_loc.position};
+    std::string json_sub {it, temptative_end};
     // LOG_WARNING("Parsing json", {{"json_sub", json_sub}});
     try {
         out = json::parse(json_sub);
@@ -155,9 +157,7 @@ static llama_tool_calls parse_llama_3_1_tool_calls(const json & tools, const std
     return {input, {}};
 }
 
-static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::string& input) {
-    static std::regex function_regex(R"(<function=(\w+)>)");
-    static std::regex close_regex(R"(</function>)");
+static llama_tool_calls parse_functionary_tool_calls(const std::string& input, const std::regex & function_regex, const std::regex & close_regex) {
     std::smatch match;
 
     llama_tool_calls result;
@@ -190,22 +190,16 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::str
     return result;
 }
 
+static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::string& input) {
+    static std::regex function_regex(R"(<function=(\w+)>)");
+    static std::regex close_regex(R"(</function>)");
+    return parse_functionary_tool_calls(input, function_regex, close_regex);
+}
+
 static llama_tool_calls parse_functionary_v3_tool_calls(const std::string& input) {
-    static std::regex python_tag_regex(R"(>>>(\w+)\n((?!>>>)[\s\S\n]*))");
-    std::smatch match;
-    llama_tool_calls result;
-    std::string content;
-    std::string in = input;
-    while (std::regex_search(in, match, python_tag_regex)) {
-        content += match.prefix().str();
-        result.tool_calls.push_back({
-            match[1].str(),
-            (json {{"code", match[2].str()}}).dump(),
-        });
-        in = match.suffix().str();
-    }
-    result.content = content + in;
-    return result;
+    static std::regex function_regex(R"(>>>(\w+)\n)");
+    static std::regex close_regex(R"($|\n(?=>>>))");
+    return parse_functionary_tool_calls(input, function_regex, close_regex);
 }
 
 llama_tool_calls parse_tool_calls(const json & tools, const std::string & chat_template, const std::string& input) {

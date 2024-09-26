@@ -166,7 +166,7 @@ def step_use_jinja(context):
     context.use_jinja = True
 
 
-@step('chat template file {file}')
+@step('a chat template file {file}')
 def step_use_jinja(context, file):
     context.chat_template_file = file
 

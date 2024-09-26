@@ -74,7 +74,7 @@ int main() {
 
     std::string functionary_v3_like_tmpl = "Functionary 3.2 template should have <|start_header_id|> and then some >>>all inside it";
     test_parse_tool_call(tools, functionary_v3_like_tmpl,
-      ">>>ipython\nprint('Hello, world!')",
+      ">>>ipython\n{\"code\": \"print('Hello, world!')\"}",
       "",
       json {{
         {"function", {
@@ -82,6 +82,15 @@ int main() {
           {"arguments", (json {
             {"code", "print('Hello, world!')"}
           }).dump()}
+        }}
+      }});
+    test_parse_tool_call(tools, functionary_v3_like_tmpl,
+      ">>>test\n{ } \n ",
+      "",
+      json {{
+        {"function", {
+          {"name", "test"},
+          {"arguments", "{}"}
         }}
       }});
 
