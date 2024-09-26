@@ -377,14 +377,17 @@ extern "C" {
     } llama_sampler_chain_params;
 
     // used in chat template
+
+    typedef struct llama_tool_call {
+        const char * name;
+        const char * arguments;
+    } llama_tool_call;
+
     typedef struct llama_chat_message {
         const char * role;
         const char * content;
         const char * tool;
-        struct llama_tool_call {
-            const char * name;
-            const char * arguments;
-        };
+
         const llama_tool_call * tool_calls;
         uint32_t n_tool_calls;
     } llama_chat_message;
@@ -984,10 +987,10 @@ extern "C" {
                                   bool   add_ass,
                                   char * buf,
                                int32_t   length,
-                                  bool   use_jinja = false,
-                            const char * tools = nullptr,
-                            const char * bos_token = nullptr,
-                            const char * eos_token = nullptr);
+                                  bool   use_jinja,
+                            const char * tools,
+                            const char * bos_token,
+                            const char * eos_token);
 
     //
     // Sampling API
