@@ -22946,6 +22946,14 @@ const char * gguf_get_arr_str(const struct gguf_context * ctx, int key_id, int i
     return str->data;
 }
 
+int gguf_get_arr_str_n(const struct gguf_context * ctx, int key_id, int i) {
+    GGML_ASSERT(key_id >= 0 && key_id < gguf_get_n_kv(ctx));
+    GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_ARRAY);
+    struct gguf_kv * kv = &ctx->kv[key_id];
+    struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];
+    return str->n;
+}
+
 int gguf_get_arr_n(const struct gguf_context * ctx, int key_id) {
     GGML_ASSERT(key_id >= 0 && key_id < gguf_get_n_kv(ctx));
     GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_ARRAY);
@@ -23022,6 +23030,12 @@ const char * gguf_get_val_str(const struct gguf_context * ctx, int key_id) {
     GGML_ASSERT(key_id >= 0 && key_id < gguf_get_n_kv(ctx));
     GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_STRING);
     return ctx->kv[key_id].value.str.data;
+}
+
+int gguf_get_val_str_n(const struct gguf_context * ctx, int key_id) {
+    GGML_ASSERT(key_id >= 0 && key_id < gguf_get_n_kv(ctx));
+    GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_STRING);
+    return ctx->kv[key_id].value.str.n;
 }
 
 const void * gguf_get_val_data(const struct gguf_context * ctx, int key_id) {

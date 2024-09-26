@@ -2329,9 +2329,8 @@ class InternLM2Model(Model):
 
     def set_vocab(self):
         # (TODO): Is there a better way?
-        # Copy from _set_vocab_sentencepiece, The only difference is that we will treat the character
-        # \x00 specially and convert it into an emoji character to prevent it from being mistakenly
-        # recognized as an empty string in C++.
+        # Copy from _set_vocab_sentencepiece, The only difference is that we find mislabeled UNUSED tokens,
+        # and that we set '<|im_end|>' as the eos token for chat models.
         from sentencepiece import SentencePieceProcessor
         from sentencepiece import sentencepiece_model_pb2 as model
 
@@ -2358,11 +2357,6 @@ class InternLM2Model(Model):
             piece = tokenizer.IdToPiece(token_id)
             text = piece.encode("utf-8")
             score = tokenizer.GetScore(token_id)
-            if text == b"\x00":
-                # (TODO): fixme
-                # Hack here and replace the \x00 characters.
-                logger.warning(f"InternLM2 convert token '{text}' to '🐉'!")
-                text = "🐉".encode("utf-8")
 
             toktype = SentencePieceTokenTypes.NORMAL
             if tokenizer.IsUnknown(token_id):

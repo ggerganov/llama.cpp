@@ -562,7 +562,7 @@ static void load_vocab(const char * filename, const Config * config, struct llam
         vocab->id_to_token.resize(n_vocab);
 
         for (uint32_t i = 0; i < n_vocab; i++) {
-            std::string word = gguf_get_arr_str(ctx, token_idx, i);
+            std::string word(gguf_get_arr_str(ctx, token_idx, i), gguf_get_arr_str_n(ctx, token_idx, i));
 
             vocab->token_to_id[word] = i;
 
