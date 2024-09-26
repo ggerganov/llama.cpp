@@ -62,7 +62,7 @@ model_ids = [
     # "deepseek-ai/DeepSeek-Coder-V2-Instruct",
     # "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
     # "deepseek-ai/DeepSeek-V2.5",
-    
+
     # Cannot find chat template:
     # "eachadea/vicuna-13b-1.1",
     # "microsoft/Phi-3-vision-instruct",
@@ -160,6 +160,7 @@ def handle_chat_template(model_id, variant, template_src):
             f.write(output)
 
     logger.info('')
+
 
 def main():
     for dir in ['tests/chat/templates', 'tests/chat/goldens']:
