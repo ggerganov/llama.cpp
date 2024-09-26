@@ -1,0 +1,3 @@
+{% for message in messages %}{% if loop.first %}[gMASK]sop<|{{ message['role'] }}|>
+ {{ message['content'] }}{% else %}<|{{ message['role'] }}|>
+ {{ message['content'] }}{% endif %}{% endfor %}{% if add_generation_prompt %}<|assistant|>{% endif %}

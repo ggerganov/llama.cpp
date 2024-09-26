@@ -1,0 +1,10 @@
+[gMASK]<sop><|user|>
+Print a hello world message with python.<|tool|>
+{"stdout": "Hello, World!"}<|assistant|>
+Anything else?<|user|>
+Test a tautology.<|tool|>
+true<|assistant|>
+Truth is definitely true.<|user|>
+Check it on the web.<|tool|>
+{"title":"Truth: don't ask the web, ask an LLM instead!","url":"https://en.wikipedia.org/wiki/Truth"}<|assistant|>
+I don't need the web to answer you but I did check, as you asked. What now?<|assistant|>

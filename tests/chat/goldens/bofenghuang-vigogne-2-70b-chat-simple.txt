@@ -1,0 +1,5 @@
+<|startoftext|>[INST] <<SYS>>
+Vous êtes Vigogne, un assistant IA créé par Zaion Lab. Vous suivez extrêmement bien les instructions. Aidez autant que vous le pouvez.
+<</SYS>>
+
+What's your favourite LLM framework? [/INST] llama.cpp! <|endoftext|>
