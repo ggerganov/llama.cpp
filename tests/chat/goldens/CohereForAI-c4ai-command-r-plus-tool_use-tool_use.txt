@@ -59,9 +59,7 @@ Action:
 [
     {
         "tool_name": "ipython",
-        "parameters": {
-            "code": "print('Hello, World!')"
-        }
+        "parameters": "{\"code\": \"print('Hello, World!')\"}"
     }
 ]```
 <|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|><results>
@@ -71,9 +69,7 @@ Action:
 [
     {
         "tool_name": "test",
-        "parameters": {
-            "condition": true
-        }
+        "parameters": "{\"condition\":true}"
     }
 ]```
 <|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|><results>
@@ -83,9 +79,7 @@ Action:
 [
     {
         "tool_name": "brave_search",
-        "parameters": {
-            "query": "what is truth anyway am I right?"
-        }
+        "parameters": "{\"query\": \"what is truth anyway am I right?\"}"
     }
 ]```
 <|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|><results>

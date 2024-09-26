@@ -26,7 +26,7 @@ import jinja2.ext
 import re
 # import requests
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 model_ids = [
@@ -85,11 +85,11 @@ def strftime_now(format):
 
 
 def handle_chat_template(model_id, variant, template_src):
-    logger.info(f"# {model_id} @ {variant}")
+    logger.info(f"# {model_id}{' @ ' + variant if variant else ''}")
     model_name = model_id.replace("/", "-")
     base_name = f'{model_name}-{variant}' if variant else model_name
     template_file = f'tests/chat/templates/{base_name}.jinja'
-    logger.info(f'template_file: {template_file}')
+    logger.info(f'- template_file: {template_file}')
     with open(template_file, 'w') as f:
         f.write(template_src)
 
@@ -125,8 +125,20 @@ def handle_chat_template(model_id, variant, template_src):
 
         output_file = f'tests/chat/goldens/{base_name}-{context_name}.txt'
         logger.info(f"- {output_file}")
+
+        # The template (and workarounds) may modify the context in place, so we need to make a copy of it.
+        actual_context = json.loads(json.dumps(context))
+
+        # Work around Llama-3.1 template quirk: it expects tool_call.function.arguments to be an object rather than its JSON string representation.
+        if 'tool_call.arguments | items' in template_src:
+            for message in actual_context['messages']:
+                if 'tool_calls' in message:
+                    for tool_call in message['tool_calls']:
+                        arguments = tool_call['function']['arguments']
+                        tool_call['function']['arguments'] = json.loads(arguments)
+
         try:
-            output = template.render(**context)
+            output = template.render(**actual_context)
         except Exception as e1:
             # Some templates (e.g. Phi-3-medium-128k's) expect a non-null "content" key in each message.
             for message in context["messages"]:
@@ -142,6 +154,7 @@ def handle_chat_template(model_id, variant, template_src):
         with open(output_file, 'w') as f:
             f.write(output)
 
+    logger.info('')
 
 def main():
     for dir in ['tests/chat/templates', 'tests/chat/goldens']:

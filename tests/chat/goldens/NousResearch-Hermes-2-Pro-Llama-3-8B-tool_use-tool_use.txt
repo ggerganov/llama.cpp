@@ -35,7 +35,7 @@ Anything else?<|im_end|>
 Test a tautology.<|im_end|>
 <|im_start|>assistant
 <tool_call>
-{"name": "test", "arguments": {"condition": true}}
+{"name": "test", "arguments": {"condition":true}}
 </tool_call><|im_end|>
 <|im_start|>tool
 <tool_response>
