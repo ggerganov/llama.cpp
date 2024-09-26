@@ -5084,6 +5084,43 @@ struct llama_model_loader {
         }
 #endif
 
+#if defined(GGML_USE_SYCL)
+        // 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
+        // NVMe raid configurations might require more / larger buffers.
+        constexpr size_t n_buffers = 4;
+        constexpr size_t buffer_size = 1 * 1024 * 1024; // 1MB
+
+        std::vector<ggml_backend_buffer_t> host_buffers;
+        std::vector<void*> host_ptrs;
+        // std::vector<ggml_backend_event_t> events;
+        size_t buffer_idx = 0; // buffer to use for async loads
+
+        ggml_backend_t sycl_backend = nullptr;
+        if (!use_mmap && !check_tensors) {
+            // When not using mmaped io use async uploads from pinned memory to GPU memory.
+            // First determine if the SYCL backend is active, and if so, determine the device ID.
+            ggml_backend_buffer_t buf = bufs_mmap.count(0) ? bufs_mmap.at(0) : nullptr;
+            if (buf) {
+                ggml_backend_buffer_type_t buffer_type = ggml_backend_buffer_get_type(buf);
+                for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
+                    auto * sycl_buffer_type = ggml_backend_sycl_buffer_type(i);
+                    if (buffer_type == sycl_buffer_type) {
+                        sycl_backend = ggml_backend_sycl_init(i);
+                        break;
+                    }
+                }
+            }
+
+            // If the sycl backend is active create pinned memory buffers and events for synchronisation.
+            if (sycl_backend) {
+                for (size_t idx = 0; idx < n_buffers; ++idx) {
+                    host_buffers.emplace_back(ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), buffer_size));
+                    host_ptrs.emplace_back(ggml_backend_buffer_get_base(host_buffers[idx]));
+                }
+            }
+        }
+#endif
+
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             const auto * weight = get_weight(ggml_get_name(cur));
             if (weight == nullptr) {
@@ -5153,7 +5190,25 @@ struct llama_model_loader {
                             file->read_raw(host_ptrs[buffer_idx], read_iteration);
                             ggml_backend_tensor_set_async(cuda_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
                             ggml_backend_event_record(events[buffer_idx]);
+                            bytes_read += read_iteration;
+                            ++buffer_idx;
+                            buffer_idx %= n_buffers;
+                        }
 
+                    }
+                    else
+#endif
+#if defined(GGML_USE_SYCL)
+                    // If sycl_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
+                    if (sycl_backend) {
+                        file->seek(weight->offs, SEEK_SET);
+
+                        size_t bytes_read = 0;
+
+                        while (bytes_read < n_size) {
+                            size_t read_iteration = std::min<size_t>(buffer_size, n_size - bytes_read);
+                            file->read_raw(host_ptrs[buffer_idx], read_iteration);
+                            ggml_backend_tensor_set_async(sycl_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
                             bytes_read += read_iteration;
                             ++buffer_idx;
                             buffer_idx %= n_buffers;
@@ -5185,6 +5240,18 @@ struct llama_model_loader {
                 ggml_backend_buffer_free(host_buffers[idx]);
             }
             ggml_backend_free(cuda_backend);
+        }
+#endif
+
+#if defined(GGML_USE_SYCL) 
+        // free temporary resources used for async cuda uploads
+        if (sycl_backend) {
+            for (size_t idx = 0; idx < n_buffers;++idx) {
+                // ggml_backend_event_synchronize(events[idx]);
+                // ggml_backend_event_free(events[idx]);
+                ggml_backend_buffer_free(host_buffers[idx]);
+            }
+            ggml_backend_free(sycl_backend);
         }
 #endif
 
