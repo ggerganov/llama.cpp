@@ -187,7 +187,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
     for (int id = 0; id < info.device_count; ++id) {
         int device_vmm = 0;
 
-#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM) && !defined(GGML_USE_MUSA)
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM)
         CUdevice device;
         CU_CHECK(cuDeviceGet(&device, id));
         CU_CHECK(cuDeviceGetAttribute(&device_vmm, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, device));
@@ -199,7 +199,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
             alloc_prop.location.id = id;
             CU_CHECK(cuMemGetAllocationGranularity(&info.devices[id].vmm_granularity, &alloc_prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
         }
-#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM) && !defined(GGML_USE_MUSA)
+#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM)
         info.devices[id].vmm = !!device_vmm;
 
         cudaDeviceProp prop;
@@ -335,7 +335,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
 };
 
 // pool with virtual memory
-#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM) && !defined(GGML_USE_MUSA)
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM)
 struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
     static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 35; // 32 GB
 
@@ -429,14 +429,14 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         GGML_ASSERT(ptr == (void *) (pool_addr + pool_used));
     }
 };
-#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM) && !defined(GGML_USE_MUSA)
+#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM)
 
 std::unique_ptr<ggml_cuda_pool> ggml_backend_cuda_context::new_pool_for_device(int device) {
-#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM) && !defined(GGML_USE_MUSA)
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM)
     if (ggml_cuda_info().devices[device].vmm) {
         return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_vmm(device));
     }
-#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM) && !defined(GGML_USE_MUSA)
+#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_CUDA_NO_VMM)
     return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_leg(device));
 }
 
