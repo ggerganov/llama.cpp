@@ -2160,7 +2160,7 @@ private:
                   throw unterminated(**start);
               }
               children.emplace_back(nonstd_make_unique<MacroNode>(token->location, std::move(macro_token->name), std::move(macro_token->params), std::move(body)));
-          } else if (auto comment_token = dynamic_cast<CommentTemplateToken*>(token.get())) {
+          } else if (dynamic_cast<CommentTemplateToken*>(token.get())) {
               // Ignore comments
           } else if (dynamic_cast<EndForTemplateToken*>(token.get())
                   || dynamic_cast<EndSetTemplateToken*>(token.get())

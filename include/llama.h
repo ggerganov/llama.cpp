@@ -378,17 +378,17 @@ extern "C" {
 
     // used in chat template
 
-    typedef struct llama_tool_call {
+    typedef struct llama_chat_message_tool_call {
         const char * name;
         const char * arguments;
-    } llama_tool_call;
+    } llama_chat_message_tool_call;
 
     typedef struct llama_chat_message {
         const char * role;
         const char * content;
         const char * tool;
 
-        const llama_tool_call * tool_calls;
+        const llama_chat_message_tool_call * tool_calls;
         uint32_t n_tool_calls;
     } llama_chat_message;
 

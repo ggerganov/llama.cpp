@@ -41,8 +41,7 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
 
         json_error_locator() : position(0), found_error(false) {}
 
-        bool parse_error(std::size_t position, const std::string & last_token, const json::exception & ex) override {
-            // LOG_WARNING("JSON error (Expected)", {{"position", position}, {"last_token", last_token}, {"error", ex.what()}});
+        bool parse_error(std::size_t position, const std::string &, const json::exception &) override {
             this->position = position - 1;
             this->found_error = true;
             return false;
@@ -70,13 +69,11 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
         temptative_end = end;
     }
     std::string json_sub {it, temptative_end};
-    // LOG_WARNING("Parsing json", {{"json_sub", json_sub}});
     try {
         out = json::parse(json_sub);
         it = temptative_end;
         return true;
-    } catch (const std::exception & e) {
-        // LOG_WARNING("Failed to parse tool call", {{"json_sub", json_sub}, {"error", e.what()}});
+    } catch (const std::exception &) {
         return false;
     }
 }

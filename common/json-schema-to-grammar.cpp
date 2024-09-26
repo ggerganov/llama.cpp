@@ -1041,15 +1041,15 @@ std::string json_schema_to_grammar(const json & schema) {
 }
 
 std::string build_grammar(const std::function<void(const llama_grammar_builder &)> & cb) {
-    SchemaConverter converter([&](const std::string & name) { return json(); }, /* dotall= */ false);
+    SchemaConverter converter([&](const std::string &) { return json(); }, /* dotall= */ false);
     llama_grammar_builder builder {
-        .add_rule = [&](const std::string & name, const std::string & rule) {
+        /* .add_rule = */ [&](const std::string & name, const std::string & rule) {
             return converter.add_rule(name, rule);
         },
-        .add_schema = [&](const std::string & name, const nlohmann::ordered_json & schema) {
+        /* .add_schema = */ [&](const std::string & name, const nlohmann::ordered_json & schema) {
             return converter.visit(schema, name);
         },
-        .resolve_refs = [&](nlohmann::ordered_json & schema) {
+        /* .resolve_refs = */ [&](nlohmann::ordered_json & schema) {
             converter.resolve_refs(schema, "");
         }
     };

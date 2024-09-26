@@ -662,7 +662,7 @@ struct server_context {
     bool validate_model_chat_template(bool use_jinja) const {
         llama_chat_message chat[] = {{"user", "test"}};
 
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0, use_jinja);
+        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0, use_jinja, nullptr, nullptr, nullptr);
 
         return res > 0;
     }

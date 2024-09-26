@@ -471,16 +471,17 @@ std::string llama_detokenize(
 // Chat template utils
 //
 
+struct llama_chat_msg_tool_call {
+    std::string name;
+    std::string arguments;
+};
+
 // same as llama_chat_message, but uses std::string and std::vector
 struct llama_chat_msg {
     std::string role;
     std::string content;
     std::string tool;
-    struct llama_tool_call {
-        std::string name;
-        std::string arguments;
-    };
-    std::vector<llama_tool_call> tool_calls;
+    std::vector<struct llama_chat_msg_tool_call> tool_calls;
 };
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
@@ -571,8 +572,8 @@ private:
     // The Aho–Corasick algorithm allows efficient string matching with multiple patterns.
     // See https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm
     struct TrieNode {
-        std::unordered_map<char, TrieNode> children;
-        TrieNode* fail = nullptr;
+        std::unordered_map<char, struct TrieNode> children;
+        struct TrieNode* fail = nullptr;
         int output = -1;
         size_t depth = 0;
 

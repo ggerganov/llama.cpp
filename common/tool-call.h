@@ -1,18 +1,14 @@
 #pragma once
 
 #include "ggml.h"
+#include "common.h"
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 
-struct llama_tool_call {
-    std::string name;
-    std::string arguments;
-};
-
 struct llama_tool_calls {
     std::string content;
-    std::vector<llama_tool_call> tool_calls;
+    std::vector<llama_chat_msg_tool_call> tool_calls;
 };
 
 struct llama_tool_call_handler {
