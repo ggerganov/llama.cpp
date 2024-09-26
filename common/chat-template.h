@@ -1,10 +1,12 @@
 #pragma once
 
+#include "minja.hpp"
 #include <json.hpp>
 #include <string>
 #include <vector>
 
 using json = nlohmann::ordered_json;
+
 
 enum llama_tool_call_style {
     Unknown,
@@ -27,30 +29,14 @@ class llama_chat_template {
     std::string _chat_template;
     std::string _bos_token;
     std::string _eos_token;
+    std::unique_ptr<minja::TemplateNode> _template_root;
+
   public:
-    llama_chat_template(const std::string & chat_template, const std::string & bos_token, const std::string & eos_token)
-        : _chat_template(chat_template), _bos_token(bos_token), _eos_token(eos_token) {
-
-        _supports_tools = chat_template.find("tools") != std::string::npos;
-        _requires_object_arguments = chat_template.find("tool_call.arguments | items") != std::string::npos;
-        _supports_system_role = chat_template.find("System role not supported") == std::string::npos;
-
-        if (chat_template.find("<tool_call>") != std::string::npos) {
-            _tool_call_style = Hermes2Pro;
-        } else if (chat_template.find(">>>all") != std::string::npos) {
-            _tool_call_style = FunctionaryV3Llama3;
-        } else if (chat_template.find("<|start_header_id|>") != std::string::npos) {
-            if (chat_template.find("<function=") != std::string::npos) {
-                _tool_call_style = FunctionaryV3Llama31;
-            } else if (chat_template.find("<|python_tag|>") != std::string::npos) {
-                _tool_call_style = Llama31;
-            }
-        }
-    }
+    llama_chat_template(const std::string & chat_template, const std::string & bos_token, const std::string & eos_token);
 
     static llama_chat_template from_model(
         const struct llama_model * model,
-        const std::string & chat_template_override);
+        const char * chat_template_override = nullptr);
 
     llama_tool_call_style tool_call_style() const { return _tool_call_style; }
 

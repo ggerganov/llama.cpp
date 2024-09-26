@@ -1,5 +1,4 @@
 #include "chat-template.h"
-#include "minja.hpp"
 #include "llama.h"
 
 using json = nlohmann::ordered_json;
@@ -31,14 +30,39 @@ static std::string llama_model_meta_val_str(const struct llama_model * model, co
     return "";
 }
 
+llama_chat_template::llama_chat_template(const std::string & chat_template, const std::string & bos_token, const std::string & eos_token)
+    : _chat_template(chat_template), _bos_token(bos_token), _eos_token(eos_token) {
+
+    _supports_tools = chat_template.find("tools") != std::string::npos;
+    _requires_object_arguments = chat_template.find("tool_call.arguments | items") != std::string::npos;
+    _supports_system_role = chat_template.find("System role not supported") == std::string::npos;
+
+    if (chat_template.find("<tool_call>") != std::string::npos) {
+        _tool_call_style = Hermes2Pro;
+    } else if (chat_template.find(">>>all") != std::string::npos) {
+        _tool_call_style = FunctionaryV3Llama3;
+    } else if (chat_template.find("<|start_header_id|>") != std::string::npos) {
+        if (chat_template.find("<function=") != std::string::npos) {
+            _tool_call_style = FunctionaryV3Llama31;
+        } else if (chat_template.find("<|python_tag|>") != std::string::npos) {
+            _tool_call_style = Llama31;
+        }
+    }
+    _template_root = minja::Parser::parse(_chat_template, {
+        /* .trim_blocks = */ true,
+        /* .lstrip_blocks = */ true,
+        /* .keep_trailing_newline = */ false,
+    });
+}
+
 llama_chat_template llama_chat_template::from_model(
     const struct llama_model * model,
-    const std::string & chat_template_override)
+    const char * chat_template_override)
 {
     // TODO: handle "chatml"?
-    auto chat_template = chat_template_override.empty()
-        ? llama_model_meta_val_str(model, "tokenizer.chat_template")
-        : chat_template_override;
+    std::string chat_template = chat_template_override
+        ? chat_template_override
+        : llama_model_meta_val_str(model, "tokenizer.chat_template");
     auto bos_token = _llama_token_to_piece(model, llama_token_bos(model), true);
     auto eos_token = _llama_token_to_piece(model, llama_token_eos(model), true);
     return llama_chat_template(chat_template, bos_token, eos_token);
@@ -69,9 +93,9 @@ std::string llama_chat_template::apply(
                 throw std::runtime_error("message must have 'role' and 'content' fields: " + message.dump());
             }
             std::string role = message.at("role");
-            std::string content = message.at("content");
 
-            if (!_supports_system_role) {
+            if (!message["content"].is_null() && !_supports_system_role) {
+                std::string content = message.at("content");
                 if (role == "system") {
                     if (!pending_system.empty()) pending_system += "\n";
                     pending_system += content;
@@ -89,8 +113,11 @@ std::string llama_chat_template::apply(
             }
             if (_requires_object_arguments && message.contains("tool_calls")) {
                 for (auto & tool_call : message.at("tool_calls")) {
-                    std::string arguments = tool_call.at("arguments");
-                    tool_call["arguments"] = json::parse(arguments);
+                    if (tool_call["type"] == "function") {
+                        auto & function = tool_call.at("function");
+                        std::string arguments = function.at("arguments");
+                        function["arguments"] = json::parse(arguments);
+                    }
                 }
             }
         }
@@ -99,20 +126,11 @@ std::string llama_chat_template::apply(
 
     auto context = minja::Context::make(json({
         {"messages", actual_messages},
+        {"tools", tools},
         {"add_generation_prompt", add_generation_prompt},
         {"bos_token", _bos_token},
         {"eos_token", _eos_token},
     }));
 
-    if (!tools.is_null() && !tools.empty()) {
-        auto tools_val = minja::Value(tools);
-        context->set("tools", tools_val);
-    }
-
-    auto tmpl_root = minja::Parser::parse(_chat_template, {
-        /* .trim_blocks = */ true,
-        /* .lstrip_blocks = */ true,
-        /* .keep_trailing_newline = */ false,
-    });
-    return tmpl_root->render(context);
+    return _template_root->render(context);
 }

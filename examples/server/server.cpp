@@ -662,9 +662,23 @@ struct server_context {
     bool validate_model_chat_template(bool use_jinja) const {
         llama_chat_message chat[] = {{"user", "test"}};
 
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        if (use_jinja) {
+            auto chat_template = llama_chat_template::from_model(model);
+            try {
+                chat_template.apply({{
+                    {"role", "user"},
+                    {"content", "test"},
+                }}, json(), true);
+                return true;
+            } catch (const std::exception & e) {
+                SRV_ERR("failed to apply template: %s\n", e.what());
+                return false;
+            }
+        } else {
+            const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
 
-        return res > 0;
+            return res > 0;
+        }
     }
 
     void init() {
@@ -2860,7 +2874,7 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        auto chat_template = llama_chat_template::from_model(ctx_server.model, params.chat_template);
+        auto chat_template = llama_chat_template::from_model(ctx_server.model, params.chat_template.empty() ? nullptr : params.chat_template.c_str());
 
         json data;
         try {
