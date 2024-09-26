@@ -1146,8 +1146,8 @@ async def oai_chat_completions(user_prompt,
                 max_tokens=n_predict,
                 stream=enable_streaming,
                 response_format=payload.get('response_format') or openai.NOT_GIVEN,
-                tools=payload.get('tools'),
-                tool_choice=payload.get('tool_choice'),
+                tools=payload.get('tools') or openai.NOT_GIVEN,
+                tool_choice=payload.get('tool_choice') or openai.NOT_GIVEN,
                 seed=seed,
                 temperature=payload['temperature']
             )
