@@ -659,10 +659,10 @@ struct server_context {
         return true;
     }
 
-    bool validate_model_chat_template() const {
+    bool validate_model_chat_template(bool use_jinja) const {
         llama_chat_message chat[] = {{"user", "test"}};
 
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0, use_jinja);
 
         return res > 0;
     }
@@ -3183,7 +3183,7 @@ int main(int argc, char ** argv) {
 
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
-        if (!ctx_server.validate_model_chat_template()) {
+        if (!ctx_server.validate_model_chat_template(params.use_jinja)) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             params.chat_template = "chatml";
         }
