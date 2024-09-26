@@ -316,7 +316,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     tool_rules.push_back(
                         builder.add_rule(
                             name + "-call",
-                            "\"\\n{\\\"name\\\": " + name + "\\\", \\\"parameters\\\", \" " +
+                            "\"\\n{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                                 builder.add_schema(name + "-args", parameters) +
                             " \"}\""));
                     if (allow_content) {
