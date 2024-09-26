@@ -21,7 +21,7 @@
     {
       "role": "tool",
       "name": "ipython",
-      "content": "{\"stdout\": \"Hello, World!\"}"
+      "content": {"stdout": "Hello, World!"}
     },
     {
       "role": "assistant",
@@ -48,7 +48,7 @@
     {
       "role": "tool",
       "name": "test",
-      "content": "true"
+      "content": true
     },
     {
       "role": "assistant",
@@ -75,7 +75,7 @@
     {
       "role": "tool",
       "name": "brave_search",
-      "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}"
+      "content": {"title":"Truth: don't ask the web, ask an LLM instead!","url":"https://en.wikipedia.org/wiki/Truth"}
     },
     {
       "role": "assistant",

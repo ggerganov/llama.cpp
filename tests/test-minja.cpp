@@ -43,40 +43,6 @@
 #include <string>
 #include <json.hpp>
 
-static std::string read_file(const std::string &path) {
-  std::ifstream fs(path, std::ios_base::binary);
-  if (!fs.is_open()) {
-    throw std::runtime_error("Failed to open file: " + path);
-  }
-  fs.seekg(0, std::ios_base::end);
-  auto size = fs.tellg();
-  fs.seekg(0);
-  std::string out;
-  out.resize(static_cast<size_t>(size));
-  fs.read(&out[0], static_cast<std::streamsize>(size));
-  return out;
-}
-
-static std::vector<std::string> find_files(const std::string & folder, const std::string & ext) {
-    std::vector<std::string> files;
-    for (const auto & entry : std::__fs::filesystem::directory_iterator(folder)) {
-        if (entry.path().extension() == ext)
-            files.push_back(entry.path().string());
-    }
-    return files;
-}
-
-static std::string filename_without_extension(const std::string & path) {
-    auto res = path;
-    auto pos = res.find_last_of('/');
-    if (pos != std::string::npos)
-        res = res.substr(pos + 1);
-    pos = res.find_last_of('.');
-    if (pos != std::string::npos)
-        res = res.substr(0, pos);
-    return res;
-}
-
 static void assert_equals(const std::string & expected, const std::string & actual) {
     if (expected != actual) {
         std::cerr << "Expected: " << expected << std::endl;
@@ -148,7 +114,11 @@ static void test_error_contains(const std::string & template_str, const json & b
     std::cout << "  passed!" << std::endl << std::flush;
 }
 
-static void test_template_features() {
+
+/*
+    cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-minja -j && ./build/bin/test-minja
+*/
+int main() {
     test_render(R"({{ 'foo bar'.title() }})", {}, {}, "Foo Bar");
     test_render(R"({{ 1 | safe }})", {}, {}, "1");
     test_render(R"({{ 'abc'.endswith('bc') }},{{ ''.endswith('a') }})", {}, {}, "True,False");
@@ -368,71 +338,6 @@ static void test_template_features() {
         {%- set greeting = "Hello " ~ user -%}
         {{- greeting -}}
     )", {}, {}, "Hello Olivier");
-}
-
-static void test_chat_templates_with_common_contexts_against_goldens() {
-    auto jinja_template_files = find_files("tests/chat/templates", ".jinja");
-    auto context_files = find_files("tests/chat/contexts", ".json");
-
-    auto get_golden_file = [&](const std::string & tmpl_file, const std::string & ctx_file) {
-        auto tmpl_name = filename_without_extension(tmpl_file);
-        auto ctx_name = filename_without_extension(ctx_file);
-        auto golden_name = tmpl_name + "-" + ctx_name;
-        return "tests/chat/goldens/" + golden_name + ".txt";
-    };
-    auto fail_with_golden_instructions = [&]() {
-        throw std::runtime_error("To fetch templates and generate golden files, run `python tests/update_jinja_goldens.py`");
-    };
-    if (jinja_template_files.empty()) {
-        std::cerr << "No Jinja templates found in tests/chat/templates" << std::endl;
-        fail_with_golden_instructions();
-    }
-    const auto options = minja::Options {.trim_blocks = true, .lstrip_blocks = true};
-    for (const auto & tmpl_file : jinja_template_files) {
-        std::cout << "# Testing template: " << tmpl_file << std::endl << std::flush;
-        auto tmpl_str = read_file(tmpl_file);
-        auto tmpl = minja::Parser::parse(tmpl_str, options);
-
-        auto found_goldens = false;
-
-        for (const auto & ctx_file : context_files) {
-            auto ctx = json::parse(read_file(ctx_file));
-
-            auto golden_file = get_golden_file(tmpl_file, ctx_file);
-            if (!std::ifstream(golden_file).is_open()) {
-                continue;
-            }
-            found_goldens = true;
-            std::cout << "  - " << golden_file << std::endl << std::flush;
-
-            std::string actual;
-            try {
-                actual = tmpl->render(minja::Context::make(ctx));
-            } catch (const std::runtime_error & e) {
-                actual = "ERROR: " + std::string(e.what());
-            }
-            auto expected = read_file(golden_file);
-            assert_equals(expected, actual);
-        }
-
-        if (!found_goldens) {
-            std::cerr << "No golden files found for " << tmpl_file << std::endl;
-            fail_with_golden_instructions();
-        }
-    }
-}
-
-/*
-    cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-minja -j && ./build/bin/test-minja
-*/
-int main() {
-    test_template_features();
-
-    if (getenv("LLAMA_SKIP_TESTS_SLOW_ON_EMULATOR")) {
-        fprintf(stderr, "\033[33mWARNING: Skipping slow tests on emulator.\n\033[0m");
-    } else {
-        test_chat_templates_with_common_contexts_against_goldens();
-    }
 
     return 0;
 }

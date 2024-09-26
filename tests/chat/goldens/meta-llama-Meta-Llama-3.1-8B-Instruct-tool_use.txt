@@ -96,7 +96,7 @@ Print a hello world message with python.<|eot_id|><|start_header_id|>assistant<|
 
 {"name": "ipython", "parameters": {"code": "print('Hello, World!')"}}<|eom_id|><|start_header_id|>ipython<|end_header_id|>
 
-"{\"stdout\": \"Hello, World!\"}"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+{"stdout": "Hello, World!"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 Anything else?<|eot_id|><|start_header_id|>user<|end_header_id|>
 
@@ -104,7 +104,7 @@ Test a tautology.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 {"name": "test", "parameters": {"condition": true}}<|eom_id|><|start_header_id|>ipython<|end_header_id|>
 
-"true"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+True<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 Truth is definitely true.<|eot_id|><|start_header_id|>user<|end_header_id|>
 
@@ -112,7 +112,7 @@ Check it on the web.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 <|python_tag|>brave_search.call(query="what is truth anyway am I right?")<|eom_id|><|start_header_id|>ipython<|end_header_id|>
 
-"{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+{"title": "Truth: don't ask the web, ask an LLM instead!", "url": "https://en.wikipedia.org/wiki/Truth"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 I don't need the web to answer you but I did check, as you asked. What now?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 

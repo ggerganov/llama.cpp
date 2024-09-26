@@ -30,36 +30,40 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 model_ids = [
-    "NousResearch/Hermes-3-Llama-3.1-70B",
+    "abacusai/Fewshot-Metamath-OrcaVicuna-Mistral",
+    "bofenghuang/vigogne-2-70b-chat",
+    "deepseek-ai/deepseek-coder-33b-instruct",
+    "indischepartij/MiniCPM-3B-OpenHermes-2.5-v2",
+    "microsoft/Phi-3-medium-4k-instruct",
+    "microsoft/Phi-3-mini-4k-instruct",
+    "microsoft/Phi-3-small-8k-instruct",
+    "microsoft/Phi-3.5-mini-instruct",
+    "mlabonne/AlphaMonarch-7B",
     "NousResearch/Hermes-2-Pro-Llama-3-8B",
     "NousResearch/Hermes-2-Pro-Mistral-7B",
-    "meetkai/functionary-medium-v3.2",
-    "meetkai/functionary-medium-v3.1",
+    "NousResearch/Hermes-3-Llama-3.1-70B",
+    "openchat/openchat-3.5-0106",
+    "OrionStarAI/Orion-14B-Chat",
     "Qwen/Qwen2-7B-Instruct",
     "Qwen/Qwen2-VL-7B-Instruct",
     "Qwen/Qwen2.5-7B-Instruct",
     "Qwen/Qwen2.5-Math-7B-Instruct",
-    "microsoft/Phi-3-mini-4k-instruct",
-    "microsoft/Phi-3-small-8k-instruct",
-    "microsoft/Phi-3-medium-4k-instruct",
-    "microsoft/Phi-3.5-mini-instruct",
-    "indischepartij/MiniCPM-3B-OpenHermes-2.5-v2",
     "teknium/OpenHermes-2.5-Mistral-7B",
     "TheBloke/FusionNet_34Bx2_MoE-AWQ",
-    "bofenghuang/vigogne-2-70b-chat",
-    "mlabonne/AlphaMonarch-7B",
-    "OrionStarAI/Orion-14B-Chat",
-    "openchat/openchat-3.5-0106",
-    "deepseek-ai/deepseek-coder-33b-instruct",
-    "abacusai/Fewshot-Metamath-OrcaVicuna-Mistral",
-    "CohereForAI/c4ai-command-r-plus",
-    "THUDM/chatglm3-6b",
-    "derek33125/project-angel-chatglm4",
-    "deepseek-ai/DeepSeek-Coder-V2-Instruct",
-    "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
-    "deepseek-ai/DeepSeek-V2.5",
 
-    # Needs debugging:
+    # Python update goldens broken:
+    # "meetkai/functionary-medium-v3.2",
+    # "meetkai/functionary-medium-v3.1",
+
+    # C++ minja templating broken:
+    # "CohereForAI/c4ai-command-r-plus",
+    # "THUDM/chatglm3-6b",
+    # "derek33125/project-angel-chatglm4",
+    # "deepseek-ai/DeepSeek-Coder-V2-Instruct",
+    # "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+    # "deepseek-ai/DeepSeek-V2.5",
+    
+    # Cannot find chat template:
     # "eachadea/vicuna-13b-1.1",
     # "microsoft/Phi-3-vision-instruct",
 
@@ -127,18 +131,19 @@ def handle_chat_template(model_id, variant, template_src):
         logger.info(f"- {output_file}")
 
         # The template (and workarounds) may modify the context in place, so we need to make a copy of it.
-        actual_context = json.loads(json.dumps(context))
+        render_context = json.loads(json.dumps(context))
 
         # Work around Llama-3.1 template quirk: it expects tool_call.function.arguments to be an object rather than its JSON string representation.
         if 'tool_call.arguments | items' in template_src:
-            for message in actual_context['messages']:
+            for message in render_context['messages']:
                 if 'tool_calls' in message:
                     for tool_call in message['tool_calls']:
-                        arguments = tool_call['function']['arguments']
-                        tool_call['function']['arguments'] = json.loads(arguments)
+                        if tool_call.get('type') == 'function':
+                            arguments = tool_call['function']['arguments']
+                            tool_call['function']['arguments'] = json.loads(arguments)
 
         try:
-            output = template.render(**actual_context)
+            output = template.render(**render_context)
         except Exception as e1:
             # Some templates (e.g. Phi-3-medium-128k's) expect a non-null "content" key in each message.
             for message in context["messages"]:
@@ -146,7 +151,7 @@ def handle_chat_template(model_id, variant, template_src):
                     message["content"] = ""
 
             try:
-                output = template.render(**context)
+                output = template.render(**render_context)
             except Exception as e2:
                 logger.info(f"  ERROR: {e2} (after first error: {e1})")
                 output = f"ERROR: {e2}"

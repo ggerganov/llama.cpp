@@ -25,7 +25,7 @@ Print a hello world message with python.<|im_end|>
 </tool_call><|im_end|>
 <|im_start|>user
 <tool_response>
-{"stdout": "Hello, World!"}
+{'stdout': 'Hello, World!'}
 </tool_response><|im_end|>
 <|im_start|>assistant
 Anything else?<|im_end|>
@@ -37,7 +37,7 @@ Test a tautology.<|im_end|>
 </tool_call><|im_end|>
 <|im_start|>user
 <tool_response>
-true
+True
 </tool_response><|im_end|>
 <|im_start|>assistant
 Truth is definitely true.<|im_end|>
@@ -49,7 +49,7 @@ Check it on the web.<|im_end|>
 </tool_call><|im_end|>
 <|im_start|>user
 <tool_response>
-{"title":"Truth: don't ask the web, ask an LLM instead!","url":"https://en.wikipedia.org/wiki/Truth"}
+{'title': "Truth: don't ask the web, ask an LLM instead!", 'url': 'https://en.wikipedia.org/wiki/Truth'}
 </tool_response><|im_end|>
 <|im_start|>assistant
 I don't need the web to answer you but I did check, as you asked. What now?<|im_end|>

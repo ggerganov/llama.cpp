@@ -126,11 +126,17 @@ std::string llama_chat_template::apply(
 
     auto context = minja::Context::make(json({
         {"messages", actual_messages},
-        {"tools", tools},
         {"add_generation_prompt", add_generation_prompt},
         {"bos_token", _bos_token},
         {"eos_token", _eos_token},
     }));
+
+    if (!tools.is_null()) {
+        auto tools_val = minja::Value(tools);
+        context->set("tools", tools_val);
+        auto builtin_tools = minja::Value(json {"wolfram_alpha", "brave_search"});
+        context->set("builtin_tools", builtin_tools);
+    }
 
     return _template_root->render(context);
 }
