@@ -2860,7 +2860,13 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template, params.use_jinja);
+        json data;
+        try {
+            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template, params.use_jinja);
+        } catch (const std::runtime_error & e) {
+            res_error(res, format_error_response(e.what(), ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
 
         std::vector<server_task> tasks = ctx_server.create_tasks_cmpl(data, SERVER_TASK_CMPL_TYPE_NORMAL);
         ctx_server.queue_results.add_waiting_tasks(tasks);
