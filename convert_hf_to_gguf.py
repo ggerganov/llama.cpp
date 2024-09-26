@@ -3128,6 +3128,7 @@ class JinaBertV2Model(BertModel):
 
         return super().modify_tensors(data_torch, name, bid)
 
+
 @Model.register("OpenELMForCausalLM")
 class OpenELMModel(Model):
     model_arch = gguf.MODEL_ARCH.OPENELM
