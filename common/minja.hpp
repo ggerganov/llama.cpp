@@ -435,7 +435,7 @@ public:
 };
 
 template <>
-json Value::get<json>() const {
+inline json Value::get<json>() const {
   if (is_primitive()) return primitive_;
   if (is_null()) return json();
   if (array_) {

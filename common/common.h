@@ -4,6 +4,7 @@
 
 #include "llama.h"
 
+#include <functional>
 #include <queue>
 #include <string>
 #include <vector>
@@ -657,7 +658,7 @@ private:
         );
     }
 
-    void build(const std::function<std::vector<llama_token>(const std::string)> & tokenizer, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_trigger_words) {
+    void build(const std::function<std::vector<llama_token>(const std::string &)> & tokenizer, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_trigger_words) {
         clear();
         this->stop_words = stop_words;
         this->grammar_trigger_words = grammar_trigger_words;
