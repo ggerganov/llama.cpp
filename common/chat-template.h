@@ -9,7 +9,7 @@ using json = nlohmann::ordered_json;
 
 
 enum llama_tool_call_style {
-    Unknown,
+    UnknownToolCallStyle,
     Llama31,
     FunctionaryV3Llama3,
     FunctionaryV3Llama31,
@@ -20,7 +20,7 @@ class llama_chat_template {
   public:
 
   private:
-    llama_tool_call_style _tool_call_style = Unknown;
+    llama_tool_call_style _tool_call_style = UnknownToolCallStyle;
     bool _supports_tools = true;
     // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
