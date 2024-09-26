@@ -29,6 +29,8 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_typ
 GGML_API ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type(void);
 
 GGML_API void   ggml_backend_sycl_print_sycl_devices(void);
+GGML_API int   ggml_backend_sycl_rank(void);
+GGML_API int   ggml_backend_sycl_world_size(void);
 GGML_API GGML_CALL void   ggml_sycl_get_gpu_list(int *id_list, int max_len);
 GGML_API GGML_CALL void   ggml_sycl_get_device_description(int device, char *description, size_t description_size);
 GGML_API GGML_CALL int   ggml_backend_sycl_get_device_count();

@@ -599,8 +599,8 @@ extern "C" {
         TENSOR_NO_CHANGE,
 	TENSOR_SPLIT_BY_ROW,
 	TENSOR_SPLIT_BY_COLUMN,
-	TENSOR_KEEPED_ON_MASTER,
-    }
+	TENSOR_KEEPED_ON_MASTER
+    };
 
     // n-dimensional tensor
     struct ggml_tensor {
@@ -637,9 +637,9 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-	enum tensor_parallel_mode split_mode = tensor_parallel_mode::TENSOR_NO_CHANGE;
+	enum tensor_parallel_mode split_mode; // {tensor_parallel_mode::TENSOR_NO_CHANGE};
 
-        // char padding[4];
+        char padding[12];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);

@@ -4368,8 +4368,6 @@ struct llama_model_loader {
     int n_created = 0;
     // For tensor parallelism
     int world_size = 1;
-    int rank = 0;
-    bool enable_tp = false;
 
     int64_t n_elements = 0;
     size_t  n_bytes    = 0;
@@ -4630,7 +4628,6 @@ struct llama_model_loader {
         this->use_mmap = use_mmap;
         this->check_tensors = check_tensors;
 	world_size = ggml_backend_get_world_size();
-	rank = ggml_backend_get_rank();
     }
 
     ~llama_model_loader() {
@@ -4859,12 +4856,12 @@ struct llama_model_loader {
         ggml_set_name(tensor, ggml_get_name(cur));
 	if (flags == TENSOR_SPLIT_BY_ROW) {
 	    tensor->split_mode =  tensor_parallel_mode::TENSOR_SPLIT_BY_ROW;
-	} 
-	if (flags == TENSOR_SPLIT_BY_COLUMN) {
+	} else if (flags == TENSOR_SPLIT_BY_COLUMN) {
 	    tensor->split_mode = tensor_parallel_mode::TENSOR_SPLIT_BY_COLUMN;
-	}
-	if (flags == TENSOR_KEEPED_ON_MASTER) {
+	} else if (flags == TENSOR_KEEPED_ON_MASTER) {
 	    tensor->split_mode = tensor_parallel_mode::TENSOR_KEEPED_ON_MASTER;
+	} else {
+	    tensor->split_mode = tensor_parallel_mode::TENSOR_NO_CHANGE;
 	}
 
         if (flags == TENSOR_DUPLICATED) {
@@ -7023,8 +7020,9 @@ static bool llm_load_tensors(
         if (n_expert > 0 && hparams.n_expert_used == 0) {
             throw std::runtime_error("model has expert layers but no expert layers are used");
         }
-
+        bool enable_tp = false; 
         if (split_mode == LLAMA_SPLIT_MODE_TENSOR) {
+	    int world_size = ggml_backend_get_world_size();
             if (world_size > 1) {
                 enable_tp = true;
 		// need to change the size before load tensor
@@ -7078,7 +7076,7 @@ static bool llm_load_tensors(
                             layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd_head_k * n_head, n_embd}, llama_model_loader::TENSOR_SPLIT_BY_COLUMN);
 
                             // optional bias tensors
-			    auto bias_split_mode = llama_model_loader::TENSOR_NOT_REQUIRED | llama_model_loader::TENSOR_SPLIT_BY_COLUMN
+			    auto bias_split_mode = llama_model_loader::TENSOR_NOT_REQUIRED | llama_model_loader::TENSOR_SPLIT_BY_COLUMN;
                             layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd}, bias_split_mode);
                             layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, bias_split_mode);
                             layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, bias_split_mode);
@@ -7109,7 +7107,7 @@ static bool llm_load_tensors(
                                 layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, llama_model_loader::TENSOR_SPLIT_BY_ROW);
 
                                 // optional MLP bias
-			        auto bias_split_mode = llama_model_loader::TENSOR_NOT_REQUIRED | llama_model_loader::TENSOR_SPLIT_BY_COLUMN
+			        auto bias_split_mode = llama_model_loader::TENSOR_NOT_REQUIRED | llama_model_loader::TENSOR_SPLIT_BY_COLUMN;
                                 layer.ffn_gate_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE, "bias", i), {n_ff}, bias_split_mode);
                                 layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED | llama_model_loader::TENSOR_KEEPED_ON_MASTER);
                                 layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, bias_split_mode);

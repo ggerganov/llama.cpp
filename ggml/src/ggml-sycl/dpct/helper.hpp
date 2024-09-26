@@ -13,11 +13,13 @@
 #ifndef GGML_SYCL_DPCT_HELPER_HPP
 #define GGML_SYCL_DPCT_HELPER_HPP
 
+#include <stdlib.h>
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
 #include <oneapi/ccl.hpp>
 #include <oneapi/mkl.hpp>
 #include <map>
+#include <mpi.h>
 
 #include "ggml.h"
 
@@ -480,8 +482,6 @@ namespace dpct
         int _max_nd_range_size_i[3];
         uint32_t _device_id;
         std::array<unsigned char, 16> _uuid;
-        uint32_t _rank;
-        uint32_t _world_size;
     };
 
     static int get_major_version(const sycl::device &dev)
@@ -873,8 +873,8 @@ namespace dpct
             }
             return -1;
         }
-	inline int get_ccl_rank() { return _rank; }
-	inline int get_ccl_world_size() { return _world_size; }
+	inline int get_rank() { return _rank; }
+	inline int get_world_size() { return _world_size; }
 	inline ccl::communicator create_ccl_communicator(ccl::device dev, ccl::context ctx) {
             return ccl::create_communicator(_world_size, _rank, dev, ctx, _kvs);
 	    
@@ -1002,7 +1002,13 @@ namespace dpct
             return convert_backend_index(backend1) < convert_backend_index(backend2);
         }
 
-	static void init_ccl() {
+	static void mpi_finalize() {
+	    static int is_finalized = 0;
+	    MPI_Finalized(&is_finalized);
+	    if (!is_finalized) MPI_Finalize();
+	}
+
+	void init_ccl() {
             ccl::init();
 	    MPI_Init(NULL, NULL);
 	    MPI_Comm_size(MPI_COMM_WORLD, &_world_size);
@@ -1018,7 +1024,6 @@ namespace dpct
                 MPI_Bcast((void *)main_addr.data(), main_addr.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
                 _kvs = ccl::create_kvs(main_addr);
             }
-
 	}
 
         dev_mgr()

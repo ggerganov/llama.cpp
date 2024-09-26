@@ -1747,12 +1747,12 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
 
 int ggml_backend_sycl_rank() {
     // use ccl rank as main gpu
-    return dpct::dev_mgr::instance().get_ccl_rank();
+    return dpct::dev_mgr::instance().get_rank();
 }
 
 int ggml_backend_sycl_world_size() {
     // use ccl rank as main gpu
-    return dpct::dev_mgr::instance().get_ccl_world_size();
+    return dpct::dev_mgr::instance().get_world_size();
 }
 
 void ggml_backend_sycl_print_sycl_devices() {
@@ -4237,9 +4237,9 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-static bool split_tensor(const struct ggml_tensor * src, void* dst, void* data, int split_mode) {
-    int rank = ggml_backend_sycl_rank()
-    int world_size = ggml_backend_sycl_world_size()
+static bool split_tensor(const struct ggml_tensor * src, void* dst, const void* data, enum tensor_parallel_mode split_mode) {
+    int rank = ggml_backend_sycl_rank();
+    int world_size = ggml_backend_sycl_world_size();
     auto type_traits = ggml_internal_get_type_traits(src->type);
     size_t element_size = type_traits.type_size / type_traits.blck_size;
     const int64_t dst_size = ggml_nelements(src) * element_size / world_size;
@@ -4288,7 +4288,7 @@ static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
     if (tensor->split_mode == tensor_parallel_mode::TENSOR_NO_CHANGE) {
         memcpy(host_buf, data, size);
     } else {
-        if (!split_tensor(tensor, host_buf, data, size, tensor->split_mode)) {
+        if (!split_tensor(tensor, ((void*)host_buf), data, tensor->split_mode)) {
 	    std::cerr << "split tensor failed!" << std::endl;
 	}	    
     }
@@ -4505,8 +4505,8 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device) {
     static bool ggml_backend_sycl_buffer_type_initialized = false;
 
     if (!ggml_backend_sycl_buffer_type_initialized) {
-	if (dpct::dev_mgr::instance().world_size() > 1) {
-	    auto rank = dpct::dev_mgr::instance().get_rank();
+	if (ggml_backend_sycl_world_size() > 1) {
+	    auto rank = ggml_backend_sycl_rank();
 	    auto & device_tp = dpct::dev_mgr::instance().get_device(rank);
 	    queue_ptr stream = &(device_tp.default_queue());
 	    // TODO(xi): buffer_types always use 0 to avoid changes on public code
