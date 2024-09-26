@@ -2329,6 +2329,9 @@ inline std::shared_ptr<Context> Context::builtins() {
       auto & items = args.at("items");
       return (int64_t) items.size();
   }));
+  globals.set("safe", simple_function("safe", { "value" }, [](const std::shared_ptr<Context> &, Value & args) -> Value {
+      return args.at("value");
+  }));
   globals.set("list", simple_function("list", { "items" }, [](const std::shared_ptr<Context> &, Value & args) -> Value {
       auto & items = args.at("items");
       if (!items.is_array()) throw std::runtime_error("object is not iterable");
@@ -2415,6 +2418,8 @@ inline std::shared_ptr<Context> Context::builtins() {
   globals.set("selectattr", Value::callable([=](const std::shared_ptr<Context> & context, Value::Arguments & args) {
     args.expectArgs("selectattr", {2, std::numeric_limits<size_t>::max()}, {0, 0});
     auto & items = args.args[0];
+    if (items.is_null())
+      return Value::array();
     auto attr_name = args.args[1].get<std::string>();
 
     bool has_test = false;
