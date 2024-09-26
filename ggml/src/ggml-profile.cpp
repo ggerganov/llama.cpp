@@ -2,42 +2,63 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
+#include <string>
 #include <chrono>
 
 #ifdef GGML_GRAPH_PROFILER
 
-extern "C" void ggml_profile_graph_init(struct ggml_cgraph *cg, int n_threads)
+struct ggml_profile_output {
+    const char * prefix;
+    FILE *       stream;
+};
+
+extern "C" void ggml_graph_profile_init(struct ggml_cgraph *cg, int n_threads)
 {
-    if (!getenv("GGML_GRAPH_PROFILE")) { return; }
+    // TODO: make this a param
+    const char *env = getenv("GGML_GRAPH_PROFILE");
+    if (!env) { return; }
 
     // The number of threads may change between passes (pp vs tg).
     // Allocate for max_n_threads for simplicity for now.
     // TODO: use aligned allocator
 
-    size_t node_size = sizeof(struct ggml_profile_data) * GGML_MAX_N_THREADS;
+    size_t node_size = sizeof(struct ggml_profile_timing) * GGML_MAX_N_THREADS;
     size_t pvec_size = sizeof(std::intptr_t) * cg->n_nodes;
-    size_t data_size = node_size * cg->n_nodes;
-    size_t t_size    = pvec_size + data_size;
+    size_t time_size = node_size * cg->n_nodes;
+    size_t t_size    = pvec_size + time_size + sizeof(ggml_profile_output) + sizeof(ggml_profile_data);
 
-    cg->prof = (struct ggml_profile_data **) malloc(t_size);
-    if (!cg->prof) {
+    uint8_t * ptr = (uint8_t *) malloc(t_size);
+    if (!ptr) {
         fprintf(stderr, "ggml-profile: failed to allocate profiling data : n_threads %d n_nodes %d\n", n_threads, cg->n_nodes);
         return;
     }
+    memset(ptr, 0, t_size);
 
-    memset(cg->prof, 0, t_size);
-
-    // init pre-thread pointers
-    uint8_t * data = (uint8_t *) cg->prof + pvec_size;
+    // init all pointers
+    cg->prof         = (ggml_profile_data *)    ptr; ptr += sizeof(ggml_profile_data);
+    cg->prof->output = (ggml_profile_output *)  ptr; ptr += sizeof(ggml_profile_output);
+    cg->prof->timing = (ggml_profile_timing **) ptr; ptr += pvec_size;
     for (int i=0; i < cg->n_nodes; i++) {
-        cg->prof[i] = (struct ggml_profile_data *) data; data += node_size;
+        cg->prof->timing[i] = (struct ggml_profile_timing *) ptr; ptr += node_size;
     }
+
+    // init the output
+    ggml_profile_output *out = cg->prof->output;
+    if (!strcmp("stderr", env) || !strcmp("1", env)) {
+        out->prefix = "ggml-profile:";
+        out->stream = stderr;
+    } else {
+        out->prefix = "";
+        out->stream = fopen(env, "w");
+    }
+
 }
 
-extern "C" void ggml_profile_graph_start(struct ggml_cgraph *cg, int n_threads)
+extern "C" void ggml_graph_profile_start(struct ggml_cgraph *cg, int n_threads)
 {
-    if (!cg->prof) { ggml_profile_graph_init(cg, n_threads); }
+    if (!cg->prof) { ggml_graph_profile_init(cg, n_threads); }
     if (!cg->prof) { return; }
 }
 
@@ -89,13 +110,14 @@ static inline void ggml_profile_format_op_types(char *str, struct ggml_tensor *t
     p += sprintf(p, "%3s", ggml_type_name(t->type));
 }
 
-
-extern "C" void ggml_profile_graph_finish(struct ggml_cgraph *cg, int n_threads)
+extern "C" void ggml_graph_profile_finish(struct ggml_cgraph *cg, int n_threads)
 {
     if (!cg->prof) { return; }
 
-    fprintf(stderr, "ggml-profile: | node idx | op name | proc (nsec) | sync (nsec) | total (nsec) | op dims | op types | tensor name |\n");
-    fprintf(stderr, "ggml-profile: | -------: | :------ | ----------: | ----------: | -----------: | ------: | -------: | ----------: |\n");
+    ggml_profile_output *out = cg->prof->output;
+
+    fprintf(out->stream, "%s| node idx | op name | proc (nsec) | sync (nsec) | total (nsec) | op dims | op types | tensor name |\n", out->prefix);
+    fprintf(out->stream, "%s| -------: | :------ | ----------: | ----------: | -----------: | ------: | -------: | ----------: |\n", out->prefix);
 
     char dims[64 * GGML_MAX_SRC];
     char types[16 * GGML_MAX_SRC];
@@ -107,39 +129,48 @@ extern "C" void ggml_profile_graph_finish(struct ggml_cgraph *cg, int n_threads)
 
         // add up per thread counters and reset them
         for (int t=0; t < n_threads; t++) {
-            p_nsec += cg->prof[i][t].nsec[GGML_PROF_OP_SYNC] - cg->prof[i][t].nsec[GGML_PROF_OP_START];
-            s_nsec += cg->prof[i][t].nsec[GGML_PROF_OP_END]  - cg->prof[i][t].nsec[GGML_PROF_OP_SYNC];
-            t_nsec += cg->prof[i][t].nsec[GGML_PROF_OP_END]  - cg->prof[i][t].nsec[GGML_PROF_OP_START];
+            ggml_profile_timing &timing = cg->prof->timing[i][t];
 
-            cg->prof[i][t].nsec[GGML_PROF_OP_START] = 0;
-            cg->prof[i][t].nsec[GGML_PROF_OP_SYNC]  = 0;
-            cg->prof[i][t].nsec[GGML_PROF_OP_END]   = 0;
+            p_nsec += timing.nsec[GGML_PROF_OP_SYNC] - timing.nsec[GGML_PROF_OP_START];
+            s_nsec += timing.nsec[GGML_PROF_OP_END]  - timing.nsec[GGML_PROF_OP_SYNC];
+            t_nsec += timing.nsec[GGML_PROF_OP_END]  - timing.nsec[GGML_PROF_OP_START];
+
+            timing.nsec[GGML_PROF_OP_START] = 0;
+            timing.nsec[GGML_PROF_OP_SYNC]  = 0;
+            timing.nsec[GGML_PROF_OP_END]   = 0;
         }
 
         ggml_profile_format_op_dims(dims, cg->nodes[i]);
         ggml_profile_format_op_types(types, cg->nodes[i]);
 
-        fprintf(stderr, "ggml-profile: | %04d | %10s | %10lu | %10lu | %10lu | %46s | %22s | %20s |\n",
+        fprintf(out->stream, "%s| %04d | %10s | %10lu | %10lu | %10lu | %46s | %22s | %20s |\n", out->prefix,
             i, ggml_op_name(cg->nodes[i]->op),
             (unsigned long) p_nsec, (unsigned long) s_nsec, (unsigned long) t_nsec,
             dims, types, cg->nodes[i]->name);
     }
-    fprintf(stderr, "ggml-profile:   \n"); // empty line to split tables
+    fprintf(out->stream, "%s   \n", out->prefix); // empty line to split tables
 }
 
-extern "C" void ggml_profile_graph_free(struct ggml_cgraph *cg)
+extern "C" void ggml_graph_profile_free(struct ggml_cgraph *cg)
 {
     if (!cg->prof) { return; }
+
+    ggml_profile_output *out = cg->prof->output;
+    if (out->stream != stderr) {
+        fclose(out->stream);
+    }
 
     free(cg->prof); cg->prof = nullptr;
 }
 
-extern "C" void ggml_profile_op_event(const struct ggml_cgraph *cg, enum ggml_profile_event e, int node_n, int ith)
+extern "C" void ggml_graph_profile_event(const struct ggml_cgraph *cg, enum ggml_profile_event e, int node_n, int ith)
 {
     if (!cg->prof) { return; }
 
     using clock = std::chrono::high_resolution_clock;
-    cg->prof[node_n][ith].nsec[e] = std::chrono::nanoseconds(clock::now().time_since_epoch()).count();
+
+    ggml_profile_timing &timing = cg->prof->timing[node_n][ith];
+    timing.nsec[e] = std::chrono::nanoseconds(clock::now().time_since_epoch()).count();
 }
 
 #endif // GGML_GRAPH_PROFILER

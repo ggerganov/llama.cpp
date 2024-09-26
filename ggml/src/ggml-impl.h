@@ -176,7 +176,7 @@ struct ggml_cgraph {
     struct ggml_tensor ** grads;
     struct ggml_tensor ** leafs;
 
-    struct ggml_profile_data ** prof;
+    struct ggml_profile_data * prof;
 
     struct ggml_hash_set visited_hash_set;
 
