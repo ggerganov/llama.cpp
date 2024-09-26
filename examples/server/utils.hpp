@@ -77,8 +77,8 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
                         msg.content += "\n" + part["text"].get<std::string>();
                     }
                 }
-            } else {
-                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+            } else if (!(curr_msg.is_null() && curr_msg.contains("tool_calls"))) {
+                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367): " + curr_msg.dump());
             }
         } else {
             throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
@@ -474,6 +474,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
     auto tools = json_value(request, "tools", json::array());
     json tool_calls;
     json message_content;
+    printf("# CONTENT: %s\n\n", content.c_str());
     if (json_value(request, "parse_tool_calls", false)
             && !(parsed_tool_calls = parse_tool_calls(tools, chat_template, content)).tool_calls.empty()) {
         finish_reason = "tool";
@@ -513,6 +514,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
         }},
         {"id", completion_id}
     };
+    printf("# RES: %s\n\n", res.dump(2).c_str());
 
     // extra fields for debugging purposes
     if (verbose) {
