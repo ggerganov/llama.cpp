@@ -934,6 +934,7 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
+	common/chat-template.o \
 	common/arg.o \
 	common/log.o \
 	common/console.o \
@@ -1170,6 +1171,8 @@ $(LIB_LLAMA_S): \
 common/common.o: \
 	common/common.cpp \
 	common/common.h \
+	common/chat-template.cpp \
+	common/chat-template.h \
 	common/console.h \
 	common/sampling.h \
 	common/json.hpp \
@@ -1465,6 +1468,7 @@ llama-server: \
 	examples/server/prompt-formats.js.hpp \
 	examples/server/json-schema-to-grammar.mjs.hpp \
 	examples/server/loading.html.hpp \
+	common/chat-template.h \
 	common/json.hpp \
 	common/stb_image.h \
 	$(OBJ_ALL)

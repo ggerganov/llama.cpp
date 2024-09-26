@@ -662,7 +662,7 @@ struct server_context {
     bool validate_model_chat_template(bool use_jinja) const {
         llama_chat_message chat[] = {{"user", "test"}};
 
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0, use_jinja, nullptr, nullptr, nullptr);
+        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
 
         return res > 0;
     }
@@ -2860,9 +2860,11 @@ int main(int argc, char ** argv) {
             return;
         }
 
+        auto chat_template = llama_chat_template::from_model(ctx_server.model, params.chat_template);
+
         json data;
         try {
-            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template, params.use_jinja);
+            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), chat_template, params.use_jinja);
         } catch (const std::runtime_error & e) {
             res_error(res, format_error_response(e.what(), ERROR_TYPE_NOT_SUPPORTED));
             return;
@@ -2880,7 +2882,7 @@ int main(int argc, char ** argv) {
             ctx_server.receive_cmpl_results(task_ids, [&](const std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
                 try {
-                    json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose);
+                    json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, chat_template, /*.streaming =*/ false, verbose);
                     res_ok(res, result_oai);
                 } catch (const std::runtime_error & e) {
                     res_error(res, format_error_response(e.what(), ERROR_TYPE_SERVER));

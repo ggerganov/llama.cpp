@@ -571,6 +571,12 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
     ```shell
     llama-server --jinja -hfr lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF -hff Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf -fa
 
+    # https://huggingface.co/meetkai/functionary-medium-v3.2
+    llama-server --jinja -hfr bartowski/functionary-medium-v3.2-GGUF -hff functionary-medium-v3.2-IQ4_XS.gguf -fa
+
+    # https://huggingface.co/meetkai/functionary-medium-v3.1
+    llama-server --jinja -hfr meetkai/functionary-medium-v3.1-GGUF -hff functionary-medium-llama-3.1.Q4_0.gguf -fa
+
     curl http://localhost:8080/v1/chat/completions \
     -d '{
     "model": "gpt-3.5-turbo",

@@ -377,19 +377,9 @@ extern "C" {
     } llama_sampler_chain_params;
 
     // used in chat template
-
-    typedef struct llama_chat_message_tool_call {
-        const char * name;
-        const char * arguments;
-    } llama_chat_message_tool_call;
-
     typedef struct llama_chat_message {
         const char * role;
         const char * content;
-        const char * tool;
-
-        const llama_chat_message_tool_call * tool_calls;
-        uint32_t n_tool_calls;
     } llama_chat_message;
 
     // lora adapter
@@ -986,11 +976,7 @@ extern "C" {
                                 size_t   n_msg,
                                   bool   add_ass,
                                   char * buf,
-                               int32_t   length,
-                                  bool   use_jinja,
-                            const char * tools,
-                            const char * bos_token,
-                            const char * eos_token);
+                               int32_t   length);
 
     //
     // Sampling API

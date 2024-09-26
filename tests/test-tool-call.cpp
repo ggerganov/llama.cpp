@@ -20,9 +20,9 @@ static void assert_equals(const std::string & expected, const std::string & actu
     cmake -B build -DLLAMA_CURL=1 -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-tool-call -j && ./build/bin/test-tool-call
 */
 
-static void test_parse_tool_call(const json & tools, const std::string & chat_template, const std::string & input, const std::string & expected_content, const json & expected_tool_calls) {
+static void test_parse_tool_call(llama_tool_call_style style, const json & tools, const std::string & input, const std::string & expected_content, const json & expected_tool_calls) {
     std::cout << "# Testing: " << input << std::endl << std::flush;
-    auto result = parse_tool_calls(tools, chat_template, input);
+    auto result = parse_tool_calls(style, tools, input);
     assert_equals(expected_content, result.content);
     auto tool_calls = json::array();
     for (const auto & tc : result.tool_calls) {
@@ -59,8 +59,7 @@ int main() {
       {"tools", tools}
     };
 
-    std::string hermes_2_pro_like_tmpl = "Hermes 2 Pro template should have <tool_call> inside it";
-    test_parse_tool_call(tools, hermes_2_pro_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::Hermes2Pro, tools,
       "<tool_call>{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}</tool_call>",
       "",
       json {{
@@ -72,8 +71,7 @@ int main() {
         }}
       }});
 
-    std::string functionary_v3_like_tmpl = "Functionary 3.2 template should have <|start_header_id|> and then some >>>all inside it";
-    test_parse_tool_call(tools, functionary_v3_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
       ">>>ipython\n{\"code\": \"print('Hello, world!')\"}",
       "",
       json {{
@@ -84,7 +82,7 @@ int main() {
           }).dump()}
         }}
       }});
-    test_parse_tool_call(tools, functionary_v3_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
       ">>>test\n{ } \n ",
       "",
       json {{
@@ -94,8 +92,7 @@ int main() {
         }}
       }});
 
-    std::string functionary_v3_llama_3_1_like_tmpl = "Functionary 3.2 template for llama 3.1 should have <|start_header_id|> and then some <function=foo>{...}</function> inside it";
-    test_parse_tool_call(tools, functionary_v3_llama_3_1_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama31, tools,
       "Hell<function=foo>{\"arg1\": 1}</function>o, world<function=bar>{\"arg2\": 2}</function>!",
       "Hello, world!",
       json {
@@ -116,7 +113,7 @@ int main() {
           }}
         },
       });
-    test_parse_tool_call(tools, functionary_v3_llama_3_1_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama31, tools,
       "<function=test>{ } </function> ",
       " ",
       json {{
@@ -126,8 +123,7 @@ int main() {
         }}
       }});
 
-    std::string llama_3_1_like_tmpl = "Llama 3.1 template should have <|start_header_id|> and <|python_tag|> inside it";
-    test_parse_tool_call(tools, llama_3_1_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "<|python_tag|>this could be anything",
       "",
       json {{
@@ -138,7 +134,7 @@ int main() {
           }).dump()}
         }}
       }});
-    test_parse_tool_call(tools, llama_3_1_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "I'm thinking<|python_tag|>",
       "I'm thinking",
       json {{
@@ -147,7 +143,7 @@ int main() {
           {"arguments", (json {{"code", ""}}).dump()}
         }}
       }});
-    test_parse_tool_call(tools, llama_3_1_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json {{
@@ -158,7 +154,7 @@ int main() {
           }).dump()}
         }}
       }});
-    test_parse_tool_call(tools, llama_3_1_like_tmpl,
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}", json::array());
 

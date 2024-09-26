@@ -14,6 +14,7 @@
 
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
+#include "chat-template.h"
 #include "json.hpp"
 #include "minja.hpp"
 #include "tool-call.h"
@@ -64,40 +65,30 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
 
-        llama_chat_msg msg;
-        msg.role = json_value(curr_msg, "role", std::string(""));
-        msg.tool = json_value(curr_msg, "tool", std::string(""));
+        std::string role = json_value(curr_msg, "role", std::string(""));
+
+        std::string content;
 
         if (curr_msg.contains("content")) {
             if (curr_msg["content"].is_string()) {
-                msg.content = curr_msg["content"].get<std::string>();
+                content = curr_msg["content"].get<std::string>();
             } else if (curr_msg["content"].is_array()) {
                 for (const auto & part : curr_msg["content"]) {
                     if (part.contains("text")) {
-                        msg.content += "\n" + part["text"].get<std::string>();
+                        content += "\n" + part["text"].get<std::string>();
                     }
                 }
-            } else if (!(curr_msg.is_null() && curr_msg.contains("tool_calls"))) {
-                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367): " + curr_msg.dump());
+            } else {
+                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
             }
         } else {
             throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
         }
-        if (curr_msg.contains("tool_calls") && curr_msg["tool_calls"].is_array()) {
-            for (const auto & tool_call : curr_msg["tool_calls"]) {
-                if (json_value(tool_call, "type", std::string("")) == "function"
-                        && tool_call.contains("function") && tool_call["function"].is_object()) {
-                    msg.tool_calls.push_back({
-                        json_value(tool_call["function"], "name", std::string("")),
-                        json_value(tool_call["function"], "arguments", std::string(""))
-                    });
-                }
-            }
-        }
-        chat.emplace_back(std::move(msg));
+
+        chat.push_back({role, content});
     }
 
-    const auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true, use_jinja, tools.is_null() ? nullptr : tools.dump().c_str());
+    const auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
@@ -315,38 +306,12 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 // OAI utils
 //
 
-static std::string _llama_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
-    std::string piece;
-    piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
-    if (n_chars < 0) {
-        piece.resize(-n_chars);
-        int check = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
-        GGML_ASSERT(check == -n_chars);
-    }
-    else {
-        piece.resize(n_chars);
-    }
-
-    return piece;
-}
-
-std::string llama_model_meta_val_str(const struct llama_model * model, const char * key) {
-    int32_t tlen = llama_model_meta_val_str(model, key, nullptr, 0);
-    if (tlen > 0) {
-        std::vector<char> curr_tmpl_buf(tlen + 1, 0);
-        if (llama_model_meta_val_str(model, key, curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
-            return std::string(curr_tmpl_buf.data(), tlen);
-        }
-    }
-    return "";
-}
-
 static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json & body, /* openai api json semantics */
-    const std::string & chat_template_src,
-    bool use_jinja) {
+    const llama_chat_template & tmpl,
+    bool use_jinja)
+{
     json llama_params;
 
     llama_params["__oaicompat"] = true;
@@ -355,16 +320,15 @@ static json oaicompat_completion_params_parse(
     auto has_tools = tools.is_array() && !tools.empty();
 
     // Apply chat template to the list of messages
-    auto chat_template = chat_template_src.empty() ? llama_model_meta_val_str(model, "tokenizer.chat_template") : chat_template_src;
-    llama_params["chat_template"] = chat_template;
+    llama_params["chat_template"] = tmpl.chat_template();
+
     if (use_jinja) {
-        if (has_tools && chat_template.find("tools") == std::string::npos) {
+        if (has_tools && !tmpl.supports_tools()) {
             throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");
         }
     } else if (has_tools) {
         throw std::runtime_error("Tools are only supported in --jinja mode");
     }
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"), tools, use_jinja);
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
@@ -399,26 +363,40 @@ static json oaicompat_completion_params_parse(
         } else if (!response_type.empty() && response_type != "text") {
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
-    } else if (use_jinja && tool_choice != "none" && has_tools) {
-        bool parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
+    }
+
+    if (use_jinja) {
         bool allow_content = tool_choice != "required";
+        if (tool_choice != "none" && has_tools) {
+            bool parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
+            llama_params["parse_tool_calls"] = true;
+            llama_params["parallel_tool_calls"] = parallel_tool_calls;
 
-        auto handler = llama_tool_call_handler_init(chat_template, allow_content, parallel_tool_calls, tools);
+            auto handler = llama_tool_call_handler_init(tmpl, allow_content, parallel_tool_calls, tools);
 
-        for (const auto & stop : handler.additional_stop_words) {
-            llama_params["stop"].push_back(stop);
-        }
-        if (!handler.grammar_trigger_words.empty()) {
-            auto triggers = json::array();
-            for (const auto & word : handler.grammar_trigger_words) {
-                triggers.push_back(word);
+            for (const auto & stop : handler.additional_stop_words) {
+                llama_params["stop"].push_back(stop);
             }
-            llama_params["grammar_trigger_words"] = triggers;
+            if (!handler.grammar_trigger_words.empty()) {
+                auto triggers = json::array();
+                for (const auto & word : handler.grammar_trigger_words) {
+                    triggers.push_back(word);
+                }
+                llama_params["grammar_trigger_words"] = triggers;
+            }
+            if (handler.updated_tools.is_null()) {
+                tools = handler.updated_tools;
+            }
+            if (!handler.grammar.empty()) {
+                if (llama_params.contains("grammar")) {
+                    throw std::runtime_error("Cannot use custom grammar constraints with tools.");
+                }
+                llama_params["grammar"] = handler.grammar;
+            }
         }
-
-        llama_params["grammar"] = handler.grammar;
-        llama_params["parse_tool_calls"] = true;
-        llama_params["parallel_tool_calls"] = parallel_tool_calls;
+        llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
+    } else {
+        llama_params["prompt"] = format_chat(model, tmpl.chat_template(), body.at("messages"), tools, /* use_jinja= */ false);
     }
 
     // Handle "n" field
@@ -458,7 +436,7 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false) {
+static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, const llama_chat_template & tmpl, bool streaming = false, bool verbose = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -474,9 +452,8 @@ static json format_final_response_oaicompat(const json & request, const json & r
     auto tools = json_value(request, "tools", json::array());
     json tool_calls;
     json message_content;
-    printf("# CONTENT: %s\n\n", content.c_str());
     if (json_value(request, "parse_tool_calls", false)
-            && !(parsed_tool_calls = parse_tool_calls(tools, chat_template, content)).tool_calls.empty()) {
+            && !(parsed_tool_calls = parse_tool_calls(tmpl.tool_call_style(), tools, content)).tool_calls.empty()) {
         finish_reason = "tool";
         if (!parsed_tool_calls.content.empty()) {
             message_content = parsed_tool_calls.content;
@@ -514,7 +491,6 @@ static json format_final_response_oaicompat(const json & request, const json & r
         }},
         {"id", completion_id}
     };
-    printf("# RES: %s\n\n", res.dump(2).c_str());
 
     // extra fields for debugging purposes
     if (verbose) {

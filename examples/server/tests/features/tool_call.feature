@@ -23,19 +23,19 @@ Feature: llama.cpp server
     And   a model test
     And   <n_predict> max tokens to predict
     And   a user prompt write a hello world in python
-    And   a tool choice <tool_choice>
+    And   a tool choice required
     And   tools <tools>
     And   an OAI compatible chat completions request with no api error
     Then  tool <tool_name> is called with arguments <tool_arguments>
 
     Examples: Prompts
-      | template_name                         | n_predict | tool_name | tool_arguments       | tool_choice | tools |
-      | meetkai-functionary-medium-v3.1       | 128       | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "Yes, you can."}     | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
-      | meetkai-functionary-medium-v3.2       | 128       | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}     | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                   | required    | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 16        | ipython   | {"code": "it and "}  | required    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | template_name                         | n_predict | tool_name | tool_arguments         | tools |
+      | meetkai-functionary-medium-v3.1       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
+      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "I'm sorry,"} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | meetkai-functionary-medium-v3.2       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
+      | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 16        | ipython   | {"code": ". A"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
 
 
   Scenario: OAI Compatibility w/ no tool

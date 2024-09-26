@@ -12,27 +12,6 @@
 
 using json = nlohmann::ordered_json;
 
-// https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3.llama3.txt
-static bool needs_functionary_v3_tool_call(const std::string & chat_template) {
-    return chat_template.find("<|start_header_id|>") != std::string::npos
-        && chat_template.find(">>>all") != std::string::npos;
-}
-
-// https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
-static bool needs_functionary_v3_llama_3_1_tool_call(const std::string & chat_template) {
-    return chat_template.find("<|start_header_id|>") != std::string::npos
-        && chat_template.find("<function=") != std::string::npos;
-}
-
-static bool needs_llama_3_1_tool_call(const std::string & chat_template) {
-    return chat_template.find("<|start_header_id|>") != std::string::npos
-        && chat_template.find("<|python_tag|>") != std::string::npos;
-}
-
-static bool needs_hermes_pro_tool_call(const std::string & chat_template) {
-    return chat_template.find("<tool_call>") != std::string::npos;
-}
-
 static bool parse_json(std::string::const_iterator & it, const std::string::const_iterator & end, json & out) {
     // // https://json.nlohmann.me/features/parsing/sax_interface/
     struct json_error_locator : public nlohmann::json_sax<json> {
@@ -209,137 +188,145 @@ static llama_tool_calls parse_functionary_v3_tool_calls(const std::string& input
     return parse_functionary_tool_calls(input, function_regex, close_regex);
 }
 
-llama_tool_calls parse_tool_calls(const json & tools, const std::string & chat_template, const std::string& input) {
-    if (needs_hermes_pro_tool_call(chat_template)) {
-        return parse_hermes_tool_calls(input);
-    } else if (needs_functionary_v3_tool_call(chat_template)) {
-        return parse_functionary_v3_tool_calls(input);
-    } else if (needs_functionary_v3_llama_3_1_tool_call(chat_template)) {
-        return parse_functionary_v3_llama_3_1_tool_calls(input);
-    } else if (needs_llama_3_1_tool_call(chat_template)) {
-        return parse_llama_3_1_tool_calls(tools, input);
-    } else {
-        throw std::runtime_error("Unsupported chat template for tool calls");
+llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tools, const std::string& input) {
+    switch (style) {
+        case llama_tool_call_style::Llama31:
+            return parse_llama_3_1_tool_calls(tools, input);
+        case llama_tool_call_style::FunctionaryV3Llama3:
+            return parse_functionary_v3_tool_calls(input);
+        case llama_tool_call_style::FunctionaryV3Llama31:
+            return parse_functionary_v3_llama_3_1_tool_calls(input);
+        case llama_tool_call_style::Hermes2Pro:
+            return parse_hermes_tool_calls(input);
+        default:
+            throw std::runtime_error("Unsupported tool call style");
     }
 }
 
 llama_tool_call_handler llama_tool_call_handler_init(
-    const std::string & chat_template,
+    const llama_chat_template & tmpl,
     bool allow_content,
     bool parallel_tool_calls,
     const nlohmann::ordered_json & tools)
 {
     llama_tool_call_handler handler;
 
-    if (needs_functionary_v3_tool_call(chat_template)) {
-        // MeetKaiFunctionary_3_2
-        // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
-        // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
-        handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-            std::vector<std::string> tool_rules;
-            for (size_t i = 0, n = tools.size(); i < n; i++) {
-                auto & tool = tools[i];
-                const auto & function = tool["function"];
-                std::string name = function["name"];
-                auto parameters = function["parameters"];
-                auto tool_rule = builder.add_rule(name + "-call", "\">>>" + name + "\\n\" " + builder.add_schema(name + "-args", parameters));
-                tool_rules.push_back(tool_rule);
+    switch (tmpl.tool_call_style()) {
+        case llama_tool_call_style::Llama31: {
+            handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
+                static std::vector<std::string> builtin_tools {"wolfram_alpha", "brave_search"};
+                std::vector<std::string> tool_rules;
+
+                for (const auto & tool : tools) {
+                    const auto & function = tool["function"];
+                    std::string name = function["name"];
+                    auto parameters = function["parameters"];
+                    builder.resolve_refs(parameters);
+                    if (name == "ipython" || std::find(builtin_tools.begin(), builtin_tools.end(), name) != builtin_tools.end()) {
+                        tool_rules.push_back(builder.add_rule("ipython-call", "\"<|python_tag|>\" .*"));
+                        if (allow_content) {
+                            handler.grammar_trigger_words.push_back("<|python_tag|>");
+                        }
+                    } else {
+                        //"<|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"" + name + "\", " +
+                        tool_rules.push_back(
+                            builder.add_rule(
+                                name + "-call",
+                                "\"\\n{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                                    builder.add_schema(name + "-args", parameters) +
+                                " \"}\""));
+                        if (allow_content) {
+                            handler.grammar_trigger_words.push_back("\n{\"" + name + "\"");
+                        }
+                    }
+                }
+
+                builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
+            });
+            handler.additional_stop_words.push_back("<|eom_id|>");
+            break;
+        }
+        case llama_tool_call_style::FunctionaryV3Llama3: {
+            // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
+            // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
+            handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
+                std::vector<std::string> tool_rules;
+                for (size_t i = 0, n = tools.size(); i < n; i++) {
+                    auto & tool = tools[i];
+                    const auto & function = tool["function"];
+                    std::string name = function["name"];
+                    auto parameters = function["parameters"];
+                    auto tool_rule = builder.add_rule(name + "-call", "\">>>" + name + "\\n\" " + builder.add_schema(name + "-args", parameters));
+                    tool_rules.push_back(tool_rule);
+                    if (allow_content) {
+                        handler.grammar_trigger_words.push_back(">>>" + name + "\n");
+                    }
+                }
+                auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
+                builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
+            });
+            // handler.parser = parse_functionary_3_2_tool_calls;
+            break;
+        }
+        case llama_tool_call_style::FunctionaryV3Llama31: {
+            // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
+            // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
+            // TODO: handle tool {type: code_interpreter} as python
+            handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
+                std::vector<std::string> tool_rules;
+                for (size_t i = 0, n = tools.size(); i < n; i++) {
+                    auto & tool = tools[i];
+                    const auto & function = tool["function"];
+                    std::string name = function["name"];
+                    auto parameters = function["parameters"];
+                    if (name == "python") {
+                        tool_rules.push_back(builder.add_rule("python-call", "\"<|python_tag|>\" .*"));
+                        if (allow_content) {
+                            handler.grammar_trigger_words.push_back("<|python_tag|>");
+                        }
+                    } else {
+                        tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\""));
+                    }
+                }
+                auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
+                builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
-                    handler.grammar_trigger_words.push_back(">>>" + name + "\n");
+                    handler.grammar_trigger_words.push_back("<function=");
                 }
-            }
-            auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
-            builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
-        });
-        // handler.parser = parse_functionary_3_2_tool_calls;
-    } else if (needs_functionary_v3_llama_3_1_tool_call(chat_template)) {
-        // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
-        // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
-        // TODO: handle tool {type: code_interpreter} as python
-        handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-            std::vector<std::string> tool_rules;
-            for (size_t i = 0, n = tools.size(); i < n; i++) {
-                auto & tool = tools[i];
-                const auto & function = tool["function"];
-                std::string name = function["name"];
-                auto parameters = function["parameters"];
-                if (name == "python") {
-                    tool_rules.push_back(builder.add_rule("python-call", "\"<|python_tag|>\" .*"));
-                    if (allow_content) {
-                        handler.grammar_trigger_words.push_back("<|python_tag|>");
-                    }
-                } else {
-                    tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\""));
+            });
+            // handler.parser = parse_functionary_3_2_tool_calls;
+            break;
+        }
+        case llama_tool_call_style::Hermes2Pro: {
+            // NousResearchHermesPro_2
+            // (content)?(<tool_call>{"name": "foo", "arguments": {"a": 1}}</tool_call>)*
+            handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
+                std::vector<std::string> tool_rules;
+                for (const auto & tool : tools) {
+                    const auto & function = tool["function"];
+                    std::string name = function["name"];
+                    auto parameters = function["parameters"];
+                    builder.resolve_refs(parameters);
+                    tool_rules.push_back(builder.add_schema(name + "-call", {
+                        {"type", "object"},
+                        {"properties", json {
+                            {"name", json {{"const", name}}},
+                            {"arguments", parameters},
+                        }},
+                        {"required", json::array({"name", "arguments"})},
+                    }));
                 }
-            }
-            auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
-            builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
-            if (allow_content) {
-                handler.grammar_trigger_words.push_back("<function=");
-            }
-        });
-        // handler.parser = parse_functionary_3_2_tool_calls;
-    } else if (needs_hermes_pro_tool_call(chat_template)) {
-        // NousResearchHermesPro_2
-        // (content)?(<tool_call>{"name": "foo", "arguments": {"a": 1}}</tool_call>)*
-        handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-            std::vector<std::string> tool_rules;
-            for (const auto & tool : tools) {
-                const auto & function = tool["function"];
-                std::string name = function["name"];
-                auto parameters = function["parameters"];
-                builder.resolve_refs(parameters);
-                tool_rules.push_back(builder.add_schema(name + "-call", {
-                    {"type", "object"},
-                    {"properties", json {
-                        {"name", json {{"const", name}}},
-                        {"arguments", parameters},
-                    }},
-                    {"required", json::array({"name", "arguments"})},
-                }));
-            }
 
-            auto tool_call = "\"<tool_call>\" " + builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " \"</tool_call>\" space";
-            builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
-            if (allow_content) {
-                handler.grammar_trigger_words.push_back("<tool_call>");
-            }
-        });
-    } else if (needs_llama_3_1_tool_call(chat_template)) {
-        handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-            static std::vector<std::string> builtin_tools {"wolfram_alpha", "brave_search"};
-            std::vector<std::string> tool_rules;
-
-            for (const auto & tool : tools) {
-                const auto & function = tool["function"];
-                std::string name = function["name"];
-                auto parameters = function["parameters"];
-                builder.resolve_refs(parameters);
-                if (name == "ipython" || std::find(builtin_tools.begin(), builtin_tools.end(), name) != builtin_tools.end()) {
-                    tool_rules.push_back(builder.add_rule("ipython-call", "\"<|python_tag|>\" .*"));
-                    if (allow_content) {
-                        handler.grammar_trigger_words.push_back("<|python_tag|>");
-                    }
-                } else {
-                    //"<|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"" + name + "\", " +
-                    tool_rules.push_back(
-                        builder.add_rule(
-                            name + "-call",
-                            "\"\\n{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
-                                builder.add_schema(name + "-args", parameters) +
-                            " \"}\""));
-                    if (allow_content) {
-                        handler.grammar_trigger_words.push_back("\n{\"" + name + "\"");
-                    }
+                auto tool_call = "\"<tool_call>\" " + builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " \"</tool_call>\" space";
+                builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
+                if (allow_content) {
+                    handler.grammar_trigger_words.push_back("<tool_call>");
                 }
-            }
-
-            builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
-        });
-        handler.additional_stop_words.push_back("<|eom_id|>");
-    } else {
-        // TODO: generic thoughtful schema.
-        throw std::runtime_error("Unsupported tool call style!");
+            });
+            break;
+        }
+        default:
+            throw std::runtime_error("Unsupported tool call style");
     }
     return handler;
 }

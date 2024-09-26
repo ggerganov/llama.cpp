@@ -2,8 +2,6 @@
 #include "llama-vocab.h"
 #include "llama-sampling.h"
 
-#include "minja.hpp"
-
 #include "unicode.h"
 
 #include "ggml.h"
@@ -21004,95 +21002,7 @@ int32_t llama_detokenize(
 static int32_t llama_chat_apply_template_internal(
     const std::string & tmpl,
     const std::vector<const llama_chat_message *> & chat,
-    std::string & dest, bool add_ass,
-    bool use_jinja,
-    const std::string & tools,
-    const std::string & bos_token, const std::string & eos_token) {
-
-    if (use_jinja) {
-        auto system_not_supported = tmpl.find("System role not supported") != std::string::npos;
-
-        // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
-        // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
-        auto tool_call_args_must_be_objects = tmpl.find("tool_call.arguments | items") != std::string::npos;
-
-        auto messages = json::array();
-
-        std::string pending_system;
-        auto flush_sys = [&]() {
-            if (!pending_system.empty()) {
-                messages.push_back({
-                    {"role", "user"},
-                    {"content", pending_system},
-                });
-                pending_system.clear();
-            }
-        };
-        for (const auto * msg : chat) {
-            std::string role(msg->role);
-            std::string content(msg->content);
-            if (system_not_supported) {
-                if (role == "system") {
-                    if (!pending_system.empty()) pending_system += "\n";
-                    pending_system += content;
-                    continue;
-                } else {
-                    if (role == "user") {
-                        if (!pending_system.empty()) {
-                            content = pending_system + (content.empty() ? "" : "\n" + content);
-                            pending_system.clear();
-                        }
-                    } else {
-                        flush_sys();
-                    }
-                }
-            }
-            auto message = json({
-                {"role", role},
-                {"content", content},
-            });
-            if (msg->tool) message["tool"] = msg->tool;
-            if (msg->n_tool_calls) {
-                auto tool_calls = json::array();
-                for (uint32_t i = 0; i < msg->n_tool_calls; i++) {
-                    auto args = msg->tool_calls[i].arguments;
-                    tool_calls.push_back(json({
-                        {"type", "function"},
-                        {"function", {
-                            {"name", msg->tool_calls[i].name},
-                            {"arguments", tool_call_args_must_be_objects ? json::parse(args) : args},
-                        }}
-                    }));
-                }
-                messages["tool_calls"] = tool_calls;
-            }
-            messages.push_back(message);
-        }
-        flush_sys();
-
-        auto context = minja::Context::make(json({
-            {"messages", messages},
-            {"add_generation_prompt", add_ass},
-            {"bos_token", bos_token},
-            {"eos_token", eos_token},
-        }));
-        if (!tools.empty()) {
-            auto tools_val = minja::Value(json::parse(tools));
-            context->set("tools", tools_val);
-        }
-        auto tmpl_root = minja::Parser::parse(tmpl, {
-            /* .trim_blocks = */ true,
-            /* .lstrip_blocks = */ true,
-            /* .keep_trailing_newline = */ false,
-        });
-        try {
-            dest = tmpl_root->render(context);
-            return dest.size();
-        } catch (const std::runtime_error & err) {
-            LLAMA_LOG_ERROR("Error in jinja template: %s\n", err.what());
-            return -1;
-        }
-    }
+    std::string & dest, bool add_ass) {
 
     // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
     std::stringstream ss;
@@ -21360,11 +21270,7 @@ int32_t llama_chat_apply_template(
                                   size_t   n_msg,
                                     bool   add_ass,
                                     char * buf,
-                                 int32_t   length,
-                                    bool   use_jinja,
-                              const char * tools,
-                              const char * bos_token,
-                              const char * eos_token) {
+                                 int32_t   length) {
     std::string curr_tmpl(tmpl == nullptr ? "" : tmpl);
     if (tmpl == nullptr) {
         GGML_ASSERT(model != nullptr);
@@ -21379,16 +21285,6 @@ int32_t llama_chat_apply_template(
             curr_tmpl = std::string(model_template.data(), model_template.size());
         }
     }
-    std::string curr_bos_token(bos_token ? bos_token : "");
-    std::string curr_eos_token(eos_token ? eos_token : "");
-    if (bos_token == nullptr) {
-        GGML_ASSERT(model != nullptr);
-        curr_bos_token = llama_token_to_piece(model, llama_token_bos(model), true);
-    }
-    if (eos_token == nullptr) {
-        GGML_ASSERT(model != nullptr);
-        curr_eos_token = llama_token_to_piece(model, llama_token_eos(model), true);
-    }
 
     // format the chat to string
     std::vector<const llama_chat_message *> chat_vec;
@@ -21398,7 +21294,7 @@ int32_t llama_chat_apply_template(
     }
 
     std::string formatted_chat;
-    int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass, use_jinja, tools == nullptr ? "" : tools, curr_bos_token, curr_eos_token);
+    int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
     if (res < 0) {
         return res;
     }

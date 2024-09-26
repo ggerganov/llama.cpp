@@ -471,21 +471,14 @@ std::string llama_detokenize(
 // Chat template utils
 //
 
-struct llama_chat_msg_tool_call {
-    std::string name;
-    std::string arguments;
-};
-
 // same as llama_chat_message, but uses std::string and std::vector
 struct llama_chat_msg {
     std::string role;
     std::string content;
-    std::string tool;
-    std::vector<struct llama_chat_msg_tool_call> tool_calls;
 };
 
-// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-bool llama_chat_verify_template(const std::string & tmpl, bool use_jinja = false);
+// Check if the template is supported or not. Returns true if it's valid
+bool llama_chat_verify_template(const std::string & tmpl, bool use_jinja);
 
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
@@ -493,22 +486,14 @@ bool llama_chat_verify_template(const std::string & tmpl, bool use_jinja = false
 std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & chat,
-        bool add_ass,
-        bool use_jinja = false,
-        const char * tools = nullptr,
-        const char * bos_token = nullptr,
-        const char * eos_token = nullptr);
+        bool add_ass);
 
 // Format single message, while taking into account the position of that message in chat history
 std::string llama_chat_format_single(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & past_msg,
         const llama_chat_msg & new_msg,
-        bool add_ass,
-        bool use_jinja = false,
-        const char * tools = nullptr,
-        const char * bos_token = nullptr,
-        const char * eos_token = nullptr);
+        bool add_ass);
 
 // Returns an example of formatted chat
 std::string llama_chat_format_example(const struct llama_model * model,
