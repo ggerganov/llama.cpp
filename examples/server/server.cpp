@@ -3297,7 +3297,9 @@ int main(int argc, char ** argv) {
     svr->Post("/embeddings",          handle_embeddings);
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/rerank",              handle_rerank);
+    svr->Post("/reranking",           handle_rerank);
     svr->Post("/v1/rerank",           handle_rerank);
+    svr->Post("/v1/reranking",        handle_rerank);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
     // LoRA adapters hotswap
