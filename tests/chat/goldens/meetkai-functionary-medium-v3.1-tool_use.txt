@@ -1,0 +1,66 @@
+<|startoftext|><|start_header_id|>system<|end_header_id|>
+
+
+Cutting Knowledge Date: December 2023
+
+
+You have access to the following functions:
+
+Use the function 'ipython' to 'Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.'
+{"name": "ipython", "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": "The code to run in the ipython interpreter."}}, "required": ["code"]}}
+
+Use the function 'brave_search' to 'Executes a web search with Brave.'
+{"name": "brave_search", "description": "Executes a web search with Brave.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "The query to search for."}}, "required": ["query"]}}
+
+Use the function 'wolfram_alpha' to 'Executes a query with Wolfram Alpha.'
+{"name": "wolfram_alpha", "description": "Executes a query with Wolfram Alpha.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "The query to execute."}}, "required": ["query"]}}
+
+Use the function 'test' to 'Runs a test.'
+{"name": "test", "description": "Runs a test.", "parameters": {"type": "object", "properties": {"condition": {"type": "boolean", "description": "The condition to test."}}, "required": ["condition"]}}
+
+
+Think very carefully before calling functions.
+If a you choose to call a function ONLY reply in the following format:
+<{start_tag}={function_name}>{parameters}{end_tag}
+where
+
+start_tag => `<function`
+parameters => a JSON dict with the function argument name as key and function argument value as value.
+end_tag => `</function>`
+
+Here is an example,
+<function=example_function_name>{"example_name": "example_value"}</function>
+
+Reminder:
+- If looking for real time information use relevant functions before falling back to brave_search
+- Function calls MUST follow the specified format, start with <function= and end with </function>
+- Required parameters MUST be specified
+- Only call one function at a time
+- Put the entire function call reply on one line
+
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Print a hello world message with python.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+<function=ipython>{"code": "print('Hello, World!')"}</function><|eom_id|><|start_header_id|>ipython<|end_header_id|>
+
+{"stdout": "Hello, World!"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+Anything else?<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Test a tautology.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+<function=test>{"condition":true}</function><|eom_id|><|start_header_id|>ipython<|end_header_id|>
+
+true<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+Truth is definitely true.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Check it on the web.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+<function=brave_search>{"query": "what is truth anyway am I right?"}</function><|eom_id|><|start_header_id|>ipython<|end_header_id|>
+
+{"title":"Truth: don't ask the web, ask an LLM instead!","url":"https://en.wikipedia.org/wiki/Truth"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+I don't need the web to answer you but I did check, as you asked. What now?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+

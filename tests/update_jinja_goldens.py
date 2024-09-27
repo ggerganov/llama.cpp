@@ -34,6 +34,8 @@ model_ids = [
     "bofenghuang/vigogne-2-70b-chat",
     "deepseek-ai/deepseek-coder-33b-instruct",
     "indischepartij/MiniCPM-3B-OpenHermes-2.5-v2",
+    "meetkai/functionary-medium-v3.2",
+    "meetkai/functionary-medium-v3.1",
     "microsoft/Phi-3-medium-4k-instruct",
     "microsoft/Phi-3-mini-4k-instruct",
     "microsoft/Phi-3-small-8k-instruct",
@@ -50,10 +52,6 @@ model_ids = [
     "Qwen/Qwen2.5-Math-7B-Instruct",
     "teknium/OpenHermes-2.5-Mistral-7B",
     "TheBloke/FusionNet_34Bx2_MoE-AWQ",
-
-    # Python update goldens broken:
-    "meetkai/functionary-medium-v3.2",
-    "meetkai/functionary-medium-v3.1",
 
     # C++ minja templating broken:
     # "CohereForAI/c4ai-command-r-plus",
@@ -106,6 +104,7 @@ def handle_chat_template(model_id, variant, template_src):
         extensions=[
             jinja2.ext.loopcontrols
         ])
+    env.filters['safe'] = lambda x: x
     env.filters['tojson'] = tojson
     env.globals['raise_exception'] = raise_exception
     env.globals['strftime_now'] = strftime_now

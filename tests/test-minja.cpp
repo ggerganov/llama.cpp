@@ -120,7 +120,7 @@ static void test_error_contains(const std::string & template_str, const json & b
 */
 int main() {
     test_render(R"({{ {} is mapping }},{{ '' is mapping }})", {}, {}, "True,False");
-    test_render(R"({{ {} is iterable }},{{ '' is iterable }})", {}, {}, "True,True");   
+    test_render(R"({{ {} is iterable }},{{ '' is iterable }})", {}, {}, "True,True");
     test_render(R"({% for x in ["a", "b"] %}{{ x }},{% endfor %})", {}, {}, "a,b,");
     test_render(R"({% for x in {"a": 1, "b": 2} %}{{ x }},{% endfor %})", {}, {}, "a,b,");
     test_render(R"({% for x in "ab" %}{{ x }},{% endfor %})", {}, {}, "a,b,");
