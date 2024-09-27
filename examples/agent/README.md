@@ -15,8 +15,7 @@
 - Run some tools inside a docker container (check http://localhost:8088/docs once running):
 
   ```bash
-  docker run -p 8088:8088 -w /src \
-    -v $PWD/examples/agent:/src \
+  docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
     --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
     uv run fastify.py --port 8088 tools.py
   ```

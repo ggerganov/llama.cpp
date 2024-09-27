@@ -182,6 +182,7 @@ def main(
         else:
             assert content
             print(content)
+            return
 
         i += 1
 

@@ -31,11 +31,11 @@ Feature: llama.cpp server
     Examples: Prompts
       | template_name                         | n_predict | tool_name | tool_arguments         | tools |
       | meetkai-functionary-medium-v3.1       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "I'm sorry,"} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "Yes, you can."} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
       | meetkai-functionary-medium-v3.2       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
       | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
       | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 16        | ipython   | {"code": ". A"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 16        | ipython   | {"code": "it and "}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
 
 
   Scenario Outline: OAI Compatibility w/ tools and auto tool_choice

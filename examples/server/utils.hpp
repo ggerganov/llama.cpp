@@ -384,9 +384,6 @@ static json oaicompat_completion_params_parse(
                 }
                 llama_params["grammar_trigger_words"] = triggers;
             }
-            if (handler.updated_tools.is_null()) {
-                tools = handler.updated_tools;
-            }
             if (!handler.grammar.empty()) {
                 if (llama_params.contains("grammar")) {
                     throw std::runtime_error("Cannot use custom grammar constraints with tools.");

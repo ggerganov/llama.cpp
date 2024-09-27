@@ -21,7 +21,6 @@ struct llama_tool_call_handler {
     std::string grammar;
     std::vector<std::string> grammar_trigger_words;
     std::vector<std::string> additional_stop_words;
-    nlohmann::ordered_json updated_tools;
 };
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);

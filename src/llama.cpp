@@ -21312,7 +21312,7 @@ int32_t llama_chat_apply_template(
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
- 
+
 bool llama_sampler_is_grammar_empty(struct llama_sampler * gsmpl) {
     return llama_sampler_is_grammar_empty_impl(gsmpl);
 }

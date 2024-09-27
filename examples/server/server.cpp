@@ -986,6 +986,7 @@ struct server_context {
 
         {
             slot.antiprompts.clear();
+            slot.sparams.grammar_trigger_words.clear();
 
             auto copy_string_array = [&](const json & data, const std::string & key, std::vector<std::string> & vec) {
                 const auto & arr = data.find(key);
@@ -1004,7 +1005,7 @@ struct server_context {
             copy_string_array(data, "grammar_trigger_words", slot.sparams.grammar_trigger_words);
 
             slot.antiprompts.build(ctx, stop_words, slot.sparams.grammar_trigger_words);
-            
+
         }
 
         {
