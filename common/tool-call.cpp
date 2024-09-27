@@ -133,12 +133,19 @@ static llama_tool_calls parse_llama_3_1_tool_calls(const json & tools, const std
     return {input, {}};
 }
 
-static llama_tool_calls parse_functionary_tool_calls(const std::string& input, const std::regex & function_regex, const std::regex & close_regex) {
+static llama_tool_calls parse_functionary_tool_calls(const json & tools, const std::string& input, const std::regex & function_regex, const std::regex & close_regex) {
     std::smatch match;
 
     llama_tool_calls result;
     auto end = input.end();
     auto it = input.begin();
+
+    std::unordered_set<std::string> tool_names;
+    for (const auto & tool : tools) {
+        if (tool.contains("type") && tool["type"] == "function") {
+            tool_names.insert(tool["function"]["name"]);
+        }
+    }
 
     while (it != end) {
         std::sregex_iterator rend;
@@ -147,11 +154,15 @@ static llama_tool_calls parse_functionary_tool_calls(const std::string& input, c
             result.content += std::string(it, end);
             break;
         }
+        auto name = rit->str(1);
+        if (tool_names.find(name) == tool_names.end()) {
+            result.content += std::string(it, rit->suffix().first);
+            break;
+        }
 
         result.content += std::string(it, rit->prefix().second);
         it = rit->suffix().first;
 
-        auto name = rit->str(1);
 
         json arguments;
         if (!parse_json(it, end, arguments)) {
@@ -166,7 +177,7 @@ static llama_tool_calls parse_functionary_tool_calls(const std::string& input, c
     return result;
 }
 
-static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::string& input) {
+static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & tools, const std::string& input) {
     // This version of Functionary still supports the llama 3.1 tool call format for the python tool.
     static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
     std::smatch match;
@@ -179,13 +190,13 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const std::str
     }
     static std::regex function_regex(R"(<function=(\w+)>)");
     static std::regex close_regex(R"(</function>)");
-    return parse_functionary_tool_calls(input, function_regex, close_regex);
+    return parse_functionary_tool_calls(tools, input, function_regex, close_regex);
 }
 
-static llama_tool_calls parse_functionary_v3_tool_calls(const std::string& input) {
-    static std::regex function_regex(R"(>>>(\w+)\n)");
+static llama_tool_calls parse_functionary_v3_tool_calls(const json & tools, const std::string& input) {
+    static std::regex function_regex(R"((?:>>>)?(\w+)\n)");
     static std::regex close_regex(R"($|\n(?=>>>))");
-    return parse_functionary_tool_calls(input, function_regex, close_regex);
+    return parse_functionary_tool_calls(tools, input, function_regex, close_regex);
 }
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tools, const std::string& input) {
@@ -193,9 +204,9 @@ llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tool
         case llama_tool_call_style::Llama31:
             return parse_llama_3_1_tool_calls(tools, input);
         case llama_tool_call_style::FunctionaryV3Llama3:
-            return parse_functionary_v3_tool_calls(input);
+            return parse_functionary_v3_tool_calls(tools, input);
         case llama_tool_call_style::FunctionaryV3Llama31:
-            return parse_functionary_v3_llama_3_1_tool_calls(input);
+            return parse_functionary_v3_llama_3_1_tool_calls(tools, input);
         case llama_tool_call_style::Hermes2Pro:
             return parse_hermes_tool_calls(input);
         default:
@@ -250,20 +261,28 @@ llama_tool_call_handler llama_tool_call_handler_init(
             // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
             // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-                std::vector<std::string> tool_rules;
+                std::vector<std::string> first_tool_rules;
+                std::vector<std::string> subsequent_tool_rules;
                 for (size_t i = 0, n = tools.size(); i < n; i++) {
                     auto & tool = tools[i];
                     const auto & function = tool["function"];
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
-                    auto tool_rule = builder.add_rule(name + "-call", "\">>>" + name + "\\n\" " + builder.add_schema(name + "-args", parameters));
-                    tool_rules.push_back(tool_rule);
+                    auto args_rule = builder.add_schema(name + "-args", parameters);
+                    first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
+                    subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\"\\n>>>" + name + "\\n\" " + args_rule));
                     if (allow_content) {
+                        handler.grammar_trigger_words.push_back(name + "\n");
                         handler.grammar_trigger_words.push_back(">>>" + name + "\n");
                     }
                 }
-                auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
-                builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
+                auto first_rule = builder.add_rule("first_tool_call", join(first_tool_rules.begin(), first_tool_rules.end(), " | ")) + " space";
+                if (parallel_tool_calls) {
+                    auto subsequent_rule = builder.add_rule("subsequent_tool_call", join(subsequent_tool_rules.begin(), subsequent_tool_rules.end(), " | ")) + " space";
+                    builder.add_rule("root", first_rule + " (" + subsequent_rule + ")*");
+                } else {
+                    builder.add_rule("root", first_rule);
+                }
             });
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;

@@ -4,6 +4,7 @@
 #     "fastapi",
 #     "uvicorn",
 #     "typer",
+#     "ipython",
 # ]
 # ///
 '''

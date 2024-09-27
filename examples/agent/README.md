@@ -7,10 +7,23 @@
   ```bash
   make -j LLAMA_CURL=1 llama-server
   ./llama-server \
-    -mu https://huggingface.co/lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf \
-    --jinja \
-    -c 8192 -fa
+    --jinja -fa \
+    -mu https://huggingface.co/lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf
   ```
+
+  <details>
+  <summary>Instructions for meekai/functionary-small-v3.2 (experimental)</summary>
+
+  The template in the GGUF doesn't seem to support tool calls, but its bigger brother's template can be used:
+
+  ```bash
+  ./llama-server \
+    --jinja -fa \
+    -mu https://huggingface.co/meetkai/functionary-small-v3.2-GGUF/resolve/main/functionary-small-v3.2.Q4_0.gguf \
+    --chat-template-file tests/chat/templates/meetkai-functionary-medium-v3.2.jinja
+  ```
+
+  </details>
 
 - Run some tools inside a docker container (check http://localhost:8088/docs once running):
 
