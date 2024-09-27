@@ -12,7 +12,17 @@
   ```
 
   <details>
-  <summary>Instructions for meekai/functionary-small-v3.2 (experimental)</summary>
+  <summary>Instructions for NousResearch/Hermes-2-Pro-Llama-3-8B (needs template override)</summary>
+
+  ```bash
+  ./llama-server \
+    --jinja -fa \
+    -mu https://huggingface.co/NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF/resolve/main/Hermes-2-Pro-Llama-3-8B-Q8_0.gguf \
+    --chat-template-file tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja
+  ```
+
+  <details>
+  <summary>Instructions for meekai/functionary-small-v3.2 (needs template override)</summary>
 
   The template in the GGUF doesn't seem to support tool calls, but its bigger brother's template can be used:
 
