@@ -1036,7 +1036,7 @@ std::string json_schema_to_grammar(const json & schema) {
     return build_grammar([&](const llama_grammar_builder & callbacks) {
         auto copy = schema;
         callbacks.resolve_refs(copy);
-        callbacks.add_schema("root", copy);
+        callbacks.add_schema("", copy);
     });
 }
 
