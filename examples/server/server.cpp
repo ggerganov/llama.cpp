@@ -3144,7 +3144,6 @@ int main(int argc, char ** argv) {
                 return;
             }
         } else {
-            exit(0);
             res_error(res, format_error_response("\"query\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
