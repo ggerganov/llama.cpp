@@ -14,17 +14,21 @@
   <details>
   <summary>Instructions for NousResearch/Hermes-2-Pro-Llama-3-8B (needs template override)</summary>
 
+  The HF model had two variants for its chat template (`default` and `tool_use`), but the GGUF only retained the `default` one.
+
   ```bash
   ./llama-server \
     --jinja -fa \
     -mu https://huggingface.co/NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF/resolve/main/Hermes-2-Pro-Llama-3-8B-Q8_0.gguf \
     --chat-template-file tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja
   ```
+`
+  </details>
 
   <details>
   <summary>Instructions for meekai/functionary-small-v3.2 (needs template override)</summary>
 
-  The template in the GGUF doesn't seem to support tool calls, but its bigger brother's template can be used:
+  The template in the GGUF doesn't support tool calls, but its bigger brother's template can be used:
 
   ```bash
   ./llama-server \
