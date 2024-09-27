@@ -12,7 +12,7 @@ Feature: llama.cpp server
     And   512 as batch size
     And   512 as ubatch size
     And   512 KV cache size
-    And   embeddings extraction
+    And   enable reranking endpoint
     Then  the server is starting
     Then  the server is healthy
 
@@ -39,5 +39,4 @@ Feature: llama.cpp server
       """
     When  reranking request
     Then  reranking results are returned
-    # TODO: this result make no sense, probably need a better model?
-    Then  reranking highest score is index 3 and lowest score is index 0
+    Then  reranking highest score is index 2 and lowest score is index 3

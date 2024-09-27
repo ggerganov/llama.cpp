@@ -2888,8 +2888,8 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_completions_generic = [&ctx_server, &res_error, &res_ok](server_task_cmpl_type cmpl_type, json & data, httplib::Response & res) {
-        if (ctx_server.params.embedding) {
-            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+        if (ctx_server.params.embedding || ctx_server.params.reranking) {
+            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings` or `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
@@ -2949,8 +2949,8 @@ int main(int argc, char ** argv) {
 
     // TODO: maybe merge this function with "handle_completions_generic"
     const auto handle_chat_completions = [&ctx_server, &params, &res_error, &res_ok, verbose](const httplib::Request & req, httplib::Response & res) {
-        if (ctx_server.params.embedding) {
-            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+        if (ctx_server.params.embedding || ctx_server.params.reranking) {
+            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings` or `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
@@ -3074,6 +3074,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        // TODO: somehow clean up this checks in the future
+        if (!ctx_server.params.embedding || ctx_server.params.reranking) {
+            res_error(res, format_error_response("This server does not support embeddings. Start it with `--embeddings` and without `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
         const json body = json::parse(req.body);
         bool is_openai = false;
 
@@ -3125,6 +3130,10 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_rerank = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        if (!ctx_server.params.reranking) {
+            res_error(res, format_error_response("This server does not support reranking. Start it with `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
         const json body = json::parse(req.body);
 
         // TODO: implement
@@ -3148,15 +3157,9 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        json documents;
-        if (body.count("documents") != 0) {
-            documents = body.at("documents");
-            if (!documents.is_array() || documents.size() == 0) {
-                res_error(res, format_error_response("\"documents\" must be a non-empty string array", ERROR_TYPE_INVALID_REQUEST));
-                return;
-            }
-        } else {
-            res_error(res, format_error_response("\"documents\" must be provided", ERROR_TYPE_INVALID_REQUEST));
+        std::vector<std::string> documents = json_value(body, "documents", std::vector<std::string>());
+        if (documents.empty()) {
+            res_error(res, format_error_response("\"documents\" must be a non-empty string array", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 

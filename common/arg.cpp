@@ -284,6 +284,10 @@ static bool gpt_params_parse_ex(int argc, char ** argv, gpt_params_context & ctx
         params.kv_overrides.back().key[0] = 0;
     }
 
+    if (params.reranking && params.embedding) {
+        throw std::invalid_argument("error: either --embedding or --reranking can be specified, but not both");
+    }
+
     return true;
 }
 
@@ -1750,6 +1754,13 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             params.embedding = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_EMBEDDINGS"));
+    add_opt(llama_arg(
+        {"--reranking", "--rerank"},
+        format("enable reranking endpoint on server (default: %s)", params.reranking ? "enabled" : "disabled"),
+        [](gpt_params & params) {
+            params.reranking = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_RERANKING"));
     add_opt(llama_arg(
         {"--api-key"}, "KEY",
         "API key to use for authentication (default: none)",

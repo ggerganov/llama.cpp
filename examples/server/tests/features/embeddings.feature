@@ -15,7 +15,7 @@ Feature: llama.cpp server
     And   128 as batch size
     And   128 as ubatch size
     And   512 KV cache size
-    And   embeddings extraction
+    And   enable embeddings endpoint
     Then  the server is starting
     Then  the server is healthy
 

@@ -68,6 +68,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.server_api_key = None
     context.server_continuous_batching = False
     context.server_embeddings = False
+    context.server_reranking = False
     context.server_metrics = False
     context.server_process = None
     context.seed = None
@@ -176,10 +177,13 @@ def step_server_continuous_batching(context):
     context.server_continuous_batching = True
 
 
-@step('embeddings extraction')
+@step('enable embeddings endpoint')
 def step_server_embeddings(context):
     context.server_embeddings = True
 
+@step('enable reranking endpoint')
+def step_server_reranking(context):
+    context.server_reranking = True
 
 @step('prometheus compatible metrics exposed')
 def step_server_metrics(context):
@@ -1408,6 +1412,8 @@ def start_server_background(context):
         server_args.append('--cont-batching')
     if context.server_embeddings:
         server_args.append('--embedding')
+    if context.server_reranking:
+        server_args.append('--reranking')
     if context.server_metrics:
         server_args.append('--metrics')
     if context.model_alias:
