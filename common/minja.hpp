@@ -1689,7 +1689,7 @@ private:
     }
 
     std::unique_ptr<VariableExpr> parseIdentifier() {
-        static std::regex ident_regex(R"((?!not|is|and|or|del)[a-zA-Z_]\w*)");
+        static std::regex ident_regex(R"((?!(?:not|is|and|or|del)\b)[a-zA-Z_]\w*)");
         auto location = get_location();
         auto ident = consumeToken(ident_regex);
         if (ident.empty())
@@ -2165,7 +2165,7 @@ private:
                 static std::regex trailing_space_regex(R"((\s|\r|\n)+$)");
                 text = std::regex_replace(text, trailing_space_regex, "");
               } else if (options.lstrip_blocks && it != end) {
-                static std::regex trailing_last_line_space_regex(R"((^|\n)[ \t]*$)");
+                static std::regex trailing_last_line_space_regex(R"((\n)[ \t]*$)");
                 text = std::regex_replace(text, trailing_last_line_space_regex, "$1");
               }
 

@@ -119,6 +119,17 @@ static void test_error_contains(const std::string & template_str, const json & b
     cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-minja -j && ./build/bin/test-minja
 */
 int main() {
+    test_render(R"({%- if True %}        {% set _ = x %}{%- endif %}{{ 1 }})",
+        {},
+        {
+            .lstrip_blocks = true,
+            .trim_blocks = true
+        },
+        "        1"
+    );
+    test_render(R"(  {{- 'a' -}}{{ '  ' }}{{- 'b' -}}  )", {}, {}, "a  b");
+    test_render(R"(    {%- if True %}{%- endif %}{{ '        ' }}{%- for x in [] %}foo{% endfor %}end)", {}, {}, "        end");
+    test_render(R"({% set ns = namespace(is_first=false, nottool=false, and_or=true, delme='') %}{{ ns.is_first }})", {}, {}, "False");
     test_render(R"({{ {} is mapping }},{{ '' is mapping }})", {}, {}, "True,False");
     test_render(R"({{ {} is iterable }},{{ '' is iterable }})", {}, {}, "True,True");
     test_render(R"({% for x in ["a", "b"] %}{{ x }},{% endfor %})", {}, {}, "a,b,");

@@ -33,9 +33,11 @@ model_ids = [
     "abacusai/Fewshot-Metamath-OrcaVicuna-Mistral",
     "bofenghuang/vigogne-2-70b-chat",
     "deepseek-ai/deepseek-coder-33b-instruct",
+    "deepseek-ai/DeepSeek-Coder-V2-Instruct",
+    "deepseek-ai/DeepSeek-V2.5",
     "indischepartij/MiniCPM-3B-OpenHermes-2.5-v2",
-    "meetkai/functionary-medium-v3.2",
     "meetkai/functionary-medium-v3.1",
+    "meetkai/functionary-medium-v3.2",
     "microsoft/Phi-3-medium-4k-instruct",
     "microsoft/Phi-3-mini-4k-instruct",
     "microsoft/Phi-3-small-8k-instruct",
@@ -57,9 +59,6 @@ model_ids = [
     # "CohereForAI/c4ai-command-r-plus",
     # "THUDM/chatglm3-6b",
     # "derek33125/project-angel-chatglm4",
-    # "deepseek-ai/DeepSeek-Coder-V2-Instruct",
-    # "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
-    # "deepseek-ai/DeepSeek-V2.5",
 
     # Cannot find chat template:
     # "eachadea/vicuna-13b-1.1",
