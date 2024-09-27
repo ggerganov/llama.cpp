@@ -1,13 +1,10 @@
-from datetime import date
 import datetime
 import json
 from pydantic import BaseModel
-import subprocess
 import sys
 import time
-import typer
-from typing import Union, Optional, Dict
 import types
+from typing import Union, Optional, Dict
 
 
 class Duration(BaseModel):
@@ -58,7 +55,7 @@ def wait_for_duration(duration: Duration) -> None:
     time.sleep(duration.get_total_seconds)
 
 @staticmethod
-def wait_for_date(target_date: date) -> None:
+def wait_for_date(target_date: datetime.date) -> None:
     f'''
         Wait until a specific date is reached before continuing.
         Today's date is {datetime.date.today()}
