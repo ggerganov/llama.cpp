@@ -1053,7 +1053,6 @@ async def oai_chat_completions(user_prompt,
         print(f"Sending OAI Chat completions request: {user_prompt}")
     # openai client always expects an api key
     user_api_key = user_api_key if user_api_key is not None else 'nope'
-    assert isinstance(seed, int), f'seed: {seed}'
     seed = seed if seed is not None else 42
 
     enable_streaming = enable_streaming if enable_streaming is not None else False
