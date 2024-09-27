@@ -1,3 +1,9 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "ipython",
+# ]
+# ///
 import datetime
 import json
 from pydantic import BaseModel
@@ -82,32 +88,69 @@ def _is_serializable(obj) -> bool:
     except Exception as e:
         return False
 
-def python(source: str) -> Union[Dict, str]:
+def python(code: str) -> str:
     """
-        Evaluate a Python program and return the globals it declared.
-        Can be used to compute mathematical expressions (e.g. after importing math module).
-        Args:
-            source: contain valid, executable and pure Python code. Should also import any required Python packages.
-                For example: "import math\nresult = math.cos(2) * 10"
-        Returns:
-            dict | str: A dictionary containing variables declared, or an error message if an exception occurred.
+    Executes Python code in a siloed environment using IPython and returns the output.
+
+    Parameters:
+        code (str): The Python code to execute.
+
+    Returns:
+        str: The output of the executed code.
     """
+    from IPython import InteractiveShell
+    from io import StringIO
+    import sys
+
+    # Create an isolated IPython shell instance
+    shell = InteractiveShell()
+
+    # Redirect stdout to capture output
+    old_stdout = sys.stdout
+    sys.stdout = mystdout = StringIO()
+
     try:
-        namespace = {}
-        sys.stderr.write(f"Executing Python program:\n{source}\n")
-        exec(source, namespace)
-        results = {
-            k: v
-            for k, v in namespace.items()
-            if not k.startswith('_') \
-                and not isinstance(v, type) \
-                and not isinstance(v, types.ModuleType) \
-                and not callable(v) \
-                and _is_serializable(v)
-        }
-        sys.stderr.write(f"Results: {json.dumps(results, indent=2)}\n")
-        return results
+        # Execute the code
+        shell.run_cell(code)
     except Exception as e:
-        msg = f"Error: {sys.exc_info()[1]}"
-        sys.stderr.write(f"{msg}\n")
-        return msg
+        # Restore stdout before returning
+        sys.stdout = old_stdout
+        return f"An error occurred: {e}"
+    finally:
+        # Always restore stdout
+        sys.stdout = old_stdout
+
+    # Retrieve the output
+    output = mystdout.getvalue()
+    return output
+
+
+# def python(source: str) -> Union[Dict, str]:
+#     """
+#         Evaluate a Python program and return the globals it declared.
+#         Can be used to compute mathematical expressions (e.g. after importing math module).
+#         Args:
+#             source: contain valid, executable and pure Python code. Should also import any required Python packages.
+#                 For example: "import math\nresult = math.cos(2) * 10"
+#         Returns:
+#             dict | str: A dictionary containing variables declared, or an error message if an exception occurred.
+#     """
+#     try:
+#         namespace = {}
+#         sys.stderr.write(f"Executing Python program:\n{source}\n")
+#         exec(source, namespace)
+#         results = {
+#             k: v
+#             for k, v in namespace.items()
+#             if not k.startswith('_') \
+#                 and not isinstance(v, type) \
+#                 and not isinstance(v, types.ModuleType) \
+#                 and not callable(v) \
+#                 and _is_serializable(v)
+#         }
+#         sys.stderr.write(f"Results: {json.dumps(results, indent=2)}\n")
+#         return results
+#     except Exception as e:
+#         msg = f"Error: {sys.exc_info()[1]}"
+#         sys.stderr.write(f"{msg}\n")
+#         return msg

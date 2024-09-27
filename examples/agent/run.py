@@ -22,6 +22,9 @@ import urllib.parse
 
 class OpenAPIMethod:
     def __init__(self, url, name, descriptor, catalog):
+        '''
+            Wraps a remote OpenAPI method as a Python function.
+        '''
         self.url = url
         self.__name__ = name
 
@@ -96,11 +99,8 @@ def main(
     goal: Annotated[str, typer.Option()],
     api_key: Optional[str] = None,
     tool_endpoint: Optional[list[str]] = None,
-    format: Annotated[Optional[str], typer.Option(help="The output format: either a Python type (e.g. 'float' or a Pydantic model defined in one of the tool files), or a JSON schema, e.g. '{\"format\": \"date\"}'")] = None,
     max_iterations: Optional[int] = 10,
-    parallel_calls: Optional[bool] = False,
     verbose: bool = False,
-    # endpoint: Optional[str] = None,
     endpoint: str = "http://localhost:8080/v1/",
 ):
 
@@ -110,6 +110,7 @@ def main(
     tool_map = {}
     tools = []
 
+    # Discover tools using OpenAPI catalogs at the provided endpoints.
     for url in (tool_endpoint or []):
         assert url.startswith('http://') or url.startswith('https://'), f'Tools must be URLs, not local files: {url}'
 
