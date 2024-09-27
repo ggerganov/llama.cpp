@@ -2,16 +2,18 @@
 # Android
 
 ## Build on Android using Termux
-[Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
+[Termux](https://termux.dev/en/) is an Android terminal emulator and Linux environment app (no root required). With Termux, you can install and run `llama.cpp` as if the environment were Linux. Once in the Termux shell:
+
 ```
 apt update && apt upgrade -y
 apt install git make cmake
 ```
 
 It's recommended to move your model inside the `~/` directory for best performance:
+
 ```
 cd storage/downloads
-mv model.gguf ~/
+mv {model}.gguf ~/
 ```
 
 [Get the code](https://github.com/ggerganov/llama.cpp#get-the-code) & [follow the Linux build instructions](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
