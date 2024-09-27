@@ -119,6 +119,7 @@ static void test_error_contains(const std::string & template_str, const json & b
     cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-minja -j && ./build/bin/test-minja
 */
 int main() {
+    test_render("{% set txt = 'a\\nb\\n' %}{{ txt | indent(2) }}|{{ txt | indent(2, first=true) }}", {}, {}, "a\n  b\n|  a\n  b\n");
     test_render(R"({%- if True %}        {% set _ = x %}{%- endif %}{{ 1 }})",
         {},
         {

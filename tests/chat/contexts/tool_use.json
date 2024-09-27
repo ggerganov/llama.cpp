@@ -33,7 +33,7 @@
     },
     {
       "role": "assistant",
-      "content": null,
+      "content": "",
       "tool_calls": [
         {
           "id": "call_2",
@@ -60,7 +60,7 @@
     },
     {
       "role": "assistant",
-      "content": null,
+      "content": "",
       "tool_calls": [
         {
           "id": "call_3",

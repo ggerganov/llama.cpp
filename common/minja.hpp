@@ -2452,6 +2452,24 @@ inline std::shared_ptr<Context> Context::builtins() {
     }
     return res;
   }));
+  globals.set("indent", simple_function("indent", { "text", "indent", "first" }, [](const std::shared_ptr<Context> &, Value & args) {
+    auto text = args.at("text").get<std::string>();
+    auto first = args.get<bool>("first", false);
+    std::string out;
+    std::string indent(args.get<int64_t>("indent", 0), ' ');
+    std::istringstream iss(text);
+    std::string line;
+    auto is_first = true;
+    while (std::getline(iss, line, '\n')) {
+      auto needs_indent = !is_first || first;
+      if (is_first) is_first = false;
+      else out += "\n";
+      if (needs_indent) out += indent;
+      out += line;
+    }
+    if (!text.empty() && text.back() == '\n') out += "\n";
+    return out;
+  }));
   globals.set("selectattr", Value::callable([=](const std::shared_ptr<Context> & context, Value::Arguments & args) {
     args.expectArgs("selectattr", {2, std::numeric_limits<size_t>::max()}, {0, 0});
     auto & items = args.args[0];

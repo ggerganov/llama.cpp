@@ -43,6 +43,7 @@ model_ids = [
     "microsoft/Phi-3-small-8k-instruct",
     "microsoft/Phi-3.5-mini-instruct",
     "mlabonne/AlphaMonarch-7B",
+    "CohereForAI/c4ai-command-r-plus",
     "NousResearch/Hermes-2-Pro-Llama-3-8B",
     "NousResearch/Hermes-2-Pro-Mistral-7B",
     "NousResearch/Hermes-3-Llama-3.1-70B",
@@ -56,7 +57,6 @@ model_ids = [
     "TheBloke/FusionNet_34Bx2_MoE-AWQ",
 
     # C++ minja templating broken:
-    # "CohereForAI/c4ai-command-r-plus",
     # "THUDM/chatglm3-6b",
     # "derek33125/project-angel-chatglm4",
 
