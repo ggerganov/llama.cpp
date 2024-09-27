@@ -249,6 +249,7 @@ public:
   bool is_number_float() const { return primitive_.is_number_float(); }
   bool is_number() const { return primitive_.is_number(); }
   bool is_string() const { return primitive_.is_string(); }
+  bool is_iterable() const { return is_array() || is_object() || is_string(); }
 
   bool is_primitive() const { return !array_ && !object_ && !callable_; }
   bool is_hashable() const { return is_primitive(); }
@@ -260,6 +261,28 @@ public:
     if (is_array()) return array_->empty();
     if (is_object()) return object_->empty();
     return false;
+  }
+
+  void for_each(const std::function<void(Value &)> & callback) const {
+    if (is_null())
+      throw std::runtime_error("Undefined value or reference");
+    if (array_) {
+      for (auto& item : *array_) {
+        callback(item);
+      }
+    } else if (object_) {
+      for (auto & item : *object_) {
+        Value key(item.first);
+        callback(key);
+      }
+    } else if (is_string()) {
+      for (char c : primitive_.get<std::string>()) {
+        auto val = Value(std::string(1, c));
+        callback(val);
+      }
+    } else {
+      throw std::runtime_error("Value is not iterable: " + dump());
+    }
   }
 
   bool to_bool() const {
@@ -829,16 +852,15 @@ public:
       std::function<void(Value&)> visit = [&](Value& iter) {
           auto filtered_items = Value::array();
           if (!iter.is_null()) {
-            if (!iterable_value.is_array()) {
+            if (!iterable_value.is_iterable()) {
               throw std::runtime_error("For loop iterable must be iterable: " + iterable_value.dump());
             }
-            for (size_t i = 0, n = iter.size(); i < n; ++i) {
-                auto item = iter.at(i);
+            iterable_value.for_each([&](Value & item) {
                 destructuring_assign(var_names, context, item);
                 if (!condition || condition->evaluate(context).to_bool()) {
                   filtered_items.push_back(item);
                 }
-            }
+            });
           }
           if (filtered_items.empty()) {
             if (else_body) {
@@ -1115,7 +1137,7 @@ public:
               if (name == "number") return l.is_number();
               if (name == "string") return l.is_string();
               if (name == "mapping") return l.is_object();
-              if (name == "iterable") return l.is_array();
+              if (name == "iterable") return l.is_iterable();
               if (name == "sequence") return l.is_array();
               if (name == "defined") return !l.is_null();
               throw std::runtime_error("Unknown type for 'is' operator: " + name);

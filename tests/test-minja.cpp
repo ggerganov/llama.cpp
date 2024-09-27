@@ -119,6 +119,11 @@ static void test_error_contains(const std::string & template_str, const json & b
     cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-minja -j && ./build/bin/test-minja
 */
 int main() {
+    test_render(R"({{ {} is mapping }},{{ '' is mapping }})", {}, {}, "True,False");
+    test_render(R"({{ {} is iterable }},{{ '' is iterable }})", {}, {}, "True,True");   
+    test_render(R"({% for x in ["a", "b"] %}{{ x }},{% endfor %})", {}, {}, "a,b,");
+    test_render(R"({% for x in {"a": 1, "b": 2} %}{{ x }},{% endfor %})", {}, {}, "a,b,");
+    test_render(R"({% for x in "ab" %}{{ x }},{% endfor %})", {}, {}, "a,b,");
     test_render(R"({{ 'foo bar'.title() }})", {}, {}, "Foo Bar");
     test_render(R"({{ 1 | safe }})", {}, {}, "1");
     test_render(R"({{ 'abc'.endswith('bc') }},{{ ''.endswith('a') }})", {}, {}, "True,False");
@@ -261,7 +266,7 @@ int main() {
                 {{- x | tojson -}},
             {%- endfor -%}
         )", {}, {},
-        R"(1,1.2,"a",True,True,False,False,null,[],[1],[1, 2],{},{"a": 1},{"1": "b"},)");
+        R"(1,1.2,"a",true,true,false,false,null,[],[1],[1, 2],{},{"a": 1},{"1": "b"},)");
     test_render(
         R"(
             {%- set n = namespace(value=1, title='') -%}
