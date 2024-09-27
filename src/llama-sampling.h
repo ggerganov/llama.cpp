@@ -27,3 +27,5 @@ struct llama_sampler * llama_sampler_init_grammar_impl(
         const struct llama_vocab & vocab,
                       const char * grammar_str,
                       const char * grammar_root);
+
+bool llama_sampler_is_grammar_empty_impl(struct llama_sampler * gsmpl);

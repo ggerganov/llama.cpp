@@ -236,7 +236,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                                     builder.add_schema(name + "-args", parameters) +
                                 " \"}\""));
                         if (allow_content) {
-                            handler.grammar_trigger_words.push_back("\n{\"" + name + "\"");
+                            handler.grammar_trigger_words.push_back("\n{\"name\": \"" + name + "\"");
                         }
                     }
                 }

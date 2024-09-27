@@ -16,7 +16,7 @@ Feature: llama.cpp server
     And   jinja templates are enabled
 
 
-  Scenario Outline: OAI Compatibility w/ required tool
+  Scenario Outline: OAI Compatibility w/ tools and required tool_choice
     Given a chat template file ../../../tests/chat/templates/<template_name>.jinja
     And   the server is starting
     And   the server is healthy
@@ -36,6 +36,24 @@ Feature: llama.cpp server
       | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
       | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
       | meta-llama-Meta-Llama-3.1-8B-Instruct | 16        | ipython   | {"code": ". A"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+
+
+  Scenario Outline: OAI Compatibility w/ tools and auto tool_choice
+    Given a chat template file ../../../tests/chat/templates/<template_name>.jinja
+    And   the server is starting
+    And   the server is healthy
+    And   a model test
+    And   <n_predict> max tokens to predict
+    And   a user prompt write a hello world in python
+    And   tools [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]
+    And   an OAI compatible chat completions request with no api error
+    Then  no tool is called
+
+    Examples: Prompts
+      | template_name                         | n_predict |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        |
+      | meetkai-functionary-medium-v3.1       | 128       |
+      | meetkai-functionary-medium-v3.2       | 128       |
 
 
   Scenario: OAI Compatibility w/ no tool

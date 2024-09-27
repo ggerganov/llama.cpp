@@ -1118,6 +1118,8 @@ extern "C" {
                           const char * grammar_str,
                           const char * grammar_root);
 
+    LLAMA_API bool llama_sampler_is_grammar_empty(struct llama_sampler * gsmpl);
+
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
                              int32_t   n_vocab,         // llama_n_vocab()
                          llama_token   special_eos_id,  // llama_token_eos()

@@ -140,7 +140,7 @@ std::string gpt_sampler_params::print() const {
 }
 
 bool gpt_sampler_trigger_grammar(const struct llama_model * model, gpt_sampler * gsmpl, const std::string & trigger) {
-    if (gsmpl->grmr) {
+    if (!llama_sampler_is_grammar_empty(gsmpl->grmr)) {
         return false;
     }
     gsmpl->grmr   = llama_sampler_init_grammar(model, gsmpl->params.grammar.c_str(), "root");
@@ -155,7 +155,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
 
     auto * result = new gpt_sampler {
         /* .params = */ params,
-        /* .grmr   = */ params.grammar_trigger_words.empty() ? llama_sampler_init_grammar(model, params.grammar.c_str(), "root") : nullptr,
+        /* .grmr   = */ llama_sampler_init_grammar(model, params.grammar_trigger_words.empty() ? params.grammar.c_str() : "", "root"),
         /* .chain  = */ llama_sampler_chain_init(lparams),
         /* .prev   = */ ring_buffer<llama_token>(std::max(32, params.n_prev)),
         /* .cur    = */ {},
@@ -256,7 +256,9 @@ void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool acce
 }
 
 void gpt_sampler_reset(struct gpt_sampler * gsmpl) {
-    llama_sampler_reset(gsmpl->grmr);
+    if (gsmpl->grmr) {
+        llama_sampler_reset(gsmpl->grmr);
+    }
 
     llama_sampler_reset(gsmpl->chain);
 }

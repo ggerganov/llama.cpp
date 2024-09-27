@@ -677,7 +677,7 @@ async def step_tool_called(context):
     assert n_completions > 0
 
     def check(tool_calls):
-        assert tool_calls is None
+        assert tool_calls is None, f"tool calls: {tool_calls}"
 
     for i in range(n_completions):
         assert_n_tokens_predicted(context.tasks_result.pop(), tool_calls_check=check)

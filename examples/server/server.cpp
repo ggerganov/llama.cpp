@@ -999,12 +999,12 @@ struct server_context {
             };
 
             std::vector<std::string> stop_words;
-            std::vector<std::string> grammar_trigger_words;
 
             copy_string_array(data, "stop", stop_words);
-            copy_string_array(data, "grammar_trigger_words", grammar_trigger_words);
+            copy_string_array(data, "grammar_trigger_words", slot.sparams.grammar_trigger_words);
 
-            slot.antiprompts.build(ctx, stop_words, grammar_trigger_words);
+            slot.antiprompts.build(ctx, stop_words, slot.sparams.grammar_trigger_words);
+            
         }
 
         {
