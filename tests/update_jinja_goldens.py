@@ -65,6 +65,7 @@ model_ids = [
     # "microsoft/Phi-3-vision-instruct",
 
     # Gated models:
+    "meta-llama/Llama-3.2-3B-Instruct",
     "meta-llama/Meta-Llama-3.1-8B-Instruct",
     "google/gemma-7b-it",
     "google/gemma-2-2b-it",
@@ -81,8 +82,11 @@ def tojson(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False)
     return json.dumps(x, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
 
 
+TEST_DATE = os.environ.get('TEST_DATE', '2024-07-26')
 def strftime_now(format):
-    return datetime.datetime.now().strftime(format)
+    now = datetime.datetime.strptime(TEST_DATE, "%Y-%m-%d")
+    # now = datetime.datetime.now()
+    return now.strftime(format)
 
 
 def handle_chat_template(model_id, variant, template_src):
