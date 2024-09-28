@@ -1894,7 +1894,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             }
             params.chat_template = chat_template;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE_FILE"));
     add_opt(llama_arg(
         {"-sps", "--slot-prompt-similarity"}, "SIMILARITY",
         format("how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity),
