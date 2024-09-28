@@ -450,6 +450,20 @@ struct llm_tokenizer_bpe {
                     "[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))*((?=[\\p{L}])([^A-Z]))+|[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))+((?=[\\p{L}])([^A-Z]))*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
+            case LLAMA_VOCAB_PRE_TYPE_CHAMELEON:
+                // Note: in theory, the special token (sentinel and image token) regex_exprs below
+                // are unnecessary, as they are split in `tokenizer_st_partition` anyway.
+                // However, since the upstream pre-tokenizer uses them, they are also
+                // included here (see https://huggingface.co/facebook/chameleon-7b).
+                regex_exprs = {
+                    "<sentinel:[0-9]+>",  // Sentinel tokens
+                    "(IMGIMG)((A|B|C|D|E|F|G|H|I){1,4})Z",  // Image tokens
+                    "([\\t\\n]|    |  )",  // directly from tokenizer.json
+                    "\\p{N}", // Individual digits
+                    "[\\p{P}!-/:-@\\[-`{-~]",  // Punctuation, Isolated
+                    "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                };
+                break;
             default:
                 // default regex for BPE tokenization pre-processing
                 regex_exprs = {
