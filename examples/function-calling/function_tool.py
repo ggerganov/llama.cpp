@@ -3,6 +3,8 @@
 import inspect
 import re
 
+import json
+
 # Extract OpenAI function calling style definitions from functions
 #
 # Generated with: Create a python function to to generate the OpenAI function calling definition from a given function, getting the description, parameter type and parameter description from the function documentation, assuming the function documentation contains sphynx style parameter descriptions, marked with :param.
@@ -36,7 +38,7 @@ def get_function_tool_json(func):
 # Generate function definition schema from function definitions
 #
 # This is from llama-cpp-python, llama_chat_format.py
-def generate_schema_from_functions(functions, namespace="functions") -> str:
+def generate_functionary_schema_from_functions(functions, namespace="functions") -> str:
     schema = (
         "// Supported function definitions that should be called when necessary.\n"
     )
@@ -61,3 +63,31 @@ def generate_schema_from_functions(functions, namespace="functions") -> str:
 
     schema += "}} // namespace {}".format(namespace)
     return schema
+
+functionary_prompt_start = """<|start_header_id|>system<|end_header_id|>
+
+You are capable of executing available function(s) if required.
+Execute function(s) as needed.
+The function calls are not shown in the conversation and should be called covertly to answer questions.
+Ask for the required input to:recipient==all
+Use JSON for function arguments.
+Respond in this format:
+>>>${recipient}
+${content}
+Available functions:
+"""
+functionary_prompt_end = """<|eot_id|><|start_header_id|>system<|end_header_id|>
+
+When you send a message containing Python code to python, it will be executed in a stateful Jupyter notebook environment. python will respond with the output of the execution or time out after 60.0 seconds. The drive at '/mnt/data' can be used to save and persist user files.<|eot_id|><|start_header_id|>user<|end_header_id|>
+"""
+
+def get_chat_tool_format(args, tools):
+    return {
+        'prompt': functionary_prompt_start + generate_functionary_schema_from_functions(tools) + functionary_prompt_end,
+        'function_marker': '>>>',
+        'function_re': r'>>>([^\n]*)\n(.*)<\|eot_id\|>',
+        'user_start': '<|start_header_id|>user<|end_header_id|>\n',
+        'user_end': '<|eot_id|><|start_header_id|>assistant<|end_header_id|>' + '\n',
+        'tool_start': '',
+        'tool_end': '<|eot_id|><|start_header_id|>assistant<|end_header_id|>'
+    }
