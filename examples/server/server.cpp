@@ -1157,7 +1157,7 @@ struct server_context {
             // If there is a lazy grammar trigger word at stop_pos, enable the lazy grammar
             if (match.is_grammar_trigger && gpt_sampler_trigger_grammar(model, slot.smpl, match.pattern)) {
                 is_grammar_trigger = true;
-                length = pos + match.pos + match.matchLength;
+                length = match.pos + match.matchLength;
             } else if (!match.is_grammar_trigger && match.pos != std::string::npos && !match.is_partial) {
                 slot.stopped_word   = true;
                 slot.stopping_word  = match.pattern;
