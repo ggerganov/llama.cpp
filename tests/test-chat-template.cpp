@@ -13,7 +13,6 @@
 #include <iostream>
 #include <string>
 #include <json.hpp>
-#include <dirent.h>
 
 using json = nlohmann::ordered_json;
 
@@ -39,30 +38,9 @@ static void assert_equals(const T & expected, const T & actual) {
 }
 
 static std::vector<std::string> find_files(const std::string & folder, const std::string & ext) {
-    auto do_find = [&](const std::string & folder) {
-        std::vector<std::string> files;
-        // Note: once we can use C++17 this becomes:
-        //   for (const auto & entry : std::filesystem::directory_iterator(folder))
-        //     if (entry.path().extension() == ext) files.push_back(entry.path().string());
-        DIR* dir = opendir(folder.c_str());
-        if (dir != nullptr) {
-            struct dirent* entry;
-            while ((entry = readdir(dir)) != nullptr) {
-                if (entry->d_type == DT_REG) {  // If it's a regular file
-                    std::string filename = entry->d_name;
-                    if (filename.length() >= ext.length() &&
-                        filename.compare(filename.length() - ext.length(), ext.length(), ext) == 0) {
-                        files.push_back(folder + "/" + filename);
-                    }
-                }
-            }
-            closedir(dir);
-        }
-        return files;
-    };
-    auto files = do_find(folder);
+    auto files = fs_list_files(folder, ext);
     if (files.empty()) {
-        files = do_find("../" + folder);
+        files = fs_list_files("../" + folder, ext);
     }
     return files;
 }

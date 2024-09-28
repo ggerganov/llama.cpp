@@ -44,6 +44,7 @@
 #include <fcntl.h>
 #include <io.h>
 #else
+#include <dirent.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -775,6 +776,43 @@ bool fs_create_directory_with_parents(const std::string & path) {
 
     return true;
 #endif // _WIN32
+}
+
+
+std::vector<std::string> fs_list_files(const std::string & folder, const std::string & ext) {
+    std::vector<std::string> files;
+    // Note: once we can use C++17 this becomes:
+    //   for (const auto & entry : std::filesystem::directory_iterator(folder))
+    //     if (entry.path().extension() == ext) files.push_back(entry.path().string());
+#ifdef _WIN32
+    std::string search_path = folder + "\\*" + ext;
+    WIN32_FIND_DATA fd;
+    HANDLE hFind = ::FindFirstFile(search_path.c_str(), &fd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                files.push_back(folder + "\\" + fd.cFileName);
+            }
+        } while (::FindNextFile(hFind, &fd));
+        ::FindClose(hFind);
+    }
+#else
+    DIR* dir = opendir(folder.c_str());
+    if (dir != nullptr) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            if (entry->d_type == DT_REG) {  // If it's a regular file
+                std::string filename = entry->d_name;
+                if (filename.length() >= ext.length() &&
+                    filename.compare(filename.length() - ext.length(), ext.length(), ext) == 0) {
+                    files.push_back(folder + "/" + filename);
+                }
+            }
+        }
+        closedir(dir);
+    }
+#endif
+    return files;
 }
 
 std::string fs_get_cache_directory() {

@@ -397,6 +397,7 @@ std::string string_from(const struct llama_context * ctx, const struct llama_bat
 
 bool fs_validate_filename(const std::string & filename);
 bool fs_create_directory_with_parents(const std::string & path);
+std::vector<std::string> fs_list_files(const std::string & path, const std::string & ext);
 
 std::string fs_get_cache_directory();
 std::string fs_get_cache_file(const std::string & filename);
