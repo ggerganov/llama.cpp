@@ -6464,6 +6464,8 @@ static void llm_load_vocab(
     }
     GGML_ASSERT(vocab.id_to_token.size() == vocab.token_to_id.size());
 
+    vocab.init_tokenizer();
+
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
         // For Fill-In-the-Middle (FIM)/infill models which where converted
