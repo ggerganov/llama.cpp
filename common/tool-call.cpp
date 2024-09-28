@@ -223,10 +223,10 @@ llama_tool_call_handler llama_tool_call_handler_init(
             auto uses_python_tag = tmpl.tool_call_style() == llama_tool_call_style::Llama31;
 
             // Technically we should only trigger on `"\n{\"name\": \"" + name + "\""` for each tool name,
-            // but Llama-3.2-3B struggles to output valid tool calls so we're "guiding" it strongly as soon
+            // but Llama-3.2-3B (and 1B) struggles to output valid tool calls so we're "guiding" it strongly as soon
             // as it seems to be outputting some JSON.
             // TODO: make this conditional on a very small model (e.g. 1B / 3B).
-            auto eagerly_match_any_json = true;
+            auto eagerly_match_any_json = tmpl.tool_call_style() == llama_tool_call_style::Llama32;
 
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;
