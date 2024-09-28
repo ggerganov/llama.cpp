@@ -39,23 +39,30 @@ static void assert_equals(const T & expected, const T & actual) {
 }
 
 static std::vector<std::string> find_files(const std::string & folder, const std::string & ext) {
-    std::vector<std::string> files;
-    // Note: once we can use C++17 this becomes:
-    //   for (const auto & entry : std::filesystem::directory_iterator(folder))
-    //     if (entry.path().extension() == ext) files.push_back(entry.path().string());
-    DIR* dir = opendir(folder.c_str());
-    if (dir != nullptr) {
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (entry->d_type == DT_REG) {  // If it's a regular file
-                std::string filename = entry->d_name;
-                if (filename.length() >= ext.length() &&
-                    filename.compare(filename.length() - ext.length(), ext.length(), ext) == 0) {
-                    files.push_back(folder + "/" + filename);
+    auto do_find = [&](const std::string & folder) {
+        std::vector<std::string> files;
+        // Note: once we can use C++17 this becomes:
+        //   for (const auto & entry : std::filesystem::directory_iterator(folder))
+        //     if (entry.path().extension() == ext) files.push_back(entry.path().string());
+        DIR* dir = opendir(folder.c_str());
+        if (dir != nullptr) {
+            struct dirent* entry;
+            while ((entry = readdir(dir)) != nullptr) {
+                if (entry->d_type == DT_REG) {  // If it's a regular file
+                    std::string filename = entry->d_name;
+                    if (filename.length() >= ext.length() &&
+                        filename.compare(filename.length() - ext.length(), ext.length(), ext) == 0) {
+                        files.push_back(folder + "/" + filename);
+                    }
                 }
             }
+            closedir(dir);
         }
-        closedir(dir);
+        return files;
+    };
+    auto files = do_find(folder);
+    if (files.empty()) {
+        files = do_find("../" + folder);
     }
     return files;
 }
@@ -110,7 +117,11 @@ static void test_jinja_templates() {
                 ctx.at("eos_token"));
 
             auto golden_file = get_golden_file(tmpl_file, ctx_file);
-            if (!std::ifstream(golden_file).is_open()) {
+            std::string expected;
+            try {
+                expected = read_file(golden_file);
+            } catch (const std::runtime_error & e) {
+                // No golden file.
                 continue;
             }
             found_goldens = true;
@@ -128,7 +139,6 @@ static void test_jinja_templates() {
             } catch (const std::runtime_error & e) {
                 actual = "ERROR: " + std::string(e.what());
             }
-            auto expected = read_file(golden_file);
             assert_equals(expected, actual);
         }
 
