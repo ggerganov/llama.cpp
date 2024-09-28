@@ -63,6 +63,10 @@ static std::vector<std::string> find_files(const std::string & folder, const std
 static std::string read_file(const std::string &path) {
   std::ifstream fs(path, std::ios_base::binary);
   if (!fs.is_open()) {
+    fs = std::ifstream("../" + path, std::ios_base::binary);
+    if (!fs.is_open()) {
+      throw std::runtime_error("Failed to open file: " + path);
+    }
     throw std::runtime_error("Failed to open file: " + path);
   }
   fs.seekg(0, std::ios_base::end);
