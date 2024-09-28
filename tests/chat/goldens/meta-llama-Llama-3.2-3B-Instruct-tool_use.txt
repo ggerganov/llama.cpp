@@ -92,7 +92,7 @@ Respond in the format {"name": function name, "parameters": dictionary of argume
 
 Print a hello world message with python.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
-{"name": "ipython", "parameters": "{\"code\": \"print('Hello, World!')\"}"}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
+{"name": "ipython", "parameters": {"code": "print('Hello, World!')"}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
 
 "{\"stdout\": \"Hello, World!\"}"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
@@ -100,7 +100,7 @@ Anything else?<|eot_id|><|start_header_id|>user<|end_header_id|>
 
 Test a tautology.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
-{"name": "test", "parameters": "{\"condition\":true}"}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
+{"name": "test", "parameters": {"condition": true}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
 
 "true"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
@@ -108,7 +108,7 @@ Truth is definitely true.<|eot_id|><|start_header_id|>user<|end_header_id|>
 
 Check it on the web.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
-{"name": "brave_search", "parameters": "{\"query\": \"what is truth anyway am I right?\"}"}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
+{"name": "brave_search", "parameters": {"query": "what is truth anyway am I right?"}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
 
 "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 

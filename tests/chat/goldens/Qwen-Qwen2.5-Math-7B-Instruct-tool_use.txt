@@ -21,7 +21,7 @@ For each function call, return a json object with function name and arguments wi
 Print a hello world message with python.<|im_end|>
 <|im_start|>assistant
 <tool_call>
-{"name": "ipython", "arguments": "{\"code\": \"print('Hello, World!')\"}"}
+{"name": "ipython", "arguments": {"code": "print('Hello, World!')"}}
 </tool_call><|im_end|>
 <|im_start|>user
 <tool_response>
@@ -33,7 +33,7 @@ Anything else?<|im_end|>
 Test a tautology.<|im_end|>
 <|im_start|>assistant
 <tool_call>
-{"name": "test", "arguments": "{\"condition\":true}"}
+{"name": "test", "arguments": {"condition": true}}
 </tool_call><|im_end|>
 <|im_start|>user
 <tool_response>
@@ -45,7 +45,7 @@ Truth is definitely true.<|im_end|>
 Check it on the web.<|im_end|>
 <|im_start|>assistant
 <tool_call>
-{"name": "brave_search", "arguments": "{\"query\": \"what is truth anyway am I right?\"}"}
+{"name": "brave_search", "arguments": {"query": "what is truth anyway am I right?"}}
 </tool_call><|im_end|>
 <|im_start|>user
 <tool_response>

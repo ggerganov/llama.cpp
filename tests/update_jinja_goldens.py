@@ -138,7 +138,7 @@ def handle_chat_template(model_id, variant, template_src):
         render_context = json.loads(json.dumps(context))
 
         # Work around Llama-3.1 template quirk: it expects tool_call.function.arguments to be an object rather than its JSON string representation.
-        if 'tool_call.arguments | items' in template_src:
+        if 'tool_call.arguments | items' in template_src or 'tool_call.arguments | tojson' in template_src:
             for message in render_context['messages']:
                 if 'tool_calls' in message:
                     for tool_call in message['tool_calls']:
