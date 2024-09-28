@@ -83,6 +83,8 @@ def tojson(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False)
 
 
 TEST_DATE = os.environ.get('TEST_DATE', '2024-07-26')
+
+
 def strftime_now(format):
     now = datetime.datetime.strptime(TEST_DATE, "%Y-%m-%d")
     # now = datetime.datetime.now()

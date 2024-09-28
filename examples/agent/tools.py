@@ -5,12 +5,10 @@
 # ]
 # ///
 import datetime
-import json
 from pydantic import BaseModel
 import sys
 import time
-import types
-from typing import Union, Optional, Dict
+from typing import Optional
 
 
 class Duration(BaseModel):
@@ -46,6 +44,7 @@ class Duration(BaseModel):
             (self.years or 0)*31536000,
         ])
 
+
 class WaitForDuration(BaseModel):
     duration: Duration
 
@@ -53,21 +52,20 @@ class WaitForDuration(BaseModel):
         sys.stderr.write(f"Waiting for {self.duration}...\n")
         time.sleep(self.duration.get_total_seconds)
 
-@staticmethod
+
 def wait_for_duration(duration: Duration) -> None:
     'Wait for a certain amount of time before continuing.'
 
     # sys.stderr.write(f"Waiting for {duration}...\n")
     time.sleep(duration.get_total_seconds)
 
-@staticmethod
+
 def wait_for_date(target_date: datetime.date) -> None:
     f'''
         Wait until a specific date is reached before continuing.
         Today's date is {datetime.date.today()}
     '''
 
-    # Get the current date
     current_date = datetime.date.today()
 
     if target_date < current_date:
@@ -79,14 +77,7 @@ def wait_for_date(target_date: datetime.date) -> None:
 
     # sys.stderr.write(f"Waiting for {days} days and {seconds} seconds until {target_date}...\n")
     time.sleep(days * 86400 + seconds)
-    # sys.stderr.write(f"Reached the target date: {target_date}\n")
 
-def _is_serializable(obj) -> bool:
-    try:
-        json.dumps(obj)
-        return True
-    except Exception as e:
-        return False
 
 def python(code: str) -> str:
     """
@@ -102,55 +93,16 @@ def python(code: str) -> str:
     from io import StringIO
     import sys
 
-    # Create an isolated IPython shell instance
     shell = InteractiveShell()
 
-    # Redirect stdout to capture output
     old_stdout = sys.stdout
-    sys.stdout = mystdout = StringIO()
+    sys.stdout = out = StringIO()
 
     try:
-        # Execute the code
         shell.run_cell(code)
     except Exception as e:
-        # Restore stdout before returning
-        sys.stdout = old_stdout
         return f"An error occurred: {e}"
     finally:
-        # Always restore stdout
         sys.stdout = old_stdout
 
-    # Retrieve the output
-    output = mystdout.getvalue()
-    return output
-
-
-# def python(source: str) -> Union[Dict, str]:
-#     """
-#         Evaluate a Python program and return the globals it declared.
-#         Can be used to compute mathematical expressions (e.g. after importing math module).
-#         Args:
-#             source: contain valid, executable and pure Python code. Should also import any required Python packages.
-#                 For example: "import math\nresult = math.cos(2) * 10"
-#         Returns:
-#             dict | str: A dictionary containing variables declared, or an error message if an exception occurred.
-#     """
-#     try:
-#         namespace = {}
-#         sys.stderr.write(f"Executing Python program:\n{source}\n")
-#         exec(source, namespace)
-#         results = {
-#             k: v
-#             for k, v in namespace.items()
-#             if not k.startswith('_') \
-#                 and not isinstance(v, type) \
-#                 and not isinstance(v, types.ModuleType) \
-#                 and not callable(v) \
-#                 and _is_serializable(v)
-#         }
-#         sys.stderr.write(f"Results: {json.dumps(results, indent=2)}\n")
-#         return results
-#     except Exception as e:
-#         msg = f"Error: {sys.exc_info()[1]}"
-#         sys.stderr.write(f"{msg}\n")
-#         return msg
+    return out.getvalue()

@@ -97,7 +97,7 @@ class OpenAPIMethod:
 
 def main(
     goal: Annotated[str, typer.Option()],
-    api_key: Optional[str] = None,
+    api_key: str = '<unset>',
     tool_endpoint: Optional[list[str]] = None,
     max_iterations: Optional[int] = 10,
     verbose: bool = False,
