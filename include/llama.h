@@ -911,6 +911,8 @@ extern "C" {
     //
     // Tokenization
     //
+    // The API is thread-safe.
+    //
 
     /// @details Convert the provided text into tokens.
     /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
