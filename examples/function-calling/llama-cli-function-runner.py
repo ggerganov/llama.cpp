@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--display-prompt', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--special', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--reverse-prompt', type=str)
+    parser.add_argument('-m', '--model', type=str, default='model.gguf')
     parser.add_argument('--ctx-size', type=int, default=1024)
     args, other_args = parser.parse_known_args()
 
@@ -31,8 +32,7 @@ def main():
 
     if args.display_prompt: print(tool_format['prompt'])
 
-    command = [ './llama-cli', '-i', '-p', tool_format['prompt'], '--reverse-prompt', args.reverse_prompt, '--escape', '--special', '--no-display-prompt', '--log-disable', '--simple-io', '--ctx-size',  str(args.ctx_size), *other_args]
-    print("'" + "' '".join(command) + "'")
+    command = [ './llama-cli', '-i', '-p', tool_format['prompt'], '--model', args.model, '--reverse-prompt', args.reverse_prompt, '--escape', '--special', '--no-display-prompt', '--log-disable', '--simple-io', '--ctx-size',  str(args.ctx_size), *other_args]
 
     process = subprocess.Popen(
         command,

@@ -44,3 +44,8 @@ What is 37234 times 39?
 To calculate 37234 times 39, I'll perform the multiplication. Let's do that.
 The result of multiplying 37234 by 39 is 1,452,126. If you have any more calculations or questions, feel free to ask!
 ```
+
+## Function calling example, using Phi-3 function calling
+```
+./examples/function-calling/llama-cli-function-runner.py -m `huggingface-cli download nold/Phi-3-mini-4k-instruct-function-calling-GGUF Phi-3-mini-4k-instruct-function-calling_Q4_K_M.gguf` --special --display-prompt -i
+```

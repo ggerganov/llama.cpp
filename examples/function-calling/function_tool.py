@@ -64,6 +64,9 @@ def generate_functionary_schema_from_functions(functions, namespace="functions")
     schema += "}} // namespace {}".format(namespace)
     return schema
 
+def generate_simple_schema_from_functions(functions) -> str:
+    return '\n'.join([json.dumps(function).replace('{', '{ ').replace('}', ' }') for function in functions])
+
 functionary_prompt_start = """<|start_header_id|>system<|end_header_id|>
 
 You are capable of executing available function(s) if required.
@@ -81,13 +84,27 @@ functionary_prompt_end = """<|eot_id|><|start_header_id|>system<|end_header_id|>
 When you send a message containing Python code to python, it will be executed in a stateful Jupyter notebook environment. python will respond with the output of the execution or time out after 60.0 seconds. The drive at '/mnt/data' can be used to save and persist user files.<|eot_id|><|start_header_id|>user<|end_header_id|>
 """
 
+simple_prompt_start = """<s><|user|> You are a helpful assistant with access to the following functions. Use them if required - """
+simple_prompt_end = """<|end|>"""
+
 def get_chat_tool_format(args, tools):
-    return {
-        'prompt': functionary_prompt_start + generate_functionary_schema_from_functions(tools) + functionary_prompt_end,
-        'function_marker': '>>>',
-        'function_re': r'>>>([^\n]*)\n(.*)<\|eot_id\|>',
-        'user_start': '<|start_header_id|>user<|end_header_id|>\n',
-        'user_end': '<|eot_id|><|start_header_id|>assistant<|end_header_id|>' + '\n',
-        'tool_start': '',
-        'tool_end': '<|eot_id|><|start_header_id|>assistant<|end_header_id|>'
-    }
+    if 'functionary' in args.model.lower():
+        return {
+            'prompt': functionary_prompt_start + generate_functionary_schema_from_functions(tools) + functionary_prompt_end,
+            'function_marker': '>>>',
+            'function_re': r'>>>([^\n]*)\n(.*)<\|eot_id\|>',
+            'user_start': '<|start_header_id|>user<|end_header_id|>\n',
+            'user_end': '<|eot_id|><|start_header_id|>assistant<|end_header_id|>' + '\n',
+            'tool_start': '',
+            'tool_end': '<|eot_id|><|start_header_id|>assistant<|end_header_id|>'
+        }
+    else:
+        return {
+            'prompt': simple_prompt_start + generate_simple_schema_from_functions(tools) + simple_prompt_end,
+            'function_marker': '<functioncall>',
+            'function_re': r'<functioncall> \n?(.*)<\|end\|>',
+            'user_start': '<|user|> ',
+            'user_end': '<|end|>' + '\n',
+            'tool_start': '<|user|>',
+            'tool_end': '<|end|> <|assistant|>'
+        }
