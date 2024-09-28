@@ -537,11 +537,34 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
-        {"usage", json {
+        {"usage", json { // TODO: fill
             {"prompt_tokens", 0},
             {"total_tokens", 0}
         }},
         {"data", data}
+    };
+
+    return res;
+}
+
+static json format_response_rerank(const json & request, const json & ranks) {
+    json data = json::array();
+    int i = 0;
+    for (const auto & rank : ranks) {
+        data.push_back(json{
+            {"index",    i++},
+            {"relevance_score", json_value(rank, "score", 0.0)},
+        });
+    }
+
+    json res = json {
+        {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
+        {"object", "list"},
+        {"usage", json { // TODO: fill
+            {"prompt_tokens", 0},
+            {"total_tokens", 0}
+        }},
+        {"results", data}
     };
 
     return res;

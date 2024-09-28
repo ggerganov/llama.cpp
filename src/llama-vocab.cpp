@@ -1554,7 +1554,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
             } break;
         case LLAMA_VOCAB_TYPE_UGM:
             {
-                if (add_special && vocab.tokenizer_add_bos != 0) {
+                if (add_special && vocab.tokenizer_add_bos) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
                     output.push_back(vocab.special_bos_id);
                 }
@@ -1572,14 +1572,14 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     }
                 }
 
-                if (add_special && vocab.tokenizer_add_bos != 0 && output.size() >= 2 && output[1] == vocab.special_bos_id) {
+                if (add_special && vocab.tokenizer_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
                     LLAMA_LOG_WARN(
                         "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                         "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                         "Are you sure this is what you want?\n", __FUNCTION__);
                 }
 
-                if (add_special && vocab.tokenizer_add_eos == 1) {
+                if (add_special && vocab.tokenizer_add_eos) {
                     GGML_ASSERT(vocab.special_eos_id != -1);
                     output.push_back(vocab.special_eos_id);
                 }
@@ -1791,11 +1791,13 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
                 // suppressing them like CONTROL tokens.
                 if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
                     return _try_copy(token_text.data(), token_text.size());
-                } else if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
+                }
+                if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
                     std::string result = token_text;
                     llama_unescape_whitespace(result);
                     return _try_copy(result.data(), result.size());
-                } else if (attr & LLAMA_TOKEN_ATTR_BYTE) {
+                }
+                if (attr & LLAMA_TOKEN_ATTR_BYTE) {
                     char byte = (char) llama_token_to_byte(vocab, token);
                     return _try_copy((char*) &byte, 1);
                 }
@@ -1806,7 +1808,8 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
                 // suppressing them like CONTROL tokens.
                 if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
                     return _try_copy(token_text.data(), token_text.size());
-                } else if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
+                }
+                if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
                     std::string result = llama_decode_text(token_text);
                     return _try_copy(result.data(), result.size());
                 }

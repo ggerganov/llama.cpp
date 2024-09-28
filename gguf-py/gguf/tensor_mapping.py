@@ -679,6 +679,15 @@ class TensorNameMap:
         MODEL_TENSOR.ENC_OUTPUT_NORM: (
             "encoder.final_layer_norm", # t5
         ),
+
+        MODEL_TENSOR.CLS: (
+            "classifier",       # jina
+            "classifier.dense", # roberta
+        ),
+
+        MODEL_TENSOR.CLS_OUT: (
+            "classifier.out_proj", # roberta
+        ),
     }
 
     # architecture-specific block mappings
