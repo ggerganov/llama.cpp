@@ -57,6 +57,56 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
     }
 }
 
+/**
+ * Takes a prefix regex that must have 1 group to capture the function name, a closing suffix, and expects json parameters in between.
+ * Aggregates the prefix, suffix and in-between text into the content.
+ */
+static llama_tool_calls parse_json_tool_calls(const json & tools, const std::string& input, const std::regex & function_regex, const std::regex & close_regex, bool check_names) {
+    std::smatch match;
+
+    llama_tool_calls result;
+    auto end = input.end();
+    auto it = input.begin();
+
+    std::unordered_set<std::string> tool_names;
+    if (check_names) {
+        for (const auto & tool : tools) {
+            if (tool.contains("type") && tool["type"] == "function") {
+                tool_names.insert(tool["function"]["name"]);
+            }
+        }
+    }
+
+    while (it != end) {
+        std::sregex_iterator rend;
+        std::sregex_iterator rit(it, end, function_regex);
+        if (rit == rend) {
+            result.content += std::string(it, end);
+            break;
+        }
+        auto name = rit->str(1);
+        if (check_names && tool_names.find(name) == tool_names.end()) {
+            result.content += std::string(it, rit->suffix().first);
+            break;
+        }
+
+        result.content += std::string(it, rit->prefix().second);
+        it = rit->suffix().first;
+
+
+        json arguments;
+        if (!parse_json(it, end, arguments)) {
+            throw std::runtime_error("Failed to parse json tool call arguments");
+        }
+        if (!std::regex_search(it, end, match, close_regex)) {
+            throw std::runtime_error("Malformed input, missing closing pattern");
+        }
+        it = match.suffix().first;
+        result.tool_calls.push_back({name, arguments.dump()});
+    }
+    return result;
+}
+
 static llama_tool_calls parse_hermes_tool_calls(const std::string& input) {
     try {
         std::regex start_pattern(R"([\n\s]*<tool_call>)");
@@ -100,81 +150,21 @@ static llama_tool_calls parse_hermes_tool_calls(const std::string& input) {
     }
 }
 
-static llama_tool_calls parse_llama_3_1_tool_calls(const json & tools, const std::string& input) {
-    static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
-    std::smatch match;
-    if (std::regex_search(input, match, python_tag_regex)) {
-        return {
-            match.prefix().str(), {
-                {"ipython", (json {{"code", match[1].str()}}).dump()},
-            }
-        };
-    }
-    try {
-        auto call = json::parse(input);
-        // Only treat JSON as a tool call if it has a name attribute that matches any of the tools specified in the request.
-        // There doesn't seem to be any better way to detect a tool call.
-        if (call.contains("name") && call["name"].is_string()) {
-            std::string name = call["name"];
-            for (const auto & tool : tools) {
-                if (tool.at("function").at("name") == name) {
-                    return {
-                        "",
-                        {
-                            {name, call["parameters"].dump()},
-                        }
-                    };
+static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::string& input, bool allow_python_tag) {
+    if (allow_python_tag) {
+        static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
+        std::smatch match;
+        if (std::regex_search(input, match, python_tag_regex)) {
+            return {
+                match.prefix().str(), {
+                    {"ipython", (json {{"code", match[1].str()}}).dump()},
                 }
-            }
-        }
-    } catch (const std::exception & e) {
-        // Do nothing
-    }
-    return {input, {}};
-}
-
-static llama_tool_calls parse_functionary_tool_calls(const json & tools, const std::string& input, const std::regex & function_regex, const std::regex & close_regex) {
-    std::smatch match;
-
-    llama_tool_calls result;
-    auto end = input.end();
-    auto it = input.begin();
-
-    std::unordered_set<std::string> tool_names;
-    for (const auto & tool : tools) {
-        if (tool.contains("type") && tool["type"] == "function") {
-            tool_names.insert(tool["function"]["name"]);
+            };
         }
     }
-
-    while (it != end) {
-        std::sregex_iterator rend;
-        std::sregex_iterator rit(it, end, function_regex);
-        if (rit == rend) {
-            result.content += std::string(it, end);
-            break;
-        }
-        auto name = rit->str(1);
-        if (tool_names.find(name) == tool_names.end()) {
-            result.content += std::string(it, rit->suffix().first);
-            break;
-        }
-
-        result.content += std::string(it, rit->prefix().second);
-        it = rit->suffix().first;
-
-
-        json arguments;
-        if (!parse_json(it, end, arguments)) {
-            throw std::runtime_error("Failed to parse json tool call arguments");
-        }
-        if (!std::regex_search(it, end, match, close_regex)) {
-            throw std::runtime_error("Malformed input, missing closing pattern");
-        }
-        it = match.suffix().first;
-        result.tool_calls.push_back({name, arguments.dump()});
-    }
-    return result;
+    static std::regex function_regex("(?:^|\\n)\\{\"name\": \"([^\"]+)\", \"parameters\": ");
+    static std::regex close_regex("\\}");
+    return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ false);
 }
 
 static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & tools, const std::string& input) {
@@ -190,19 +180,21 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & t
     }
     static std::regex function_regex(R"(<function=(\w+)>)");
     static std::regex close_regex(R"(</function>)");
-    return parse_functionary_tool_calls(tools, input, function_regex, close_regex);
+    return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ false);
 }
 
 static llama_tool_calls parse_functionary_v3_tool_calls(const json & tools, const std::string& input) {
     static std::regex function_regex(R"((?:>>>)?(\w+)\n)");
-    static std::regex close_regex(R"($|\n(?=>>>))");
-    return parse_functionary_tool_calls(tools, input, function_regex, close_regex);
+    static std::regex close_regex(R"($|(?=>>>))");
+    return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ true);
 }
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tools, const std::string& input) {
     switch (style) {
         case llama_tool_call_style::Llama31:
-            return parse_llama_3_1_tool_calls(tools, input);
+            return parse_llama_3_tool_calls(tools, input, /* parse_llama_3_tool_calls= */ true);
+        case llama_tool_call_style::Llama32:
+            return parse_llama_3_tool_calls(tools, input, /* parse_llama_3_tool_calls= */ false);
         case llama_tool_call_style::FunctionaryV3Llama3:
             return parse_functionary_v3_tool_calls(tools, input);
         case llama_tool_call_style::FunctionaryV3Llama31:
@@ -224,9 +216,19 @@ llama_tool_call_handler llama_tool_call_handler_init(
     llama_tool_call_handler handler;
 
     switch (tmpl.tool_call_style()) {
-        case llama_tool_call_style::Llama31: {
+        case llama_tool_call_style::Llama31:
+        case llama_tool_call_style::Llama32: {
+            static auto builtin_tools = json {"wolfram_alpha", "brave_search"};
+
+            auto uses_python_tag = tmpl.tool_call_style() == llama_tool_call_style::Llama31;
+
+            // Technically we should only trigger on `"\n{\"name\": \"" + name + "\""` for each tool name,
+            // but Llama-3.2-3B struggles to output valid tool calls so we're "guiding" it strongly as soon
+            // as it seems to be outputting some JSON.
+            // TODO: make this conditional on a very small model (e.g. 1B / 3B).
+            auto eagerly_match_any_json = true;
+
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-                static std::vector<std::string> builtin_tools {"wolfram_alpha", "brave_search"};
                 std::vector<std::string> tool_rules;
 
                 for (const auto & tool : tools) {
@@ -234,7 +236,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
                     builder.resolve_refs(parameters);
-                    if (name == "ipython" || std::find(builtin_tools.begin(), builtin_tools.end(), name) != builtin_tools.end()) {
+                    if (uses_python_tag && (name == "ipython" || builtin_tools.contains(name))) {
                         tool_rules.push_back(builder.add_rule("ipython-call", "\"<|python_tag|>\" .*"));
                         if (allow_content) {
                             handler.grammar_trigger_words.push_back("<|python_tag|>");
@@ -244,13 +246,18 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         tool_rules.push_back(
                             builder.add_rule(
                                 name + "-call",
-                                "\"\\n{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                                "\"\\n\"? \"{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                                     builder.add_schema(name + "-args", parameters) +
                                 " \"}\""));
-                        if (allow_content) {
+                        if (allow_content && !eagerly_match_any_json) {
                             handler.grammar_trigger_words.push_back("\n{\"name\": \"" + name + "\"");
                         }
                     }
+                }
+
+                if (allow_content && eagerly_match_any_json) {
+                    handler.grammar_trigger_words.push_back("\n{\"");
+                    handler.grammar_trigger_words.push_back("{\"");
                 }
 
                 builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
@@ -274,7 +281,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     auto parameters = function["parameters"];
                     auto args_rule = builder.add_schema(name + "-args", parameters);
                     first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
-                    subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\"\\n>>>" + name + "\\n\" " + args_rule));
+                    subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
                     if (allow_content) {
                         handler.grammar_trigger_words.push_back(name + "\n");
                         handler.grammar_trigger_words.push_back(">>>" + name + "\n");
