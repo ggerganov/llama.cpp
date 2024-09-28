@@ -10257,9 +10257,9 @@ struct llm_build_context {
                     cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls, inp), model.cls_b);
                     cur = ggml_tanh(ctx0, cur);
 
+                    // some models don't have `cls_out`, for example: https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
+                    // https://huggingface.co/jinaai/jina-reranker-v1-tiny-en/blob/cb5347e43979c3084a890e3f99491952603ae1b7/modeling_bert.py#L884-L896
                     if (model.cls_out) {
-                        // this path is taken for example by the https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
-                        // https://huggingface.co/jinaai/jina-reranker-v1-tiny-en/blob/cb5347e43979c3084a890e3f99491952603ae1b7/modeling_bert.py#L884-L896
                         GGML_ASSERT(model.cls_out_b != nullptr);
 
                         cur = ggml_add (ctx0, ggml_mul_mat(ctx0, model.cls_out, cur), model.cls_out_b);
