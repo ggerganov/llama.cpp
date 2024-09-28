@@ -35,8 +35,8 @@ static std::string read_file(const std::string &path) {
   return out;
 }
 
-static llama_grammar * build_grammar(const std::string & grammar_str) {
-    return llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root");
+static std::unique_ptr<llama_grammar> build_grammar(const std::string & grammar_str) {
+    return std::unique_ptr<llama_grammar>(llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root"));
 }
 
 // TODO: extract to common helper (copied from test-grammar-integration.cpp)
@@ -292,7 +292,7 @@ static void test_template(const std::string & template_file, const char * bos_to
     {"content", ""},
     {"tool_calls", tool_calls}
   }, tools);
-  if (!match_string(content_less_delta, grammar)) {
+  if (!match_string(content_less_delta, grammar.get())) {
     throw std::runtime_error("Failed to match content-less delta against grammar:\n\nContent-less delta: " + content_less_delta + "\n\nGrammar: " + handler.grammar);
   }
 }
