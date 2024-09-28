@@ -16,6 +16,20 @@ static void assert_equals(const std::string & expected, const std::string & actu
     }
 }
 
+static std::string read_file(const std::string &path) {
+  std::ifstream fs(path, std::ios_base::binary);
+  if (!fs.is_open()) {
+    throw std::runtime_error("Failed to open file: " + path);
+  }
+  fs.seekg(0, std::ios_base::end);
+  auto size = fs.tellg();
+  fs.seekg(0);
+  std::string out;
+  out.resize(static_cast<size_t>(size));
+  fs.read(&out[0], static_cast<std::streamsize>(size));
+  return out;
+}
+
 /*
     cmake -B build -DLLAMA_CURL=1 -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-tool-call -j && ./build/bin/test-tool-call
 */
@@ -53,6 +67,23 @@ int main() {
             "required": ["arg1"]
           }
         }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "ipython",
+          "description": "a python interpreter",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "The code."
+              }
+            },
+            "required": ["code"]
+          }
+        }
       }
     ])");
     json request = {
@@ -83,12 +114,14 @@ int main() {
         }}
       }});
     test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
-      ">>>test\n{ } \n ",
+      ">>>special_function\n{\"arg1\": 1}\n ",
       "",
       json {{
         {"function", {
-          {"name", "test"},
-          {"arguments", "{}"}
+          {"name", "special_function"},
+          {"arguments", (json {
+            {"arg1", 1}
+          }).dump()}
         }}
       }});
 
@@ -158,5 +191,6 @@ int main() {
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}", json::array());
 
+    std::cout << "[tool-call] All tests passed!" << std::endl;
     return 0;
 }

@@ -372,7 +372,8 @@ static json oaicompat_completion_params_parse(
             llama_params["parse_tool_calls"] = true;
             llama_params["parallel_tool_calls"] = parallel_tool_calls;
 
-            auto handler = llama_tool_call_handler_init(tmpl, allow_content, parallel_tool_calls, tools);
+            auto handler = llama_tool_call_handler_init(tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools);
+            llama_params["prompt"] = handler.prompt;
 
             for (const auto & stop : handler.additional_stop_words) {
                 llama_params["stop"].push_back(stop);
@@ -390,8 +391,9 @@ static json oaicompat_completion_params_parse(
                 }
                 llama_params["grammar"] = handler.grammar;
             }
+        } else {
+            llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
         }
-        llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
     } else {
         llama_params["prompt"] = format_chat(model, tmpl.chat_template(), body.at("messages"));
     }

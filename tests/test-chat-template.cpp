@@ -104,7 +104,10 @@ static void test_jinja_templates() {
                 actual = tmpl.apply(
                     ctx.at("messages"),
                     ctx.contains("tools") ? ctx.at("tools") : json(),
-                    ctx.at("add_generation_prompt"));
+                    ctx.at("add_generation_prompt"),
+                    ctx.contains("tools") ? json {
+                        {"builtin_tools", {"wolfram_alpha", "brave_search"}}
+                    } : json());
             } catch (const std::runtime_error & e) {
                 actual = "ERROR: " + std::string(e.what());
             }

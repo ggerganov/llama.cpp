@@ -18,6 +18,7 @@ struct llama_tool_calls {
 };
 
 struct llama_tool_call_handler {
+    std::string prompt;
     std::string grammar;
     std::vector<std::string> grammar_trigger_words;
     std::vector<std::string> additional_stop_words;
@@ -29,4 +30,5 @@ llama_tool_call_handler llama_tool_call_handler_init(
     const llama_chat_template & tmpl,
     bool allow_content,
     bool parallel_tool_calls,
+    const nlohmann::ordered_json & messages,
     const nlohmann::ordered_json & tools);

@@ -48,5 +48,6 @@ class llama_chat_template {
     std::string apply(
         const nlohmann::ordered_json & messages,
         const nlohmann::ordered_json & tools,
-        bool add_generation_prompt) const;
+        bool add_generation_prompt,
+        const nlohmann::ordered_json & extra_context = nlohmann::ordered_json()) const;
 };

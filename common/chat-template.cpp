@@ -78,7 +78,8 @@ llama_chat_template llama_chat_template::from_model(
 std::string llama_chat_template::apply(
     const json & messages,
     const json & tools,
-    bool add_generation_prompt) const
+    bool add_generation_prompt,
+    const json & extra_context) const
 {
     auto actual_messages = messages;
 
@@ -141,8 +142,12 @@ std::string llama_chat_template::apply(
     if (!tools.is_null()) {
         auto tools_val = minja::Value(tools);
         context->set("tools", tools_val);
-        auto builtin_tools = minja::Value(json {"wolfram_alpha", "brave_search"});
-        context->set("builtin_tools", builtin_tools);
+    }
+    if (!extra_context.is_null()) {
+        for (auto & kv : extra_context.items()) {
+            minja::Value val(kv.value());
+            context->set(kv.key(), val);
+        }
     }
 
     return _template_root->render(context);

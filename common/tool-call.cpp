@@ -218,6 +218,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
     const llama_chat_template & tmpl,
     bool allow_content,
     bool parallel_tool_calls,
+    const nlohmann::ordered_json & messages,
     const nlohmann::ordered_json & tools)
 {
     llama_tool_call_handler handler;
@@ -255,6 +256,9 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
             });
             handler.additional_stop_words.push_back("<|eom_id|>");
+            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true, {
+                {"builtin_tools", builtin_tools},
+            });
             break;
         }
         case llama_tool_call_style::FunctionaryV3Llama3: {
@@ -284,6 +288,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     builder.add_rule("root", first_rule);
                 }
             });
+            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
@@ -313,6 +318,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     handler.grammar_trigger_words.push_back("<function=");
                 }
             });
+            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
@@ -342,6 +348,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     handler.grammar_trigger_words.push_back("<tool_call>");
                 }
             });
+            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             break;
         }
         default:
