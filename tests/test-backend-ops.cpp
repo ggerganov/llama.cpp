@@ -634,8 +634,8 @@ struct test_case {
         if (op_flops(out) > 0) {
             // based on flops
             const uint64_t GFLOP = 1000 * 1000 * 1000;
-            const uint64_t target_flops_cpu =  8ULL * GFLOP;
-            const uint64_t target_flops_gpu = 64ULL * GFLOP;
+            const uint64_t target_flops_cpu =   8ULL * GFLOP;
+            const uint64_t target_flops_gpu = 100ULL * GFLOP;
             uint64_t target_flops = ggml_backend_is_cpu(backend) ? target_flops_cpu : target_flops_gpu;
             n_runs = std::min<int>(ggml_graph_size(gf) - ggml_graph_n_nodes(gf), target_flops / op_flops(out)) + 1;
         } else {
@@ -674,18 +674,24 @@ struct test_case {
         // run
         ggml_backend_synchronize(backend);
 
-        int64_t start_time = ggml_time_us();
-        ggml_backend_graph_compute(backend, gf);
-        ggml_backend_synchronize(backend);
-        int64_t end_time = ggml_time_us();
-        double time_us = end_time - start_time;
+        int64_t total_time_us = 0;
+        int total_runs = 0;
+        do {
+            int64_t start_time = ggml_time_us();
+            ggml_backend_graph_compute(backend, gf);
+            ggml_backend_synchronize(backend);
+            int64_t end_time = ggml_time_us();
 
-        printf("    %5d runs - %8.2f us/run - ",
-            n_runs,
-            time_us / n_runs);
+            total_time_us += end_time - start_time;
+            total_runs += n_runs;
+        } while (total_time_us < 1000*1000); // run for at least 1 second
+
+        printf("    %8d runs - %8.2f us/run - ",
+            total_runs,
+            (double)total_time_us / total_runs);
 
         if (op_flops(out) > 0) {
-            double flops_per_sec = (op_flops(out) * n_runs) / (time_us / 1e6);
+            double flops_per_sec = (op_flops(out) * total_runs) / (total_time_us / 1e6);
             auto format_flops = [](double flops) -> std::string {
                 char buf[256];
                 if (flops >= 1e12) {
@@ -706,7 +712,7 @@ struct test_case {
         } else {
             printf("%8zu kB/run - \033[1;34m%7.2f GB/s\033[0m",
                 op_size(out) / 1024,
-                mem / (time_us/1e6) / 1024.0 / 1024.0 / 1024.0);
+                mem / (total_time_us / 1e6) / 1024.0 / 1024.0 / 1024.0);
         }
         printf("\n");
 
@@ -3613,11 +3619,13 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
 static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
     std::vector<std::unique_ptr<test_case>> test_cases;
 
-    for (int bs : {1, 8, 16, 32, 512}) {
+    test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1,   1, 1, 1}));
+    test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1, 512, 1, 1}));
+
+    for (int bs : {1, 512}) {
         for (ggml_type type_a : all_types) {
-            for (ggml_type type_b : {GGML_TYPE_F16, GGML_TYPE_F32}) {
-                test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, bs, 4096, {1,  1}, {1, 1}));
-                test_cases.emplace_back(new test_mul_mat(type_a, type_b, 32000, bs, 4096, {1,  1}, {1, 1}));
+            for (ggml_type type_b : {GGML_TYPE_F32}) {
+                test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, bs, 14336, {1,  1}, {1, 1}));
             }
         }
     }
