@@ -1,3 +1,4 @@
+-r ../examples/agent/requirements.txt
 -r ../examples/llava/requirements.txt
 -r ../examples/server/bench/requirements.txt
 -r ../examples/server/tests/requirements.txt
