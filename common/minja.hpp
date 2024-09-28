@@ -156,7 +156,7 @@ public:
   Value(const bool& v) : primitive_(v) {}
   Value(const int64_t & v) : primitive_(v) {}
   Value(const double& v) : primitive_(v) {}
-  Value(const nullptr_t &) {}
+  Value(const std::nullptr_t &) {}
   Value(const std::string & v) : primitive_(v) {}
   Value(const char * v) : primitive_(std::string(v)) {}
 
