@@ -1860,9 +1860,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params, const std::string & value) {
             if (!llama_chat_verify_template(value, params.use_jinja)) {
                 throw std::runtime_error(format(
-                    "error: the supplied chat template is not supported: %s\n"
-                    "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",
-                    value.c_str()
+                    "error: the supplied chat template is not supported: %s%s\n",
+                    value.c_str(),
+                    params.use_jinja ? "" : "\nnote: llama.cpp does not use jinja parser, we only support commonly used templates"
                 ));
             }
             params.chat_template = value;
@@ -1887,9 +1887,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             );
             if (!llama_chat_verify_template(chat_template, params.use_jinja)) {
                 throw std::runtime_error(format(
-                    "error: the supplied chat template is not supported: %s\n"
-                    "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",
-                    chat_template.c_str()
+                    "error: the supplied chat template is not supported: %s%s\n",
+                    value.c_str(),
+                    params.use_jinja ? "" : "\nnote: llama.cpp does not use jinja parser, we only support commonly used templates"
                 ));
             }
             params.chat_template = chat_template;
