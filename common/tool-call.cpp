@@ -316,7 +316,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                             handler.grammar_trigger_words.push_back("<|python_tag|>");
                         }
                     } else {
-                        tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\""));
+                        tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
                     }
                 }
                 auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
@@ -349,7 +349,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     }));
                 }
 
-                auto tool_call = "\"<tool_call>\" " + builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " \"</tool_call>\" space";
+                auto tool_call = "\"<tool_call>\" space " + builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " \"</tool_call>\" space";
                 builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
                     handler.grammar_trigger_words.push_back("<tool_call>");

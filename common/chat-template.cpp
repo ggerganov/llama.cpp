@@ -34,7 +34,9 @@ llama_chat_template::llama_chat_template(const std::string & chat_template, cons
     : _chat_template(chat_template), _bos_token(bos_token), _eos_token(eos_token) {
 
     _supports_tools = chat_template.find("tools") != std::string::npos;
-    _requires_object_arguments = chat_template.find("tool_call.arguments | items") != std::string::npos;
+    _requires_object_arguments =
+        chat_template.find("tool_call.arguments | items") != std::string::npos
+        || chat_template.find("{{- tool_call.arguments | tojson }}") != std::string::npos;
     _supports_system_role = chat_template.find("System role not supported") == std::string::npos;
 
     if (chat_template.find("<tool_call>") != std::string::npos) {

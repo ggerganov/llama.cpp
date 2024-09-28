@@ -16,6 +16,10 @@
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF -hff Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
 
+  # Llama 3.1 70B
+  ./llama-server --jinja -fa --verbose \
+    -hfr lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF -hff Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf
+
   # functionary-small-v3
   ./llama-server --jinja -fa --verbose \
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q4_0.gguf \
@@ -38,10 +42,6 @@
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-1B-Instruct-GGUF -hff Llama-3.2-1B-Instruct-Q4_K_M.gguf \
     --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
-
-  # Llama 3.1 70B (untested)
-  ./llama-server --jinja -fa --verbose \
-    -hfr lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF -hff Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf
   ```
 
 - Run some tools inside a docker container (check http://localhost:8088/docs once running):
