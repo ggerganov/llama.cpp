@@ -67,7 +67,6 @@ static std::string read_file(const std::string &path) {
     if (!fs.is_open()) {
       throw std::runtime_error("Failed to open file: " + path);
     }
-    throw std::runtime_error("Failed to open file: " + path);
   }
   fs.seekg(0, std::ios_base::end);
   auto size = fs.tellg();
