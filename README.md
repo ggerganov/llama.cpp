@@ -443,7 +443,7 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 - Contributors can open PRs
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
-- Any help with managing issues and PRs is very appreciated!
+- Any help with managing issues, PRs and projects is very appreciated!
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
 - Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
