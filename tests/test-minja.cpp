@@ -123,8 +123,9 @@ int main() {
     test_render(R"({%- if True %}        {% set _ = x %}{%- endif %}{{ 1 }})",
         {},
         {
-            .lstrip_blocks = true,
-            .trim_blocks = true
+            /* .lstrip_blocks = */ true,
+            /* .trim_blocks = */ true,
+            /* .keep_trailing_newline = */ false,
         },
         "        1"
     );
