@@ -89,7 +89,7 @@ def python(code: str) -> str:
     Returns:
         str: The output of the executed code.
     """
-    from IPython import InteractiveShell
+    from IPython.core.interactiveshell import InteractiveShell
     from io import StringIO
     import sys
 
