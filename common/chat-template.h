@@ -11,9 +11,11 @@ using json = nlohmann::ordered_json;
 enum llama_tool_call_style {
     UnknownToolCallStyle,
     Llama31,
+    Llama32,
     FunctionaryV3Llama3,
     FunctionaryV3Llama31,
     Hermes2Pro,
+    CommandRPlus,
 };
 
 class llama_chat_template {

@@ -27,7 +27,8 @@ static std::string filename_without_extension(const std::string & path) {
     return res;
 }
 
-static void assert_equals(const std::string & expected, const std::string & actual) {
+template <class T>
+static void assert_equals(const T & expected, const T & actual) {
     if (expected != actual) {
         std::cerr << "Expected: " << expected << std::endl;
         std::cerr << "Actual: " << actual << std::endl;
@@ -116,6 +117,20 @@ static void test_jinja_templates() {
             fail_with_golden_instructions();
         }
     }
+}
+
+void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
+    auto tmpl = llama_chat_template(read_file(template_file), "<s>", "</s>");
+    std::cout << "# Testing tool call style of: " << template_file << std::endl << std::flush;
+    assert_equals(expected, tmpl.tool_call_style());
+}
+
+void test_tool_call_styles() {
+    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", FunctionaryV3Llama31);
+    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", FunctionaryV3Llama3);
+    test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", Llama31);
+    test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", Llama32);
+    test_tool_call_style("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja", CommandRPlus);
 }
 
 static void test_legacy_templates() {
@@ -330,6 +345,7 @@ int main(void) {
     if (getenv("LLAMA_SKIP_TESTS_SLOW_ON_EMULATOR")) {
         fprintf(stderr, "\033[33mWARNING: Skipping slow tests on emulator.\n\033[0m");
     } else {
+        test_tool_call_styles();
         test_jinja_templates();
     }
 

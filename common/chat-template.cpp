@@ -41,12 +41,19 @@ llama_chat_template::llama_chat_template(const std::string & chat_template, cons
         _tool_call_style = Hermes2Pro;
     } else if (chat_template.find(">>>all") != std::string::npos) {
         _tool_call_style = FunctionaryV3Llama3;
-    } else if (chat_template.find("<|start_header_id|>") != std::string::npos) {
-        if (chat_template.find("<function=") != std::string::npos) {
-            _tool_call_style = FunctionaryV3Llama31;
-        } else if (chat_template.find("<|python_tag|>") != std::string::npos) {
+    } else if (chat_template.find("<|start_header_id|>") != std::string::npos
+        && chat_template.find("<function=") != std::string::npos) {
+        _tool_call_style = FunctionaryV3Llama31;
+    } else if (chat_template.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
+        if (chat_template.find("<|python_tag|>") != std::string::npos) {
             _tool_call_style = Llama31;
+        } else {
+            _tool_call_style = Llama32;
         }
+    } else if (chat_template.find("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>") != std::string::npos) {
+        _tool_call_style = CommandRPlus;
+    } else {
+        _tool_call_style = UnknownToolCallStyle;
     }
     _template_root = minja::Parser::parse(_chat_template, {
         /* .trim_blocks = */ true,
