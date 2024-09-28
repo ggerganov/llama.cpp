@@ -62,6 +62,9 @@ option(LLAMA_SANITIZE_THREAD    "llama: enable thread sanitizer"    OFF)
 option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
 option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 
+# utils
+option(LLAMA_BUILD_COMMON "llama: build common utils library" ON)
+
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES "llama: build examples"       ${LLAMA_STANDALONE})
@@ -191,15 +194,17 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
         DESTINATION lib/pkgconfig)
 
 #
-# programs, examples and tests
+# utils, programs, examples and tests
 #
 
-add_subdirectory(common)
+if (LLAMA_BUILD_COMMON)
+    add_subdirectory(common)
+endif()
 
 if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
     add_subdirectory(tests)
-endif ()
+endif()
 
 if (LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
