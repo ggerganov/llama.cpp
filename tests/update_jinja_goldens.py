@@ -42,6 +42,7 @@ model_ids = [
     "microsoft/Phi-3-mini-4k-instruct",
     "microsoft/Phi-3-small-8k-instruct",
     "microsoft/Phi-3.5-mini-instruct",
+    "microsoft/Phi-3.5-vision-instruct",
     "mlabonne/AlphaMonarch-7B",
     "CohereForAI/c4ai-command-r-plus",
     "NousResearch/Hermes-2-Pro-Llama-3-8B",
@@ -55,14 +56,6 @@ model_ids = [
     "Qwen/Qwen2.5-Math-7B-Instruct",
     "teknium/OpenHermes-2.5-Mistral-7B",
     "TheBloke/FusionNet_34Bx2_MoE-AWQ",
-
-    # C++ minja templating broken:
-    # "THUDM/chatglm3-6b",
-    # "derek33125/project-angel-chatglm4",
-
-    # Cannot find chat template:
-    # "eachadea/vicuna-13b-1.1",
-    # "microsoft/Phi-3-vision-instruct",
 
     # Gated models:
     "meta-llama/Llama-3.2-3B-Instruct",
