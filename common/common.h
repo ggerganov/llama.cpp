@@ -557,12 +557,19 @@ private:
     // The Aho–Corasick algorithm allows efficient string matching with multiple patterns.
     // See https://en.wikipedia.org/wiki/Aho%E2%80%93Corasick_algorithm
     struct TrieNode {
-        std::unordered_map<char, struct TrieNode> children;
-        struct TrieNode* fail = nullptr;
+        std::unordered_map<char, TrieNode*> children;
+        TrieNode* fail = nullptr;
         int output = -1;
         size_t depth = 0;
 
+        ~TrieNode() {
+            clear();
+        }
+
         void clear() {
+            for (auto & pair : children) {
+                delete pair.second;
+            }
             children.clear();
             fail = nullptr;
             output = -1;
@@ -581,11 +588,15 @@ private:
             const auto & pattern = antiprompts[i].value;
             for (size_t j = 0; j < pattern.length(); ++j) {
                 char c = pattern[j];
-                auto & child = node->children[c];
-                if (child.depth == 0) {
-                    child.depth = j + 1;
+                auto it = node->children.find(c);
+                if (it != node->children.end()) {
+                    node = it->second;
+                } else {
+                    node = node->children[c] = new TrieNode();
                 }
-                node = &child;
+                if (node->depth == 0) {
+                    node->depth = j + 1;
+                }
             }
             node->output = i;
         }
@@ -594,8 +605,8 @@ private:
     void build_failure_and_dict_links() {
         std::queue<TrieNode*> q;
         for (auto& child : root.children) {
-            child.second.fail = &root;
-            q.push(&child.second);
+            child.second->fail = &root;
+            q.push(child.second);
         }
 
         while (!q.empty()) {
@@ -611,14 +622,14 @@ private:
                     f = f->fail;
                 }
 
-                child.fail = (f == &root && f->children.find(c) == f->children.end())
-                                   ? &root : &f->children[c];
+                child->fail = (f == &root && f->children.find(c) == f->children.end())
+                                   ? &root : f->children[c];
 
-                if (child.fail->output != -1) {
-                    child.output = child.fail->output;
+                if (child->fail->output != -1) {
+                    child->output = child->fail->output;
                 }
 
-                q.push(&child);
+                q.push(child);
             }
         }
     }
@@ -703,7 +714,7 @@ private:
             }
             auto it = current->children.find(c);
             if (it != current->children.end()) {
-                current = &it->second;
+                current = it->second;
             }
             if (current->output != -1) {
                 const auto & antiprompt = antiprompts[current->output];
