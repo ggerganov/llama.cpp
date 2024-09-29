@@ -1437,6 +1437,8 @@ void llama_batch_add(
                           llama_pos   pos,
     const std::vector<llama_seq_id> & seq_ids,
                                bool   logits) {
+    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "llama_batch size exceeded");
+
     batch.token   [batch.n_tokens] = id;
     batch.pos     [batch.n_tokens] = pos;
     batch.n_seq_id[batch.n_tokens] = seq_ids.size();
