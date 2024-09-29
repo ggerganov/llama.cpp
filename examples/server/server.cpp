@@ -2349,7 +2349,7 @@ struct server_context {
 
                 completion_token_output result;
                 if (params.testing_sampler_delay_millis > 0) {
-                    LOG_DBG("sleeping for %dms before sampling (for tests!)\n", params.testing_sampler_delay_millis);
+                    SRV_DBG("sleeping for %dms before sampling (for tests!)\n", params.testing_sampler_delay_millis);
                     std::this_thread::sleep_for(std::chrono::milliseconds(params.testing_sampler_delay_millis));
                 }
                 const llama_token id = gpt_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
