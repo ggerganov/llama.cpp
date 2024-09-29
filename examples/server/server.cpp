@@ -2431,7 +2431,7 @@ static void handle_tasks(
     httplib::Response & res,
     server_context & ctx_server,
     const std::function<std::unordered_set<int>(const std::function<bool()> &)> & create_tasks,
-    const std::function<void(const std::unordered_set<int> &, httplib::DataSink & sink, const std::function<bool()> &)> & payload)
+    const std::function<void(const std::unordered_set<int> &, httplib::DataSink & sink)> & payload)
 {
     struct State {
         std::unordered_set<int> task_ids;
@@ -2446,7 +2446,7 @@ static void handle_tasks(
         res.set_content_provider(MIMETYPE_JSON, [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
             auto is_alive = [&sink]() { return sink.is_writable(); };
             state->task_ids = create_tasks(is_alive);
-            payload(state->task_ids, sink, is_alive);
+            payload(state->task_ids, sink);
             ctx_server.queue_results.remove_waiting_task_ids(state->task_ids);
             return false;
         }, resource_releaser);
@@ -2454,7 +2454,7 @@ static void handle_tasks(
         res.set_chunked_content_provider("text/event-stream", [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
             auto is_alive = [&sink]() { return sink.is_writable(); };
             state->task_ids = create_tasks(is_alive);
-            payload(state->task_ids, sink, is_alive);
+            payload(state->task_ids, sink);
             ctx_server.queue_results.remove_waiting_task_ids(state->task_ids);
             return false;
         }, resource_releaser);
@@ -2958,7 +2958,7 @@ int main(int argc, char ** argv) {
             ctx_server.queue_tasks.post(tasks);
 
             return server_task::get_list_id(tasks);
-        }, [stream, &res, &ctx_server](const std::unordered_set<int> & task_ids, httplib::DataSink & sink, const std::function<bool()> &) {
+        }, [stream, &res, &ctx_server](const std::unordered_set<int> & task_ids, httplib::DataSink & sink) {
             if (!stream) {
                 ctx_server.receive_cmpl_results(task_ids, [&res, &sink](std::vector<server_task_result> & results) {
                     if (results.size() == 1) {
@@ -3013,7 +3013,7 @@ int main(int argc, char ** argv) {
             ctx_server.queue_tasks.post(tasks);
 
             return server_task::get_list_id(tasks);
-        }, [data, verbose, stream, &res, &ctx_server](const std::unordered_set<int> & task_ids, httplib::DataSink & sink, const std::function<bool()> & is_alive) {
+        }, [data, verbose, stream, &res, &ctx_server](const std::unordered_set<int> & task_ids, httplib::DataSink & sink) {
             const auto completion_id = gen_chatcmplid();
             if (!stream) {
                 ctx_server.receive_cmpl_results(task_ids, [completion_id, data, verbose, &sink, &res](std::vector<server_task_result> & results) {
@@ -3143,7 +3143,7 @@ int main(int argc, char ** argv) {
             ctx_server.queue_tasks.post(tasks);
 
             return server_task::get_list_id(tasks);
-        }, [is_openai, &ctx_server, &res, body](const std::unordered_set<int> & task_ids, httplib::DataSink & sink, const std::function<bool()> &) {
+        }, [is_openai, &ctx_server, &res, body](const std::unordered_set<int> & task_ids, httplib::DataSink & sink) {
             bool error = false;
             json responses = json::array();
 
