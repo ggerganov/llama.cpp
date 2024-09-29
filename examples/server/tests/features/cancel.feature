@@ -12,7 +12,7 @@ Feature: Cancellation of llama.cpp server requests
       # KV Cache corresponds to the total amount of tokens
       # that can be stored across all independent sequences: #4130
       # see --ctx-size and #5568
-    And   512 KV cache size
+    And   256 KV cache size
     And   32 as batch size
     And   2 slots
     And   64 server max tokens to predict
