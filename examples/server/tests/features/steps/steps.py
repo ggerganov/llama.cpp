@@ -512,7 +512,6 @@ async def step_oai_chat_completions(context, api_error):
     if context.debug:
         print(f"Submitting OAI compatible completions request...")
     expect_api_error = api_error == 'raised'
-    seeds = await completions_seed(context, num_seeds=1),
     seeds = await completions_seed(context, num_seeds=1)
     completion = await oai_chat_completions(context.prompts.pop(),
                                             seeds[0] if seeds is not None else seeds,
