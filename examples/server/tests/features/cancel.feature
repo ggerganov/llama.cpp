@@ -18,10 +18,8 @@ Feature: Cancellation of llama.cpp server requests
     And   64 server max tokens to predict
     And   prometheus compatible metrics exposed
     And   300 milliseconds delay in sampler for testing
-    And   no warmup
     Then  the server is starting
     Then  the server is healthy
-    # Then  the server is healthy with timeout 10 seconds
 
 
   Scenario Outline: Cancelling an OAI chat completion request frees up slot (streaming <enable_streaming>)
