@@ -3025,9 +3025,6 @@ int main(int argc, char ** argv) {
                 });
             } else {
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result result) -> bool {
-                    if (!is_alive()) {
-                        return false; // connection is closed
-                    }
                     std::vector<json> result_array = format_partial_response_oaicompat(result.data, completion_id);
                     for (auto & event_data : result_array) {
                         if (event_data.empty()) {
