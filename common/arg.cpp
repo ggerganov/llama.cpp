@@ -1880,6 +1880,13 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
+        {"--testing-sampler-delay-millis"}, "N",
+        format("for tests: delay in milliseconds to add to each sampling (default: %d)", params.testing_sampler_delay_millis),
+        [](gpt_params & params, int value) {
+            params.testing_sampler_delay_millis = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(llama_arg(
         {"--lora-init-without-apply"},
         format("load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"),
         [](gpt_params & params) {

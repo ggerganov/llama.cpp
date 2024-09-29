@@ -299,6 +299,8 @@ struct gpt_params {
 
     float slot_prompt_similarity = 0.5f;
 
+    int testing_sampler_delay_millis = 0;
+
     // batched-bench params
     bool is_pp_shared = false;
 

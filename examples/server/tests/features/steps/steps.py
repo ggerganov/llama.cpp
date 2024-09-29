@@ -78,6 +78,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.response_format = None
     context.temperature = None
     context.lora_file = None
+    context.testing_sampler_delay_millis = None
     context.disable_ctx_shift = False
 
     context.tasks_result = []
@@ -455,6 +456,9 @@ def step_impl(context, n_ga):
 def step_impl(context, n_ga_w):
     context.n_ga_w = n_ga_w
 
+@step('{testing_sampler_delay_millis:d} milliseconds delay in sampler for testing')
+def step_testing_sampler_delay_millis(context, testing_sampler_delay_millis):
+    context.testing_sampler_delay_millis = testing_sampler_delay_millis
 
 @step('a passkey prompt template')
 def step_prompt_passkey(context):
@@ -1436,6 +1440,8 @@ def start_server_background(context):
         server_args.append('--verbose')
     if context.lora_file:
         server_args.extend(['--lora', context.lora_file])
+    if context.testing_sampler_delay_millis:
+        server_args.extend(['--testing-sampler-delay-millis', context.testing_sampler_delay_millis])
     if context.disable_ctx_shift:
         server_args.extend(['--no-context-shift'])
 

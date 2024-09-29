@@ -2348,6 +2348,9 @@ struct server_context {
                 }
 
                 completion_token_output result;
+                if (params.testing_sampler_delay_millis > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(params.testing_sampler_delay_millis));
+                }
                 const llama_token id = gpt_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
 
                 gpt_sampler_accept(slot.smpl, id, true);
