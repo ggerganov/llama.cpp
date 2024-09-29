@@ -1,6 +1,6 @@
 // This file defines tests for various GGML ops and backends.
 // For the forward pass it asserts that the results of multiple backends computing the same GGML ops are consistent.
-// For the backwards pass it asserts that the gradients from backpropagation are consistent
+// For the backward pass it asserts that the gradients from backpropagation are consistent
 // with the gradients obtained via the method of finite differences ("grad" mode, this is optional).
 // It is also possible to check the performance ("perf" mode).
 //
@@ -740,7 +740,7 @@ struct test_case {
 
         ggml_tensor * out = build_graph(ctx);
 
-        if (op_name != nullptr && op_desc(out) != op_name) {
+        if ((op_name != nullptr && op_desc(out) != op_name) || out->op == GGML_OP_OPT_STEP_ADAMW) {
             //printf("  %s: skipping\n", op_desc(out).c_str());
             ggml_free(ctx);
             return true;
@@ -749,11 +749,6 @@ struct test_case {
         printf("  %s(%s): ", op_desc(out).c_str(), vars().c_str());
         fflush(stdout);
 
-        if (out->grad == nullptr) {
-            printf("backwards pass not supported \n");
-            ggml_free(ctx);
-            return true;
-        }
         if (out->type != GGML_TYPE_F32) {
             ggml_free(ctx);
             printf("not supported [%s->type != FP32]\n", out->name);
@@ -762,17 +757,25 @@ struct test_case {
 
         // check if the backend supports the ops
         bool supported = true;
+        bool any_params = false;
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (!ggml_backend_supports_op(backend, t)) {
                 printf("not supported [%s] ", ggml_backend_name(backend));
                 supported = false;
                 break;
             }
-            if ((t->flags & GGML_TENSOR_FLAG_PARAM) && t->type != GGML_TYPE_F32) {
-                printf("not supported [%s->type != FP32] ", t->name);
-                supported = false;
-                break;
+            if ((t->flags & GGML_TENSOR_FLAG_PARAM)) {
+                any_params = true;
+                if (t->type != GGML_TYPE_F32) {
+                    printf("not supported [%s->type != FP32] ", t->name);
+                    supported = false;
+                    break;
+                }
             }
+        }
+        if (!any_params) {
+            printf("not supported [%s] \n", op_name);
+            supported = false;
         }
         if (!supported) {
             printf("\n");
@@ -801,7 +804,7 @@ struct test_case {
 
         ggml_build_forward_expand(gf, out);
         ggml_graph_cpy(gf, gb);
-        ggml_build_backward_expand(ctx, gf, gb, false, false);
+        ggml_build_backward_expand(ctx, gf, gb, false);
         if (expect.size() != 1 || expect[0] != 0.0f) {
             GGML_ASSERT(ggml_graph_n_nodes(gb) > ggml_graph_n_nodes(gf));
             for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
@@ -984,7 +987,7 @@ struct test_example : public test_case {
     }
     // In order to also check the gradients for your op, add calls like ggml_set_param(ctx, a)
     // immediately after you create the tensors.
-    // This is optional and only makes sense if a backwards pass has actually been implemented for the new op.
+    // This is optional and only makes sense if a backward pass has actually been implemented for the new op.
 };
 
 
@@ -1223,7 +1226,7 @@ struct test_set : public test_case {
             offset += ((ne_dst[i] - ne[i])/2)*dst->nb[i];
         }
         ggml_tensor * out = ggml_set(ctx, dst, src,
-            // The backwards pass requires setting a contiguous region:
+            // The backward pass requires setting a contiguous region:
             src->nb[1], src->nb[2], src->nb[3], offset);
         ggml_set_name(out, "out");
 
@@ -1335,7 +1338,7 @@ struct test_bin_bcast : public test_case {
         ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_set_name(b, "b");
 
-        // The backwards pass supports broadcasting only for GGML_ADD:
+        // The backward pass supports broadcasting only for GGML_ADD:
         const bool grad_supported = op == ggml_add || ggml_are_same_shape(a, b);
         if (grad_supported) {
             ggml_set_param(ctx, a);
@@ -1830,7 +1833,7 @@ struct test_log : public test_case {
 
     void initialize_tensors(ggml_context * ctx) override {
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-            // log(1) == 0, cluster values there to keep the sum low for better precision in the backwards pass:
+            // log(1) == 0, cluster values there to keep the sum low for better precision in the backward pass:
             init_tensor_uniform(t, 0.9f, 1.1f);
         }
     }
@@ -3257,7 +3260,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_conv_transpose_1d({3,2,1,1}, {3,1,2,1}, 1, 0, 1));
     test_cases.emplace_back(new test_conv_transpose_1d({2,1,1,1}, {3,1,1,1}, 1, 0, 1));
 
-    for (int ne3 : {1, 3}) { // CUDA backwards pass only supports ne3 == 1
+    for (int ne3 : {1, 3}) { // CUDA backward pass only supports ne3 == 1
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {1, 1, 1, 1}));
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {2, 1, 1, 1}));
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {1, 2, 1, 1}));
