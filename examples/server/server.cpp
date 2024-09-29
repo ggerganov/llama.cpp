@@ -2349,6 +2349,7 @@ struct server_context {
 
                 completion_token_output result;
                 if (params.testing_sampler_delay_millis > 0) {
+                    LOG_DBG("sleeping for %dms before sampling (for tests!)\n", params.testing_sampler_delay_millis);
                     std::this_thread::sleep_for(std::chrono::milliseconds(params.testing_sampler_delay_millis));
                 }
                 const llama_token id = gpt_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
@@ -3006,7 +3007,7 @@ int main(int argc, char ** argv) {
         json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
 
         bool stream = json_value(data, "stream", false);
-        
+
         handle_tasks(stream, res, ctx_server, [data, &ctx_server](const std::function<bool()> & is_alive) {
             std::vector<server_task> tasks = ctx_server.create_tasks_cmpl(data, SERVER_TASK_CMPL_TYPE_NORMAL, is_alive);
             ctx_server.queue_results.add_waiting_tasks(tasks);
@@ -3136,7 +3137,7 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        
+
         handle_tasks(false, res, ctx_server, [prompt, &ctx_server](const std::function<bool()> & is_alive) {
             std::vector<server_task> tasks = ctx_server.create_tasks_cmpl({{"prompt", prompt}}, SERVER_TASK_CMPL_TYPE_EMBEDDING, is_alive);
             ctx_server.queue_results.add_waiting_tasks(tasks);
@@ -3164,7 +3165,7 @@ int main(int argc, char ** argv) {
             json root = is_openai
                 ? format_embeddings_response_oaicompat(body, responses)
                 : responses[0];
-        
+
             res_ok(res, &sink, root);
         });
     };

@@ -80,6 +80,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.lora_file = None
     context.testing_sampler_delay_millis = None
     context.disable_ctx_shift = False
+    context.disconnect_after_millis = None
 
     context.tasks_result = []
     context.concurrent_tasks = []
@@ -279,6 +280,7 @@ async def step_request_completion(context, api_error: Literal['raised'] | str):
                                           n_predict=context.n_predict,
                                           cache_prompt=context.cache_prompt,
                                           id_slot=context.id_slot,
+                                          disconnect_after_millis=context.disconnect_after_millis,
                                           expect_api_error=expect_api_error,
                                           user_api_key=context.user_api_key,
                                           temperature=context.temperature)
@@ -296,20 +298,12 @@ async def step_request_completion(context, api_error: Literal['raised'] | str):
 async def step_request_completion(context, millis: int):
     await asyncio.sleep(millis / 1000.0)
 
-@step('a completion request cancelled after {disconnect_after_millis:d} milliseconds')
+
+@step('disconnect after {disconnect_after_millis:d} milliseconds')
 @async_run_until_complete
-async def step_request_completion(context, disconnect_after_millis: int):
-    seeds = await completions_seed(context, num_seeds=1)
-    await request_completion(context.prompts.pop(),
-                                          seeds[0] if seeds is not None else seeds,
-                                          context.base_url,
-                                          debug=context.debug,
-                                          n_predict=context.n_predict,
-                                          cache_prompt=context.cache_prompt,
-                                          id_slot=context.id_slot,
-                                          disconnect_after_millis=disconnect_after_millis,
-                                          user_api_key=context.user_api_key,
-                                          temperature=context.temperature)
+async def step_disconnect_after(context, disconnect_after_millis: int):
+    context.disconnect_after_millis = disconnect_after_millis
+
 
 @step('{predicted_n:d} tokens are predicted matching {re_content}')
 def step_n_tokens_predicted_with_content(context, predicted_n, re_content):
@@ -519,6 +513,7 @@ async def step_oai_chat_completions(context, api_error):
         print(f"Submitting OAI compatible completions request...")
     expect_api_error = api_error == 'raised'
     seeds = await completions_seed(context, num_seeds=1),
+    seeds = await completions_seed(context, num_seeds=1)
     completion = await oai_chat_completions(context.prompts.pop(),
                                             seeds[0] if seeds is not None else seeds,
                                             context.system_prompt,
@@ -538,6 +533,8 @@ async def step_oai_chat_completions(context, api_error):
 
                                             user_api_key=context.user_api_key
                                             if hasattr(context, 'user_api_key') else None,
+
+                                            disconnect_after_millis=context.disconnect_after_millis,
 
                                             expect_api_error=expect_api_error)
     context.tasks_result.append(completion)
@@ -606,6 +603,7 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'enable_streaming') else None,
                               response_format=context.response_format
                               if hasattr(context, 'response_format') else None,
+                              disconnect_after_millis=context.disconnect_after_millis,
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
 
@@ -1029,9 +1027,9 @@ async def request_completion(prompt,
                                 },
                                 headers=headers) as response:
             if disconnect_after_millis is not None:
-                await asyncio.sleep(disconnect_after_millis / 1000)
+                await asyncio.sleep(disconnect_after_millis / 1000.0)
                 return 0
-            
+
             if expect_api_error is None or not expect_api_error:
                 assert response.status == 200
                 assert response.headers['Access-Control-Allow-Origin'] == origin
@@ -1050,6 +1048,7 @@ async def oai_chat_completions(user_prompt,
                                temperature=None,
                                model=None,
                                n_predict=None,
+                               disconnect_after_millis=None,
                                enable_streaming=None,
                                response_format=None,
                                user_api_key=None,
@@ -1093,6 +1092,10 @@ async def oai_chat_completions(user_prompt,
             async with session.post(f'{base_url}{base_path}',
                                     json=payload,
                                     headers=headers) as response:
+                if disconnect_after_millis is not None:
+                    await asyncio.sleep(disconnect_after_millis / 1000.0)
+                    return 0
+
                 if enable_streaming:
                     assert response.status == 200
                     assert response.headers['Access-Control-Allow-Origin'] == origin
@@ -1133,6 +1136,7 @@ async def oai_chat_completions(user_prompt,
                     else:
                         return response.status
     else:
+        assert disconnect_after_millis is None, "disconnect_after_millis is not supported with sync client"
         try:
             openai.api_key = user_api_key
             openai.base_url = f'{base_url}{base_path.removesuffix("chat")}'
