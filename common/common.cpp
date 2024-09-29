@@ -1023,6 +1023,11 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.flash_attn        = params.flash_attn;
     cparams.no_perf           = params.no_perf;
 
+    if (params.reranking) {
+        cparams.embeddings    = true;
+        cparams.pooling_type  = LLAMA_POOLING_TYPE_RANK;
+    }
+
     cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
     cparams.type_v = kv_cache_type_from_str(params.cache_type_v);
 
@@ -1432,6 +1437,8 @@ void llama_batch_add(
                           llama_pos   pos,
     const std::vector<llama_seq_id> & seq_ids,
                                bool   logits) {
+    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "llama_batch size exceeded");
+
     batch.token   [batch.n_tokens] = id;
     batch.pos     [batch.n_tokens] = pos;
     batch.n_seq_id[batch.n_tokens] = seq_ids.size();

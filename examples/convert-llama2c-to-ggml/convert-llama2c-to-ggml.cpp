@@ -201,7 +201,7 @@ static void print_sample_weights(TransformerWeights *w){
 
 //////////////////////////////////////// ggml structs and functions required to load models, configs and save the model.
 
-struct llama_vocab {
+struct my_llama_vocab {
     using id    = int32_t;
     using token = std::string;
     using ttype = llama_token_type;
@@ -525,7 +525,7 @@ static std::string llama_escape_whitespaces(const std::string & text) {
     return out.str();
 }
 
-static void load_vocab(const char * filename, const Config * config, struct llama_vocab * vocab) {
+static void load_vocab(const char * filename, const Config * config, struct my_llama_vocab * vocab) {
     if (is_ggml_file(filename)) {
         LOG_INF("%s: Loading vocabulary from gguf file %s\n", __func__, filename);
         struct ggml_context * ctx_data = NULL;
@@ -583,13 +583,13 @@ static void load_vocab(const char * filename, const Config * config, struct llam
         const int  n_vocab = config->vocab_size;
         /* uint32_t max_token_length =  */ file.read_u32(); // unused
         vocab->id_to_token.resize(n_vocab);
-        for (llama_vocab::id id=0; id<n_vocab; ++id) {
+        for (my_llama_vocab::id id=0; id<n_vocab; ++id) {
             float_t score = file.read_f32();
             uint32_t len = file.read_u32();
             std::string text = file.read_string(len);
 
             unsigned char byte_val;
-            llama_vocab::ttype type = LLAMA_TOKEN_TYPE_NORMAL;
+            my_llama_vocab::ttype type = LLAMA_TOKEN_TYPE_NORMAL;
             if (id == UNKNOWN_TOKEN_ID) {
                 text = "<unk>";
                 type = LLAMA_TOKEN_TYPE_UNKNOWN;
@@ -631,7 +631,7 @@ static void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const floa
 }
 
 static void save_as_llama_model(
-    struct llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename
+    struct my_llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename
 ) {
     // convert AK weights into GG weights one by one.
     // w->token_embedding_table -> model->tok_embeddings
@@ -671,7 +671,7 @@ static void save_as_llama_model(
     std::vector<const char*> tokens;
     std::vector<float> scores;
     std::vector<llama_token_type> token_types;
-    for (const llama_vocab::token_data & token_data : vocab->id_to_token) {
+    for (const my_llama_vocab::token_data & token_data : vocab->id_to_token) {
         tokens.push_back(token_data.text.c_str());
         scores.push_back(token_data.score);
         token_types.push_back(token_data.type);
@@ -905,7 +905,7 @@ int main(int argc, char ** argv) {
         fclose(file);
     }
 
-    struct llama_vocab vocab;
+    struct my_llama_vocab vocab;
     load_vocab(params.fn_vocab_model, &config, &vocab);
 
     struct my_llama_model model;

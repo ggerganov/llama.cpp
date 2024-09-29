@@ -8,6 +8,8 @@
 #include <map>
 #include <set>
 
+struct llm_tokenizer;
+
 struct llama_vocab {
     using id    = llama_token;
     using token = std::string;
@@ -65,7 +67,14 @@ struct llama_vocab {
 
     std::vector<char> precompiled_charsmap;
 
+    llm_tokenizer * tokenizer = nullptr;
+
+    llama_vocab() = default;
+    ~llama_vocab();
+
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
+
+    void init_tokenizer();
 };
 
 //

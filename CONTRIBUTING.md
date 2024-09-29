@@ -27,3 +27,8 @@
 
 ![matmul](media/matmul.png)
 
+# Resources
+
+The Github issues, PRs and discussions contain a lot of information that can be useful to get familiar with the codebase. For convenience, some of the more important information is referenced from Github projects:
+
+https://github.com/ggerganov/llama.cpp/projects

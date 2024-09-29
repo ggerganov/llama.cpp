@@ -174,6 +174,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 **Tools:**
 
 - [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
+- [akx/ollama-dl](https://github.com/akx/ollama-dl) – download models from the Ollama library to be used directly with llama.cpp
 - [crashr/gppm](https://github.com/crashr/gppm) – launch llama.cpp instances utilizing NVIDIA Tesla P40 or P100 GPUs with reduced idle power consumption
 - [gpustack/gguf-parser](https://github.com/gpustack/gguf-parser-go/tree/main/cmd/gguf-parser) - review/check the GGUF file and estimate the memory usage
 - [Styled Lines](https://marketplace.unity.com/packages/tools/generative-ai/styled-lines-llama-cpp-model-292902) (proprietary licensed, async wrapper of inference part for game development in Unity3d with prebuild Mobile and Web platform wrappers and a model example)
@@ -442,7 +443,7 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 - Contributors can open PRs
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
-- Any help with managing issues and PRs is very appreciated!
+- Any help with managing issues, PRs and projects is very appreciated!
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
 - Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)

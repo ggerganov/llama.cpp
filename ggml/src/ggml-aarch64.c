@@ -598,15 +598,6 @@ size_t quantize_q4_0_8x8(const float * restrict src, void * restrict dst, int64_
     return quantize_q4_0_nr_bl(src, dst, nrow, n_per_row, 8, 8);
 }
 
-// Return the number of byte lanes in the SVE vector if SVE is supported; otherwise, returns 0 if SVE is not supported.
-static int sve_lane_count(void) {
-#if defined(__ARM_FEATURE_SVE)
-    return ggml_sve_cnt_b;
-#else
-    return 0;
-#endif
-}
-
 void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
@@ -843,7 +834,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
 #if defined(__ARM_FEATURE_SVE)
-    if (ggml_cpu_has_sve() && sve_lane_count() == QK8_0) {
+    if (ggml_cpu_has_sve() && ggml_cpu_get_sve_cnt() == QK8_0) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
@@ -2020,7 +2011,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
-    if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && sve_lane_count() == QK8_0) {
+    if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
