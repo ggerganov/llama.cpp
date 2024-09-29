@@ -1652,7 +1652,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "multi-modality" });
     options.push_back({ "*",           "       --mmproj FILE",          "path to a multimodal projector file for LLaVA. see examples/llava/README.md" });
     options.push_back({ "*",           "       --image FILE",           "path to an image file. use with multimodal models. Specify multiple times for batching" });
-    options.push_back({ "*",           "       --video FILE",           "path to an video file. use with multimodal models. Specify multiple times for batching" });
+    options.push_back({ "*",           "       --video FILE",           "path to a video file. use with multimodal models. Specify multiple times for batching" });
     options.push_back({ "*",           "       --frame-num N",          "number of max video frame (default: 16)" });
 
     options.push_back({ "backend" });

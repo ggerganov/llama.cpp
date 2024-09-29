@@ -284,7 +284,7 @@ static int process_image(struct llava_context * ctx_llava, struct llava_image_em
     std::string system_prompt;
     bool res = false;
     int idx = 0;
-    int num_image_embeds = embeds->n_image_pos / clip_n_patches(ctx_llava->ctx_clip);    
+    int num_image_embeds = embeds->n_image_pos / clip_n_patches(ctx_llava->ctx_clip);
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
     eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, false);
     process_eval_image_embed(ctx_llava, embeds, params->n_batch, &n_past, idx++);
@@ -473,7 +473,7 @@ int main(int argc, char ** argv) {
 
     if (params.video.size() > 0){
         ctx_llava = llava_init_context(&params);
-        auto video = params.video;        
+        auto video = params.video;
         std::vector<clip_image_u8 *> frames = extract_frames(video.c_str(), params.frame_num);
         process_prompt(0, ctx_llava, &params, n_past);
         // LOG_TEE("frames.size: %zu\n", frames.size());
@@ -501,7 +501,7 @@ int main(int argc, char ** argv) {
             }
             have_tmp = true;
             printf("%s", tmp);
-            if (strstr(response.c_str(), "<user>")) break; // minicpm-v 
+            if (strstr(response.c_str(), "<user>")) break; // minicpm-v
 
             fflush(stdout);
         }
@@ -534,7 +534,7 @@ int main(int argc, char ** argv) {
                 }
                 have_tmp = true;
                 printf("%s", tmp);
-                if (strstr(response.c_str(), "<user>")) break; // minicpm-v 
+                if (strstr(response.c_str(), "<user>")) break; // minicpm-v
 
                 fflush(stdout);
             }
@@ -561,7 +561,7 @@ int main(int argc, char ** argv) {
                     }
                     have_tmp = true;
                     printf("%s", tmp);
-                    if (strstr(response.c_str(), "<user>")) break; // minicpm-v 
+                    if (strstr(response.c_str(), "<user>")) break; // minicpm-v
 
                     fflush(stdout);
                 }
@@ -583,15 +583,15 @@ int main(int argc, char ** argv) {
                         if (strcmp(tmp, "</s>") == 0) break;
                         if (strstr(tmp, "###")) break; // Yi-VL behavior
                         printf("%s", tmp);// mistral llava-1.6
-                        if (strstr(response.c_str(), "<user>")) break; // minicpm-v 
+                        if (strstr(response.c_str(), "<user>")) break; // minicpm-v
                         fflush(stdout);
                     }
                     llama_sampling_free(ctx_sampling);
-                }                
+                }
             }
         }
         printf("\n");
-        llama_print_timings(ctx_llava->ctx_llama);        
+        llama_print_timings(ctx_llava->ctx_llama);
 
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
