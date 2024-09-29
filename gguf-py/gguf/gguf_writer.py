@@ -814,6 +814,36 @@ class GGUFWriter:
     def add_precompiled_charsmap(self, charsmap: Sequence[bytes]) -> None:
         self.add_array(Keys.Tokenizer.PRECOMPILED_CHARSMAP, charsmap)
 
+    def add_vision_type(self, value: str) -> None:
+        self.add_string(Keys.Vision.TYPE, value)
+
+    def add_vision_image_size(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.IMAGE_SIZE, value)
+
+    def add_vision_patch_size(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.PATCH_SIZE, value)
+
+    def add_vision_clip_architecture(self, value: str) -> None:
+        self.add_string(Keys.Vision.Clip.ARCHITECTURE, value)
+
+    def add_vision_clip_context_length(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.CONTEXT_LENGTH, value)
+
+    def add_vision_clip_embedding_length(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.EMBEDDING_LENGTH, value)
+
+    def add_vision_clip_block_count(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.BLOCK_COUNT, value)
+
+    def add_vision_clip_feed_forward_length(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.FEED_FORWARD_LENGTH, value)
+
+    def add_vision_clip_head_count(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.HEAD_COUNT, value)
+
+    def add_vision_clip_layer_norm_epsilon(self, value: float) -> None:
+        self.add_float32(Keys.Vision.Clip.LAYERNORM_EPS, value)
+
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
         if not isinstance(value, str):
             template_default = None

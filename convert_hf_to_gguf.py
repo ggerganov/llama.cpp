@@ -66,6 +66,11 @@ class Model:
     dir_model_card: Path
     is_lora: bool
 
+    # for vision model
+    vparams: dict[str, Any] | None = None
+    v_tensor_map: gguf.TensorNameMap
+    v_tensor_names: set[str] | None
+
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
@@ -210,9 +215,13 @@ class Model:
 
     def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
         new_name = self.tensor_map.get_name(key=name, try_suffixes=try_suffixes)
-        if new_name is None:
+        new_name_vision = self.v_tensor_map.get_name(key=name, try_suffixes=try_suffixes)
+        if new_name is not None:
+            return new_name
+        elif new_name_vision is not None:
+            return new_name_vision
+        else:
             raise ValueError(f"Can not map tensor {name!r}")
-        return new_name
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_block_count(self.block_count)
@@ -452,7 +461,10 @@ class Model:
     @staticmethod
     def load_hparams(dir_model: Path):
         with open(dir_model / "config.json", "r", encoding="utf-8") as f:
-            return json.load(f)
+            hparams = json.load(f)
+            if "text_config" in hparams:
+                hparams = {**hparams, **hparams["text_config"]}
+            return hparams
 
     @classmethod
     def register(cls, *names: str) -> Callable[[AnyModel], AnyModel]:
@@ -1501,9 +1513,16 @@ class StableLMModel(Model):
                 raise ValueError(f"Unprocessed norms: {norms}")
 
 
-@Model.register("LLaMAForCausalLM", "LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
+@Model.register("LLaMAForCausalLM", "LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM", "LlavaForConditionalGeneration")
 class LlamaModel(Model):
     model_arch = gguf.MODEL_ARCH.LLAMA
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "vision_config" in self.hparams:
+            self.vparams = self.hparams["vision_config"]
+        if self.vparams is not None:
+            self.v_tensor_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.LLAVA_VISION, self.vparams["num_hidden_layers"])
 
     def set_vocab(self):
         try:
@@ -1554,6 +1573,17 @@ class LlamaModel(Model):
         if self.hparams.get("vocab_size", 32000) == 49152:
             self.gguf_writer.add_add_bos_token(False)
 
+        # For vision model
+        if self.vparams is not None:
+            self.gguf_writer.add_vision_type("clip")
+            self.gguf_writer.add_vision_image_size(self.vparams["image_size"])
+            self.gguf_writer.add_vision_patch_size(self.vparams["patch_size"])
+            self.gguf_writer.add_vision_clip_architecture("llava")
+            self.gguf_writer.add_vision_clip_block_count(self.vparams["num_hidden_layers"])
+            self.gguf_writer.add_vision_clip_embedding_length(self.vparams["hidden_size"])
+            self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
+            self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
+
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
         if n_head_kv is not None and n_head != n_head_kv:
@@ -1567,6 +1597,9 @@ class LlamaModel(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
+
+        if name.startswith("language_model"):
+            name = name.replace("language_model.", "")
 
         if name.endswith(("q_proj.weight", "q_proj.bias")):
             data_torch = LlamaModel.permute(data_torch, n_head, n_head)

@@ -679,6 +679,66 @@ class TensorNameMap:
         MODEL_TENSOR.ENC_OUTPUT_NORM: (
             "encoder.final_layer_norm", # t5
         ),
+
+        MODEL_TENSOR.V_MMPROJ_A: (
+            "multi_modal_projector.linear_1",
+        ),
+
+        MODEL_TENSOR.V_MMPROJ_B: (
+            "multi_modal_projector.linear_2",
+        ),
+
+        MODEL_TENSOR.V_ENC_EMBD_CLS: (
+            "vision_tower.vision_model.embeddings.class_embedding",
+        ),
+
+        MODEL_TENSOR.V_ENC_EMBD_PATCH: (
+            "vision_tower.vision_model.embeddings.patch_embedding",
+        ),
+
+        MODEL_TENSOR.V_ENC_EMBD_POS: (
+            "vision_tower.vision_model.embeddings.position_embedding",
+        ),
+
+        MODEL_TENSOR.V_ENC_ATTN_Q: (
+            "vision_tower.vision_model.encoder.layers.{bid}.self_attn.q_proj",
+        ),
+
+        MODEL_TENSOR.V_ENC_ATTN_K: (
+            "vision_tower.vision_model.encoder.layers.{bid}.self_attn.k_proj",
+        ),
+
+        MODEL_TENSOR.V_ENC_ATTN_V: (
+            "vision_tower.vision_model.encoder.layers.{bid}.self_attn.v_proj",
+        ),
+
+        MODEL_TENSOR.V_ENC_INPUT_NORM: (
+            "vision_tower.vision_model.encoder.layers.{bid}.layer_norm1",
+        ),
+
+        MODEL_TENSOR.V_ENC_OUTPUT: (
+            "vision_tower.vision_model.encoder.layers.{bid}.self_attn.out_proj",
+        ),
+
+        MODEL_TENSOR.V_ENC_OUTPUT_NORM: (
+            "vision_tower.vision_model.encoder.layers.{bid}.layer_norm2",
+        ),
+
+        MODEL_TENSOR.V_ENC_FFN_UP: (
+            "vision_tower.vision_model.encoder.layers.{bid}.mlp.fc1",
+        ),
+
+        MODEL_TENSOR.V_ENC_FFN_DOWN: (
+            "vision_tower.vision_model.encoder.layers.{bid}.mlp.fc2",
+        ),
+
+        MODEL_TENSOR.V_PRE_NORM: (
+            "vision_tower.vision_model.pre_layrnorm",
+        ),
+
+        MODEL_TENSOR.V_POST_NORM: (
+            "vision_tower.vision_model.post_layernorm",
+        ),
     }
 
     # architecture-specific block mappings

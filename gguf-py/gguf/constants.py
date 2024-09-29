@@ -178,6 +178,26 @@ class Keys:
         TYPE       = "adapter.type"
         LORA_ALPHA = "adapter.lora.alpha"
 
+    class Vision:
+        # only support vision.type = "clip" for now
+        TYPE                = "vision.type"
+        IMAGE_SIZE          = "vision.image_size"
+        PATCH_SIZE          = "vision.patch_size"
+        IMAGE_MEAN          = "vision.image_mean"
+        IMAGE_STD           = "vision.image_std"
+
+        class Clip:
+            ARCHITECTURE        = "vision.clip.architecture"
+            CONTEXT_LENGTH      = "vision.clip.context_length"
+            EMBEDDING_LENGTH    = "vision.clip.embedding_length"
+            BLOCK_COUNT         = "vision.clip.block_count"
+            FEED_FORWARD_LENGTH = "vision.clip.feed_forward_length"
+            PROJECTION_TYPE     = "vision.clip.projection_type"
+            PROJECTION_DIM      = "vision.clip.projection_dim"
+            USE_GELU            = "vision.clip.use_gelu"
+            HEAD_COUNT          = "vision.clip.attention.head_count"
+            LAYERNORM_EPS       = "vision.clip.attention.layer_norm_epsilon"
+
 #
 # recommended mapping of model tensor names for storage in gguf
 #
@@ -238,6 +258,8 @@ class MODEL_ARCH(IntEnum):
     GRANITE      = auto()
     GRANITE_MOE  = auto()
     CHAMELEON    = auto()
+    # vision models
+    LLAVA_VISION = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -345,6 +367,22 @@ class MODEL_TENSOR(IntEnum):
     ENC_FFN_DOWN         = auto()
     ENC_FFN_UP           = auto()
     ENC_OUTPUT_NORM      = auto()
+    # vision
+    V_MMPROJ_A           = auto()
+    V_MMPROJ_B           = auto()
+    V_ENC_EMBD_CLS       = auto()
+    V_ENC_EMBD_PATCH     = auto()
+    V_ENC_EMBD_POS       = auto()
+    V_ENC_ATTN_Q         = auto()
+    V_ENC_ATTN_K         = auto()
+    V_ENC_ATTN_V         = auto()
+    V_ENC_INPUT_NORM     = auto()
+    V_ENC_OUTPUT         = auto()
+    V_ENC_OUTPUT_NORM    = auto()
+    V_ENC_FFN_UP         = auto()
+    V_ENC_FFN_DOWN       = auto()
+    V_PRE_NORM           = auto()
+    V_POST_NORM          = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -397,6 +435,8 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GRANITE:        "granite",
     MODEL_ARCH.GRANITE_MOE:    "granitemoe",
     MODEL_ARCH.CHAMELEON:      "chameleon",
+    # vision
+    MODEL_ARCH.LLAVA_VISION:   "llava",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -504,6 +544,22 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ENC_FFN_DOWN:              "enc.blk.{bid}.ffn_down",
     MODEL_TENSOR.ENC_FFN_UP:                "enc.blk.{bid}.ffn_up",
     MODEL_TENSOR.ENC_OUTPUT_NORM:           "enc.output_norm",
+    # vision
+    MODEL_TENSOR.V_MMPROJ_A:                "v.mmproj_a",
+    MODEL_TENSOR.V_MMPROJ_B:                "v.mmproj_b",
+    MODEL_TENSOR.V_ENC_EMBD_CLS:            "v.enc.embd.cls",
+    MODEL_TENSOR.V_ENC_EMBD_PATCH:          "v.enc.embd.patch",
+    MODEL_TENSOR.V_ENC_EMBD_POS:            "v.enc.embd.pos",
+    MODEL_TENSOR.V_ENC_ATTN_Q:              "v.enc.blk.{bid}.attn_q",
+    MODEL_TENSOR.V_ENC_ATTN_K:              "v.enc.blk.{bid}.attn_k",
+    MODEL_TENSOR.V_ENC_ATTN_V:              "v.enc.blk.{bid}.attn_v",
+    MODEL_TENSOR.V_ENC_INPUT_NORM:          "v.enc.blk.{bid}.input_norm",
+    MODEL_TENSOR.V_ENC_OUTPUT:              "v.enc.blk.{bid}.output",
+    MODEL_TENSOR.V_ENC_OUTPUT_NORM:         "v.enc.blk.{bid}.output_norm",
+    MODEL_TENSOR.V_ENC_FFN_UP:              "v.enc.blk.{bid}.ffn_up",
+    MODEL_TENSOR.V_ENC_FFN_DOWN:            "v.enc.blk.{bid}.ffn_down",
+    MODEL_TENSOR.V_PRE_NORM:                "v.pre_norm",
+    MODEL_TENSOR.V_POST_NORM:               "v.post_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -1278,6 +1334,23 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.LLAVA_VISION: [
+        MODEL_TENSOR.V_MMPROJ_A,
+        MODEL_TENSOR.V_MMPROJ_B,
+        MODEL_TENSOR.V_ENC_EMBD_CLS,
+        MODEL_TENSOR.V_ENC_EMBD_PATCH,
+        MODEL_TENSOR.V_ENC_EMBD_POS,
+        MODEL_TENSOR.V_ENC_ATTN_Q,
+        MODEL_TENSOR.V_ENC_ATTN_K,
+        MODEL_TENSOR.V_ENC_ATTN_V,
+        MODEL_TENSOR.V_ENC_INPUT_NORM,
+        MODEL_TENSOR.V_ENC_OUTPUT,
+        MODEL_TENSOR.V_ENC_OUTPUT_NORM,
+        MODEL_TENSOR.V_ENC_FFN_UP,
+        MODEL_TENSOR.V_ENC_FFN_DOWN,
+        MODEL_TENSOR.V_PRE_NORM,
+        MODEL_TENSOR.V_POST_NORM,
     ],
     # TODO
 }
