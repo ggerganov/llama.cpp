@@ -11249,20 +11249,24 @@ static void ggml_mrope_cache_init(
     
     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
         const float ff = freq_factors ? freq_factors[i0/2] : 1.0f;
+        float theta = theta_t;
+        int sector = (i0 / 2) % sect_dims;
         
-        float theta = theta_base_t;
-        int sector = i0 % sect_dims;
-        if (sector > sections[1] && sector >= sections[0])
-            theta = theta_base_h;
-        else if (sector >= sections[1])
-            theta = theta_base_w;
+        if (sector < sections[1] + sections[0] && sector >= sections[0]) {
+            theta = theta_h;
+        } 
+        else if (sector >= sections[1] + sections[0]) {
+            theta = theta_w;
+        }
         
         rope_yarn(
             theta/ff, freq_scale, corr_dims, i0, ext_factor, mscale, &cache[i0 + 0], &cache[i0 + 1]
         );
         cache[i0 + 1] *= sin_sign;
 
-        theta *= theta_scale;
+        theta_t *= theta_scale;
+        theta_w *= theta_scale;
+        theta_h *= theta_scale;
     }
 }
 

@@ -11,15 +11,27 @@
 #include <cstdlib>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+
 
 static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
+    std::vector<llama_pos> pos;
     for (int i = 0; i < N; i += n_batch) {
         int n_eval = (int) tokens.size() - i;
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        auto batch = llama_batch_get_one(&tokens[i], n_eval, *n_past, 0);
+        llama_batch batch = llama_batch_get_one(&tokens[i], n_eval, *n_past, 0);
+        
+        // TODO: add mrope pos ids somewhere else
+        pos.resize(batch.n_tokens * 3);
+        for (int j = 0; j < batch.n_tokens * 3; j ++) {
+            pos[j] = j % batch.n_tokens;
+        }
+        batch.pos = pos.data();
+        
         if (llama_decode(ctx_llama, batch)) {
             LOG_TEE("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
@@ -338,7 +350,7 @@ static void tmp_test_conv2d_reshape(struct llava_context * ctx_llava, gpt_params
         hidden_size * 4, (patch_w / 2) * batch_size * (patch_h / 2));
     
     ggml_build_forward_expand(gf, inp);
-    ggml_graph_compute_with_ctx(ctx0, gf, 8);
+    ggml_graph_compute_with_ctx(ctx0, gf, 2);
 
     std::vector<float> embd;
     embd.resize(num_patches * hidden_size * batch_size);
@@ -347,6 +359,135 @@ static void tmp_test_conv2d_reshape(struct llava_context * ctx_llava, gpt_params
         (float *) ggml_get_data(inp), 
         sizeof(float) * num_patches * hidden_size * batch_size);
     ggml_free(ctx0);
+}
+
+
+static void tmp_test_rope(struct llava_context * ctx_llava, gpt_params * params) {
+    
+    int n_threads = 1;
+    static size_t buf_size = 512u*1024*1024;
+    static void * buf = malloc(buf_size);
+
+    struct ggml_init_params init_params = {
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf,
+        /*.no_alloc   =*/ false,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(init_params);
+    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+
+    struct ggml_tensor * inp_raw = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 128, 12, 30);
+    ggml_set_name(inp_raw, "inp_raw");
+    ggml_set_input(inp_raw);
+
+    std::vector<float> dummy_q;
+    dummy_q.resize(128 * 12 * 30);
+    std::fill(dummy_q.begin(), dummy_q.end(), 0.1);
+    memcpy(inp_raw->data, dummy_q.data(), 128 * 12 * 30 * ggml_element_size(inp_raw));
+
+    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 30);
+    ggml_set_name(pos, "pos");
+    ggml_set_input(pos);
+
+    std::vector<int> pos_id;
+    pos_id.resize(30);
+    for (int i = 0; i < 30; i ++) pos_id[i] = i;
+    memcpy(pos->data, pos_id.data(), (30) * ggml_element_size(pos));
+
+    auto encode = ggml_rope_ext(
+        ctx0, inp_raw, pos, nullptr,
+        128, LLAMA_ROPE_TYPE_NEOX, 32768, 1000000, 1,
+        0, 1, 32, 1);
+    
+    ggml_build_forward_expand(gf, encode);
+    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+
+    std::vector<float> embd;
+    embd.resize(128 * 12 * 30);
+    memcpy(
+        embd.data(), 
+        (float *) ggml_get_data(encode), 
+        sizeof(float) * 128 * 12 * 30);
+    ggml_free(ctx0);
+
+
+    // Open a binary file for writing
+    std::ofstream outFile("rope.bin", std::ios::binary);
+    // Check if file is open
+    if (outFile.is_open()) {
+        // Write the vector to the file
+        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
+
+        // Close the file
+        outFile.close();
+        std::cout << "Data successfully written to output.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+}
+
+
+static void tmp_test_mrope(struct llava_context * ctx_llava, gpt_params * params) {
+    
+    int n_threads = 1;
+    static size_t buf_size = 512u*1024*1024;
+    static void * buf = malloc(buf_size);
+
+    struct ggml_init_params init_params = {
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf,
+        /*.no_alloc   =*/ false,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(init_params);
+    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+
+    struct ggml_tensor * inp_raw = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 128, 12, 30);
+    ggml_set_name(inp_raw, "inp_raw");
+    ggml_set_input(inp_raw);
+
+    std::vector<float> dummy_q;
+    dummy_q.resize(128 * 12 * 30);
+    std::fill(dummy_q.begin(), dummy_q.end(), 0.1);
+    memcpy(inp_raw->data, dummy_q.data(), 128 * 12 * 30 * ggml_element_size(inp_raw));
+
+    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 30 * 3);
+    ggml_set_name(pos, "pos");
+    ggml_set_input(pos);
+
+    std::vector<int> pos_id;
+    pos_id.resize(90);
+    for (int i = 0; i < 30; i ++) pos_id[i] = i;
+    for (int i = 30; i < 60; i ++) pos_id[i] = i - 0;
+    for (int i = 60; i < 90; i ++) pos_id[i] = i - 0;
+    memcpy(pos->data, pos_id.data(), 90 * ggml_element_size(pos));
+
+    auto encode = ggml_mrope_ext(
+        ctx0, inp_raw, pos, nullptr,
+        128, LLAMA_ROPE_TYPE_NEOX, 32768, 1000000, 1,
+        0, 1, 32, 1);
+    
+    ggml_build_forward_expand(gf, encode);
+    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+
+    std::vector<float> embd;
+    embd.resize(128 * 12 * 30);
+    memcpy(
+        embd.data(), 
+        (float *) ggml_get_data(encode), 
+        sizeof(float) * 128 * 12 * 30);
+    ggml_free(ctx0);
+
+    std::ofstream outFile("mrope.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
+
+        outFile.close();
+        std::cout << "Data successfully written to mrope.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
 }
 
 /*
@@ -399,8 +540,10 @@ int main(int argc, char ** argv) {
         auto ctx_llava = llava_init_context(&params, model);
 
         // process the prompt
-        tmp_test_conv2d_reshape(ctx_llava, &params);
-        process_prompt(ctx_llava, nullptr, &params, params.prompt);
+        // tmp_test_conv2d_reshape(ctx_llava, &params);
+        // tmp_test_rope(ctx_llava, &params);
+        tmp_test_mrope(ctx_llava, &params);
+        // process_prompt(ctx_llava, nullptr, &params, params.prompt);
 
         llama_print_timings(ctx_llava->ctx_llama);
         ctx_llava->model = NULL;
