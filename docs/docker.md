@@ -20,7 +20,7 @@ Additionally, there the following images, similar to the above:
 - `ghcr.io/ggerganov/llama.cpp:light-rocm`: Same as `light` but compiled with ROCm support. (platforms: `linux/amd64`, `linux/arm64`)
 - `ghcr.io/ggerganov/llama.cpp:server-rocm`: Same as `server` but compiled with ROCm support. (platforms: `linux/amd64`, `linux/arm64`)
 
-The GPU enabled images are not currently tested by CI beyond being built. They are not built with any variation from the ones in the Dockerfiles defined in [.devops/](.devops/) and the GitHub Action defined in [.github/workflows/docker.yml](.github/workflows/docker.yml). If you need different settings (for example, a different CUDA or ROCm library, you'll need to build the images locally for now).
+The GPU enabled images are not currently tested by CI beyond being built. They are not built with any variation from the ones in the Dockerfiles defined in [.devops/](../.devops/) and the GitHub Action defined in [.github/workflows/docker.yml](../.github/workflows/docker.yml). If you need different settings (for example, a different CUDA or ROCm library, you'll need to build the images locally for now).
 
 ## Usage
 
@@ -66,8 +66,8 @@ You may want to pass in some different `ARGS`, depending on the CUDA environment
 
 The defaults are:
 
-- `CUDA_VERSION` set to `11.7.1`
-- `CUDA_DOCKER_ARCH` set to `all`
+- `CUDA_VERSION` set to `12.6.0`
+- `CUDA_DOCKER_ARCH` set to the cmake build default, which includes all the supported architectures
 
 The resulting images, are essentially the same as the non-CUDA images:
 

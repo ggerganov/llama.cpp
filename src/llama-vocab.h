@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <set>
 
 struct llama_vocab {
     using id    = llama_token;
@@ -17,6 +18,8 @@ struct llama_vocab {
         float score;
         tattr attr;
     };
+
+    uint32_t n_vocab = 0; // TODO: not great because has to keep in sync with hparams.n_vocab
 
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
     enum llama_vocab_pre_type type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
@@ -47,12 +50,15 @@ struct llama_vocab {
     id special_eot_id    = -1; // TODO: move above after "eos_id", and here add "file separator" token
     id special_eom_id    = -1;
 
+    // set of all tokens that cause "end of generation"
+    std::set<id> special_eog_ids;
+
     // tokenizer flags
-    bool tokenizer_add_space_prefix = false;
-    bool tokenizer_add_bos          = false;
-    bool tokenizer_add_eos          = false;
-    bool tokenizer_ignore_merges    = false;
-    bool tokenizer_clean_spaces     = false;  // clean_up_tokenization_spaces
+    bool tokenizer_add_space_prefix           = false;
+    bool tokenizer_add_bos                    = false;
+    bool tokenizer_add_eos                    = false;
+    bool tokenizer_ignore_merges              = false;
+    bool tokenizer_clean_spaces               = false;  // clean_up_tokenization_spaces
     bool tokenizer_remove_extra_whitespaces   = false;
     bool tokenizer_escape_whitespaces         = true;
     bool tokenizer_treat_whitespace_as_suffix = false;
@@ -61,8 +67,6 @@ struct llama_vocab {
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
 };
-
-const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx);
 
 //
 // internal API
@@ -76,6 +80,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
         bool add_special,
         bool parse_special = false);
 
+// TODO: move the API below as member functions of llama_vocab
 llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch);
 
 const char * llama_token_get_text_impl(const struct llama_vocab & vocab, llama_token token);
@@ -95,8 +100,8 @@ llama_token llama_token_sep_impl(const struct llama_vocab & vocab);
 llama_token llama_token_nl_impl (const struct llama_vocab & vocab);
 llama_token llama_token_pad_impl(const struct llama_vocab & vocab);
 
-int32_t llama_add_bos_token_impl(const struct llama_vocab & vocab);
-int32_t llama_add_eos_token_impl(const struct llama_vocab & vocab);
+bool llama_add_bos_token_impl(const struct llama_vocab & vocab);
+bool llama_add_eos_token_impl(const struct llama_vocab & vocab);
 
 llama_token llama_token_prefix_impl(const struct llama_vocab & vocab);
 llama_token llama_token_middle_impl(const struct llama_vocab & vocab);

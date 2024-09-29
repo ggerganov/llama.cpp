@@ -63,8 +63,10 @@ extern "C" {
     GGML_API void ggml_backend_tensor_set_async(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
     GGML_API void ggml_backend_tensor_get_async(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
 
+    // "offset" refers to the offset of the tensor data for setting/getting data
     GGML_API GGML_CALL void ggml_backend_tensor_set(      struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
     GGML_API GGML_CALL void ggml_backend_tensor_get(const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
+    GGML_API GGML_CALL void ggml_backend_tensor_memset(   struct ggml_tensor * tensor,     uint8_t value, size_t offset, size_t size);
 
     GGML_API void ggml_backend_synchronize(ggml_backend_t backend);
 
@@ -102,6 +104,7 @@ extern "C" {
 
     GGML_API GGML_CALL bool ggml_backend_is_cpu                (ggml_backend_t backend);
     GGML_API           void ggml_backend_cpu_set_n_threads     (ggml_backend_t backend_cpu, int n_threads);
+    GGML_API           void ggml_backend_cpu_set_threadpool    (ggml_backend_t backend_cpu, ggml_threadpool_t threadpool);
     GGML_API           void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback abort_callback, void * abort_callback_data);
 
     // Create a backend buffer from an existing pointer
@@ -120,7 +123,7 @@ extern "C" {
     // The backend registry is a registry of all the available backends, and allows initializing backends in a generic way
 
     GGML_API size_t                     ggml_backend_reg_get_count(void);
-    GGML_API size_t                     ggml_backend_reg_find_by_name(const char * name);
+    GGML_API size_t                     ggml_backend_reg_find_by_name(const char * name); // returns index of backend with name, or SIZE_MAX if not found
     GGML_API ggml_backend_t             ggml_backend_reg_init_backend_from_str(const char * backend_str); // str is backend_name:params (params is optional)
     GGML_API const char *               ggml_backend_reg_get_name(size_t i);
     GGML_API ggml_backend_t             ggml_backend_reg_init_backend(size_t i, const char * params); // params is backend-specific

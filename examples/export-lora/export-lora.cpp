@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -9,6 +10,12 @@
 #include <fstream>
 
 static bool g_verbose = false;
+
+struct tensor_transformation {
+    struct ggml_tensor * in;
+    struct ggml_tensor * out;
+    bool is_copy;
+};
 
 static std::string get_kv_str(struct gguf_context * ctx_gguf, const std::string & key){
     int id = gguf_find_key(ctx_gguf, key.c_str());
@@ -198,8 +205,7 @@ struct lora_merge_ctx {
         }
 
         // mapping base tensor to out tensor (same shape with base, but different type)
-        // if out_tensor == nullptr, we only copy it
-        std::vector<std::pair<struct ggml_tensor *, struct ggml_tensor *>> base_to_out_tensors;
+        std::vector<tensor_transformation> trans;
         for (auto & it : base_model.tensors) {
             bool t_a = true;
             bool t_b = true;
@@ -212,14 +218,22 @@ struct lora_merge_ctx {
                 // only copy
                 struct ggml_tensor * cpy_tensor = ggml_dup_tensor(ctx_out_ggml, base_tensor);
                 ggml_set_name(cpy_tensor, base_tensor->name);
-                base_to_out_tensors.push_back(std::make_pair(cpy_tensor, nullptr));
+                trans.push_back({
+                    cpy_tensor,
+                    cpy_tensor,
+                    true,
+                });
                 gguf_add_tensor(ctx_out, cpy_tensor);
             } else if (t_a && t_b) {
                 // need merging
                 struct ggml_tensor * out_tensor = ggml_new_tensor(
                     ctx_out_ggml, get_out_tensor_type(base_tensor), GGML_MAX_DIMS, base_tensor->ne);
                 ggml_set_name(out_tensor, base_tensor->name);
-                base_to_out_tensors.push_back(std::make_pair(base_tensor, out_tensor));
+                trans.push_back({
+                    base_tensor,
+                    out_tensor,
+                    false,
+                });
                 gguf_add_tensor(ctx_out, out_tensor);
             } else {
                 throw std::runtime_error("tensor " + it.first + " missing either lora_a or lora_b");
@@ -234,12 +248,12 @@ struct lora_merge_ctx {
 
         // process base model tensors
         size_t n_merged = 0;
-        for (auto & it : base_to_out_tensors) {
-            if (it.second != nullptr) {
-                merge_tensor(it.first, it.second);
+        for (auto & it : trans) {
+            if (!it.is_copy) {
+                merge_tensor(it.in, it.out);
                 n_merged++;
             } else {
-                copy_tensor(it.first);
+                copy_tensor(it.in);
             }
         }
 
@@ -252,7 +266,7 @@ struct lora_merge_ctx {
         }
 
         printf("%s : merged %ld tensors with lora adapters\n", __func__, n_merged);
-        printf("%s : wrote %ld tensors to output file\n", __func__, base_to_out_tensors.size());
+        printf("%s : wrote %ld tensors to output file\n", __func__, trans.size());
     }
 
     void copy_tensor(struct ggml_tensor * base) {
@@ -285,6 +299,10 @@ struct lora_merge_ctx {
         for (size_t i = 0; i < adapters.size(); ++i) {
             auto t_a = adapters[i]->get_tensor(name_lora_a);
             auto t_b = adapters[i]->get_tensor(name_lora_b);
+            // TODO: add support for quantized lora
+            if (ggml_is_quantized(t_a->type) || ggml_is_quantized(t_b->type)) {
+                throw std::runtime_error("quantized LoRA adapters is not supported, please retry with f16 or f32");
+            }
             inp_a[i] = ggml_dup_tensor(ctx, t_a);
             inp_b[i] = ggml_dup_tensor(ctx, t_b);
         }
@@ -352,7 +370,7 @@ struct lora_merge_ctx {
 
         // write data to output file
         {
-            auto result = gf->nodes[gf->n_nodes - 1];
+            auto * result = ggml_graph_node(gf, -1);
             size_t len = ggml_nbytes(result);
             if (read_buf.size() < len) {
                 read_buf.resize(len);
@@ -374,9 +392,7 @@ struct lora_merge_ctx {
     }
 };
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     printf("\nexample usage:\n");
     printf("\n  %s -m base-model.gguf --lora lora-file.gguf -o merged-model-f16.gguf\n", argv[0]);
     printf("\nNOTE: output model is F16\n");
@@ -386,14 +402,13 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 
-    g_verbose = (params.verbosity == 1);
+    g_verbose = (params.verbosity > 1);
     try {
-        lora_merge_ctx ctx(params.model, params.lora_adapters, params.lora_outfile, params.n_threads);
+        lora_merge_ctx ctx(params.model, params.lora_adapters, params.lora_outfile, params.cpuparams.n_threads);
         ctx.run_merge();
     } catch (const std::exception & err) {
         fprintf(stderr, "%s\n", err.what());

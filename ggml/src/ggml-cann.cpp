@@ -30,6 +30,7 @@
 #include <cstring>
 #include <mutex>
 
+#include "ggml-impl.h"
 #include "ggml-backend-impl.h"
 #include "ggml-cann/aclnn_ops.h"
 #include "ggml-cann/common.h"
@@ -1036,6 +1037,7 @@ static ggml_backend_buffer_i ggml_backend_cann_buffer_interface = {
     /* .free_buffer     = */ ggml_backend_cann_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cann_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_cann_buffer_init_tensor,
+    /* .memset_tensor   = */ NULL,
     /* .set_tensor      = */ ggml_backend_cann_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_cann_buffer_get_tensor,
     /* .cpy_tensor      = */ ggml_backend_cann_buffer_cpy_tensor,
@@ -1218,6 +1220,116 @@ ggml_backend_cann_buffer_type(int32_t device) {
     }
 
     return &ggml_backend_cann_buffer_types[device];
+}
+
+/**
+ * @brief Retrieves the name associated with a CANN host buffer type.
+ *
+ * This function returns the descriptive name associated with the specified
+ * CANN host buffer type context.
+ *
+ * @param buft Pointer to the host buffer type context.
+ * @return Const pointer to the C-style string containing the name.
+ */
+GGML_CALL static const char * ggml_backend_cann_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    return "CANN_Host";
+
+    GGML_UNUSED(buft);
+}
+
+/**
+ * @brief Retrieves the name associated with a CANN host buffer.
+ *
+ * This function returns the descriptive name associated with the specified
+ * CANN host buffer context.
+ *
+ * @param buft Pointer to the host buffer context.
+ * @return Const pointer to the C-style string containing the name.
+ */
+GGML_CALL static const char * ggml_backend_cann_host_buffer_name(ggml_backend_buffer_t buffer) {
+    return "CANN_Host";
+
+    GGML_UNUSED(buffer);
+}
+
+/**
+ * @brief Free resources associated with a CANN host buffer.
+ *
+ * This function frees the resources associated with a CANN host buffer, including
+ * its context.
+ *
+ * @param buffer The CANN host buffer to free.
+ */
+GGML_CALL static void ggml_backend_cann_host_buffer_free(ggml_backend_buffer_t buffer) {
+    ACL_CHECK(aclrtFreeHost(buffer->context));
+}
+
+/**
+ * @brief Allocates a new CANN host buffer of the specified size.
+ *
+ * This function allocates a new CANN host buffer with the given size.
+ * @param size Size in bytes of the host buffer to allocate.
+ * @return Pointer to the allocated host buffer, or nullptr if allocation fails.
+ */
+static void * ggml_cann_host_malloc(size_t size) {
+    if (getenv("GGML_CANN_NO_PINNED") != nullptr) {
+        return nullptr;
+    }
+
+    void * hostPtr = nullptr;
+    aclError err = aclrtMallocHost((void **) &hostPtr, size);
+    if (err != ACL_SUCCESS) {
+
+        GGML_CANN_LOG_WARN("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
+                           size / 1024.0 / 1024.0, aclGetRecentErrMsg());
+        return nullptr;
+    }
+    return hostPtr;
+}
+
+/**
+ * @brief Allocates a new CANN host buffer of the specified type and size.
+ *
+ * @param buft Pointer to the host buffer type context.
+ * @param size Size in bytes of the host buffer to allocate.
+ * @return Pointer to the allocated host buffer, or CPU buffer pointer if allocation fails.
+ */
+GGML_CALL static ggml_backend_buffer_t ggml_backend_cann_host_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    void * hostPtr = ggml_cann_host_malloc(size);
+
+    if (hostPtr == nullptr) {
+        // fallback to cpu buffer
+        return ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size);
+    }
+
+    ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(hostPtr, size);
+    buffer->buft = buft;
+    buffer->iface.get_name = ggml_backend_cann_host_buffer_name;
+    buffer->iface.free_buffer = ggml_backend_cann_host_buffer_free;
+
+    return buffer;
+}
+
+/**
+ * @brief Interface for managing CANN host buffer types in the GGML backend.
+ *
+ * Provides function pointers for allocating, querying properties, and managing
+ * memory for CANN buffer types in the GGML backend.
+ */
+GGML_CALL ggml_backend_buffer_type_t ggml_backend_cann_host_buffer_type() {
+    static struct ggml_backend_buffer_type ggml_backend_cann_buffer_type_host = {
+        /* .iface    = */ {
+            /* .get_name         = */ ggml_backend_cann_host_buffer_type_name,
+            /* .alloc_buffer     = */ ggml_backend_cann_host_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
+            /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
+        },
+        /* .context  = */ nullptr,
+    };
+
+    return &ggml_backend_cann_buffer_type_host;
 }
 
 /**
@@ -1942,7 +2054,7 @@ GGML_CALL ggml_backend_t ggml_backend_cann_init(int32_t device) {
         GGML_CANN_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
         return nullptr;
     }
-
+    ggml_cann_set_device(ctx->device);
     ggml_backend_t cann_backend =
         new ggml_backend{/* .guid      = */ ggml_backend_cann_guid(),
                          /* .interface = */ ggml_backend_cann_interface,

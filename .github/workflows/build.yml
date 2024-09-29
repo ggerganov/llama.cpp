@@ -23,6 +23,9 @@ env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
+  LLAMA_LOG_COLORS: 1
+  LLAMA_LOG_PREFIX: 1
+  LLAMA_LOG_TIMESTAMPS: 1
 
 jobs:
   macOS-latest-cmake-arm64:
@@ -47,7 +50,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON -DBUILD_SHARED_LIBS=OFF ..
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -105,7 +108,7 @@ jobs:
           sysctl -a
           # Metal is disabled due to intermittent failures with Github runners not having a GPU:
           # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
-          cmake -B build -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL=OFF -DLLAMA_CURL=ON -DBUILD_SHARED_LIBS=OFF
+          cmake -B build -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL=OFF -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
           cmake --build build --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -222,7 +225,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON -DBUILD_SHARED_LIBS=OFF
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
@@ -375,7 +378,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -401,7 +404,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: add oneAPI to apt
         shell: bash
@@ -442,7 +445,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: add oneAPI to apt
         shell: bash
@@ -546,7 +549,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -576,7 +579,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -610,7 +613,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -696,22 +699,20 @@ jobs:
     strategy:
       matrix:
         include:
-          - build: 'rpc-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'noavx-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx2-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'avx-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx512-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX512=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'openblas-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_BLAS=ON -DBUILD_SHARED_LIBS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_BLAS=ON -DBUILD_SHARED_LIBS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
           - build: 'kompute-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'vulkan-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'llvm-arm64'
             defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'msvc-arm64'
@@ -859,7 +860,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON
+          cmake .. -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON -DGGML_RPC=ON
           cmake --build . --config Release -j $((${env:NUMBER_OF_PROCESSORS} - 1)) -t ggml
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
@@ -955,6 +956,7 @@ jobs:
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/sycl7.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/svml_dispmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libmmd.dll" ./build/bin
+          cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libiomp5md.dll" ./build/bin
           echo "cp oneAPI running time dll files to ./build/bin done"
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
 
@@ -966,19 +968,20 @@ jobs:
           name: llama-bin-win-sycl-x64.zip
 
   windows-latest-cmake-hip:
+    if: ${{ github.event.inputs.create_release != 'true' }}
     runs-on: windows-latest
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install
         id: depends
         run: |
           $ErrorActionPreference = "Stop"
           write-host "Downloading AMD HIP SDK Installer"
-          Invoke-WebRequest -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-23.Q4-WinSvr2022-For-HIP.exe" -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
+          Invoke-WebRequest -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-24.Q3-WinSvr2022-For-HIP.exe" -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
           write-host "Installing AMD HIP SDK"
           Start-Process "${env:RUNNER_TEMP}\rocm-install.exe" -ArgumentList '-install' -NoNewWindow -Wait
           write-host "Completed AMD HIP SDK installation"
@@ -993,8 +996,72 @@ jobs:
         run: |
           $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
           $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
-          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIPBLAS=ON
-          cmake --build build --config Release
+          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release -DGGML_RPC=ON
+          cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
+
+  windows-latest-cmake-hip-release:
+    if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        gpu_target: [gfx1100, gfx1101, gfx1030]
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Install
+        id: depends
+        run: |
+          $ErrorActionPreference = "Stop"
+          write-host "Downloading AMD HIP SDK Installer"
+          Invoke-WebRequest -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-24.Q3-WinSvr2022-For-HIP.exe" -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
+          write-host "Installing AMD HIP SDK"
+          Start-Process "${env:RUNNER_TEMP}\rocm-install.exe" -ArgumentList '-install' -NoNewWindow -Wait
+          write-host "Completed AMD HIP SDK installation"
+
+      - name: Verify ROCm
+        id: verify
+        run: |
+          & 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' --version
+
+      - name: Build
+        id: cmake_build
+        run: |
+          $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
+          $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
+          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=${{ matrix.gpu_target }} -DGGML_RPC=ON
+          cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
+          md "build\bin\rocblas\library\"
+          cp "${env:HIP_PATH}\bin\hipblas.dll" "build\bin\"
+          cp "${env:HIP_PATH}\bin\rocblas.dll" "build\bin\"
+          cp "${env:HIP_PATH}\bin\rocblas\library\*" "build\bin\rocblas\library\"
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        run: |
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip .\build\bin\*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
+          name: llama-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
 
   ios-xcode-build:
     runs-on: macos-latest
@@ -1059,6 +1126,7 @@ jobs:
       - macOS-latest-cmake
       - windows-latest-cmake
       - windows-latest-cmake-cuda
+      - windows-latest-cmake-hip-release
       - macOS-latest-cmake-arm64
       - macOS-latest-cmake-x64
 
