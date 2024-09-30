@@ -33,53 +33,53 @@ int main()
     antiprompts.build(tokenizer, {"abc", "bcd"}, {"bca", "x"});
 
     assert_equal(antiprompts.findSingleTokenMatch('x'), {
-        .pos = 0,
-        .pattern = "x",
-        .is_partial = false,
-        .matchLength = 1,
-        .is_grammar_trigger = true,
+        /* .pos = */ 0,
+        /* .pattern = */ "x",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 1,
+        /* .is_grammar_trigger = */ true,
     });
     assert_equal(antiprompts.findSingleTokenMatch('a'), {
-        .pos = std::string::npos,
-        .pattern = "",
-        .is_partial = false,
-        .matchLength = 0,
-        .is_grammar_trigger = false,
+        /* .pos = */ std::string::npos,
+        /* .pattern = */ "",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 0,
+        /* .is_grammar_trigger = */ false,
     });
     assert_equal(antiprompts.findFirstMatch(" ab", 0), {
-        .pos = 1,
-        .pattern = "",
-        .is_partial = true,
-        .matchLength = 2,
-        .is_grammar_trigger = false,
+        /* .pos = */ 1,
+        /* .pattern = */ "",
+        /* .is_partial = */ true,
+        /* .matchLength = */ 2,
+        /* .is_grammar_trigger = */ false,
     });
     assert_equal(antiprompts.findFirstMatch(" abc", 0), {
-        .pos = 1,
-        .pattern = "abc",
-        .is_partial = false,
-        .matchLength = 3,
-        .is_grammar_trigger = false,
+        /* .pos = */ 1,
+        /* .pattern = */ "abc",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 3,
+        /* .is_grammar_trigger = */ false,
     });
     assert_equal(antiprompts.findFirstMatch(" bc", 0), {
-        .pos = 1,
-        .pattern = "",
-        .is_partial = true,
-        .matchLength = 2,
-        .is_grammar_trigger = false,
+        /* .pos = */ 1,
+        /* .pattern = */ "",
+        /* .is_partial = */ true,
+        /* .matchLength = */ 2,
+        /* .is_grammar_trigger = */ false,
     });
     assert_equal(antiprompts.findFirstMatch(" bcd", 0), {
-        .pos = 1,
-        .pattern = "bcd",
-        .is_partial = false,
-        .matchLength = 3,
-        .is_grammar_trigger = false,
+        /* .pos = */ 1,
+        /* .pattern = */ "bcd",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 3,
+        /* .is_grammar_trigger = */ false,
     });
     assert_equal(antiprompts.findFirstMatch(" bca", 0), {
-        .pos = 1,
-        .pattern = "bca",
-        .is_partial = false,
-        .matchLength = 3,
-        .is_grammar_trigger = true,
+        /* .pos = */ 1,
+        /* .pattern = */ "bca",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 3,
+        /* .is_grammar_trigger = */ true,
     });
     printf("OK\n");
     // llama_antiprompts::MatchResult{0, "a", .is_partial = false, . 1, false});
