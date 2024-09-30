@@ -1513,70 +1513,48 @@ struct server_context {
             }
             tasks.push_back(std::move(task));
         };
-
-        static constexpr const char * error_msg = "\"prompt\" must be a string, an array of token ids or an array of prompts";
+        static constexpr const char * error_msg = "\"prompt\" must be a string, an array of token ids, a mixed array of strings and token ids, or an array of prompts";
         if (!data.contains("prompt")) {
             throw std::runtime_error(error_msg);
         }
-
         json prompt = data.at("prompt");
-
-        // The commented out code removed the previous ability to submit a mixed array of strings and token IDs
-
-        // // if the prompt is a singleton (i.e. a string or a list of tokens), we only need to create single task
-        // if (prompt.is_string() || json_is_array_of_numbers(prompt)) {
-        //     data["index"] = 0;
-        //     create_task(data, false, nullptr);
-        // }
-        // // otherwise, it's a multiple-prompt task, we break it into smaller tasks
-        // else if (prompt.is_array()) {
-        //     std::vector<json> prompts = prompt;
-        //     for (size_t i = 0; i < prompts.size(); i++) {
-        //         const auto & e = prompts[i];
-        //         if (e.is_string() || json_is_array_of_numbers(e)) {
-        //             data["index"] = i;
-        //             create_task(data, true, e);
-        //         } else {
-        //             throw std::runtime_error(error_msg);
-        //         }
-        //     }
-        // }
-        // // invalid case
-        // else {
-        //     throw std::runtime_error(error_msg);
-        // }
-
-        // Single string prompt
-        if (prompt.is_string()) {
-            data["index"] = 0;
-            create_task(data, false, nullptr);
-        }
-        // Single array prompt (could be all tokens, all strings, or mixed)
-        else if (prompt.is_array()) {
+        // if the prompt is a singleton (i.e. a string, a list of tokens, or a mixed array of strings and tokens), we only need to create a single task
+        if (prompt.is_string() || (prompt.is_array() && !prompt.empty() && !prompt[0].is_array())) {
             bool is_mixed = false;
-            bool has_string = false;
+            bool has_string = prompt.is_string();
             bool has_number = false;
-            for (const auto& elem : prompt) {
-                if (elem.is_string()) has_string = true;
-                else if (elem.is_number()) has_number = true;
-                if (has_string && has_number) {
-                    is_mixed = true;
-                    break;
+            if (prompt.is_array()) {
+                for (const auto& elem : prompt) {
+                    if (elem.is_string()) has_string = true;
+                    else if (elem.is_number()) has_number = true;
+                    if (has_string && has_number) {
+                        is_mixed = true;
+                        break;
+                    }
                 }
             }
-
-            if (is_mixed || (has_string && !has_number)) {
-                // Mixed array or array of strings, treat as single prompt
-                data["index"] = 0;
-                create_task(data, false, nullptr);
-            } else if (!has_string && has_number) {
-                // Array of token IDs
-                data["index"] = 0;
-                create_task(data, false, nullptr);
+            data["index"] = 0;
+            create_task(data, false, nullptr);
+            SRV_DBG("creating single%s prompt task\n", is_mixed ? " mixed" : "");
+        }
+        // otherwise, it's a multiple-prompt task or a rerank task, we break it into smaller tasks
+        else if (prompt.is_array()) {
+            std::vector<json> prompts = prompt;
+            if (cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
+                // prompts[0] is the question
+                // the rest are the answers/documents
+                SRV_DBG("creating rerank tasks, n_prompts = %d\n", (int) prompts.size() - 1);
+                for (size_t i = 1; i < prompts.size(); i++) {
+                    json qd;
+                    qd.push_back(prompts[0]);
+                    qd.push_back(prompts[i]);
+                    data["index"] = i - 1;
+                    create_task(data, true, qd);
+                }
             } else {
-                // Array of prompts
-                for (size_t i = 0; i < prompt.size(); i++) {
-                    const auto & e = prompt[i];
+                SRV_DBG("creating multi-prompt tasks, n_prompts = %d\n", (int) prompts.size());
+                for (size_t i = 0; i < prompts.size(); i++) {
+                    const auto & e = prompts[i];
                     if (e.is_string() || json_is_array_of_numbers(e)) {
                         data["index"] = i;
                         create_task(data, true, e);
@@ -1586,11 +1564,10 @@ struct server_context {
                 }
             }
         }
-        // Invalid case
+        // invalid case
         else {
             throw std::runtime_error(error_msg);
         }
-
         return tasks;
     }
 
