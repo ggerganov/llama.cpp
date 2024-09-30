@@ -1132,6 +1132,16 @@ extern "C" {
                                 bool   penalize_nl,     // consider newlines as a repeatable token
                                 bool   ignore_eos);     // ignore the end-of-sequence token
 
+    ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
+    LLAMA_API struct llama_sampler * llama_sampler_init_dry(
+            const struct llama_model * model,
+                               float   dry_multiplier,
+                               float   dry_base,
+                             int32_t   dry_allowed_length,
+                             int32_t   dry_penalty_last_n);
+
+    LLAMA_API void llama_sampler_dry_set_context_size(struct llama_sampler * smpl, int32_t context_size);
+
     LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(
                              int32_t   n_vocab,
                              int32_t   n_logit_bias,
@@ -1213,5 +1223,15 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+// Need to find a cleaner way to implement the sequence breakers as a vector of strings
+#ifdef __cplusplus
+
+#include <vector>
+#include <string>
+
+LLAMA_API void llama_sampler_dry_set_seq_breakers(struct llama_sampler * sampler, const std::vector<std::string>& seq_breakers);
+
+#endif // __cplusplus
 
 #endif // LLAMA_H

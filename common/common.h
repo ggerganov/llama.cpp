@@ -102,27 +102,33 @@ enum dimre_method {
 struct gpt_sampler_params {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
 
-    int32_t n_prev            = 64;    // number of previous tokens to remember
-    int32_t n_probs           = 0;     // if greater than 0, output the probabilities of top n_probs tokens.
-    int32_t min_keep          = 0;     // 0 = disabled, otherwise samplers should return at least min_keep tokens
-    int32_t top_k             = 40;    // <= 0 to use vocab size
-    float   top_p             = 0.95f; // 1.0 = disabled
-    float   min_p             = 0.05f; // 0.0 = disabled
-    float   tfs_z             = 1.00f; // 1.0 = disabled
-    float   typ_p             = 1.00f; // typical_p, 1.0 = disabled
-    float   temp              = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
-    float   dynatemp_range    = 0.00f; // 0.0 = disabled
-    float   dynatemp_exponent = 1.00f; // controls how entropy maps to temperature in dynamic temperature sampler
-    int32_t penalty_last_n    = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
-    float   penalty_repeat    = 1.00f; // 1.0 = disabled
-    float   penalty_freq      = 0.00f; // 0.0 = disabled
-    float   penalty_present   = 0.00f; // 0.0 = disabled
-    int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
-    float   mirostat_tau      = 5.00f; // target entropy
-    float   mirostat_eta      = 0.10f; // learning rate
-    bool    penalize_nl       = false; // consider newlines as a repeatable token
-    bool    ignore_eos        = false;
-    bool    no_perf           = false; // disable performance metrics
+    int32_t n_prev             = 64;    // number of previous tokens to remember
+    int32_t n_probs            = 0;     // if greater than 0, output the probabilities of top n_probs tokens.
+    int32_t min_keep           = 0;     // 0 = disabled, otherwise samplers should return at least min_keep tokens
+    int32_t top_k              = 40;    // <= 0 to use vocab size
+    float   top_p              = 0.95f; // 1.0 = disabled
+    float   min_p              = 0.05f; // 0.0 = disabled
+    float   tfs_z              = 1.00f; // 1.0 = disabled
+    float   typ_p              = 1.00f; // typical_p, 1.0 = disabled
+    float   temp               = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
+    float   dynatemp_range     = 0.00f; // 0.0 = disabled
+    float   dynatemp_exponent  = 1.00f; // controls how entropy maps to temperature in dynamic temperature sampler
+    int32_t penalty_last_n     = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
+    float   penalty_repeat     = 1.00f; // 1.0 = disabled
+    float   penalty_freq       = 0.00f; // 0.0 = disabled
+    float   penalty_present    = 0.00f; // 0.0 = disabled
+    float   dry_multiplier     = 0.0f;  // 0.0f = disabled, recommended value: 0.8f
+    float   dry_base           = 1.75f;
+    int32_t dry_allowed_length = 2;
+    int32_t dry_penalty_last_n = -1;    // DRY last n tokens to penalize (0 = disable penalty, -1 = context size)
+    int32_t mirostat           = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    float   mirostat_tau       = 5.00f; // target entropy
+    float   mirostat_eta       = 0.10f; // learning rate
+    bool    penalize_nl        = false; // consider newlines as a repeatable token
+    bool    ignore_eos         = false;
+    bool    no_perf            = false; // disable performance metrics
+
+    std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
 
     std::vector<enum gpt_sampler_type> samplers = {
         GPT_SAMPLER_TYPE_TOP_K,

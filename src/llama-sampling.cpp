@@ -1,3 +1,4 @@
+#define DEBUG
 #include "llama-sampling.h"
 
 #include "llama-vocab.h"
@@ -1563,6 +1564,476 @@ struct llama_sampler * llama_sampler_init_penalties(
             /* .prev            = */ ring_buffer<llama_token>(penalty_last_n),
         },
     };
+}
+
+// DRY
+
+struct llama_sampler_dry {
+    const   llama_model * model;
+
+    int32_t total_context_size;
+
+    const float   dry_multiplier;
+    const float   dry_base;
+    const int32_t dry_allowed_length;
+    const int32_t dry_penalty_last_n;
+
+    std::unordered_multimap<llama_token, std::vector<llama_token>> dry_processed_breakers;
+    std::vector<int> dry_repeat_count;
+    std::unordered_map<llama_token, int> dry_max_token_repeat;
+    ring_buffer<llama_token> last_tokens;
+};
+
+std::vector<llama_token> llama_tokenize(
+    const struct llama_model * model,
+           const std::string & text,
+                        bool   add_special,
+                        bool   parse_special) {
+    // upper limit for the number of tokens
+    int n_tokens = text.length() + 2 * add_special;
+    std::vector<llama_token> result(n_tokens);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+    return result;
+}
+
+std::string llama_detokenize(const struct llama_model * model, const std::vector<llama_token> & tokens, bool special) {
+    std::string text;
+    text.resize(std::max(text.capacity(), tokens.size()));
+    int32_t n_chars = llama_detokenize(model, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+    if (n_chars < 0) {
+        text.resize(-n_chars);
+        n_chars = llama_detokenize(model, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+        GGML_ASSERT(n_chars <= (int32_t)text.size());  // whitespace trimming is performed after per-token detokenization
+    }
+
+    text.resize(n_chars);
+
+    // NOTE: the original tokenizer decodes bytes after collecting the pieces.
+    return text;
+}
+
+std::string llama_detokenize_single(const struct llama_model * model, llama_token token, bool special) {
+    std::vector<llama_token> tokens = {token};
+    return llama_detokenize(model, tokens, special);
+}
+
+// For DRY debugging
+std::string detokenize_for_display(const struct llama_model* model, llama_token token, bool special) {
+    std::string token_text = llama_detokenize_single(model, token, special);
+    size_t pos = 0;
+    while ((pos = token_text.find('\n', pos)) != std::string::npos) {
+        token_text.replace(pos, 1, "\\n");
+        pos += 2;
+    }
+
+    return token_text;
+}
+
+// For DRY debugging
+void dry_print_ring_buffer_debug(const llama_sampler_dry* ctx) {
+    const size_t max_tokens_per_side = 100;
+    const size_t total_tokens = ctx->last_tokens.size();
+    const size_t tokens_to_print = std::min(total_tokens, max_tokens_per_side * 2);
+
+    std::vector<std::pair<int, std::string>> token_info;
+    token_info.reserve(tokens_to_print);
+
+    // Collect token information
+    if (total_tokens <= max_tokens_per_side * 2) {
+        // If we have 200 or fewer tokens, print all of them
+        for (size_t i = 0; i < total_tokens; ++i) {
+            llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
+            std::string token_text = detokenize_for_display(ctx->model, token, true);
+            token_info.emplace_back(token, std::move(token_text));
+        }
+    } else {
+        // If we have more than 200 tokens, print the first 100 and the last 100
+        // First 100 tokens
+        for (size_t i = 0; i < max_tokens_per_side; ++i) {
+            llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
+            std::string token_text = detokenize_for_display(ctx->model, token, true);
+            token_info.emplace_back(token, std::move(token_text));
+        }
+
+        // Last 100 tokens
+        for (size_t i = total_tokens - max_tokens_per_side; i < total_tokens; ++i) {
+            llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
+            std::string token_text = detokenize_for_display(ctx->model, token, true);
+            token_info.emplace_back(token, std::move(token_text));
+        }
+    }
+
+    // Find the maximum width for each column
+    size_t max_index_width = std::to_string(total_tokens - 1).length();
+    size_t max_token_width = 0;
+    size_t max_text_width = 0;
+    for (const auto& info : token_info) {
+        max_token_width = std::max(max_token_width, std::to_string(info.first).length());
+        max_text_width = std::max(max_text_width, info.second.length());
+    }
+
+    LLAMA_LOG_INFO("DRY Ring Buffer Content (showing %zu out of %zu tokens):\n\n", tokens_to_print, total_tokens);
+    LLAMA_LOG_INFO("%-*s | %-*s | %-*s\n", (int)max_index_width, "Idx", (int)max_token_width, "Token", (int)max_text_width, "Text");
+    LLAMA_LOG_INFO("%s-+-%s-+-%s\n", std::string(max_index_width, '-').c_str(),
+                 std::string(max_token_width, '-').c_str(), std::string(max_text_width, '-').c_str());
+
+    // Print tokens
+    for (size_t i = 0; i < tokens_to_print; ++i) {
+        size_t true_index = (total_tokens <= max_tokens_per_side * 2) ? i :
+                            (i < max_tokens_per_side) ? i : (total_tokens - max_tokens_per_side * 2 + i);
+
+        LLAMA_LOG_INFO("%-*zu | %-*d | %-*s\n",
+                     (int)max_index_width, true_index,
+                     (int)max_token_width, token_info[i].first,
+                     (int)max_text_width, token_info[i].second.c_str());
+
+        // Add a separator between oldest and newest tokens if applicable
+        if (total_tokens > max_tokens_per_side * 2 && i == max_tokens_per_side - 1) {
+            LLAMA_LOG_INFO("%s\n", std::string(max_index_width + max_token_width + max_text_width + 6, '.').c_str());
+        }
+    }
+}
+
+// For DRY debugging
+struct CandidateInfo {
+    llama_token_data data;
+    bool penalized;
+    float original_logit;
+};
+
+// For DRY debugging
+std::vector<CandidateInfo> get_top_n_candidates(const llama_token_data_array* cur_p, size_t n) {
+    std::vector<CandidateInfo> candidates;
+    candidates.reserve(cur_p->size);
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        candidates.push_back({cur_p->data[i], false, cur_p->data[i].logit});
+    }
+
+    std::partial_sort(candidates.begin(), candidates.begin() + std::min(n, candidates.size()), candidates.end(),
+        [](const CandidateInfo& a, const CandidateInfo& b) { return a.data.logit > b.data.logit; });
+
+    candidates.resize(std::min(n, candidates.size()));
+    return candidates;
+}
+
+static void GetOverlappingTokenSequences(const struct llama_model * model, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
+    const int n_vocab = llama_n_vocab(model);
+    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+        std::string word = llama_detokenize_single(model, token_id, true);
+        if (word.find(str) != std::string::npos) {
+            token_sequences.emplace(token_id, std::vector<llama_token>());
+        } else {
+            size_t word_len = word.size(), str_len = str.size();
+            size_t pos = -1;
+            while ((pos = word.find(str[0], pos + 1)) != std::string::npos) {
+                bool match = true;
+                size_t i;
+                for (i = 1; i < str_len && i + pos < word_len; ++i) {
+                    if (word[pos + i] != str[i]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    std::vector<llama_token> tokenization = llama_tokenize(model, str.substr(i), false, false);
+                    if (max_tail_len >= 0 && tokenization.size() > (size_t)max_tail_len) {
+                        tokenization.resize(max_tail_len);
+                    }
+
+                    // Ensure we don't already have a duplicate matching tokenization
+                    auto its = token_sequences.equal_range(token_id);
+                    bool found = false;
+                    for (auto it = its.first; it != its.second; ++it) {
+                        if (tokenization == it->second) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        token_sequences.emplace(token_id, tokenization);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+static const char * llama_sampler_dry_name(const struct llama_sampler * smpl) {
+    return "dry";
+}
+
+static void llama_sampler_dry_accept(struct llama_sampler * smpl, llama_token token) {
+    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+    if (ctx->dry_penalty_last_n == 0) {
+        return;
+    }
+
+    ctx->last_tokens.push_back(token);
+}
+
+static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+
+    if (ctx->dry_multiplier == 0.0f || ctx->dry_base == 0.0f) {
+        return;
+    }
+
+    int last_n_repeat = std::min(std::min((int)ctx->last_tokens.size(), ctx->dry_penalty_last_n), ctx->total_context_size);
+    if (last_n_repeat <= ctx->dry_allowed_length) {
+        return;
+    }
+
+    ctx->dry_repeat_count.assign(last_n_repeat, 0);
+    ctx->dry_max_token_repeat.clear();
+
+    // Step 1: Look for restart sequences
+    int rep_limit = last_n_repeat;
+    for (size_t i = 0; i < last_n_repeat; ++i) {
+        llama_token token = ctx->last_tokens.rat(i);
+        auto its = ctx->dry_processed_breakers.equal_range(token);
+        if (its.first == ctx->dry_processed_breakers.end()) {
+            continue;
+        }
+        int longest_match = -1;
+        for (auto it = its.first; it != its.second; ++it) {
+            int seq_len = (int)it->second.size();
+            if (seq_len > longest_match && seq_len <= (int)i) {
+                bool match = true;
+                for (size_t offset = 0; offset < seq_len; ++offset) {
+                    if (it->second[offset] != ctx->last_tokens.rat(i - offset - 1)) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    longest_match = seq_len;
+                }
+            }
+        }
+        if (longest_match >= 0) {
+            rep_limit = i - longest_match;
+            break;
+        }
+    }
+    if (rep_limit <= ctx->dry_allowed_length) {
+        return;
+    }
+
+    // Step 2: Z-algorithm implementation
+    {
+        const int last = last_n_repeat - 1;
+        int rt = 0, lt = 0;
+
+        for (int k = 1; k < last_n_repeat; ++k) {
+            if (k > rt) {
+                int n = 0;
+                while (n + k < last_n_repeat && ctx->last_tokens.rat(n) == ctx->last_tokens.rat(n+k)) {
+                    ++n;
+                }
+                ctx->dry_repeat_count[last - k] = std::min(n, rep_limit);
+                if (n > 0) {
+                    lt = k;
+                    rt = k+n-1;
+                }
+            } else {
+                int p = k - lt;
+                int right_part_len = rt - k + 1;
+
+                if (ctx->dry_repeat_count[last - p] < right_part_len) {
+                    int n = std::min(ctx->dry_repeat_count[last - p], rep_limit);
+                    ctx->dry_repeat_count[last - k] = n;
+                } else {
+                    int i = rt + 1;
+                    while (i < last_n_repeat && ctx->last_tokens.rat(i) == ctx->last_tokens.rat(i - k)) {
+                        i += 1;
+                    }
+
+                    int n = std::min(i - k, rep_limit);
+                    ctx->dry_repeat_count[last - k] = n;
+                    lt = k;
+                    rt = i - 1;
+                }
+            }
+        }
+    }
+
+    // Step 3: Find maximum repeat length for each token
+    for (size_t i = 0; i < last_n_repeat - 1; ++i) {
+        int repeat_len = ctx->dry_repeat_count[i];
+        if (repeat_len >= ctx->dry_allowed_length) {
+            llama_token token = ctx->last_tokens.rat(last_n_repeat - 2 - i);
+            const auto& it = ctx->dry_max_token_repeat.find(token);
+            if (it == ctx->dry_max_token_repeat.end() || it->second < repeat_len) {
+                ctx->dry_max_token_repeat[token] = repeat_len;
+            }
+        }
+    }
+
+    // Step 4: Apply penalties
+    const float FLOAT_MAX_LOG = 88.7228391f;
+    int max_exponent = 0;
+    if (ctx->dry_base > 1.000001f) {
+        max_exponent = FLOAT_MAX_LOG / std::log(ctx->dry_base);
+    }
+
+#ifdef DEBUG
+    int penalties_applied = 0;
+    const size_t top_n = 10;
+    std::vector<CandidateInfo> top_n_before = get_top_n_candidates(cur_p, top_n);
+
+#endif
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        const auto& af_kvp = ctx->dry_max_token_repeat.find(cur_p->data[i].id);
+        if (af_kvp != ctx->dry_max_token_repeat.end()) {
+            int repeat_exp = af_kvp->second - ctx->dry_allowed_length;
+            if (max_exponent > 0 && repeat_exp > max_exponent) {
+                repeat_exp = max_exponent;
+            }
+            float penalty = ctx->dry_multiplier * std::pow(ctx->dry_base, repeat_exp);
+            cur_p->data[i].logit -= penalty;
+#ifdef DEBUG
+                penalties_applied++;
+                if (penalties_applied == 1) {
+                    LLAMA_LOG_INFO("\n---- DRY sampling debug info:\n");
+                }
+                std::string token_text = detokenize_for_display(ctx->model, cur_p->data[i].id, true);
+                LLAMA_LOG_INFO("  Applied penalty %.4f to token %d (%s) (repeat length %d)\n",
+                        penalty, cur_p->data[i].id, token_text.c_str(), af_kvp->second);
+#endif
+        }
+    }
+
+#ifdef DEBUG
+    // Get top N candidates after applying penalties
+    std::vector<CandidateInfo> top_n_after = get_top_n_candidates(cur_p, top_n);
+
+    // Print top N candidates before and after penalties
+    if (penalties_applied > 0) {
+        LLAMA_LOG_INFO("Total DRY penalties applied: %d\n", penalties_applied);
+        dry_print_ring_buffer_debug(ctx);
+        LLAMA_LOG_INFO("\nTop %zu candidates before penalties:\n", top_n);
+        for (const auto& candidate : top_n_before) {
+            std::string token_text = detokenize_for_display(ctx->model, candidate.data.id, true);
+            LLAMA_LOG_INFO("Token %d (%s): logit = %.4f\n",
+                candidate.data.id, token_text.c_str(), candidate.data.logit);
+        }
+
+        LLAMA_LOG_INFO("\nTop %zu candidates after penalties:\n", top_n);
+        for (const auto& candidate : top_n_after) {
+            std::string token_text = detokenize_for_display(ctx->model, candidate.data.id, true);
+            auto it = std::find_if(top_n_before.begin(), top_n_before.end(),
+                [&](const CandidateInfo& c) { return c.data.id == candidate.data.id; });
+
+            if (it != top_n_before.end() && it->data.logit != candidate.data.logit) {
+                LLAMA_LOG_INFO("Token %d (%s): logit = %.4f (was %.4f) [PENALIZED]\n",
+                    candidate.data.id, token_text.c_str(), candidate.data.logit, it->data.logit);
+            } else {
+                LLAMA_LOG_INFO("Token %d (%s): logit = %.4f\n",
+                    candidate.data.id, token_text.c_str(), candidate.data.logit);
+            }
+        }
+        LLAMA_LOG_INFO("---- End of DRY debug info\n\n");
+    }
+#endif
+
+    cur_p->sorted = false;
+}
+
+static void llama_sampler_dry_reset(struct llama_sampler * smpl) {
+    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+
+    ctx->last_tokens.clear();
+    ctx->dry_repeat_count.clear();
+    int32_t effective_dry_penalty_last_n = (ctx->dry_penalty_last_n == -1) ? ctx->total_context_size : std::max(ctx->dry_penalty_last_n, 0);
+    ctx->dry_repeat_count.resize(effective_dry_penalty_last_n, 0);
+    ctx->dry_max_token_repeat.clear();
+}
+
+static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler * smpl) {
+    const auto * ctx = (llama_sampler_dry *) smpl->ctx;
+    auto * result = llama_sampler_init_dry(ctx->model, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n);
+
+    // copy the state
+    {
+        auto * result_ctx = (llama_sampler_dry *) result->ctx;
+        result_ctx->dry_processed_breakers = ctx->dry_processed_breakers;
+        result_ctx->dry_repeat_count = ctx->dry_repeat_count;
+        result_ctx->dry_max_token_repeat = ctx->dry_max_token_repeat;
+        result_ctx->last_tokens = ctx->last_tokens;
+    }
+
+    return result;
+}
+
+static void llama_sampler_dry_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_dry *) smpl->ctx;
+}
+
+static struct llama_sampler_i llama_sampler_dry_i = {
+    /* .name   = */ llama_sampler_dry_name,
+    /* .accept = */ llama_sampler_dry_accept,
+    /* .apply  = */ llama_sampler_dry_apply,
+    /* .reset  = */ llama_sampler_dry_reset,
+    /* .clone  = */ llama_sampler_dry_clone,
+    /* .free   = */ llama_sampler_dry_free,
+};
+
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n) {
+    if (dry_multiplier < 0 || dry_base <= 0 || dry_allowed_length < 0) {
+        return nullptr;
+    }
+
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_dry_i,
+        /* .ctx   = */ new llama_sampler_dry {
+            /* .model               = */ model,
+            /* .total_context_size  = */ 0,  // Will be set later
+            /* .dry_multiplier      = */ dry_multiplier,
+            /* .dry_base            = */ dry_base,
+            /* .dry_allowed_length  = */ dry_allowed_length,
+            /* .dry_penalty_last_n  = */ dry_penalty_last_n,
+            /* .dry_processed_breakers = */ {},
+            /* .dry_repeat_count    = */ {},
+            /* .dry_max_token_repeat = */ {},
+            /* .last_tokens         = */ ring_buffer<llama_token>(16),
+        },
+    };
+}
+
+void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::vector<std::string>& seq_breakers) {
+    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+    ctx->dry_processed_breakers.clear();
+
+    const int MAX_CHAR_LEN = 40;
+    const int MAX_SEQ_LEN = 20;
+
+    for (auto sequence_break : seq_breakers) {
+        if (sequence_break.size() > MAX_CHAR_LEN) {
+            sequence_break.resize(MAX_CHAR_LEN);
+        }
+        GetOverlappingTokenSequences(ctx->model, sequence_break, ctx->dry_processed_breakers, MAX_SEQ_LEN);
+    }
+}
+
+void llama_sampler_dry_set_context_size(struct llama_sampler * smpl, int32_t context_size) {
+    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+    ctx->total_context_size = context_size;
+
+    int32_t effective_dry_penalty_last_n = (ctx->dry_penalty_last_n == -1) ? ctx->total_context_size : std::max(ctx->dry_penalty_last_n, 0);
+
+    ctx->dry_repeat_count.resize(effective_dry_penalty_last_n, 0);
+    ctx->last_tokens = ring_buffer<llama_token>(effective_dry_penalty_last_n);
 }
 
 // logit-bias

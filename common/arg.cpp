@@ -1010,6 +1010,34 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_sparam());
     add_opt(llama_arg(
+        {"--dry-multiplier"}, "N",
+        format("Set DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)params.sparams.dry_multiplier),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.dry_multiplier = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
+        {"--dry-base"}, "N",
+        format("Set DRY sampling base value (default: %.2f)", (double)params.sparams.dry_base),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.dry_base = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
+        {"--dry-allowed-length"}, "N",
+        format("Set allowed length for DRY sampling (default: %d)", params.sparams.dry_allowed_length),
+        [](gpt_params & params, int value) {
+            params.sparams.dry_allowed_length = value;
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
+        {"--dry-penalty-last-n"}, "N",
+        format("Set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sparams.dry_penalty_last_n),
+        [](gpt_params & params, int value) {
+            params.sparams.dry_penalty_last_n = value;
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
         {"--dynatemp-range"}, "N",
         format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sparams.dynatemp_range),
         [](gpt_params & params, const std::string & value) {
