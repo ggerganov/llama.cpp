@@ -1587,7 +1587,7 @@ private:
         auto left = parseStringConcat();
         if (!left) throw std::runtime_error("Expected left side of 'logical compare' expression");
 
-        static std::regex compare_tok(R"(==|!=|<=?|>=?|in\b|is\b|not[\n\s]+in\b)");
+        static std::regex compare_tok(R"(==|!=|<=?|>=?|in\b|is\b|not[\r\n\s]+in\b)");
         static std::regex not_tok(R"(not\b)");
         std::string op_str;
         while (!(op_str = consumeToken(compare_tok)).empty()) {
@@ -1957,7 +1957,7 @@ private:
     using TemplateTokenIterator = TemplateTokenVector::const_iterator;
 
     std::vector<std::string> parseVarNames() {
-      static std::regex varnames_regex(R"(((?:\w+)(?:[\n\s]*,[\n\s]*(?:\w+))*)[\n\s]*)");
+      static std::regex varnames_regex(R"(((?:\w+)(?:[\r\n\s]*,[\r\n\s]*(?:\w+))*)[\r\n\s]*)");
 
       std::vector<std::string> group;
       if ((group = consumeTokenGroups(varnames_regex)).empty()) throw std::runtime_error("Expected variable names");
@@ -1982,11 +1982,11 @@ private:
     TemplateTokenVector tokenize() {
       static std::regex comment_tok(R"(\{#([-~]?)(.*?)([-~]?)#\})");
       static std::regex expr_open_regex(R"(\{\{([-~])?)");
-      static std::regex block_open_regex(R"(^\{%([-~])?[\s\n]*)");
+      static std::regex block_open_regex(R"(^\{%([-~])?[\s\n\r]*)");
       static std::regex block_keyword_tok(R"((if|else|elif|endif|for|endfor|set|endset|block|endblock|macro|endmacro)\b)");
-      static std::regex text_regex(R"([\s\S\n]*?($|(?=\{\{|\{%|\{#)))");
-      static std::regex expr_close_regex(R"([\s\n]*([-~])?\}\})");
-      static std::regex block_close_regex(R"([\s\n]*([-~])?%\})");
+      static std::regex text_regex(R"([\s\S\n\r]*?($|(?=\{\{|\{%|\{#)))");
+      static std::regex expr_close_regex(R"([\s\n\r]*([-~])?\}\})");
+      static std::regex block_close_regex(R"([\s\n\r]*([-~])?%\})");
 
       TemplateTokenVector tokens;
       std::vector<std::string> group;
@@ -2063,7 +2063,7 @@ private:
               auto post_space = parseBlockClose();
               tokens.push_back(nonstd_make_unique<EndForTemplateToken>(location, pre_space, post_space));
             } else if (keyword == "set") {
-              static std::regex namespaced_var_regex(R"((\w+)[\s\n]*\.[\s\n]*(\w+))");
+              static std::regex namespaced_var_regex(R"((\w+)[\s\n\r]*\.[\s\n\r]*(\w+))");
 
               std::string ns;
               std::vector<std::string> var_names;
@@ -2158,19 +2158,19 @@ private:
                 static std::regex leading_space_regex(R"(^(\s|\r|\n)+)");
                 text = std::regex_replace(text, leading_space_regex, "");
               } else if (options.trim_blocks && (it - 1) != begin && !dynamic_cast<ExpressionTemplateToken*>((*(it - 2)).get())) {
-                static std::regex leading_line(R"(^[ \t]*\n)");
+                static std::regex leading_line(R"(^[ \t]*\r?\n)");
                 text = std::regex_replace(text, leading_line, "");
               }
               if (post_space == SpaceHandling::Strip) {
                 static std::regex trailing_space_regex(R"((\s|\r|\n)+$)");
                 text = std::regex_replace(text, trailing_space_regex, "");
               } else if (options.lstrip_blocks && it != end) {
-                static std::regex trailing_last_line_space_regex(R"((\n)[ \t]*$)");
+                static std::regex trailing_last_line_space_regex(R"((\r?\n)[ \t]*$)");
                 text = std::regex_replace(text, trailing_last_line_space_regex, "$1");
               }
 
               if (it == end && !options.keep_trailing_newline) {
-                static std::regex r(R"([\n\r]$)");
+                static std::regex r(R"(\r?\n$)");
                 text = std::regex_replace(text, r, "");  // Strip one trailing newline
               }
               children.emplace_back(nonstd_make_unique<TextNode>(token->location, text));
