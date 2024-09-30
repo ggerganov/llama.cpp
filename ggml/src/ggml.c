@@ -3559,6 +3559,7 @@ struct ggml_tensor * ggml_mrope_ext(
         struct ggml_tensor  * b,
         struct ggml_tensor  * c,
         int                   n_dims,
+        int                   sections[3],
         int                   mode,
         int                   n_ctx_orig,
         float                 freq_base,
@@ -3567,8 +3568,6 @@ struct ggml_tensor * ggml_mrope_ext(
         float                 attn_factor,
         float                 beta_fast,
         float                 beta_slow) {
-
-    int sections[3] = {16, 24, 24};  // TODO: move this into gguf model file.
 
     GGML_ASSERT((mode & 1) == 0 && "mode & 1 == 1 is no longer supported");
 
@@ -3596,7 +3595,8 @@ struct ggml_tensor * ggml_mrope_ext(
     memcpy(params +  8, &attn_factor,  sizeof(float));
     memcpy(params +  9, &beta_fast,    sizeof(float));
     memcpy(params + 10, &beta_slow,    sizeof(float));
-    memcpy(params + 11, &sections,    sizeof(int) * 3);
+    memcpy(&params[11], sections,      sizeof(int)*3);
+    // memcpy(params + 11, sections,      sizeof(int)*3);
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ROPE;
@@ -11238,7 +11238,7 @@ static void ggml_rope_cache_init(
 }
 
 static void ggml_mrope_cache_init(
-     float theta_base_t, float theta_base_h, float theta_base_w, int sections[3],
+     float theta_base_t, float theta_base_h, float theta_base_w, int sections[3], bool indep_sects,
      float freq_scale, const float * freq_factors, float corr_dims[2], int64_t ne0, float ext_factor, float mscale,
      float * cache, float sin_sign, float theta_scale) {
     // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/LlamaYaRNScaledRotaryEmbedding.py
@@ -11246,12 +11246,25 @@ static void ggml_mrope_cache_init(
     float theta_h = theta_base_h;
     float theta_w = theta_base_w;
     int sect_dims = sections[0] + sections[1] + sections[2];
+    int prev_sector = -1;
     
     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
         const float ff = freq_factors ? freq_factors[i0/2] : 1.0f;
-        float theta = theta_t;
-        int sector = (i0 / 2) % sect_dims;
         
+        int sector = (i0 / 2) % sect_dims;
+        if (indep_sects) {
+            if (sector == 0) {
+                theta_t = theta_base_t;
+            }
+            else if (sector == sections[0]) {
+                theta_h = theta_base_h;;
+            }
+            else if (sector == sections[1]) {
+                theta_w = theta_base_w;
+            }
+        }
+
+        float theta = theta_t;
         if (sector < sections[1] + sections[0] && sector >= sections[0]) {
             theta = theta_h;
         } 
@@ -11267,6 +11280,7 @@ static void ggml_mrope_cache_init(
         theta_t *= theta_scale;
         theta_w *= theta_scale;
         theta_h *= theta_scale;
+        prev_sector = sector;
     }
 }
 
@@ -11366,7 +11380,7 @@ static void ggml_compute_forward_rope_f32(
                 const int64_t p_h = pos[i2 + ne2];
                 const int64_t p_w = pos[i2 + ne2 * 2];
                 ggml_mrope_cache_init(
-                    p_t, p_h, p_w, sections, 
+                    p_t, p_h, p_w, sections, sections[2] == 0,
                     freq_scale, freq_factors, corr_dims, ne0, ext_factor, attn_factor, cache, sin_sign, theta_scale);
             }
 
@@ -11406,12 +11420,23 @@ static void ggml_compute_forward_rope_f32(
                     }
                 }
 
-                for (int64_t i0 = n_dims; i0 < ne0; i0 += 2) {
-                    const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                    float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+                if (is_mrope) {
+                    // fill the remain channels by repeating 0~n_dims channel
+                    for (int64_t i0 = n_dims; i0 < ne0; i0 ++) {
+                        float * dst_data_0  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1);
+                        float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+                        dst_data[0] = dst_data_0[i0 % n_dims];
+                    }
+                }
+                else {
+                    // fill the remain channels with data from src tensor
+                    for (int64_t i0 = n_dims; i0 < ne0; i0 += 2) {
+                        const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+                        float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
 
-                    dst_data[0] = src[0];
-                    dst_data[1] = src[1];
+                        dst_data[0] = src[0];
+                        dst_data[1] = src[1];
+                    }
                 }
             }
         }
