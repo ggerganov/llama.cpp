@@ -9,6 +9,10 @@ enum vision_arch {
     VISION_ARCH_UNKNOWN,
 };
 
+enum clip_projector_type {
+    CLIP_PROJECTOR_TYPE_MLP,
+};
+
 enum mm_patch_merge {
     MM_PATCH_MERGE_FLAT,
     MM_PATCH_MERGE_SPATIAL_UNPAD,
@@ -28,9 +32,13 @@ struct clip_hparams {
 
     float eps;
 
+    clip_projector_type proj_type = CLIP_PROJECTOR_TYPE_MLP;
     mm_patch_merge mm_patch_merge_type = MM_PATCH_MERGE_FLAT;
 
-    int32_t image_grid_pinpoints[32];
+    std::array<float, 3> image_mean;
+    std::array<float, 3> image_std;
+
+    std::array<int32_t, 32> image_grid_pinpoints;
     int32_t image_crop_resolution;
 };
 
@@ -88,4 +96,12 @@ struct clip_vision_model {
     struct ggml_tensor * mm_b_b = NULL;
 
     struct ggml_tensor * image_newline = NULL;
+};
+
+struct clip_context {
+    struct ggml_context * ctx_ggml;
+    clip_vision_model model;
+
+    int32_t n_output;
+    float * output;
 };

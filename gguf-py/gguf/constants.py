@@ -196,6 +196,7 @@ class Keys:
             PROJECTION_DIM      = "vision.clip.projection_dim"
             USE_GELU            = "vision.clip.use_gelu"
             MAX_POS_EMBEDDING   = "vision.clip.max_position_embeddings"
+            PROJECTOR_TYPE      = "vision.clip.projector_type"
             HEAD_COUNT          = "vision.clip.attention.head_count"
             LAYERNORM_EPS       = "vision.clip.attention.layer_norm_epsilon"
 
@@ -1423,6 +1424,10 @@ class PoolingType(IntEnum):
     NONE = 0
     MEAN = 1
     CLS  = 2
+
+
+class CLIPProjectorType(Enum):
+    MLP = 'mlp'
 
 
 class GGMLQuantizationType(IntEnum):

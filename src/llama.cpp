@@ -400,8 +400,9 @@ enum llm_kv {
     LLM_KV_VISION_CLIP_PROJECTION_TYPE,
     LLM_KV_VISION_CLIP_PROJECTION_DIM,
     LLM_KV_VISION_CLIP_USE_GELU,
-    LLM_KV_VISION_CLIP_HEAD_COUNT,
     LLM_KV_VISION_CLIP_MAX_POS_EMBD,
+    LLM_KV_VISION_CLIP_PROJECTOR_TYPE,
+    LLM_KV_VISION_CLIP_HEAD_COUNT,
     LLM_KV_VISION_CLIP_LAYERNORM_EPS,
 };
 
@@ -526,6 +527,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_VISION_CLIP_PROJECTION_DIM,      "vision.clip.projection_dim"               },
     { LLM_KV_VISION_CLIP_USE_GELU,            "vision.clip.use_gelu"                     },
     { LLM_KV_VISION_CLIP_MAX_POS_EMBD,        "vision.clip.max_position_embeddings"      },
+    { LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      "vision.clip.projector_type"               },
     { LLM_KV_VISION_CLIP_HEAD_COUNT,          "vision.clip.attention.head_count"         },
     { LLM_KV_VISION_CLIP_LAYERNORM_EPS,       "vision.clip.attention.layer_norm_epsilon" },
 };
@@ -5573,30 +5575,6 @@ static void llm_load_hparams(
         hparams.n_embd_head_v = 0;
     }
 
-    std::string vision_type;
-    ml.get_key(LLM_KV_VISION_TYPE, vision_type, false);
-    if (vision_type == "clip") {
-        hparams.has_vision = true;
-        ml.get_key(LLM_KV_VISION_IMAGE_SIZE, hparams.clip.image_size, true);
-        ml.get_key(LLM_KV_VISION_PATCH_SIZE, hparams.clip.patch_size, true);
-        ml.get_key(LLM_KV_VISION_CLIP_EMBEDDING_LENGTH, hparams.clip.hidden_size, true);
-        ml.get_key(LLM_KV_VISION_CLIP_BLOCK_COUNT, hparams.clip.n_layer, true);
-        ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, hparams.clip.n_intermediate, true);
-        ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT, hparams.clip.n_head, true);
-        ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS, hparams.clip.eps, true);
-        // TODO: add image_std
-        std::string arch;
-        ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
-        for (auto & it : VISION_ARCH_NAMES) {
-            if (arch == it.second) {
-                hparams.clip.arch = it.first;
-                break;
-            }
-        }
-    } else if (!vision_type.empty()) {
-        throw std::runtime_error(format("unsupported vision type: %s", vision_type.c_str()));
-    }
-
     // arch-specific KVs
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
@@ -6242,6 +6220,39 @@ static void llm_load_hparams(
                }
             } break;
         default: (void)0;
+    }
+
+    // vision model
+    std::string vision_type;
+    ml.get_key(LLM_KV_VISION_TYPE, vision_type, false);
+    if (vision_type == "clip") {
+        hparams.has_vision = true;
+        std::string proj_type;
+        ml.get_key(LLM_KV_VISION_IMAGE_SIZE,               hparams.clip.image_size,     true);
+        ml.get_key(LLM_KV_VISION_PATCH_SIZE,               hparams.clip.patch_size,     true);
+        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_MEAN,        hparams.clip.image_mean, 3,  true);
+        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_STD,         hparams.clip.image_std,  3,  true);
+        ml.get_key(LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,    hparams.clip.hidden_size,    true);
+        ml.get_key(LLM_KV_VISION_CLIP_BLOCK_COUNT,         hparams.clip.n_layer,        true);
+        ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, hparams.clip.n_intermediate, true);
+        ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          hparams.clip.n_head,         true);
+        ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       hparams.clip.eps,            true);
+        ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      proj_type,                   true);
+        if (proj_type == "mlp") {
+            hparams.clip.proj_type = CLIP_PROJECTOR_TYPE_MLP;
+        } else {
+            throw std::runtime_error(format("unsupported clip projector type: %s", proj_type.c_str()));
+        }
+        std::string arch;
+        ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
+        for (auto & it : VISION_ARCH_NAMES) {
+            if (arch == it.second) {
+                hparams.clip.arch = it.first;
+                break;
+            }
+        }
+    } else if (!vision_type.empty()) {
+        throw std::runtime_error(format("unsupported vision type: %s", vision_type.c_str()));
     }
 
     // arch-specific CLIP hparams

@@ -26,6 +26,7 @@ from .constants import (
     RopeScalingType,
     PoolingType,
     TokenType,
+    CLIPProjectorType,
 )
 
 from .quants import quant_shape_from_byte_shape
@@ -844,8 +845,17 @@ class GGUFWriter:
     def add_vision_clip_max_position_embeddings(self, value: int) -> None:
         self.add_uint32(Keys.Vision.Clip.MAX_POS_EMBEDDING, value)
 
+    def add_vision_clip_projector_type(self, value: CLIPProjectorType) -> None:
+        self.add_string(Keys.Vision.Clip.PROJECTOR_TYPE, value.value)
+
     def add_vision_clip_layer_norm_epsilon(self, value: float) -> None:
         self.add_float32(Keys.Vision.Clip.LAYERNORM_EPS, value)
+
+    def add_vision_clip_image_mean(self, value: Sequence[float]) -> None:
+        self.add_array(Keys.Vision.IMAGE_MEAN, value)
+
+    def add_vision_clip_image_std(self, value: Sequence[float]) -> None:
+        self.add_array(Keys.Vision.IMAGE_STD, value)
 
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
         if not isinstance(value, str):

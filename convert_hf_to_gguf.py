@@ -1584,8 +1584,13 @@ class LlamaModel(Model):
             self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
             self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
             # TODO: should not hardcode these, but they are currently missing from config.json
+            self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.MLP)
             self.gguf_writer.add_vision_clip_max_position_embeddings(577)
             self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-05)
+            default_image_mean = [0.48145466, 0.4578275, 0.40821073]
+            default_image_std = [0.26862954, 0.26130258, 0.27577711]
+            self.gguf_writer.add_vision_clip_image_mean(default_image_mean)
+            self.gguf_writer.add_vision_clip_image_std(default_image_std)
 
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
