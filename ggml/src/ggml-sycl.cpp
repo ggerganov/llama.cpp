@@ -4927,8 +4927,8 @@ GGML_CALL static void ggml_backend_sycl_set_tensor_async(ggml_backend_t backend,
 
     GGML_ASSERT(buf->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device) && "unsupported buffer type");
     const queue_ptr stream = sycl_ctx->stream(sycl_ctx->device, 0);
-    SYCL_CHECK(CHECK_TRY_ERROR((stream)->memcpy(
-        (char *)tensor->data + offset, data, size).wait()));
+    SYCL_CHECK(CHECK_TRY_ERROR(
+        (stream)->memcpy((char *)tensor->data + offset, data, size)));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -5181,13 +5181,73 @@ GGML_CALL static bool ggml_backend_sycl_supports_buft(ggml_backend_t backend, gg
     return buft_ctx->device == sycl_ctx->device;
 }
 
+static ggml_backend_event_t
+ggml_backend_sycl_event_new(ggml_backend_t backend) {
+  ggml_backend_sycl_context *sycl_ctx =
+      (ggml_backend_sycl_context *)backend->context;
+
+  sycl::event *event_ptr = new sycl::event();
+
+  return new ggml_backend_event{
+      /* .backend = */ backend,
+      /* .context = */ event_ptr,
+  };
+}
+
+static void ggml_backend_sycl_event_free(ggml_backend_event_t event) try {
+  if (event == nullptr) {
+    return;
+  }
+
+  if (event->context != nullptr) {
+    sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
+    delete sycl_event;
+    event->context = nullptr;
+  }
+
+  delete event;
+} catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
+
+static void ggml_backend_sycl_event_record(ggml_backend_event_t event) try {
+  if (event == nullptr || event->context == nullptr) {
+    return;
+  }
+
+  ggml_backend_sycl_context *sycl_ctx =
+      (ggml_backend_sycl_context *)event->backend->context;
+  sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
+
+  const queue_ptr &stream = sycl_ctx->stream(sycl_ctx->device, 0);
+  // Record the current state of the queue
+  *sycl_event = stream->ext_oneapi_submit_barrier();
+} catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
+
+static void ggml_backend_sycl_event_synchronize(ggml_backend_event_t event) {
+  if (event == nullptr || event->context == nullptr) {
+    return;
+  }
+
+  sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
+  SYCL_CHECK(CHECK_TRY_ERROR(sycl_event->wait()));
+}
+
 static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_name                = */ ggml_backend_sycl_name,
     /* .free                    = */ ggml_backend_sycl_free,
     /* .get_default_buffer_type = */ ggml_backend_sycl_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_sycl_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_sycl_get_tensor_async,
-    /* .cpy_tensor_async        = */ NULL, //ggml_backend_sycl_cpy_tensor_async, // TODO: update for the new interface
+    /* .cpy_tensor_async        = */ NULL, // ggml_backend_sycl_cpy_tensor_async,
+                                           // // TODO: update for the new
+                                           // interface
     /* .synchronize             = */ ggml_backend_sycl_synchronize,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
@@ -5197,11 +5257,11 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
     /* .supports_buft           = */ ggml_backend_sycl_supports_buft,
     /* .offload_op              = */ ggml_backend_sycl_offload_op,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
-    /* .event_record            = */ NULL,
+    /* .event_new               = */ ggml_backend_sycl_event_new,
+    /* .event_free              = */ ggml_backend_sycl_event_free,
+    /* .event_record            = */ ggml_backend_sycl_event_record,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
+    /* .event_synchronize       = */ ggml_backend_sycl_event_synchronize,
 };
 
 static ggml_guid_t ggml_backend_sycl_guid() {
