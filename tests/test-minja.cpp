@@ -119,14 +119,26 @@ static void test_error_contains(const std::string & template_str, const json & b
     cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -t test-minja -j && ./build/bin/test-minja
 */
 int main() {
+    const minja::Options lstrip_blocks {
+        /* .trim_blocks = */ false,
+        /* .lstrip_blocks = */ true,
+        /* .keep_trailing_newline = */ false,
+    };
+    const minja::Options trim_blocks {
+        /* .trim_blocks = */ true,
+        /* .lstrip_blocks = */ false,
+        /* .keep_trailing_newline = */ false,
+    };
+    const minja::Options lstrip_trim_blocks {
+        /* .trim_blocks = */ true,
+        /* .lstrip_blocks = */ true,
+        /* .keep_trailing_newline = */ false,
+    };
+
     test_render("{% set txt = 'a\\nb\\n' %}{{ txt | indent(2) }}|{{ txt | indent(2, first=true) }}", {}, {}, "a\n  b\n|  a\n  b\n");
     test_render(R"({%- if True %}        {% set _ = x %}{%- endif %}{{ 1 }})",
         {},
-        {
-            /* .lstrip_blocks = */ true,
-            /* .trim_blocks = */ true,
-            /* .keep_trailing_newline = */ false,
-        },
+        lstrip_trim_blocks,
         "        1"
     );
     test_render(R"(  {{- 'a' -}}{{ '  ' }}{{- 'b' -}}  )", {}, {}, "a  b");
@@ -159,23 +171,23 @@ int main() {
         "\n";
      test_render(
         trim_tmpl,
-        {}, { .trim_blocks = true }, "\n  Hello...\n");
+        {}, trim_blocks, "\n  Hello...\n");
      test_render(
         trim_tmpl,
         {}, {}, "\n  Hello  \n...\n");
      test_render(
         trim_tmpl,
-        {}, { .lstrip_blocks = true }, "\nHello  \n...\n");
+        {}, lstrip_blocks, "\nHello  \n...\n");
      test_render(
         trim_tmpl,
-        {}, { .trim_blocks = true, .lstrip_blocks = true }, "\nHello...\n");
+        {}, lstrip_trim_blocks, "\nHello...\n");
 
     test_render(
         R"({%- set separator = joiner(' | ') -%}
            {%- for item in ["a", "b", "c"] %}{{ separator() }}{{ item }}{% endfor -%})",
         {}, {}, "a | b | c");
     test_render("a\nb\n", {}, {}, "a\nb");
-    test_render("  {{- ' a\n'}}", {}, {.trim_blocks = true}, " a\n");
+    test_render("  {{- ' a\n'}}", {}, trim_blocks, " a\n");
 
     test_render(
         R"(
