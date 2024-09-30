@@ -2751,7 +2751,10 @@ struct test_opt_step_adamw : public test_case {
         ggml_set_param(ctx, a); // Despite tensor a having gradients the output tensor will not.
         ggml_set_name(a, "a");
 
-        ggml_tensor * out = ggml_opt_step_adamw(ctx, a, alpha, beta1, beta2, eps, wd);
+        ggml_tensor * grad = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], ne[2], ne[3]);
+        ggml_set_name(grad, "grad");
+
+        ggml_tensor * out = ggml_opt_step_adamw(ctx, a, grad, alpha, beta1, beta2, eps, wd);
         ggml_set_name(out, "out");
 
         return out;
