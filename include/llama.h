@@ -224,6 +224,20 @@ extern "C" {
 
     typedef bool (*llama_progress_callback)(float progress, void * user_data);
 
+    // represent an RGB image
+    // size of data must be equal to 3*nx*ny
+    typedef struct llama_img {
+        uint32_t nx;
+        uint32_t ny;
+        unsigned char * data;
+    } llama_img;
+
+    // Input data for llama_vision_decode
+    typedef struct llama_img_batch {
+        int32_t     n_imgs;
+        llama_img * imgs;
+    } llama_img_batch;
+
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
     // The provided arrays (i.e. token, embd, pos, etc.) must have size of n_tokens
@@ -874,6 +888,16 @@ extern "C" {
     // Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
+
+    //
+    // Vision
+    //
+
+    // encode image into embeddings
+    LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, llama_img_batch * batch);
+
+    // get output embeddings, to be put into language batch
+    LLAMA_API float * llama_vision_get_embeddings(struct llama_context * ctx, int32_t idx);
 
     //
     // Vocab

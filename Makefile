@@ -1120,6 +1120,7 @@ src/llama.o: \
 	src/llama-vocab.h \
 	src/llama-grammar.h \
 	src/llama-sampling.h \
+	src/llama-vision.h \
 	src/unicode.h \
 	include/llama.h \
 	ggml/include/ggml-cuda.h \
@@ -1150,6 +1151,17 @@ src/llama-sampling.o: \
 	src/llama-sampling.h \
 	src/llama-impl.h \
 	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-vision.o: \
+	src/llama-vision.cpp \
+	src/llama-vision.h \
+	include/llama.h \
+	ggml/include/ggml-cuda.h \
+	ggml/include/ggml-metal.h \
+	ggml/include/ggml.h \
+	ggml/include/ggml-alloc.h \
+	ggml/include/ggml-backend.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(LIB_LLAMA): \

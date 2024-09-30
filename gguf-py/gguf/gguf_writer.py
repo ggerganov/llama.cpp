@@ -841,6 +841,9 @@ class GGUFWriter:
     def add_vision_clip_head_count(self, value: int) -> None:
         self.add_uint32(Keys.Vision.Clip.HEAD_COUNT, value)
 
+    def add_vision_clip_max_position_embeddings(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.MAX_POS_EMBEDDING, value)
+
     def add_vision_clip_layer_norm_epsilon(self, value: float) -> None:
         self.add_float32(Keys.Vision.Clip.LAYERNORM_EPS, value)
 

@@ -195,6 +195,7 @@ class Keys:
             PROJECTION_TYPE     = "vision.clip.projection_type"
             PROJECTION_DIM      = "vision.clip.projection_dim"
             USE_GELU            = "vision.clip.use_gelu"
+            MAX_POS_EMBEDDING   = "vision.clip.max_position_embeddings"
             HEAD_COUNT          = "vision.clip.attention.head_count"
             LAYERNORM_EPS       = "vision.clip.attention.layer_norm_epsilon"
 

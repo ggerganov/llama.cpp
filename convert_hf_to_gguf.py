@@ -1583,6 +1583,9 @@ class LlamaModel(Model):
             self.gguf_writer.add_vision_clip_embedding_length(self.vparams["hidden_size"])
             self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
             self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
+            # TODO: should not hardcode these, but they are currently missing from config.json
+            self.gguf_writer.add_vision_clip_max_position_embeddings(577)
+            self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-05)
 
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
