@@ -1872,6 +1872,7 @@ static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
     /* .free_buffer     = */ ggml_backend_kompute_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_kompute_buffer_get_base,
     /* .init_tensor     = */ NULL,
+    /* .memset_tensor   = */ NULL,
     /* .set_tensor      = */ ggml_backend_kompute_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_kompute_buffer_get_tensor,
     /* .cpy_tensor      = */ NULL,

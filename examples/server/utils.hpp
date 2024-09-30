@@ -331,6 +331,9 @@ static json oaicompat_completion_params_parse(
         std::string response_type = json_value(response_format, "type", std::string());
         if (response_type == "json_object") {
             llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+        } else if (response_type == "json_schema") {
+            json json_schema = json_value(response_format, "json_schema", json::object());
+            llama_params["json_schema"] = json_value(json_schema, "schema", json::object());
         } else if (!response_type.empty() && response_type != "text") {
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
@@ -534,11 +537,34 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
-        {"usage", json {
+        {"usage", json { // TODO: fill
             {"prompt_tokens", 0},
             {"total_tokens", 0}
         }},
         {"data", data}
+    };
+
+    return res;
+}
+
+static json format_response_rerank(const json & request, const json & ranks) {
+    json data = json::array();
+    int i = 0;
+    for (const auto & rank : ranks) {
+        data.push_back(json{
+            {"index",    i++},
+            {"relevance_score", json_value(rank, "score", 0.0)},
+        });
+    }
+
+    json res = json {
+        {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
+        {"object", "list"},
+        {"usage", json { // TODO: fill
+            {"prompt_tokens", 0},
+            {"total_tokens", 0}
+        }},
+        {"results", data}
     };
 
     return res;

@@ -32,6 +32,9 @@ struct seq_draft {
 int main(int argc, char ** argv) {
     gpt_params params;
 
+    // needed to get candidate probs even for temp <= 0.0
+    params.sparams.n_probs = 128;
+
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
     }
@@ -49,7 +52,7 @@ int main(int argc, char ** argv) {
     // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
     const float p_split  = params.p_split;
 
-    std::default_random_engine rng(params.sparams.seed);
+    std::default_random_engine rng(params.sparams.seed == LLAMA_DEFAULT_SEED ? std::random_device()() : params.sparams.seed);
     std::uniform_real_distribution<> u_dist;
 
     // init llama.cpp

@@ -6,6 +6,9 @@
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <set>
+
+struct llm_tokenizer;
 
 struct llama_vocab {
     using id    = llama_token;
@@ -49,19 +52,29 @@ struct llama_vocab {
     id special_eot_id    = -1; // TODO: move above after "eos_id", and here add "file separator" token
     id special_eom_id    = -1;
 
+    // set of all tokens that cause "end of generation"
+    std::set<id> special_eog_ids;
+
     // tokenizer flags
-    bool tokenizer_add_space_prefix = false;
-    bool tokenizer_add_bos          = false;
-    bool tokenizer_add_eos          = false;
-    bool tokenizer_ignore_merges    = false;
-    bool tokenizer_clean_spaces     = false;  // clean_up_tokenization_spaces
+    bool tokenizer_add_space_prefix           = false;
+    bool tokenizer_add_bos                    = false;
+    bool tokenizer_add_eos                    = false;
+    bool tokenizer_ignore_merges              = false;
+    bool tokenizer_clean_spaces               = false;  // clean_up_tokenization_spaces
     bool tokenizer_remove_extra_whitespaces   = false;
     bool tokenizer_escape_whitespaces         = true;
     bool tokenizer_treat_whitespace_as_suffix = false;
 
     std::vector<char> precompiled_charsmap;
 
+    llm_tokenizer * tokenizer = nullptr;
+
+    llama_vocab() = default;
+    ~llama_vocab();
+
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
+
+    void init_tokenizer();
 };
 
 //
