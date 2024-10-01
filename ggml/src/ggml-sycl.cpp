@@ -4038,7 +4038,7 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
     return true;
 }
 
-GGML_API GGML_CALL void   ggml_sycl_get_gpu_list(int *id_list, int max_len) try {
+GGML_API void   ggml_sycl_get_gpu_list(int *id_list, int max_len) try {
     GGML_SYCL_DEBUG("[SYCL] call ggml_sycl_get_gpu_list\n");
     for(int i=0;i<max_len;i++) id_list[i] = -1;
 
@@ -4068,7 +4068,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_API GGML_CALL void ggml_sycl_get_device_description(int device, char *description,
+GGML_API void ggml_sycl_get_device_description(int device, char *description,
                                       size_t description_size) try {
     GGML_SYCL_DEBUG("[SYCL] call ggml_sycl_get_device_description\n");
     dpct::device_info prop;
@@ -4082,7 +4082,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL void ggml_backend_sycl_get_device_memory(int device, size_t *free,
+void ggml_backend_sycl_get_device_memory(int device, size_t *free,
                                                    size_t *total) try {
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_memory\n");
     ggml_sycl_set_device(device);
@@ -4135,12 +4135,12 @@ struct ggml_backend_sycl_buffer_context {
     }
 };
 
-GGML_CALL static const char * ggml_backend_sycl_buffer_get_name(ggml_backend_buffer_t buffer) {
+static const char * ggml_backend_sycl_buffer_get_name(ggml_backend_buffer_t buffer) {
     ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *)buffer->context;
     return ctx->name.c_str();
 }
 
-GGML_CALL static bool ggml_backend_buffer_is_sycl(ggml_backend_buffer_t buffer) {
+static bool ggml_backend_buffer_is_sycl(ggml_backend_buffer_t buffer) {
     return buffer->iface.get_name == ggml_backend_sycl_buffer_get_name;
 }
 
@@ -4162,7 +4162,7 @@ static void * ggml_backend_sycl_buffer_get_base(ggml_backend_buffer_t buffer) {
     return ctx->dev_ptr;
 }
 
-GGML_CALL static void
+static void
 ggml_backend_sycl_buffer_init_tensor(ggml_backend_buffer_t buffer,
                                      ggml_tensor *tensor) try {
     ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *)buffer->context;
@@ -4237,7 +4237,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static bool
+static bool
 ggml_backend_sycl_buffer_cpy_tensor(ggml_backend_buffer_t buffer,
                                     const ggml_tensor *src,
                                     ggml_tensor *dst) try {
@@ -4339,12 +4339,12 @@ struct ggml_backend_sycl_buffer_type_context {
     queue_ptr stream = nullptr;
 };
 
-GGML_CALL static const char * ggml_backend_sycl_buffer_type_name(ggml_backend_buffer_type_t buft) {
+static const char * ggml_backend_sycl_buffer_type_name(ggml_backend_buffer_type_t buft) {
     ggml_backend_sycl_buffer_type_context * ctx = (ggml_backend_sycl_buffer_type_context *)buft->context;
 
     return ctx->name.c_str();
 }
-GGML_CALL static ggml_backend_buffer_t
+static ggml_backend_buffer_t
 ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
                                            size_t size) try {
     ggml_backend_sycl_buffer_type_context * buft_ctx = (ggml_backend_sycl_buffer_type_context *)buft->context;
@@ -4368,7 +4368,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static size_t ggml_backend_sycl_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
+static size_t ggml_backend_sycl_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     return 128;
     UNUSED(buft);
 }
@@ -4379,7 +4379,7 @@ static size_t ggml_backend_sycl_buffer_type_get_max_size(ggml_backend_buffer_typ
     UNUSED(buft);
 }
 
-GGML_CALL static size_t ggml_backend_sycl_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
+static size_t ggml_backend_sycl_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     size_t size = ggml_nbytes(tensor);
     int64_t ne0 = tensor->ne[0];
 
@@ -4513,7 +4513,7 @@ struct ggml_backend_sycl_split_buffer_context {
     std::vector<queue_ptr> streams;
 };
 
-GGML_CALL static const char * ggml_backend_sycl_split_buffer_get_name(ggml_backend_buffer_t buffer) {
+static const char * ggml_backend_sycl_split_buffer_get_name(ggml_backend_buffer_t buffer) {
     return GGML_SYCL_NAME "_Split";
 
     UNUSED(buffer);
@@ -4523,19 +4523,19 @@ static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
    return buffer->iface.get_name == ggml_backend_sycl_split_buffer_get_name;
 }
 
-GGML_CALL static void ggml_backend_sycl_split_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+static void ggml_backend_sycl_split_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_sycl_split_buffer_context * ctx = (ggml_backend_sycl_split_buffer_context *)buffer->context;
     delete ctx;
 }
 
-GGML_CALL static void * ggml_backend_sycl_split_buffer_get_base(ggml_backend_buffer_t buffer) {
+static void * ggml_backend_sycl_split_buffer_get_base(ggml_backend_buffer_t buffer) {
     // the pointers are stored in the tensor extras, this is just a dummy address and never dereferenced
     return (void *)0x1000;
 
     UNUSED(buffer);
 }
 
-GGML_CALL static void
+static void
 ggml_backend_sycl_split_buffer_init_tensor(ggml_backend_buffer_t buffer,
                                            ggml_tensor *tensor) try {
     GGML_ASSERT(tensor->view_src == nullptr); // views of split tensors are not supported
@@ -4618,7 +4618,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static void
+static void
 ggml_backend_sycl_split_buffer_set_tensor(ggml_backend_buffer_t buffer,
                                           ggml_tensor *tensor, const void *data,
                                           size_t offset, size_t size) try {
@@ -4671,7 +4671,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static void
+static void
 ggml_backend_sycl_split_buffer_get_tensor(ggml_backend_buffer_t buffer,
                                           const ggml_tensor *tensor, void *data,
                                           size_t offset, size_t size) try {
@@ -4724,7 +4724,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static void ggml_backend_sycl_split_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+static void ggml_backend_sycl_split_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     UNUSED(buffer);
     UNUSED(value);
 }
@@ -4742,13 +4742,13 @@ static struct ggml_backend_buffer_i ggml_backend_sycl_split_buffer_interface = {
     /* .reset           = */ NULL,
 };
 
-GGML_CALL static const char * ggml_backend_sycl_split_buffer_type_name(ggml_backend_buffer_type_t buft) {
+static const char * ggml_backend_sycl_split_buffer_type_name(ggml_backend_buffer_type_t buft) {
     return GGML_SYCL_NAME "_Split";
 
     UNUSED(buft);
 }
 
-GGML_CALL static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     // since we don't know the exact split after rounding, we cannot allocate the device buffers at this point
     // instead, we allocate them for each tensor separately in init_tensor
     // however, the size still represents the maximum cumulative size of all the device buffers after the tensors are allocated,
@@ -4758,12 +4758,12 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc
     return ggml_backend_buffer_init(buft, ggml_backend_sycl_split_buffer_interface, ctx, size);
 }
 
-GGML_CALL static size_t ggml_backend_sycl_split_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
+static size_t ggml_backend_sycl_split_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     return 128;
     UNUSED(buft);
 }
 
-GGML_CALL static size_t ggml_backend_sycl_split_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
+static size_t ggml_backend_sycl_split_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     ggml_backend_sycl_split_buffer_type_context * ctx = (ggml_backend_sycl_split_buffer_type_context *)buft->context;
 
     size_t total_size = 0;
@@ -4790,7 +4790,7 @@ GGML_CALL static size_t ggml_backend_sycl_split_buffer_type_get_alloc_size(ggml_
     return total_size;
 }
 
-GGML_CALL static bool ggml_backend_sycl_split_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+static bool ggml_backend_sycl_split_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
     return false;
 
     UNUSED(buft);
@@ -4805,7 +4805,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_split_buffer_type_interface 
     /* .is_host          = */ ggml_backend_sycl_split_buffer_type_is_host,
 };
 
-GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split) {
+ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split) {
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -4846,13 +4846,13 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const f
 
 // host buffer type
 
-GGML_CALL static const char * ggml_backend_sycl_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
+static const char * ggml_backend_sycl_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
     return GGML_SYCL_NAME "_Host";
 
     UNUSED(buft);
 }
 
-GGML_CALL static const char * ggml_backend_sycl_host_buffer_name(ggml_backend_buffer_t buffer) {
+static const char * ggml_backend_sycl_host_buffer_name(ggml_backend_buffer_t buffer) {
     return GGML_SYCL_NAME "_Host";
 
     UNUSED(buffer);
@@ -4898,14 +4898,14 @@ ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type() {
 
 // backend
 
-GGML_CALL static const char * ggml_backend_sycl_name(ggml_backend_t backend) {
+static const char * ggml_backend_sycl_name(ggml_backend_t backend) {
 
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     return sycl_ctx->name.c_str();
 }
 
-GGML_CALL static void ggml_backend_sycl_free(ggml_backend_t backend) {
+static void ggml_backend_sycl_free(ggml_backend_t backend) {
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     delete sycl_ctx;
@@ -4913,12 +4913,12 @@ GGML_CALL static void ggml_backend_sycl_free(ggml_backend_t backend) {
 }
 
 
-GGML_CALL static ggml_backend_buffer_type_t ggml_backend_sycl_get_default_buffer_type(ggml_backend_t backend) {
+static ggml_backend_buffer_type_t ggml_backend_sycl_get_default_buffer_type(ggml_backend_t backend) {
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
     return ggml_backend_sycl_buffer_type(sycl_ctx->device);
 }
 
-GGML_CALL static void ggml_backend_sycl_set_tensor_async(ggml_backend_t backend,
+static void ggml_backend_sycl_set_tensor_async(ggml_backend_t backend,
                                                ggml_tensor *tensor,
                                                const void *data, size_t offset,
                                                size_t size) try {
@@ -4936,7 +4936,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static void ggml_backend_sycl_get_tensor_async(ggml_backend_t backend,
+static void ggml_backend_sycl_get_tensor_async(ggml_backend_t backend,
                                                const ggml_tensor *tensor,
                                                void *data, size_t offset,
                                                size_t size) try {
@@ -4954,9 +4954,9 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static bool ggml_backend_sycl_cpy_tensor_async(ggml_backend_t backend,
-                                                         const ggml_tensor *src,
-                                                         ggml_tensor *dst) try {
+static bool ggml_backend_sycl_cpy_tensor_async(ggml_backend_t backend,
+                                               const ggml_tensor *src,
+                                               ggml_tensor *dst) try {
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
     if (dst->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device) && ggml_backend_buffer_is_sycl(src->buffer)) {
         /*
@@ -4991,7 +4991,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
     ggml_sycl_set_main_device(sycl_ctx->device);
 
@@ -5019,7 +5019,7 @@ GGML_CALL static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t back
     return GGML_STATUS_SUCCESS;
 }
 
-GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
+static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
     switch (op->op) {
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
@@ -5166,13 +5166,13 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
     UNUSED(backend);
 }
 
-GGML_CALL static bool ggml_backend_sycl_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
+static bool ggml_backend_sycl_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
     const int min_batch_size = 32;
     return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS && op->op != GGML_OP_MUL_MAT_ID;
     GGML_UNUSED(backend);
 }
 
-GGML_CALL static bool ggml_backend_sycl_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
+static bool ggml_backend_sycl_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
     if (buft->iface.get_name != ggml_backend_sycl_buffer_type_name) {
         return false;
     }
@@ -5209,7 +5209,7 @@ static ggml_guid_t ggml_backend_sycl_guid() {
     return &guid;
 }
 
-GGML_CALL ggml_backend_t ggml_backend_sycl_init(int device) {
+ggml_backend_t ggml_backend_sycl_init(int device) {
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_init\n");
     ggml_check_sycl();
 
@@ -5234,12 +5234,12 @@ bool ggml_backend_is_sycl(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_sycl_guid());
 }
 
-GGML_CALL int ggml_backend_sycl_get_device_count() {
+int ggml_backend_sycl_get_device_count() {
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_count\n");
     return ggml_sycl_info().device_count;
 }
 
-GGML_CALL static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, void * user_data) {
+static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, void * user_data) {
     ggml_backend_t sycl_backend = ggml_backend_sycl_init((int) (intptr_t) user_data);
     return sycl_backend;
 

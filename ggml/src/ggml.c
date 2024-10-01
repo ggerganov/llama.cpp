@@ -461,7 +461,7 @@ struct ggml_arm_arch_features_type {
 } ggml_arm_arch_features = {-1, -1, -1, 0};
 #endif
 
-GGML_CALL const char * ggml_status_to_string(enum ggml_status status) {
+const char * ggml_status_to_string(enum ggml_status status) {
     switch (status) {
         case GGML_STATUS_ALLOC_FAILED: return "GGML status: error (failed to allocate memory)";
         case GGML_STATUS_FAILED:       return "GGML status: error (operation failed)";
@@ -3382,19 +3382,19 @@ void ggml_print_objects(const struct ggml_context * ctx) {
     GGML_PRINT("%s: --- end ---\n", __func__);
 }
 
-GGML_CALL int64_t ggml_nelements(const struct ggml_tensor * tensor) {
+int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[0]*tensor->ne[1]*tensor->ne[2]*tensor->ne[3];
 }
 
-GGML_CALL int64_t ggml_nrows(const struct ggml_tensor * tensor) {
+int64_t ggml_nrows(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[1]*tensor->ne[2]*tensor->ne[3];
 }
 
-GGML_CALL size_t ggml_nbytes(const struct ggml_tensor * tensor) {
+size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     size_t nbytes;
     size_t blck_size = ggml_blck_size(tensor->type);
     if (blck_size == 1) {
@@ -3417,15 +3417,15 @@ size_t ggml_nbytes_pad(const struct ggml_tensor * tensor) {
     return GGML_PAD(ggml_nbytes(tensor), GGML_MEM_ALIGN);
 }
 
-GGML_CALL int64_t ggml_blck_size(enum ggml_type type) {
+int64_t ggml_blck_size(enum ggml_type type) {
     return type_traits[type].blck_size;
 }
 
-GGML_CALL size_t ggml_type_size(enum ggml_type type) {
+size_t ggml_type_size(enum ggml_type type) {
     return type_traits[type].type_size;
 }
 
-GGML_CALL size_t ggml_row_size(enum ggml_type type, int64_t ne) {
+size_t ggml_row_size(enum ggml_type type, int64_t ne) {
     assert(ne % ggml_blck_size(type) == 0);
     return ggml_type_size(type)*ne/ggml_blck_size(type);
 }
@@ -3434,15 +3434,15 @@ double ggml_type_sizef(enum ggml_type type) {
     return ((double)(type_traits[type].type_size))/type_traits[type].blck_size;
 }
 
-GGML_CALL const char * ggml_type_name(enum ggml_type type) {
+const char * ggml_type_name(enum ggml_type type) {
     return type < GGML_TYPE_COUNT ? type_traits[type].type_name : "NONE";
 }
 
-GGML_CALL bool ggml_is_quantized(enum ggml_type type) {
+bool ggml_is_quantized(enum ggml_type type) {
     return type_traits[type].is_quantized;
 }
 
-GGML_CALL const char * ggml_op_name(enum ggml_op op) {
+const char * ggml_op_name(enum ggml_op op) {
     return GGML_OP_NAME[op];
 }
 
@@ -3454,7 +3454,7 @@ const char * ggml_unary_op_name(enum ggml_unary_op op) {
     return GGML_UNARY_OP_NAME[op];
 }
 
-GGML_CALL const char * ggml_op_desc(const struct ggml_tensor * t) {
+const char * ggml_op_desc(const struct ggml_tensor * t) {
     if (t->op == GGML_OP_UNARY) {
         enum ggml_unary_op uop = ggml_get_unary_op(t);
         return ggml_unary_op_name(uop);
@@ -3462,7 +3462,7 @@ GGML_CALL const char * ggml_op_desc(const struct ggml_tensor * t) {
     return ggml_op_name(t->op);
 }
 
-GGML_CALL size_t ggml_element_size(const struct ggml_tensor * tensor) {
+size_t ggml_element_size(const struct ggml_tensor * tensor) {
     return ggml_type_size(tensor->type);
 }
 
@@ -3555,7 +3555,7 @@ size_t ggml_tensor_overhead(void) {
     return GGML_OBJECT_SIZE + GGML_TENSOR_SIZE;
 }
 
-GGML_CALL bool ggml_is_transposed(const struct ggml_tensor * tensor) {
+bool ggml_is_transposed(const struct ggml_tensor * tensor) {
     return tensor->nb[0] > tensor->nb[1];
 }
 
@@ -3581,23 +3581,23 @@ static bool ggml_is_contiguous_n(const struct ggml_tensor * tensor, int n) {
     return true;
 }
 
-GGML_CALL bool ggml_is_contiguous(const struct ggml_tensor * tensor) {
+bool ggml_is_contiguous(const struct ggml_tensor * tensor) {
     return ggml_is_contiguous_0(tensor);
 }
 
-GGML_CALL bool ggml_is_contiguous_0(const struct ggml_tensor * tensor) {
+bool ggml_is_contiguous_0(const struct ggml_tensor * tensor) {
     return ggml_is_contiguous_n(tensor, 0);
 }
 
-GGML_CALL bool ggml_is_contiguous_1(const struct ggml_tensor * tensor) {
+bool ggml_is_contiguous_1(const struct ggml_tensor * tensor) {
     return ggml_is_contiguous_n(tensor, 1);
 }
 
-GGML_CALL bool ggml_is_contiguous_2(const struct ggml_tensor * tensor) {
+bool ggml_is_contiguous_2(const struct ggml_tensor * tensor) {
     return ggml_is_contiguous_n(tensor, 2);
 }
 
-GGML_CALL bool ggml_is_permuted(const struct ggml_tensor * tensor) {
+bool ggml_is_permuted(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->nb[0] > tensor->nb[1] || tensor->nb[1] > tensor->nb[2] || tensor->nb[2] > tensor->nb[3];
@@ -3612,7 +3612,7 @@ static inline bool ggml_is_padded_1d(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
-GGML_CALL bool ggml_is_empty(const struct ggml_tensor * tensor) {
+bool ggml_is_empty(const struct ggml_tensor * tensor) {
     for (int i = 0; i < GGML_MAX_DIMS; ++i) {
         if (tensor->ne[i] == 0) {
             // empty if any dimension has no elements
@@ -4628,7 +4628,7 @@ float * ggml_get_data_f32(const struct ggml_tensor * tensor) {
     return (float *)(tensor->data);
 }
 
-GGML_CALL enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor) {
+enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor) {
     GGML_ASSERT(tensor->op == GGML_OP_UNARY);
     return (enum ggml_unary_op) ggml_get_op_params_i32(tensor, 0);
 }
@@ -12731,6 +12731,10 @@ static void ggml_compute_forward_out_prod_f32(
 
     GGML_TENSOR_BINARY_OP_LOCALS
 
+    GGML_ASSERT(dst->type == GGML_TYPE_F32);
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+
     const int ith = params->ith;
     const int nth = params->nth;
 
@@ -14060,7 +14064,7 @@ static void ggml_rope_cache_init(
     }
 }
 
-GGML_CALL void ggml_rope_yarn_corr_dims(
+void ggml_rope_yarn_corr_dims(
     int n_dims, int n_ctx_orig, float freq_base, float beta_fast, float beta_slow, float dims[2]
 ) {
     // start and end correction dims
