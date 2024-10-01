@@ -1,0 +1,5 @@
+set(TARGET llama-compress)
+add_executable(${TARGET} compress.cpp)
+install(TARGETS ${TARGET} RUNTIME)
+target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
+target_compile_features(${TARGET} PRIVATE cxx_std_11)

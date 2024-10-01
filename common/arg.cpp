@@ -1638,7 +1638,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             params.cvector_outfile = value;
             params.lora_outfile = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_IMATRIX, LLAMA_EXAMPLE_CVECTOR_GENERATOR, LLAMA_EXAMPLE_EXPORT_LORA}));
+    ).set_examples({LLAMA_EXAMPLE_IMATRIX, LLAMA_EXAMPLE_CVECTOR_GENERATOR, LLAMA_EXAMPLE_EXPORT_LORA, LLAMA_EXAMPLE_COMPRESS}));
     add_opt(llama_arg(
         {"-ofreq", "--output-frequency"}, "N",
         format("output the imatrix every N iterations (default: %d)", params.n_out_freq),
@@ -1950,6 +1950,24 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else { std::invalid_argument("invalid value"); }
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
+    add_opt(llama_arg(
+        {"--compression_header_size"}, "N",
+        "Number of tokens to keep in header (default: 1)",
+        [](gpt_params & params, int value){
+            params.num_tokens_header = value;
+        }).set_examples({LLAMA_EXAMPLE_COMPRESS}));
+    add_opt(llama_arg(
+        {"--mode"}, "{compress,expand,test}",
+        "What task to run (default: test)",
+        [](gpt_params & params,  const std::string & value){
+            if (value == "test"){
+                return; }
+            else if (value == "compress"){
+                params.compress_mode = 1; }
+            else if (value == "expand"){
+                params.compress_mode = 2; }
+            else { std::invalid_argument("invalid value"); }
+        }).set_examples({LLAMA_EXAMPLE_COMPRESS}));
     add_opt(llama_arg(
         {"--log-disable"},
         "Log disable",
