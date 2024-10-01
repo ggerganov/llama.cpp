@@ -547,7 +547,7 @@ if (GGML_SYCL)
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
     elseif (GGML_SYCL_TARGET STREQUAL "AMD")
-        # INFO: Allowed Sub_group_siezs are not consistent through all
+        # INFO: Allowed Sub_group_sizes are not consistent through all
         # hip targets. For example, 64 is used for certain models, but the backend
         # does not support it.
         # Target archs tested working: gfx1030, gfx1031, (Only tested sub_group_size = 32)

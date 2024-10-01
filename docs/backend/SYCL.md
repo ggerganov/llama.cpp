@@ -26,7 +26,7 @@
 
 ### Llama.cpp + SYCL
 
-The llama.cpp SYCL backend is designed to support **Intel GPU** firstly. Based on the cross-platform feature of SYCL, it could support other vendor GPUs: Nvidia and AMD GPU.
+The llama.cpp SYCL backend is designed to support **Intel GPU** firstly. Based on the cross-platform feature of SYCL, it also supports other vendor GPUs: Nvidia and AMD.
 
 ## Recommended Release
 
@@ -334,7 +334,7 @@ export CPLUS_INCLUDE_DIR=/path/to/oneMKL/buildWithrocBLAS/include:$CPLUS_INCLUDE
 ## AMD
 # Use FP32, FP16 is not supported
 # Find your GGML_SYCL_HIP_TARGET with rocminfo, under the key 'Name:'
-cmake -B build -DGGML_SYCL=ON -DGGML_SYCL_TARGET=AMD -DGGML_SYCL_HIP_TARGET=gfx1030 -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+cmake -B build -DGGML_SYCL=ON -DGGML_SYCL_TARGET=AMD -DGGML_SYCL_HIP_TARGET=${GGML_SYCL_HIP_TARGET} -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
 # build all binary
 cmake --build build --config Release -j -v
