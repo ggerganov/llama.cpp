@@ -2300,12 +2300,12 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
 // globals
 //
 
-struct llama_state {
+struct llama_logger_state {
     ggml_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
-static llama_state g_logger_state;
+static llama_logger_state g_logger_state;
 
 // available llama models
 enum e_model {
