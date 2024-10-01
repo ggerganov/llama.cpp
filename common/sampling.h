@@ -36,7 +36,7 @@ struct gpt_sampler;
 
 // llama_sampler API overloads
 
-struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params);
+struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params, int32_t context_size);
 
 void gpt_sampler_free(struct gpt_sampler * gsmpl);
 

@@ -1135,6 +1135,7 @@ extern "C" {
     ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
     LLAMA_API struct llama_sampler * llama_sampler_init_dry(
             const struct llama_model * model,
+                             int32_t   context_size,
                                float   dry_multiplier,
                                float   dry_base,
                              int32_t   dry_allowed_length,
@@ -1231,6 +1232,7 @@ extern "C" {
 #include <string>
 
 LLAMA_API void llama_sampler_dry_set_seq_breakers(struct llama_sampler * sampler, const std::vector<std::string>& seq_breakers);
+LLAMA_API void llama_sampler_dry_set_seq_breakers_as_tokens(struct llama_sampler * smpl, const std::vector<std::vector<llama_token>>& seq_breakers);
 
 #endif // __cplusplus
 

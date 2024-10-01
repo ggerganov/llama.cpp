@@ -145,7 +145,7 @@ std::string gpt_sampler_params::print() const {
     return std::string(result);
 }
 
-struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
+struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params, int32_t context_size) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
     lparams.no_perf = params.no_perf;
@@ -180,7 +180,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
                 params.ignore_eos));
 
     if (params.dry_multiplier != 0.0f && params.dry_base != 0.0f) {
-        auto * dry_sampler = llama_sampler_init_dry(model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n);
+        auto * dry_sampler = llama_sampler_init_dry(model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n);
 
         llama_sampler_dry_set_seq_breakers(dry_sampler, params.dry_sequence_breakers);
         llama_sampler_chain_add(result->chain, dry_sampler);
@@ -289,19 +289,19 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
 
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
     // Check and set the context size if it hasn't been set yet
-    if (!gsmpl->context_size_set) {
-        gsmpl->n_ctx = llama_n_ctx(ctx);
-        gsmpl->context_size_set = true;
+    // if (!gsmpl->context_size_set) {
+    //     gsmpl->n_ctx = llama_n_ctx(ctx);
+    //     gsmpl->context_size_set = true;
 
-        // Update the DRY sampler's context size if it is active
-        for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
-            auto * sampler = llama_sampler_chain_get(gsmpl->chain, i);
-            if (strcmp(llama_sampler_name(sampler), "dry") == 0) {
-                llama_sampler_dry_set_context_size(sampler, gsmpl->n_ctx);
-                break;
-            }
-        }
-    }
+    //     // Update the DRY sampler's context size if it is active
+    //     for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
+    //         auto * sampler = llama_sampler_chain_get(gsmpl->chain, i);
+    //         if (strcmp(llama_sampler_name(sampler), "dry") == 0) {
+    //             llama_sampler_dry_set_context_size(sampler, gsmpl->n_ctx);
+    //             break;
+    //         }
+    //     }
+    // }
 
     gsmpl->set_logits(ctx, idx);
 

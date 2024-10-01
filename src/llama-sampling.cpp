@@ -1604,6 +1604,9 @@ std::vector<llama_token> llama_tokenize(
 }
 
 std::string llama_detokenize(const struct llama_model * model, const std::vector<llama_token> & tokens, bool special) {
+    if (model == nullptr) {
+        return "??";
+    }
     std::string text;
     text.resize(std::max(text.capacity(), tokens.size()));
     int32_t n_chars = llama_detokenize(model, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
@@ -1625,7 +1628,7 @@ std::string llama_detokenize_single(const struct llama_model * model, llama_toke
 }
 
 // For DRY debugging
-std::string detokenize_for_display(const struct llama_model* model, llama_token token, bool special) {
+std::string detokenize_for_display(const struct llama_model * model, llama_token token, bool special) {
     std::string token_text = llama_detokenize_single(model, token, special);
     size_t pos = 0;
     while ((pos = token_text.find('\n', pos)) != std::string::npos) {
@@ -1637,32 +1640,30 @@ std::string detokenize_for_display(const struct llama_model* model, llama_token 
 }
 
 // For DRY debugging
-void dry_print_ring_buffer_debug(const llama_sampler_dry* ctx) {
-    const size_t max_tokens_per_side = 100;
+void dry_print_ring_buffer_debug(const llama_sampler_dry * ctx, int max_tokens_per_side = 100) {
     const size_t total_tokens = ctx->last_tokens.size();
-    const size_t tokens_to_print = std::min(total_tokens, max_tokens_per_side * 2);
+    size_t tokens_to_print = total_tokens;
+
+    if (max_tokens_per_side != -1) {
+        tokens_to_print = std::min(total_tokens, static_cast<size_t>(max_tokens_per_side) * 2);
+    }
 
     std::vector<std::pair<int, std::string>> token_info;
     token_info.reserve(tokens_to_print);
 
     // Collect token information
-    if (total_tokens <= max_tokens_per_side * 2) {
-        // If we have 200 or fewer tokens, print all of them
+    if (max_tokens_per_side == -1 || total_tokens <= tokens_to_print) {
         for (size_t i = 0; i < total_tokens; ++i) {
             llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
             std::string token_text = detokenize_for_display(ctx->model, token, true);
             token_info.emplace_back(token, std::move(token_text));
         }
     } else {
-        // If we have more than 200 tokens, print the first 100 and the last 100
-        // First 100 tokens
         for (size_t i = 0; i < max_tokens_per_side; ++i) {
             llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
             std::string token_text = detokenize_for_display(ctx->model, token, true);
             token_info.emplace_back(token, std::move(token_text));
         }
-
-        // Last 100 tokens
         for (size_t i = total_tokens - max_tokens_per_side; i < total_tokens; ++i) {
             llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
             std::string token_text = detokenize_for_display(ctx->model, token, true);
@@ -1682,20 +1683,18 @@ void dry_print_ring_buffer_debug(const llama_sampler_dry* ctx) {
     LLAMA_LOG_INFO("DRY Ring Buffer Content (showing %zu out of %zu tokens):\n\n", tokens_to_print, total_tokens);
     LLAMA_LOG_INFO("%-*s | %-*s | %-*s\n", (int)max_index_width, "Idx", (int)max_token_width, "Token", (int)max_text_width, "Text");
     LLAMA_LOG_INFO("%s-+-%s-+-%s\n", std::string(max_index_width, '-').c_str(),
-                 std::string(max_token_width, '-').c_str(), std::string(max_text_width, '-').c_str());
+                   std::string(max_token_width, '-').c_str(), std::string(max_text_width, '-').c_str());
 
     // Print tokens
     for (size_t i = 0; i < tokens_to_print; ++i) {
-        size_t true_index = (total_tokens <= max_tokens_per_side * 2) ? i :
-                            (i < max_tokens_per_side) ? i : (total_tokens - max_tokens_per_side * 2 + i);
-
+        size_t true_index = (max_tokens_per_side == -1 || total_tokens <= tokens_to_print) ? i :
+            (i < max_tokens_per_side) ? i : (total_tokens - tokens_to_print + i);
         LLAMA_LOG_INFO("%-*zu | %-*d | %-*s\n",
-                     (int)max_index_width, true_index,
-                     (int)max_token_width, token_info[i].first,
-                     (int)max_text_width, token_info[i].second.c_str());
-
+            (int)max_index_width, true_index,
+            (int)max_token_width, token_info[i].first,
+            (int)max_text_width, token_info[i].second.c_str());
         // Add a separator between oldest and newest tokens if applicable
-        if (total_tokens > max_tokens_per_side * 2 && i == max_tokens_per_side - 1) {
+        if (max_tokens_per_side != -1 && total_tokens > tokens_to_print && i == max_tokens_per_side - 1) {
             LLAMA_LOG_INFO("%s\n", std::string(max_index_width + max_token_width + max_text_width + 6, '.').c_str());
         }
     }
@@ -1709,7 +1708,7 @@ struct CandidateInfo {
 };
 
 // For DRY debugging
-std::vector<CandidateInfo> get_top_n_candidates(const llama_token_data_array* cur_p, size_t n) {
+std::vector<CandidateInfo> get_top_n_candidates(const llama_token_data_array * cur_p, size_t n) {
     std::vector<CandidateInfo> candidates;
     candidates.reserve(cur_p->size);
 
@@ -1788,7 +1787,9 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
         return;
     }
 
-    int last_n_repeat = std::min(std::min((int)ctx->last_tokens.size(), ctx->dry_penalty_last_n), ctx->total_context_size);
+    int32_t effective_dry_penalty_last_n = (ctx->dry_penalty_last_n == -1) ? ctx->total_context_size : std::max(ctx->dry_penalty_last_n, 0);
+    int last_n_repeat = std::min(std::min((int)ctx->last_tokens.size(), effective_dry_penalty_last_n), ctx->total_context_size);
+
     if (last_n_repeat <= ctx->dry_allowed_length) {
         return;
     }
@@ -1921,7 +1922,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
     // Print top N candidates before and after penalties
     if (penalties_applied > 0) {
         LLAMA_LOG_INFO("Total DRY penalties applied: %d\n", penalties_applied);
-        dry_print_ring_buffer_debug(ctx);
+        dry_print_ring_buffer_debug(ctx, 100);
         LLAMA_LOG_INFO("\nTop %zu candidates before penalties:\n", top_n);
         for (const auto& candidate : top_n_before) {
             std::string token_text = detokenize_for_display(ctx->model, candidate.data.id, true);
@@ -1952,17 +1953,14 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
 
 static void llama_sampler_dry_reset(struct llama_sampler * smpl) {
     auto * ctx = (llama_sampler_dry *) smpl->ctx;
-
     ctx->last_tokens.clear();
     ctx->dry_repeat_count.clear();
-    int32_t effective_dry_penalty_last_n = (ctx->dry_penalty_last_n == -1) ? ctx->total_context_size : std::max(ctx->dry_penalty_last_n, 0);
-    ctx->dry_repeat_count.resize(effective_dry_penalty_last_n, 0);
     ctx->dry_max_token_repeat.clear();
 }
 
 static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (llama_sampler_dry *) smpl->ctx;
-    auto * result = llama_sampler_init_dry(ctx->model, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n);
+    auto * result = llama_sampler_init_dry(ctx->model, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n);
 
     // copy the state
     {
@@ -1989,24 +1987,26 @@ static struct llama_sampler_i llama_sampler_dry_i = {
     /* .free   = */ llama_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n) {
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n) {
     if (dry_multiplier < 0 || dry_base <= 0 || dry_allowed_length < 0) {
         return nullptr;
     }
+
+    int32_t effective_dry_penalty_last_n = (dry_penalty_last_n == -1) ? context_size : std::max(dry_penalty_last_n, 0);
 
     return new llama_sampler {
         /* .iface = */ &llama_sampler_dry_i,
         /* .ctx   = */ new llama_sampler_dry {
             /* .model               = */ model,
-            /* .total_context_size  = */ 0,  // Will be set later
+            /* .total_context_size  = */ context_size,
             /* .dry_multiplier      = */ dry_multiplier,
             /* .dry_base            = */ dry_base,
             /* .dry_allowed_length  = */ dry_allowed_length,
             /* .dry_penalty_last_n  = */ dry_penalty_last_n,
             /* .dry_processed_breakers = */ {},
-            /* .dry_repeat_count    = */ {},
+            /* .dry_repeat_count    = */ std::vector<int>(effective_dry_penalty_last_n, 0),
             /* .dry_max_token_repeat = */ {},
-            /* .last_tokens         = */ ring_buffer<llama_token>(16),
+            /* .last_tokens         = */ ring_buffer<llama_token>(effective_dry_penalty_last_n),
         },
     };
 }
@@ -2026,14 +2026,18 @@ void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::
     }
 }
 
-void llama_sampler_dry_set_context_size(struct llama_sampler * smpl, int32_t context_size) {
+//For use in test-sampling.cpp
+void llama_sampler_dry_set_seq_breakers_as_tokens(struct llama_sampler * smpl, const std::vector<std::vector<llama_token>>& seq_breakers) {
     auto * ctx = (llama_sampler_dry *) smpl->ctx;
-    ctx->total_context_size = context_size;
+    ctx->dry_processed_breakers.clear();
 
-    int32_t effective_dry_penalty_last_n = (ctx->dry_penalty_last_n == -1) ? ctx->total_context_size : std::max(ctx->dry_penalty_last_n, 0);
-
-    ctx->dry_repeat_count.resize(effective_dry_penalty_last_n, 0);
-    ctx->last_tokens = ring_buffer<llama_token>(effective_dry_penalty_last_n);
+    for (const auto& breaker : seq_breakers) {
+        if (breaker.size() >= 1) {
+            llama_token head_token = breaker[0];
+            std::vector<llama_token> tail_tokens(breaker.begin() + 1, breaker.end());
+            ctx->dry_processed_breakers.emplace(head_token, tail_tokens);
+        }
+    }
 }
 
 // logit-bias

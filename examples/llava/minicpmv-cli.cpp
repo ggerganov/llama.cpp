@@ -237,7 +237,7 @@ static struct gpt_sampler * llama_init(struct llava_context * ctx_llava, gpt_par
 
     LOG_INF("\n");
 
-    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams, llama_n_ctx(ctx_llava->ctx_llama));
     return smpl;
 }
 

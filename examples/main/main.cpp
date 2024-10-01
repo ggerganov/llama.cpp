@@ -448,7 +448,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    smpl = gpt_sampler_init(model, sparams);
+    smpl = gpt_sampler_init(model, sparams, n_ctx);
     if (!smpl) {
         LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         return 1;

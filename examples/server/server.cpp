@@ -163,7 +163,7 @@ struct server_slot {
     int32_t n_prompt_tokens           = 0;
     int32_t n_prompt_tokens_processed = 0;
 
-    json prompt; // can be either a string, array of strings or array of token ids
+    json prompt; // can be either a string, array of strings, array of token ids, or mixed array of strings and token ids
 
     // when a task is submitted, we first tokenize the prompt and store it here
     std::vector<llama_token> prompt_tokens;
@@ -975,8 +975,7 @@ struct server_context {
             }
 
             if ((prompt->is_string()) ||
-                (prompt->is_array() &&  prompt->size() == 1 && prompt->at(0).is_string()) ||
-                (prompt->is_array() && !prompt->empty()     && prompt->at(0).is_number_integer())) {
+                (prompt->is_array() && !prompt->empty() && (prompt->at(0).is_string() || prompt->at(0).is_number_integer()))) {
                 slot.prompt = *prompt;
             } else if (prompt->is_array() && prompt->size() == 1 && prompt->at(0).is_array()) {
                 slot.prompt = prompt->at(0);
@@ -984,7 +983,7 @@ struct server_context {
                 // array of strings
                 for (const auto & el : *prompt) {
                     if (!el.is_string()) {
-                        send_error(task, "\"prompt\" must be a string, an array of strings or an array of integers", ERROR_TYPE_INVALID_REQUEST);
+                        send_error(task, "\"prompt\" must be a string, an array of strings, an array of integers, or a mixed array of strings and integers", ERROR_TYPE_INVALID_REQUEST);
                         return false;
                     }
                 }
@@ -1062,18 +1061,10 @@ struct server_context {
         }
 
         {
-            // These lines seem to force the clearing of sampler data between generations:
-
-            // if (slot.smpl != nullptr) {
-            //     gpt_sampler_free(slot.smpl);
-            // }
-            // slot.smpl = gpt_sampler_init(model, slot.sparams);
-
-            // Changed it to this so data could be maintained between generations:
-
-            if (slot.smpl == nullptr) {
-                slot.smpl = gpt_sampler_init(model, slot.sparams);
+            if (slot.smpl != nullptr) {
+                gpt_sampler_free(slot.smpl);
             }
+            slot.smpl = gpt_sampler_init(model, slot.sparams, slot.n_ctx);
 
             if (slot.smpl == nullptr) {
                 // for now, the only error that may happen here is invalid grammar
@@ -1518,24 +1509,25 @@ struct server_context {
             throw std::runtime_error(error_msg);
         }
         json prompt = data.at("prompt");
-        // if the prompt is a singleton (i.e. a string, a list of tokens, or a mixed array of strings and tokens), we only need to create a single task
-        if (prompt.is_string() || (prompt.is_array() && !prompt.empty() && !prompt[0].is_array())) {
-            bool is_mixed = false;
-            bool has_string = prompt.is_string();
+
+        auto is_valid_singleton_array = [](const json& arr) {
             bool has_number = false;
-            if (prompt.is_array()) {
-                for (const auto& elem : prompt) {
-                    if (elem.is_string()) has_string = true;
-                    else if (elem.is_number()) has_number = true;
-                    if (has_string && has_number) {
-                        is_mixed = true;
-                        break;
-                    }
+            for (const auto& elem : arr) {
+                if (elem.is_number()) {
+                    has_number = true;
+                } else if (!elem.is_string()) {
+                    return false;
                 }
             }
+            return has_number;
+        };
+
+        bool is_singleton = prompt.is_string() || (prompt.is_array() && is_valid_singleton_array(prompt));
+
+        // if the prompt is a singleton (i.e. a string, a list of tokens, or a mixed array of strings and tokens), we only need to create a single task
+        if (prompt.is_string() || (prompt.is_array() && is_valid_singleton_array(prompt))) {
             data["index"] = 0;
             create_task(data, false, nullptr);
-            SRV_DBG("creating single%s prompt task\n", is_mixed ? " mixed" : "");
         }
         // otherwise, it's a multiple-prompt task or a rerank task, we break it into smaller tasks
         else if (prompt.is_array()) {
@@ -2154,7 +2146,8 @@ struct server_context {
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
 
-                            //gpt_sampler_reset(slot.smpl);                     // This line is likely preventing sampler state from being maintained from generation to generation
+                            // Should this be (re-)moved?
+                            gpt_sampler_reset(slot.smpl);
 
                             if (!slot.params.cache_prompt) {
                                 slot.n_past_se = 0;
@@ -2165,10 +2158,13 @@ struct server_context {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
 
+                                // Not sure if the for loop below should happen in multiple places but for now I moved it
+                                // until after the entire prompt is processed so that sampling would happen consistently.
+
                                 // push the prompt into the sampling context (do not apply grammar)
-                                for (int i = 0; i < slot.n_past; ++i) {
-                                    gpt_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
-                                }
+                                // for (int i = 0; i < slot.n_past; ++i) {
+                                //     gpt_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
+                                // }
                             }
                         }
 
@@ -2263,6 +2259,11 @@ struct server_context {
                         slot.state = SLOT_STATE_DONE_PROMPT;
 
                         GGML_ASSERT(batch.n_tokens > 0);
+
+                        // Process all prompt tokens through sampler system
+                        for (int i = 0; i < slot.n_prompt_tokens; ++i) {
+                            gpt_sampler_accept(slot.smpl, prompt_tokens[i], false);
+                        }
 
                         // extract the logits only for the last token
                         batch.logits[batch.n_tokens - 1] = true;
