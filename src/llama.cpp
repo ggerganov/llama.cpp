@@ -5502,8 +5502,10 @@ static void llm_load_hparams(
                     }
                 } else {
                     switch (hparams.n_layer) {
+                        case 16: model.type = e_model::MODEL_1B; break; // Llama 3.2 1B
                         case 22: model.type = e_model::MODEL_1B; break;
                         case 26: model.type = e_model::MODEL_3B; break;
+                        case 28: model.type = e_model::MODEL_3B; break; // Llama 3.2 3B
                         // granite uses a vocab with len 49152
                         case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
                         case 36: model.type = e_model::MODEL_8B; break; // granite
