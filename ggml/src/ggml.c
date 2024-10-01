@@ -319,6 +319,43 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 // logging
 //
 
+struct ggml_logger_state {
+    ggml_log_callback log_callback = ggml_log_callback_default;
+    void * log_callback_user_data  = nullptr;
+};
+static ggml_logger_state g_logger_state;
+
+static void ggml_log_internal_v(ggml_log_level level, const char * format, va_list args) {
+    va_list args_copy;
+    va_copy(args_copy, args);
+    char buffer[128];
+    int len = vsnprintf(buffer, 128, format, args);
+    if (len < 128) {
+        g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
+    } else {
+        char * buffer2 = new char[len + 1];
+        vsnprintf(buffer2, len + 1, format, args_copy);
+        buffer2[len] = 0;
+        g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
+        delete[] buffer2;
+    }
+    va_end(args_copy);
+}
+
+void ggml_log_internal(ggml_log_level level, const char * format, ...) {
+    va_list args;
+    va_start(args, format);
+    ggml_log_internal_v(level, format, args);
+    va_end(args);
+}
+
+void ggml_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
+    (void) level;
+    (void) user_data;
+    fputs(text, stderr);
+    fflush(stderr);
+}
+
 #if (GGML_DEBUG >= 1)
 #define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
 #else
@@ -23236,5 +23273,10 @@ int ggml_cpu_get_sve_cnt(void) {
 #else
     return 0;
 #endif
+}
+
+void ggml_log_set(ggml_log_callback log_callback, void * user_data) {
+    g_logger_state.log_callback = log_callback ? log_callback : ggml_log_callback_default;
+    g_logger_state.log_callback_user_data = user_data;
 }
 ////////////////////////////////////////////////////////////////////////////////
