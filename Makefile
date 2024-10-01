@@ -1477,7 +1477,6 @@ llama-server: \
 	examples/server/json-schema-to-grammar.mjs.hpp \
 	examples/server/loading.html.hpp \
 	common/json.hpp \
-	common/stb_image.h \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
@@ -1500,7 +1499,6 @@ libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
 	examples/llava/clip.h \
-	common/stb_image.h \
 	common/base64.hpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -static -fPIC -c $< -o $@ -Wno-cast-qual

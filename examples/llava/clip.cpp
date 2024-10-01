@@ -23,7 +23,7 @@
 #include "ggml-vulkan.h"
 #endif
 
-#define STB_IMAGE_IMPLEMENTATION
+#include "vision.h" // without this, we get duplicated symbol error
 #include "stb_image.h"
 
 #include <cassert>
