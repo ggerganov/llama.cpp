@@ -37,16 +37,6 @@ extern "C" {
 // logging
 //
 
-#ifdef __GNUC__
-#ifdef __MINGW32__
-#define GGML_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
-#else
-#define GGML_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
-#endif
-#else
-#define GGML_ATTRIBUTE_FORMAT(...)
-#endif
-
 GGML_ATTRIBUTE_FORMAT(2, 3)
 void ggml_log_internal        (ggml_log_level level, const char * format, ...);
 void ggml_log_callback_default(ggml_log_level level, const char * text, void * user_data);
