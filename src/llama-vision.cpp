@@ -14,7 +14,8 @@
 
 // export clip_image_u8 to bmp file for debugging
 // https://codereview.stackexchange.com/questions/195121/writing-a-bitmap-image-from-c
-static int bmp_export(const clip_image_u8 &img, const std::string &location);
+struct clip_image_size;
+static int bmp_export(const struct clip_image_u8 &img, const std::string &location);
 #endif
 
 struct clip_image_size {
@@ -53,13 +54,13 @@ struct clip_image_f32 {
 using clip_image_f32_batch = std::vector<clip_image_f32>;
 using clip_image_f8_batch  = std::vector<clip_image_u8>;
 
-static int clip_n_patches(const clip_context & ctx) {
+int clip_n_patches(const clip_context & ctx) {
     auto & hparams = ctx.model->hparams;
     int n_patches = (hparams.image_size / hparams.patch_size) * (hparams.image_size / hparams.patch_size);
     return n_patches;
 }
 
-static int clip_n_mmproj_embd(const clip_context & ctx) {
+int clip_n_mmproj_embd(const clip_context & ctx) {
     if (ctx.model->hparams.proj_type == CLIP_PROJECTOR_TYPE_MLP) {
         return ctx.model->mm_b_b->ne[0];
     } else {
@@ -67,7 +68,7 @@ static int clip_n_mmproj_embd(const clip_context & ctx) {
     }
 }
 
-static int clip_n_embd(const clip_context & ctx) {
+int clip_n_embd(const clip_context & ctx) {
     return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx);
 }
 
@@ -323,7 +324,7 @@ static bool clip_image_preprocess(const clip_context & ctx, const clip_image_u8 
 
     const int nx = temp.nx;
     const int ny = temp.ny;
-    // clip_image_save_to_bmp(*temp, "resized_vanilla.bmp");
+    // bmp_export(temp, "resized_vanilla.bmp");
 
     const int nx2 = params.image_size;
     const int ny2 = params.image_size;
@@ -451,11 +452,11 @@ static ggml_cgraph * clip_image_build_graph(clip_context & ctx, int batch_size, 
         embeddings = ggml_norm(ctx0, embeddings, eps);
         ggml_set_name(embeddings, "pre_ln");
 
-        embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_norm_w), model.pre_norm_w);
+        embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_norm_w), model.pre_norm_b);
     }
 
     // loop over layers
-    for (int il = 0; il < (int)hparams.n_layer - 1; il++) {
+    for (int il = 0; il < (int)hparams.n_layer - 2; il++) {
         struct ggml_tensor * cur = embeddings;
 
         // layernorm1
@@ -535,6 +536,14 @@ static ggml_cgraph * clip_image_build_graph(clip_context & ctx, int batch_size, 
         cur = ggml_add(ctx0, embeddings, cur);
 
         embeddings = cur;
+    }
+
+    // post-layernorm
+    if (model.post_norm_w) {
+        embeddings = ggml_norm(ctx0, embeddings, eps);
+        ggml_set_name(embeddings, "post_ln");
+
+        embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.post_norm_w), model.post_norm_b);
     }
 
     // llava projector
@@ -673,6 +682,7 @@ static int32_t encode_image_with_clip(clip_context & ctx, const llama_img img, s
     clip_image_u8 img_u8(img);
     clip_image_f32_batch img_res_v;
     auto & hparams = ctx.model->hparams;
+    // bmp_export(img_u8, "test_inp.bmp");
 
     if (!clip_image_preprocess(ctx, img_u8, img_res_v)) {
         LLAMA_LOG_ERROR("%s: unable to preprocess image\n", __func__);
@@ -724,7 +734,6 @@ int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch
         // copy output embeddings to result
         for (int k = 0; k < n_embd; k++) {
             ctx.output[n_embd*i + k] = output_single[k];
-            // if (k<10) printf("%f\n", output_single[k]);
         }
     }
 
@@ -735,10 +744,19 @@ int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch
 // for debugging
 #ifndef NDEBUG
 
-static int bmp_export(const clip_image_u8 &img, const std::string &location) {
+static int bmp_export(const struct clip_image_u8 &img, const std::string &location) {
     const uint32_t width = img.nx;
     const uint32_t height = img.ny;
-    const std::vector<uint8_t> &buffer = img.buf;
+    // swap red and blue channel
+    std::vector<uint8_t> buffer(width*height*3);
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < width; x++) {
+            size_t base = x*3 + y*3*width;
+            buffer[base+2] = img.buf[base];
+            buffer[base+1] = img.buf[base+1];
+            buffer[base]   = img.buf[base+2];
+        }
+    }
     const bool hasAlphaChannel = false;
 
     std::ofstream fout(location, std::ios::out | std::ios::binary);

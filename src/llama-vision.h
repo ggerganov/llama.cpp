@@ -6,8 +6,8 @@
 #include <array>
 
 enum vision_arch {
-    VISION_ARCH_LLAVA,
     VISION_ARCH_UNKNOWN,
+    VISION_ARCH_LLAVA,
 };
 
 enum clip_projector_type {
@@ -111,5 +111,9 @@ struct clip_context {
     int n_output;
     std::vector<float> output; // size == n_output * n_embd
 };
+
+int clip_n_patches(const clip_context & ctx);
+int clip_n_mmproj_embd(const clip_context & ctx);
+int clip_n_embd(const clip_context & ctx);
 
 int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch);

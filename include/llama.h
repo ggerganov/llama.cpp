@@ -903,6 +903,8 @@ extern "C" {
     // get output embeddings, to be put into language batch
     LLAMA_API float * llama_vision_get_embeddings(struct llama_context * ctx, int32_t idx);
 
+    LLAMA_API int32_t llama_vision_n_patches(struct llama_context * ctx);
+
     //
     // Vocab
     //

@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+from transformers import AutoConfig
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
@@ -67,6 +68,7 @@ class Model:
     is_lora: bool
 
     # for vision model
+    preprocessor_config: dict[str, Any] | None = None
     vparams: dict[str, Any] | None = None
     v_tensor_map: gguf.TensorNameMap
     v_tensor_names: set[str] | None
@@ -100,6 +102,7 @@ class Model:
         self.model_name = model_name
         self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
         self.is_lora = is_lora  # true if model is used inside convert_lora_to_gguf.py
+        self.preprocessor_config = self.load_preprocessor_config(self.dir_model)
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -463,8 +466,20 @@ class Model:
         with open(dir_model / "config.json", "r", encoding="utf-8") as f:
             hparams = json.load(f)
             if "text_config" in hparams:
-                hparams = {**hparams, **hparams["text_config"]}
+                text_config = hparams["text_config"]
+                if "_name_or_path" in text_config:
+                    text_config = AutoConfig.from_pretrained(text_config["_name_or_path"]).to_dict()
+                hparams = {**text_config, **hparams}
             return hparams
+        
+    @staticmethod
+    def load_preprocessor_config(dir_model: Path):
+        file_path = dir_model / "preprocessor_config.json"
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        else:
+            return None
 
     @classmethod
     def register(cls, *names: str) -> Callable[[AnyModel], AnyModel]:
@@ -1574,7 +1589,7 @@ class LlamaModel(Model):
             self.gguf_writer.add_add_bos_token(False)
 
         # For vision model
-        if self.vparams is not None:
+        if self.vparams is not None and self.preprocessor_config is not None:
             self.gguf_writer.add_vision_type("clip")
             self.gguf_writer.add_vision_image_size(self.vparams["image_size"])
             self.gguf_writer.add_vision_patch_size(self.vparams["patch_size"])
@@ -1583,14 +1598,13 @@ class LlamaModel(Model):
             self.gguf_writer.add_vision_clip_embedding_length(self.vparams["hidden_size"])
             self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
             self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
+            self.gguf_writer.add_vision_clip_image_mean(self.preprocessor_config["image_mean"])
+            self.gguf_writer.add_vision_clip_image_std(self.preprocessor_config["image_std"])
+            max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
+            self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
             # TODO: should not hardcode these, but they are currently missing from config.json
             self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.MLP)
-            self.gguf_writer.add_vision_clip_max_position_embeddings(577)
             self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-05)
-            default_image_mean = [0.48145466, 0.4578275, 0.40821073]
-            default_image_std = [0.26862954, 0.26130258, 0.27577711]
-            self.gguf_writer.add_vision_clip_image_mean(default_image_mean)
-            self.gguf_writer.add_vision_clip_image_std(default_image_std)
 
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
@@ -1606,8 +1620,11 @@ class LlamaModel(Model):
         n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
 
+        # For vision model
         if name.startswith("language_model"):
             name = name.replace("language_model.", "")
+        if "post_layernorm" in name:
+            return [] # skip post_layernorm
 
         if name.endswith(("q_proj.weight", "q_proj.bias")):
             data_torch = LlamaModel.permute(data_torch, n_head, n_head)

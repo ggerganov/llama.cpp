@@ -32,6 +32,7 @@ llama_img * load_image_from_file(const char * fname) {
     // }
     // printf("\n");
     llama_img * result = llama_img_alloc(nx, ny);
-    memcpy(result->data, bytes, nx*ny*nc);
+    memcpy(result->data, img, nx*ny*3);
+    stbi_image_free(img);
     return result;
 }

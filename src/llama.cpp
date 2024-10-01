@@ -6239,7 +6239,7 @@ static void llm_load_hparams(
         ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, vparams.n_intermediate, true);
         ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          vparams.n_head,         true);
         ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       vparams.eps,            true);
-        ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      proj_type,                   true);
+        ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      proj_type,              true);
         if (proj_type == "mlp") {
             vparams.proj_type = CLIP_PROJECTOR_TYPE_MLP;
         } else {
@@ -8987,9 +8987,9 @@ static bool llm_load_tensors(
                     model.clip.position_embeddings = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_POS,   "weight"), {n_embd, max_pos_embd});
 
                     model.clip.pre_norm_w          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "weight"), {n_embd});
-                    model.clip.pre_norm_w          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "bias"  ), {n_embd});
-                    model.clip.post_norm_w         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "weight"), {n_embd});
-                    model.clip.post_norm_w         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "bias"  ), {n_embd});
+                    model.clip.pre_norm_b          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "bias"  ), {n_embd});
+                    // model.clip.post_norm_w         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "weight"), {n_embd});
+                    // model.clip.post_norm_b         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "bias"  ), {n_embd});
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -21813,6 +21813,10 @@ int32_t llama_vision_encode(struct llama_context * ctx, llama_img_batch * batch)
 
 float * llama_vision_get_embeddings(struct llama_context * ctx, int32_t idx) {
     return ctx->clip.output.data();
+}
+
+int32_t llama_vision_n_patches(struct llama_context * ctx) {
+    return clip_n_patches(ctx->clip);
 }
 
 //

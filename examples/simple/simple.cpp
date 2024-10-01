@@ -66,12 +66,41 @@ int main(int argc, char ** argv) {
 
 
     // TODO: this is for testing; DELETE ME
-    llama_img_batch ibatch;
-    ibatch.n_imgs = 1;
-    ibatch.imgs = (llama_img **) malloc(1024);
-    ibatch.imgs[0] = load_image_from_file("media/llama0-logo.png");
-    llama_vision_encode(ctx, &ibatch);
-    return 0;
+    int n_cur = 0;
+    params.prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
+    {
+        llama_img_batch ibatch;
+        ibatch.n_imgs = 1;
+        ibatch.imgs = (llama_img **) malloc(1024);
+        ibatch.imgs[0] = load_image_from_file("../models/eiffel-tower-3349075_1280.jpg");
+        llama_vision_encode(ctx, &ibatch);
+
+        auto tokens = ::llama_tokenize(ctx, params.prompt, true);
+        int n_imgs = ibatch.n_imgs;
+        int n_embd = llama_n_embd(model);
+        int n_patches = llama_vision_n_patches(ctx);
+        printf("n_embd = %d ; n_patches = %d \n", n_embd, n_patches);
+        float * output_img = llama_vision_get_embeddings(ctx, 0);
+
+        n_cur += tokens.size();
+        llama_batch batch = llama_batch_init(512, 0, 1);
+        llama_batch_clear(batch);
+        for (auto t : tokens) { llama_batch_add(batch, t, n_cur, { 0 }, false); n_cur++; }
+        if (llama_decode(ctx, batch) != 0) {
+            LOG("%s: llama_decode() failed\n", __func__);
+            return 1;
+        }
+
+        // for (int k = 0; k < 10; k++) printf("%f\n", output_img[k]);
+        llama_batch_clear(batch);
+        batch = {int32_t(n_patches*n_imgs), nullptr, output_img, nullptr, nullptr, nullptr, nullptr, n_cur, 1, 0, };
+        if (llama_decode(ctx, batch) != 0) {
+            LOG("%s: llama_decode() failed\n", __func__);
+            return 1;
+        }
+        n_cur += n_embd*n_imgs;
+    }
+    params.prompt = "\nwhat did you see?\nASSISTANT:";
 
 
 
@@ -108,7 +137,10 @@ int main(int argc, char ** argv) {
 
     // evaluate the initial prompt
     for (size_t i = 0; i < tokens_list.size(); i++) {
-        llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+        //llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+        if (i == 0) continue;
+        llama_batch_add(batch, tokens_list[i], n_cur, { 0 }, false);
+        n_cur++;
     }
 
     // llama_decode will output logits only for the last token of the prompt
@@ -121,18 +153,18 @@ int main(int argc, char ** argv) {
 
     // main loop
 
-    int n_cur    = batch.n_tokens;
+    //int n_cur    = batch.n_tokens;
     int n_decode = 0;
 
     const auto t_main_start = ggml_time_us();
 
-    while (n_cur <= n_predict) {
+    for (int i = 0; i < n_predict; i++) {
         // sample the next token
         {
             const llama_token new_token_id = llama_sampler_sample(smpl, ctx, -1);
 
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
+            if (llama_token_is_eog(model, new_token_id)) {
                 LOG("\n");
 
                 break;
