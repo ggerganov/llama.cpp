@@ -243,14 +243,14 @@ static void test_parsing() {
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}", json::array());
 }
 
-void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
+static void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
     const minja::chat_template tmpl(read_file(template_file), "<s>", "</s>");
     auto tool_call_style = llama_tool_call_style_detect(tmpl);
     std::cout << "# Testing tool call style of: " << template_file << std::endl << std::flush;
     assert_equals(expected, tool_call_style);
 }
 
-void test_tool_call_style_detection() {
+static void test_tool_call_style_detection() {
     test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", FunctionaryV3Llama31);
     test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", FunctionaryV3Llama3);
     test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", Llama31);

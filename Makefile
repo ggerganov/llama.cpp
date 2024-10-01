@@ -55,7 +55,6 @@ TEST_TARGETS = \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
 	tests/test-minja \
-	tests/test-tool-call \
 	tests/test-llama-grammar \
 	tests/test-log \
 	tests/test-model-load-cancel \
@@ -64,6 +63,7 @@ TEST_TARGETS = \
 	tests/test-quantize-perf \
 	tests/test-rope \
 	tests/test-sampling \
+	tests/test-tool-call \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
@@ -934,7 +934,6 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
-	common/chat-template.o \
 	common/arg.o \
 	common/log.o \
 	common/console.o \
@@ -1171,12 +1170,14 @@ $(LIB_LLAMA_S): \
 common/common.o: \
 	common/common.cpp \
 	common/common.h \
-	common/chat-template.cpp \
-	common/chat-template.h \
+	common/chat-template.hpp \
 	common/console.h \
 	common/sampling.h \
 	common/json.hpp \
 	common/json-schema-to-grammar.h \
+	common/minja.hpp \
+	common/tool-call.cpp \
+	common/tool-call.h \
 	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -1468,9 +1469,11 @@ llama-server: \
 	examples/server/prompt-formats.js.hpp \
 	examples/server/json-schema-to-grammar.mjs.hpp \
 	examples/server/loading.html.hpp \
-	common/chat-template.h \
+	common/chat-template.hpp \
 	common/json.hpp \
+	common/minja.hpp \
 	common/stb_image.h \
+	common/tool-call.h \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
