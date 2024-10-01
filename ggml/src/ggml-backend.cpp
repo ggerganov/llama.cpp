@@ -331,6 +331,10 @@ bool ggml_backend_offload_op(ggml_backend_t backend, const struct ggml_tensor * 
     return false;
 }
 
+ggml_backend_dev_t ggml_backend_get_device(ggml_backend_t backend) {
+    return backend->device;
+}
+
 // backend copy
 
 static bool ggml_are_same_layout(const struct ggml_tensor * a, const struct ggml_tensor * b) {
@@ -440,8 +444,12 @@ void ggml_backend_dev_memory(ggml_backend_dev_t device, size_t * free, size_t * 
     device->iface.get_memory(device, free, total);
 }
 
-enum ggml_backend_device_type ggml_backend_dev_type(ggml_backend_dev_t device) {
+enum ggml_backend_dev_type ggml_backend_dev_type(ggml_backend_dev_t device) {
     return device->iface.get_type(device);
+}
+
+void ggml_backend_dev_get_props(ggml_backend_dev_t device, struct ggml_backend_dev_props * props) {
+    device->iface.get_props(device, props);
 }
 
 ggml_backend_reg_t ggml_backend_dev_backend_reg(ggml_backend_dev_t device) {
@@ -474,13 +482,6 @@ bool ggml_backend_dev_supports_buft(ggml_backend_dev_t device, ggml_backend_buff
 
 bool ggml_backend_dev_offload_op(ggml_backend_dev_t device, const struct ggml_tensor * op) {
     return device->iface.offload_op(device, op);
-}
-
-ggml_backend_event_t ggml_backend_dev_event_new(ggml_backend_dev_t device) {
-    if (!device->iface.event_new) {
-        return NULL;
-    }
-    return device->iface.event_new(device);
 }
 
 // Backend (reg)
@@ -603,7 +604,7 @@ ggml_backend_dev_t ggml_backend_dev_by_name(const char * name) {
     return NULL;
 }
 
-ggml_backend_dev_t ggml_backend_dev_by_type(enum ggml_backend_device_type type) {
+ggml_backend_dev_t ggml_backend_dev_by_type(enum ggml_backend_dev_type type) {
     for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
         if (ggml_backend_dev_type(dev) == type) {
@@ -629,7 +630,7 @@ ggml_backend_t ggml_backend_init_by_name(const char * name, const char * params)
     return ggml_backend_dev_init(dev, params);
 }
 
-ggml_backend_t ggml_backend_init_by_type(enum ggml_backend_device_type type, const char * params) {
+ggml_backend_t ggml_backend_init_by_type(enum ggml_backend_dev_type type, const char * params) {
     ggml_backend_dev_t dev = ggml_backend_dev_by_type(type);
     if (!dev) {
         return NULL;
@@ -1028,60 +1029,72 @@ static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, void * user
 
 ////////////////////////
 
-static const char * ggml_backend_cpu_device_name(ggml_backend_dev_t device) {
+static const char * ggml_backend_cpu_device_name(ggml_backend_dev_t dev) {
     return "CPU";
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static const char * ggml_backend_cpu_device_description(ggml_backend_dev_t device) {
+static const char * ggml_backend_cpu_device_description(ggml_backend_dev_t dev) {
     // TODO
     return "CPU";
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static void ggml_backend_cpu_device_memory(ggml_backend_dev_t device, size_t * free, size_t * total) {
+static void ggml_backend_cpu_device_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
     // TODO
     *free = 0;
     *total = 0;
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static enum ggml_backend_device_type ggml_backend_cpu_device_type(ggml_backend_dev_t device) {
+static enum ggml_backend_dev_type ggml_backend_cpu_device_type(ggml_backend_dev_t dev) {
     return GGML_BACKEND_DEVICE_TYPE_CPU_FULL;
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static ggml_backend_reg_t ggml_backend_cpu_device_reg(ggml_backend_dev_t device) {
+static void ggml_backend_cpu_device_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_cpu_device_name(dev);
+    props->description = ggml_backend_cpu_device_description(dev);
+    props->type        = ggml_backend_cpu_device_type(dev);
+    ggml_backend_cpu_device_memory(dev, &props->memory_free, &props->memory_total);
+    props->caps = {
+        /* async       */ false,
+        /* host_buffer */ false,
+        /* events      */ false,
+    };
+}
+
+static ggml_backend_reg_t ggml_backend_cpu_device_reg(ggml_backend_dev_t dev) {
     return ggml_backend_cpu_reg();
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static ggml_backend_t ggml_backend_cpu_device_init(ggml_backend_dev_t device, const char * params) {
+static ggml_backend_t ggml_backend_cpu_device_init(ggml_backend_dev_t dev, const char * params) {
     return ggml_backend_cpu_init();
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
     GGML_UNUSED(params);
 }
 
-static ggml_backend_buffer_type_t ggml_backend_cpu_device_buffer_type(ggml_backend_dev_t device) {
+static ggml_backend_buffer_type_t ggml_backend_cpu_device_buffer_type(ggml_backend_dev_t dev) {
     return ggml_backend_cpu_buffer_type();
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static ggml_backend_buffer_t ggml_backend_cpu_device_buffer_from_ptr(ggml_backend_dev_t device, void * ptr, size_t size, size_t max_tensor_size) {
+static ggml_backend_buffer_t ggml_backend_cpu_device_buffer_from_ptr(ggml_backend_dev_t dev, void * ptr, size_t size, size_t max_tensor_size) {
     return ggml_backend_cpu_buffer_from_ptr(ptr, size);
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
     GGML_UNUSED(max_tensor_size);
 }
 
-static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t device, const struct ggml_tensor * op) {
+static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
     switch (op->op) {
         case GGML_OP_CPY:
             return
@@ -1101,13 +1114,13 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t device, const
             return true;
     }
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
-static bool ggml_backend_cpu_device_supports_buft(ggml_backend_dev_t device, ggml_backend_buffer_type_t buft) {
+static bool ggml_backend_cpu_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
     return ggml_backend_buft_is_host(buft);
 
-    GGML_UNUSED(device);
+    GGML_UNUSED(dev);
 }
 
 struct ggml_backend_device_i ggml_backend_cpu_device_i = {
@@ -1115,6 +1128,7 @@ struct ggml_backend_device_i ggml_backend_cpu_device_i = {
     /* .get_description      = */ ggml_backend_cpu_device_description,
     /* .get_memory           = */ ggml_backend_cpu_device_memory,
     /* .get_type             = */ ggml_backend_cpu_device_type,
+    /* .get_props            = */ ggml_backend_cpu_device_props,
     /* .get_backend_reg      = */ ggml_backend_cpu_device_reg,
     /* .init_backend         = */ ggml_backend_cpu_device_init,
     /* .buffer_type          = */ ggml_backend_cpu_device_buffer_type,

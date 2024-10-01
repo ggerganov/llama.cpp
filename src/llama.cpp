@@ -5035,7 +5035,7 @@ struct llama_model_loader {
     // Returns false if cancelled by progress_callback
     bool load_all_data(
             struct ggml_context * ctx,
-            llama_buf_map & bufs_mmap,
+            llama_buf_map & bufs,
             llama_mlocks * lmlocks,
             llama_progress_callback progress_callback,
             void * progress_callback_user_data) {
@@ -5044,7 +5044,6 @@ struct llama_model_loader {
         std::vector<no_init<uint8_t>> read_buf;
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
 
-        // TODO: adapt to ggml-backend
         // 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
         // NVMe raid configurations might require more / larger buffers.
         constexpr size_t n_buffers = 4;
@@ -5054,26 +5053,84 @@ struct llama_model_loader {
         std::vector<ggml_backend_event_t> events;
         std::vector<void *> host_ptrs;
         size_t buffer_idx = 0; // buffer to use for async loads
-
-        // TODO: only do this if the backend supports all the required features: async, events, pinned memory
-        // it also must be avoided for split buffers and other buffers that require the entire tensor to be loaded at once
-        ggml_backend_t upload_backend = nullptr;
-        if (!use_mmap && !check_tensors) {
-            // When not using mmaped io use async uploads from pinned memory to GPU memory.
-            // First determine if the CUDA backend is active, and if so, determine the device ID.
-            ggml_backend_buffer_t buf = bufs_mmap.count(0) ? bufs_mmap.at(0) : nullptr;
-            ggml_backend_dev_t dev = buf ? ggml_backend_buft_get_device(ggml_backend_buffer_get_type(buf)) : nullptr;
-            ggml_backend_buffer_type_t host_buft = dev ? ggml_backend_dev_host_buffer_type(dev) : nullptr;
-            upload_backend = host_buft ? ggml_backend_dev_init(dev, nullptr) : nullptr;
-
-            // If the cuda is active create pinned memory buffers and events for synchronisation.
-            if (upload_backend) {
-                for (size_t idx = 0; idx < n_buffers; ++idx) {
-                    host_buffers.emplace_back(ggml_backend_buft_alloc_buffer(host_buft, buffer_size));
-                    host_ptrs.emplace_back(ggml_backend_buffer_get_base(host_buffers[idx]));
-                    events.emplace_back(ggml_backend_dev_event_new(dev));
-                }
+        ggml_backend_t upload_backend = [&](const char * fn) -> ggml_backend_t {
+            if (use_mmap || check_tensors) {
+                return nullptr;
             }
+            // When not using mmaped io use async uploads from pinned memory to GPU memory.
+            // First determine if the backend supports the necessary features for async uploads.
+            auto * buf = bufs.count(0) ? bufs.at(0) : nullptr;
+            if (!buf) {
+                LLAMA_LOG_DEBUG("%s: no buffer found for async uploads\n", fn);
+                return nullptr;
+            }
+
+            auto * buft = ggml_backend_buffer_get_type(buf);
+            auto * dev = ggml_backend_buft_get_device(buft);
+            if (!dev) {
+                LLAMA_LOG_DEBUG("%s: no device found for buffer type %s for async uploads\n", fn,
+                    ggml_backend_buft_name(buft));
+                return nullptr;
+            }
+
+            if (buft != ggml_backend_dev_buffer_type(dev)) {
+                LLAMA_LOG_DEBUG("%s: buffer type %s is not the default buffer type for device %s for async uploads\n", fn,
+                    ggml_backend_buft_name(buft), ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            ggml_backend_dev_props props;
+            ggml_backend_dev_get_props(dev, &props);
+            if (!props.caps.async || !props.caps.host_buffer || !props.caps.events) {
+                LLAMA_LOG_DEBUG("%s: device %s does not support async, host buffers or events\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+            if (!host_buft) {
+                LLAMA_LOG_DEBUG("%s: no host buffer type found for device %s\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            // If the backend is supported, create pinned memory buffers and events for synchronisation.
+            for (size_t idx = 0; idx < n_buffers; ++idx) {
+                auto * buf = ggml_backend_buft_alloc_buffer(host_buft, buffer_size);
+                if (!buf) {
+                    LLAMA_LOG_DEBUG("%s: failed to allocate host buffer for async uploads for device %s\n", fn,
+                        ggml_backend_dev_name(dev));
+                    return nullptr;
+                }
+
+                host_buffers.emplace_back(buf);
+                host_ptrs.emplace_back(ggml_backend_buffer_get_base(buf));
+
+                auto * event = ggml_backend_event_new(dev);
+                if (!event) {
+                    LLAMA_LOG_DEBUG("%s: failed to create event for async uploads for device %s\n", fn,
+                        ggml_backend_dev_name(dev));
+                    return nullptr;
+                }
+
+                events.emplace_back(event);
+            }
+
+            ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+            if (!backend) {
+                LLAMA_LOG_DEBUG("%s: failed to initialize backend for device %s for async uploads\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            return backend;
+        }(__func__);
+
+        if (upload_backend) {
+            LLAMA_LOG_DEBUG("%s: using async uploads for device %s, buffer type %s, backend %s\n", __func__,
+                ggml_backend_dev_name(ggml_backend_get_device(upload_backend)),
+                ggml_backend_buft_name(ggml_backend_buffer_get_type(bufs.at(0))),
+                ggml_backend_name(upload_backend));
         }
 
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
@@ -5094,8 +5151,8 @@ struct llama_model_loader {
             if (use_mmap) {
                 const auto & mapping = mappings.at(weight->idx);
                 ggml_backend_buffer_t buf_mmap = nullptr;
-                if (bufs_mmap.count(weight->idx)) {
-                    buf_mmap = bufs_mmap.at(weight->idx);
+                if (bufs.count(weight->idx)) {
+                    buf_mmap = bufs.at(weight->idx);
                 }
                 uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
 
@@ -5131,7 +5188,7 @@ struct llama_model_loader {
                         }));
                     }
                 } else {
-                    // If cuda_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
+                    // If upload_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
                     if (upload_backend) {
                         file->seek(weight->offs, SEEK_SET);
 

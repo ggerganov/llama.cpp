@@ -9,10 +9,9 @@ extern "C" {
 #endif
 
     //
-    // Backend buffer
+    // Backend buffer type
     //
 
-    // buffer type
     struct ggml_backend_buffer_type_i {
         const char *          (*get_name)      (ggml_backend_buffer_type_t buft);
         // allocate a buffer of this type
@@ -33,7 +32,10 @@ extern "C" {
         void * context;
     };
 
-    // buffer
+    //
+    // Backend buffer
+    //
+
     struct ggml_backend_buffer_i {
         const char * (*get_name)     (ggml_backend_buffer_t buffer);
         // (optional) free the buffer
@@ -143,15 +145,26 @@ extern "C" {
     };
 
     //
-    // Backend registry v2
+    // Backend device
     //
 
+    // Note: if additional properties are needed, we should add a struct with all of them
+    //       the current functions to obtain the properties can remain, since they are more convenient for often used properties
     struct ggml_backend_device_i {
-        // device properties
+        // device name: short identifier for this device, such as "CPU" or "CUDA0"
         const char * (*get_name)(ggml_backend_dev_t dev);
+
+        // device description: short informative description of the device, could be the model name
         const char * (*get_description)(ggml_backend_dev_t dev);
+
+        // device memory in bytes
         void         (*get_memory)(ggml_backend_dev_t dev, size_t * free, size_t * total);
-        enum ggml_backend_device_type (*get_type)(ggml_backend_dev_t dev);
+
+        // device type
+        enum ggml_backend_dev_type (*get_type)(ggml_backend_dev_t dev);
+
+        // device properties
+        void (*get_props)(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props);
 
         // get the backend (reg) associated with this device
         ggml_backend_reg_t (*get_backend_reg)(ggml_backend_dev_t dev);
@@ -190,6 +203,10 @@ extern "C" {
         void * context;
     };
 
+    //
+    // Backend (reg)
+    //
+
     struct ggml_backend_reg_i {
         const char * (*get_name)(ggml_backend_reg_t reg);
 
@@ -212,7 +229,7 @@ extern "C" {
     };
 
 
-    // Internal API
+    // Internal backend registry API
     void ggml_backend_register(ggml_backend_reg_t reg);
     void ggml_backend_device_register(ggml_backend_dev_t device);
     // TODO: backends can be loaded as a dynamic library, in which case it needs to export this function

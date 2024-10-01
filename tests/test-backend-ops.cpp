@@ -672,14 +672,11 @@ struct test_case {
         }
 
         // run
-        ggml_backend_synchronize(backend);
-
         int64_t total_time_us = 0;
         int total_runs = 0;
         do {
             int64_t start_time = ggml_time_us();
             ggml_backend_graph_compute(backend, gf);
-            ggml_backend_synchronize(backend);
             int64_t end_time = ggml_time_us();
 
             total_time_us += end_time - start_time;

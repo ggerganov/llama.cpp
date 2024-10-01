@@ -2929,9 +2929,29 @@ static void ggml_backend_cuda_device_memory(ggml_backend_dev_t dev, size_t * fre
     CUDA_CHECK(cudaMemGetInfo(free, total));
 }
 
-static enum ggml_backend_device_type ggml_backend_cuda_device_type(ggml_backend_dev_t dev) {
+static enum ggml_backend_dev_type ggml_backend_cuda_device_type(ggml_backend_dev_t dev) {
     GGML_UNUSED(dev);
     return GGML_BACKEND_DEVICE_TYPE_GPU_FULL;
+}
+
+static void ggml_backend_cuda_device_props(ggml_backend_dev_t dev, ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_cuda_device_name(dev);
+    props->description = ggml_backend_cuda_device_description(dev);
+    props->type        = ggml_backend_cuda_device_type(dev);
+    ggml_backend_cuda_device_memory(dev, &props->memory_free, &props->memory_total);
+
+    bool host_buffer = getenv("GGML_CUDA_NO_PINNED") == nullptr;
+#ifdef GGML_CUDA_NO_PEER_COPY
+    bool events = false;
+#else
+    bool events = true;
+#endif
+
+    props->caps = {
+        /* async       */ true,
+        /* host_buffer */ host_buffer,
+        /* events      */ events,
+    };
 }
 
 static ggml_backend_reg_t ggml_backend_cuda_device_reg(ggml_backend_dev_t dev) {
@@ -3206,7 +3226,6 @@ static bool ggml_backend_cuda_device_offload_op(ggml_backend_dev_t dev, const gg
     GGML_UNUSED(dev);
 }
 
-
 static ggml_backend_event_t ggml_backend_cuda_device_event_new(ggml_backend_dev_t dev) {
 #ifdef GGML_CUDA_NO_PEER_COPY
     return nullptr;
@@ -3242,6 +3261,7 @@ static ggml_backend_device_i ggml_backend_cuda_device_interface = {
     /* .get_description         = */ ggml_backend_cuda_device_description,
     /* .get_memory              = */ ggml_backend_cuda_device_memory,
     /* .get_type                = */ ggml_backend_cuda_device_type,
+    /* .get_props               = */ ggml_backend_cuda_device_props,
     /* .get_backend_reg         = */ ggml_backend_cuda_device_reg,
     /* .init_backend            = */ ggml_backend_cuda_device_init,
     /* .buffer_type             = */ ggml_backend_cuda_device_buffer_type,

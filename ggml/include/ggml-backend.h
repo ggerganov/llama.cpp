@@ -20,13 +20,13 @@ extern "C" {
     // Backend buffer type
     //
 
-    GGML_API const char *          ggml_backend_buft_name            (ggml_backend_buffer_type_t buft);
-    GGML_API ggml_backend_buffer_t ggml_backend_buft_alloc_buffer    (ggml_backend_buffer_type_t buft, size_t size);
-    GGML_API size_t                ggml_backend_buft_get_alignment   (ggml_backend_buffer_type_t buft);
-    GGML_API size_t                ggml_backend_buft_get_max_size    (ggml_backend_buffer_type_t buft);
-    GGML_API size_t                ggml_backend_buft_get_alloc_size  (ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor);
-    GGML_API bool                  ggml_backend_buft_is_host         (ggml_backend_buffer_type_t buft);
-    GGML_API ggml_backend_dev_t    ggml_backend_buft_get_device      (ggml_backend_buffer_type_t buft);
+    GGML_API const char *          ggml_backend_buft_name          (ggml_backend_buffer_type_t buft);
+    GGML_API ggml_backend_buffer_t ggml_backend_buft_alloc_buffer  (ggml_backend_buffer_type_t buft, size_t size);
+    GGML_API size_t                ggml_backend_buft_get_alignment (ggml_backend_buffer_type_t buft);
+    GGML_API size_t                ggml_backend_buft_get_max_size  (ggml_backend_buffer_type_t buft);
+    GGML_API size_t                ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor);
+    GGML_API bool                  ggml_backend_buft_is_host       (ggml_backend_buffer_type_t buft);
+    GGML_API ggml_backend_dev_t    ggml_backend_buft_get_device    (ggml_backend_buffer_type_t buft);
 
     //
     // Backend buffer
@@ -52,6 +52,9 @@ extern "C" {
     GGML_API enum ggml_backend_buffer_usage ggml_backend_buffer_get_usage     (ggml_backend_buffer_t buffer);
     GGML_API ggml_backend_buffer_type_t     ggml_backend_buffer_get_type      (ggml_backend_buffer_t buffer);
     GGML_API void                           ggml_backend_buffer_reset         (ggml_backend_buffer_t buffer);
+
+    // tensor copy between different backends
+    GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);
 
     //
     // Backend (stream)
@@ -88,49 +91,70 @@ extern "C" {
     GGML_API bool ggml_backend_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft);
     GGML_API bool ggml_backend_offload_op(ggml_backend_t backend, const struct ggml_tensor * op);
 
-    // tensor copy between different backends
-    GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);
-
     // asynchronous copy
     // the copy is performed after all the currently queued operations in backend_src
     // backend_dst will wait for the copy to complete before performing other operations
     // automatic fallback to sync copy if async is not supported
     GGML_API void ggml_backend_tensor_copy_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, struct ggml_tensor * src, struct ggml_tensor * dst);
 
-    // events
-    GGML_API ggml_backend_event_t ggml_backend_event_new        (ggml_backend_dev_t device);
-    GGML_API void                 ggml_backend_event_free       (ggml_backend_event_t event);
-    GGML_API void                 ggml_backend_event_record     (ggml_backend_event_t event, ggml_backend_t backend);
+    GGML_API ggml_backend_dev_t ggml_backend_get_device(ggml_backend_t backend);
+
+    //
+    // Events
+    //
+
+    GGML_API ggml_backend_event_t ggml_backend_event_new(ggml_backend_dev_t device);
+    GGML_API void                 ggml_backend_event_free(ggml_backend_event_t event);
+    GGML_API void                 ggml_backend_event_record(ggml_backend_event_t event, ggml_backend_t backend);
     GGML_API void                 ggml_backend_event_synchronize(ggml_backend_event_t event);
-    GGML_API void                 ggml_backend_event_wait       (ggml_backend_t backend, ggml_backend_event_t event);
+    GGML_API void                 ggml_backend_event_wait(ggml_backend_t backend, ggml_backend_event_t event);
 
     //
     // Backend device
     //
 
-    enum ggml_backend_device_type {
+    enum ggml_backend_dev_type {
         GGML_BACKEND_DEVICE_TYPE_CPU,
         GGML_BACKEND_DEVICE_TYPE_GPU,
-        // devices with full capabilities (excludes backends such as BLAS)
+        // devices with full capabilities (excludes backends such as BLAS that only support matrix multiplication)
         GGML_BACKEND_DEVICE_TYPE_CPU_FULL,
         GGML_BACKEND_DEVICE_TYPE_GPU_FULL
+    };
+
+    // functionality supported by the device
+    struct ggml_backend_dev_caps {
+        // asynchronous operations
+        bool async;
+        // pinned host buffer
+        bool host_buffer;
+        // event synchronization
+        bool events;
+    };
+
+    // all the device properties
+    struct ggml_backend_dev_props {
+        const char * name;
+        const char * description;
+        size_t memory_free;
+        size_t memory_total;
+        enum ggml_backend_dev_type type;
+        struct ggml_backend_dev_caps caps;
     };
 
     GGML_API const char *                  ggml_backend_dev_name(ggml_backend_dev_t device);
     GGML_API const char *                  ggml_backend_dev_description(ggml_backend_dev_t device);
     GGML_API void                          ggml_backend_dev_memory(ggml_backend_dev_t device, size_t * free, size_t * total);
-    GGML_API enum ggml_backend_device_type ggml_backend_dev_type(ggml_backend_dev_t device);
+    GGML_API enum ggml_backend_dev_type    ggml_backend_dev_type(ggml_backend_dev_t device);
+    GGML_API void                          ggml_backend_dev_get_props(ggml_backend_dev_t device, struct ggml_backend_dev_props * props);
     GGML_API ggml_backend_reg_t            ggml_backend_dev_backend_reg(ggml_backend_dev_t device);
     GGML_API ggml_backend_t                ggml_backend_dev_init(ggml_backend_dev_t device, const char * params);
     GGML_API ggml_backend_buffer_type_t    ggml_backend_dev_buffer_type(ggml_backend_dev_t device);
     GGML_API ggml_backend_buffer_type_t    ggml_backend_dev_host_buffer_type(ggml_backend_dev_t device);
     GGML_API ggml_backend_buffer_t         ggml_backend_dev_buffer_from_host_ptr(ggml_backend_dev_t device, void * ptr, size_t size, size_t max_tensor_size);
 
-    GGML_API bool ggml_backend_dev_supports_op(ggml_backend_dev_t device, const struct ggml_tensor * op);
-    GGML_API bool ggml_backend_dev_supports_buft(ggml_backend_dev_t device, ggml_backend_buffer_type_t buft);
-    GGML_API bool ggml_backend_dev_offload_op(ggml_backend_dev_t device, const struct ggml_tensor * op);
-
-    GGML_API ggml_backend_event_t ggml_backend_dev_event_new(ggml_backend_dev_t device);
+    GGML_API bool                          ggml_backend_dev_supports_op(ggml_backend_dev_t device, const struct ggml_tensor * op);
+    GGML_API bool                          ggml_backend_dev_supports_buft(ggml_backend_dev_t device, ggml_backend_buffer_type_t buft);
+    GGML_API bool                          ggml_backend_dev_offload_op(ggml_backend_dev_t device, const struct ggml_tensor * op);
 
     //
     // Backend (reg)
@@ -158,16 +182,16 @@ extern "C" {
     GGML_API size_t             ggml_backend_dev_count(void);
     GGML_API ggml_backend_dev_t ggml_backend_dev_get(size_t index);
     GGML_API ggml_backend_dev_t ggml_backend_dev_by_name(const char * name);
-    GGML_API ggml_backend_dev_t ggml_backend_dev_by_type(enum ggml_backend_device_type type);
+    GGML_API ggml_backend_dev_t ggml_backend_dev_by_type(enum ggml_backend_dev_type type);
 
     // Set the log callback for all registered backends
     GGML_API void ggml_backend_set_log_callback(ggml_log_callback log_callback, void * user_data);
 
-    // Direct Backend (stream) initialization
+    // Direct backend (stream) initialization
     // = ggml_backend_dev_init(ggml_backend_dev_by_name(name), params)
     GGML_API ggml_backend_t ggml_backend_init_by_name(const char * name, const char * params);
     // = ggml_backend_dev_init(ggml_backend_dev_by_type(type), params)
-    GGML_API ggml_backend_t ggml_backend_init_by_type(enum ggml_backend_device_type type, const char * params);
+    GGML_API ggml_backend_t ggml_backend_init_by_type(enum ggml_backend_dev_type type, const char * params);
     // = ggml_backend_dev_init(ggml_backend_dev_by_type(GPU_FULL) OR ggml_backend_dev_by_type(CPU_FULL), NULL)
     GGML_API ggml_backend_t ggml_backend_init_best(void);
 
@@ -275,7 +299,6 @@ extern "C" {
     // Tensor initialization
     GGML_API void ggml_backend_tensor_alloc(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, void * addr);
     GGML_API void ggml_backend_view_init(struct ggml_tensor * tensor);
-
 
     //
     // CPU backend
