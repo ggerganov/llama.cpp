@@ -283,7 +283,7 @@ struct split_strategy {
             return i_tensor > 0 && i_tensor < n_tensors && i_tensor % params.n_split_tensors == 0;
         }
         // should never happen
-        return false;
+        GGML_ABORT("invalid mode");
     }
 
     void print_info() {
