@@ -1,4 +1,3 @@
-#define DEBUG
 #include "llama-sampling.h"
 
 #include "llama-vocab.h"
