@@ -108,7 +108,7 @@ extern "C" {
         // compute graph (always async if supported by the backend)
         enum ggml_status          (*graph_compute)     (ggml_backend_t backend, struct ggml_cgraph * cgraph);
 
-        // IMPORTANT: these functions have been moved to the device interfance and will be removed from the backend interface
+        // IMPORTANT: these functions have been moved to the device interface and will be removed from the backend interface
         //            new backends should implement the device interface instead
 
         // These functions are being moved to the device interface
