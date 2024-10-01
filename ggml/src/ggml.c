@@ -333,11 +333,11 @@ static void ggml_log_internal_v(enum ggml_log_level level, const char * format, 
     if (len < 128) {
         g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
     } else {
-        char * buffer2 = new char[len + 1];
+        char * buffer2 = (char *) calloc(len + 1, sizeof(char));
         vsnprintf(buffer2, len + 1, format, args_copy);
         buffer2[len] = 0;
         g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
-        delete[] buffer2;
+        free(buffer2);
     }
     va_end(args_copy);
 }
