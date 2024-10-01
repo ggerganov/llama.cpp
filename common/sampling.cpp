@@ -111,9 +111,6 @@ struct gpt_sampler {
 
     llama_token_data_array cur_p;
 
-    int32_t n_ctx;
-    bool    context_size_set;
-
     void set_logits(struct llama_context * ctx, int idx) {
         const auto * logits = llama_get_logits_ith(ctx, idx);
 
@@ -157,8 +154,6 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
         /* .prev   = */ ring_buffer<llama_token>(std::max(32, params.n_prev)),
         /* .cur    = */ {},
         /* .cur_p  = */ {},
-        /* .n_ctx = */ 0,
-        /* .context_size_set   = */ false,
     };
 
     llama_sampler_chain_add(result->chain,
@@ -288,21 +283,6 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
 }
 
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
-    // Check and set the context size if it hasn't been set yet
-    // if (!gsmpl->context_size_set) {
-    //     gsmpl->n_ctx = llama_n_ctx(ctx);
-    //     gsmpl->context_size_set = true;
-
-    //     // Update the DRY sampler's context size if it is active
-    //     for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
-    //         auto * sampler = llama_sampler_chain_get(gsmpl->chain, i);
-    //         if (strcmp(llama_sampler_name(sampler), "dry") == 0) {
-    //             llama_sampler_dry_set_context_size(sampler, gsmpl->n_ctx);
-    //             break;
-    //         }
-    //     }
-    // }
-
     gsmpl->set_logits(ctx, idx);
 
     auto & grmr  = gsmpl->grmr;

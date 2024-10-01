@@ -1141,8 +1141,6 @@ extern "C" {
                              int32_t   dry_allowed_length,
                              int32_t   dry_penalty_last_n);
 
-    LLAMA_API void llama_sampler_dry_set_context_size(struct llama_sampler * smpl, int32_t context_size);
-
     LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(
                              int32_t   n_vocab,
                              int32_t   n_logit_bias,

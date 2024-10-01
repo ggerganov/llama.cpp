@@ -168,19 +168,14 @@ static void test_penalties(
 }
 
 static void test_dry(
-    const std::vector<float> & probs,
-    const std::vector<llama_token> & last_tokens,
-    const std::vector<float> & expected_probs,
-    float dry_multiplier,
-    float dry_base,
-    int dry_allowed_length,
-    int dry_penalty_last_n,
+    const std::vector<float> & probs, const std::vector<llama_token> & last_tokens,
+    const std::vector<float> & expected_probs, float dry_multiplier, float dry_base,
+    int dry_allowed_length, int dry_penalty_last_n,
     const std::vector<std::vector<llama_token>> & seq_breakers
 ) {
     const size_t n_vocab = probs.size();
     GGML_ASSERT(probs.size() == expected_probs.size());
 
-    // Initialize the token data array with logits
     std::vector<llama_token_data> cur;
     cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
@@ -189,10 +184,8 @@ static void test_dry(
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-
-    // Initialize the DRY sampler
-    const int32_t context_size = 1024; // Set an arbitrary context size
-    struct llama_model * model = nullptr; // For testing purposes, we can set model to nullptr
+    const int32_t context_size = 1024;
+    struct llama_model * model = nullptr;
 
     struct llama_sampler * sampler = llama_sampler_init_dry(
         model,
@@ -203,12 +196,10 @@ static void test_dry(
         dry_penalty_last_n
     );
 
-    // Set sequence breakers if any
     if (!seq_breakers.empty()) {
         llama_sampler_dry_set_seq_breakers_as_tokens(sampler, seq_breakers);
     }
 
-    // Accept last tokens into the sampler's history
     for (size_t i = 0; i < last_tokens.size(); i++) {
         llama_sampler_accept(sampler, last_tokens[i]);
     }
@@ -219,29 +210,16 @@ static void test_dry(
     APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
 
-    // // Apply the DRY sampler
-    // APPLY(sampler, &cur_p);
-    // DUMP(&cur_p);
-
-    // // Apply softmax to get probabilities
-    // APPLY(llama_sampler_init_softmax(), &cur_p);
-
-    // **NEW CODE:** Sort cur_p.data[] by token ID to align with expected_probs[]
     std::sort(cur_p.data, cur_p.data + cur_p.size, [](const llama_token_data & a, const llama_token_data & b) {
         return a.id < b.id;
     });
 
-    // Now we can compare
     GGML_ASSERT(cur_p.size == expected_probs.size());
     for (size_t i = 0; i < cur_p.size; i++) {
-        // Ensure that the token IDs match the expected indices
         GGML_ASSERT(cur_p.data[i].id == (llama_token)i);
         GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
-
-
-
 
 static void test_sampler_queue(const size_t n_vocab, const std::string & samplers_sequence, const int top_k, const float top_p, const float min_p
 ) {
