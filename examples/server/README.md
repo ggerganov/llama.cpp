@@ -7,6 +7,7 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 **Features:**
  * LLM inference of F16 and quantized models on GPU and CPU
  * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes
+ * Reranking endoint (WIP: https://github.com/ggerganov/llama.cpp/pull/9510)
  * Parallel decoding with multi-user support
  * Continuous batching
  * Multimodal (wip)
@@ -17,12 +18,13 @@ The project is under active development, and we are [looking for feedback and co
 
 ## Usage
 
+**Common params**
+
 | Argument | Explanation |
 | -------- | ----------- |
 | `-h, --help, --usage` | print usage and exit |
 | `--version` | show version and build info |
-| `-v, --verbose` | print verbose information |
-| `--verbosity N` | set specific verbosity level (default: 0) |
+| `--verbose-prompt` | print a verbose prompt before generation (default: false) |
 | `-t, --threads N` | number of threads to use during generation (default: -1)<br/>(env: LLAMA_ARG_THREADS) |
 | `-tb, --threads-batch N` | number of threads to use during batch and prompt processing (default: same as --threads) |
 | `-C, --cpu-mask M` | CPU affinity mask: arbitrarily long hex. Complements cpu-range (default: "") |
@@ -42,13 +44,63 @@ The project is under active development, and we are [looking for feedback and co
 | `--keep N` | number of tokens to keep from the initial prompt (default: 0, -1 = all) |
 | `-fa, --flash-attn` | enable Flash Attention (default: disabled)<br/>(env: LLAMA_ARG_FLASH_ATTN) |
 | `-p, --prompt PROMPT` | prompt to start generation with |
+| `--no-perf` | disable internal libllama performance timings (default: false)<br/>(env: LLAMA_ARG_NO_PERF) |
 | `-f, --file FNAME` | a file containing the prompt (default: none) |
 | `-bf, --binary-file FNAME` | binary file containing the prompt (default: none) |
 | `-e, --escape` | process escapes sequences (\n, \r, \t, \', \", \\) (default: true) |
 | `--no-escape` | do not process escape sequences |
-| `--spm-infill` | use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: disabled) |
+| `--rope-scaling {none,linear,yarn}` | RoPE frequency scaling method, defaults to linear unless specified by the model<br/>(env: LLAMA_ARG_ROPE_SCALING_TYPE) |
+| `--rope-scale N` | RoPE context scaling factor, expands context by a factor of N<br/>(env: LLAMA_ARG_ROPE_SCALE) |
+| `--rope-freq-base N` | RoPE base frequency, used by NTK-aware scaling (default: loaded from model)<br/>(env: LLAMA_ARG_ROPE_FREQ_BASE) |
+| `--rope-freq-scale N` | RoPE frequency scaling factor, expands context by a factor of 1/N<br/>(env: LLAMA_ARG_ROPE_FREQ_SCALE) |
+| `--yarn-orig-ctx N` | YaRN: original context size of model (default: 0 = model training context size)<br/>(env: LLAMA_ARG_YARN_ORIG_CTX) |
+| `--yarn-ext-factor N` | YaRN: extrapolation mix factor (default: -1.0, 0.0 = full interpolation)<br/>(env: LLAMA_ARG_YARN_EXT_FACTOR) |
+| `--yarn-attn-factor N` | YaRN: scale sqrt(t) or attention magnitude (default: 1.0)<br/>(env: LLAMA_ARG_YARN_ATTN_FACTOR) |
+| `--yarn-beta-slow N` | YaRN: high correction dim or alpha (default: 1.0)<br/>(env: LLAMA_ARG_YARN_BETA_SLOW) |
+| `--yarn-beta-fast N` | YaRN: low correction dim or beta (default: 32.0)<br/>(env: LLAMA_ARG_YARN_BETA_FAST) |
+| `-gan, --grp-attn-n N` | group-attention factor (default: 1)<br/>(env: LLAMA_ARG_GRP_ATTN_N) |
+| `-gaw, --grp-attn-w N` | group-attention width (default: 512.0)<br/>(env: LLAMA_ARG_GRP_ATTN_W) |
+| `-dkvc, --dump-kv-cache` | verbose print of the KV cache |
+| `-nkvo, --no-kv-offload` | disable KV offload<br/>(env: LLAMA_ARG_NO_KV_OFFLOAD) |
+| `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_K) |
+| `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_V) |
+| `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: -1.0, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
+| `-np, --parallel N` | number of parallel sequences to decode (default: 1)<br/>(env: LLAMA_ARG_N_PARALLEL) |
+| `--mlock` | force system to keep model in RAM rather than swapping or compressing<br/>(env: LLAMA_ARG_MLOCK) |
+| `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock)<br/>(env: LLAMA_ARG_NO_MMAP) |
+| `--numa TYPE` | attempt optimizations that help on some NUMA systems<br/>- distribute: spread execution evenly over all nodes<br/>- isolate: only spawn threads on CPUs on the node that execution started on<br/>- numactl: use the CPU map provided by numactl<br/>if run without this previously, it is recommended to drop the system page cache before using this<br/>see https://github.com/ggerganov/llama.cpp/issues/1437<br/>(env: LLAMA_ARG_NUMA) |
+| `-ngl, --gpu-layers, --n-gpu-layers N` | number of layers to store in VRAM<br/>(env: LLAMA_ARG_N_GPU_LAYERS) |
+| `-sm, --split-mode {none,layer,row}` | how to split the model across multiple GPUs, one of:<br/>- none: use one GPU only<br/>- layer (default): split layers and KV across GPUs<br/>- row: split rows across GPUs<br/>(env: LLAMA_ARG_SPLIT_MODE) |
+| `-ts, --tensor-split N0,N1,N2,...` | fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1<br/>(env: LLAMA_ARG_TENSOR_SPLIT) |
+| `-mg, --main-gpu INDEX` | the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: 0)<br/>(env: LLAMA_ARG_MAIN_GPU) |
+| `--check-tensors` | check model tensor data for invalid values (default: false) |
+| `--override-kv KEY=TYPE:VALUE` | advanced option to override model metadata by key. may be specified multiple times.<br/>types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false |
+| `--lora FNAME` | path to LoRA adapter (can be repeated to use multiple adapters) |
+| `--lora-scaled FNAME SCALE` | path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters) |
+| `--control-vector FNAME` | add a control vector<br/>note: this argument can be repeated to add multiple control vectors |
+| `--control-vector-scaled FNAME SCALE` | add a control vector with user defined scaling SCALE<br/>note: this argument can be repeated to add multiple scaled control vectors |
+| `--control-vector-layer-range START END` | layer range to apply the control vector(s) to, start and end inclusive |
+| `-m, --model FNAME` | model path (default: `models/$filename` with filename from `--hf-file` or `--model-url` if set, otherwise models/7B/ggml-model-f16.gguf)<br/>(env: LLAMA_ARG_MODEL) |
+| `-mu, --model-url MODEL_URL` | model download url (default: unused)<br/>(env: LLAMA_ARG_MODEL_URL) |
+| `-hfr, --hf-repo REPO` | Hugging Face model repository (default: unused)<br/>(env: LLAMA_ARG_HF_REPO) |
+| `-hff, --hf-file FILE` | Hugging Face model file (default: unused)<br/>(env: LLAMA_ARG_HF_FILE) |
+| `-hft, --hf-token TOKEN` | Hugging Face access token (default: value from HF_TOKEN environment variable)<br/>(env: HF_TOKEN) |
+| `-ld, --logdir LOGDIR` | path under which to save YAML logs (no logging if unset) |
+| `--log-disable` | Log disable |
+| `--log-file FNAME` | Log to file |
+| `--log-colors` | Enable colored logging<br/>(env: LLAMA_LOG_COLORS) |
+| `-v, --verbose, --log-verbose` | Set verbosity level to infinity (i.e. log all messages, useful for debugging) |
+| `-lv, --verbosity, --log-verbosity N` | Set the verbosity threshold. Messages with a higher verbosity will be ignored.<br/>(env: LLAMA_LOG_VERBOSITY) |
+| `--log-prefix` | Enable prefx in log messages<br/>(env: LLAMA_LOG_PREFIX) |
+| `--log-timestamps` | Enable timestamps in log messages<br/>(env: LLAMA_LOG_TIMESTAMPS) |
+
+
+**Sampling params**
+
+| Argument | Explanation |
+| -------- | ----------- |
 | `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;tfs_z;typ_p;top_p;min_p;temperature) |
-| `-s, --seed SEED` | RNG seed (default: -1, use random seed for < 0) |
+| `-s, --seed SEED` | RNG seed (default: 4294967295, use random seed for 4294967295) |
 | `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: kfypmt) |
 | `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
 | `--penalize-nl` | penalize newline tokens (default: false) |
@@ -71,54 +123,29 @@ The project is under active development, and we are [looking for feedback and co
 | `--grammar GRAMMAR` | BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '') |
 | `--grammar-file FNAME` | file to read grammar from |
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
-| `--rope-scaling {none,linear,yarn}` | RoPE frequency scaling method, defaults to linear unless specified by the model |
-| `--rope-scale N` | RoPE context scaling factor, expands context by a factor of N |
-| `--rope-freq-base N` | RoPE base frequency, used by NTK-aware scaling (default: loaded from model) |
-| `--rope-freq-scale N` | RoPE frequency scaling factor, expands context by a factor of 1/N |
-| `--yarn-orig-ctx N` | YaRN: original context size of model (default: 0 = model training context size) |
-| `--yarn-ext-factor N` | YaRN: extrapolation mix factor (default: -1.0, 0.0 = full interpolation) |
-| `--yarn-attn-factor N` | YaRN: scale sqrt(t) or attention magnitude (default: 1.0) |
-| `--yarn-beta-slow N` | YaRN: high correction dim or alpha (default: 1.0) |
-| `--yarn-beta-fast N` | YaRN: low correction dim or beta (default: 32.0) |
-| `-gan, --grp-attn-n N` | group-attention factor (default: 1) |
-| `-gaw, --grp-attn-w N` | group-attention width (default: 512.0) |
-| `-dkvc, --dump-kv-cache` | verbose print of the KV cache |
-| `-nkvo, --no-kv-offload` | disable KV offload |
-| `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16) |
-| `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16) |
-| `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: -1.0, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
-| `-np, --parallel N` | number of parallel sequences to decode (default: 1)<br/>(env:  LLAMA_ARG_N_PARALLEL) |
+
+
+**Example-specific params**
+
+| Argument | Explanation |
+| -------- | ----------- |
+| `--no-context-shift` | disables context shift on inifinite text generation (default: disabled)<br/>(env: LLAMA_ARG_NO_CONTEXT_SHIFT) |
+| `-sp, --special` | special tokens output enabled (default: false) |
+| `--spm-infill` | use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: disabled) |
+| `--pooling {none,mean,cls,last,rank}` | pooling type for embeddings, use model default if unspecified<br/>(env: LLAMA_ARG_POOLING) |
 | `-cb, --cont-batching` | enable continuous batching (a.k.a dynamic batching) (default: enabled)<br/>(env: LLAMA_ARG_CONT_BATCHING) |
 | `-nocb, --no-cont-batching` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
-| `--mlock` | force system to keep model in RAM rather than swapping or compressing |
-| `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock) |
-| `--numa TYPE` | attempt optimizations that help on some NUMA systems<br/>- distribute: spread execution evenly over all nodes<br/>- isolate: only spawn threads on CPUs on the node that execution started on<br/>- numactl: use the CPU map provided by numactl<br/>if run without this previously, it is recommended to drop the system page cache before using this<br/>see https://github.com/ggerganov/llama.cpp/issues/1437 |
-| `-ngl, --gpu-layers, --n-gpu-layers N` | number of layers to store in VRAM<br/>(env: LLAMA_ARG_N_GPU_LAYERS) |
-| `-sm, --split-mode {none,layer,row}` | how to split the model across multiple GPUs, one of:<br/>- none: use one GPU only<br/>- layer (default): split layers and KV across GPUs<br/>- row: split rows across GPUs |
-| `-ts, --tensor-split N0,N1,N2,...` | fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1 |
-| `-mg, --main-gpu INDEX` | the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: 0) |
-| `--check-tensors` | check model tensor data for invalid values (default: false) |
-| `--override-kv KEY=TYPE:VALUE` | advanced option to override model metadata by key. may be specified multiple times.<br/>types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false |
-| `--lora FNAME` | path to LoRA adapter (can be repeated to use multiple adapters) |
-| `--lora-scaled FNAME SCALE` | path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters) |
-| `--control-vector FNAME` | add a control vector<br/>note: this argument can be repeated to add multiple control vectors |
-| `--control-vector-scaled FNAME SCALE` | add a control vector with user defined scaling SCALE<br/>note: this argument can be repeated to add multiple scaled control vectors |
-| `--control-vector-layer-range START END` | layer range to apply the control vector(s) to, start and end inclusive |
-| `-a, --alias STRING` | set alias for model name (to be used by REST API) |
-| `-m, --model FNAME` | model path (default: `models/$filename` with filename from `--hf-file` or `--model-url` if set, otherwise models/7B/ggml-model-f16.gguf)<br/>(env: LLAMA_ARG_MODEL) |
-| `-mu, --model-url MODEL_URL` | model download url (default: unused)<br/>(env: LLAMA_ARG_MODEL_URL) |
-| `-hfr, --hf-repo REPO` | Hugging Face model repository (default: unused)<br/>(env: LLAMA_ARG_HF_REPO) |
-| `-hff, --hf-file FILE` | Hugging Face model file (default: unused)<br/>(env: LLAMA_ARG_HF_FILE) |
-| `-hft, --hf-token TOKEN` | Hugging Face access token (default: value from HF_TOKEN environment variable)<br/>(env: HF_TOKEN) |
+| `-a, --alias STRING` | set alias for model name (to be used by REST API)<br/>(env: LLAMA_ARG_ALIAS) |
 | `--host HOST` | ip address to listen (default: 127.0.0.1)<br/>(env: LLAMA_ARG_HOST) |
 | `--port PORT` | port to listen (default: 8080)<br/>(env: LLAMA_ARG_PORT) |
-| `--path PATH` | path to serve static files from (default: ) |
+| `--path PATH` | path to serve static files from (default: )<br/>(env: LLAMA_ARG_STATIC_PATH) |
 | `--embedding, --embeddings` | restrict to only support embedding use case; use only with dedicated embedding models (default: disabled)<br/>(env: LLAMA_ARG_EMBEDDINGS) |
+| `--reranking, --rerank` | enable reranking endpoint on server (default: disabled)<br/>(env: LLAMA_ARG_RERANKING) |
 | `--api-key KEY` | API key to use for authentication (default: none)<br/>(env: LLAMA_API_KEY) |
 | `--api-key-file FNAME` | path to file containing API keys (default: none) |
-| `--ssl-key-file FNAME` | path to file a PEM-encoded SSL private key |
-| `--ssl-cert-file FNAME` | path to file a PEM-encoded SSL certificate |
-| `-to, --timeout N` | server read/write timeout in seconds (default: 600) |
+| `--ssl-key-file FNAME` | path to file a PEM-encoded SSL private key<br/>(env: LLAMA_ARG_SSL_KEY_FILE) |
+| `--ssl-cert-file FNAME` | path to file a PEM-encoded SSL certificate<br/>(env: LLAMA_ARG_SSL_CERT_FILE) |
+| `-to, --timeout N` | server read/write timeout in seconds (default: 600)<br/>(env: LLAMA_ARG_TIMEOUT) |
 | `--threads-http N` | number of threads used to process HTTP requests (default: -1)<br/>(env: LLAMA_ARG_THREADS_HTTP) |
 | `-spf, --system-prompt-file FNAME` | set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications |
 | `--metrics` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
@@ -127,13 +154,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--chat-template JINJA_TEMPLATE` | set custom jinja chat template (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>only commonly used templates are accepted:<br/>https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template<br/>(env: LLAMA_ARG_CHAT_TEMPLATE) |
 | `-sps, --slot-prompt-similarity SIMILARITY` | how much the prompt of a request must match the prompt of a slot in order to use that slot (default: 0.50, 0.0 = disabled)<br/> |
 | `--lora-init-without-apply` | load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: disabled) |
-| `-ld, --logdir LOGDIR` | path under which to save YAML logs (no logging if unset) |
-| `--log-test` | Log test |
-| `--log-disable` | Log disable |
-| `--log-enable` | Log enable |
-| `--log-new` | Log new |
-| `--log-append` | Log append |
-| `--log-file FNAME` | Log file |
+
 
 Note: If both command line argument and environment variable are both set for the same param, the argument will take precedence over env var.
 
@@ -460,6 +481,39 @@ The same as [the embedding example](../embedding) does.
     `content`: Set the text to process.
 
     `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `content`. You can determine the place of the image in the content as in the following: `Image: [img-21].\nCaption: This is a picture of a house`. In this case, `[img-21]` will be replaced by the embeddings of the image with id `21` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 21}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
+
+### POST `/reranking`: Rerank documents according to a given query
+
+Similar to https://jina.ai/reranker/ but might change in the future.
+Requires a reranker model (such as [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)) and the `--embedding --pooling rank` options.
+
+    *Options:*
+
+    `query`: The query against which the documents will be ranked.
+
+    `documents`: An array strings representing the documents to be ranked.
+
+    *Aliases:*
+      - `/rerank`
+      - `/v1/rerank`
+      - `/v1/reranking`
+
+    *Examples:*
+
+    ```shell
+    curl http://127.0.0.1:8012/v1/rerank \
+        -H "Content-Type: application/json" \
+        -d '{
+            "model": "some-model",
+                "query": "What is panda?",
+                "top_n": 3,
+                "documents": [
+                    "hi",
+                "it is a bear",
+                "The giant panda (Ailuropoda melanoleuca), sometimes called a panda bear or simply panda, is a bear species endemic to China."
+                ]
+        }' | jq
+    ```
 
 ### POST `/infill`: For code infilling.
 

@@ -3496,8 +3496,7 @@ static void ggml_sycl_mul_mat(ggml_backend_sycl_context & ctx, const ggml_tensor
 
     bool use_mul_mat_vec_q =  ggml_is_quantized(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
-        && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE
-        && (ctx.stream()->get_backend() == sycl::backend::ext_oneapi_cuda || src1->ne[1] > MMVQ_MIN_BATCH_SIZE);
+        && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
 
     bool use_mul_mat_q =  ggml_sycl_supports_mmq(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
@@ -4323,6 +4322,7 @@ static struct ggml_backend_buffer_i ggml_backend_sycl_buffer_interface = {
     /* .free_buffer     = */ ggml_backend_sycl_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_sycl_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_sycl_buffer_init_tensor,
+    /* .memset_tensor   = */ NULL,
     /* .set_tensor      = */ ggml_backend_sycl_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_sycl_buffer_get_tensor,
     /* .cpy_tensor      = */ ggml_backend_sycl_buffer_cpy_tensor,
@@ -4734,6 +4734,7 @@ static struct ggml_backend_buffer_i ggml_backend_sycl_split_buffer_interface = {
     /* .free_buffer     = */ ggml_backend_sycl_split_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_sycl_split_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_sycl_split_buffer_init_tensor,
+    /* .memset_tensor   = */ NULL,
     /* .set_tensor      = */ ggml_backend_sycl_split_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_sycl_split_buffer_get_tensor,
     /* .cpy_tensor      = */ NULL,

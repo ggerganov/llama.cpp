@@ -204,13 +204,6 @@ static ggml_status compute_piter(
         ggml_backend_cpu_set_n_threads(model.backend, params.n_threads);
     }
 
-// TODO: enable GPU support when support for GGML_OP_SQRT is added
-//#ifdef GGML_USE_METAL
-//    if (ggml_backend_is_metal(model.backend)) {
-//        ggml_backend_metal_set_n_cb(model.backend, params.n_threads);
-//    }
-//#endif
-
     ggml_status res = ggml_backend_graph_compute(model.backend, gf);
     if (res == GGML_STATUS_SUCCESS) {
         auto extract_i = [](std::string prefix, std::string str) -> int {

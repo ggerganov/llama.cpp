@@ -209,7 +209,15 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             GGML_ASSERT(false && "unknown mirostat version");
         }
     } else {
-        llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+        if (params.n_probs > 0) {
+            // some use cases require to sample greedily, but still obtain the probabilities of the top tokens
+            // ref: https://github.com/ggerganov/llama.cpp/pull/9605
+            //
+            // the following will not produce exactly the same probs as applyging softmax to the full vocabulary, but
+            // it is much faster, since we avoid sorting all tokens and should give a good approximation
+            llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.n_probs));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+        }
         llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
     }
 

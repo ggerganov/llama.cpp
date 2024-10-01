@@ -1,6 +1,5 @@
 #include "ggml.h"
 #include "llama.h"
-#include "llama-sampling.h"
 
 #ifdef NDEBUG
 #undef NDEBUG
@@ -249,6 +248,45 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
            samplers_sequence.c_str(), n_vocab, top_k, top_p, min_p);
 }
 
+static void bench(llama_sampler * cnstr, const char * cnstr_name, const std::vector<llama_token_data> & data, int n_iter) {
+    std::vector<llama_token_data> cur(data.size());
+    std::copy(data.begin(), data.end(), cur.begin());
+    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+    llama_sampler_apply(cnstr, &cur_p);
+    llama_sampler_reset(cnstr);
+    const int64_t t_start = ggml_time_us();
+    for (int i = 0; i < n_iter; i++) {
+        std::copy(data.begin(), data.end(), cur.begin());
+        llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+        llama_sampler_apply(cnstr, &cur_p);
+        llama_sampler_reset(cnstr);
+    }
+    const int64_t t_end = ggml_time_us();
+    llama_sampler_free(cnstr);
+    printf("%-42s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
+}
+
+#define BENCH(__cnstr, __data, __n_iter) bench((__cnstr), #__cnstr, (__data), (__n_iter))
+
+static void test_perf() {
+    const int n_vocab = 1 << 17;
+
+    std::vector<llama_token_data> data;
+
+    data.reserve(n_vocab);
+    for (int i = 0; i < n_vocab; i++) {
+        const float logit = 2.0f*((float)(rand())/RAND_MAX - 0.5f);
+        data.emplace_back(llama_token_data{i, logit, 0.0f});
+    }
+
+    BENCH(llama_sampler_init_top_k    (40),      data, 32);
+    BENCH(llama_sampler_init_top_p    (0.8f, 1), data, 32);
+    BENCH(llama_sampler_init_min_p    (0.2f, 1), data, 32);
+    BENCH(llama_sampler_init_tail_free(0.5f, 1), data, 32);
+    BENCH(llama_sampler_init_typical  (0.5f, 1), data, 32);
+    BENCH(llama_sampler_init_softmax  (),        data, 32);
+}
+
 int main(void) {
     ggml_time_init();
 
@@ -315,6 +353,8 @@ int main(void) {
     test_sampler_queue(10000, "mpk", 100, 0.8f, 0.1f);
 
     printf("OK\n");
+
+    test_perf();
 
     return 0;
 }
