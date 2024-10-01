@@ -17025,12 +17025,6 @@ static void llama_graph_compute(
             ggml_cgraph * gf,
                     int   n_threads,
         ggml_threadpool * threadpool) {
-#ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(lctx.backend_metal)) {
-        ggml_backend_metal_set_n_cb(lctx.backend_metal, n_threads);
-    }
-#endif
-
     if (lctx.backend_cpu != nullptr) {
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
