@@ -550,6 +550,7 @@ if (GGML_SYCL)
         # INFO: Allowed Sub_group_siezs are not consistent through all
         # hip targets. For example, 64 is used for certain models, but the backend
         # does not support it.
+        # Target archs tested working: gfx1030, gfx1031, (Only tested sub_group_size = 32)
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
     else()
         add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
