@@ -320,10 +320,10 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 //
 
 struct ggml_logger_state {
-    ggml_log_callback log_callback = ggml_log_callback_default;
-    void * log_callback_user_data  = nullptr;
+    ggml_log_callback log_callback;
+    void * log_callback_user_data;
 };
-static ggml_logger_state g_logger_state;
+static struct ggml_logger_state g_logger_state = {ggml_log_callback_default, NULL};
 
 static void ggml_log_internal_v(enum ggml_log_level level, const char * format, va_list args) {
     va_list args_copy;
