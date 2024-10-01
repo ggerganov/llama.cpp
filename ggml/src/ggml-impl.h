@@ -38,8 +38,8 @@ extern "C" {
 //
 
 GGML_ATTRIBUTE_FORMAT(2, 3)
-void ggml_log_internal        (ggml_log_level level, const char * format, ...);
-void ggml_log_callback_default(ggml_log_level level, const char * text, void * user_data);
+void ggml_log_internal        (enum ggml_log_level level, const char * format, ...);
+void ggml_log_callback_default(enum ggml_log_level level, const char * text, void * user_data);
 
 #define GGML_LOG(...)       ggml_log_internal(GGML_LOG_LEVEL_NONE , __VA_ARGS__)
 #define GGML_LOG_INFO(...)  ggml_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)

@@ -325,7 +325,7 @@ struct ggml_logger_state {
 };
 static ggml_logger_state g_logger_state;
 
-static void ggml_log_internal_v(ggml_log_level level, const char * format, va_list args) {
+static void ggml_log_internal_v(enum ggml_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
@@ -342,14 +342,14 @@ static void ggml_log_internal_v(ggml_log_level level, const char * format, va_li
     va_end(args_copy);
 }
 
-void ggml_log_internal(ggml_log_level level, const char * format, ...) {
+void ggml_log_internal(enum ggml_log_level level, const char * format, ...) {
     va_list args;
     va_start(args, format);
     ggml_log_internal_v(level, format, args);
     va_end(args);
 }
 
-void ggml_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
+void ggml_log_callback_default(enum ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) user_data;
     fputs(text, stderr);
