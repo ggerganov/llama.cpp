@@ -123,8 +123,8 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
 static std::vector<codepoint_flags> unicode_cpt_flags_array() {
     std::vector<codepoint_flags> cpt_flags(MAX_CODEPOINTS, codepoint_flags::UNDEFINED);
 
-    assert (unicode_ranges_flags.begin()->first == 0);
-    assert (unicode_ranges_flags.end()->first == MAX_CODEPOINTS);
+    assert (unicode_ranges_flags.begin()[0].first == 0);
+    assert (unicode_ranges_flags.begin()[unicode_ranges_flags.size()-1].first == MAX_CODEPOINTS);
     for (size_t i = 1; i < unicode_ranges_flags.size(); ++i) {
         const auto range_ini = unicode_ranges_flags.begin()[i-1];  // codepoint_ini, flags
         const auto range_end = unicode_ranges_flags.begin()[i];    // codepoint_end, flags
