@@ -3,6 +3,7 @@
 #include "ggml.h"
 
 #include <vector>
+#include <array>
 
 enum vision_arch {
     VISION_ARCH_LLAVA,
@@ -29,6 +30,7 @@ struct clip_hparams {
     uint32_t n_head;
     uint32_t n_layer;
     uint32_t max_pos_embd;
+    bool use_gelu = false;
 
     float eps;
 
@@ -44,50 +46,50 @@ struct clip_hparams {
 
 struct clip_layer {
     // attention
-    struct ggml_tensor * k_w;
-    struct ggml_tensor * k_b;
-    struct ggml_tensor * q_w;
-    struct ggml_tensor * q_b;
-    struct ggml_tensor * v_w;
-    struct ggml_tensor * v_b;
+    struct ggml_tensor * k_w = NULL;
+    struct ggml_tensor * k_b = NULL;
+    struct ggml_tensor * q_w = NULL;
+    struct ggml_tensor * q_b = NULL;
+    struct ggml_tensor * v_w = NULL;
+    struct ggml_tensor * v_b = NULL;
 
-    struct ggml_tensor * output_w;
-    struct ggml_tensor * output_b;
+    struct ggml_tensor * output_w = NULL;
+    struct ggml_tensor * output_b = NULL;
 
     // layernorm 1
-    struct ggml_tensor * norm_in_w;
-    struct ggml_tensor * norm_in_b;
+    struct ggml_tensor * norm_in_w = NULL;
+    struct ggml_tensor * norm_in_b = NULL;
 
     // ff
-    struct ggml_tensor * ffn_up_w;
-    struct ggml_tensor * ffn_up_b;
+    struct ggml_tensor * ffn_up_w = NULL;
+    struct ggml_tensor * ffn_up_b = NULL;
 
-    struct ggml_tensor * ffn_down_w;
-    struct ggml_tensor * ffn_down_b;
+    struct ggml_tensor * ffn_down_w = NULL;
+    struct ggml_tensor * ffn_down_b = NULL;
 
     // layernorm 2
-    struct ggml_tensor * norm_out_w;
-    struct ggml_tensor * norm_out_b;
+    struct ggml_tensor * norm_out_w = NULL;
+    struct ggml_tensor * norm_out_b = NULL;
 };
 
 struct clip_vision_model {
     struct clip_hparams hparams;
 
     // embeddings
-    struct ggml_tensor * class_embedding;
-    struct ggml_tensor * patch_embeddings;
-    struct ggml_tensor * patch_bias;
-    struct ggml_tensor * position_embeddings;
+    struct ggml_tensor * class_embedding     = NULL;
+    struct ggml_tensor * patch_embeddings    = NULL;
+    struct ggml_tensor * patch_bias          = NULL;
+    struct ggml_tensor * position_embeddings = NULL;
 
-    struct ggml_tensor * pre_norm_w;
-    struct ggml_tensor * pre_norm_b;
+    struct ggml_tensor * pre_norm_w = NULL;
+    struct ggml_tensor * pre_norm_b = NULL;
 
     std::vector<clip_layer> layers;
 
-    struct ggml_tensor * post_norm_w;
-    struct ggml_tensor * post_norm_b;
+    struct ggml_tensor * post_norm_w = NULL;
+    struct ggml_tensor * post_norm_b = NULL;
 
-    struct ggml_tensor * projection;
+    struct ggml_tensor * projection = NULL;
 
     // LLaVA projection
     struct ggml_tensor * mm_a_w = NULL;
@@ -99,9 +101,15 @@ struct clip_vision_model {
 };
 
 struct clip_context {
-    struct ggml_context * ctx_ggml;
-    clip_vision_model model;
+    // memory buffers used to evaluate the model
+    std::vector<uint8_t> buf_compute_meta;
+    ggml_backend_sched_t sched = nullptr;
 
-    int32_t n_output;
-    float * output;
+    const clip_vision_model * model;
+
+    // temporary output data
+    int n_output;
+    std::vector<float> output; // size == n_output * n_embd
 };
+
+int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch);

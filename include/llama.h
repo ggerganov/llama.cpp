@@ -234,8 +234,8 @@ extern "C" {
 
     // Input data for llama_vision_decode
     typedef struct llama_img_batch {
-        int32_t     n_imgs;
-        llama_img * imgs;
+        int32_t      n_imgs;
+        llama_img ** imgs;
     } llama_img_batch;
 
     // Input data for llama_decode
@@ -892,6 +892,10 @@ extern "C" {
     //
     // Vision
     //
+
+    // create new RGB image for input
+    LLAMA_API llama_img * llama_img_alloc(int width, int height);
+    LLAMA_API void llama_img_free(llama_img * img);
 
     // encode image into embeddings
     LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, llama_img_batch * batch);

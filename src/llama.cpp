@@ -2552,9 +2552,6 @@ struct llama_hparams {
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
     enum llama_rope_scaling_type rope_scaling_type_train = LLAMA_ROPE_SCALING_TYPE_NONE;
 
-    bool has_vision = false;
-    clip_hparams clip;
-
     bool operator!=(const llama_hparams & other) const {
         if (this->vocab_only    != other.vocab_only)    return true;
         if (this->n_vocab       != other.n_vocab)       return true;
@@ -3005,6 +3002,7 @@ struct llama_model {
 
     std::vector<llama_layer> layers;
 
+    bool has_vision = false;
     clip_vision_model clip;
 
     llama_split_mode split_mode;
@@ -3502,6 +3500,9 @@ struct llama_context {
     struct ggml_tensor * inp_pos_bucket;    // I32 [n_batch|n_kv, n_batch]
     struct ggml_tensor * inp_embd_enc;      // F32 [n_embd, n_outputs_enc]
     struct ggml_tensor * inp_KQ_mask_cross; // F32 [n_outputs_enc, n_batch]
+
+    // vision
+    clip_context clip;
 };
 
 struct llama_lora_weight {
@@ -6223,23 +6224,24 @@ static void llm_load_hparams(
     }
 
     // vision model
+    auto & vparams = model.clip.hparams;
     std::string vision_type;
     ml.get_key(LLM_KV_VISION_TYPE, vision_type, false);
     if (vision_type == "clip") {
-        hparams.has_vision = true;
+        model.has_vision = true;
         std::string proj_type;
-        ml.get_key(LLM_KV_VISION_IMAGE_SIZE,               hparams.clip.image_size,     true);
-        ml.get_key(LLM_KV_VISION_PATCH_SIZE,               hparams.clip.patch_size,     true);
-        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_MEAN,        hparams.clip.image_mean, 3,  true);
-        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_STD,         hparams.clip.image_std,  3,  true);
-        ml.get_key(LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,    hparams.clip.hidden_size,    true);
-        ml.get_key(LLM_KV_VISION_CLIP_BLOCK_COUNT,         hparams.clip.n_layer,        true);
-        ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, hparams.clip.n_intermediate, true);
-        ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          hparams.clip.n_head,         true);
-        ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       hparams.clip.eps,            true);
+        ml.get_key(LLM_KV_VISION_IMAGE_SIZE,               vparams.image_size,     true);
+        ml.get_key(LLM_KV_VISION_PATCH_SIZE,               vparams.patch_size,     true);
+        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_MEAN,        vparams.image_mean, 3,  true);
+        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_STD,         vparams.image_std,  3,  true);
+        ml.get_key(LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,    vparams.hidden_size,    true);
+        ml.get_key(LLM_KV_VISION_CLIP_BLOCK_COUNT,         vparams.n_layer,        true);
+        ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, vparams.n_intermediate, true);
+        ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          vparams.n_head,         true);
+        ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       vparams.eps,            true);
         ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      proj_type,                   true);
         if (proj_type == "mlp") {
-            hparams.clip.proj_type = CLIP_PROJECTOR_TYPE_MLP;
+            vparams.proj_type = CLIP_PROJECTOR_TYPE_MLP;
         } else {
             throw std::runtime_error(format("unsupported clip projector type: %s", proj_type.c_str()));
         }
@@ -6247,7 +6249,7 @@ static void llm_load_hparams(
         ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
         for (auto & it : VISION_ARCH_NAMES) {
             if (arch == it.second) {
-                hparams.clip.arch = it.first;
+                vparams.arch = it.first;
                 break;
             }
         }
@@ -6256,10 +6258,10 @@ static void llm_load_hparams(
     }
 
     // arch-specific CLIP hparams
-    switch (hparams.clip.arch) {
+    switch (vparams.arch) {
         case VISION_ARCH_LLAVA:
             {
-                ml.get_key(LLM_KV_VISION_CLIP_MAX_POS_EMBD, hparams.clip.max_pos_embd, true);
+                ml.get_key(LLM_KV_VISION_CLIP_MAX_POS_EMBD, vparams.max_pos_embd, true);
             } break;
         default: (void)0;
     }
@@ -8957,21 +8959,22 @@ static bool llm_load_tensors(
     }
 
     // load tensors for vision model
-    if (hparams.has_vision) {
-        const int64_t n_layer      = hparams.clip.n_layer;
-        const int64_t n_embd       = hparams.clip.hidden_size;
-        const int64_t n_ff         = hparams.clip.n_intermediate;
-        const int64_t max_pos_embd = hparams.clip.max_pos_embd;
+    auto & vparams = model.clip.hparams;
+    if (model.has_vision) {
+        const int64_t n_layer      = vparams.n_layer;
+        const int64_t n_embd       = vparams.hidden_size;
+        const int64_t n_ff         = vparams.n_intermediate;
+        const int64_t max_pos_embd = vparams.max_pos_embd;
         const int64_t n_channel    = 3; // always RGB
-        const int64_t patch_size   = hparams.clip.patch_size;
-        const auto tn = VISION_TN(hparams.clip.arch);
+        const int64_t patch_size   = vparams.patch_size;
+        const auto tn = VISION_TN(vparams.arch);
 
         ggml_context * ctx_vision = ctx_map.at(model.buft_input.buft); // TODO: make dedicated buft for vision
         auto ctx_for_layer = [&](int i) { return ctx_map.at(model.buft_layer[i].buft); };
 
         model.clip.layers.resize(n_layer);
 
-        switch (hparams.clip.arch) {
+        switch (vparams.arch) {
             case VISION_ARCH_LLAVA:
                 {
                     model.clip.mm_a_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ_A, "weight"), {n_embd, n_ff});
@@ -19637,6 +19640,14 @@ struct llama_context * llama_new_context_with_model(
         }
     }
 
+    // initialize vision context
+    if (model->has_vision) {
+        ctx->clip.model = &model->clip;
+        ctx->clip.sched = ctx->sched;
+        const size_t max_nodes = llama_model_max_nodes(*model);
+        ctx->clip.buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
+    }
+
     return ctx;
 }
 
@@ -21778,6 +21789,30 @@ int32_t llama_chat_apply_template(
 // TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
+}
+
+//
+// vision
+//
+
+llama_img * llama_img_alloc(int width, int height) {
+    llama_img * img = new llama_img();
+    img->nx = width;
+    img->ny = height;
+    img->data = (unsigned char *)malloc(width*height*3);
+    return img;
+}
+void llama_img_free(llama_img * img) {
+    free(img->data);
+    delete img;
+}
+
+int32_t llama_vision_encode(struct llama_context * ctx, llama_img_batch * batch) {
+    return llama_vision_encode_internal(ctx->clip, batch);
+}
+
+float * llama_vision_get_embeddings(struct llama_context * ctx, int32_t idx) {
+    return ctx->clip.output.data();
 }
 
 //

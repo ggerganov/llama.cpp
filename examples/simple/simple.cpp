@@ -2,6 +2,7 @@
 #include "common.h"
 #include "log.h"
 #include "llama.h"
+#include "vision.h"
 
 #include <vector>
 
@@ -60,6 +61,19 @@ int main(int argc, char ** argv) {
     llama_sampler * smpl = llama_sampler_chain_init(sparams);
 
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+
+
+
+
+    // TODO: this is for testing; DELETE ME
+    llama_img_batch ibatch;
+    ibatch.n_imgs = 1;
+    ibatch.imgs = (llama_img **) malloc(1024);
+    ibatch.imgs[0] = load_image_from_file("media/llama0-logo.png");
+    llama_vision_encode(ctx, &ibatch);
+    return 0;
+
+
 
     // tokenize the prompt
 

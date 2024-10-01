@@ -1,7 +1,21 @@
 #include "llama.h"
-
 #include "llama-vision.h"
 #include "llama-impl.h"
+
+#include <string.h> // memcpy
+#include <limits>
+#include <cmath>
+
+#ifndef NDEBUG
+// for debugging
+#include <fstream>
+#include <cstdint>
+#include <iostream>
+
+// export clip_image_u8 to bmp file for debugging
+// https://codereview.stackexchange.com/questions/195121/writing-a-bitmap-image-from-c
+static int bmp_export(const clip_image_u8 &img, const std::string &location);
+#endif
 
 struct clip_image_size {
     int width;
@@ -39,8 +53,23 @@ struct clip_image_f32 {
 using clip_image_f32_batch = std::vector<clip_image_f32>;
 using clip_image_f8_batch  = std::vector<clip_image_u8>;
 
-int32_t clip_image_encode      (const clip_context & ctx, const clip_image_f32 & img,        std::vector<float> & output);
-int32_t clip_image_batch_encode(const clip_context & ctx, const clip_image_f32_batch & imgs, std::vector<float> & output);
+static int clip_n_patches(const clip_context & ctx) {
+    auto & hparams = ctx.model->hparams;
+    int n_patches = (hparams.image_size / hparams.patch_size) * (hparams.image_size / hparams.patch_size);
+    return n_patches;
+}
+
+static int clip_n_mmproj_embd(const clip_context & ctx) {
+    if (ctx.model->hparams.proj_type == CLIP_PROJECTOR_TYPE_MLP) {
+        return ctx.model->mm_b_b->ne[0];
+    } else {
+        GGML_ASSERT(false && "invalid proj type");
+    }
+}
+
+static int clip_n_embd(const clip_context & ctx) {
+    return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx);
+}
 
 /**
  * Selects the best resolution from a list of possible resolutions based on the original size.
@@ -221,9 +250,9 @@ static void normalize_image_u8_to_f32(const clip_image_u8 src, clip_image_f32 ds
 
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
-bool clip_image_preprocess(const clip_context & ctx, const clip_image_u8 & img, clip_image_f32_batch & output_imgs) {
+static bool clip_image_preprocess(const clip_context & ctx, const clip_image_u8 & img, clip_image_f32_batch & output_imgs) {
     bool pad_to_square = true;
-    auto & params = ctx.model.hparams;
+    auto & params = ctx.model->hparams;
     // The model config actually contains all we need to decide on how to preprocess, here we automatically switch to the new llava-1.6 preprocessing
     if (params.mm_patch_merge_type == MM_PATCH_MERGE_SPATIAL_UNPAD) {
         pad_to_square = false;
@@ -357,58 +386,356 @@ bool clip_image_preprocess(const clip_context & ctx, const clip_image_u8 & img, 
     return true;
 }
 
-int clip_n_patches(const clip_context & ctx) {
-    auto & hparams = ctx.model.hparams;
-    int n_patches = (hparams.image_size / hparams.patch_size) * (hparams.image_size / hparams.patch_size);
-    return n_patches;
-}
+static ggml_cgraph * clip_image_build_graph(clip_context & ctx, int batch_size, clip_image_size & image_size) {
+    auto & model = *ctx.model;
+    auto & hparams = ctx.model->hparams;
 
-static bool encode_image_with_clip(clip_context & ctx_clip, const llama_img img) {
-    clip_image_u8 img_u8(img);
-    clip_image_f32_batch img_res_v;
-    std::vector<float> image_embd; // output vectors
-    auto & hparams = ctx_clip.model.hparams;
-    int n_output;
+    const int hidden_size   = hparams.hidden_size;
+    const int n_head        = hparams.n_head;
+    const int d_head        = hidden_size / n_head;
+    const int patch_size    = hparams.patch_size;
+    const float eps         = hparams.eps;
+    const int num_patches   = ((image_size.width / patch_size) * (image_size.height / patch_size));
+    const int num_positions = num_patches + (model.class_embedding ? 1 : 0);
 
-    if (!clip_image_preprocess(ctx_clip, img_u8, img_res_v)) {
-        LLAMA_LOG_ERROR("%s: unable to preprocess image\n", __func__);
-        return false;
+    LLAMA_LOG_DEBUG("%s: num_patches = %d\n", __func__, num_patches);
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ ctx.buf_compute_meta.size(),
+        /*.mem_buffer =*/ ctx.buf_compute_meta.data(),
+        /*.no_alloc   =*/ true,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(params);
+    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+
+    // input
+    struct ggml_tensor * embeddings;
+    {
+        struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size.width, image_size.height, 3, batch_size);
+        ggml_set_name(inp_raw, "inp_raw");
+        ggml_set_input(inp_raw);
+
+        struct ggml_tensor * inp = ggml_conv_2d(ctx0, model.patch_embeddings, inp_raw, patch_size, patch_size, 0, 0, 1, 1);
+
+        inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
+        inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));
+
+        if (model.patch_bias) {
+            inp = ggml_add(ctx0, inp, model.patch_bias);
+        }
+        // auto * ne = inp->ne; printf("%d %d %d %d\n", ne[0], ne[1], ne[2], ne[3]);
+
+        embeddings = inp;
+        if (model.class_embedding) {
+            embeddings = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
+            ggml_set_name(embeddings, "embeddings");
+            ggml_set_input(embeddings);
+            embeddings = ggml_acc(ctx0, embeddings, model.class_embedding,
+                    embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], 0);
+            embeddings = ggml_acc(ctx0, embeddings, inp,
+                    embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
+        }
+
+        struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_positions);
+        ggml_set_name(positions, "positions");
+        ggml_set_input(positions);
+
+        embeddings = ggml_add(ctx0,
+            embeddings,
+            ggml_get_rows(ctx0, model.position_embeddings, positions));
     }
 
-    if (hparams.mm_patch_merge_type != MM_PATCH_MERGE_SPATIAL_UNPAD) {
-        // flat / default llava-1.5 type embedding
-        n_output = clip_n_patches(ctx_clip);
-        bool encoded = clip_image_encode(ctx_clip, img_res_v[0], image_embd);
-        if (!encoded) {
-            LLAMA_LOG_ERROR("Unable to encode image\n");
-            return false;
+    // pre-layernorm
+    if (model.pre_norm_w) {
+        embeddings = ggml_norm(ctx0, embeddings, eps);
+        ggml_set_name(embeddings, "pre_ln");
+
+        embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_norm_w), model.pre_norm_w);
+    }
+
+    // loop over layers
+    for (int il = 0; il < (int)hparams.n_layer - 1; il++) {
+        struct ggml_tensor * cur = embeddings;
+
+        // layernorm1
+        {
+            cur = ggml_norm(ctx0, cur, eps);
+            cur = ggml_add(ctx0,
+                ggml_mul(ctx0, cur, model.layers[il].norm_in_w),
+                model.layers[il].norm_in_b);
+        }
+
+        // self-attention
+        {
+
+            struct ggml_tensor * Q = ggml_add(ctx0,
+                ggml_mul_mat(ctx0, model.layers[il].q_w, cur),
+                model.layers[il].q_b);
+
+            Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
+            Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_positions, batch_size);
+            Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3));
+            Q = ggml_reshape_3d(ctx0, Q, d_head, num_positions, n_head * batch_size);
+
+            struct ggml_tensor * K = ggml_add(ctx0,
+                ggml_mul_mat(ctx0, model.layers[il].k_w, cur),
+                model.layers[il].k_b);
+
+            K = ggml_reshape_4d(ctx0, K, d_head, n_head, num_positions, batch_size);
+            K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3));
+            K = ggml_reshape_3d(ctx0, K, d_head, num_positions, n_head * batch_size);
+
+            struct ggml_tensor * V = ggml_add(ctx0,
+                ggml_mul_mat(ctx0, model.layers[il].v_w, cur),
+                model.layers[il].v_b);
+
+            V = ggml_reshape_4d(ctx0, V, d_head, n_head, num_positions, batch_size);
+            V = ggml_cont(ctx0, ggml_permute(ctx0, V, 1, 2, 0, 3));
+            V = ggml_reshape_3d(ctx0, V, num_positions, d_head, n_head * batch_size);
+
+            struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
+            KQ = ggml_soft_max_inplace(ctx0, KQ);
+            struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ);
+            KQV = ggml_reshape_4d(ctx0, KQV, d_head, num_positions, n_head, batch_size);
+            KQV = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
+
+            cur = ggml_cont_3d(ctx0, KQV, hidden_size, num_positions, batch_size);
+        }
+
+        // attention output
+        cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].output_w, cur), model.layers[il].output_b);
+
+        // re-add the layer input, e.g., residual
+        cur = ggml_add(ctx0, cur, embeddings);
+
+        embeddings = cur; // embeddings = residual, cur = hidden_states
+
+        // layernorm2
+        {
+            cur = ggml_norm(ctx0, cur, eps);
+            cur = ggml_add(ctx0,
+                ggml_mul(ctx0, cur, model.layers[il].norm_out_w),
+                model.layers[il].norm_out_b);
+        }
+
+        cur = ggml_mul_mat(ctx0, model.layers[il].ffn_up_w, cur);
+        cur = ggml_add(ctx0, cur, model.layers[il].ffn_up_b);
+
+        if (hparams.use_gelu) {
+            cur = ggml_gelu_inplace(ctx0, cur);
+        } else {
+            cur = ggml_gelu_quick_inplace(ctx0, cur);
+        }
+
+        cur = ggml_mul_mat(ctx0, model.layers[il].ffn_down_w, cur);
+        cur = ggml_add(ctx0, cur, model.layers[il].ffn_down_b);
+
+        // residual 2
+        cur = ggml_add(ctx0, embeddings, cur);
+
+        embeddings = cur;
+    }
+
+    // llava projector
+    {
+        embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
+
+        struct ggml_tensor * patches = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_patches);
+        ggml_set_name(patches, "patches");
+        ggml_set_input(patches);
+
+        // shape [1, 576, 1024]
+        // ne is whcn, ne = [1024, 576, 1, 1]
+        embeddings = ggml_get_rows(ctx0, embeddings, patches);
+
+        if (hparams.proj_type == CLIP_PROJECTOR_TYPE_MLP) {
+            embeddings = ggml_mul_mat(ctx0, model.mm_a_w, embeddings);
+            embeddings = ggml_add(ctx0, embeddings, model.mm_a_b);
+
+            embeddings = ggml_gelu(ctx0, embeddings);
+            embeddings = ggml_mul_mat(ctx0, model.mm_b_w, embeddings);
+            embeddings = ggml_add(ctx0, embeddings, model.mm_b_b);
+        } else {
+            GGML_ASSERT(false && "unsupported proj type");
         }
     }
+
+    // build the graph
+    ggml_build_forward_expand(gf, embeddings);
+    ggml_free(ctx0);
+    return gf;
 }
 
-int32_t clip_image_encode(const clip_context & ctx, const clip_image_f32 & img, std::vector<float> & output) {
+static int32_t clip_image_batch_encode(clip_context & ctx, const clip_image_f32_batch & imgs, std::vector<float> & output) {
+    int batch_size = imgs.size();
+    auto & model = *ctx.model;
+    auto & hparams = ctx.model->hparams;
+
+    if (hparams.arch == VISION_ARCH_LLAVA) {
+        GGML_ASSERT(batch_size == 1); // TODO: support multiple images
+    }
+
+    clip_image_size image_size{(int)hparams.image_size, (int)hparams.image_size};
+    const int patch_size    = hparams.patch_size;
+    const int num_patches   = ((image_size.width / patch_size) * (image_size.height / patch_size));
+    const int num_positions = num_patches + (model.class_embedding ? 1 : 0);
+
+    LLAMA_LOG_DEBUG("%s: image_size = %d\n", __func__, hparams.image_size);
+    LLAMA_LOG_DEBUG("%s: num_positions = %d\n", __func__, num_positions);
+
+    // build the inference graph
+    ggml_cgraph * gf = clip_image_build_graph(ctx, batch_size, image_size);
+
+    // alloc memory for graph
+    bool ok = ggml_backend_sched_alloc_graph(ctx.sched, gf);
+    if (!ok) {
+        LLAMA_LOG_ERROR("failed to alloc memory for graph\n");
+        return -1;
+    }
+
+    // set raw input
+    {
+        struct ggml_tensor * inp_raw = ggml_graph_get_tensor(gf, "inp_raw");
+        float * data = (float *)malloc(ggml_nbytes(inp_raw));
+
+        for (int i = 0; i < batch_size; i++) {
+            const int nx = imgs[i].nx;
+            const int ny = imgs[i].ny;
+            const int n = nx * ny;
+
+            for (int b = 0; b < batch_size; b++) {
+                for (int k = 0; k < 3; k++) {
+                    for (int y = 0; y < ny; y++) {
+                        for (int x = 0; x < nx; x++) {
+                            data[(b * 3 * n) + k * n + y * nx + x] = imgs[b].buf[3 * (y * nx + x) + k];
+                        }
+                    }
+                }
+            }
+        }
+        ggml_backend_tensor_set(inp_raw, data, 0, ggml_nbytes(inp_raw));
+        free(data);
+    }
+
+    if (model.class_embedding) {
+        struct ggml_tensor * embeddings = ggml_graph_get_tensor(gf, "embeddings");
+
+        void* zero_mem = malloc(ggml_nbytes(embeddings));
+        memset(zero_mem, 0, ggml_nbytes(embeddings));
+        ggml_backend_tensor_set(embeddings, zero_mem, 0, ggml_nbytes(embeddings));
+        free(zero_mem);
+    }
+
+    {
+        struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
+
+        int* positions_data = (int*)malloc(ggml_nbytes(positions));
+        for (int i = 0; i < num_positions; i++) {
+            positions_data[i] = i;
+        }
+        ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
+        free(positions_data);
+    }
+
+    {
+        struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "patches");
+        int* patches_data = (int*)malloc(ggml_nbytes(patches));
+        for (int i = 0; i < num_patches; i++) {
+            patches_data[i] = i + 1;
+        }
+        ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
+        free(patches_data);
+    }
+
+    // compute
+    ggml_backend_sched_graph_compute_async(ctx.sched, gf);
+
+    // the last node is the embedding tensor
+    struct ggml_tensor * embeddings = ggml_graph_node(gf, -1);
+    ggml_backend_t backend_embd = ggml_backend_sched_get_tensor_backend(ctx.sched, embeddings);
+
+    // copy the embeddings to the location passed by the user
+    output.resize(clip_n_embd(ctx));
+    ggml_backend_tensor_get_async(backend_embd, embeddings, output.data(), 0, ggml_nbytes(embeddings));
+
+    ggml_backend_sched_synchronize(ctx.sched);
+
+    return 0;
+}
+
+static int32_t clip_image_encode(clip_context & ctx, const clip_image_f32 & img, std::vector<float> & output) {
     clip_image_f32_batch imgs{img};
     return clip_image_batch_encode(ctx, imgs, output);
 }
 
-int32_t clip_image_batch_encode(const clip_context & ctx, const clip_image_f32_batch & imgs, std::vector<float> & output) {
-    int batch_size = imgs.size();
+static int32_t encode_image_with_clip(clip_context & ctx, const llama_img img, std::vector<float> & output_embd) {
+    clip_image_u8 img_u8(img);
+    clip_image_f32_batch img_res_v;
+    auto & hparams = ctx.model->hparams;
+
+    if (!clip_image_preprocess(ctx, img_u8, img_res_v)) {
+        LLAMA_LOG_ERROR("%s: unable to preprocess image\n", __func__);
+        return -2;
+    }
+
+    switch (hparams.mm_patch_merge_type) {
+        case MM_PATCH_MERGE_FLAT:
+            {
+                // flat / default llava-1.5 type embedding
+                // n_output = clip_n_patches(ctx);
+                int32_t encoded = clip_image_encode(ctx, img_res_v[0], output_embd);
+                if (encoded != 0) {
+                    LLAMA_LOG_ERROR("Unable to encode image\n");
+                    return encoded;
+                }
+            } break;
+        case MM_PATCH_MERGE_SPATIAL_UNPAD:
+            {
+                // TODO: support llava-1.6
+                (void)0;
+            } break;
+        default:
+            GGML_ASSERT(false && "unsupported mm_patch_merge_type");
+    }
+
+    return 0;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////////////
+// public API
+
+int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch) {
+    if (batch->n_imgs == 0) {
+        return 0;
+    }
+
+    // TODO: batching is not working atm, should be fixed later
+    const int n_embd = clip_n_embd(ctx);
+    ctx.output.resize(n_embd * batch->n_imgs);
+    ctx.n_output = batch->n_imgs;
+
+    for (int i = 0; i < batch->n_imgs; i++) {
+        std::vector<float> output_single;
+        int32_t status = encode_image_with_clip(ctx, *batch->imgs[i], output_single);
+        if (status != 0) {
+            return status;
+        }
+        // copy output embeddings to result
+        for (int k = 0; k < n_embd; k++) {
+            ctx.output[n_embd*i + k] = output_single[k];
+            // if (k<10) printf("%f\n", output_single[k]);
+        }
+    }
+
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // for debugging
 #ifndef NDEBUG
 
-#include <fstream>
-#include <vector>
-#include <cstdint>
-#include <iostream>
-
-// export clip_image_u8 to bmp file for debugging
-// https://codereview.stackexchange.com/questions/195121/writing-a-bitmap-image-from-c
-inline int bmp_export(const clip_image_u8 &img, const std::string &location) {
+static int bmp_export(const clip_image_u8 &img, const std::string &location) {
     const uint32_t width = img.nx;
     const uint32_t height = img.ny;
     const std::vector<uint8_t> &buffer = img.buf;
@@ -445,7 +772,7 @@ inline int bmp_export(const clip_image_u8 &img, const std::string &location) {
     const uint32_t blueBitmask = (hasAlphaChannel) ? 0xFF000000 : 0;
     const uint32_t alphaBitmask = (hasAlphaChannel) ? 0x000000FF : 0;
 
-    //Writing the file header and information header to the file 
+    //Writing the file header and information header to the file
     std::vector<uint8_t> header(offset, 0);
     header[0] = signature[0];
     header[1] = signature[1];

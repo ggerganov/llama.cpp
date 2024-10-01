@@ -926,6 +926,7 @@ OBJ_LLAMA = \
 	src/llama-vocab.o \
 	src/llama-grammar.o \
 	src/llama-sampling.o \
+	src/llama-vision.o \
 	src/unicode.o \
 	src/unicode-data.o
 
@@ -937,6 +938,7 @@ OBJ_COMMON = \
 	common/ngram-cache.o \
 	common/sampling.o \
 	common/train.o \
+	common/vision.o \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
@@ -1219,6 +1221,12 @@ common/train.o: \
 common/ngram-cache.o: \
 	common/ngram-cache.cpp \
 	common/ngram-cache.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/vision.o: \
+	common/vision.cpp \
+	common/vision.h \
+	common/stb_image.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(LIB_COMMON): \
