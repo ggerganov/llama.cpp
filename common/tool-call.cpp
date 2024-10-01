@@ -12,6 +12,29 @@
 
 using json = nlohmann::ordered_json;
 
+llama_tool_call_style llama_tool_call_style_detect(const minja::chat_template & chat_template) {
+    const auto & src = chat_template.source();
+
+    if (src.find("<tool_call>") != std::string::npos) {
+        return Hermes2Pro;
+    } else if (src.find(">>>all") != std::string::npos) {
+        return FunctionaryV3Llama3;
+    } else if (src.find("<|start_header_id|>") != std::string::npos
+        && src.find("<function=") != std::string::npos) {
+        return FunctionaryV3Llama31;
+    } else if (src.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
+        if (src.find("<|python_tag|>") != std::string::npos) {
+            return Llama31;
+        } else {
+            return Llama32;
+        }
+    } else if (src.find("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>") != std::string::npos) {
+        return CommandRPlus;
+    } else {
+        return UnknownToolCallStyle;
+    }
+}
+
 static bool parse_json(std::string::const_iterator & it, const std::string::const_iterator & end, json & out) {
     // // https://json.nlohmann.me/features/parsing/sax_interface/
     struct json_error_locator : public nlohmann::json_sax<json> {
@@ -207,7 +230,8 @@ llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tool
 }
 
 llama_tool_call_handler llama_tool_call_handler_init(
-    const llama_chat_template & tmpl,
+    llama_tool_call_style style,
+    const minja::chat_template & tmpl,
     bool allow_content,
     bool parallel_tool_calls,
     const nlohmann::ordered_json & messages,
@@ -215,18 +239,18 @@ llama_tool_call_handler llama_tool_call_handler_init(
 {
     llama_tool_call_handler handler;
 
-    switch (tmpl.tool_call_style()) {
+    switch (style) {
         case llama_tool_call_style::Llama31:
         case llama_tool_call_style::Llama32: {
             static auto builtin_tools = json {"wolfram_alpha", "brave_search"};
 
-            auto uses_python_tag = tmpl.tool_call_style() == llama_tool_call_style::Llama31;
+            auto uses_python_tag = style == llama_tool_call_style::Llama31;
 
             // Technically we should only trigger on `"\n{\"name\": \"" + name + "\""` for each tool name,
             // but Llama-3.2-3B (and 1B) struggles to output valid tool calls so we're "guiding" it strongly as soon
             // as it seems to be outputting some JSON.
             // TODO: make this conditional on a very small model (e.g. 1B / 3B).
-            auto eagerly_match_any_json = tmpl.tool_call_style() == llama_tool_call_style::Llama32;
+            auto eagerly_match_any_json = style == llama_tool_call_style::Llama32;
 
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;

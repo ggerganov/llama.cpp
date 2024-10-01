@@ -9,7 +9,8 @@
 
 using json = nlohmann::ordered_json;
 
-static void assert_equals(const std::string & expected, const std::string & actual) {
+template <class T>
+static void assert_equals(const T & expected, const T & actual) {
     if (expected != actual) {
         std::cerr << "Expected: " << expected << std::endl;
         std::cerr << "Actual: " << actual << std::endl;
@@ -242,7 +243,22 @@ static void test_parsing() {
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}", json::array());
 }
 
-static std::string get_message_prompt_delta(const llama_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
+void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
+    const minja::chat_template tmpl(read_file(template_file), "<s>", "</s>");
+    auto tool_call_style = llama_tool_call_style_detect(tmpl);
+    std::cout << "# Testing tool call style of: " << template_file << std::endl << std::flush;
+    assert_equals(expected, tool_call_style);
+}
+
+void test_tool_call_style_detection() {
+    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", FunctionaryV3Llama31);
+    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", FunctionaryV3Llama3);
+    test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", Llama31);
+    test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", Llama32);
+    test_tool_call_style("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja", CommandRPlus);
+}
+
+static std::string get_message_prompt_delta(const minja::chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
   auto prefix = tmpl.apply(json::array({user_message}), tools, /* add_generation_prompt= */ true, json::object());
   auto full = tmpl.apply(json::array({user_message, delta_message}), tools, /* add_generation_prompt= */ false, json::object());
 
@@ -267,7 +283,8 @@ static std::string get_message_prompt_delta(const llama_chat_template & tmpl, co
 
 static void test_template(const std::string & template_file, const char * bos_token, const char * eos_token, const std::vector<std::string> & end_tokens, const json & tool_calling_message, const json & tools) {
   std::cout << "# Testing template: " << template_file << std::endl << std::flush;
-  const llama_chat_template & tmpl = llama_chat_template(read_file(template_file), bos_token, eos_token);
+  const minja::chat_template tmpl(read_file(template_file), bos_token, eos_token);
+  auto tool_call_style = llama_tool_call_style_detect(tmpl);
   auto & tool_calls = tool_calling_message.at("tool_calls");
 
   // Format the message: apply the template to 1 user message w/ add_generation_prompt=true, then w/ the extra message w/ add_generation_prompt=false,
@@ -277,7 +294,7 @@ static void test_template(const std::string & template_file, const char * bos_to
       {"content", "Hello, world!"}
   };
 
-  auto handler = llama_tool_call_handler_init(tmpl, /* allow_content= */ true, /* parallel_tool_calls= */ true, {user_message, tool_calling_message}, tools);
+  auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, /* allow_content= */ true, /* parallel_tool_calls= */ true, {user_message, tool_calling_message}, tools);
   auto grammar = build_grammar(handler.grammar);
   if (!grammar) {
     throw std::runtime_error("Failed to build grammar");
@@ -285,7 +302,7 @@ static void test_template(const std::string & template_file, const char * bos_to
 
   auto full_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, tool_calling_message, tools);
   std::cout << "Full delta:\n```\n" << full_delta << "\n```" << std::endl;
-  test_parse_tool_call(tmpl.tool_call_style(), tools, full_delta, "", tool_calls);
+  test_parse_tool_call(tool_call_style, tools, full_delta, "", tool_calls);
 
   auto content_less_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, {
     {"role", "assistant"},
@@ -319,6 +336,7 @@ static void test_grammars() {
 int main() {
     test_grammars();
     test_parsing();
+    test_tool_call_style_detection();
 
     std::cout << "[tool-call] All tests passed!" << std::endl;
     return 0;

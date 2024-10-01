@@ -663,7 +663,7 @@ struct server_context {
         llama_chat_message chat[] = {{"user", "test"}};
 
         if (use_jinja) {
-            auto chat_template = llama_chat_template::from_model(model);
+            auto chat_template = llama_chat_template_from_model(model);
             try {
                 chat_template.apply({{
                     {"role", "user"},
@@ -2875,11 +2875,12 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        auto chat_template = llama_chat_template::from_model(ctx_server.model, params.chat_template.empty() ? nullptr : params.chat_template.c_str());
+        static auto chat_template = llama_chat_template_from_model(ctx_server.model, params.chat_template.empty() ? nullptr : params.chat_template.c_str());
+        static auto tool_call_style = llama_tool_call_style_detect(chat_template);
 
         json data;
         try {
-            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), chat_template, params.use_jinja);
+            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), chat_template, tool_call_style, params.use_jinja);
         } catch (const std::exception & e) {
             res_error(res, format_error_response(e.what(), ERROR_TYPE_NOT_SUPPORTED));
             return;
@@ -2897,7 +2898,7 @@ int main(int argc, char ** argv) {
             ctx_server.receive_cmpl_results(task_ids, [&](const std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
                 try {
-                    json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, chat_template, /*.streaming =*/ false, verbose);
+                    json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, tool_call_style, /*.streaming =*/ false, verbose);
                     res_ok(res, result_oai);
                 } catch (const std::runtime_error & e) {
                     res_error(res, format_error_response(e.what(), ERROR_TYPE_SERVER));

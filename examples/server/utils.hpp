@@ -14,7 +14,6 @@
 
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
-#include "chat-template.h"
 #include "json.hpp"
 #include "minja.hpp"
 #include "tool-call.h"
@@ -309,7 +308,8 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json & body, /* openai api json semantics */
-    const llama_chat_template & tmpl,
+    const minja::chat_template & tmpl,
+    llama_tool_call_style tool_call_style,
     bool use_jinja)
 {
     json llama_params;
@@ -320,7 +320,7 @@ static json oaicompat_completion_params_parse(
     auto has_tools = tools.is_array() && !tools.empty();
 
     // Apply chat template to the list of messages
-    llama_params["chat_template"] = tmpl.chat_template();
+    llama_params["chat_template"] = tmpl.source();
 
     if (use_jinja) {
         if (has_tools && !tmpl.supports_tools()) {
@@ -372,7 +372,7 @@ static json oaicompat_completion_params_parse(
             llama_params["parse_tool_calls"] = true;
             llama_params["parallel_tool_calls"] = parallel_tool_calls;
 
-            auto handler = llama_tool_call_handler_init(tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools);
+            auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools);
             llama_params["prompt"] = handler.prompt;
 
             for (const auto & stop : handler.additional_stop_words) {
@@ -395,7 +395,7 @@ static json oaicompat_completion_params_parse(
             llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
         }
     } else {
-        llama_params["prompt"] = format_chat(model, tmpl.chat_template(), body.at("messages"));
+        llama_params["prompt"] = format_chat(model, tmpl.source(), body.at("messages"));
     }
 
     // Handle "n" field
@@ -435,7 +435,7 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, const llama_chat_template & tmpl, bool streaming = false, bool verbose = false) {
+static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, llama_tool_call_style tool_call_style, bool streaming = false, bool verbose = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -452,7 +452,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
     json tool_calls;
     json message_content;
     if (json_value(request, "parse_tool_calls", false)
-            && !(parsed_tool_calls = parse_tool_calls(tmpl.tool_call_style(), tools, content)).tool_calls.empty()) {
+            && !(parsed_tool_calls = parse_tool_calls(tool_call_style, tools, content)).tool_calls.empty()) {
         finish_reason = "tool_calls";
         if (!parsed_tool_calls.content.empty()) {
             message_content = parsed_tool_calls.content;

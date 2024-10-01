@@ -27,6 +27,9 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+// Forward declaration
+namespace minja { class chat_template; }
+
 struct llama_lora_adapter_info {
     std::string path;
     float scale;
@@ -499,6 +502,10 @@ std::string llama_chat_format_single(const struct llama_model * model,
 // Returns an example of formatted chat
 std::string llama_chat_format_example(const struct llama_model * model,
         const std::string & tmpl);
+
+minja::chat_template llama_chat_template_from_model(
+        const struct llama_model * model,
+        const char * chat_template_override = nullptr);
 
 //
 // KV cache utils

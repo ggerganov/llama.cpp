@@ -9,7 +9,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
-#include "chat-template.h"
+#include "chat-template.hpp"
 
 #include <algorithm>
 #include <cinttypes>
@@ -1513,13 +1513,13 @@ std::vector<llama_token> llama_tokenize(
     return result;
 }
 
-std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+static std::string _llama_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+    const int n_chars = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+        int check = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -1527,6 +1527,10 @@ std::string llama_token_to_piece(const struct llama_context * ctx, llama_token t
     }
 
     return piece;
+}
+
+std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+    return _llama_token_to_piece(llama_get_model(ctx), token, special);
 }
 
 std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
@@ -1552,7 +1556,7 @@ std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token>
 bool llama_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     if (use_jinja) {
         try {
-            auto chat_template = llama_chat_template(tmpl, "<s>", "</s>");
+            auto chat_template = minja::chat_template(tmpl, "<s>", "</s>");
             chat_template.apply({{
                 {"role", "user"},
                 {"content", "test"},
@@ -1649,6 +1653,30 @@ std::string llama_chat_format_example(const struct llama_model * model,
         {"user",      "How are you?"},
     };
     return llama_chat_apply_template(model, tmpl, msgs, true);
+}
+
+static std::string _llama_model_meta_val_str(const struct llama_model * model, const char * key) {
+    int32_t tlen = llama_model_meta_val_str(model, key, nullptr, 0);
+    if (tlen > 0) {
+        std::vector<char> curr_tmpl_buf(tlen + 1, 0);
+        if (llama_model_meta_val_str(model, key, curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
+            return std::string(curr_tmpl_buf.data(), tlen);
+        }
+    }
+    return "";
+}
+
+minja::chat_template llama_chat_template_from_model(
+    const struct llama_model * model,
+    const char * chat_template_override)
+{
+    // TODO: handle "chatml"?
+    std::string chat_template = chat_template_override
+        ? chat_template_override
+        : _llama_model_meta_val_str(model, "tokenizer.chat_template");
+    auto bos_token = _llama_token_to_piece(model, llama_token_bos(model), true);
+    auto eos_token = _llama_token_to_piece(model, llama_token_eos(model), true);
+    return {std::move(chat_template), bos_token, eos_token};
 }
 
 //

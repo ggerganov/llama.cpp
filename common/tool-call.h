@@ -2,10 +2,20 @@
 
 #include "ggml.h"
 #include "common.h"
+#include "chat-template.hpp"
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
-#include "chat-template.h"
+
+enum llama_tool_call_style {
+    UnknownToolCallStyle,
+    Llama31,
+    Llama32,
+    FunctionaryV3Llama3,
+    FunctionaryV3Llama31,
+    Hermes2Pro,
+    CommandRPlus,
+};
 
 struct llama_tool_call {
     std::string name;
@@ -24,10 +34,13 @@ struct llama_tool_call_handler {
     std::vector<std::string> additional_stop_words;
 };
 
+llama_tool_call_style llama_tool_call_style_detect(const minja::chat_template & chat_template);
+
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);
 
 llama_tool_call_handler llama_tool_call_handler_init(
-    const llama_chat_template & tmpl,
+    llama_tool_call_style style,
+    const minja::chat_template & tmpl,
     bool allow_content,
     bool parallel_tool_calls,
     const nlohmann::ordered_json & messages,
