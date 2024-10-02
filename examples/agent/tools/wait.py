@@ -1,15 +1,8 @@
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#     "ipython",
-# ]
-# ///
+import asyncio
 import datetime
 from pydantic import BaseModel
 import sys
-import time
 from typing import Optional
-
 
 class Duration(BaseModel):
     seconds: Optional[int] = None
@@ -34,7 +27,7 @@ class Duration(BaseModel):
         ])
 
     @property
-    def get_total_seconds(self) -> int:
+    def get_total_seconds(self) -> float:
         return sum([
             self.seconds or 0,
             (self.minutes or 0)*60,
@@ -44,23 +37,18 @@ class Duration(BaseModel):
             (self.years or 0)*31536000,
         ])
 
-
 class WaitForDuration(BaseModel):
     duration: Duration
 
-    def __call__(self):
+    async def __call__(self):
         sys.stderr.write(f"Waiting for {self.duration}...\n")
-        time.sleep(self.duration.get_total_seconds)
+        await asyncio.sleep(self.duration.get_total_seconds)
 
-
-def wait_for_duration(duration: Duration) -> None:
+async def wait_for_duration(duration: Duration) -> None:
     'Wait for a certain amount of time before continuing.'
+    await asyncio.sleep(duration.get_total_seconds)
 
-    # sys.stderr.write(f"Waiting for {duration}...\n")
-    time.sleep(duration.get_total_seconds)
-
-
-def wait_for_date(target_date: datetime.date) -> None:
+async def wait_for_date(target_date: datetime.date) -> None:
     f'''
         Wait until a specific date is reached before continuing.
         Today's date is {datetime.date.today()}
@@ -75,34 +63,4 @@ def wait_for_date(target_date: datetime.date) -> None:
 
     days, seconds = time_diff.days, time_diff.seconds
 
-    # sys.stderr.write(f"Waiting for {days} days and {seconds} seconds until {target_date}...\n")
-    time.sleep(days * 86400 + seconds)
-
-
-def python(code: str) -> str:
-    """
-    Executes Python code in a siloed environment using IPython and returns the output.
-
-    Parameters:
-        code (str): The Python code to execute.
-
-    Returns:
-        str: The output of the executed code.
-    """
-    from IPython.core.interactiveshell import InteractiveShell
-    from io import StringIO
-    import sys
-
-    shell = InteractiveShell()
-
-    old_stdout = sys.stdout
-    sys.stdout = out = StringIO()
-
-    try:
-        shell.run_cell(code)
-    except Exception as e:
-        return f"An error occurred: {e}"
-    finally:
-        sys.stdout = old_stdout
-
-    return out.getvalue()
+    await asyncio.sleep(days * 86400 + seconds)

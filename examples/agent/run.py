@@ -136,16 +136,16 @@ def typer_async_workaround():
 
 @typer_async_workaround()
 async def main(
-    goal: Annotated[str, typer.Option()],
+    goal: str,
     api_key: str = '<unset>',
-    tool_endpoint: Optional[list[str]] = None,
+    tools: Optional[list[str]] = None,
     max_iterations: Optional[int] = 10,
     verbose: bool = False,
     endpoint: str = "http://localhost:8080/v1/",
 ):
     client = AsyncOpenAI(api_key=api_key, base_url=endpoint)
 
-    tool_map, tools = await discover_tools(tool_endpoint or [], verbose)
+    tool_map, tools = await discover_tools(tools or [], verbose)
 
     sys.stdout.write(f'🛠️  {", ".join(tool_map.keys())}\n')
 

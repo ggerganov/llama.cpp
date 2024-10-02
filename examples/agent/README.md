@@ -48,8 +48,9 @@
 
   ```bash
   docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
+    --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
     --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
-    uv run fastify.py --port 8088 tools.py
+    uv run fastify.py --port 8088 tools
   ```
 
   > [!WARNING]
@@ -58,9 +59,14 @@
 - Run the agent with a given goal:
 
   ```bash
-  uv run examples/agent/run.py \
-    --tool-endpoint http://localhost:8088 \
-    --goal "What is the sum of 2535 squared and 32222000403?"
+  uv run examples/agent/run.py --tools http://localhost:8088 \
+    "What is the sum of 2535 squared and 32222000403?"
+
+  uv run examples/agent/run.py --tools http://localhost:8088 \
+    "What is the best BBQ join in Laguna Beach?"
+
+  uv run examples/agent/run.py --tools http://localhost:8088 \
+    "Search for, fetch and summarize the homepage of llama.cpp"
   ```
 
 ## TODO

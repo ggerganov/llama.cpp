@@ -1,14 +1,17 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "aiohttp",
 #     "fastapi",
-#     "uvicorn",
-#     "typer",
+#     "html2text",
 #     "ipython",
+#     "pyppeteer",
+#     "typer",
+#     "uvicorn",
 # ]
 # ///
 '''
-    Binds the functions of a python script as a FastAPI server.
+    Discovers and binds python script functions as a FastAPI server.
 '''
 import os
 import sys
@@ -45,7 +48,7 @@ def _load_module(f: str):
 def main(files: List[str], host: str = '0.0.0.0', port: int = 8000):
     app = fastapi.FastAPI()
 
-    for f in files:
+    def load_python(f):
         print(f'Binding functions from {f}')
         module = _load_module(f)
         for k in dir(module):
@@ -69,7 +72,15 @@ def main(files: List[str], host: str = '0.0.0.0', port: int = 8000):
             except Exception as e:
                 print(f'WARNING:    Failed to bind /{k}\n\t{e}')
 
-    print(f'INFO:     CWD = {os.getcwd()}')
+    for f in files:
+        if os.path.isdir(f):
+            for root, _, files in os.walk(f):
+                for file in files:
+                    if file.endswith('.py'):
+                        load_python(os.path.join(root, file))
+        else:
+            load_python(f)
+
     uvicorn.run(app, host=host, port=port)
 
 
