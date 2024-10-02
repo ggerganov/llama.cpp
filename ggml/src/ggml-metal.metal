@@ -812,30 +812,21 @@ kernel void kernel_ssm_scan_f32(
         constant  int64_t & n_head,
         constant  int64_t & n_group,
         constant  int64_t & n_seq_tokens,
-        constant  int64_t & n_seqs,
-        constant uint64_t & nb00,
         constant uint64_t & nb01,
         constant uint64_t & nb02,
         constant uint64_t & nb03,
-        constant uint64_t & nb10,
         constant uint64_t & nb11,
         constant uint64_t & nb12,
         constant uint64_t & nb13,
-        constant uint64_t & nb20,
         constant uint64_t & nb21,
         constant uint64_t & nb22,
-        constant uint64_t & nb30,
         constant uint64_t & nb31,
-        constant uint64_t & nb40,
         constant uint64_t & nb41,
         constant uint64_t & nb42,
         constant uint64_t & nb43,
-        constant uint64_t & nb50,
         constant uint64_t & nb51,
         constant uint64_t & nb52,
         constant uint64_t & nb53,
-        constant uint64_t & nb60,
-        constant uint64_t & nb70,
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {
@@ -843,12 +834,16 @@ kernel void kernel_ssm_scan_f32(
     const int64_t ir = tgpig.x; // current head
     const int64_t i3 = tgpig.y; // current seq
 
+    const uint64_t nb00 = sizeof(float);
+    const uint64_t nb10 = sizeof(float);
+    const uint64_t nb20 = sizeof(float);
+    const uint64_t nb60 = sizeof(float);
+
     const int64_t nc  = d_state;
     const int64_t nr  = d_inner;
     const int64_t nh  = n_head;
     const int64_t ng  = n_group;
     const int64_t n_t = n_seq_tokens;
-    const int64_t n_s = n_seqs;
 
     const int64_t s_off = d_inner * n_head * n_seq_tokens * n_seqs * sizeof(float);
 
@@ -864,7 +859,7 @@ kernel void kernel_ssm_scan_f32(
         device const float * B  = (device const float *) ((device const char *) src4 + (ir & (ng - 1))*nb41 + i2*nb42 + i3*nb43); // {d_state, ng, nt, ns}
         device const float * C  = (device const float *) ((device const char *) src5 + (ir & (ng - 1))*nb51 + i2*nb52 + i3*nb53); // {d_state, ng, nt, ns}
         device const float * D  = (device const float *) ((device const char *) src6 + ir*nb60); // {nh}
-        device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*sizeof(float)); // {dim, nh, nt, ns}
+        device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*nb00); // {dim, nh, nt, ns}
 
         const float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
         const float x_dt = x[0] * dt_soft_plus;
@@ -901,30 +896,21 @@ kernel void kernel_ssm_scan_f32_group(
         constant  int64_t & n_head,
         constant  int64_t & n_group,
         constant  int64_t & n_seq_tokens,
-        constant  int64_t & n_seqs,
-        constant uint64_t & nb00,
         constant uint64_t & nb01,
         constant uint64_t & nb02,
         constant uint64_t & nb03,
-        constant uint64_t & nb10,
         constant uint64_t & nb11,
         constant uint64_t & nb12,
         constant uint64_t & nb13,
-        constant uint64_t & nb20,
         constant uint64_t & nb21,
         constant uint64_t & nb22,
-        constant uint64_t & nb30,
         constant uint64_t & nb31,
-        constant uint64_t & nb40,
         constant uint64_t & nb41,
         constant uint64_t & nb42,
         constant uint64_t & nb43,
-        constant uint64_t & nb50,
         constant uint64_t & nb51,
         constant uint64_t & nb52,
         constant uint64_t & nb53,
-        constant uint64_t & nb60,
-        constant uint64_t & nb70,
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {
@@ -932,12 +918,16 @@ kernel void kernel_ssm_scan_f32_group(
     const int64_t ir = tgpig.y; // current head
     const int64_t i3 = tgpig.z; // current seq
 
+    const uint64_t nb00 = sizeof(float);
+    const uint64_t nb10 = sizeof(float);
+    const uint64_t nb20 = sizeof(float);
+    const uint64_t nb60 = sizeof(float);
+
     const int64_t nc  = d_state;
     const int64_t nr  = d_inner;
     const int64_t nh  = n_head;
     const int64_t ng  = n_group;
     const int64_t n_t = n_seq_tokens;
-    const int64_t n_s = n_seqs;
 
     const int64_t s_off = d_inner * n_head * n_seq_tokens * n_seqs * sizeof(float);
 
@@ -953,7 +943,7 @@ kernel void kernel_ssm_scan_f32_group(
         device const float * B  = (device const float *) ((device const char *) src4 + (ir & (ng - 1))*nb41 + i2*nb42 + i3*nb43); // {d_state, ng, nt, ns}
         device const float * C  = (device const float *) ((device const char *) src5 + (ir & (ng - 1))*nb51 + i2*nb52 + i3*nb53); // {d_state, ng, nt, ns}
         device const float * D  = (device const float *) ((device const char *) src6 + ir*nb60); // {nh}
-        device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*sizeof(float)); // {dim, nh, nt, ns}
+        device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*nb00); // {dim, nh, nt, ns}
 
         const float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
         const float x_dt = x[0] * dt_soft_plus;
