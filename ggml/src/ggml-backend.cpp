@@ -525,6 +525,10 @@ void * ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * na
 #include "ggml-cuda.h"
 #endif
 
+#ifdef GGML_USE_METAL
+#include "ggml-metal.h"
+#endif
+
 struct ggml_backend_registry {
     std::vector<ggml_backend_reg_t> backends;
     std::vector<ggml_backend_dev_t> devices;
@@ -533,10 +537,13 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_CUDA
         register_backend(ggml_backend_cuda_reg());
 #endif
+#ifdef GGML_USE_METAL
+        register_backend(ggml_backend_metal_reg());
+#endif
 
         register_backend(ggml_backend_cpu_reg());
 
-        // TODO: sycl, metal, vulkan, kompute, cann
+        // TODO: sycl, vulkan, kompute, cann
     }
 
     void register_backend(ggml_backend_reg_t reg) {
@@ -1193,19 +1200,19 @@ static const struct ggml_backend_device_i ggml_backend_cpu_device_i = {
 
 ////////////////////////
 
-static const char * ggml_backend_cpu_reg_get_name(ggml_backend_reg_t reg) {
+static const char * ggml_backend_cpu_reg_name(ggml_backend_reg_t reg) {
     return "CPU";
 
     GGML_UNUSED(reg);
 }
 
-static size_t ggml_backend_cpu_reg_get_device_count(ggml_backend_reg_t reg) {
+static size_t ggml_backend_cpu_reg_device_count(ggml_backend_reg_t reg) {
     return 1;
 
     GGML_UNUSED(reg);
 }
 
-static ggml_backend_dev_t ggml_backend_cpu_reg_get_device(ggml_backend_reg_t reg, size_t index) {
+static ggml_backend_dev_t ggml_backend_cpu_reg_device_get(ggml_backend_reg_t reg, size_t index) {
     GGML_ASSERT(index == 0);
 
     static ggml_backend_cpu_device_context ctx;
@@ -1222,9 +1229,9 @@ static ggml_backend_dev_t ggml_backend_cpu_reg_get_device(ggml_backend_reg_t reg
 }
 
 static const struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
-    /* .get_name         = */ ggml_backend_cpu_reg_get_name,
-    /* .get_device_count = */ ggml_backend_cpu_reg_get_device_count,
-    /* .get_device       = */ ggml_backend_cpu_reg_get_device,
+    /* .get_name         = */ ggml_backend_cpu_reg_name,
+    /* .device_count     = */ ggml_backend_cpu_reg_device_count,
+    /* .device_get       = */ ggml_backend_cpu_reg_device_get,
     /* .get_proc_address = */ NULL,
 };
 
