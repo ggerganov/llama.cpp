@@ -1020,13 +1020,6 @@ ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) 
     return ggml_backend_buffer_init(ggml_backend_cpu_buffer_type(), cpu_backend_buffer_i_from_ptr, ptr, size);
 }
 
-static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, void * user_data) {
-    return ggml_backend_cpu_init();
-
-    GGML_UNUSED(params);
-    GGML_UNUSED(user_data);
-}
-
 ////////////////////////
 
 static const char * ggml_backend_cpu_device_name(ggml_backend_dev_t dev) {
@@ -1123,7 +1116,7 @@ static bool ggml_backend_cpu_device_supports_buft(ggml_backend_dev_t dev, ggml_b
     GGML_UNUSED(dev);
 }
 
-struct ggml_backend_device_i ggml_backend_cpu_device_i = {
+static struct ggml_backend_device_i ggml_backend_cpu_device_i = {
     /* .get_name             = */ ggml_backend_cpu_device_name,
     /* .get_description      = */ ggml_backend_cpu_device_description,
     /* .get_memory           = */ ggml_backend_cpu_device_memory,
@@ -1170,7 +1163,7 @@ static ggml_backend_dev_t ggml_backend_cpu_reg_device_get(ggml_backend_reg_t reg
     GGML_UNUSED(index);
 }
 
-struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
+static struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
     /* .get_name         = */ ggml_backend_cpu_reg_name,
     /* .device_count     = */ ggml_backend_cpu_reg_device_count,
     /* .device_get       = */ ggml_backend_cpu_reg_device_get,
