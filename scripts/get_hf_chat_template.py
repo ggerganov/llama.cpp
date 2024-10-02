@@ -1,6 +1,6 @@
 '''
   Fetches the Jinja chat template of a HuggingFace model.
-  If a model 
+  If a model
 
   Syntax:
     get_hf_chat_template.py model_id [variant]
@@ -21,7 +21,7 @@ def main(args):
         raise ValueError("Please provide a model ID and an optional variant name")
     model_id = args[0]
     variant = None if len(args) < 2 else args[1]
-    
+
     try:
         # Use huggingface_hub library if available.
         # Allows access to gated models if the user has access and ran `huggingface-cli login`.
@@ -53,7 +53,7 @@ def main(args):
             for ct in chat_template
         }
         format_variants = lambda: ', '.join(f'"{v}"' for v in variants.keys())
-    
+
         if variant is None:
             if 'default' not in variants:
                 raise Exception(f'Please specify a chat template variant (one of {format_variants()})')
@@ -61,7 +61,7 @@ def main(args):
             print(f'Note: picked "default" chat template variant (out of {format_variants()})', file=sys.stderr)
         elif variant not in variants:
             raise Exception(f"Variant {variant} not found in chat template (found {format_variants()})")
-        
+
         print(variants[variant], end=None)
 
 

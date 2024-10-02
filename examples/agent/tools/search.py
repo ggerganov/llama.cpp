@@ -1,9 +1,10 @@
+from pydantic import Field
 import aiohttp
 import itertools
 import json
 import logging
 import os
-from typing import Dict, List
+from typing import Annotated, Dict, List
 import urllib.parse
 
 
@@ -28,18 +29,19 @@ _result_keys_by_type = {
 }
 
 
-async def brave_search(query: str, max_results: int = 10) -> List[Dict]:
+async def brave_search(*, query: str) -> List[Dict]:
     '''
     Search the Brave Search API for the specified query.
 
     Parameters:
         query (str): The query to search for.
-        max_results (int): The maximum number of results to return (defaults to 10)
 
     Returns:
         List[Dict]: The search results.
     '''
     logging.debug('[brave_search] Searching for %s', query)
+
+    max_results = 10
 
     url = f'https://api.search.brave.com/res/v1/web/search?q={urllib.parse.quote(query)}'
     headers = {
