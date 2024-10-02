@@ -1693,11 +1693,13 @@ static void ggml_metal_encode_node(
                 const int64_t n_seq_tokens = ne11;
                 const int64_t n_seqs       = ne13;
 
+                id<MTLComputePipelineState> pipeline = nil;
+
                 if (ne30 == 1) {
                     // Mamba-2
-                    id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32_GROUP].pipeline;
+                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32_GROUP].pipeline;
                 } else {
-                    id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32].pipeline;
+                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32].pipeline;
                 }
 
                 [encoder setComputePipelineState:pipeline];
