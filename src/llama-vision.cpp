@@ -54,6 +54,22 @@ struct clip_image_f32 {
 using clip_image_f32_batch = std::vector<clip_image_f32>;
 using clip_image_f8_batch  = std::vector<clip_image_u8>;
 
+clip_projector_type projector_type_from_name(std::string & name) {
+    if (name == "mlp") {
+        return CLIP_PROJECTOR_TYPE_MLP;
+    }
+    return CLIP_PROJECTOR_TYPE_UNKNOWN;
+}
+
+mm_patch_merge mm_patch_merge_from_name(std::string & name) {
+    if (name == "flat") {
+        return MM_PATCH_MERGE_FLAT;
+    } else if (name == "spatial_unpad") {
+        return MM_PATCH_MERGE_SPATIAL_UNPAD;
+    }
+    return MM_PATCH_MERGE_UNKNOWN;
+}
+
 int clip_n_patches(const clip_context & ctx) {
     auto & hparams = ctx.model->hparams;
     int n_patches = (hparams.image_size / hparams.patch_size) * (hparams.image_size / hparams.patch_size);
@@ -456,7 +472,7 @@ static ggml_cgraph * clip_image_build_graph(clip_context & ctx, int batch_size, 
     }
 
     // loop over layers
-    for (int il = 0; il < (int)hparams.n_layer - 2; il++) {
+    for (int il = 0; il < (int)hparams.n_layer + hparams.select_layer; il++) {
         struct ggml_tensor * cur = embeddings;
 
         // layernorm1

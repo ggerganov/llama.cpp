@@ -471,7 +471,7 @@ class Model:
                     text_config = AutoConfig.from_pretrained(text_config["_name_or_path"]).to_dict()
                 hparams = {**text_config, **hparams}
             return hparams
-        
+
     @staticmethod
     def load_preprocessor_config(dir_model: Path):
         file_path = dir_model / "preprocessor_config.json"
@@ -1590,7 +1590,7 @@ class LlamaModel(Model):
 
         # For vision model
         if self.vparams is not None and self.preprocessor_config is not None:
-            self.gguf_writer.add_vision_type("clip")
+            self.gguf_writer.add_vision_type("clip-vit")
             self.gguf_writer.add_vision_image_size(self.vparams["image_size"])
             self.gguf_writer.add_vision_patch_size(self.vparams["patch_size"])
             self.gguf_writer.add_vision_clip_architecture("llava")
@@ -1600,6 +1600,8 @@ class LlamaModel(Model):
             self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
             self.gguf_writer.add_vision_clip_image_mean(self.preprocessor_config["image_mean"])
             self.gguf_writer.add_vision_clip_image_std(self.preprocessor_config["image_std"])
+            self.gguf_writer.add_vision_clip_select_layer(self.hparams["vision_feature_layer"])
+            self.gguf_writer.add_vision_clip_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
             max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
             self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
             # TODO: should not hardcode these, but they are currently missing from config.json

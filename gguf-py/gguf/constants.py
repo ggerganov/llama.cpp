@@ -173,13 +173,15 @@ class Keys:
         MIDDLE_ID            = "tokenizer.ggml.middle_token_id"
         EOT_ID               = "tokenizer.ggml.eot_token_id"
         EOM_ID               = "tokenizer.ggml.eom_token_id"
+        IMAGE_START_ID       = "tokenizer.ggml.image_start_token_id"
+        IMAGE_END_ID         = "tokenizer.ggml.image_end_token_id"
 
     class Adapter:
         TYPE       = "adapter.type"
         LORA_ALPHA = "adapter.lora.alpha"
 
     class Vision:
-        # only support vision.type = "clip" for now
+        # only support vision.type = "clip-vit" for now
         TYPE                = "vision.type"
         IMAGE_SIZE          = "vision.image_size"
         PATCH_SIZE          = "vision.patch_size"
@@ -196,7 +198,10 @@ class Keys:
             PROJECTION_DIM      = "vision.clip.projection_dim"
             USE_GELU            = "vision.clip.use_gelu"
             MAX_POS_EMBEDDING   = "vision.clip.max_position_embeddings"
+            MAX_SLICES          = "vision.clip.max_slices"
             PROJECTOR_TYPE      = "vision.clip.projector_type"
+            SELECT_LAYER        = "vision.clip.select_layer"
+            PATCH_MERGE_TYPE    = "vision.clip.patch_merge_type"
             HEAD_COUNT          = "vision.clip.attention.head_count"
             LAYERNORM_EPS       = "vision.clip.attention.layer_norm_epsilon"
 
@@ -1428,6 +1433,11 @@ class PoolingType(IntEnum):
 
 class CLIPProjectorType(Enum):
     MLP = 'mlp'
+
+
+class CLIPPatchMergeType(Enum):
+    FLAT = 'flat'
+    SPATIAL_UNPAD = 'spatial_unpad'
 
 
 class GGMLQuantizationType(IntEnum):

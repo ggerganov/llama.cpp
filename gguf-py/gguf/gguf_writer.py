@@ -27,6 +27,7 @@ from .constants import (
     PoolingType,
     TokenType,
     CLIPProjectorType,
+    CLIPPatchMergeType,
 )
 
 from .quants import quant_shape_from_byte_shape
@@ -847,6 +848,15 @@ class GGUFWriter:
 
     def add_vision_clip_projector_type(self, value: CLIPProjectorType) -> None:
         self.add_string(Keys.Vision.Clip.PROJECTOR_TYPE, value.value)
+
+    def add_vision_clip_max_slices(self, value: int) -> None:
+        self.add_uint32(Keys.Vision.Clip.MAX_SLICES, value)
+
+    def add_vision_clip_select_layer(self, value: int) -> None:
+        self.add_int32(Keys.Vision.Clip.SELECT_LAYER, value)
+
+    def add_vision_clip_patch_merge_type(self, value: CLIPPatchMergeType) -> None:
+        self.add_string(Keys.Vision.Clip.PATCH_MERGE_TYPE, value.value)
 
     def add_vision_clip_layer_norm_epsilon(self, value: float) -> None:
         self.add_float32(Keys.Vision.Clip.LAYERNORM_EPS, value)

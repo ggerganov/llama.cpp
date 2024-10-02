@@ -401,7 +401,10 @@ enum llm_kv {
     LLM_KV_VISION_CLIP_PROJECTION_DIM,
     LLM_KV_VISION_CLIP_USE_GELU,
     LLM_KV_VISION_CLIP_MAX_POS_EMBD,
+    LLM_KV_VISION_CLIP_MAX_SLICES,
     LLM_KV_VISION_CLIP_PROJECTOR_TYPE,
+    LLM_KV_VISION_CLIP_SELECT_LAYER,
+    LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE,
     LLM_KV_VISION_CLIP_HEAD_COUNT,
     LLM_KV_VISION_CLIP_LAYERNORM_EPS,
 };
@@ -527,7 +530,10 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_VISION_CLIP_PROJECTION_DIM,      "vision.clip.projection_dim"               },
     { LLM_KV_VISION_CLIP_USE_GELU,            "vision.clip.use_gelu"                     },
     { LLM_KV_VISION_CLIP_MAX_POS_EMBD,        "vision.clip.max_position_embeddings"      },
+    { LLM_KV_VISION_CLIP_MAX_SLICES,          "vision.clip.max_slices"                   },
     { LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      "vision.clip.projector_type"               },
+    { LLM_KV_VISION_CLIP_SELECT_LAYER,        "vision.clip.select_layer"                 },
+    { LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE,    "vision.clip.patch_merge_type"             },
     { LLM_KV_VISION_CLIP_HEAD_COUNT,          "vision.clip.attention.head_count"         },
     { LLM_KV_VISION_CLIP_LAYERNORM_EPS,       "vision.clip.attention.layer_norm_epsilon" },
 };
@@ -6227,9 +6233,8 @@ static void llm_load_hparams(
     auto & vparams = model.clip.hparams;
     std::string vision_type;
     ml.get_key(LLM_KV_VISION_TYPE, vision_type, false);
-    if (vision_type == "clip") {
+    if (vision_type == "clip-vit") {
         model.has_vision = true;
-        std::string proj_type;
         ml.get_key(LLM_KV_VISION_IMAGE_SIZE,               vparams.image_size,     true);
         ml.get_key(LLM_KV_VISION_PATCH_SIZE,               vparams.patch_size,     true);
         ml.get_key_or_arr(LLM_KV_VISION_IMAGE_MEAN,        vparams.image_mean, 3,  true);
@@ -6239,18 +6244,28 @@ static void llm_load_hparams(
         ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, vparams.n_intermediate, true);
         ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          vparams.n_head,         true);
         ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       vparams.eps,            true);
-        ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      proj_type,              true);
-        if (proj_type == "mlp") {
-            vparams.proj_type = CLIP_PROJECTOR_TYPE_MLP;
-        } else {
-            throw std::runtime_error(format("unsupported clip projector type: %s", proj_type.c_str()));
+        ml.get_key(LLM_KV_VISION_CLIP_SELECT_LAYER,        vparams.select_layer,   true);
+        {
+            std::string name;
+            ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE, name, true);
+            vparams.proj_type = projector_type_from_name(name);
+            if (vparams.proj_type == CLIP_PROJECTOR_TYPE_UNKNOWN) {
+                throw std::runtime_error(format("unsupported clip projector type: %s", name.c_str()));
+            }
         }
-        std::string arch;
-        ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
-        for (auto & it : VISION_ARCH_NAMES) {
-            if (arch == it.second) {
-                vparams.arch = it.first;
-                break;
+        {
+            std::string name;
+            ml.get_key(LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE, name, false);
+            vparams.mm_patch_merge_type = mm_patch_merge_from_name(name);
+        }
+        {
+            std::string arch;
+            ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
+            for (auto & it : VISION_ARCH_NAMES) {
+                if (arch == it.second) {
+                    vparams.arch = it.first;
+                    break;
+                }
             }
         }
     } else if (!vision_type.empty()) {

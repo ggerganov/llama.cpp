@@ -11,10 +11,12 @@ enum vision_arch {
 };
 
 enum clip_projector_type {
+    CLIP_PROJECTOR_TYPE_UNKNOWN,
     CLIP_PROJECTOR_TYPE_MLP,
 };
 
 enum mm_patch_merge {
+    MM_PATCH_MERGE_UNKNOWN,
     MM_PATCH_MERGE_FLAT,
     MM_PATCH_MERGE_SPATIAL_UNPAD,
 };
@@ -30,11 +32,12 @@ struct clip_hparams {
     uint32_t n_head;
     uint32_t n_layer;
     uint32_t max_pos_embd;
+    int32_t select_layer = 0;
     bool use_gelu = false;
 
     float eps;
 
-    clip_projector_type proj_type = CLIP_PROJECTOR_TYPE_MLP;
+    clip_projector_type proj_type = CLIP_PROJECTOR_TYPE_UNKNOWN;
     mm_patch_merge mm_patch_merge_type = MM_PATCH_MERGE_FLAT;
 
     std::array<float, 3> image_mean;
@@ -112,6 +115,8 @@ struct clip_context {
     std::vector<float> output; // size == n_output * n_embd
 };
 
+mm_patch_merge mm_patch_merge_from_name(std::string & name);
+clip_projector_type projector_type_from_name(std::string & name);
 int clip_n_patches(const clip_context & ctx);
 int clip_n_mmproj_embd(const clip_context & ctx);
 int clip_n_embd(const clip_context & ctx);
