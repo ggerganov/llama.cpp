@@ -21334,6 +21334,63 @@ int32_t llama_detokenize(
     return llama_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
 }
 
+int32_t llama_token_inp_embd(struct llama_context * ctx, llama_token * tokens, int32_t n_tokens, float * embeddings) {
+    int32_t n_embd = llama_n_embd(&ctx->model);
+    const struct llama_hparams & hparams = ctx->model.hparams;
+    llama_ubatch batch = {};
+    batch.token = tokens;
+    batch.n_tokens = n_tokens;
+    llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
+    ggml_backend_cpu_set_n_threads(ctx->backend_cpu, ctx->cparams.n_threads);
+    if (ctx->threadpool) {
+        ggml_backend_cpu_set_threadpool(ctx->backend_cpu, ctx->threadpool);
+    }
+
+    ggml_init_params params = ggml_init_params{
+        GGML_DEFAULT_GRAPH_SIZE * ggml_tensor_overhead() + ggml_graph_overhead(),
+        nullptr,
+        true
+    };
+
+    ggml_context * ctx0 = ggml_init(params);
+    if (!ctx0) {
+        return -1;
+    }
+
+    ggml_tensor * output = llm_build_inp_embd(
+        ctx0,
+        *ctx,
+        hparams,
+        batch,
+        ctx->model.tok_embd,
+        cb
+    );
+
+    ggml_backend_buffer_type_t buffer_type = ggml_backend_get_default_buffer_type(ctx->backend_cpu);
+    ggml_gallocr_t graph_allocator = ggml_gallocr_new(buffer_type);
+    ggml_cgraph * gf = ggml_new_graph(ctx0);
+
+    ggml_set_output(output);
+    ggml_build_forward_expand(gf, output);
+
+    if (!ggml_gallocr_reserve(graph_allocator, gf) || !ggml_gallocr_alloc_graph(graph_allocator, gf)) {
+        ggml_gallocr_free(graph_allocator);
+        ggml_free(ctx0);
+        return -1;
+    }
+
+    ggml_backend_tensor_set(ctx->inp_tokens, tokens, 0, n_tokens * sizeof(int32_t));
+
+    ggml_backend_graph_compute(ctx->backend_cpu, gf);
+
+    ggml_backend_tensor_get(output, embeddings, 0, n_tokens * n_embd * sizeof(float));
+
+    ggml_gallocr_free(graph_allocator);
+    ggml_free(ctx0);
+
+    return 0;
+}
+
 //
 // chat templates
 //
