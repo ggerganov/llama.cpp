@@ -25,17 +25,9 @@
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q4_0.gguf \
     --chat-template "$( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )"
 
-  ./llama-server --jinja -fa --verbose \
-    -m ~/Downloads/functionary-small-v3.2.Q4_0.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )"
-
   # Llama 3.2 3B (poor adherence)
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K_L.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
-
-  ./llama-server --jinja -fa --verbose \
-    -m ~/Downloads/Llama-3.2-3B-Instruct-Q6_K_L.gguf \
     --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
 
   # Llama 3.2 1B (very poor adherence)
