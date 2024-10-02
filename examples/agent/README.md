@@ -44,13 +44,13 @@
     --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
   ```
 
-- Run some tools inside a docker container (check http://localhost:8088/docs once running):
+- Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container (check http://localhost:8088/docs once running):
 
   ```bash
   docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
     --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
     --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
-    uv run fastify.py --port 8088 tools
+    uv run fastify.py --port 8088 tools/
   ```
 
   > [!WARNING]

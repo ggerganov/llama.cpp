@@ -18,7 +18,7 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolMess
 from pydantic import BaseModel
 import sys
 import typer
-from typing import Annotated, Optional
+from typing import Optional
 import urllib.parse
 
 class OpenAPIMethod:

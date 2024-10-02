@@ -1,7 +1,7 @@
 import asyncio
 import datetime
+import logging
 from pydantic import BaseModel
-import sys
 from typing import Optional
 
 class Duration(BaseModel):
@@ -40,12 +40,12 @@ class Duration(BaseModel):
 class WaitForDuration(BaseModel):
     duration: Duration
 
-    async def __call__(self):
-        sys.stderr.write(f"Waiting for {self.duration}...\n")
-        await asyncio.sleep(self.duration.get_total_seconds)
-
 async def wait_for_duration(duration: Duration) -> None:
-    'Wait for a certain amount of time before continuing.'
+    '''
+        Wait for a certain amount of time before continuing.
+    '''
+
+    logging.debug(f"[wait_for_duration] Waiting for %s...", duration.get_total_seconds)
     await asyncio.sleep(duration.get_total_seconds)
 
 async def wait_for_date(target_date: datetime.date) -> None:
@@ -55,9 +55,10 @@ async def wait_for_date(target_date: datetime.date) -> None:
     '''
 
     current_date = datetime.date.today()
-
     if target_date < current_date:
         raise ValueError("Target date cannot be in the past.")
+
+    logging.debug(f"[wait_for_date] Waiting until %s (current date = %s)...", target_date, current_date)
 
     time_diff = datetime.datetime.combine(target_date, datetime.time.min) - datetime.datetime.combine(current_date, datetime.time.min)
 

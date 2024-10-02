@@ -12,15 +12,29 @@
 # ///
 '''
     Discovers and binds python script functions as a FastAPI server.
+
+    Usage (docker isolation - with network access):
+
+        docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
+            --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
+            --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
+            uv run fastify.py --port 8088 tools/
+
+    Usage (non-siloed, DANGEROUS):
+
+        uv run examples/agent/fastify.py --port 8088 examples/agent/tools
+
+        uv run examples/agent/fastify.py --port 8088 examples/agent/tools/python.py
 '''
+import fastapi
+import importlib.util
+import logging
 import os
-import sys
-import fastapi, uvicorn
 from pathlib import Path
+import sys
 import typer
 from typing import List
-
-import importlib.util
+import uvicorn
 
 
 def _load_source_as_module(source):
@@ -45,11 +59,13 @@ def _load_module(f: str):
         return importlib.import_module(f)
 
 
-def main(files: List[str], host: str = '0.0.0.0', port: int = 8000):
+def main(files: List[str], host: str = '0.0.0.0', port: int = 8000, verbose: bool = False):
+    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
+
     app = fastapi.FastAPI()
 
     def load_python(f):
-        print(f'Binding functions from {f}')
+        logging.info(f'Binding functions from {f}')
         module = _load_module(f)
         for k in dir(module):
             if k.startswith('_'):
@@ -66,11 +82,12 @@ def main(files: List[str], host: str = '0.0.0.0', port: int = 8000):
             if vt.__module__ == 'langchain_core.tools' and vt.__name__.endswith('Tool') and hasattr(v, 'func') and callable(func := getattr(v, 'func')):
                 v = func
 
-            print(f'INFO:     Binding /{k}')
             try:
                 app.post('/' + k)(v)
+                logging.info(f'Bound /{k}')
             except Exception as e:
-                print(f'WARNING:    Failed to bind /{k}\n\t{e}')
+                logging.warning(f'Failed to bind /{k}\n\t{e}')
+
 
     for f in files:
         if os.path.isdir(f):

@@ -1,10 +1,11 @@
 from IPython.core.interactiveshell import InteractiveShell
 from io import StringIO
+import logging
 import sys
 
 
 def python(code: str) -> str:
-    """
+    '''
     Execute Python code in a siloed environment using IPython and returns the output.
 
     Parameters:
@@ -12,7 +13,8 @@ def python(code: str) -> str:
 
     Returns:
         str: The output of the executed code.
-    """
+    '''
+    logging.debug('[python] Executing %s', code)
     shell = InteractiveShell()
 
     old_stdout = sys.stdout
@@ -21,7 +23,8 @@ def python(code: str) -> str:
     try:
         shell.run_cell(code)
     except Exception as e:
-        return f"An error occurred: {e}"
+        logging.debug('[python] Execution failed: %s\nCode: %s', e, code)
+        return f'An error occurred: {e}'
     finally:
         sys.stdout = old_stdout
 
