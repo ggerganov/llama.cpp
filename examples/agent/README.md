@@ -48,7 +48,7 @@
   > [!WARNING]
   > The command above gives tools (and your agent) access to the web (and read-only access to `examples/agent/**`. If you're concerned about unleashing a rogue agent on the web, please explore setting up proxies for your docker (and contribute back!)
 
-- Run the agent with a given goal:
+- Run the agent with a given goal
 
   ```bash
   uv run examples/agent/run.py --tools http://localhost:8088 \
@@ -59,6 +59,15 @@
 
   uv run examples/agent/run.py --tools http://localhost:8088 \
     "Search for, fetch and summarize the homepage of llama.cpp"
+  ```
+
+- To compare the above results w/ OpenAI's tool usage behaviour, just add `--openai` to the agent invocation (other providers can easily be added, just use the `--endpoint`, `--api-key`, and `--model` flags)
+
+  ```bash
+  export OPENAI_API_KEY=...
+  uv run examples/agent/run.py --tools http://localhost:8088 \
+    "Search for, fetch and summarize the homepage of llama.cpp" \
+    --openai
   ```
 
 ## TODO
