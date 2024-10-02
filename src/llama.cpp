@@ -32,6 +32,14 @@
 #  include "ggml-metal.h"
 #endif
 
+#ifndef __AMX_INT8__
+#undef GGML_USE_AMX
+#endif
+
+#ifdef GGML_USE_AMX
+#  include "ggml-amx.h"
+#endif
+
 // TODO: replace with ggml API call
 #define QK_K 256
 
@@ -3342,6 +3350,9 @@ struct llama_context {
 #ifdef GGML_USE_METAL
     ggml_backend_t backend_metal = nullptr;
 #endif
+#ifdef GGML_USE_AMX
+    ggml_backend_t backend_amx = nullptr;
+#endif
 #ifdef GGML_USE_BLAS
     ggml_backend_t backend_blas = nullptr;
 #endif
@@ -3508,6 +3519,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     }
 #elif defined(GGML_USE_CANN)
     buft = ggml_backend_cann_buffer_type(local_gpu);
+#elif defined(GGML_USE_AMX)
+    buft = ggml_backend_amx_buffer_type();
 #endif
 
     if (buft == nullptr) {
@@ -3580,6 +3593,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 #else
     return 1;
 #endif
+
     GGML_UNUSED(model);
     GGML_UNUSED(local_device);
 }
@@ -5130,7 +5144,12 @@ struct llama_model_loader {
             } else {
                 GGML_ASSERT(weight->idx < files.size());
                 const auto & file = files.at(weight->idx);
-                if (ggml_backend_buffer_is_host(cur->buffer)) {
+#if defined(GGML_USE_AMX)
+                const bool can_use_mmap = false;
+#else
+                const bool can_use_mmap = true;
+#endif
+                if (ggml_backend_buffer_is_host(cur->buffer) && can_use_mmap) {
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(cur->data, n_size);
                     if (check_tensors) {
@@ -17030,6 +17049,13 @@ static void llama_graph_compute(
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
+
+#ifdef GGML_USE_AMX
+    if (lctx.backend_amx != nullptr) {
+        ggml_backend_amx_set_n_threads(lctx.backend_amx, n_threads);
+    }
+#endif
+
 #ifdef GGML_USE_BLAS
     if (lctx.backend_blas != nullptr) {
         ggml_backend_blas_set_n_threads(lctx.backend_blas, n_threads);
@@ -18922,6 +18948,11 @@ struct llama_model_params llama_model_default_params() {
     result.n_gpu_layers = 999;
 #endif
 
+#ifdef GGML_USE_AMX
+    // by default offload all layers to AMX
+    result.n_gpu_layers = 999;
+#endif
+
     return result;
 }
 
@@ -19381,6 +19412,18 @@ struct llama_context * llama_new_context_with_model(
             }
             ctx->backends.push_back(backend);
         }
+    }
+#endif
+
+#if defined(GGML_USE_AMX)
+    {
+        ctx->backend_amx = ggml_backend_amx_init();
+        if (ctx->backend_amx == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to initialize AMX backend\n", __func__);
+            llama_free(ctx);
+            return nullptr;
+        }
+        ctx->backends.push_back(ctx->backend_amx);
     }
 #endif
 
@@ -21688,6 +21731,7 @@ const char * llama_print_system_info(void) {
     s += "AVX512_VBMI = " + std::to_string(ggml_cpu_has_avx512_vbmi()) + " | ";
     s += "AVX512_VNNI = " + std::to_string(ggml_cpu_has_avx512_vnni()) + " | ";
     s += "AVX512_BF16 = " + std::to_string(ggml_cpu_has_avx512_bf16()) + " | ";
+    s += "AMX_INT8 = "    + std::to_string(ggml_cpu_has_amx_int8())    + " | ";
     s += "FMA = "         + std::to_string(ggml_cpu_has_fma())         + " | ";
     s += "NEON = "        + std::to_string(ggml_cpu_has_neon())        + " | ";
     s += "SVE = "         + std::to_string(ggml_cpu_has_sve())         + " | ";
