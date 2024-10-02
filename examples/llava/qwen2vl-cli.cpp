@@ -19,12 +19,21 @@
 
 static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
+    std::vector<llama_pos> pos;
     for (int i = 0; i < N; i += n_batch) {
         int n_eval = (int) tokens.size() - i;
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval, *n_past, 0))) {
+        auto batch = llama_batch_get_one(&tokens[i], n_eval, *n_past, 0);
+        // TODO: add mrope pos ids somewhere else
+        pos.resize(batch.n_tokens * 3);
+        for (int j = 0; j < batch.n_tokens * 3; j ++) {
+            pos[j] = j % batch.n_tokens;
+        }
+        batch.pos = pos.data();
+        
+        if (llama_decode(ctx_llama, batch)) {
             LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
         }
@@ -296,9 +305,12 @@ static void tmp_test_conv2d_reshape(struct llava_context * ctx_llava, gpt_params
     ggml_set_input(inp_raw);
 
     auto image_pixels = batch_size * image_size_width * image_size_height * 3;
+    auto one_ch = image_size_width * image_size_height;
     std::vector<float> dummy_img;
     dummy_img.resize(image_pixels);
-    std::fill(dummy_img.begin(), dummy_img.end(), 0.1);
+    std::fill(dummy_img.begin(), dummy_img.begin() + one_ch, 0.1);
+    std::fill(dummy_img.begin() + one_ch, dummy_img.begin() + one_ch * 2, 0.2);
+    std::fill(dummy_img.begin() + one_ch * 2, dummy_img.end(), 0.3);
     memcpy(inp_raw->data, dummy_img.data(), image_pixels * ggml_element_size(inp_raw));
 
     int patch_size = 14;
@@ -343,6 +355,105 @@ static void tmp_test_conv2d_reshape(struct llava_context * ctx_llava, gpt_params
         (float *) ggml_get_data(inp), 
         sizeof(float) * num_patches * hidden_size * batch_size);
     ggml_free(ctx0);
+
+    std::ofstream outFile("conv2d.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
+
+        outFile.close();
+        std::cout << "Data successfully written to conv2d.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+}
+
+
+static void tmp_test_4d_reshape(struct llava_context * ctx_llava, gpt_params * params) {
+    int image_size_width = 32;
+    int image_size_height = 32;
+    int batch_size = 1;
+
+    static size_t buf_size = 512u*1024*1024;
+    static void * buf = malloc(buf_size);
+
+    struct ggml_init_params init_params = {
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf,
+        /*.no_alloc   =*/ false,
+    };
+
+    struct ggml_context * ctx0 = ggml_init(init_params);
+    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+
+    struct ggml_tensor * inp_raw = ggml_new_tensor_4d(
+        ctx0, GGML_TYPE_F32, image_size_width, image_size_height, 8, batch_size);
+    ggml_set_name(inp_raw, "inp_raw");
+    ggml_set_input(inp_raw);
+
+    auto image_pixels = batch_size * image_size_width * image_size_height * 8;
+    auto one_ch = image_size_width * image_size_height;
+    std::vector<float> dummy_img;
+    dummy_img.resize(image_pixels);
+    for (int i = 0; i < 8; i++)
+    {
+        // std::fill(
+        //     dummy_img.begin() + one_ch * i, 
+        //     dummy_img.begin() + one_ch * (i + 1), 
+        //     0.1 * i
+        // );
+        for (size_t y = 0; y < image_size_height; y++)
+        {
+            for (size_t x = 0; x < image_size_width; x++)
+            {
+                dummy_img[one_ch * i + image_size_width * y + x] = i * (image_size_width * y + x) / (float)(32 * 32);
+            }
+            
+        }
+        
+    }    
+    memcpy(inp_raw->data, dummy_img.data(), image_pixels * ggml_element_size(inp_raw));
+
+    int patch_size = 1;
+    int hidden_size = 8;
+    int patch_w = image_size_width / patch_size;
+    int patch_h = image_size_height / patch_size;
+    int num_patches = (image_size_width / patch_size) * (image_size_height / patch_size);
+
+    // inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
+    // inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));  // swap axis 0 & 1, ignore axis 3 which is empty in this tensor
+    // auto inp = ggml_cont(ctx0, ggml_permute(ctx0, inp_raw, 2, 0, 1, 3));  // [w, h, c, b] -> [c, w, h, b]
+    auto inp = ggml_cont(ctx0, ggml_permute(ctx0, inp_raw, 1, 2, 0, 3));  // [w, h, c, b] -> [c, w, h, b] [(0-->1), (1-->2), (2-->0), (3-->3)]
+    inp = ggml_reshape_4d(
+        ctx0, inp, 
+        hidden_size * 2, patch_w / 2, patch_h, batch_size);
+    inp = ggml_reshape_4d(
+        ctx0, inp, 
+        hidden_size * 2, patch_w / 2, 2, batch_size * (patch_h / 2));
+    inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 0, 2, 1, 3));
+    inp = ggml_reshape_2d(
+        ctx0, inp, 
+        hidden_size * 4, (patch_w / 2) * batch_size * (patch_h / 2));
+    
+    ggml_build_forward_expand(gf, inp);
+    ggml_graph_compute_with_ctx(ctx0, gf, 2);
+
+    std::vector<float> embd;
+    embd.resize(num_patches * hidden_size * batch_size);
+    memcpy(
+        embd.data(), 
+        (float *) ggml_get_data(inp), 
+        sizeof(float) * num_patches * hidden_size * batch_size);
+    ggml_free(ctx0);
+
+    std::ofstream outFile("reshape_4d.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
+
+        outFile.close();
+        std::cout << "Data successfully written to reshape_4d.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
 }
 
 
@@ -582,11 +693,11 @@ int main(int argc, char ** argv) {
         auto ctx_llava = llava_init_context(&params, model);
 
         // process the prompt
-        // tmp_test_conv2d_reshape(ctx_llava, &params);
+        tmp_test_4d_reshape(ctx_llava, &params);
         // tmp_test_rope(ctx_llava, &params);
         // tmp_test_mrope(ctx_llava, &params);
-        tmp_test_mrope_2d(ctx_llava, &params);
-        process_prompt(ctx_llava, nullptr, &params, params.prompt);
+        // tmp_test_mrope_2d(ctx_llava, &params);
+        // process_prompt(ctx_llava, nullptr, &params, params.prompt);
 
         llama_perf_context_print(ctx_llava->ctx_llama);
         ctx_llava->model = NULL;
