@@ -2954,11 +2954,6 @@ static void ggml_backend_cuda_device_props(ggml_backend_dev_t dev, ggml_backend_
     };
 }
 
-static ggml_backend_reg_t ggml_backend_cuda_device_reg(ggml_backend_dev_t dev) {
-    GGML_UNUSED(dev);
-    return ggml_backend_cuda_reg();
-}
-
 static ggml_backend_t ggml_backend_cuda_device_init(ggml_backend_dev_t dev, const char * params) {
     GGML_UNUSED(params);
     ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *)dev->context;
@@ -3262,7 +3257,6 @@ static ggml_backend_device_i ggml_backend_cuda_device_interface = {
     /* .get_memory              = */ ggml_backend_cuda_device_memory,
     /* .get_type                = */ ggml_backend_cuda_device_type,
     /* .get_props               = */ ggml_backend_cuda_device_props,
-    /* .get_backend_reg         = */ ggml_backend_cuda_device_reg,
     /* .init_backend            = */ ggml_backend_cuda_device_init,
     /* .buffer_type             = */ ggml_backend_cuda_device_buffer_type,
     /* .host_buffer_type        = */ ggml_backend_cuda_device_host_buffer_type,
@@ -3291,7 +3285,7 @@ static size_t ggml_backend_cuda_reg_get_device_count(ggml_backend_reg_t reg) {
     return ctx->devices.size();
 }
 
-static ggml_backend_dev_t ggml_backend_cuda_reg_get_device(ggml_backend_reg_t reg, size_t index) {
+static ggml_backend_dev_t ggml_backend_cuda_reg_device_get(ggml_backend_reg_t reg, size_t index) {
     ggml_backend_cuda_reg_context * ctx = (ggml_backend_cuda_reg_context *)reg->context;
     GGML_ASSERT(index < ctx->devices.size());
     return ctx->devices[index];
@@ -3319,19 +3313,20 @@ static void ggml_backend_cuda_reg_set_log_callback(ggml_backend_reg_t reg, ggml_
 static ggml_backend_reg_i ggml_backend_cuda_reg_interface = {
     /* .get_name          = */ ggml_backend_cuda_reg_name,
     /* .device_count      = */ ggml_backend_cuda_reg_get_device_count,
-    /* .device_get        = */ ggml_backend_cuda_reg_get_device,
+    /* .device_get        = */ ggml_backend_cuda_reg_device_get,
     /* .get_proc_address  = */ ggml_backend_cuda_get_proc_address,
     /* .set_log_callback  = */ ggml_backend_cuda_reg_set_log_callback,
 };
 
 // backend registry
 ggml_backend_reg_t ggml_backend_cuda_reg() {
-    static ggml_backend_reg_t reg = nullptr;
+    static ggml_backend_reg reg;
+    static bool initialized = false;
 
     {
         static std::mutex mutex;
         std::lock_guard<std::mutex> lock(mutex);
-        if (!reg) {
+        if (!initialized) {
             ggml_backend_cuda_reg_context * ctx = new ggml_backend_cuda_reg_context;
 
             for (int i = 0; i < ggml_cuda_info().device_count; i++) {
@@ -3346,19 +3341,22 @@ ggml_backend_reg_t ggml_backend_cuda_reg() {
 
                 ggml_backend_dev_t dev = new ggml_backend_device {
                     /* .interface = */ ggml_backend_cuda_device_interface,
+                    /* .reg       = */ &reg,
                     /* .context   = */ dev_ctx
                 };
                 ctx->devices.push_back(dev);
             }
 
-            reg = new ggml_backend_reg {
+            reg = ggml_backend_reg {
                 /* .interface = */ ggml_backend_cuda_reg_interface,
                 /* .context   = */ ctx
             };
         }
+
+        initialized = true;
     }
 
-    return reg;
+    return &reg;
 }
 
 ggml_backend_t ggml_backend_cuda_init(int device) {

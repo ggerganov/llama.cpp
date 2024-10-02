@@ -166,9 +166,6 @@ extern "C" {
         // device properties
         void (*get_props)(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props);
 
-        // get the backend (reg) associated with this device
-        ggml_backend_reg_t (*get_backend_reg)(ggml_backend_dev_t dev);
-
         // backend (stream) initialization
         ggml_backend_t (*init_backend)(ggml_backend_dev_t dev, const char * params);
 
@@ -200,6 +197,7 @@ extern "C" {
 
     struct ggml_backend_device {
         struct ggml_backend_device_i iface;
+        ggml_backend_reg_t reg;
         void * context;
     };
 
