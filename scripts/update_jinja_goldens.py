@@ -10,7 +10,7 @@
   Fetches the Jinja2 templates of a few known models and use them to generate prompt goldens for a few predefined chat contexts.
 
   Examples:
-    python ./tests/update_jinja_goldens.py
+    python ./scripts/update_jinja_goldens.py
 
   https://github.com/huggingface/transformers/blob/main/src/transformers/utils/chat_template_utils.py
 '''

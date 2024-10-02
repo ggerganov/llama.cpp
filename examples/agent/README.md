@@ -10,7 +10,7 @@
   # Nous Hermes 2 Pro Llama 3 8B
   ./llama-server --jinja -fa --verbose \
     -hfr NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF -hff Hermes-2-Pro-Llama-3-8B-Q8_0.gguf \
-    --chat-template-file tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja
+    --chat-template "$( python scripts/get_hf_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B tool_use )"
 
   # Llama 3.1 8B
   ./llama-server --jinja -fa --verbose \
@@ -23,25 +23,25 @@
   # functionary-small-v3
   ./llama-server --jinja -fa --verbose \
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q4_0.gguf \
-    --chat-template-file tests/chat/templates/meetkai-functionary-medium-v3.2.jinja
+    --chat-template "$( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )"
 
   ./llama-server --jinja -fa --verbose \
     -m ~/Downloads/functionary-small-v3.2.Q4_0.gguf \
-    --chat-template-file tests/chat/templates/meetkai-functionary-medium-v3.2.jinja
+    --chat-template "$( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )"
 
   # Llama 3.2 3B (poor adherence)
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K_L.gguf \
-    --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
+    --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
 
   ./llama-server --jinja -fa --verbose \
     -m ~/Downloads/Llama-3.2-3B-Instruct-Q6_K_L.gguf \
-    --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
+    --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
 
   # Llama 3.2 1B (very poor adherence)
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-1B-Instruct-GGUF -hff Llama-3.2-1B-Instruct-Q4_K_M.gguf \
-    --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
+    --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
   ```
 
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container (check http://localhost:8088/docs once running):
