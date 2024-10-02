@@ -706,7 +706,7 @@ static void ggml_backend_cpu_buffer_clear(ggml_backend_buffer_t buffer, uint8_t 
     memset(buffer->context, value, buffer->size);
 }
 
-static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
+static const struct ggml_backend_buffer_i ggml_backend_cpu_buffer_i = {
     /* .get_name        = */ ggml_backend_cpu_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cpu_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cpu_buffer_get_base,
@@ -719,8 +719,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
     /* .reset           = */ NULL,
 };
 
-// for buffers from ptr, free is not called
-static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
+static const struct ggml_backend_buffer_i ggml_backend_cpu_buffer_from_ptr_i = {
     /* .get_name        = */ ggml_backend_cpu_buffer_get_name,
     /* .free_buffer     = */ NULL, // ptr is not owned by the buffer, so it does not need to be freed
     /* .get_base        = */ ggml_backend_cpu_buffer_get_base,
@@ -747,7 +746,7 @@ static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_back
         return NULL;
     }
 
-    return ggml_backend_buffer_init(buft, cpu_backend_buffer_i, data, size);
+    return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, size);
 }
 
 static size_t ggml_backend_cpu_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
@@ -931,7 +930,7 @@ static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t backend, s
     return ggml_graph_compute(cgraph, &cplan);
 }
 
-static struct ggml_backend_i cpu_backend_i = {
+static const struct ggml_backend_i ggml_backend_cpu_i = {
     /* .get_name                = */ ggml_backend_cpu_get_name,
     /* .free                    = */ ggml_backend_cpu_free,
     /* .get_default_buffer_type = */ ggml_backend_cpu_get_default_buffer_type,
@@ -971,7 +970,7 @@ ggml_backend_t ggml_backend_cpu_init(void) {
 
     ggml_backend_t cpu_backend = new ggml_backend {
         /* .guid      = */ ggml_backend_cpu_guid(),
-        /* .interface = */ cpu_backend_i,
+        /* .interface = */ ggml_backend_cpu_i,
         /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_cpu_reg(), 0),
         /* .context   = */ ctx,
     };
@@ -1017,7 +1016,7 @@ void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_
 
 ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) {
     GGML_ASSERT((uintptr_t)ptr % TENSOR_ALIGNMENT == 0 && "buffer pointer must be aligned");
-    return ggml_backend_buffer_init(ggml_backend_cpu_buffer_type(), cpu_backend_buffer_i_from_ptr, ptr, size);
+    return ggml_backend_buffer_init(ggml_backend_cpu_buffer_type(), ggml_backend_cpu_buffer_from_ptr_i, ptr, size);
 }
 
 ////////////////////////
@@ -1110,7 +1109,7 @@ static bool ggml_backend_cpu_device_supports_buft(ggml_backend_dev_t dev, ggml_b
     GGML_UNUSED(dev);
 }
 
-static struct ggml_backend_device_i ggml_backend_cpu_device_i = {
+static const struct ggml_backend_device_i ggml_backend_cpu_device_i = {
     /* .get_name             = */ ggml_backend_cpu_device_get_name,
     /* .get_description      = */ ggml_backend_cpu_device_get_description,
     /* .get_memory           = */ ggml_backend_cpu_device_get_memory,
@@ -1157,7 +1156,7 @@ static ggml_backend_dev_t ggml_backend_cpu_reg_get_device(ggml_backend_reg_t reg
     GGML_UNUSED(index);
 }
 
-static struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
+static const struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
     /* .get_name         = */ ggml_backend_cpu_reg_get_name,
     /* .get_device_count = */ ggml_backend_cpu_reg_get_device_count,
     /* .get_device       = */ ggml_backend_cpu_reg_get_device,
@@ -1204,22 +1203,18 @@ static void ggml_backend_multi_buffer_clear(ggml_backend_buffer_t buffer, uint8_
     }
 }
 
-static struct ggml_backend_buffer_i ggml_backend_multi_buffer_context_interface(void) {
-    static struct ggml_backend_buffer_i multi_backend_buffer_i = {
-        /* .get_name        = */ ggml_backend_multi_buffer_get_name,
-        /* .free_buffer     = */ ggml_backend_multi_buffer_free_buffer,
-        /* .get_base        = */ NULL,
-        /* .init_tensor     = */ NULL,
-        /* .memset_tensor   = */ NULL,
-        /* .set_tensor      = */ NULL,
-        /* .get_tensor      = */ NULL,
-        /* .cpy_tensor      = */ NULL,
-        /* .clear           = */ ggml_backend_multi_buffer_clear,
-        /* .reset           = */ NULL,
-    };
-
-    return multi_backend_buffer_i;
-}
+static const struct ggml_backend_buffer_i ggml_backend_multi_buffer_i = {
+    /* .get_name        = */ ggml_backend_multi_buffer_get_name,
+    /* .free_buffer     = */ ggml_backend_multi_buffer_free_buffer,
+    /* .get_base        = */ NULL,
+    /* .init_tensor     = */ NULL,
+    /* .memset_tensor   = */ NULL,
+    /* .set_tensor      = */ NULL,
+    /* .get_tensor      = */ NULL,
+    /* .cpy_tensor      = */ NULL,
+    /* .clear           = */ ggml_backend_multi_buffer_clear,
+    /* .reset           = */ NULL,
+};
 
 ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers) {
     ggml_backend_multi_buffer_context * ctx = (ggml_backend_multi_buffer_context *) malloc(sizeof(struct ggml_backend_multi_buffer_context));
@@ -1234,7 +1229,7 @@ ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer
         total_size += ggml_backend_buffer_get_size(buffers[i]);
     }
 
-    return ggml_backend_buffer_init(buffers[0]->buft, ggml_backend_multi_buffer_context_interface(), ctx, total_size);
+    return ggml_backend_buffer_init(buffers[0]->buft, ggml_backend_multi_buffer_i, ctx, total_size);
 }
 
 bool ggml_backend_buffer_is_multi_buffer(ggml_backend_buffer_t buffer) {

@@ -550,7 +550,7 @@ static void ggml_backend_cuda_buffer_clear(ggml_backend_buffer_t buffer, uint8_t
     CUDA_CHECK(cudaDeviceSynchronize());
 }
 
-static ggml_backend_buffer_i ggml_backend_cuda_buffer_interface = {
+static const ggml_backend_buffer_i ggml_backend_cuda_buffer_interface = {
     /* .get_name        = */ ggml_backend_cuda_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cuda_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cuda_buffer_get_base,
@@ -621,7 +621,7 @@ static size_t ggml_backend_cuda_buffer_type_get_alloc_size(ggml_backend_buffer_t
     GGML_UNUSED(buft);
 }
 
-static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
+static const ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_cuda_buffer_type_get_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
@@ -868,7 +868,7 @@ static void ggml_backend_cuda_split_buffer_clear(ggml_backend_buffer_t buffer, u
     GGML_UNUSED(value);
 }
 
-static struct ggml_backend_buffer_i ggml_backend_cuda_split_buffer_interface = {
+static const ggml_backend_buffer_i ggml_backend_cuda_split_buffer_interface = {
     /* .get_name        = */ ggml_backend_cuda_split_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cuda_split_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cuda_split_buffer_get_base,
@@ -942,7 +942,7 @@ static bool ggml_backend_cuda_split_buffer_type_is_host(ggml_backend_buffer_type
     GGML_UNUSED(buft);
 }
 
-static ggml_backend_buffer_type_i ggml_backend_cuda_split_buffer_type_interface = {
+static const ggml_backend_buffer_type_i ggml_backend_cuda_split_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_cuda_split_buffer_type_get_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_split_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_split_buffer_type_get_alignment,
@@ -2826,7 +2826,7 @@ static void ggml_backend_cuda_event_wait(ggml_backend_t backend, ggml_backend_ev
     }
 }
 
-static ggml_backend_i ggml_backend_cuda_interface = {
+static const ggml_backend_i ggml_backend_cuda_interface = {
     /* .get_name                = */ ggml_backend_cuda_get_name,
     /* .free                    = */ ggml_backend_cuda_free,
     /* .get_default_buffer_type = */ ggml_backend_cuda_get_default_buffer_type,
@@ -3251,7 +3251,7 @@ static void ggml_backend_cuda_device_event_synchronize(ggml_backend_dev_t dev, g
     CUDA_CHECK(cudaEventSynchronize((cudaEvent_t)event->context));
 }
 
-static ggml_backend_device_i ggml_backend_cuda_device_interface = {
+static const ggml_backend_device_i ggml_backend_cuda_device_interface = {
     /* .get_name                = */ ggml_backend_cuda_device_get_name,
     /* .get_description         = */ ggml_backend_cuda_device_get_description,
     /* .get_memory              = */ ggml_backend_cuda_device_get_memory,
@@ -3310,7 +3310,7 @@ static void ggml_backend_cuda_reg_set_log_callback(ggml_backend_reg_t reg, ggml_
     ggml_backend_cuda_log_set_callback(log_callback, user_data);
 }
 
-static ggml_backend_reg_i ggml_backend_cuda_reg_interface = {
+static const ggml_backend_reg_i ggml_backend_cuda_reg_interface = {
     /* .get_name          = */ ggml_backend_cuda_reg_get_name,
     /* .get_device_count  = */ ggml_backend_cuda_reg_get_device_count,
     /* .get_device_get    = */ ggml_backend_cuda_reg_get_device,
