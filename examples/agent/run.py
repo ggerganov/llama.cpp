@@ -65,9 +65,17 @@ class OpenAPIMethod:
                     for name, param in self.parameters.items()
                 }
             },
-            components=catalog.get('components'),
             required=[name for name, param in self.parameters.items() if param['required']] + ([self.body['name']] if self.body and self.body['required'] else [])
         )
+
+        if (components := catalog.get('components', {})) is not None:
+            if (schemas := components.get('schemas')) is not None:
+                del schemas['HTTPValidationError']
+                del schemas['ValidationError']
+                if not schemas:
+                    del components['schemas']
+            if components:
+                self.parameters_schema['components'] = components
 
     async def __call__(self, session: aiohttp.ClientSession, **kwargs):
         if self.body:

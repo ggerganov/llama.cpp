@@ -1,18 +1,9 @@
 import aiohttp
 import html2text
 import logging
-from pydantic import BaseModel
-from typing import Optional
-import sys
 
 
-class FetchResult(BaseModel):
-    content: Optional[str] = None
-    markdown: Optional[str] = None
-    error: Optional[str] = None
-
-
-async def fetch_page(url: str) -> FetchResult:
+async def fetch_page(url: str) -> str:
     '''
         Fetch a web page (convert it to markdown if possible).
     '''
@@ -24,8 +15,7 @@ async def fetch_page(url: str) -> FetchResult:
                 res.raise_for_status()
                 content = await res.text()
     except aiohttp.ClientError as e:
-        logging.error('[fetch_page] Failed to fetch %s: %s', url, e)
-        return FetchResult(error=str(e))
+        raise Exception(f'Failed to fetch {url}: {e}')
 
     # NOTE: Pyppeteer doesn't work great in docker, short of installing a bunch of dependencies
     # from pyppeteer import launch
@@ -54,7 +44,7 @@ async def fetch_page(url: str) -> FetchResult:
         h.ignore_images = False
         h.ignore_emphasis = False
         markdown = h.handle(content)
-        return FetchResult(markdown=markdown)
+        return markdown
     except Exception as e:
         logging.warning('[fetch_page] Failed to convert HTML of %s to markdown: %s', url, e)
-        return FetchResult(content=content)
+        return content
