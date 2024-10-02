@@ -662,11 +662,8 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .supports_op             = */ ggml_backend_rpc_supports_op,
     /* .supports_buft           = */ ggml_backend_rpc_supports_buft,
     /* .offload_op              = */ NULL,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
 };
 
 GGML_API ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
@@ -694,6 +691,7 @@ GGML_API ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * en
 
     ggml_backend_buffer_type_t buft = new ggml_backend_buffer_type {
         /* .iface   = */ ggml_backend_rpc_buffer_type_interface,
+        /* .device  = */ nullptr,
         /* .context = */ buft_ctx
     };
     buft_map[endpoint] = buft;
@@ -709,6 +707,7 @@ ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
     ggml_backend_t backend = new ggml_backend {
         /* .guid      = */ ggml_backend_rpc_guid(),
         /* .interface = */ ggml_backend_rpc_interface,
+        /* .device    = */ nullptr,
         /* .context   = */ ctx
     };
     return backend;

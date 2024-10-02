@@ -1938,6 +1938,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         device->buffer_type = {
             /* .iface    = */ ggml_backend_vk_buffer_type_interface,
+            /* .device   = */ nullptr,
             /* .context  = */ new ggml_backend_vk_buffer_type_context{ device->name, device },
         };
 
@@ -6409,6 +6410,7 @@ ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
         },
+        /* .device   = */ nullptr,
         /* .context  = */ nullptr,
     };
 
@@ -6771,11 +6773,8 @@ static ggml_backend_i ggml_backend_vk_interface = {
     /* .supports_op             = */ ggml_backend_vk_supports_op,
     /* .supports_buft           = */ ggml_backend_vk_supports_buft,
     /* .offload_op              = */ ggml_backend_vk_offload_op,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_vk_guid() {
@@ -6792,6 +6791,7 @@ ggml_backend_t ggml_backend_vk_init(size_t dev_num) {
     ggml_backend_t vk_backend = new ggml_backend {
         /* .guid      = */ ggml_backend_vk_guid(),
         /* .interface = */ ggml_backend_vk_interface,
+        /* .device    = */ nullptr,
         /* .context   = */ ctx,
     };
 
@@ -6832,19 +6832,6 @@ static ggml_backend_t ggml_backend_reg_vk_init(const char * params, void * user_
     return vk_backend;
 
     UNUSED(params);
-}
-
-extern "C" int ggml_backend_vk_reg_devices();
-
-int ggml_backend_vk_reg_devices() {
-    ggml_vk_instance_init();
-
-    for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
-        char name[128];
-        snprintf(name, sizeof(name), "%s%ld", GGML_VK_NAME, i);
-        ggml_backend_register(name, ggml_backend_reg_vk_init, ggml_backend_vk_buffer_type(i), (void *) (intptr_t) i);  // NOLINT
-    }
-    return vk_instance.device_indices.size();
 }
 
 // Extension availability

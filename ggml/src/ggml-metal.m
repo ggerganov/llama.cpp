@@ -3380,6 +3380,7 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,
         },
+        /* .device  = */ NULL,
         /* .context = */ NULL,
     };
 
@@ -3539,11 +3540,8 @@ static struct ggml_backend_i ggml_backend_metal_i = {
     /* .supports_op             = */ ggml_backend_metal_supports_op,
     /* .supports_buft           = */ ggml_backend_metal_supports_buft,
     /* .offload_op              = */ NULL,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
 };
 
 void ggml_backend_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
@@ -3568,6 +3566,7 @@ ggml_backend_t ggml_backend_metal_init(void) {
     *backend = (struct ggml_backend) {
         /* .guid      = */ ggml_backend_metal_guid(),
         /* .interface = */ ggml_backend_metal_i,
+        /* .device    = */ NULL,
         /* .context   = */ ctx,
     };
 

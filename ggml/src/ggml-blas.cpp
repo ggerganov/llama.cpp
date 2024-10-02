@@ -322,11 +322,8 @@ static struct ggml_backend_i blas_backend_i = {
     /* .supports_op             = */ ggml_backend_blas_supports_op,
     /* .supports_buft           = */ ggml_backend_blas_supports_buft,
     /* .offload_op              = */ NULL,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_blas_guid(void) {
@@ -340,6 +337,7 @@ ggml_backend_t ggml_backend_blas_init(void) {
     ggml_backend_t backend = new ggml_backend {
         /* .guid      = */ ggml_backend_blas_guid(),
         /* .interface = */ blas_backend_i,
+        /* .device    = */ nullptr,
         /* .context   = */ ctx,
     };
 

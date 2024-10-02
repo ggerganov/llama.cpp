@@ -1326,6 +1326,7 @@ ggml_backend_buffer_type_t ggml_backend_cann_host_buffer_type() {
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
         },
+        /* .device   = */ nullptr,
         /* .context  = */ nullptr,
     };
 
@@ -2021,11 +2022,8 @@ static ggml_backend_i ggml_backend_cann_interface = {
     /* .supports_op             = */ ggml_backend_cann_supports_op,
     /* .supports_buft           = */ ggml_backend_cann_supports_buft,
     /* .offload_op              = */ ggml_backend_cann_offload_op,
-    /* .event_new               = */ ggml_backend_cann_event_new,
-    /* .event_free              = */ ggml_backend_cann_event_free,
     /* .event_record            = */ ggml_backend_cann_event_record,
     /* .event_wait              = */ ggml_backend_cann_event_wait,
-    /* .event_synchronize       = */ ggml_backend_cann_event_synchronize,
 };
 
 /**
@@ -2058,6 +2056,7 @@ ggml_backend_t ggml_backend_cann_init(int32_t device) {
     ggml_backend_t cann_backend =
         new ggml_backend{/* .guid      = */ ggml_backend_cann_guid(),
                          /* .interface = */ ggml_backend_cann_interface,
+                         /* .device    = */ nullptr,
                          /* .context   = */ ctx};
 
     return cann_backend;
@@ -2104,29 +2103,4 @@ static ggml_backend_t ggml_backend_reg_cann_init(const char* params,
     return cann_backend;
 
     GGML_UNUSED(params);
-}
-
-extern "C" int ggml_backend_cann_reg_devices();
-
-/**
- * @brief Registers CANN (Ascend) devices as backend options.
- *
- * This function initializes ACL, retrieves the number of available CANN
- * devices, and registers each device as a backend option using
- * `ggml_backend_register`. Each device is given a unique name based on
- * `GGML_CANN_NAME` followed by its index.
- *
- * @return int The number of CANN devices registered.
- */
-int ggml_backend_cann_reg_devices() {
-    uint32_t device_count = ggml_backend_cann_get_device_count();
-    // initialization
-    for (uint32_t i = 0; i < device_count; i++) {
-        char name[128];
-        snprintf(name, sizeof(name), "CANN%d", i);
-        ggml_backend_register(name, ggml_backend_reg_cann_init,
-                              ggml_backend_cann_buffer_type(i),
-                              (void*)(intptr_t)i);
-    }
-    return device_count;
 }

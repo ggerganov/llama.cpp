@@ -4424,6 +4424,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device) {
             queue_ptr stream = &(device_i.default_queue());
             ggml_backend_sycl_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_sycl_buffer_type_interface,
+                /* .device   = */ nullptr,
                 /* .context  = */ new ggml_backend_sycl_buffer_type_context{i, GGML_SYCL_NAME + std::to_string(i), stream},
             };
         }
@@ -4449,6 +4450,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(ggml_backend_sycl_conte
         for (int i = 0; i < ggml_sycl_info().device_count; i++) {
             ggml_backend_sycl_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_sycl_buffer_type_interface,
+                /* .device   = */ nullptr,
                 /* .context  = */ new ggml_backend_sycl_buffer_type_context{i, GGML_SYCL_NAME + std::to_string(i), ctx->stream(i, 0)},
             };
         }
@@ -4837,6 +4839,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * ten
 
     struct ggml_backend_buffer_type buft {
         /* .iface   = */ ggml_backend_sycl_split_buffer_type_interface,
+        /* .device  = */ nullptr,
         /* .context = */ new ggml_backend_sycl_split_buffer_type_context{tensor_split_arr},
     };
 
@@ -4890,6 +4893,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type() {
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
         },
+        /* .device   = */ nullptr,
         /* .context  = */ nullptr,
     };
 
@@ -5197,11 +5201,8 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
     /* .supports_buft           = */ ggml_backend_sycl_supports_buft,
     /* .offload_op              = */ ggml_backend_sycl_offload_op,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_sycl_guid() {
@@ -5224,6 +5225,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
     ggml_backend_t sycl_backend = new ggml_backend {
         /* .guid      = */ ggml_backend_sycl_guid(),
         /* .interface = */ ggml_backend_sycl_interface,
+        /* .device    = */ nullptr,
         /* .context   = */ ctx
     };
 
@@ -5244,16 +5246,4 @@ static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, void * use
     return sycl_backend;
 
     UNUSED(params);
-}
-
-extern "C" int ggml_backend_sycl_reg_devices();
-
-int ggml_backend_sycl_reg_devices() {
-    assert(ggml_sycl_info().device_count>0);
-    for (int i = 0; i < ggml_sycl_info().device_count; i++) {
-        char name[128];
-        snprintf(name, sizeof(name), "%s%d", GGML_SYCL_NAME, i);
-        ggml_backend_register(name, ggml_backend_reg_sycl_init, ggml_backend_sycl_buffer_type(i), (void *) (intptr_t) i);
-    }
-    return ggml_sycl_info().device_count;
 }
