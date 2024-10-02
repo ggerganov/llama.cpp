@@ -672,14 +672,11 @@ struct test_case {
         }
 
         // run
-        ggml_backend_synchronize(backend);
-
         int64_t total_time_us = 0;
         int total_runs = 0;
         do {
             int64_t start_time = ggml_time_us();
             ggml_backend_graph_compute(backend, gf);
-            ggml_backend_synchronize(backend);
             int64_t end_time = ggml_time_us();
 
             total_time_us += end_time - start_time;
@@ -3723,20 +3720,22 @@ int main(int argc, char ** argv) {
     }
 
     // enumerate backends
-    printf("Testing %zu backends\n\n", ggml_backend_reg_get_count());
+    printf("Testing %zu devices\n\n", ggml_backend_dev_count());
 
     size_t n_ok = 0;
 
-    for (size_t i = 0; i < ggml_backend_reg_get_count(); i++) {
-        printf("Backend %zu/%zu (%s)\n", i + 1, ggml_backend_reg_get_count(), ggml_backend_reg_get_name(i));
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
 
-        if (backend_filter != NULL && strcmp(backend_filter, ggml_backend_reg_get_name(i)) != 0) {
+        printf("Backend %zu/%zu: %s\n", i + 1, ggml_backend_dev_count(), ggml_backend_dev_name(dev));
+
+        if (backend_filter != NULL && strcmp(backend_filter, ggml_backend_dev_name(dev)) != 0) {
             printf("  Skipping\n");
             n_ok++;
             continue;
         }
 
-        ggml_backend_t backend = ggml_backend_reg_init_backend(i, NULL);
+        ggml_backend_t backend = ggml_backend_dev_init(dev, NULL);
         GGML_ASSERT(backend != NULL);
 
         if (backend_filter == NULL && ggml_backend_is_cpu(backend) && mode != MODE_GRAD) {
@@ -3751,7 +3750,11 @@ int main(int argc, char ** argv) {
             ggml_backend_cpu_set_n_threads(backend, std::thread::hardware_concurrency() / 2);
         }
 
-        printf("  Backend name: %s\n", ggml_backend_name(backend));
+        printf("  Device description: %s\n", ggml_backend_dev_description(dev));
+        size_t free, total; // NOLINT
+        ggml_backend_dev_memory(dev, &free, &total);
+        printf("  Device memory: %zu MB (%zu MB free)\n", total / 1024 / 1024, free / 1024 / 1024);
+        printf("\n");
 
         bool ok = test_backend(backend, mode, op_name_filter);
 
@@ -3768,9 +3771,9 @@ int main(int argc, char ** argv) {
         ggml_backend_free(backend);
     }
 
-    printf("%zu/%zu backends passed\n", n_ok, ggml_backend_reg_get_count());
+    printf("%zu/%zu backends passed\n", n_ok, ggml_backend_dev_count());
 
-    if (n_ok != ggml_backend_reg_get_count()) {
+    if (n_ok != ggml_backend_dev_count()) {
         printf("\033[1;31mFAIL\033[0m\n");
         return 1;
     }

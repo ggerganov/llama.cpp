@@ -187,16 +187,6 @@
 #    define GGML_API
 #endif
 
-#ifdef GGML_MULTIPLATFORM
-#    if defined(_WIN32)
-#        define GGML_CALL
-#    else
-#        define GGML_CALL __attribute__((__ms_abi__))
-#    endif
-#else
-#    define GGML_CALL
-#endif
-
 // TODO: support for clang
 #ifdef __GNUC__
 #    define GGML_DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
@@ -340,7 +330,7 @@ extern "C" {
     };
 
     // get ggml_status name string
-    GGML_API GGML_CALL const char * ggml_status_to_string(enum ggml_status status);
+    GGML_API const char * ggml_status_to_string(enum ggml_status status);
 
     // ieee 754-2008 half-precision float16
     // todo: make this not an integral type
@@ -716,46 +706,46 @@ extern "C" {
     GGML_API void    ggml_print_object (const struct ggml_object * obj);
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);
 
-    GGML_API GGML_CALL int64_t ggml_nelements   (const struct ggml_tensor * tensor);
-    GGML_API GGML_CALL int64_t ggml_nrows       (const struct ggml_tensor * tensor);
-    GGML_API GGML_CALL size_t  ggml_nbytes      (const struct ggml_tensor * tensor);
-    GGML_API           size_t  ggml_nbytes_pad  (const struct ggml_tensor * tensor); // same as ggml_nbytes() but padded to GGML_MEM_ALIGN
+    GGML_API int64_t ggml_nelements (const struct ggml_tensor * tensor);
+    GGML_API int64_t ggml_nrows     (const struct ggml_tensor * tensor);
+    GGML_API size_t  ggml_nbytes    (const struct ggml_tensor * tensor);
+    GGML_API size_t  ggml_nbytes_pad(const struct ggml_tensor * tensor); // same as ggml_nbytes() but padded to GGML_MEM_ALIGN
 
-    GGML_API GGML_CALL int64_t ggml_blck_size(enum ggml_type type);
-    GGML_API GGML_CALL size_t  ggml_type_size(enum ggml_type type);             // size in bytes for all elements in a block
-    GGML_API GGML_CALL size_t  ggml_row_size (enum ggml_type type, int64_t ne); // size in bytes for all elements in a row
+    GGML_API int64_t ggml_blck_size(enum ggml_type type);
+    GGML_API size_t  ggml_type_size(enum ggml_type type);             // size in bytes for all elements in a block
+    GGML_API size_t  ggml_row_size (enum ggml_type type, int64_t ne); // size in bytes for all elements in a row
 
     GGML_DEPRECATED(
     GGML_API double ggml_type_sizef(enum ggml_type type), // ggml_type_size()/ggml_blck_size() as float
     "use ggml_row_size() instead");
 
-    GGML_API GGML_CALL const char * ggml_type_name(enum ggml_type type);
-    GGML_API GGML_CALL const char * ggml_op_name  (enum ggml_op   op);
-    GGML_API           const char * ggml_op_symbol(enum ggml_op   op);
+    GGML_API const char * ggml_type_name(enum ggml_type type);
+    GGML_API const char * ggml_op_name  (enum ggml_op   op);
+    GGML_API const char * ggml_op_symbol(enum ggml_op   op);
 
-    GGML_API           const char * ggml_unary_op_name(enum ggml_unary_op op);
-    GGML_API GGML_CALL const char * ggml_op_desc(const struct ggml_tensor * t); // unary or op name
+    GGML_API const char * ggml_unary_op_name(enum ggml_unary_op op);
+    GGML_API const char * ggml_op_desc(const struct ggml_tensor * t); // unary or op name
 
-    GGML_API GGML_CALL size_t  ggml_element_size(const struct ggml_tensor * tensor);
+    GGML_API size_t  ggml_element_size(const struct ggml_tensor * tensor);
 
-    GGML_API GGML_CALL bool    ggml_is_quantized(enum ggml_type type);
+    GGML_API bool    ggml_is_quantized(enum ggml_type type);
 
     // TODO: temporary until model loading of ggml examples is refactored
     GGML_API enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype);
 
-    GGML_API GGML_CALL bool ggml_is_transposed(const struct ggml_tensor * tensor);
-    GGML_API GGML_CALL bool ggml_is_permuted  (const struct ggml_tensor * tensor);
-    GGML_API GGML_CALL bool ggml_is_empty     (const struct ggml_tensor * tensor);
-    GGML_API           bool ggml_is_scalar    (const struct ggml_tensor * tensor);
-    GGML_API           bool ggml_is_vector    (const struct ggml_tensor * tensor);
-    GGML_API           bool ggml_is_matrix    (const struct ggml_tensor * tensor);
-    GGML_API           bool ggml_is_3d        (const struct ggml_tensor * tensor);
-    GGML_API           int  ggml_n_dims       (const struct ggml_tensor * tensor); // returns 1 for scalars
+    GGML_API bool ggml_is_transposed(const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_permuted  (const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_empty     (const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_scalar    (const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_vector    (const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_matrix    (const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_3d        (const struct ggml_tensor * tensor);
+    GGML_API int  ggml_n_dims       (const struct ggml_tensor * tensor); // returns 1 for scalars
 
-    GGML_API GGML_CALL bool ggml_is_contiguous  (const struct ggml_tensor * tensor);
-    GGML_API GGML_CALL bool ggml_is_contiguous_0(const struct ggml_tensor * tensor); // same as ggml_is_contiguous()
-    GGML_API GGML_CALL bool ggml_is_contiguous_1(const struct ggml_tensor * tensor); // contiguous for dims >= 1
-    GGML_API GGML_CALL bool ggml_is_contiguous_2(const struct ggml_tensor * tensor); // contiguous for dims >= 2
+    GGML_API bool ggml_is_contiguous  (const struct ggml_tensor * tensor);
+    GGML_API bool ggml_is_contiguous_0(const struct ggml_tensor * tensor); // same as ggml_is_contiguous()
+    GGML_API bool ggml_is_contiguous_1(const struct ggml_tensor * tensor); // contiguous for dims >= 1
+    GGML_API bool ggml_is_contiguous_2(const struct ggml_tensor * tensor); // contiguous for dims >= 2
 
     GGML_API bool ggml_are_same_shape (const struct ggml_tensor * t0, const struct ggml_tensor * t1);
     GGML_API bool ggml_are_same_stride(const struct ggml_tensor * t0, const struct ggml_tensor * t1);
@@ -847,7 +837,7 @@ extern "C" {
     GGML_API void *  ggml_get_data    (const struct ggml_tensor * tensor);
     GGML_API float * ggml_get_data_f32(const struct ggml_tensor * tensor);
 
-    GGML_API GGML_CALL enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor);
+    GGML_API enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor);
 
     GGML_API const char *         ggml_get_name   (const struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_set_name   (      struct ggml_tensor * tensor, const char * name);
@@ -1561,7 +1551,7 @@ extern "C" {
         "use ggml_rope_ext_inplace instead");
 
     // compute correction dims for YaRN RoPE scaling
-    GGML_CALL void ggml_rope_yarn_corr_dims(
+    void ggml_rope_yarn_corr_dims(
         int n_dims, int n_ctx_orig, float freq_base, float beta_fast, float beta_slow, float dims[2]);
 
     // rotary position embedding backward, i.e compute dx from dy

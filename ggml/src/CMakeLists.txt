@@ -1325,7 +1325,7 @@ add_library(ggml
             ../include/ggml-backend.h
             ggml.c
             ggml-alloc.c
-            ggml-backend.c
+            ggml-backend.cpp
             ggml-quants.c
             ggml-quants.h
             ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
