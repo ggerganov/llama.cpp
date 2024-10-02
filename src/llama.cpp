@@ -19494,6 +19494,7 @@ struct llama_context * llama_new_context_with_model(
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
 
+            // TODO: move these checks to ggml_backend_sched
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
             bool pipeline_parallel =
                 llama_get_device_count(*model) > 1 &&
@@ -19501,12 +19502,29 @@ struct llama_context * llama_new_context_with_model(
                 model->split_mode == LLAMA_SPLIT_MODE_LAYER &&
                 params.offload_kqv;
 
-            // FIXME
-#if !defined(GGML_USE_CUDA) && false
-            // pipeline parallelism requires support for async compute and events
-            // currently this is only implemented in the CUDA backend
-            pipeline_parallel = false;
-#endif
+            // pipeline parallelism requires support for async compute and events in all devices
+            if (pipeline_parallel) {
+                for (auto * backend : ctx->backends) {
+                    if (ggml_backend_is_cpu(backend)) {
+                        // ignore CPU backend
+                        continue;
+                    }
+                    auto * dev = ggml_backend_get_device(backend);
+                    if (!dev) {
+                        // backend is using old interface, not supported
+                        pipeline_parallel = false;
+                        break;
+                    }
+                    ggml_backend_dev_props props;
+                    ggml_backend_dev_get_props(dev, &props);
+                    if (!props.caps.async || !props.caps.events) {
+                        // device does not support async compute or events
+                        pipeline_parallel = false;
+                        break;
+                    }
+                }
+            }
+
             ctx->sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), max_nodes, pipeline_parallel);
 
             if (pipeline_parallel) {
