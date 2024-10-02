@@ -327,7 +327,7 @@ static struct ggml_logger_state g_logger_state = {ggml_log_callback_default, NUL
 
 static void ggml_log_internal_v(enum ggml_log_level level, const char * format, va_list args) {
     if (format == NULL)
-	return;
+        return;
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
