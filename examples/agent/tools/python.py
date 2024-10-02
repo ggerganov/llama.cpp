@@ -4,6 +4,9 @@ import logging
 import sys
 
 
+python_tools = {}
+
+
 def python(code: str) -> str:
     '''
     Execute Python code in a siloed environment using IPython and returns the output.
@@ -16,6 +19,7 @@ def python(code: str) -> str:
     '''
     logging.debug('[python] Executing %s', code)
     shell = InteractiveShell()
+    shell.user_global_ns.update(python_tools)
 
     old_stdout = sys.stdout
     sys.stdout = out = StringIO()

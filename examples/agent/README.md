@@ -42,24 +42,62 @@
   docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
     --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
     --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
-    uv run fastify.py --port 8088 tools/
+    uv run serve_tools.py --port 8088
   ```
 
   > [!WARNING]
   > The command above gives tools (and your agent) access to the web (and read-only access to `examples/agent/**`. If you're concerned about unleashing a rogue agent on the web, please explore setting up proxies for your docker (and contribute back!)
 
-- Run the agent with a given goal
+- Run the agent with some goal
 
   ```bash
   uv run examples/agent/run.py --tools http://localhost:8088 \
     "What is the sum of 2535 squared and 32222000403?"
+  ```
 
+  <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
+
+  ```
+  🛠️  Tools: python, fetch_page, brave_search
+  ⚙️  python(code="print(2535**2 + 32222000403)")
+  → 15 chars
+  The sum of 2535 squared and 32222000403 is 32228426628.
+  ```
+
+  </details>
+
+  ```bash
   uv run examples/agent/run.py --tools http://localhost:8088 \
-    "What is the best BBQ join in Laguna Beach?"
+    "What is the best BBQ joint in Laguna Beach?"
+  ```
 
+  <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
+
+  ```
+  🛠️  Tools: python, fetch_page, brave_search
+  ⚙️  brave_search(query="best bbq joint in laguna beach")
+  → 4283 chars
+  Based on the search results, Beach Pit BBQ seems to be a popular and highly-rated BBQ joint in Laguna Beach. They offer a variety of BBQ options, including ribs, pulled pork, brisket, salads, wings, and more. They have dine-in, take-out, and catering options available.
+  ```
+
+  </details>
+
+  ```bash
   uv run examples/agent/run.py --tools http://localhost:8088 \
     "Search for, fetch and summarize the homepage of llama.cpp"
   ```
+
+  <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
+
+  ```
+  🛠️  Tools: python, fetch_page, brave_search
+  ⚙️  brave_search(query="llama.cpp")
+  → 3330 chars
+  Llama.cpp is an open-source software library written in C++ that performs inference on various Large Language Models (LLMs). Alongside the library, it includes a CLI and web server. It is co-developed alongside the GGML project, a general-purpose tensor library. Llama.cpp is also available with Python bindings, known as llama.cpp-python. It has gained popularity for its ability to run LLMs on local machines, such as Macs with NVIDIA RTX systems. Users can leverage this library to accelerate LLMs and integrate them into various applications. There are numerous resources available, including tutorials and guides, for getting started with Llama.cpp and llama.cpp-python.
+  ```
+
+  </details>
+
 
 - To compare the above results w/ OpenAI's tool usage behaviour, just add `--openai` to the agent invocation (other providers can easily be added, just use the `--endpoint`, `--api-key`, and `--model` flags)
 
