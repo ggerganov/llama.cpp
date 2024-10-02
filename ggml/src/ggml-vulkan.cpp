@@ -6779,14 +6779,6 @@ void ggml_backend_vk_get_device_memory(int device, size_t * free, size_t * total
     }
 }
 
-// backend registry
-static ggml_backend_t ggml_backend_reg_vk_init(const char * params, void * user_data) {
-    ggml_backend_t vk_backend = ggml_backend_vk_init((int) (intptr_t) user_data);
-    return vk_backend;
-
-    UNUSED(params);
-}
-
 // Extension availability
 static bool ggml_vk_instance_validation_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions) {
 #ifdef GGML_VULKAN_VALIDATE

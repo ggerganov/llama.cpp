@@ -2016,8 +2016,3 @@ ggml_backend_t ggml_backend_kompute_init(int device) {
 bool ggml_backend_is_kompute(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_kompute_guid());
 }
-
-static ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data) {
-    GGML_UNUSED(params);
-    return ggml_backend_kompute_init(intptr_t(user_data));
-}

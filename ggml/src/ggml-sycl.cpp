@@ -5240,10 +5240,3 @@ int ggml_backend_sycl_get_device_count() {
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_count\n");
     return ggml_sycl_info().device_count;
 }
-
-static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, void * user_data) {
-    ggml_backend_t sycl_backend = ggml_backend_sycl_init((int) (intptr_t) user_data);
-    return sycl_backend;
-
-    UNUSED(params);
-}

@@ -2083,24 +2083,3 @@ void ggml_backend_cann_get_device_memory(int32_t device, size_t* free,
     ggml_cann_set_device(device);
     ACL_CHECK(aclrtGetMemInfo(ACL_HBM_MEM, free, total));
 }
-
-// backend registry
-/**
- * @brief Initializes a CANN backend based on the provided parameters.
- *
- * This function initializes a CANN backend using the device index and then
- * initializes the backend using `ggml_backend_cann_init`.
- *
- * @param params Parameters for initialization (unused in this implementation).
- * @param user_data User data containing the device index to initialize the
- * backend.
- * @return ggml_backend_t The initialized CANN backend.
- */
-static ggml_backend_t ggml_backend_reg_cann_init(const char* params,
-                                                 void* user_data) {
-    ggml_backend_t cann_backend =
-        ggml_backend_cann_init((int)(intptr_t)user_data);
-    return cann_backend;
-
-    GGML_UNUSED(params);
-}
