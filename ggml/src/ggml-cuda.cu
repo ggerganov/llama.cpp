@@ -569,14 +569,14 @@ struct ggml_backend_cuda_buffer_type_context {
     std::string name;
 };
 
-static const char * ggml_backend_cuda_buffer_type_name(ggml_backend_buffer_type_t buft) {
+static const char * ggml_backend_cuda_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
     ggml_backend_cuda_buffer_type_context * ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
 
     return ctx->name.c_str();
 }
 
 static bool ggml_backend_buft_is_cuda(ggml_backend_buffer_type_t buft) {
-    return buft->iface.get_name == ggml_backend_cuda_buffer_type_name;
+    return buft->iface.get_name == ggml_backend_cuda_buffer_type_get_name;
 }
 
 static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
@@ -622,7 +622,7 @@ static size_t ggml_backend_cuda_buffer_type_get_alloc_size(ggml_backend_buffer_t
 }
 
 static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
-    /* .get_name         = */ ggml_backend_cuda_buffer_type_name,
+    /* .get_name         = */ ggml_backend_cuda_buffer_type_get_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
     /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
@@ -883,14 +883,14 @@ static struct ggml_backend_buffer_i ggml_backend_cuda_split_buffer_interface = {
 
 // cuda split buffer type
 
-static const char * ggml_backend_cuda_split_buffer_type_name(ggml_backend_buffer_type_t buft) {
+static const char * ggml_backend_cuda_split_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
     return GGML_CUDA_NAME "_Split";
 
     GGML_UNUSED(buft);
 }
 
 static bool ggml_backend_buft_is_cuda_split(ggml_backend_buffer_type_t buft) {
-    return buft->iface.get_name == ggml_backend_cuda_split_buffer_type_name;
+    return buft->iface.get_name == ggml_backend_cuda_split_buffer_type_get_name;
 }
 
 static ggml_backend_buffer_t ggml_backend_cuda_split_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
@@ -943,7 +943,7 @@ static bool ggml_backend_cuda_split_buffer_type_is_host(ggml_backend_buffer_type
 }
 
 static ggml_backend_buffer_type_i ggml_backend_cuda_split_buffer_type_interface = {
-    /* .get_name         = */ ggml_backend_cuda_split_buffer_type_name,
+    /* .get_name         = */ ggml_backend_cuda_split_buffer_type_get_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_split_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_split_buffer_type_get_alignment,
     /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
@@ -2378,7 +2378,7 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
 
 // backend
 
-static const char * ggml_backend_cuda_name(ggml_backend_t backend) {
+static const char * ggml_backend_cuda_get_name(ggml_backend_t backend) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
 
     return cuda_ctx->name.c_str();
@@ -2827,7 +2827,7 @@ static void ggml_backend_cuda_event_wait(ggml_backend_t backend, ggml_backend_ev
 }
 
 static ggml_backend_i ggml_backend_cuda_interface = {
-    /* .get_name                = */ ggml_backend_cuda_name,
+    /* .get_name                = */ ggml_backend_cuda_get_name,
     /* .free                    = */ ggml_backend_cuda_free,
     /* .get_default_buffer_type = */ ggml_backend_cuda_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_cuda_set_tensor_async,
@@ -2913,32 +2913,32 @@ struct ggml_backend_cuda_device_context {
     std::string description;
 };
 
-static const char * ggml_backend_cuda_device_name(ggml_backend_dev_t dev) {
+static const char * ggml_backend_cuda_device_get_name(ggml_backend_dev_t dev) {
     ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *)dev->context;
     return ctx->name.c_str();
 }
 
-static const char * ggml_backend_cuda_device_description(ggml_backend_dev_t dev) {
+static const char * ggml_backend_cuda_device_get_description(ggml_backend_dev_t dev) {
     ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *)dev->context;
     return ctx->description.c_str();
 }
 
-static void ggml_backend_cuda_device_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
+static void ggml_backend_cuda_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
     ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *)dev->context;
     ggml_cuda_set_device(ctx->device);
     CUDA_CHECK(cudaMemGetInfo(free, total));
 }
 
-static enum ggml_backend_dev_type ggml_backend_cuda_device_type(ggml_backend_dev_t dev) {
+static enum ggml_backend_dev_type ggml_backend_cuda_device_get_type(ggml_backend_dev_t dev) {
     GGML_UNUSED(dev);
     return GGML_BACKEND_DEVICE_TYPE_GPU_FULL;
 }
 
-static void ggml_backend_cuda_device_props(ggml_backend_dev_t dev, ggml_backend_dev_props * props) {
-    props->name        = ggml_backend_cuda_device_name(dev);
-    props->description = ggml_backend_cuda_device_description(dev);
-    props->type        = ggml_backend_cuda_device_type(dev);
-    ggml_backend_cuda_device_memory(dev, &props->memory_free, &props->memory_total);
+static void ggml_backend_cuda_device_get_props(ggml_backend_dev_t dev, ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_cuda_device_get_name(dev);
+    props->description = ggml_backend_cuda_device_get_description(dev);
+    props->type        = ggml_backend_cuda_device_get_type(dev);
+    ggml_backend_cuda_device_get_memory(dev, &props->memory_free, &props->memory_total);
 
     bool host_buffer = getenv("GGML_CUDA_NO_PINNED") == nullptr;
 #ifdef GGML_CUDA_NO_PEER_COPY
@@ -2960,12 +2960,12 @@ static ggml_backend_t ggml_backend_cuda_device_init(ggml_backend_dev_t dev, cons
     return ggml_backend_cuda_init(ctx->device);
 }
 
-static ggml_backend_buffer_type_t ggml_backend_cuda_device_buffer_type(ggml_backend_dev_t dev) {
+static ggml_backend_buffer_type_t ggml_backend_cuda_device_get_buffer_type(ggml_backend_dev_t dev) {
     ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *)dev->context;
     return ggml_backend_cuda_buffer_type(ctx->device);
 }
 
-static ggml_backend_buffer_type_t ggml_backend_cuda_device_host_buffer_type(ggml_backend_dev_t dev) {
+static ggml_backend_buffer_type_t ggml_backend_cuda_device_get_host_buffer_type(ggml_backend_dev_t dev) {
     GGML_UNUSED(dev);
     return ggml_backend_cuda_host_buffer_type();
 }
@@ -3252,14 +3252,14 @@ static void ggml_backend_cuda_device_event_synchronize(ggml_backend_dev_t dev, g
 }
 
 static ggml_backend_device_i ggml_backend_cuda_device_interface = {
-    /* .get_name                = */ ggml_backend_cuda_device_name,
-    /* .get_description         = */ ggml_backend_cuda_device_description,
-    /* .get_memory              = */ ggml_backend_cuda_device_memory,
-    /* .get_type                = */ ggml_backend_cuda_device_type,
-    /* .get_props               = */ ggml_backend_cuda_device_props,
+    /* .get_name                = */ ggml_backend_cuda_device_get_name,
+    /* .get_description         = */ ggml_backend_cuda_device_get_description,
+    /* .get_memory              = */ ggml_backend_cuda_device_get_memory,
+    /* .get_type                = */ ggml_backend_cuda_device_get_type,
+    /* .get_props               = */ ggml_backend_cuda_device_get_props,
     /* .init_backend            = */ ggml_backend_cuda_device_init,
-    /* .buffer_type             = */ ggml_backend_cuda_device_buffer_type,
-    /* .host_buffer_type        = */ ggml_backend_cuda_device_host_buffer_type,
+    /* .get_buffer_type         = */ ggml_backend_cuda_device_get_buffer_type,
+    /* .get_host_buffer_type    = */ ggml_backend_cuda_device_get_host_buffer_type,
     /* .buffer_from_host_ptr    = */ ggml_backend_cuda_device_buffer_from_host_ptr,
     /* .supports_op             = */ ggml_backend_cuda_device_supports_op,
     /* .supports_buft           = */ ggml_backend_cuda_device_supports_buft,
@@ -3275,7 +3275,7 @@ struct ggml_backend_cuda_reg_context {
     std::vector<ggml_backend_dev_t> devices;
 };
 
-static const char * ggml_backend_cuda_reg_name(ggml_backend_reg_t reg) {
+static const char * ggml_backend_cuda_reg_get_name(ggml_backend_reg_t reg) {
     GGML_UNUSED(reg);
     return GGML_CUDA_NAME;
 }
@@ -3285,13 +3285,13 @@ static size_t ggml_backend_cuda_reg_get_device_count(ggml_backend_reg_t reg) {
     return ctx->devices.size();
 }
 
-static ggml_backend_dev_t ggml_backend_cuda_reg_device_get(ggml_backend_reg_t reg, size_t index) {
+static ggml_backend_dev_t ggml_backend_cuda_reg_get_device(ggml_backend_reg_t reg, size_t index) {
     ggml_backend_cuda_reg_context * ctx = (ggml_backend_cuda_reg_context *)reg->context;
     GGML_ASSERT(index < ctx->devices.size());
     return ctx->devices[index];
 }
 
-static void * ggml_backend_cuda_get_proc_address(ggml_backend_reg_t reg, const char * name) {
+static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, const char * name) {
     GGML_UNUSED(reg);
     if (strcmp(name, "ggml_backend_split_buffer_type") == 0) {
         return (void *)ggml_backend_cuda_split_buffer_type;
@@ -3311,10 +3311,10 @@ static void ggml_backend_cuda_reg_set_log_callback(ggml_backend_reg_t reg, ggml_
 }
 
 static ggml_backend_reg_i ggml_backend_cuda_reg_interface = {
-    /* .get_name          = */ ggml_backend_cuda_reg_name,
-    /* .device_count      = */ ggml_backend_cuda_reg_get_device_count,
-    /* .device_get        = */ ggml_backend_cuda_reg_device_get,
-    /* .get_proc_address  = */ ggml_backend_cuda_get_proc_address,
+    /* .get_name          = */ ggml_backend_cuda_reg_get_name,
+    /* .get_device_count  = */ ggml_backend_cuda_reg_get_device_count,
+    /* .get_device_get    = */ ggml_backend_cuda_reg_get_device,
+    /* .get_proc_address  = */ ggml_backend_cuda_reg_get_proc_address,
     /* .set_log_callback  = */ ggml_backend_cuda_reg_set_log_callback,
 };
 

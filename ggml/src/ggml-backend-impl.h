@@ -170,10 +170,10 @@ extern "C" {
         ggml_backend_t (*init_backend)(ggml_backend_dev_t dev, const char * params);
 
         // preferred buffer type
-        ggml_backend_buffer_type_t (*buffer_type)(ggml_backend_dev_t dev);
+        ggml_backend_buffer_type_t (*get_buffer_type)(ggml_backend_dev_t dev);
 
         // (optional) host buffer type (in system memory, typically this is a pinned memory buffer for faster transfers between host and device)
-        ggml_backend_buffer_type_t (*host_buffer_type)(ggml_backend_dev_t dev);
+        ggml_backend_buffer_type_t (*get_host_buffer_type)(ggml_backend_dev_t dev);
 
         // (optional) buffer from pointer: create a buffer from a host pointer (useful for memory mapped models and importing data from other libraries)
         ggml_backend_buffer_t (*buffer_from_host_ptr)(ggml_backend_dev_t dev, void * ptr, size_t size, size_t max_tensor_size);
@@ -209,8 +209,8 @@ extern "C" {
         const char * (*get_name)(ggml_backend_reg_t reg);
 
         // enumerate available devices
-        size_t             (*device_count)(ggml_backend_reg_t reg);
-        ggml_backend_dev_t (*device_get)(ggml_backend_reg_t reg, size_t index);
+        size_t             (*get_device_count)(ggml_backend_reg_t reg);
+        ggml_backend_dev_t (*get_device)(ggml_backend_reg_t reg, size_t index);
 
         // (optional) get a pointer to a function in the backend
         // backends can add custom functions that are not part of the standard ggml-backend interface

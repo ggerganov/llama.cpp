@@ -461,11 +461,11 @@ ggml_backend_t ggml_backend_dev_init(ggml_backend_dev_t device, const char * par
 }
 
 ggml_backend_buffer_type_t ggml_backend_dev_buffer_type(ggml_backend_dev_t device) {
-    return device->iface.buffer_type(device);
+    return device->iface.get_buffer_type(device);
 }
 
 ggml_backend_buffer_type_t ggml_backend_dev_host_buffer_type(ggml_backend_dev_t device) {
-    return device->iface.host_buffer_type(device);
+    return device->iface.get_host_buffer_type(device);
 }
 
 ggml_backend_buffer_t ggml_backend_dev_buffer_from_host_ptr(ggml_backend_dev_t device, void * ptr, size_t size, size_t max_tensor_size) {
@@ -491,11 +491,11 @@ const char * ggml_backend_reg_name(ggml_backend_reg_t reg) {
 }
 
 size_t ggml_backend_reg_dev_count(ggml_backend_reg_t reg) {
-    return reg->iface.device_count(reg);
+    return reg->iface.get_device_count(reg);
 }
 
 ggml_backend_dev_t ggml_backend_reg_dev_get(ggml_backend_reg_t reg, size_t index) {
-    return reg->iface.device_get(reg, index);
+    return reg->iface.get_device(reg, index);
 }
 
 void * ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * name) {
@@ -653,7 +653,7 @@ ggml_backend_t ggml_backend_init_best(void) {
 
 static const size_t TENSOR_ALIGNMENT = 32; // required for mmap as gguf only guarantees 32-byte alignment
 
-static const char * ggml_backend_cpu_buffer_name(ggml_backend_buffer_t buffer) {
+static const char * ggml_backend_cpu_buffer_get_name(ggml_backend_buffer_t buffer) {
     return "CPU";
 
     GGML_UNUSED(buffer);
@@ -707,7 +707,7 @@ static void ggml_backend_cpu_buffer_clear(ggml_backend_buffer_t buffer, uint8_t 
 }
 
 static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
-    /* .get_name        = */ ggml_backend_cpu_buffer_name,
+    /* .get_name        = */ ggml_backend_cpu_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cpu_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cpu_buffer_get_base,
     /* .init_tensor     = */ NULL, // no initialization required
@@ -721,7 +721,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
 
 // for buffers from ptr, free is not called
 static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
-    /* .get_name        = */ ggml_backend_cpu_buffer_name,
+    /* .get_name        = */ ggml_backend_cpu_buffer_get_name,
     /* .free_buffer     = */ NULL, // ptr is not owned by the buffer, so it does not need to be freed
     /* .get_base        = */ ggml_backend_cpu_buffer_get_base,
     /* .init_tensor     = */ NULL, // no initialization required
@@ -846,7 +846,7 @@ struct ggml_backend_cpu_context {
     void *              abort_callback_data;
 };
 
-static const char * ggml_backend_cpu_name(ggml_backend_t backend) {
+static const char * ggml_backend_cpu_get_name(ggml_backend_t backend) {
     return "CPU";
 
     GGML_UNUSED(backend);
@@ -932,7 +932,7 @@ static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t backend, s
 }
 
 static struct ggml_backend_i cpu_backend_i = {
-    /* .get_name                = */ ggml_backend_cpu_name,
+    /* .get_name                = */ ggml_backend_cpu_get_name,
     /* .free                    = */ ggml_backend_cpu_free,
     /* .get_default_buffer_type = */ ggml_backend_cpu_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
@@ -1022,20 +1022,20 @@ ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) 
 
 ////////////////////////
 
-static const char * ggml_backend_cpu_device_name(ggml_backend_dev_t dev) {
+static const char * ggml_backend_cpu_device_get_name(ggml_backend_dev_t dev) {
     return "CPU";
 
     GGML_UNUSED(dev);
 }
 
-static const char * ggml_backend_cpu_device_description(ggml_backend_dev_t dev) {
+static const char * ggml_backend_cpu_device_get_description(ggml_backend_dev_t dev) {
     // TODO
     return "CPU";
 
     GGML_UNUSED(dev);
 }
 
-static void ggml_backend_cpu_device_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
+static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
     // TODO
     *free = 0;
     *total = 0;
@@ -1043,17 +1043,17 @@ static void ggml_backend_cpu_device_memory(ggml_backend_dev_t dev, size_t * free
     GGML_UNUSED(dev);
 }
 
-static enum ggml_backend_dev_type ggml_backend_cpu_device_type(ggml_backend_dev_t dev) {
+static enum ggml_backend_dev_type ggml_backend_cpu_device_get_type(ggml_backend_dev_t dev) {
     return GGML_BACKEND_DEVICE_TYPE_CPU_FULL;
 
     GGML_UNUSED(dev);
 }
 
-static void ggml_backend_cpu_device_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
-    props->name        = ggml_backend_cpu_device_name(dev);
-    props->description = ggml_backend_cpu_device_description(dev);
-    props->type        = ggml_backend_cpu_device_type(dev);
-    ggml_backend_cpu_device_memory(dev, &props->memory_free, &props->memory_total);
+static void ggml_backend_cpu_device_get_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_cpu_device_get_name(dev);
+    props->description = ggml_backend_cpu_device_get_description(dev);
+    props->type        = ggml_backend_cpu_device_get_type(dev);
+    ggml_backend_cpu_device_get_memory(dev, &props->memory_free, &props->memory_total);
     props->caps = {
         /* async       */ false,
         /* host_buffer */ false,
@@ -1068,7 +1068,7 @@ static ggml_backend_t ggml_backend_cpu_device_init(ggml_backend_dev_t dev, const
     GGML_UNUSED(params);
 }
 
-static ggml_backend_buffer_type_t ggml_backend_cpu_device_buffer_type(ggml_backend_dev_t dev) {
+static ggml_backend_buffer_type_t ggml_backend_cpu_device_get_buffer_type(ggml_backend_dev_t dev) {
     return ggml_backend_cpu_buffer_type();
 
     GGML_UNUSED(dev);
@@ -1111,14 +1111,14 @@ static bool ggml_backend_cpu_device_supports_buft(ggml_backend_dev_t dev, ggml_b
 }
 
 static struct ggml_backend_device_i ggml_backend_cpu_device_i = {
-    /* .get_name             = */ ggml_backend_cpu_device_name,
-    /* .get_description      = */ ggml_backend_cpu_device_description,
-    /* .get_memory           = */ ggml_backend_cpu_device_memory,
-    /* .get_type             = */ ggml_backend_cpu_device_type,
-    /* .get_props            = */ ggml_backend_cpu_device_props,
+    /* .get_name             = */ ggml_backend_cpu_device_get_name,
+    /* .get_description      = */ ggml_backend_cpu_device_get_description,
+    /* .get_memory           = */ ggml_backend_cpu_device_get_memory,
+    /* .get_type             = */ ggml_backend_cpu_device_get_type,
+    /* .get_props            = */ ggml_backend_cpu_device_get_props,
     /* .init_backend         = */ ggml_backend_cpu_device_init,
-    /* .buffer_type          = */ ggml_backend_cpu_device_buffer_type,
-    /* .host_buffer_type     = */ NULL,
+    /* .get_buffer_type      = */ ggml_backend_cpu_device_get_buffer_type,
+    /* .get_host_buffer_type = */ NULL,
     /* .buffer_from_host_ptr = */ ggml_backend_cpu_device_buffer_from_ptr,
     /* .supports_op          = */ ggml_backend_cpu_device_supports_op,
     /* .supports_buft        = */ ggml_backend_cpu_device_supports_buft,
@@ -1130,19 +1130,19 @@ static struct ggml_backend_device_i ggml_backend_cpu_device_i = {
 
 ////////////////////////
 
-static const char * ggml_backend_cpu_reg_name(ggml_backend_reg_t reg) {
+static const char * ggml_backend_cpu_reg_get_name(ggml_backend_reg_t reg) {
     return "CPU";
 
     GGML_UNUSED(reg);
 }
 
-static size_t ggml_backend_cpu_reg_device_count(ggml_backend_reg_t reg) {
+static size_t ggml_backend_cpu_reg_get_device_count(ggml_backend_reg_t reg) {
     return 1;
 
     GGML_UNUSED(reg);
 }
 
-static ggml_backend_dev_t ggml_backend_cpu_reg_device_get(ggml_backend_reg_t reg, size_t index) {
+static ggml_backend_dev_t ggml_backend_cpu_reg_get_device(ggml_backend_reg_t reg, size_t index) {
     GGML_ASSERT(index == 0);
 
     static ggml_backend_device ggml_backend_cpu_device = {
@@ -1158,9 +1158,9 @@ static ggml_backend_dev_t ggml_backend_cpu_reg_device_get(ggml_backend_reg_t reg
 }
 
 static struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
-    /* .get_name         = */ ggml_backend_cpu_reg_name,
-    /* .device_count     = */ ggml_backend_cpu_reg_device_count,
-    /* .device_get       = */ ggml_backend_cpu_reg_device_get,
+    /* .get_name         = */ ggml_backend_cpu_reg_get_name,
+    /* .get_device_count = */ ggml_backend_cpu_reg_get_device_count,
+    /* .get_device       = */ ggml_backend_cpu_reg_get_device,
     /* .get_proc_address = */ NULL,
     /* .set_log_callback = */ NULL,
 };
