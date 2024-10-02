@@ -610,7 +610,7 @@ enum llm_tensor {
     LLM_TENSOR_CLS_OUT,
 };
 
-static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
+static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_NAMES = {
     {
         LLM_ARCH_LLAMA,
         {
@@ -1566,32 +1566,32 @@ struct LLM_TN {
         return LLM_TENSOR_NAMES.at(arch).at(tensor);
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix) const {
+    std::string operator()(llm_tensor tensor, const char * suffix) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return LLM_TENSOR_NAMES.at(arch).at(tensor) + "." + suffix;
+        return std::string(LLM_TENSOR_NAMES.at(arch).at(tensor)) + "." + suffix;
     }
 
     std::string operator()(llm_tensor tensor, int bid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid);
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid);
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix, int bid) const {
+    std::string operator()(llm_tensor tensor, const char * suffix, int bid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid) + "." + suffix;
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix, int bid, int xid) const {
+    std::string operator()(llm_tensor tensor, const char * suffix, int bid, int xid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid, xid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid, xid) + "." + suffix;
     }
 };
 
@@ -4916,7 +4916,7 @@ struct llama_model_loader {
     static const int TENSOR_NOT_REQUIRED = 1;
     static const int TENSOR_DUPLICATED   = 2;
 
-    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, int flags = 0) {
+    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::initializer_list<int64_t> & ne, int flags = 0) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, !(flags & TENSOR_NOT_REQUIRED));
 
         if (cur == NULL) {
@@ -4926,7 +4926,7 @@ struct llama_model_loader {
         return create_tensor_for(ctx, cur, flags & TENSOR_DUPLICATED);
     }
 
-    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::vector<int64_t> & ne, size_t offset, bool required = true) {
+    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::initializer_list<int64_t> & ne, size_t offset, bool required = true) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
 
         if (cur == NULL) {
@@ -4939,7 +4939,7 @@ struct llama_model_loader {
 
         std::array<int64_t, GGML_MAX_DIMS> dims;
         for (size_t i = 0; i < GGML_MAX_DIMS; ++i) {
-            dims[i] = i < ne.size() ? ne[i] : 1;
+            dims[i] = i < ne.size() ? ne.begin()[i] : 1;
         }
 
         struct ggml_tensor * tensor = ggml_view_4d(ctx, base,
