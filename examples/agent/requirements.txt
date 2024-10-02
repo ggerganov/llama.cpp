@@ -1,7 +1,6 @@
 aiohttp
 fastapi
 ipython
-openai
 pydantic
 typer
 uvicorn
