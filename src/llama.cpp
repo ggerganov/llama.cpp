@@ -3418,22 +3418,25 @@ struct llama_lora_adapter {
     }
 };
 
-static size_t llama_get_device_count(const llama_model & model) {
-    size_t count = 1;
+static int llama_get_device_count(const llama_model & model) {
+    int count = (int) model.devices.size();
 
-    count = model.devices.size();
-
-#if defined(GGML_USE_SYCL)
-    count = ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    count = ggml_backend_vk_get_device_count();
-#elif defined(GGML_USE_CANN)
-    return ggml_backend_cann_get_device_count();
-#endif
 #if defined(GGML_USE_RPC)
-    count += model.rpc_servers.size();
+    count += (int) model.rpc_servers.size();
 #endif
+
+#if defined(GGML_USE_METAL)
+    count += 1;
+#elif defined(GGML_USE_SYCL)
+    count += ggml_backend_sycl_get_device_count();
+#elif defined(GGML_USE_VULKAN)
+    count += ggml_backend_vk_get_device_count();
+#elif defined(GGML_USE_CANN)
+    count += ggml_backend_cann_get_device_count();
+#endif
+
     return count;
+
     GGML_UNUSED(model);
 }
 
@@ -3482,12 +3485,13 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
         const char * endpoint = model.rpc_servers[device].c_str();
         return ggml_backend_rpc_buffer_type(endpoint);
     }
-    device = device - rpc_count;
+    device -= rpc_count;
 #endif
 
     if (device < (int)model.devices.size()) {
-        buft = ggml_backend_dev_buffer_type(model.devices[device]);
+        return ggml_backend_dev_buffer_type(model.devices[device]);
     }
+    device -= (int)model.devices.size();
 
 #if defined(GGML_USE_METAL)
     buft = ggml_backend_metal_buffer_type();
@@ -6964,6 +6968,13 @@ static bool llm_load_tensors(
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
     auto & hparams = model.hparams;
+
+    // check if the value of main_gpu is valid
+    if (llama_get_device_count(model) > 0 &&
+        split_mode != LLAMA_SPLIT_MODE_LAYER &&
+        (main_gpu < 0 || main_gpu >= llama_get_device_count(model))) {
+        throw std::runtime_error(format("invalid value for main_gpu: %d (available devices: %d)", main_gpu, llama_get_device_count(model)));
+    }
 
     model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;
@@ -19291,30 +19302,20 @@ struct llama_context * llama_new_context_with_model(
 
     if (!hparams.vocab_only) {
         // initialize backends
-#if defined(GGML_USE_RPC)
-        if (model->n_gpu_layers > 0) {
-            for (const auto & endpoint : model->rpc_servers) {
-                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
+        int main_gpu = model->main_gpu;
+
+        // with registry
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            if (main_gpu >= 0 && main_gpu < (int)model->devices.size()) {
+                ggml_backend_dev_t main_dev = model->devices[main_gpu];
+                ggml_backend_t backend = ggml_backend_dev_init(main_dev, nullptr);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(main_dev));
                     llama_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
             }
-        }
-#endif
-
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            // with split_mode LLAMA_SPLIT_MODE_NONE, only the main GPU backend is used
-            ggml_backend_dev_t main_dev = model->devices[model->main_gpu];
-            ggml_backend_t backend = ggml_backend_dev_init(main_dev, nullptr);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(main_dev));
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
         } else {
             // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
             for (auto * dev : model->devices) {
@@ -19327,6 +19328,26 @@ struct llama_context * llama_new_context_with_model(
                 ctx->backends.push_back(backend);
             }
         }
+        if (main_gpu >= (int)model->devices.size()) {
+            main_gpu -= (int)model->devices.size();
+        }
+
+#if defined(GGML_USE_RPC)
+        if (model->n_gpu_layers > 0) {
+            for (const auto & endpoint : model->rpc_servers) {
+                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
+        }
+        if (main_gpu >= (int)model->rpc_servers.size()) {
+            main_gpu -= (int)model->rpc_servers.size();
+        }
+#endif
 
 #if defined(GGML_USE_METAL)
         if (model->n_gpu_layers > 0) {
@@ -19345,7 +19366,7 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(model->main_gpu);
+            ggml_backend_t backend = ggml_backend_vk_init(main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
                 llama_free(ctx);
@@ -19366,9 +19387,9 @@ struct llama_context * llama_new_context_with_model(
 #elif defined(GGML_USE_SYCL)
         // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
+            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
@@ -19387,7 +19408,7 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
-            auto * backend = ggml_backend_kompute_init(model->main_gpu);
+            auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
                 llama_free(ctx);
@@ -19396,29 +19417,29 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 #elif defined(GGML_USE_CANN)
-    // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-    // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
-    if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-        ggml_backend_t backend = ggml_backend_cann_init(model->main_gpu);
-        if (backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, model->main_gpu);
-            llama_free(ctx);
-            return nullptr;
-        }
-        ctx->backends.push_back(backend);
-    } else {
-        // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-        // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
-        for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
-            ggml_backend_t backend = ggml_backend_cann_init(device);
+        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
+        // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            ggml_backend_t backend = ggml_backend_cann_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
             ctx->backends.push_back(backend);
+        } else {
+            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+            // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
+            for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
+                ggml_backend_t backend = ggml_backend_cann_init(device);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
-    }
 #endif
 
 #ifdef GGML_USE_BLAS
