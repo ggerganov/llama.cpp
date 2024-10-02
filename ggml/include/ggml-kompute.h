@@ -11,6 +11,8 @@
 extern "C" {
 #endif
 
+#define GGML_KOMPUTE_MAX_DEVICES 16
+
 struct ggml_vk_device {
     int index;
     int type; // same as VkPhysicalDeviceType
@@ -23,10 +25,10 @@ struct ggml_vk_device {
 };
 
 struct ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count);
+int ggml_backend_kompute_get_device_count(void);
+void ggml_backend_kompute_get_device_memory(int device, size_t * free, size_t * total);
 bool ggml_vk_get_device(struct ggml_vk_device * device, size_t memoryRequired, const char * name);
 bool ggml_vk_has_vulkan(void);
-bool ggml_vk_has_device(void);
-struct ggml_vk_device ggml_vk_current_device(void);
 
 //
 // backend API

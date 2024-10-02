@@ -66,42 +66,30 @@ static std::string ggml_kompute_format_name(int device) {
     return "Kompute" + std::to_string(device);
 }
 
-struct ggml_kompute_context {
+struct ggml_backend_kompute_context {
     int device;
     std::string name;
+
+    kp::Manager manager;
     std::shared_ptr<vk::DescriptorPool> pool;
 
-    ggml_kompute_context(int device)
-        : device(device), name(ggml_kompute_format_name(device)) {}
+    ggml_backend_buffer_type buft;
+
+    ggml_backend_kompute_context(int device)
+        : device(device), name(ggml_kompute_format_name(device)) { buft.context = nullptr; }
 };
 
-// FIXME: It would be good to consolidate the kompute manager and the kompute context into one object
-// and consolidate the init functions and simplify object lifetime management. As it currently stands,
-// we *have* to have the kompute manager no matter what for device discovery, but the kompute context
-// is only created when a device is set and vulkan is explicitly turned on.
-static ggml_kompute_context *s_kompute_context = nullptr;
 
-class kompute_manager {
-    kp::Manager *s_mgr = nullptr;
+struct ggml_backend_kompute_buffer_type_context {
+    int         device;
+    int         device_ref = 0;
+    uint64_t    buffer_alignment;
+    uint64_t    max_alloc;
+    std::string name;
 
-public:
-    kp::Manager *operator()() {
-        if (s_mgr && !s_mgr->hasInstance()) {
-            destroy();
-        }
-        if (!s_mgr) {
-            s_mgr = new kp::Manager;
-        }
-        return s_mgr;
-    }
-
-    void destroy() {
-        delete s_mgr;
-        s_mgr = nullptr;
-    }
+    ggml_backend_kompute_buffer_type_context(int device, uint64_t buffer_alignment, uint64_t max_alloc)
+        : device(device), buffer_alignment(buffer_alignment), max_alloc(max_alloc), name(ggml_kompute_format_name(device)) {}
 };
-
-static kompute_manager komputeManager;
 
 struct ggml_vk_memory {
     void *data = nullptr;
@@ -111,6 +99,65 @@ struct ggml_vk_memory {
     vk::DeviceMemory *stagingMemory = nullptr;
     vk::Buffer *stagingBuffer = nullptr;
 };
+
+struct ggml_backend_kompute_buffer_context {
+    struct ggml_vk_memory memory;
+};
+
+class kompute_manager {
+public:
+    kompute_manager();
+    ~kompute_manager();
+
+    kp::Manager *get_kp_manager(void);
+    ggml_backend_t create_backend(int device);
+    void destroy_backend(ggml_backend_t backend);
+    ggml_backend_t get_backend(int device);
+
+private:
+    // Only for global queries, not for creating devices
+    kp::Manager *m_kp_manager;
+
+    std::vector<ggml_backend_t> m_backends;
+};
+
+
+static kompute_manager komputeManager;
+
+
+static ggml_backend_t kompute_backend(int device)
+{
+    return komputeManager.get_backend(device);
+}
+
+static ggml_backend_t kompute_backend(ggml_backend_buffer_type_t buffer_type)
+{
+    auto *buft_ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buffer_type->context);
+    return kompute_backend(buft_ctx->device);
+}
+
+static ggml_backend_t kompute_backend(ggml_backend_buffer_t buffer)
+{
+    return kompute_backend(buffer->buft);
+}
+
+static ggml_backend_kompute_context *kompute_backend_context(int device)
+{
+    auto * backend = kompute_backend(device);
+    return backend ? static_cast<ggml_backend_kompute_context *>(backend->context) : nullptr;
+}
+
+static ggml_backend_kompute_context *kompute_backend_context(ggml_backend_buffer_t buffer)
+{
+    auto * backend = kompute_backend(buffer);
+    return backend ? static_cast<ggml_backend_kompute_context *>(backend->context) : nullptr;
+}
+
+static ggml_backend_kompute_context *kompute_backend_context(ggml_backend_buffer_type_t buffer_type)
+{
+    auto * backend = kompute_backend(buffer_type);
+    return backend ? static_cast<ggml_backend_kompute_context *>(backend->context) : nullptr;
+}
 
 #ifdef __linux__
 __attribute__((constructor))
@@ -167,12 +214,12 @@ static const char * ggml_vk_getVendorName(uint32_t vendorID) {
 
 static std::vector<ggml_vk_device> ggml_vk_available_devices_internal(size_t memoryRequired) {
     std::vector<ggml_vk_device> results;
-    if (!komputeManager()->hasVulkan() || !komputeManager()->hasInstance())
+    if (!komputeManager.get_kp_manager()->hasVulkan() || !komputeManager.get_kp_manager()->hasInstance())
         return results;
 
     std::vector<vk::PhysicalDevice> physical_devices;
     try {
-        physical_devices = komputeManager()->listDevices();
+        physical_devices = komputeManager.get_kp_manager()->listDevices();
     } catch (vk::SystemError & err) {
         std::cerr << __func__ << ": ignoring Vulkan exception: " << err.what() << "\n";
         return results;
@@ -287,6 +334,24 @@ ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count
     return arr;
 }
 
+int ggml_backend_kompute_get_device_count(void) {
+    auto devices = ggml_vk_available_devices_internal(0);
+    return devices.size();
+}
+
+
+void ggml_backend_kompute_get_device_memory(int device, size_t * free, size_t * total) {
+    auto devices = ggml_vk_available_devices_internal(0);
+
+    for (std::size_t i = 0; i < devices.size(); i++) {
+        if (devices[i].index == device) {
+            *total = devices[i].heapSize;
+            *free = devices[i].heapSize;
+            break;
+        }
+    }
+}
+
 static void ggml_vk_filterByVendor(std::vector<ggml_vk_device>& devices, const std::string& targetVendor) {
     devices.erase(
         std::remove_if(devices.begin(), devices.end(),
@@ -330,25 +395,25 @@ bool ggml_vk_get_device(ggml_vk_device * device, size_t memoryRequired, const ch
 }
 
 bool ggml_vk_has_vulkan() {
-    return komputeManager()->hasVulkan();
+    return komputeManager.get_kp_manager()->hasVulkan();
 }
 
-bool ggml_vk_has_device() {
-    return komputeManager()->hasDevice();
+static bool ggml_vk_has_device(struct ggml_backend_kompute_context *ctx) {
+    return ctx->manager.hasDevice();
 }
 
-ggml_vk_device ggml_vk_current_device() {
-    if (!komputeManager()->hasDevice())
+static ggml_vk_device ggml_vk_current_device(struct ggml_backend_kompute_context *ctx) {
+    if (!ctx->manager.hasDevice())
         return ggml_vk_device();
 
     auto devices = ggml_vk_available_devices_internal(0);
-    ggml_vk_filterByName(devices, komputeManager()->physicalDevice()->getProperties().deviceName.data());
+    ggml_vk_filterByName(devices, ctx->manager.physicalDevice()->getProperties().deviceName.data());
     GGML_ASSERT(!devices.empty());
     return devices.front();
 }
 
 static
-void ggml_vk_allocate_descriptor_pool(struct ggml_kompute_context * ctx, size_t size) {
+void ggml_vk_allocate_descriptor_pool(struct ggml_backend_kompute_context * ctx, size_t size) {
     std::vector<vk::DescriptorPoolSize> descriptorPoolSizes = {
         vk::DescriptorPoolSize(
           vk::DescriptorType::eStorageBuffer,
@@ -363,16 +428,16 @@ void ggml_vk_allocate_descriptor_pool(struct ggml_kompute_context * ctx, size_t 
       descriptorPoolSizes.data());
 
     ctx->pool = std::make_shared<vk::DescriptorPool>();
-    vk::Result r = komputeManager()->device()->createDescriptorPool(
+    vk::Result r = ctx->manager.device()->createDescriptorPool(
       &descriptorPoolInfo, nullptr, ctx->pool.get());
     if (r != vk::Result::eSuccess)
         std::cerr << "Error allocating descriptor pool" << vk::to_string(r);
 }
 
 static
-void ggml_vk_free_descriptor_pool(struct ggml_kompute_context * ctx) {
+void ggml_vk_free_descriptor_pool(struct ggml_backend_kompute_context * ctx) {
     if (ctx->pool) {
-        komputeManager()->device()->destroy(
+        ctx->manager.device()->destroy(
           *ctx->pool,
           (vk::Optional<const vk::AllocationCallbacks>)nullptr);
         ctx->pool = nullptr;
@@ -380,7 +445,7 @@ void ggml_vk_free_descriptor_pool(struct ggml_kompute_context * ctx) {
 }
 
 static
-vk::Buffer *ggml_vk_allocate_buffer(size_t size) {
+vk::Buffer *ggml_vk_allocate_buffer(struct ggml_backend_kompute_context * ctx, size_t size) {
     vk::BufferCreateInfo bufferCreateInfo;
     bufferCreateInfo.size = size;
     bufferCreateInfo.usage = vk::BufferUsageFlagBits::eStorageBuffer |
@@ -389,18 +454,18 @@ vk::Buffer *ggml_vk_allocate_buffer(size_t size) {
     bufferCreateInfo.sharingMode = vk::SharingMode::eExclusive;
 
     vk::Buffer *vkBuffer = new vk::Buffer;
-    vk::Result r = komputeManager()->device()->createBuffer(&bufferCreateInfo, nullptr, vkBuffer);
+    vk::Result r = ctx->manager.device()->createBuffer(&bufferCreateInfo, nullptr, vkBuffer);
     if (r != vk::Result::eSuccess)
         std::cerr << "Error allocating buffer " << vk::to_string(r) << std::endl;
     return vkBuffer;
 }
 
 static
-vk::DeviceMemory *ggml_vk_allocate(size_t size, vk::MemoryPropertyFlags flags, vk::MemoryRequirements requirements, bool *isHostVisible) {
+vk::DeviceMemory *ggml_vk_allocate(struct ggml_backend_kompute_context * ctx, size_t size, vk::MemoryPropertyFlags flags, vk::MemoryRequirements requirements, bool *isHostVisible) {
 
     uint32_t memoryTypeIndex = -1;
     bool memoryTypeIndexFound = false;
-    vk::PhysicalDeviceMemoryProperties memoryProperties = komputeManager()->physicalDevice()->getMemoryProperties();
+    vk::PhysicalDeviceMemoryProperties memoryProperties = ctx->manager.physicalDevice()->getMemoryProperties();
     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
         const vk::MemoryType &memoryType = memoryProperties.memoryTypes[i];
         const vk::MemoryHeap &memoryHeap = memoryProperties.memoryHeaps[memoryType.heapIndex];
@@ -429,7 +494,7 @@ vk::DeviceMemory *ggml_vk_allocate(size_t size, vk::MemoryPropertyFlags flags, v
     allocInfo.allocationSize = size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     vk::DeviceMemory *vkDeviceMemory =  new vk::DeviceMemory;
-    vk::Result r = komputeManager()->device()->allocateMemory(&allocInfo, nullptr, vkDeviceMemory);
+    vk::Result r = ctx->manager.device()->allocateMemory(&allocInfo, nullptr, vkDeviceMemory);
     if (r != vk::Result::eSuccess) {
         std::cerr << "Error allocating memory " << vk::to_string(r) << std::endl;
         throw std::runtime_error("Error allocating vulkan memory.");
@@ -449,31 +514,31 @@ static size_t ggml_vk_aligned_offset(ggml_backend_buffer_t buffer, size_t offset
     return (offset / minStorageBufferOffsetAlignment) * minStorageBufferOffsetAlignment;
 }
 
-static ggml_vk_memory ggml_vk_allocate(size_t size) {
+static ggml_vk_memory ggml_vk_allocate(struct ggml_backend_kompute_context * ctx, size_t size) {
     ggml_vk_memory memory;
     bool isHostVisible = false;
     {
-        memory.primaryBuffer = ggml_vk_allocate_buffer(size);
-        vk::MemoryRequirements memoryRequirements = komputeManager()->device()->getBufferMemoryRequirements(*memory.primaryBuffer);
+        memory.primaryBuffer = ggml_vk_allocate_buffer(ctx, size);
+        vk::MemoryRequirements memoryRequirements = ctx->manager.device()->getBufferMemoryRequirements(*memory.primaryBuffer);
         vk::MemoryPropertyFlags memoryPropertyFlags = vk::MemoryPropertyFlagBits::eDeviceLocal;
-        memory.primaryMemory = ggml_vk_allocate(size, memoryPropertyFlags, memoryRequirements, &isHostVisible);
-        komputeManager()->device()->bindBufferMemory(*memory.primaryBuffer, *memory.primaryMemory, 0);
+        memory.primaryMemory = ggml_vk_allocate(ctx, size, memoryPropertyFlags, memoryRequirements, &isHostVisible);
+        ctx->manager.device()->bindBufferMemory(*memory.primaryBuffer, *memory.primaryMemory, 0);
         if (isHostVisible) {
-            vk::Result r = komputeManager()->device()->mapMemory(*memory.primaryMemory, 0, size, vk::MemoryMapFlags(), &memory.data);
+            vk::Result r = ctx->manager.device()->mapMemory(*memory.primaryMemory, 0, size, vk::MemoryMapFlags(), &memory.data);
             if (r != vk::Result::eSuccess)
                 std::cerr << "Error mapping memory" << vk::to_string(r);
         }
     }
 
     if (!isHostVisible) {
-        memory.stagingBuffer = ggml_vk_allocate_buffer(size);
-        vk::MemoryRequirements memoryRequirements = komputeManager()->device()->getBufferMemoryRequirements(*memory.stagingBuffer);
+        memory.stagingBuffer = ggml_vk_allocate_buffer(ctx, size);
+        vk::MemoryRequirements memoryRequirements = ctx->manager.device()->getBufferMemoryRequirements(*memory.stagingBuffer);
         vk::MemoryPropertyFlags memoryPropertyFlags = vk::MemoryPropertyFlagBits::eHostVisible |
                                                       vk::MemoryPropertyFlagBits::eHostCoherent |
                                                       vk::MemoryPropertyFlagBits::eHostCached;
-        memory.stagingMemory = ggml_vk_allocate(size, memoryPropertyFlags, memoryRequirements, &isHostVisible);
-        komputeManager()->device()->bindBufferMemory(*memory.stagingBuffer, *memory.stagingMemory, 0);
-        vk::Result r = komputeManager()->device()->mapMemory(*memory.stagingMemory, 0, size, vk::MemoryMapFlags(), &memory.data);
+        memory.stagingMemory = ggml_vk_allocate(ctx, size, memoryPropertyFlags, memoryRequirements, &isHostVisible);
+        ctx->manager.device()->bindBufferMemory(*memory.stagingBuffer, *memory.stagingMemory, 0);
+        vk::Result r = ctx->manager.device()->mapMemory(*memory.stagingMemory, 0, size, vk::MemoryMapFlags(), &memory.data);
         if (r != vk::Result::eSuccess)
             std::cerr << "Error mapping memory" << vk::to_string(r);
     }
@@ -482,21 +547,21 @@ static ggml_vk_memory ggml_vk_allocate(size_t size) {
     return memory;
 }
 
-static void ggml_vk_free_memory(ggml_vk_memory &memory)
+static void ggml_vk_free_memory(struct ggml_backend_kompute_context * ctx, ggml_vk_memory &memory)
 {
-    komputeManager()->device()->destroy(
+    ctx->manager.device()->destroy(
       *memory.primaryBuffer,
       (vk::Optional<const vk::AllocationCallbacks>)nullptr);
     if (memory.stagingBuffer) {
-        komputeManager()->device()->destroy(
+        ctx->manager.device()->destroy(
           *memory.stagingBuffer,
           (vk::Optional<const vk::AllocationCallbacks>)nullptr);
     }
-    komputeManager()->device()->freeMemory(
+    ctx->manager.device()->freeMemory(
       *memory.primaryMemory,
       (vk::Optional<const vk::AllocationCallbacks>)nullptr);
     if (memory.stagingMemory) {
-        komputeManager()->device()->freeMemory(
+        ctx->manager.device()->freeMemory(
           *memory.stagingMemory,
           (vk::Optional<const vk::AllocationCallbacks>)nullptr);
     }
@@ -522,7 +587,7 @@ ggml_vk_memory * ggml_vk_find_tensor(const struct ggml_tensor * t, uint64_t & of
 }
 
 static
-const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(const struct ggml_tensor * t, uint32_t * alignedOffset = nullptr) {
+const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(struct ggml_backend_kompute_context * ctx, const struct ggml_tensor * t, uint32_t * alignedOffset = nullptr) {
     uint64_t originalOffset = 0;
     auto * res = ggml_vk_find_tensor(t, originalOffset);
     if (!res) {
@@ -540,7 +605,7 @@ const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(const struct ggml_tensor * 
         nbytes += *alignedOffset;
     }
 
-    return komputeManager()->tensor(
+    return ctx->manager.tensor(
         t->data,
         nelements,
         nbytes, kp::Tensor::TensorDataTypes::eFloat,
@@ -572,6 +637,7 @@ uint32_t safe_divide(uint32_t a, uint32_t b) {
 }
 
 static void ggml_vk_add(
+    struct ggml_backend_kompute_context *ctx,
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -606,19 +672,21 @@ static void ggml_vk_add(
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(__func__)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(__func__, ctx->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-static void ggml_vk_addrow(kp::Sequence& seq,
+static void ggml_vk_addrow(
+                 struct ggml_backend_kompute_context *ctx,
+                 kp::Sequence& seq,
                  const std::shared_ptr<kp::Tensor>& inA,
                  const std::shared_ptr<kp::Tensor>& inB,
                  const std::shared_ptr<kp::Tensor>& out,
@@ -637,19 +705,20 @@ static void ggml_vk_addrow(kp::Sequence& seq,
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(__func__))
+        s_algo = ctx->manager.algorithm<float, PushConstants>(__func__, ctx->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_mul(
+    struct ggml_backend_kompute_context *ctx,
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -684,19 +753,21 @@ static void ggml_vk_mul(
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(__func__)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(__func__, ctx->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-static void ggml_vk_scale(kp::Sequence& seq,
+static void ggml_vk_scale(
+                   struct ggml_backend_kompute_context *ctx,
+                   kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& in,
                    const std::shared_ptr<kp::Tensor>& out,
                    uint32_t inOff, uint32_t outOff,
@@ -725,19 +796,20 @@ static void ggml_vk_scale(kp::Sequence& seq,
     }
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(name, s_kompute_context->pool.get(), {in, out}, *spirv, {size}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(name)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(name, ctx->pool.get(), {in, out}, *spirv, {size}, {}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_xxlu(
+    struct ggml_backend_kompute_context *ctx,
     const std::vector<uint32_t>& spirv, const char * suffix, kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& in,
     const std::shared_ptr<kp::Tensor>& out,
@@ -752,43 +824,44 @@ static void ggml_vk_xxlu(
 
     auto name = std::string(__func__) + "_" + suffix;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(name, s_kompute_context->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(name)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(name, ctx->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 template <typename... Args>
-static void ggml_vk_silu(Args&&... args) {
+static void ggml_vk_silu(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_silu_comp_spv,
         kp::shader_data::op_silu_comp_spv_len);
 
-    ggml_vk_xxlu(spirv, "silu", std::forward<Args>(args)...);
+    ggml_vk_xxlu(ctx, spirv, "silu", std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_relu(Args&&... args) {
+static void ggml_vk_relu(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_relu_comp_spv,
         kp::shader_data::op_relu_comp_spv_len);
 
-    ggml_vk_xxlu(spirv, "relu", std::forward<Args>(args)...);
+    ggml_vk_xxlu(ctx, spirv, "relu", std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_gelu(Args&&... args) {
+static void ggml_vk_gelu(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_gelu_comp_spv,
         kp::shader_data::op_gelu_comp_spv_len);
 
-    ggml_vk_xxlu(spirv, "gelu", std::forward<Args>(args)...);
+    ggml_vk_xxlu(ctx, spirv, "gelu", std::forward<Args>(args)...);
 }
 
 static void ggml_vk_soft_max(
+    struct ggml_backend_kompute_context *ctx,
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -815,21 +888,22 @@ static void ggml_vk_soft_max(
     auto & inB_ = inB ? inB : inA;
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__)) {
+    if (!ctx->manager.hasAlgorithm(__func__)) {
         // FIXME: The softmax kernel needs to be fixed to use the subgroupsize which can vary by device
         const uint32_t local_x = 32;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB_, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {local_x}, {pushConsts});
+        s_algo = ctx->manager.algorithm<uint32_t, PushConstants>(__func__, ctx->pool.get(), {inA, inB_, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {local_x}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB_, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_norm_(
+    struct ggml_backend_kompute_context *ctx,
     const std::vector<uint32_t>& spirv, const char * suffix, kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& in,
     const std::shared_ptr<kp::Tensor>& out,
@@ -851,35 +925,37 @@ static void ggml_vk_norm_(
 
     auto name = std::string(__func__) + "_" + suffix;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(name, s_kompute_context->pool.get(), {in, out}, spirv, {(uint32_t)nrows}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(name)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(name, ctx->pool.get(), {in, out}, spirv, {(uint32_t)nrows}, {}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({(uint32_t)nrows});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 template <typename... Args>
-static void ggml_vk_norm(Args&&... args) {
+static void ggml_vk_norm(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_norm_comp_spv,
         kp::shader_data::op_norm_comp_spv_len);
 
-    ggml_vk_norm_(spirv, "norm", std::forward<Args>(args)...);
+    ggml_vk_norm_(ctx, spirv, "norm", std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_rms_norm(Args&&... args) {
+static void ggml_vk_rms_norm(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_rmsnorm_comp_spv,
         kp::shader_data::op_rmsnorm_comp_spv_len);
 
-    ggml_vk_norm_(spirv, "rms", std::forward<Args>(args)...);
+    ggml_vk_norm_(ctx, spirv, "rms", std::forward<Args>(args)...);
 }
 
-static void ggml_vk_diag_mask_inf(kp::Sequence& seq,
+static void ggml_vk_diag_mask_inf(
+                           struct ggml_backend_kompute_context *ctx,
+                           kp::Sequence& seq,
                            const std::shared_ptr<kp::Tensor>& in,
                            const std::shared_ptr<kp::Tensor>& out,
                            uint32_t inOff, uint32_t outOff,
@@ -899,19 +975,20 @@ static void ggml_vk_diag_mask_inf(kp::Sequence& seq,
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne00), unsigned(ne01), unsigned(ne02)}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(__func__))
+        s_algo = ctx->manager.algorithm<float, PushConstants>(__func__, ctx->pool.get(), {in, out}, spirv, {unsigned(ne00), unsigned(ne01), unsigned(ne02)}, {}, {pushConsts});
     else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({unsigned(ne00), unsigned(ne01), unsigned(ne02)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_mul_mat_f16(
+    struct ggml_backend_kompute_context *ctx,
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -948,20 +1025,22 @@ static void ggml_vk_mul_mat_f16(
     const unsigned ny = unsigned((ne11 + 4 - 1)/4);
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__)) {
-        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), ny, unsigned(ne12*ne13)}, {local_x}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(__func__)) {
+        const uint32_t local_x = ggml_vk_current_device(ctx).subgroupSize * 2;
+        s_algo = ctx->manager.algorithm<uint32_t, PushConstants>(__func__, ctx->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), ny, unsigned(ne12*ne13)}, {local_x}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), ny, unsigned(ne12*ne13)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-static void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
+static void ggml_vk_mul_mat_mat_f32(
+                         struct ggml_backend_kompute_context *ctx,
+                         kp::Sequence& seq,
                          const std::shared_ptr<kp::Tensor>& inA,
                          const std::shared_ptr<kp::Tensor>& inB,
                          const std::shared_ptr<kp::Tensor>& out,
@@ -987,10 +1066,10 @@ static void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
         nb1, nb2
     };
 
-    const uint32_t local_x = ggml_vk_current_device().subgroupSize;
+    const uint32_t local_x = ggml_vk_current_device(ctx).subgroupSize;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__)) {
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(),
+    if (!ctx->manager.hasAlgorithm(__func__)) {
+        s_algo = ctx->manager.algorithm<uint32_t, PushConstants>(__func__, ctx->pool.get(),
         {inA, inB, out}, spirv,
         {unsigned(ne01),
          unsigned(ne11),
@@ -999,19 +1078,20 @@ static void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
         {local_x},
         {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01),
                               unsigned(ne11),
                               unsigned(std::max(ne12, ne02)),
                               });
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_mul_mat_impl(
+    struct ggml_backend_kompute_context *ctx,
     const std::vector<uint32_t>& spirv, const char * suffix, uint32_t block_size, kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -1038,44 +1118,45 @@ static void ggml_vk_mul_mat_impl(
 
     auto name = std::string(__func__) + "_" + suffix;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name)) {
-        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(name, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12*ne13)}, {local_x}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(name)) {
+        const uint32_t local_x = ggml_vk_current_device(ctx).subgroupSize * 2;
+        s_algo = ctx->manager.algorithm<uint32_t, PushConstants>(name, ctx->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12*ne13)}, {local_x}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12*ne13)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 template <typename... Args>
-static void ggml_vk_mul_mat_q4_0(Args&&... args) {
+static void ggml_vk_mul_mat_q4_0(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_0_comp_spv,
         kp::shader_data::op_mul_mat_q4_0_comp_spv_len);
 
-    ggml_vk_mul_mat_impl(spirv, "q4_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
+    ggml_vk_mul_mat_impl(ctx, spirv, "q4_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_mul_mat_q4_1(Args&&... args) {
+static void ggml_vk_mul_mat_q4_1(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_1_comp_spv,
         kp::shader_data::op_mul_mat_q4_1_comp_spv_len);
 
-    ggml_vk_mul_mat_impl(spirv, "q4_1", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
+    ggml_vk_mul_mat_impl(ctx, spirv, "q4_1", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_mul_mat_q8_0(Args&&... args) {
+static void ggml_vk_mul_mat_q8_0(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q8_0_comp_spv,
         kp::shader_data::op_mul_mat_q8_0_comp_spv_len);
 
-    ggml_vk_mul_mat_impl(spirv, "q8_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
+    ggml_vk_mul_mat_impl(ctx, spirv, "q8_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
 static void ggml_vk_mul_mat_q6_k(
+    struct ggml_backend_kompute_context *ctx,
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -1096,20 +1177,21 @@ static void ggml_vk_mul_mat_q6_k(
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__)) {
-        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)}, {local_x}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(__func__)) {
+        const uint32_t local_x = ggml_vk_current_device(ctx).subgroupSize * 2;
+        s_algo = ctx->manager.algorithm<uint32_t, PushConstants>(__func__, ctx->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)}, {local_x}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo = ctx->manager.getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_get_rows(
+    struct ggml_backend_kompute_context *ctx,
     const std::vector<uint32_t>& spirv,
     const char * suffix,
     unsigned element_size, unsigned qk,
@@ -1135,58 +1217,59 @@ static void ggml_vk_get_rows(
 
     auto name = std::string(__func__) + "_" + suffix;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(name, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(name)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(name, ctx->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     } else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 template <typename... Args>
-static void ggml_vk_get_rows_f32(Args&&... args) {
+static void ggml_vk_get_rows_f32(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_f32_comp_spv,
         kp::shader_data::op_getrows_f32_comp_spv_len);
 
-    ggml_vk_get_rows(spirv, "f32", sizeof(float), 0, std::forward<Args>(args)...);
+    ggml_vk_get_rows(ctx, spirv, "f32", sizeof(float), 0, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_get_rows_f16(Args&&... args) {
+static void ggml_vk_get_rows_f16(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_f16_comp_spv,
         kp::shader_data::op_getrows_f16_comp_spv_len);
 
-    ggml_vk_get_rows(spirv, "f16", sizeof(half), 0, std::forward<Args>(args)...);
+    ggml_vk_get_rows(ctx, spirv, "f16", sizeof(half), 0, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_get_rows_q4_0(Args&&... args) {
+static void ggml_vk_get_rows_q4_0(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q4_0_comp_spv,
         kp::shader_data::op_getrows_q4_0_comp_spv_len);
 
-    ggml_vk_get_rows(spirv, "q4_0", 1/*We access blocks unaligned*/, QK4_0, std::forward<Args>(args)...);
+    ggml_vk_get_rows(ctx, spirv, "q4_0", 1/*We access blocks unaligned*/, QK4_0, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_get_rows_q4_1(Args&&... args) {
+static void ggml_vk_get_rows_q4_1(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q4_1_comp_spv,
         kp::shader_data::op_getrows_q4_1_comp_spv_len);
 
-    ggml_vk_get_rows(spirv, "q4_1", 1/*We access blocks unaligned*/, QK4_1, std::forward<Args>(args)...);
+    ggml_vk_get_rows(ctx, spirv, "q4_1", 1/*We access blocks unaligned*/, QK4_1, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_get_rows_q6_k(Args&&... args) {
+static void ggml_vk_get_rows_q6_k(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q6_k_comp_spv,
         kp::shader_data::op_getrows_q6_k_comp_spv_len);
-    ggml_vk_get_rows(spirv, "q6_k", 1/*We access blocks unaligned*/, QK_NL, std::forward<Args>(args)...);
+    ggml_vk_get_rows(ctx, spirv, "q6_k", 1/*We access blocks unaligned*/, QK_NL, std::forward<Args>(args)...);
 }
 
 static void ggml_vk_rope(
+    struct ggml_backend_kompute_context *ctx,
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -1237,23 +1320,24 @@ static void ggml_vk_rope(
 
     auto name = std::string(__func__) + (src0t == GGML_TYPE_F16 ? "_f16" : "_f32");
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(
-            name, s_kompute_context->pool.get(), {inA, inB, out},
+    if (!ctx->manager.hasAlgorithm(name)) {
+        s_algo = ctx->manager.algorithm<float, PushConstants>(
+            name, ctx->pool.get(), {inA, inB, out},
             src0t == GGML_TYPE_F16 ? spirv_f16 : spirv_f32,
             {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts}
         );
     } else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 static void ggml_vk_cpy(
+    struct ggml_backend_kompute_context *ctx,
     const std::vector<uint32_t>& spirv,
     uint32_t in_element_size, uint32_t out_element_size,
     kp::Sequence& seq,
@@ -1283,44 +1367,44 @@ static void ggml_vk_cpy(
                        + "_i_" + std::to_string(in_element_size)
                        + "_o_" + std::to_string(out_element_size);
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(name))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(name, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+    if (!ctx->manager.hasAlgorithm(name))
+        s_algo = ctx->manager.algorithm<float, PushConstants>(name, ctx->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
     else {
-        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo = ctx->manager.getAlgorithm(name);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
+        s_algo->updateDescriptors(ctx->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
 template <typename... Args>
-static void ggml_vk_cpy_f32_f16(Args&&... args) {
+static void ggml_vk_cpy_f32_f16(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f32_f16_comp_spv,
         kp::shader_data::op_cpy_f32_f16_comp_spv_len);
-    ggml_vk_cpy(spirv, 4, 2, std::forward<Args>(args)...);
+    ggml_vk_cpy(ctx, spirv, 4, 2, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_cpy_f32_f32(Args&&... args) {
+static void ggml_vk_cpy_f32_f32(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f32_f32_comp_spv,
         kp::shader_data::op_cpy_f32_f32_comp_spv_len);
-    ggml_vk_cpy(spirv, 4, 4, std::forward<Args>(args)...);
+    ggml_vk_cpy(ctx, spirv, 4, 4, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_cpy_f16_f16(Args&&... args) {
+static void ggml_vk_cpy_f16_f16(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f16_f16_comp_spv,
         kp::shader_data::op_cpy_f16_f16_comp_spv_len);
-    ggml_vk_cpy(spirv, 2, 2, std::forward<Args>(args)...);
+    ggml_vk_cpy(ctx, spirv, 2, 2, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void ggml_vk_cpy_f16_f32(Args&&... args) {
+static void ggml_vk_cpy_f16_f32(struct ggml_backend_kompute_context *ctx, Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f16_f32_comp_spv,
         kp::shader_data::op_cpy_f16_f32_comp_spv_len);
-    ggml_vk_cpy(spirv, 2, 4, std::forward<Args>(args)...);
+    ggml_vk_cpy(ctx, spirv, 2, 4, std::forward<Args>(args)...);
 }
 
 static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
@@ -1412,7 +1496,7 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
     return false;
 }
 
-static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf) {
+static void ggml_vk_graph_compute(struct ggml_backend_kompute_context * ctx, struct ggml_cgraph * gf) {
     const int n_seq = 8;
 
     // FIXME: Figure out if we can somehow optimize the size of the pool... right now we're setting
@@ -1422,7 +1506,7 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
     std::vector<std::shared_ptr<kp::Sequence>> sequences(n_seq);
 
     for (auto& sequence : sequences) {
-        sequence = komputeManager()->sequence();
+        sequence = ctx->manager.sequence();
     }
     for (int seq_idx = 0; seq_idx < n_seq; ++seq_idx) {
         const int n_nodes_per_seq = (gf->n_nodes + n_seq - 1) / n_seq;
@@ -1501,19 +1585,19 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
             uint32_t off_src0 = 0;
             uint32_t off_src1 = 0;
             uint32_t off_dst  = 0;
-            const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(src0, &off_src0) : nullTensor;
-            const std::shared_ptr<kp::Tensor>& id_src1 = src1 ? ggml_vk_get_tensor(src1, &off_src1) : nullTensor;
-            const std::shared_ptr<kp::Tensor>& id_dst  = dst  ? ggml_vk_get_tensor(dst,  &off_dst)  : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0, &off_src0) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_src1 = src1 ? ggml_vk_get_tensor(ctx, src1, &off_src1) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_dst  = dst  ? ggml_vk_get_tensor(ctx, dst,  &off_dst)  : nullTensor;
 
             switch (dst->op) {
                 case GGML_OP_ADD:
                     {
                         if (ggml_nelements(src1) == ne10 && ggml_is_contiguous(src1) && ne00 % 4 == 0 && ne10 % 4 == 0) {
                             // src1 is a row
-                            ggml_vk_addrow(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4, ne00);
+                            ggml_vk_addrow(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4, ne00);
                         } else {
                             ggml_vk_add(
-                                seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                 ne00, ne01, ne02, ne03,
                                 nb00, nb01, nb02, nb03,
                                 ne10, ne11, ne12, ne13,
@@ -1526,7 +1610,7 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                 case GGML_OP_MUL:
                     {
                         ggml_vk_mul(
-                            seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                            ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                             ne00, ne01, ne02, ne03,
                             nb00, nb01, nb02, nb03,
                             ne10, ne11, ne12, ne13,
@@ -1539,7 +1623,7 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                     {
                         float scale; memcpy(&scale, dst->op_params, sizeof(float));
 
-                        ggml_vk_scale(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst), scale);
+                        ggml_vk_scale(ctx, seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst), scale);
                     } break;
                 case GGML_OP_UNARY:
                     {
@@ -1548,16 +1632,16 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                         switch (ggml_get_unary_op(gf->nodes[i])) {
                             case GGML_UNARY_OP_SILU:
                                 {
-                                    ggml_vk_silu(seq, id_src0, id_dst, off_src0, off_dst, n/4);
+                                    ggml_vk_silu(ctx, seq, id_src0, id_dst, off_src0, off_dst, n/4);
                                 } break;
                             case GGML_UNARY_OP_RELU:
                                 {
-                                    ggml_vk_relu(seq, id_src0, id_dst, off_src0, off_dst, n/4);
+                                    ggml_vk_relu(ctx, seq, id_src0, id_dst, off_src0, off_dst, n/4);
                                 } break;
                             case GGML_UNARY_OP_GELU:
                                 {
                                     GGML_ASSERT(n % 8 == 0);
-                                    ggml_vk_gelu(seq, id_src0, id_dst, off_src0, off_dst, n/8);
+                                    ggml_vk_gelu(ctx, seq, id_src0, id_dst, off_src0, off_dst, n/8);
                                 } break;
                             default:
                                 {
@@ -1582,18 +1666,18 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
 #pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/7192")
                         GGML_ASSERT(max_bias == 0.0f);
 
-                        ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
+                        ggml_vk_soft_max(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
                     {
                         const int n_past = ((int32_t *)(dst->op_params))[0];
-                        ggml_vk_diag_mask_inf(seq, id_src0, id_dst, off_src0, off_dst, n_past, ne00, ne01, ne02);
+                        ggml_vk_diag_mask_inf(ctx, seq, id_src0, id_dst, off_src0, off_dst, n_past, ne00, ne01, ne02);
                     } break;
                 case GGML_OP_NORM:
                     {
                         float eps;
                         memcpy(&eps, dst->op_params, sizeof(float));
-                        ggml_vk_norm(seq, id_src0, id_dst, off_src0, off_dst, ne00, nb01, ggml_nrows(src0), eps);
+                        ggml_vk_norm(ctx, seq, id_src0, id_dst, off_src0, off_dst, ne00, nb01, ggml_nrows(src0), eps);
                     } break;
                 case GGML_OP_RMS_NORM:
                     {
@@ -1601,7 +1685,7 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
 
                         float eps;
                         memcpy(&eps, dst->op_params, sizeof(float));
-                        ggml_vk_rms_norm(seq, id_src0, id_dst, off_src0, off_dst, ne00, nb01, ggml_nrows(src0), eps);
+                        ggml_vk_rms_norm(ctx, seq, id_src0, id_dst, off_src0, off_dst, ne00, nb01, ggml_nrows(src0), eps);
                     } break;
                 case GGML_OP_MUL_MAT:
                     {
@@ -1627,38 +1711,38 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                         switch (src0t) {
                             case GGML_TYPE_F32:
                                 ggml_vk_mul_mat_mat_f32(
-                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                     ne00, ne01, ne02, nb01, nb02, ne11, ne12, nb11, nb12, nb1, nb2
                                 );
                                 break;
                             case GGML_TYPE_F16:
                                 ggml_vk_mul_mat_f16(
-                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                     ne00, ne01, ne02, nb00, nb01, nb02, ne10, ne11, ne12, ne13, nb10, nb11, nb12,
                                     ne0, ne1, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q8_0:
                                 ggml_vk_mul_mat_q8_0(
-                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                     ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q4_0:
                                 ggml_vk_mul_mat_q4_0(
-                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                     ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q4_1:
                                 ggml_vk_mul_mat_q4_1(
-                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                     ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q6_K:
                                 ggml_vk_mul_mat_q6_k(
-                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
                                     ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02
                                 );
                                 break;
@@ -1672,15 +1756,15 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                 case GGML_OP_GET_ROWS:
                     {
                         if (src0t == GGML_TYPE_F32) {
-                            ggml_vk_get_rows_f32(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
+                            ggml_vk_get_rows_f32(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else if (src0t == GGML_TYPE_F16) {
-                            ggml_vk_get_rows_f16(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
+                            ggml_vk_get_rows_f16(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else if (src0t == GGML_TYPE_Q4_0) {
-                            ggml_vk_get_rows_q4_0(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
+                            ggml_vk_get_rows_q4_0(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else if (src0t == GGML_TYPE_Q4_1) {
-                            ggml_vk_get_rows_q4_1(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
+                            ggml_vk_get_rows_q4_1(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else if (src0t == GGML_TYPE_Q6_K) {
-                            ggml_vk_get_rows_q6_k(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
+                            ggml_vk_get_rows_q6_k(ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else {
                             fprintf(stderr, "%s: %s: Unsupported quantization: %u\n", __func__, ggml_op_name(dst->op), src0t);
                             goto not_implemented;
@@ -1711,7 +1795,7 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                         memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
                         memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
                         ggml_vk_rope(
-                            seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, src0t, n_dims, mode, n_ctx_orig,
+                            ctx, seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, src0t, n_dims, mode, n_ctx_orig,
                             freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow,
                             ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, nb0, nb1, nb2, nb3
                         );
@@ -1724,16 +1808,16 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                             case GGML_TYPE_F32:
                                 {
                                     switch (dstt) {
-                                        case GGML_TYPE_F16: ggml_vk_cpy_f32_f16(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
-                                        case GGML_TYPE_F32: ggml_vk_cpy_f32_f32(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
+                                        case GGML_TYPE_F16: ggml_vk_cpy_f32_f16(ctx, seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
+                                        case GGML_TYPE_F32: ggml_vk_cpy_f32_f32(ctx, seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
                                         default: goto not_implemented;
                                     }
                                 } break;
                             case GGML_TYPE_F16:
                                 {
                                     switch (dstt) {
-                                        case GGML_TYPE_F16: ggml_vk_cpy_f16_f16(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
-                                        case GGML_TYPE_F32: ggml_vk_cpy_f16_f32(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
+                                        case GGML_TYPE_F16: ggml_vk_cpy_f16_f16(ctx, seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
+                                        case GGML_TYPE_F32: ggml_vk_cpy_f16_f32(ctx, seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, ne1, ne2, nb0, nb1, nb2, nb3); break;
                                     default: goto not_implemented;
                                 } break;
                             default: goto not_implemented;
@@ -1781,90 +1865,54 @@ kp::TensorT<uint8_t>::dataType()
 
 // backend interface
 
-struct ggml_backend_kompute_buffer_type_context {
-    int         device;
-    int         device_ref = 0;
-    uint64_t    buffer_alignment;
-    uint64_t    max_alloc;
-    std::string name;
-
-    ggml_backend_kompute_buffer_type_context(int device, uint64_t buffer_alignment, uint64_t max_alloc)
-        : device(device), buffer_alignment(buffer_alignment), max_alloc(max_alloc), name(ggml_kompute_format_name(device)) {}
-};
-
-static void ggml_backend_kompute_device_ref(ggml_backend_buffer_type_t buft) {
-    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
-
-    if (!ctx->device_ref) {
-        komputeManager()->initializeDevice(
-            ctx->device, {}, {
-                "VK_KHR_shader_float16_int8", "VK_KHR_8bit_storage",
-                "VK_KHR_16bit_storage", "VK_KHR_shader_non_semantic_info"
-            }
-        );
-    }
-
-    assert(ggml_vk_has_device());
-    ctx->device_ref++;
-}
-
-static void ggml_backend_kompute_device_unref(ggml_backend_buffer_type_t buft) {
-    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
-
-    assert(ctx->device_ref > 0);
-
-    ctx->device_ref--;
-
-    if (!ctx->device_ref) {
-        komputeManager.destroy();
-    }
-}
-
 static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t buffer) {
     auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buffer->buft->context);
     return ctx->name.c_str();
 }
 
 static void ggml_backend_kompute_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    auto * memory = (ggml_vk_memory *)buffer->context;
-    if (ggml_vk_has_device()) {
-        ggml_vk_free_memory(*memory);
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_context *>(buffer->context);
+    auto * backend_ctx = kompute_backend_context(buffer);
+    if (backend_ctx && ggml_vk_has_device(backend_ctx)) {
+        ggml_vk_free_memory(backend_ctx, ctx->memory);
     }
-    delete memory;
+    delete ctx;
 }
 
 static void * ggml_backend_kompute_buffer_get_base(ggml_backend_buffer_t buffer) {
-    return ((ggml_vk_memory *)buffer->context)->data;
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_context *>(buffer->context);
+    return ctx->memory.data;
 }
 
 static void ggml_backend_kompute_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-    GGML_UNUSED(buffer);
+    auto * backend_ctx = kompute_backend_context(buffer);
 
-    const auto res = ggml_vk_get_tensor(tensor);
+    const auto res = ggml_vk_get_tensor(backend_ctx, tensor);
     GGML_ASSERT(res);
 
     memcpy((char *)tensor->data + offset, data, size);
 
-    komputeManager()->sequence()->eval<kp::OpTensorSyncDevice>({res});
+    backend_ctx->manager.sequence()->eval<kp::OpTensorSyncDevice>({res});
 }
 
 static void ggml_backend_kompute_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-    GGML_UNUSED(buffer);
+    auto * backend_ctx = kompute_backend_context(buffer);
 
-    const auto res = ggml_vk_get_tensor(tensor);
+    const auto res = ggml_vk_get_tensor(backend_ctx, tensor);
     GGML_ASSERT(res);
 
-    komputeManager()->sequence()->eval<kp::OpTensorSyncLocal>({res});
+    backend_ctx->manager.sequence()->eval<kp::OpTensorSyncLocal>({res});
 
     memcpy(data, (const char *)tensor->data + offset, size);
 }
 
 static void ggml_backend_kompute_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
-    auto * memory = (ggml_vk_memory *)buffer->context;
-    memset(memory->data, value, buffer->size);
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_context *>(buffer->context);
+    auto * backend_ctx = kompute_backend_context(buffer);
+    memset(ctx->memory.data, value, ctx->memory.size);
 
-    if (memory->stagingBuffer)
-        komputeManager()->sequence()->eval<kp::OpBufferSyncDevice>(memory->primaryBuffer, memory->stagingBuffer, memory->size);
+    if (ctx->memory.stagingBuffer)
+        backend_ctx->manager.sequence()->eval<kp::OpBufferSyncDevice>(ctx->memory.primaryBuffer, ctx->memory.stagingBuffer, ctx->memory.size);
 }
 
 static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
@@ -1888,8 +1936,9 @@ static const char * ggml_backend_kompute_buffer_type_get_name(ggml_backend_buffe
 }
 
 static ggml_backend_buffer_t ggml_backend_kompute_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    ggml_backend_kompute_device_ref(buft);
-    auto * ctx = new ggml_vk_memory(ggml_vk_allocate(size));
+    auto * backend_ctx = kompute_backend_context(buft);
+    auto * ctx = new ggml_backend_kompute_buffer_context;
+    ctx->memory = ggml_vk_allocate(backend_ctx, size);
     return ggml_backend_buffer_init(buft, ggml_backend_kompute_buffer_i, ctx, size);
 }
 
@@ -1913,52 +1962,44 @@ static ggml_backend_buffer_type_i ggml_backend_kompute_buffer_type_interface = {
 };
 
 ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(int device) {
-    static std::vector<ggml_backend_buffer_type> bufts = []() {
-        std::vector<ggml_backend_buffer_type> vec;
+    auto * backend = komputeManager.create_backend(device);
+    auto * buft = &(static_cast<ggml_backend_kompute_context *>(backend->context))->buft;
+
+    if (!buft->context) {
         auto devices = ggml_vk_available_devices_internal(0);
-        vec.reserve(devices.size());
-
-        for (const auto & dev : devices) {
-            vec.push_back({
-                /* .iface   = */ ggml_backend_kompute_buffer_type_interface,
-                /* .context = */ new ggml_backend_kompute_buffer_type_context(dev.index, dev.bufferAlignment, dev.maxAlloc)
-            });
+        for (std::size_t i = 0; i < devices.size(); i++) {
+            if (device == devices[i].index) {
+                buft->context = new ggml_backend_kompute_buffer_type_context(
+                        devices[i].index,
+                        devices[i].bufferAlignment,
+                        devices[i].maxAlloc);
+                buft->iface = ggml_backend_kompute_buffer_type_interface;
+                break;
+            }
         }
-        return vec;
-    }();
+    }
 
-    auto it = std::find_if(bufts.begin(), bufts.end(), [device](const ggml_backend_buffer_type & t) {
-        return device == static_cast<ggml_backend_kompute_buffer_type_context *>(t.context)->device;
-    });
-    return it < bufts.end() ? &*it : nullptr;
+    return buft;
 }
 
 // backend
 
 static const char * ggml_backend_kompute_name(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
     return ctx->name.c_str();
 }
 
 static void ggml_backend_kompute_free(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
-
-    assert(ctx == s_kompute_context);
-    s_kompute_context = nullptr;
-    if (ctx != nullptr) {
-        delete ctx;
-    }
-
-    delete backend;
+    komputeManager.destroy_backend(backend);
 }
 
 static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
     return ggml_backend_kompute_buffer_type(ctx->device);
 }
 
 static ggml_status ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
     ggml_vk_graph_compute(ctx, cgraph);
     return GGML_STATUS_SUCCESS;
 }
@@ -1969,8 +2010,16 @@ static bool ggml_backend_kompute_supports_op(ggml_backend_t backend, const struc
 }
 
 static bool ggml_backend_kompute_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
+    auto *ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
+    return &ctx->buft == buft;
+}
+
+static bool ggml_backend_kompute_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
     GGML_UNUSED(backend);
-    return buft->iface.get_name == ggml_backend_kompute_buffer_type_get_name;
+    const int min_batch_size = 32;
+
+    return (op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS) ||
+           (op->ne[2] >= min_batch_size && op->op == GGML_OP_MUL_MAT_ID);
 }
 
 static struct ggml_backend_i kompute_backend_i = {
@@ -1988,7 +2037,7 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
     /* .supports_op             = */ ggml_backend_kompute_supports_op,
     /* .supports_buft           = */ ggml_backend_kompute_supports_buft,
-    /* .offload_op              = */ NULL,
+    /* .offload_op              = */ ggml_backend_kompute_offload_op,
     /* .event_new               = */ NULL,
     /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
@@ -2001,17 +2050,94 @@ static ggml_guid_t ggml_backend_kompute_guid() {
     return &guid;
 }
 
-ggml_backend_t ggml_backend_kompute_init(int device) {
-    GGML_ASSERT(s_kompute_context == nullptr);
-    s_kompute_context = new ggml_kompute_context(device);
 
-    ggml_backend_t kompute_backend = new ggml_backend {
+
+kompute_manager::kompute_manager() : m_backends(GGML_KOMPUTE_MAX_DEVICES, nullptr)
+{
+    m_kp_manager = nullptr;
+}
+
+kompute_manager::~kompute_manager()
+{
+    if (m_kp_manager) {
+        delete m_kp_manager;
+        m_kp_manager = nullptr;
+    }
+
+    for (std::size_t i = 0; i < m_backends.size(); i++) {
+        destroy_backend(m_backends[i]);
+    }
+}
+
+kp::Manager * kompute_manager::get_kp_manager(void)
+{
+    if (!m_kp_manager)
+        m_kp_manager = new kp::Manager;
+
+    return m_kp_manager;
+}
+
+ggml_backend_t kompute_manager::create_backend(int device)
+{
+    if (device < 0 || device >= GGML_KOMPUTE_MAX_DEVICES)
+        return nullptr;
+
+    // already exist
+    ggml_backend_t backend = get_backend(device);
+    if (backend)
+        return backend;
+
+    // create new one
+    auto *context = new ggml_backend_kompute_context(device);
+    context->manager.initializeDevice(device, {},
+        {
+            "VK_KHR_shader_float16_int8",
+            "VK_KHR_8bit_storage",
+            "VK_KHR_16bit_storage",
+            "VK_KHR_shader_non_semantic_info"
+        });
+
+    backend = new ggml_backend {
         /* .guid      = */ ggml_backend_kompute_guid(),
         /* .interface = */ kompute_backend_i,
-        /* .context   = */ s_kompute_context,
+        /* .context   = */ context,
     };
 
-    return kompute_backend;
+    m_backends[device] = backend;
+
+    std::cerr << "Kompute: Init device " << device << std::endl;
+
+    return backend;
+}
+
+void kompute_manager::destroy_backend(ggml_backend_t backend)
+{
+    if (!backend)
+        return;
+
+    for (std::size_t i = 0; i < m_backends.size(); i++) {
+        if (backend == m_backends[i]) {
+            auto *context = static_cast<ggml_backend_kompute_context *>(backend->context);
+            delete context;
+            delete backend;
+            m_backends[i] = nullptr;
+            break;
+        }
+    }
+}
+
+ggml_backend_t kompute_manager::get_backend(int device)
+{
+    if (device >= 0 && static_cast<std::size_t>(device) < m_backends.size())
+        return m_backends[device];
+
+    return nullptr;
+}
+
+
+
+ggml_backend_t ggml_backend_kompute_init(int device) {
+    return komputeManager.create_backend(device);
 }
 
 bool ggml_backend_is_kompute(ggml_backend_t backend) {
