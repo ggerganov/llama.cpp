@@ -217,8 +217,6 @@ struct ggml_backend_metal_context {
     id<MTLDevice>       device;
     id<MTLCommandQueue> queue;
 
-    MTLComputePassDescriptor * edesc;
-
     dispatch_queue_t d_queue;
 
     struct ggml_metal_kernel kernels[GGML_METAL_KERNEL_TYPE_COUNT];
@@ -304,8 +302,6 @@ static struct ggml_backend_metal_context * ggml_metal_init(void) {
     struct ggml_backend_metal_context * ctx = calloc(1, sizeof(struct ggml_backend_metal_context));
     ctx->device = device;
     ctx->queue  = [ctx->device newCommandQueue];
-    ctx->edesc  = MTLComputePassDescriptor.computePassDescriptor;
-    ctx->edesc.dispatchType = MTLDispatchTypeSerial;
     ctx->d_queue = dispatch_queue_create("ggml-metal", DISPATCH_QUEUE_CONCURRENT);
 
     id<MTLLibrary> metal_library;
@@ -3016,7 +3012,7 @@ static enum ggml_status ggml_metal_graph_compute(
             const int n_nodes_per_cb = ctx->n_nodes_per_cb;
 
             id<MTLCommandBuffer> command_buffer  = ctx->command_buffers[cb_idx];
-            id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoderWithDescriptor: ctx->edesc];
+            id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
 
             int node_start = 0;
             int node_end   = n_nodes_0;
