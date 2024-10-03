@@ -12,9 +12,7 @@
 #  include "ggml-rpc.h"
 #endif
 
-#if defined(GGML_USE_VULKAN)
-#  include "ggml-vulkan.h"
-#elif defined(GGML_USE_SYCL)
+#if defined(GGML_USE_SYCL)
 #  include "ggml-sycl.h"
 #elif defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
@@ -3410,8 +3408,6 @@ static int llama_get_device_count(const llama_model & model) {
 
 #if defined(GGML_USE_SYCL)
     count += ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    count += ggml_backend_vk_get_device_count();
 #elif defined(GGML_USE_CANN)
     count += ggml_backend_cann_get_device_count();
 #endif
@@ -3443,10 +3439,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
     }
 #elif defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
-#elif defined(GGML_USE_VULKAN)
-    if (host_buffer) {
-        buft = ggml_backend_vk_host_buffer_type();
-    }
 #endif
 
     if (buft == nullptr) {
@@ -3474,9 +3466,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     }
     device -= (int)model.devices.size();
 
-#if defined(GGML_USE_VULKAN)
-    buft = ggml_backend_vk_buffer_type(device);
-#elif defined(GGML_USE_SYCL)
+#if defined(GGML_USE_SYCL)
     buft = ggml_backend_sycl_buffer_type(device);
 #elif defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
@@ -3547,11 +3537,6 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
     size_t total;
     size_t free;
     ggml_backend_sycl_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_VULKAN)
-    size_t total;
-    size_t free;
-    ggml_backend_vk_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_CANN)
     size_t total;
@@ -19019,8 +19004,7 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
+#if defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
@@ -19329,32 +19313,7 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 
-#if defined(GGML_USE_VULKAN)
-        if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
-            llama_free(ctx);
-            return nullptr;
-        }
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            for (int device = 0; device < ggml_backend_vk_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_vk_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize Vulkan%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_SYCL)
+#if defined(GGML_USE_SYCL)
         // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
             ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
