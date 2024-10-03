@@ -658,8 +658,7 @@ enum llm_tensor {
 };
 
 enum vision_tensor {
-    VISION_TENSOR_MMPROJ_A,
-    VISION_TENSOR_MMPROJ_B,
+    VISION_TENSOR_MMPROJ,
     VISION_TENSOR_ENC_EMBD_CLS,
     VISION_TENSOR_ENC_EMBD_PATCH,
     VISION_TENSOR_ENC_EMBD_POS,
@@ -1601,8 +1600,7 @@ static const std::map<vision_arch, std::map<vision_tensor, std::string>> VISION_
     {
         VISION_ARCH_LLAVA,
         {
-            { VISION_TENSOR_MMPROJ_A,                "v.mmproj_a"                  },
-            { VISION_TENSOR_MMPROJ_B,                "v.mmproj_b"                  },
+            { VISION_TENSOR_MMPROJ,                  "v.mmproj"                    },
             { VISION_TENSOR_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
             { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
             { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
@@ -8992,10 +8990,10 @@ static bool llm_load_tensors(
         switch (vparams.arch) {
             case VISION_ARCH_LLAVA:
                 {
-                    model.clip.mm_a_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ_A, "weight"), {n_embd, n_ff});
-                    model.clip.mm_a_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ_A, "bias"  ), {n_ff});
-                    model.clip.mm_b_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ_B, "weight"), {n_ff,   n_ff});
-                    model.clip.mm_b_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ_B, "bias"  ), {n_ff});
+                    model.clip.mm_a_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 1), {n_embd, n_ff});
+                    model.clip.mm_a_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 1), {n_ff});
+                    model.clip.mm_b_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 2), {n_ff,   n_ff});
+                    model.clip.mm_b_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 2), {n_ff});
 
                     model.clip.class_embedding     = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_CLS            ), {n_embd});
                     model.clip.patch_embeddings    = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_embd});

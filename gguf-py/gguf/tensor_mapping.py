@@ -680,12 +680,12 @@ class TensorNameMap:
             "encoder.final_layer_norm", # t5
         ),
 
-        MODEL_TENSOR.V_MMPROJ_A: (
-            "multi_modal_projector.linear_1",
+        MODEL_TENSOR.V_MMPROJ: (
+            "multi_modal_projector.linear_{bid}",
         ),
 
-        MODEL_TENSOR.V_MMPROJ_B: (
-            "multi_modal_projector.linear_2",
+        MODEL_TENSOR.V_MMPROJ: (
+            "multi_modal_projector.linear_{bid}",
         ),
 
         MODEL_TENSOR.V_ENC_EMBD_CLS: (

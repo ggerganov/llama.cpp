@@ -375,8 +375,7 @@ class MODEL_TENSOR(IntEnum):
     ENC_FFN_UP           = auto()
     ENC_OUTPUT_NORM      = auto()
     # vision
-    V_MMPROJ_A           = auto()
-    V_MMPROJ_B           = auto()
+    V_MMPROJ             = auto()
     V_ENC_EMBD_CLS       = auto()
     V_ENC_EMBD_PATCH     = auto()
     V_ENC_EMBD_POS       = auto()
@@ -552,8 +551,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ENC_FFN_UP:                "enc.blk.{bid}.ffn_up",
     MODEL_TENSOR.ENC_OUTPUT_NORM:           "enc.output_norm",
     # vision
-    MODEL_TENSOR.V_MMPROJ_A:                "v.mmproj_a",
-    MODEL_TENSOR.V_MMPROJ_B:                "v.mmproj_b",
+    MODEL_TENSOR.V_MMPROJ:                  "v.mmproj_{bid}",
     MODEL_TENSOR.V_ENC_EMBD_CLS:            "v.enc.embd.cls",
     MODEL_TENSOR.V_ENC_EMBD_PATCH:          "v.enc.embd.patch",
     MODEL_TENSOR.V_ENC_EMBD_POS:            "v.enc.embd.pos",
@@ -1343,8 +1341,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP,
     ],
     MODEL_ARCH.LLAVA_VISION: [
-        MODEL_TENSOR.V_MMPROJ_A,
-        MODEL_TENSOR.V_MMPROJ_B,
+        MODEL_TENSOR.V_MMPROJ,
         MODEL_TENSOR.V_ENC_EMBD_CLS,
         MODEL_TENSOR.V_ENC_EMBD_PATCH,
         MODEL_TENSOR.V_ENC_EMBD_POS,
