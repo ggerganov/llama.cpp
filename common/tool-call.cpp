@@ -274,14 +274,22 @@ llama_tool_call_handler llama_tool_call_handler_init(
                                     builder.add_schema(name + "-args", parameters) +
                                 " \"}\""));
                         if (allow_content && !eagerly_match_any_json) {
-                            handler.grammar_trigger_words.push_back("\n{\"name\": \"" + name + "\"");
+                            handler.grammar_trigger_words.push_back("{\"name\": \"" + name + "\"");
+                            // Accommodate most common tool call variations from Llama-3.1-8B and Llama-3.2-3B.
+                            // Note that c++11's regex doesn't support partial matches, otherwise it would make
+                            // sense to add support for trigger regexes to the antiprompt mechanism.
+                            handler.grammar_trigger_words.push_back("{\n\t\"name\": \"" + name + "\"");
+                            handler.grammar_trigger_words.push_back("{\n  \"name\": \"" + name + "\"");
+                            handler.grammar_trigger_words.push_back("{\n    \"name\": \"" + name + "\"");
                         }
                     }
                 }
 
                 if (allow_content && eagerly_match_any_json) {
-                    handler.grammar_trigger_words.push_back("\n{\"");
                     handler.grammar_trigger_words.push_back("{\"");
+                    handler.grammar_trigger_words.push_back("{\n\t\"");
+                    handler.grammar_trigger_words.push_back("{\n  \"");
+                    handler.grammar_trigger_words.push_back("{\n    \"");
                 }
 
                 builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
