@@ -228,19 +228,45 @@ static void test_parsing() {
           {"arguments", dump({{"code", ""}})}
         }}
       }});
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
-      "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
-      "",
-      json {{
+    auto just_special_function_call = json {{
         {"type", "function"},
         {"function", {
           {"name", "special_function"},
           {"arguments", dump({{"arg1", 1}})}
         }}
-      }});
+    }};
+    auto no_function_call = json::array();
+
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
+      "",
+      just_special_function_call);
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\n  \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
+      "",
+      just_special_function_call);
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\n\t\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
+      "",
+      just_special_function_call);
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\n    \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
+      "",
+      just_special_function_call);
+    // No match: function unknown
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
-      "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}", json::array());
+      "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
+      no_function_call);
+    // No match: bad indentation
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\n\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
+      "{\n\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
+      no_function_call);
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
+      "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
+      no_function_call);
 }
 
 static void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
@@ -334,9 +360,9 @@ static void test_grammars() {
 }
 
 int main() {
-    test_grammars();
-    test_parsing();
     test_tool_call_style_detection();
+    test_parsing();
+    test_grammars();
 
     std::cout << "[tool-call] All tests passed!" << std::endl;
     return 0;

@@ -185,9 +185,9 @@ static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::
             };
         }
     }
-    static std::regex function_regex("(?:^|\\n)\\{\"name\": \"([^\"]+)\", \"parameters\": ");
+    static std::regex function_regex("\\{[\\s\\n\\r]*\"name\": \"([^\"]+)\", \"parameters\": ");
     static std::regex close_regex("\\}");
-    return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ false);
+    return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ true);
 }
 
 static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & tools, const std::string& input) {
@@ -270,7 +270,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         tool_rules.push_back(
                             builder.add_rule(
                                 name + "-call",
-                                "\"\\n\"? \"{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                                "\"\\n\"? \"{\" space \"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                                     builder.add_schema(name + "-args", parameters) +
                                 " \"}\""));
                         if (allow_content && !eagerly_match_any_json) {
