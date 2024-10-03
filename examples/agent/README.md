@@ -39,6 +39,7 @@
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container (check http://localhost:8088/docs once running):
 
   ```bash
+  # Shorthand: ./examples/agent/serve_tools_inside_docker.sh
   docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
     --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
     --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
@@ -99,13 +100,15 @@
   </details>
 
 
-- To compare the above results w/ OpenAI's tool usage behaviour, just add `--openai` to the agent invocation (other providers can easily be added, just use the `--endpoint`, `--api-key`, and `--model` flags)
+- To compare the above results w/ a cloud provider's tool usage behaviour, just set the `--provider` flag (accepts `openai`, `together`, `groq`) and/or use `--endpoint`, `--api-key`, and `--model`
 
   ```bash
-  export OPENAI_API_KEY=...
+  export OPENAI_API_KEY=...     # for --provider=openai
+  # export TOGETHER_API_KEY=... # for --provider=together
+  # export GROQ_API_KEY=...     # for --provider=groq
   uv run examples/agent/run.py --tools http://localhost:8088 \
     "Search for, fetch and summarize the homepage of llama.cpp" \
-    --openai
+    --provider=openai
   ```
 
 ## TODO
