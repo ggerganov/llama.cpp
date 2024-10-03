@@ -2993,7 +2993,6 @@ static enum ggml_status ggml_metal_graph_compute(
                 NSError * error = nil;
                 if (![[MTLCaptureManager sharedCaptureManager] startCaptureWithDescriptor:descriptor error:&error]) {
                     GGML_LOG_ERROR("%s: error: unable to start capture '%s'\n", __func__, [[error localizedDescription] UTF8String]);
-                    GGML_ABORT("capture failed");
                 } else {
                     [ctx->capture_scope beginScope];
                     ctx->capture_started = true;
