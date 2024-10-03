@@ -3267,17 +3267,11 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     return nullptr;
 }
 
-static void ggml_backend_cuda_reg_set_log_callback(ggml_backend_reg_t reg, ggml_log_callback log_callback, void * user_data) {
-    GGML_UNUSED(reg);
-    ggml_backend_cuda_log_set_callback(log_callback, user_data);
-}
-
 static const ggml_backend_reg_i ggml_backend_cuda_reg_interface = {
     /* .get_name          = */ ggml_backend_cuda_reg_get_name,
     /* .get_device_count  = */ ggml_backend_cuda_reg_get_device_count,
     /* .get_device_get    = */ ggml_backend_cuda_reg_get_device,
     /* .get_proc_address  = */ ggml_backend_cuda_reg_get_proc_address,
-    /* .set_log_callback  = */ ggml_backend_cuda_reg_set_log_callback,
 };
 
 // backend registry
