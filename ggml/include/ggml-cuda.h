@@ -40,8 +40,6 @@ GGML_API void ggml_backend_cuda_get_device_memory(int device, size_t * free, siz
 GGML_API bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size);
 GGML_API void ggml_backend_cuda_unregister_host_buffer(void * buffer);
 
-GGML_API void ggml_backend_cuda_log_set_callback(ggml_log_callback log_callback, void * user_data);
-
 GGML_API ggml_backend_reg_t ggml_backend_cuda_reg(void);
 
 #ifdef  __cplusplus

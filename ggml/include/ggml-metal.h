@@ -39,8 +39,6 @@ extern "C" {
 // user-code should use only these functions
 //
 
-GGML_API void ggml_backend_metal_log_set_callback(ggml_log_callback log_callback, void * user_data);
-
 GGML_API ggml_backend_t ggml_backend_metal_init(void);
 
 GGML_API bool ggml_backend_is_metal(ggml_backend_t backend);

@@ -319,25 +319,62 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 // logging
 //
 
+struct ggml_logger_state {
+    ggml_log_callback log_callback;
+    void * log_callback_user_data;
+};
+static struct ggml_logger_state g_logger_state = {ggml_log_callback_default, NULL};
+
+static void ggml_log_internal_v(enum ggml_log_level level, const char * format, va_list args) {
+    if (format == NULL)
+        return;
+    va_list args_copy;
+    va_copy(args_copy, args);
+    char buffer[128];
+    int len = vsnprintf(buffer, 128, format, args);
+    if (len < 128) {
+        g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
+    } else {
+        char * buffer2 = (char *) calloc(len + 1, sizeof(char));
+        vsnprintf(buffer2, len + 1, format, args_copy);
+        buffer2[len] = 0;
+        g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
+        free(buffer2);
+    }
+    va_end(args_copy);
+}
+
+void ggml_log_internal(enum ggml_log_level level, const char * format, ...) {
+    va_list args;
+    va_start(args, format);
+    ggml_log_internal_v(level, format, args);
+    va_end(args);
+}
+
+void ggml_log_callback_default(enum ggml_log_level level, const char * text, void * user_data) {
+    (void) level;
+    (void) user_data;
+    fputs(text, stderr);
+    fflush(stderr);
+}
+
 #if (GGML_DEBUG >= 1)
-#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
+#define GGML_PRINT_DEBUG(...) GGML_LOG_DEBUG(__VA_ARGS__)
 #else
 #define GGML_PRINT_DEBUG(...)
 #endif
 
 #if (GGML_DEBUG >= 5)
-#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
+#define GGML_PRINT_DEBUG_5(...) GGML_LOG_DEBUG(__VA_ARGS__)
 #else
 #define GGML_PRINT_DEBUG_5(...)
 #endif
 
 #if (GGML_DEBUG >= 10)
-#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
+#define GGML_PRINT_DEBUG_10(...) GGML_LOG_DEBUG(__VA_ARGS__)
 #else
 #define GGML_PRINT_DEBUG_10(...)
 #endif
-
-#define GGML_PRINT(...) printf(__VA_ARGS__)
 
 //
 // end of logging block
@@ -355,7 +392,7 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
     if (size == 0) {
-        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+        GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
         return NULL;
     }
     void * aligned_memory = NULL;
@@ -377,7 +414,7 @@ inline static void * ggml_aligned_malloc(size_t size) {
                 error_desc = "insufficient memory";
                 break;
         }
-        GGML_PRINT("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
+        GGML_LOG_ERROR("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
         GGML_ABORT("fatal error");
         return NULL;
     }
@@ -393,12 +430,12 @@ inline static void * ggml_aligned_malloc(size_t size) {
 
 inline static void * ggml_malloc(size_t size) {
     if (size == 0) {
-        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_malloc!\n");
+        GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_malloc!\n");
         return NULL;
     }
     void * result = malloc(size);
     if (result == NULL) {
-        GGML_PRINT("%s: failed to allocate %6.2f MB\n", __func__, size/(1024.0*1024.0));
+        GGML_LOG_ERROR("%s: failed to allocate %6.2f MB\n", __func__, size/(1024.0*1024.0));
         GGML_ABORT("fatal error");
     }
     return result;
@@ -407,12 +444,12 @@ inline static void * ggml_malloc(size_t size) {
 // calloc
 inline static void * ggml_calloc(size_t num, size_t size) {
     if (num == 0 || size == 0) {
-        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_calloc!\n");
+        GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_calloc!\n");
         return NULL;
     }
     void * result = calloc(num, size);
     if (result == NULL) {
-        GGML_PRINT("%s: failed to allocate %6.2f MB\n", __func__, size/(1024.0*1024.0));
+        GGML_LOG_ERROR("%s: failed to allocate %6.2f MB\n", __func__, size/(1024.0*1024.0));
         GGML_ABORT("fatal error");
     }
     return result;
@@ -3347,7 +3384,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
         if (fptr != NULL) {
             char buf[42];
             if (fgets(buf, sizeof(buf), fptr) && strncmp(buf, "0\n", sizeof(buf)) != 0) {
-                GGML_PRINT("WARNING: /proc/sys/kernel/numa_balancing is enabled, this has been observed to impair performance\n");
+                GGML_LOG_WARN("/proc/sys/kernel/numa_balancing is enabled, this has been observed to impair performance\n");
             }
             fclose(fptr);
         }
@@ -3365,21 +3402,21 @@ bool ggml_is_numa(void) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void ggml_print_object(const struct ggml_object * obj) {
-    GGML_PRINT(" - ggml_object: type = %d, offset = %zu, size = %zu, next = %p\n",
+    GGML_LOG_INFO(" - ggml_object: type = %d, offset = %zu, size = %zu, next = %p\n",
             obj->type, obj->offs, obj->size, (const void *) obj->next);
 }
 
 void ggml_print_objects(const struct ggml_context * ctx) {
     struct ggml_object * obj = ctx->objects_begin;
 
-    GGML_PRINT("%s: objects in context %p:\n", __func__, (const void *) ctx);
+    GGML_LOG_INFO("%s: objects in context %p:\n", __func__, (const void *) ctx);
 
     while (obj != NULL) {
         ggml_print_object(obj);
         obj = obj->next;
     }
 
-    GGML_PRINT("%s: --- end ---\n", __func__);
+    GGML_LOG_INFO("%s: --- end ---\n", __func__);
 }
 
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
@@ -3962,7 +3999,7 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
     struct ggml_object * const obj_new = (struct ggml_object *)(mem_buffer + cur_end);
 
     if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
-        GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
+        GGML_LOG_WARN("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
                 __func__, cur_end + size_needed + GGML_OBJECT_SIZE, ctx->mem_size);
         assert(false);
         return NULL;
@@ -4026,7 +4063,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         if (ctx->scratch.data != NULL) {
             // allocate tensor data in the scratch buffer
             if (ctx->scratch.offs + data_size > ctx->scratch.size) {
-                GGML_PRINT("%s: not enough space in the scratch memory pool (needed %zu, available %zu)\n",
+                GGML_LOG_WARN("%s: not enough space in the scratch memory pool (needed %zu, available %zu)\n",
                         __func__, ctx->scratch.offs + data_size, ctx->scratch.size);
                 assert(false);
                 return NULL;
@@ -20013,7 +20050,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     }
 #else
     if (n_threads > threadpool->n_threads_max) {
-        GGML_PRINT("WARNING: cplan requested more threads (%d) than available (%d)\n", n_threads, threadpool->n_threads_max);
+        GGML_LOG_WARN("cplan requested more threads (%d) than available (%d)\n", n_threads, threadpool->n_threads_max);
         n_threads = threadpool->n_threads_max;
     }
 
@@ -20552,30 +20589,30 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
 }
 
 void ggml_graph_print(const struct ggml_cgraph * cgraph) {
-    GGML_PRINT("=== GRAPH ===\n");
+    GGML_LOG_INFO("=== GRAPH ===\n");
 
-    GGML_PRINT("n_nodes = %d\n", cgraph->n_nodes);
+    GGML_LOG_INFO("n_nodes = %d\n", cgraph->n_nodes);
     for (int i = 0; i < cgraph->n_nodes; i++) {
         struct ggml_tensor * node = cgraph->nodes[i];
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s\n",
+        GGML_LOG_INFO(" - %3d: [ %5" PRId64 ", %5" PRId64 ", %5" PRId64 "] %16s %s\n",
                 i,
                 node->ne[0], node->ne[1], node->ne[2],
                 ggml_op_name(node->op), (node->flags & GGML_TENSOR_FLAG_PARAM) ? "x" : node->grad ? "g" : " ");
     }
 
-    GGML_PRINT("n_leafs = %d\n", cgraph->n_leafs);
+    GGML_LOG_INFO("n_leafs = %d\n", cgraph->n_leafs);
     for (int i = 0; i < cgraph->n_leafs; i++) {
         struct ggml_tensor * node = cgraph->leafs[i];
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 "] %8s %16s\n",
+        GGML_LOG_INFO(" - %3d: [ %5" PRId64 ", %5" PRId64 "] %8s %16s\n",
                 i,
                 node->ne[0], node->ne[1],
                 ggml_op_name(node->op),
                 ggml_get_name(node));
     }
 
-    GGML_PRINT("========================================\n");
+    GGML_LOG_INFO("========================================\n");
 }
 
 // check if node is part of the graph
@@ -20746,7 +20783,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
 
     fclose(fp);
 
-    GGML_PRINT("%s: dot -Tpng %s -o %s.png && open %s.png\n", __func__, filename, filename, filename);
+    GGML_LOG_INFO("%s: dot -Tpng %s -o %s.png && open %s.png\n", __func__, filename, filename, filename);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -23240,5 +23277,10 @@ int ggml_cpu_get_sve_cnt(void) {
 #else
     return 0;
 #endif
+}
+
+void ggml_log_set(ggml_log_callback log_callback, void * user_data) {
+    g_logger_state.log_callback = log_callback ? log_callback : ggml_log_callback_default;
+    g_logger_state.log_callback_user_data = user_data;
 }
 ////////////////////////////////////////////////////////////////////////////////

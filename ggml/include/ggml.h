@@ -2167,6 +2167,10 @@ extern "C" {
     typedef void (*ggml_opt_callback)(void * data, int accum_step, float * sched, bool * cancel);
     typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
 
+    // Set callback for all future logging events.
+    // If this is not called, or NULL is supplied, everything is output on stderr.
+    GGML_API void ggml_log_set(ggml_log_callback log_callback, void * user_data);
+
     // optimization parameters
     //
     //   see ggml.c (ggml_opt_default_params) for default values

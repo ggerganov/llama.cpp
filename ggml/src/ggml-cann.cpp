@@ -40,69 +40,6 @@
 #include "ggml-common.h"
 
 /**
- * @brief Default logging callback for GGML.
- *
- * This function is the default logging callback that logs messages to stderr.
- *
- * @param level The log level.
- * @param msg The log message.
- * @param user_data User data passed to the callback.
- */
-static void ggml_cann_default_log_callback(enum ggml_log_level level,
-                                           const char* msg, void* user_data) {
-    GGML_UNUSED(level);
-    GGML_UNUSED(user_data);
-    fprintf(stderr, "%s", msg);
-}
-
-ggml_log_callback ggml_cann_log_callback = ggml_cann_default_log_callback;
-void* ggml_cann_log_user_data = NULL;
-
-GGML_API void ggml_backend_cann_log_set_callback(ggml_log_callback log_callback,
-                                                 void* user_data) {
-    ggml_cann_log_callback = log_callback;
-    ggml_cann_log_user_data = user_data;
-}
-
-#define GGML_CANN_LOG_INFO(...) ggml_cann_log(GGML_LOG_LEVEL_INFO, __VA_ARGS__)
-#define GGML_CANN_LOG_WARN(...) ggml_cann_log(GGML_LOG_LEVEL_WARN, __VA_ARGS__)
-#define GGML_CANN_LOG_ERROR(...) \
-    ggml_cann_log(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
-
-GGML_ATTRIBUTE_FORMAT(2, 3)
-
-/**
- * @brief Log a message using the current logging callback.
- *
- * This function formats a log message and passes it to the current logging
- * callback.
- *
- * @param level The log level.
- * @param format The format string for the log message.
- * @param ... The arguments for the format string.
- */
-static void ggml_cann_log(enum ggml_log_level level, const char* format, ...) {
-    if (ggml_cann_log_callback != NULL) {
-        va_list args;
-        va_start(args, format);
-        char buffer[128];
-        int len = vsnprintf(buffer, 128, format, args);
-        if (len < 128) {
-            ggml_cann_log_callback(level, buffer, ggml_cann_log_user_data);
-        } else {
-             // vsnprintf adds a null terminator
-            std::vector<char> buffer2(len + 1);
-            va_end(args);
-            va_start(args, format);
-            vsnprintf(&buffer2[0], buffer2.size(), format, args);
-            ggml_cann_log_callback(level, buffer2.data(),
-                                   ggml_cann_log_user_data);
-        }
-        va_end(args);
-    }
-}
-
-/**
  * @brief Handles CANN errors by printing an error message and aborting.
  *
  * @param stmt The statement that caused the error.
@@ -116,10 +53,10 @@ static void ggml_cann_log(enum ggml_log_level level, const char* format, ...) {
     int32_t id = -1;
     aclrtGetDevice(&id);
 
-    GGML_CANN_LOG_ERROR("CANN error: %s\n", msg);
-    GGML_CANN_LOG_ERROR("  current device: %d, in function %s at %s:%d\n", id, func,
+    GGML_LOG_ERROR("CANN error: %s\n", msg);
+    GGML_LOG_ERROR("  current device: %d, in function %s at %s:%d\n", id, func,
             file, line);
-    GGML_CANN_LOG_ERROR("  %s\n", stmt);
+    GGML_LOG_ERROR("  %s\n", stmt);
     // abort with GGML_ASSERT to get a stack trace
     GGML_ABORT("CANN error");
 }
@@ -165,7 +102,7 @@ static ggml_cann_device_info ggml_cann_init() {
     aclError err = aclrtGetDeviceCount((uint32_t*)&info.device_count);
 
     if (err != ACL_SUCCESS) {
-        GGML_CANN_LOG_ERROR("%s: failed to initialize CANN: %s\n",
+        GGML_LOG_ERROR("%s: failed to initialize CANN: %s\n",
                 __func__, aclGetRecentErrMsg());
         return info;
     }
@@ -315,7 +252,7 @@ struct ggml_cann_pool_leg : public ggml_cann_pool {
         *actual_size = look_ahead_size;
         pool_size += look_ahead_size;
 #ifdef DEBUG_CANN_MALLOC
-        GGML_CANN_LOG_INFO(
+        GGML_LOG_INFO(
             "%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, "
             "requested %u MB\n",
             __func__, device, nnz, (uint32_t)(max_size / 1024 / 1024),
@@ -470,7 +407,7 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
             // add to the pool
             pool_size += reserve_size;
 
-            // GGML_CANN_LOG_INFO("cann pool[%d]: size increased to %llu MB (
+            // GGML_LOG_INFO("cann pool[%d]: size increased to %llu MB (
             // reserved %llu MB)\n",
             //       device, (unsigned long long) (pool_size/1024/1024),
             //       (unsigned long long) (reserve_size/1024/1024));
@@ -483,7 +420,7 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
         pool_used += size;
 
 #ifdef DEBUG_CANN_MALLOC
-        GGML_CANN_LOG_INFO("cann pool[%d]: allocated %llu bytes at %llx\n", device,
+        GGML_LOG_INFO("cann pool[%d]: allocated %llu bytes at %llx\n", device,
                (unsigned long long)size, (unsigned long long)ptr);
 #endif
         return ptr;
@@ -497,7 +434,7 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
      */
     void free(void* ptr, size_t size) override {
 #ifdef DEBUG_CANN_MALLOC
-        GGML_CANN_LOG_INFO("cann pool[%d]: freed %llu bytes at %llx\n", device,
+        GGML_LOG_INFO("cann pool[%d]: freed %llu bytes at %llx\n", device,
                (unsigned long long)size, (unsigned long long)ptr);
 #endif
 
@@ -1095,7 +1032,7 @@ ggml_backend_cann_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     void* dev_ptr;
     aclError err = aclrtMalloc(&dev_ptr, size, ACL_MEM_MALLOC_HUGE_FIRST);
     if (err != ACL_SUCCESS) {
-        GGML_CANN_LOG_ERROR(
+        GGML_LOG_ERROR(
             "%s: allocating %.2f MiB on device %d: aclrtMalloc failed: %s\n",
             __func__, size / 1024.0 / 1024.0, buft_ctx->device,
             aclGetRecentErrMsg());
@@ -1280,7 +1217,7 @@ static void * ggml_cann_host_malloc(size_t size) {
     aclError err = aclrtMallocHost((void **) &hostPtr, size);
     if (err != ACL_SUCCESS) {
 
-        GGML_CANN_LOG_WARN("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
+        GGML_LOG_WARN("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
                            size / 1024.0 / 1024.0, aclGetRecentErrMsg());
         return nullptr;
     }
@@ -1733,7 +1670,7 @@ static enum ggml_status ggml_backend_cann_graph_compute(
         bool ok = ggml_cann_compute_forward(*cann_ctx, node);
 
         if (!ok) {
-            GGML_CANN_LOG_ERROR("%s: error: op not supported %s (%s)\n", __func__,
+            GGML_LOG_ERROR("%s: error: op not supported %s (%s)\n", __func__,
                     node->name, ggml_op_name(node->op));
         }
         GGML_ASSERT(ok);
@@ -2043,13 +1980,13 @@ static ggml_guid_t ggml_backend_cann_guid() {
 ggml_backend_t ggml_backend_cann_init(int32_t device) {
     aclInit(nullptr);
     if (device < 0 || device >= ggml_backend_cann_get_device_count()) {
-        GGML_CANN_LOG_ERROR("%s: error: invalid device %d\n", __func__, device);
+        GGML_LOG_ERROR("%s: error: invalid device %d\n", __func__, device);
         return nullptr;
     }
 
     ggml_backend_cann_context* ctx = new ggml_backend_cann_context(device);
     if (ctx == nullptr) {
-        GGML_CANN_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
+        GGML_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
         return nullptr;
     }
     ggml_cann_set_device(ctx->device);

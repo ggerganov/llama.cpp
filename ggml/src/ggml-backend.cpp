@@ -505,12 +505,6 @@ void * ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * na
     return reg->iface.get_proc_address(reg, name);
 }
 
-void ggml_backend_reg_set_log_callback(ggml_backend_reg_t reg, ggml_log_callback log_callback, void * user_data) {
-    if (reg->iface.set_log_callback) {
-        reg->iface.set_log_callback(reg, log_callback, user_data);
-    }
-}
-
 // Backend registry
 
 #ifdef GGML_USE_CUDA
@@ -612,13 +606,6 @@ ggml_backend_dev_t ggml_backend_dev_by_type(enum ggml_backend_dev_type type) {
         }
     }
     return NULL;
-}
-
-void ggml_backend_set_log_callback(ggml_log_callback log_callback, void * user_data) {
-    for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
-        ggml_backend_reg_t reg = ggml_backend_reg_get(i);
-        ggml_backend_reg_set_log_callback(reg, log_callback, user_data);
-    }
 }
 
 // Convenience functions
@@ -1161,7 +1148,6 @@ static const struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
     /* .get_device_count = */ ggml_backend_cpu_reg_get_device_count,
     /* .get_device       = */ ggml_backend_cpu_reg_get_device,
     /* .get_proc_address = */ NULL,
-    /* .set_log_callback = */ NULL,
 };
 
 ggml_backend_reg_t ggml_backend_cpu_reg(void) {

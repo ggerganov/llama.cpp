@@ -215,9 +215,6 @@ extern "C" {
         // (optional) get a pointer to a function in the backend
         // backends can add custom functions that are not part of the standard ggml-backend interface
         void * (*get_proc_address)(ggml_backend_reg_t reg, const char * name);
-
-        // (optional) set the log callback for the backend
-        void (*set_log_callback)(ggml_backend_reg_t reg, ggml_log_callback log_callback, void * user_data);
     };
 
     struct ggml_backend_reg {

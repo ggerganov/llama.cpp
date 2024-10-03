@@ -116,17 +116,6 @@ GGML_API void ggml_backend_cann_get_device_memory(int32_t device,
                                                   size_t* free,
                                                   size_t* total);
 
-/**
- * @brief Set the logging callback for GGML.
- *
- * This function sets the logging callback and user data for logging.
- *
- * @param log_callback The logging callback to set.
- * @param user_data User data to pass to the logging callback.
- */
-GGML_API void ggml_backend_cann_log_set_callback(ggml_log_callback log_callback,
-                                                 void* user_data);
-
 #ifdef __cplusplus
 }
 #endif
