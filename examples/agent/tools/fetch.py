@@ -3,9 +3,9 @@ import html2text
 import logging
 
 
-async def fetch_page(url: str) -> str:
+async def fetch_page(url: str):
     '''
-        Fetch a web page (convert it to markdown if possible).
+        Fetch a web page (convert it to markdown if possible), using aiohttp.
     '''
 
     try:

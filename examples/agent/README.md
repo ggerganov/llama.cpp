@@ -39,6 +39,7 @@
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container (check http://localhost:8088/docs once running):
 
   ```bash
+  export BRAVE_SEARCH_API_KEY=... # https://api.search.brave.com/
   # Shorthand: ./examples/agent/serve_tools_inside_docker.sh
   docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
     --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
@@ -103,9 +104,10 @@
 - To compare the above results w/ a cloud provider's tool usage behaviour, just set the `--provider` flag (accepts `openai`, `together`, `groq`) and/or use `--endpoint`, `--api-key`, and `--model`
 
   ```bash
-  export OPENAI_API_KEY=...     # for --provider=openai
-  # export TOGETHER_API_KEY=... # for --provider=together
-  # export GROQ_API_KEY=...     # for --provider=groq
+  export LLAMA_API_KEY=...      # for --provider=llama.cpp https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md
+  export OPENAI_API_KEY=...     # for --provider=openai    https://platform.openai.com/api-keys
+  export TOGETHER_API_KEY=...   # for --provider=together  https://api.together.ai/settings/api-keys
+  export GROQ_API_KEY=...       # for --provider=groq      https://console.groq.com/keys
   uv run examples/agent/run.py --tools http://localhost:8088 \
     "Search for, fetch and summarize the homepage of llama.cpp" \
     --provider=openai

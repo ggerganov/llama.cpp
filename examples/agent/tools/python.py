@@ -1,3 +1,4 @@
+import re
 from IPython.core.interactiveshell import InteractiveShell
 from io import StringIO
 import logging
@@ -5,6 +6,11 @@ import sys
 
 
 python_tools = {}
+
+
+def _strip_ansi_codes(text):
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 
 def python(code: str) -> str:
@@ -18,7 +24,9 @@ def python(code: str) -> str:
         str: The output of the executed code.
     '''
     logging.debug('[python] Executing %s', code)
-    shell = InteractiveShell()
+    shell = InteractiveShell(
+        colors='neutral',
+    )
     shell.user_global_ns.update(python_tools)
 
     old_stdout = sys.stdout
@@ -27,9 +35,9 @@ def python(code: str) -> str:
     try:
         shell.run_cell(code)
     except Exception as e:
-        logging.debug('[python] Execution failed: %s\nCode: %s', e, code)
-        return f'An error occurred: {e}'
+        # logging.debug('[python] Execution failed: %s\nCode: %s', e, code)
+        return f'An error occurred:\n{_strip_ansi_codes(str(e))}'
     finally:
         sys.stdout = old_stdout
 
-    return out.getvalue()
+    return _strip_ansi_codes(out.getvalue())

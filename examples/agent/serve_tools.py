@@ -2,6 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "aiohttp",
+#     "beautifulsoup4",
 #     "fastapi",
 #     "html2text",
 #     "ipython",

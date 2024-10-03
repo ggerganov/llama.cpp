@@ -146,22 +146,22 @@ def typer_async_workaround():
 _PROVIDERS = {
     'llama.cpp': {
         'endpoint': 'http://localhost:8080/v1/',
-        'api_key_env': 'LLAMACPP_API_KEY',
+        'api_key_env': 'LLAMA_API_KEY', # https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md
     },
     'openai': {
         'endpoint': 'https://api.openai.com/v1/',
         'default_model': 'gpt-4o',
-        'api_key_env': 'OPENAI_API_KEY',
+        'api_key_env': 'OPENAI_API_KEY', # https://platform.openai.com/api-keys
     },
     'together': {
         'endpoint': 'https://api.together.xyz',
         'default_model': 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-        'api_key_env': 'TOGETHER_API_KEY',
+        'api_key_env': 'TOGETHER_API_KEY', # https://api.together.ai/settings/api-keys
     },
     'groq': {
         'endpoint': 'https://api.groq.com/openai',
         'default_model': 'llama-3.1-70b-versatile',
-        'api_key_env': 'GROQ_API_KEY',
+        'api_key_env': 'GROQ_API_KEY', # https://console.groq.com/keys
     },
 }
 
@@ -245,7 +245,7 @@ async def main(
                     def describe(res, res_str):
                         if isinstance(res, list):
                             return f'{len(res)} items'
-                        return f'{len(res_str)} chars'
+                        return f'{len(res_str)} chars\n  {res_str[:1000]}'
                     print(f' → {describe(tool_result, tool_result_str)}', file=sys.stderr)
                     if verbose:
                         print(tool_result_str, file=sys.stderr)
