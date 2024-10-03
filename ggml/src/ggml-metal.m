@@ -1690,7 +1690,7 @@ static void ggml_metal_encode_node(
                 const int64_t d_inner      = ne01;
                 const int64_t n_head       = ne02;
                 const int64_t n_group      = ne41;
-                const int64_t n_seq_tokens = ne11;
+                const int64_t n_seq_tokens = ne12;
                 const int64_t n_seqs       = ne13;
 
                 id<MTLComputePipelineState> pipeline = nil;
