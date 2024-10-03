@@ -378,6 +378,20 @@ static std::vector<T> string_split(const std::string & str, char delim) {
     return values;
 }
 
+// split string by a `std::string delim` instead of `char delim`
+static std::vector<std::string> string_split(std::string s, const std::string & delimiter) {
+    std::vector<std::string> tokens;
+    size_t pos = 0;
+    std::string token;
+    while ((pos = s.find(delimiter)) != std::string::npos) {
+        token = s.substr(0, pos);
+        tokens.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
+    tokens.push_back(s);
+    return tokens;
+}
+
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);
 
@@ -443,6 +457,17 @@ std::vector<llama_token> llama_tokenize(
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
+           const std::string & text,
+                        bool   add_special,
+                        bool   parse_special = false);
+
+const llama_token TOKEN_IMG_PLACEMENT = -1000;
+
+// tokenize with "placeholder" for image embedding tokens
+// "<img_placement>" will be replaced with TOKEN_IMG_PLACEMENT
+// TODO: this function is hacky, need to be improved
+std::vector<llama_token> llama_tokenize_with_img(
+  const struct llama_context * ctx,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);

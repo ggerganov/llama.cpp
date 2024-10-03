@@ -15,7 +15,9 @@ static void print_usage(int, char ** argv) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    params.prompt = "Hello my name is";
+    //params.prompt = "Hello my name is";
+    params.prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\n"
+        "USER:<img_placement>\nwhat did you see?\nASSISTANT:";
     params.n_predict = 32;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON, print_usage)) {
@@ -62,52 +64,10 @@ int main(int argc, char ** argv) {
 
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
-
-
-
-    // TODO: this is for testing; DELETE ME
-    int n_cur = 0;
-    params.prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
-    {
-        llama_img_batch ibatch;
-        ibatch.n_imgs = 1;
-        ibatch.imgs = (llama_img **) malloc(1024);
-        ibatch.imgs[0] = load_image_from_file("../models/eiffel-tower-3349075_1280.jpg");
-        llama_vision_encode(ctx, &ibatch);
-
-        auto tokens = ::llama_tokenize(ctx, params.prompt, true);
-        int n_imgs = ibatch.n_imgs;
-        int n_embd = llama_n_embd(model);
-        int n_patches = llama_vision_n_patches(ctx);
-        printf("n_embd = %d ; n_patches = %d \n", n_embd, n_patches);
-        float * output_img = llama_vision_get_embeddings(ctx, 0);
-
-        n_cur += tokens.size();
-        llama_batch batch = llama_batch_init(512, 0, 1);
-        llama_batch_clear(batch);
-        for (auto t : tokens) { llama_batch_add(batch, t, n_cur, { 0 }, false); n_cur++; }
-        if (llama_decode(ctx, batch) != 0) {
-            LOG("%s: llama_decode() failed\n", __func__);
-            return 1;
-        }
-
-        // for (int k = 0; k < 10; k++) printf("%f\n", output_img[k]);
-        llama_batch_clear(batch);
-        batch = {int32_t(n_patches*n_imgs), nullptr, output_img, nullptr, nullptr, nullptr, nullptr, n_cur, 1, 0, };
-        if (llama_decode(ctx, batch) != 0) {
-            LOG("%s: llama_decode() failed\n", __func__);
-            return 1;
-        }
-        n_cur += n_embd*n_imgs;
-    }
-    params.prompt = "\nwhat did you see?\nASSISTANT:";
-
-
-
     // tokenize the prompt
 
     std::vector<llama_token> tokens_list;
-    tokens_list = ::llama_tokenize(ctx, params.prompt, true);
+    tokens_list = ::llama_tokenize_with_img(ctx, params.prompt, true);
 
     const int n_ctx    = llama_n_ctx(ctx);
     const int n_kv_req = tokens_list.size() + (n_predict - tokens_list.size());
@@ -127,8 +87,18 @@ int main(int argc, char ** argv) {
     LOG("\n");
 
     for (auto id : tokens_list) {
-        LOG("%s", llama_token_to_piece(ctx, id).c_str());
+        if (id == TOKEN_IMG_PLACEMENT) {
+            LOG("<img_placement>");
+        } else {
+            LOG("%s", llama_token_to_piece(ctx, id).c_str());
+        }
     }
+
+    LOG("\n\n");
+
+    // load image
+    llama_batch_img img_batch = llama_batch_img_init(1);
+    img_batch.imgs[0] = load_image_from_file("../models/eiffel-tower-3349075_1280.jpg");
 
     // create a llama_batch with size 512
     // we use this object to submit token data for decoding
@@ -136,15 +106,55 @@ int main(int argc, char ** argv) {
     llama_batch batch = llama_batch_init(512, 0, 1);
 
     // evaluate the initial prompt
-    for (size_t i = 0; i < tokens_list.size(); i++) {
-        //llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
-        if (i == 0) continue;
-        llama_batch_add(batch, tokens_list[i], n_cur, { 0 }, false);
-        n_cur++;
+    int n_cur = 0;
+    int i_img = 0;
+    for (auto id : tokens_list) {
+        if (id == TOKEN_IMG_PLACEMENT) {
+            img_batch.pos[i_img] = n_cur;
+            n_cur += llama_img_n_tokens(ctx, img_batch.imgs[i_img]);
+            i_img++;
+        } else {
+            llama_batch_add(batch, id, n_cur, { 0 }, false);
+            printf("pos %d tok %d --> %s\n", n_cur, id, llama_token_to_piece(ctx, id).c_str());
+            n_cur++;
+        }
     }
 
     // llama_decode will output logits only for the last token of the prompt
     batch.logits[batch.n_tokens - 1] = true;
+
+    if (llama_encode_vision(ctx, img_batch) != 0) {
+        LOG("%s: llama_encode_vision() failed\n", __func__);
+        return 1;
+    }
+
+    n_cur = 0;
+    {
+        auto t1 = ::llama_tokenize(ctx, "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:", false);
+        auto t2 = ::llama_tokenize(ctx, "\nwhat did you see?\nASSISTANT:", false);
+        t1.insert(t1.begin(), 1);
+
+        n_cur = 0;
+        llama_batch_clear(batch);
+        llama_batch_add(batch, 1, 0, { 0 }, false);
+        llama_decode(ctx, batch);
+
+        n_cur = t1.size();
+        llama_batch_clear(batch);
+        llama_batch batch0 = {int32_t(576), nullptr, _test_get_img_embd(ctx), nullptr, nullptr, nullptr, nullptr, n_cur, 1, 0, };
+        llama_decode(ctx, batch0);
+
+        n_cur = 0;
+        llama_batch_clear(batch);
+        for (auto t : t1) { llama_batch_add(batch, t, n_cur, { 0 }, false); n_cur++; }
+        llama_decode(ctx, batch);
+
+        n_cur = t1.size() + 576;
+        llama_batch_clear(batch);
+        printf("pos %d\n", n_cur);
+        for (auto t : t2) { llama_batch_add(batch, t, n_cur, { 0 }, false); n_cur++; }
+        batch.logits[batch.n_tokens - 1] = true;
+    }
 
     if (llama_decode(ctx, batch) != 0) {
         LOG("%s: llama_decode() failed\n", __func__);
@@ -153,7 +163,6 @@ int main(int argc, char ** argv) {
 
     // main loop
 
-    //int n_cur    = batch.n_tokens;
     int n_decode = 0;
 
     const auto t_main_start = ggml_time_us();

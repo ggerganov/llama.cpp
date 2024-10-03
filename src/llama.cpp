@@ -1600,7 +1600,7 @@ static const std::map<vision_arch, std::map<vision_tensor, std::string>> VISION_
     {
         VISION_ARCH_LLAVA,
         {
-            { VISION_TENSOR_MMPROJ,                  "v.mmproj"                    },
+            { VISION_TENSOR_MMPROJ,                  "v.mmproj_%d"                 },
             { VISION_TENSOR_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
             { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
             { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
@@ -8990,10 +8990,10 @@ static bool llm_load_tensors(
         switch (vparams.arch) {
             case VISION_ARCH_LLAVA:
                 {
-                    model.clip.mm_a_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 1), {n_embd, n_ff});
-                    model.clip.mm_a_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 1), {n_ff});
-                    model.clip.mm_b_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 2), {n_ff,   n_ff});
-                    model.clip.mm_b_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 2), {n_ff});
+                    model.clip.mm_1_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 1), {n_embd, n_ff});
+                    model.clip.mm_1_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 1), {n_ff});
+                    model.clip.mm_2_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 2), {n_ff,   n_ff});
+                    model.clip.mm_2_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 2), {n_ff});
 
                     model.clip.class_embedding     = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_CLS            ), {n_embd});
                     model.clip.patch_embeddings    = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_embd});
@@ -9001,8 +9001,8 @@ static bool llm_load_tensors(
 
                     model.clip.pre_norm_w          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "weight"), {n_embd});
                     model.clip.pre_norm_b          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "bias"  ), {n_embd});
-                    // model.clip.post_norm_w         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "weight"), {n_embd});
-                    // model.clip.post_norm_b         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "bias"  ), {n_embd});
+                    model.clip.post_norm_w         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "weight"), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.clip.post_norm_b         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "bias"  ), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -20110,6 +20110,8 @@ int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx) {
 
 void llama_kv_cache_clear(struct llama_context * ctx) {
     llama_kv_cache_clear(ctx->kv_self);
+    // clear vision embeddings output
+    llama_vision_clear_output(ctx->clip);
 }
 
 bool llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
@@ -21226,9 +21228,48 @@ int32_t llama_encode(
     return ret;
 }
 
+float * _test_get_img_embd(struct llama_context * ctx) { return ctx->clip.out_embd.data(); }
 int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
+    // hacky vision implementation, for testing only
+    if (!ctx->clip.out_embd.empty()) {
+        // int8_t * logits        = new int8_t        [ctx->clip.out_pos.size()];
+        // int32_t * n_seq_id     = new int32_t       [ctx->clip.out_pos.size()];
+        // llama_seq_id ** seq_id = new llama_seq_id *[ctx->clip.out_pos.size()];
+        // llama_seq_id seq_id_0  = 0;
+        // printf("out_pos %d\n", ctx->clip.out_pos.size());
+        // llama_batch ibatch = {
+        //     /*n_tokens       =*/ static_cast<int32_t>(ctx->clip.out_pos.size()),
+        //     /*tokens         =*/ nullptr,
+        //     /*embd           =*/ ctx->clip.out_embd.data(),
+        //     /*pos            =*/ ctx->clip.out_pos.data(),
+        //     /*n_seq_id       =*/ n_seq_id,
+        //     /*seq_id         =*/ seq_id,
+        //     /*logits         =*/ logits,
+        //     /*all_pos_0      =*/ 0,
+        //     /*all_pos_1      =*/ 0,
+        //     /*all_seq_id     =*/ 0,
+        // };
+        // for (size_t i = 0; i < ctx->clip.out_pos.size(); i++) {
+        //     ibatch.n_seq_id[i] = 1;
+        //     ibatch.seq_id  [i] = &seq_id_0;
+        //     ibatch.logits  [i] = 0;
+        // }
+        // llama_decode_internal(*ctx, ibatch);
+        // delete[] logits;
+        // delete[] n_seq_id;
+        // delete[] seq_id;
+        // llama_vision_clear_output(ctx->clip);
+
+        //int n_eval = ctx->clip.out_pos.size();
+        //int n_past = ctx->clip.out_pos[0];
+        //printf("n_eval %d, n_past %d\n", n_eval, n_past);
+        //llama_batch ibatch = {int32_t(n_eval), nullptr, ctx->clip.out_embd.data(), nullptr, nullptr, nullptr, nullptr, n_past, 1, 0, };
+        //llama_decode_internal(*ctx, ibatch);
+        //llama_vision_clear_output(ctx->clip);
+    }
+
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
@@ -21808,28 +21849,43 @@ struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * mod
 // vision
 //
 
-llama_img * llama_img_alloc(int width, int height) {
+llama_img * llama_img_init(int width, int height) {
     llama_img * img = new llama_img();
     img->nx = width;
     img->ny = height;
-    img->data = (unsigned char *)malloc(width*height*3);
+    if (width > 0 && height > 0) {
+        img->data = (unsigned char *)malloc(width*height*3);
+    }
     return img;
 }
+
 void llama_img_free(llama_img * img) {
-    free(img->data);
+    if (img->data) free(img->data);
     delete img;
 }
 
-int32_t llama_vision_encode(struct llama_context * ctx, llama_img_batch * batch) {
-    return llama_vision_encode_internal(ctx->clip, batch);
-}
-
-float * llama_vision_get_embeddings(struct llama_context * ctx, int32_t idx) {
-    return ctx->clip.output.data();
-}
-
-int32_t llama_vision_n_patches(struct llama_context * ctx) {
+int32_t llama_img_n_tokens(struct llama_context * ctx, llama_img * img) {
+    GGML_UNUSED(img); // reserved for future usage
     return clip_n_patches(ctx->clip);
+}
+
+llama_batch_img llama_batch_img_init(int n_imgs) {
+    llama_batch_img batch;
+    batch.n_imgs = n_imgs;
+    if (n_imgs > 0) {
+        batch.imgs = (llama_img **)malloc(n_imgs*sizeof(llama_img *));
+        batch.pos  = (llama_pos * )malloc(n_imgs*sizeof(llama_pos  ));
+    }
+    return batch;
+}
+
+void llama_batch_img_free(llama_batch_img batch) {
+    if (batch.imgs) free(batch.imgs);
+    if (batch.pos ) free(batch.pos );
+}
+
+int32_t llama_encode_vision(struct llama_context * ctx, llama_batch_img batch) {
+    return llama_encode_vision_internal(ctx->clip, &batch);
 }
 
 //

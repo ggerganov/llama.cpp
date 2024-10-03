@@ -233,10 +233,11 @@ extern "C" {
     } llama_img;
 
     // Input data for llama_vision_decode
-    typedef struct llama_img_batch {
+    typedef struct llama_batch_img {
         int32_t      n_imgs;
         llama_img ** imgs;
-    } llama_img_batch;
+        llama_pos *  pos;
+    } llama_batch_img;
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
@@ -894,16 +895,18 @@ extern "C" {
     //
 
     // create new RGB image for input
-    LLAMA_API llama_img * llama_img_alloc(int width, int height);
-    LLAMA_API void llama_img_free(llama_img * img);
+    LLAMA_API llama_img * llama_img_init(int width, int height);
+    LLAMA_API void        llama_img_free(llama_img * img);
 
-    // encode image into embeddings
-    LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, llama_img_batch * batch);
+    // get number of tokens that an image occupies, used to determine the position in the batch
+    LLAMA_API int32_t llama_img_n_tokens(struct llama_context * ctx, llama_img * img);
 
-    // get output embeddings, to be put into language batch
-    LLAMA_API float * llama_vision_get_embeddings(struct llama_context * ctx, int32_t idx);
+    // create new image batch
+    LLAMA_API llama_batch_img llama_batch_img_init(int n_imgs);
+    LLAMA_API void            llama_batch_img_free(llama_batch_img batch);
 
-    LLAMA_API int32_t llama_vision_n_patches(struct llama_context * ctx);
+    // encode the input image batch
+    LLAMA_API int32_t llama_encode_vision(struct llama_context * ctx, llama_batch_img batch);
 
     //
     // Vocab
@@ -1237,6 +1240,7 @@ extern "C" {
     LLAMA_API void                           llama_perf_sampler_reset(      struct llama_sampler * chain);
 
     LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
+    LLAMA_API float * _test_get_img_embd(struct llama_context * ctx);
 
 #ifdef __cplusplus
 }

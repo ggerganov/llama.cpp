@@ -78,14 +78,10 @@ int clip_n_patches(const clip_context & ctx) {
 
 int clip_n_mmproj_embd(const clip_context & ctx) {
     if (ctx.model->hparams.proj_type == CLIP_PROJECTOR_TYPE_MLP) {
-        return ctx.model->mm_b_b->ne[0];
+        return ctx.model->mm_2_b->ne[0];
     } else {
         GGML_ASSERT(false && "invalid proj type");
     }
-}
-
-int clip_n_embd(const clip_context & ctx) {
-    return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx);
 }
 
 /**
@@ -575,12 +571,12 @@ static ggml_cgraph * clip_image_build_graph(clip_context & ctx, int batch_size, 
         embeddings = ggml_get_rows(ctx0, embeddings, patches);
 
         if (hparams.proj_type == CLIP_PROJECTOR_TYPE_MLP) {
-            embeddings = ggml_mul_mat(ctx0, model.mm_a_w, embeddings);
-            embeddings = ggml_add(ctx0, embeddings, model.mm_a_b);
+            embeddings = ggml_mul_mat(ctx0, model.mm_1_w, embeddings);
+            embeddings = ggml_add(ctx0, embeddings, model.mm_1_b);
 
             embeddings = ggml_gelu(ctx0, embeddings);
-            embeddings = ggml_mul_mat(ctx0, model.mm_b_w, embeddings);
-            embeddings = ggml_add(ctx0, embeddings, model.mm_b_b);
+            embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
+            embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
         } else {
             GGML_ASSERT(false && "unsupported proj type");
         }
@@ -681,7 +677,9 @@ static int32_t clip_image_batch_encode(clip_context & ctx, const clip_image_f32_
     ggml_backend_t backend_embd = ggml_backend_sched_get_tensor_backend(ctx.sched, embeddings);
 
     // copy the embeddings to the location passed by the user
-    output.resize(clip_n_embd(ctx));
+    size_t out_nbytes = clip_n_patches(ctx)*clip_n_mmproj_embd(ctx)*sizeof(float);
+    GGML_ASSERT(out_nbytes == ggml_nbytes(embeddings));
+    output.resize(out_nbytes);
     ggml_backend_tensor_get_async(backend_embd, embeddings, output.data(), 0, ggml_nbytes(embeddings));
 
     ggml_backend_sched_synchronize(ctx.sched);
@@ -731,15 +729,18 @@ static int32_t encode_image_with_clip(clip_context & ctx, const llama_img img, s
 ////////////////////////////////////////////////////////////////////////////////////////
 // public API
 
-int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch) {
+int32_t llama_encode_vision_internal(clip_context & ctx, llama_batch_img * batch) {
     if (batch->n_imgs == 0) {
         return 0;
     }
 
     // TODO: batching is not working atm, should be fixed later
-    const int n_embd = clip_n_embd(ctx);
-    ctx.output.resize(n_embd * batch->n_imgs);
-    ctx.n_output = batch->n_imgs;
+    const int n_embd = clip_n_mmproj_embd(ctx);
+    const int n_tokens_per_img = clip_n_patches(ctx);
+    const int n_pos = n_tokens_per_img*batch->n_imgs;
+
+    ctx.out_embd.resize(n_embd*n_pos);
+    ctx.out_pos.resize(n_pos);
 
     for (int i = 0; i < batch->n_imgs; i++) {
         std::vector<float> output_single;
@@ -748,12 +749,21 @@ int32_t llama_vision_encode_internal(clip_context & ctx, llama_img_batch * batch
             return status;
         }
         // copy output embeddings to result
-        for (int k = 0; k < n_embd; k++) {
-            ctx.output[n_embd*i + k] = output_single[k];
+        for (int k = 0; k < n_embd*n_tokens_per_img; k++) {
+            ctx.out_embd[n_embd*n_tokens_per_img*i + k] = output_single[k];
+        }
+        // fill position for all output tokens
+        for (int p = 0; p < n_tokens_per_img; p++) {
+            ctx.out_pos[n_tokens_per_img*i + p] = batch->pos[i] + p;
         }
     }
 
     return 0;
+}
+
+void llama_vision_clear_output(clip_context & ctx) {
+    ctx.out_embd.clear();
+    ctx.out_pos.clear();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

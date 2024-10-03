@@ -1474,6 +1474,27 @@ std::vector<llama_token> llama_tokenize(
     return result;
 }
 
+// TODO: this function is hacky, need to be improved
+std::vector<llama_token> llama_tokenize_with_img(
+  const struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_special,
+                        bool   parse_special) {
+    static const std::string IMG_PLACEMENT = "<img_placement>";
+    std::vector<std::string> parts = string_split(text, IMG_PLACEMENT);
+    std::vector<llama_token> output;
+    for (const auto & part : parts) {
+        bool add_bos = &parts.front() == &part;
+        auto tokens = llama_tokenize(ctx, part, add_special && add_bos, parse_special);
+        output.insert(output.end(), tokens.begin(), tokens.end());
+        if (&parts.back() != &part) {
+            // add image token to middle of 2 parts
+            output.push_back(TOKEN_IMG_PLACEMENT);
+        }
+    }
+    return output;
+}
+
 std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
