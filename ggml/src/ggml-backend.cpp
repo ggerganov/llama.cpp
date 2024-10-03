@@ -1,5 +1,13 @@
 // Note: porting this file to C++ is a work in progress
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#   define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include "ggml-backend-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-impl.h"
@@ -10,8 +18,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <string>
 #include <vector>
+
+#ifdef __APPLE__
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 
 // backend buffer type
 
@@ -1008,6 +1022,70 @@ ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) 
 
 ////////////////////////
 
+struct ggml_backend_cpu_device_context {
+    std::string description = "CPU";
+
+    ggml_backend_cpu_device_context() {
+#ifdef __APPLE__
+        size_t len = 0;
+        if (!sysctlbyname("machdep.cpu.brand_string", NULL, &len, NULL, 0)) {
+            description.resize(len);
+            sysctlbyname("machdep.cpu.brand_string", &description[0], &len, NULL, 0); // NOLINT
+        }
+#elif defined(__linux__)
+        FILE * f = fopen("/proc/cpuinfo", "r");
+        if (f) {
+            char buf[1024];
+            while (fgets(buf, sizeof(buf), f)) {
+                if (strncmp(buf, "model name", 10) == 0) {
+                    char * p = strchr(buf, ':');
+                    if (p) {
+                        p++;
+                        while (std::isspace(*p)) {
+                            p++;
+                        }
+                        while (std::isspace(p[strlen(p) - 1])) {
+                            p[strlen(p) - 1] = '\0';
+                        }
+                        description = p;
+                        break;
+                    }
+                }
+            }
+            fclose(f);
+        }
+#elif defined(_WIN32)
+        HKEY hKey;
+        if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
+                        TEXT("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"),
+                        0,
+                        KEY_READ,
+                        &hKey) == ERROR_SUCCESS) {
+            DWORD cpu_brand_size = 0;
+            if (RegQueryValueExA(hKey,
+                                TEXT("ProcessorNameString"),
+                                NULL,
+                                NULL,
+                                NULL,
+                                &cpu_brand_size) == ERROR_SUCCESS) {
+                description.resize(cpu_brand_size);
+                if (RegQueryValueExA(hKey,
+                                    TEXT("ProcessorNameString"),
+                                    NULL,
+                                    NULL,
+                                    (LPBYTE)&description[0], // NOLINT
+                                    &cpu_brand_size) == ERROR_SUCCESS) {
+                    if (description.find('\0') != std::string::npos) {
+                        description.resize(description.find('\0'));
+                    }
+                }
+            }
+            RegCloseKey(hKey);
+        }
+#endif
+    }
+};
+
 static const char * ggml_backend_cpu_device_get_name(ggml_backend_dev_t dev) {
     return "CPU";
 
@@ -1015,10 +1093,9 @@ static const char * ggml_backend_cpu_device_get_name(ggml_backend_dev_t dev) {
 }
 
 static const char * ggml_backend_cpu_device_get_description(ggml_backend_dev_t dev) {
-    // TODO
-    return "CPU";
+    struct ggml_backend_cpu_device_context * ctx = (struct ggml_backend_cpu_device_context *)dev->context;
 
-    GGML_UNUSED(dev);
+    return ctx->description.c_str();
 }
 
 static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
@@ -1131,10 +1208,11 @@ static size_t ggml_backend_cpu_reg_get_device_count(ggml_backend_reg_t reg) {
 static ggml_backend_dev_t ggml_backend_cpu_reg_get_device(ggml_backend_reg_t reg, size_t index) {
     GGML_ASSERT(index == 0);
 
+    static ggml_backend_cpu_device_context ctx;
     static ggml_backend_device ggml_backend_cpu_device = {
         /* .iface   = */ ggml_backend_cpu_device_i,
         /* .reg     = */ reg,
-        /* .context = */ NULL,
+        /* .context = */ &ctx,
     };
 
     return &ggml_backend_cpu_device;
