@@ -714,8 +714,9 @@ private:
     MatchResult findFirstMatch(const std::string& text, size_t offset = 0) {
         TrieNode* current = &root;
         MatchResult partialMatch{std::string::npos, "", true, 0, false};
+        auto text_length = text.length();
 
-        for (size_t i = offset; i < text.length(); ++i) {
+        for (size_t i = offset; i < text_length; ++i) {
             char c = text[i];
             while (current != &root && current->children.find(c) == current->children.end()) {
                 current = current->fail;
@@ -745,7 +746,9 @@ private:
 
         // If we've found a partial match and haven't returned a full match, return the partial match
         if (partialMatch.pos != std::string::npos) {
-            return partialMatch;
+            if (partialMatch.pos + partialMatch.matchLength == text_length) {
+                return partialMatch;
+            }
         }
 
         return {std::string::npos, "", false, 0, false};

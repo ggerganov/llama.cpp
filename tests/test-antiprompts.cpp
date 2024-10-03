@@ -60,6 +60,27 @@ int main()
         /* .matchLength = */ 3,
         /* .is_grammar_trigger = */ false,
     });
+    assert_equal(antiprompts.findFirstMatch(" ab c", 0), {
+        /* .pos = */ std::string::npos,
+        /* .pattern = */ "",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 0,
+        /* .is_grammar_trigger = */ false,
+    });
+    assert_equal(antiprompts.findFirstMatch(" abc abc", 0), {
+        /* .pos = */ 1,
+        /* .pattern = */ "abc",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 3,
+        /* .is_grammar_trigger = */ false,
+    });
+    assert_equal(antiprompts.findFirstMatch(" ab abc", 0), {
+        /* .pos = */ 4,
+        /* .pattern = */ "abc",
+        /* .is_partial = */ false,
+        /* .matchLength = */ 3,
+        /* .is_grammar_trigger = */ false,
+    });
     assert_equal(antiprompts.findFirstMatch(" bc", 0), {
         /* .pos = */ 1,
         /* .pattern = */ "",
