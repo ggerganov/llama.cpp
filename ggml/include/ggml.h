@@ -456,6 +456,7 @@ extern "C" {
         GGML_OP_SUM_ROWS,
         GGML_OP_MEAN,
         GGML_OP_ARGMAX,
+        GGML_OP_COUNT_EQUAL,
         GGML_OP_REPEAT,
         GGML_OP_REPEAT_BACK,
         GGML_OP_CONCAT,
@@ -993,6 +994,12 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_argmax(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
+
+    // count number of equal elements in a and b
+    GGML_API struct ggml_tensor * ggml_count_equal(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
 
     // if a is the same shape as b, and a is not parameter, return a
     // otherwise, return a new tensor: repeat(a) to fit in b
