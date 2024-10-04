@@ -1075,12 +1075,12 @@ static const char * llama_sampler_xtc_name(const struct llama_sampler * /*smpl*/
 static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     const auto * ctx = (llama_sampler_xtc *) smpl->ctx;
 
-    if (ctx->probability <= 0.0f 
-        || ctx->threshold <= 0.0f 
-        || ctx->threshold >= 1.0f 
-        || ctx->threshold_max <= 0.0f 
-        || ctx->threshold_max <= ctx->threshold 
-        || cur_p->size <= 2 
+    if (ctx->probability <= 0.0f
+        || ctx->threshold <= 0.0f
+        || ctx->threshold >= 1.0f
+        || ctx->threshold_max <= 0.0f
+        || ctx->threshold_max <= ctx->threshold
+        || cur_p->size <= 2
         || ctx->min_keep <= 2) {
         return;
     }
