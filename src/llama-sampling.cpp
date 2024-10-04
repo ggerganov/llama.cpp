@@ -1086,8 +1086,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
         || ctx->threshold >= 1.0f
         || ctx->threshold_max <= 0.0f
         || ctx->threshold_max <= ctx->threshold
-        || cur_p->size <= 2
-        || ctx->min_keep <= 2) {
+        || cur_p->size <= 2) {
         return;
     }
     // chance is calculated on init and on each reset
@@ -1116,6 +1115,8 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
 
         // resizing now that penalized tokens are at the back
         cur_p->size = cur_p->size - found + 1;
+
+        if (cur_p->size < ctx->min_keep) cur_p->size = ctx->min_keep;
     }
 }
 
