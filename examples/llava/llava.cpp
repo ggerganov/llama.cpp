@@ -402,17 +402,18 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
 }
 
 struct llava_embd_batch {
-    std::vector<llama_pos>       pos;
-    std::vector<int32_t>         n_seq_id;
-    std::array <llama_seq_id, 1> seq_id_0;
-    std::vector<llama_seq_id *>  seq_ids;
-    std::vector<int8_t>          logits;
+    std::vector<llama_pos>      pos;
+    std::vector<int32_t>        n_seq_id;
+    std::vector<llama_seq_id>   seq_id_0;
+    std::vector<llama_seq_id *> seq_ids;
+    std::vector<int8_t>         logits;
     llama_batch batch;
     llava_embd_batch(float * embd, int32_t n_tokens, llama_pos pos_0, llama_seq_id seq_id) {
         pos     .resize(n_tokens);
         n_seq_id.resize(n_tokens);
         seq_ids .resize(n_tokens + 1);
         logits  .resize(n_tokens);
+        seq_id_0.resize(1);
         seq_id_0[0] = seq_id;
         seq_ids [n_tokens] = nullptr;
         batch = {
