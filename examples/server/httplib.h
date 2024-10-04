@@ -457,7 +457,6 @@ public:
 
   std::function<bool(const char *data, size_t data_len)> write;
   std::function<bool()> is_writable;
-  std::function<bool()> is_alive;
   std::function<void()> done;
   std::function<void(const Headers &trailer)> done_with_trailer;
   std::ostream os;
@@ -591,6 +590,7 @@ struct Response {
   Headers headers;
   std::string body;
   std::string location; // Redirect location
+  std::function<bool()> is_alive;
 
   bool has_header(const std::string &key) const;
   std::string get_header_value(const std::string &key, size_t id = 0) const;
@@ -4093,7 +4093,6 @@ inline bool write_content(Stream &strm, const ContentProvider &content_provider,
   };
 
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
-  data_sink.is_alive = [&]() -> bool { return strm.is_alive(); };
 
   while (offset < end_offset && !is_shutting_down()) {
     if (!strm.is_writable()) {
@@ -4140,7 +4139,6 @@ write_content_without_length(Stream &strm,
   };
 
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
-  data_sink.is_alive = [&]() -> bool { return strm.is_alive(); };
 
   data_sink.done = [&](void) { data_available = false; };
 
@@ -4193,7 +4191,6 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
   };
 
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
-  data_sink.is_alive = [&]() -> bool { return strm.is_alive(); };
 
   auto done_with_trailer = [&](const Headers *trailer) {
     if (!ok) { return; }
@@ -4287,6 +4284,7 @@ inline bool redirect(T &cli, Request &req, Response &res,
   }
 
   Response new_res;
+  new_res.is_alive = res.is_alive;
 
   auto ret = cli.send(new_req, new_res, error);
   if (ret) {
@@ -6648,6 +6646,7 @@ Server::process_request(Stream &strm, bool close_connection,
   Request req;
 
   Response res;
+  res.is_alive = [&strm]() { return strm.is_alive(); };
   res.version = "HTTP/1.1";
   res.headers = default_headers_;
 
