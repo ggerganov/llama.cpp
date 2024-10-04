@@ -12,6 +12,7 @@
 #include "json.hpp"
 // mime type for sending response
 #define MIMETYPE_JSON "application/json; charset=utf-8"
+#define MIMETYPE_EVENT_STREAM "text/event-stream"
 
 // auto generated files (update with ./deps.sh)
 #include "colorthemes.css.hpp"
@@ -2459,7 +2460,7 @@ static void handle_tasks(
             return false;
         }, resource_releaser);
     } else {
-        res.set_chunked_content_provider("text/event-stream", [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
+        res.set_chunked_content_provider(MIMETYPE_EVENT_STREAM, [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
             auto is_alive = [&sink]() { return sink.is_alive(); };
             state->task_ids = create_tasks(is_alive);
             payload(state->task_ids, sink);
