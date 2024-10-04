@@ -1877,6 +1877,13 @@ struct server_context {
             system_prompt_update();
         }
 
+        for (auto & slot : slots) {
+            if (slot.is_processing() && slot.is_alive && !slot.is_alive()) {
+                SLT_WRN(slot, "%s", "slot connection died\n");
+                slot.release();
+            }
+        }
+
         // check if all slots are idle
         {
             bool all_idle = true;
