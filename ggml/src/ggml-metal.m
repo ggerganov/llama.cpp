@@ -3546,19 +3546,19 @@ void ggml_backend_metal_capture_next_compute(ggml_backend_t backend) {
 
 ////////////////////////
 
-static const char * ggml_backend_metal_device_name(ggml_backend_dev_t dev) {
+static const char * ggml_backend_metal_device_get_name(ggml_backend_dev_t dev) {
     return "Metal";
 
     GGML_UNUSED(dev);
 }
 
-static const char * ggml_backend_metal_device_description(ggml_backend_dev_t dev) {
+static const char * ggml_backend_metal_device_get_description(ggml_backend_dev_t dev) {
     return [[g_state.mtl_device name] UTF8String];
 
     GGML_UNUSED(dev);
 }
 
-static void ggml_backend_metal_device_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
+static void ggml_backend_metal_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
     // TODO
     *free = 0;
     *total = 0;
@@ -3570,17 +3570,17 @@ static void ggml_backend_metal_device_memory(ggml_backend_dev_t dev, size_t * fr
     GGML_UNUSED(dev);
 }
 
-static enum ggml_backend_dev_type ggml_backend_metal_device_type(ggml_backend_dev_t dev) {
+static enum ggml_backend_dev_type ggml_backend_metal_device_get_type(ggml_backend_dev_t dev) {
     return GGML_BACKEND_DEVICE_TYPE_GPU_FULL;
 
     GGML_UNUSED(dev);
 }
 
-static void ggml_backend_metal_device_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
-    props->name        = ggml_backend_metal_device_name(dev);
-    props->description = ggml_backend_metal_device_description(dev);
-    props->type        = ggml_backend_metal_device_type(dev);
-    ggml_backend_metal_device_memory(dev, &props->memory_free, &props->memory_total);
+static void ggml_backend_metal_device_get_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_metal_device_get_name(dev);
+    props->description = ggml_backend_metal_device_get_description(dev);
+    props->type        = ggml_backend_metal_device_get_type(dev);
+    ggml_backend_metal_device_get_memory(dev, &props->memory_free, &props->memory_total);
     props->caps = (struct ggml_backend_dev_caps) {
         /* async       */ false,
         /* host_buffer */ false,
@@ -3595,7 +3595,7 @@ static ggml_backend_t ggml_backend_metal_device_init(ggml_backend_dev_t dev, con
     GGML_UNUSED(params);
 }
 
-static ggml_backend_buffer_type_t ggml_backend_metal_device_buffer_type(ggml_backend_dev_t dev) {
+static ggml_backend_buffer_type_t ggml_backend_metal_device_get_buffer_type(ggml_backend_dev_t dev) {
     return ggml_backend_metal_buffer_type();
 
     GGML_UNUSED(dev);
@@ -3621,14 +3621,14 @@ static bool ggml_backend_metal_device_supports_buft(ggml_backend_dev_t dev, ggml
 }
 
 static const struct ggml_backend_device_i ggml_backend_metal_device_i = {
-    /* .get_name             = */ ggml_backend_metal_device_name,
-    /* .get_description      = */ ggml_backend_metal_device_description,
-    /* .get_memory           = */ ggml_backend_metal_device_memory,
-    /* .get_type             = */ ggml_backend_metal_device_type,
-    /* .get_props            = */ ggml_backend_metal_device_props,
+    /* .get_name             = */ ggml_backend_metal_device_get_name,
+    /* .get_description      = */ ggml_backend_metal_device_get_description,
+    /* .get_memory           = */ ggml_backend_metal_device_get_memory,
+    /* .get_type             = */ ggml_backend_metal_device_get_type,
+    /* .get_props            = */ ggml_backend_metal_device_get_props,
     /* .init_backend         = */ ggml_backend_metal_device_init,
-    /* .buffer_type          = */ ggml_backend_metal_device_buffer_type,
-    /* .host_buffer_type     = */ NULL,
+    /* .get_buffer_type      = */ ggml_backend_metal_device_get_buffer_type,
+    /* .get_host_buffer_type = */ NULL,
     /* .buffer_from_host_ptr = */ ggml_backend_metal_device_buffer_from_ptr,
     /* .supports_op          = */ ggml_backend_metal_device_supports_op,
     /* .supports_buft        = */ ggml_backend_metal_device_supports_buft,
