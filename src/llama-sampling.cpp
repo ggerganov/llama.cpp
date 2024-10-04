@@ -1075,37 +1075,43 @@ static const char * llama_sampler_xtc_name(const struct llama_sampler * /*smpl*/
 static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     const auto * ctx = (llama_sampler_xtc *) smpl->ctx;
 
-    if (ctx->probability <= 0.0f || ctx->threshold <= 0.0f || cur_p->size <= 1 || ctx->min_keep <= 2) {
+    if (ctx->probability <= 0.0f 
+        || ctx->threshold <= 0.0f 
+        || ctx->threshold >= 1.0f 
+        || ctx->threshold_max <= 0.0f 
+        || ctx->threshold_max <= ctx->threshold 
+        || cur_p->size <= 2 
+        || ctx->min_keep <= 2) {
         return;
     }
 
     std::random_device rd;
-    float chance = (float)(rd()%100)/100;
+    float chance = (float)(rd()%100 - 1)/100;
     if (chance > ctx->probability) return;
+
     // in case it's not sorted/recalculated yet
     llama_sampler_softmax_impl(cur_p);
 
-    int removed = 0;
+    int found = 0;
     // going through all candidates from back to front, easier to keep the last of probables
     for (int i = (cur_p->size - 1); i >= 0; --i) {
         if (cur_p->data[i].p >= ctx->threshold && cur_p->data[i].p <= ctx->threshold_max) {
-            ++removed;
-            if (removed > 1) {
+            ++found;
+            if (found > 1) {
                 // .logits are used for sorting and calculating .p in llama_sample_softmax_impl
                 cur_p->data[i].logit = -999.0f;
             }
         }
     }
 
-    if (removed > 1) {
+    if (found > 1) {
         // sorting with new logits, ex-last probable will be the first anyway
         std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
             return a.logit > b.logit;
         });
-        cur_p->sorted = true;
 
         // resizing now that penalized tokens are at the back
-        cur_p->size = cur_p->size - removed + 1;
+        cur_p->size = cur_p->size - found + 1;
     }
 }
 

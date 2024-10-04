@@ -975,7 +975,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
     ).set_sparam());
     add_opt(llama_arg(
         {"--xtc-t"}, "N",
-        format("xtc threshold (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_t),
+        format("xtc threshold (default: %.1f, 0.0 or 1.0 = disabled)", (double)params.sparams.xtc_t),
         [](gpt_params & params, const std::string & value) {
             params.sparams.xtc_t = std::stof(value);
         }

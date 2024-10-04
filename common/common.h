@@ -110,7 +110,7 @@ struct gpt_sampler_params {
     float   top_p             = 0.95f; // 1.0 = disabled
     float   min_p             = 0.05f; // 0.0 = disabled
     float   xtc_p             = 0.50f; // 0.0 = disabled
-    float   xtc_t             = 0.10f; // 1.0 = disabled
+    float   xtc_t             = 0.10f; // 0.0 or 1.0 = disabled
     float   xtc_t_max         = 1.00f; // 0.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
     float   typ_p             = 1.00f; // typical_p, 1.0 = disabled
