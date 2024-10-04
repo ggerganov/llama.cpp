@@ -97,6 +97,8 @@ class OpenAPIMethod:
         url = f'{self.url}?{params}'
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=body) as response:
+                if response.status == 500:
+                    raise Exception(await response.text())
                 response.raise_for_status()
                 response_json = await response.json()
 
@@ -240,12 +242,15 @@ async def main(
                     pretty_call = f'{name}({", ".join(f"{k}={v.model_dump_json() if isinstance(v, BaseModel) else json.dumps(v)}" for k, v in args.items())})'
                     print(f'⚙️  {pretty_call}', file=sys.stderr, end=None)
                     sys.stdout.flush()
-                    tool_result = await tool_map[name](**args)
-                    tool_result_str = json.dumps(tool_result)
-                    def describe(res, res_str):
+                    try:
+                        tool_result = await tool_map[name](**args)
+                    except Exception as e:
+                        tool_result = 'ERROR: ' + str(e)
+                    tool_result_str = tool_result if isinstance(tool_result, str) else json.dumps(tool_result)
+                    def describe(res, res_str, max_len = 1000):
                         if isinstance(res, list):
                             return f'{len(res)} items'
-                        return f'{len(res_str)} chars\n  {res_str[:1000]}'
+                        return f'{len(res_str)} chars\n  {res_str[:1000] if len(res_str) > max_len else res_str}...'
                     print(f' → {describe(tool_result, tool_result_str)}', file=sys.stderr)
                     if verbose:
                         print(tool_result_str, file=sys.stderr)
