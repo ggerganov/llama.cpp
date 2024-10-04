@@ -35,12 +35,12 @@ make xgenmm-cli
 #     --seed 42 --ctx-size 4096 --predict 1024 \
 #     --temp 0 --verbose-prompt
 
-Q="What is the address of this resturant?"
+Q="What is the address of this restaurant?"
 # Q="Is this dine in or dine out receipt?"
 # Q="What is the total amount paid?"
 # Q="What is card holder's name?"
 # Q="What is the transaction date?"
-# Q="What is the phone number of this resturant?"
+# Q="What is the phone number of this restaurant?"
 # Q="Who is the attendant?"
 # Q="Who is the cashier?"
 # Q="Briefly describe this image."
@@ -53,7 +53,8 @@ echo $prompt
 # mmproj=$base_path/mmproj-model-f32.gguf
 
 base_path=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct_bf16_patch128/gguf
-model=$base_path/phi3_mini_4k_instruct_f16.gguf
+# model=$base_path/phi3_mini_4k_instruct_f16.gguf
+model=$base_path/phi3_mini_4k_instruct_f16_Q4_K_M.gguf
 mmproj=$base_path/mmproj-model-f32.gguf
 
 ./xgenmm-cli --model $model\

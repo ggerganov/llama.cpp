@@ -5,6 +5,6 @@ quantize_method=Q4_K_M
 outname=${model_name}_${quantize_method}
 input_model_path=$gguf_dir/$model_name.gguf
 output_model_path=$gguf_dir/$outname.gguf
-echo $outname
-cd ../../
+echo $input_model_path
+echo $output_model_path
 ./llama-quantize $input_model_path $output_model_path $quantize_method
