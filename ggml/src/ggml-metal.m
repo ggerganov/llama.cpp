@@ -20,6 +20,11 @@
 
 #define UNUSED(x) (void)(x)
 
+// globals
+
+static struct ggml_backend_reg    g_ggml_backend_metal_reg;
+static struct ggml_backend_device g_ggml_backend_metal_device;
+
 // global information about the Metal device
 // note: assumes single GPU device - the default one
 static struct ggml_metal_state {
@@ -60,6 +65,8 @@ static void ggml_backend_metal_free_device(void) {
         g_state.mtl_device = nil;
     }
 }
+
+// kernels
 
 struct ggml_metal_kernel {
     id<MTLComputePipelineState> pipeline;
@@ -776,6 +783,8 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_tensor * t, size_t * offs
 }
 
 static bool ggml_metal_supports_op(const struct ggml_backend_metal_context * ctx, const struct ggml_tensor * op) {
+    GGML_UNUSED(ctx);
+
     for (size_t i = 0, n = 3; i < n; ++i) {
         if (op->src[i] != NULL && op->src[i]->type == GGML_TYPE_BF16) {
             return false;
@@ -3338,14 +3347,12 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,
         },
-        /* .device  = */ NULL,
+        /* .device  = */ &g_ggml_backend_metal_device,
         /* .context = */ NULL,
     };
 
     return &ggml_backend_buffer_type_metal;
 }
-
-// buffer from ptr
 
 ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size) {
     struct ggml_backend_metal_buffer_context * ctx = calloc(1, sizeof(struct ggml_backend_metal_buffer_context));
@@ -3507,7 +3514,7 @@ ggml_backend_t ggml_backend_metal_init(void) {
     *backend = (struct ggml_backend) {
         /* .guid      = */ ggml_backend_metal_guid(),
         /* .interface = */ ggml_backend_metal_i,
-        /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_metal_reg(), 0),
+        /* .device    = */ &g_ggml_backend_metal_device,
         /* .context   = */ ctx,
     };
 
@@ -3544,7 +3551,7 @@ void ggml_backend_metal_capture_next_compute(ggml_backend_t backend) {
     ctx->capture_next_compute = true;
 }
 
-////////////////////////
+// backend device
 
 static const char * ggml_backend_metal_device_get_name(ggml_backend_dev_t dev) {
     return "Metal";
@@ -3638,7 +3645,13 @@ static const struct ggml_backend_device_i ggml_backend_metal_device_i = {
     /* .event_synchronize    = */ NULL,
 };
 
-////////////////////////
+// backend registry
+
+static struct ggml_backend_device g_ggml_backend_metal_device = (struct ggml_backend_device) {
+    /* .iface   = */ ggml_backend_metal_device_i,
+    /* .reg     = */ &g_ggml_backend_metal_reg,
+    /* .context = */ NULL,
+};
 
 static const char * ggml_backend_metal_reg_name(ggml_backend_reg_t reg) {
     return "Metal";
@@ -3655,34 +3668,24 @@ static size_t ggml_backend_metal_reg_device_count(ggml_backend_reg_t reg) {
 static ggml_backend_dev_t ggml_backend_metal_reg_device_get(ggml_backend_reg_t reg, size_t index) {
     GGML_ASSERT(index == 0);
 
-    static struct ggml_backend_device ggml_backend_metal_device = (struct ggml_backend_device) {
-        /* .iface   = */ ggml_backend_metal_device_i,
-        /* .reg     = */ NULL,
-        /* .context = */ NULL,
-    };
-
-    // TODO: fix me (initializer element is not compile-time constant)
-    ggml_backend_metal_device.reg = reg;
-
-    return &ggml_backend_metal_device;
+    return &g_ggml_backend_metal_device;
 
     GGML_UNUSED(reg);
     GGML_UNUSED(index);
 }
 
-const struct ggml_backend_reg_i ggml_backend_metal_reg_i = {
+static const struct ggml_backend_reg_i ggml_backend_metal_reg_i = {
     /* .get_name         = */ ggml_backend_metal_reg_name,
     /* .device_count     = */ ggml_backend_metal_reg_device_count,
     /* .device_get       = */ ggml_backend_metal_reg_device_get,
     /* .get_proc_address = */ NULL,
 };
 
+static struct ggml_backend_reg g_ggml_backend_metal_reg = {
+    /* .iface   = */ ggml_backend_metal_reg_i,
+    /* .context = */ NULL,
+};
+
 ggml_backend_reg_t ggml_backend_metal_reg(void) {
-    static struct ggml_backend_reg ggml_backend_metal_reg = {
-        /* .iface   = */ ggml_backend_metal_reg_i,
-        /* .context = */ NULL,
-    };
-
-    return &ggml_backend_metal_reg;
+    return &g_ggml_backend_metal_reg;
 }
-
