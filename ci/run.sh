@@ -751,7 +751,8 @@ function gg_run_rerank_tiny {
 
     model_f16="${path_models}/ggml-model-f16.gguf"
 
-    (time ./bin/llama-embedding --model ${model_f16}  -p "what is panda?</s><s>hi\nwhat is panda?</s><s>it's a bear\nwhat is panda?</s><s>The giant panda (Ailuropoda melanoleuca), sometimes called a panda bear or simply panda, is a bear species endemic to China." --pooling rank --embd-normalize -1 --verbose-prompt) 2>&1 | tee -a $OUT/${ci}-rk-f16.log
+    # for this model, the SEP token is "</s>"
+    (time ./bin/llama-embedding --model ${model_f16}  -p "what is panda?</s></s>hi\nwhat is panda?</s></s>it's a bear\nwhat is panda?</s></s>The giant panda (Ailuropoda melanoleuca), sometimes called a panda bear or simply panda, is a bear species endemic to China." --pooling rank --embd-normalize -1 --verbose-prompt) 2>&1 | tee -a $OUT/${ci}-rk-f16.log
 
     # sample output
     # rerank score 0:    0.029
