@@ -1094,7 +1094,7 @@ extern "C" {
     LLAMA_API struct llama_sampler * llama_sampler_init_temp_ext   (float   t, float   delta, float exponent);
 
     /// @details XTC sampler as described in https://github.com/oobabooga/text-generation-webui/pull/6335
-    LLAMA_API struct llama_sampler * llama_sampler_init_xtc        (float   p, float   t, float     t_max, size_t min_keep);
+    LLAMA_API struct llama_sampler * llama_sampler_init_xtc        (float   p, float   t, float     t_max, size_t min_keep, uint32_t seed);
 
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
