@@ -2,6 +2,7 @@
 #include "llava.h"
 
 #include "llama.h"
+#include "common.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -409,7 +410,8 @@ bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        llama_batch batch = {int32_t(n_eval), nullptr, (image_embed->embed+i*n_embd), nullptr, nullptr, nullptr, nullptr, *n_past, 1, 0, };
+        float * embd = image_embed->embed+i*n_embd;
+        llama_batch batch = llama_batch_get_one(embd, n_eval, *n_past, 0);
         if (llama_decode(ctx_llama, batch)) {
             LOG_ERR("%s : failed to eval\n", __func__);
             return false;

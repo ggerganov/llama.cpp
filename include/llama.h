@@ -244,15 +244,6 @@ extern "C" {
         int32_t      *  n_seq_id;
         llama_seq_id ** seq_id;
         int8_t       *  logits; // TODO: rename this to "output"
-
-        // NOTE: helpers for smooth API transition - can be deprecated in the future
-        //       for future-proof code, use the above fields instead and ignore everything below
-        //
-        // pos[i] = all_pos_0 + i*all_pos_1
-        //
-        llama_pos    all_pos_0;  // used if pos == NULL
-        llama_pos    all_pos_1;  // used if pos == NULL
-        llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
     enum llama_model_kv_override_type {
@@ -774,16 +765,6 @@ extern "C" {
     //
     // Decoding
     //
-
-    // Return batch for single sequence of tokens starting at pos_0
-    //
-    // NOTE: this is a helper function to facilitate transition to the new batch API - avoid using it
-    //
-    LLAMA_API struct llama_batch llama_batch_get_one(
-                  llama_token * tokens,
-                      int32_t   n_tokens,
-                    llama_pos   pos_0,
-                 llama_seq_id   seq_id);
 
     // Allocates a batch of tokens on the heap that can hold a maximum of n_tokens
     // Each token can be assigned up to n_seq_max sequence ids

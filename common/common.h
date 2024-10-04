@@ -543,6 +543,26 @@ static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
 
 //
+// Compatibility with old API
+//
+
+// Return batch for single sequence of tokens starting at pos_0
+struct llama_batch llama_batch_get_one(
+              llama_token * tokens,
+                  int32_t   n_tokens,
+                llama_pos   pos_0,
+             llama_seq_id   seq_id,
+                     bool   logits_all = false);
+
+// Return batch for single sequence of embeddings starting at pos_0
+struct llama_batch llama_batch_get_one(
+                    float * embd,
+                  int32_t   n_tokens,
+                llama_pos   pos_0,
+             llama_seq_id   seq_id,
+                     bool   logits_all = false);
+
+//
 // YAML utils
 //
 
