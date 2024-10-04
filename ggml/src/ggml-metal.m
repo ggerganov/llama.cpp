@@ -22,6 +22,7 @@
 
 // globals
 
+// initialized in ggml_backend_metal_reg
 static struct ggml_backend_reg    g_ggml_backend_metal_reg;
 static struct ggml_backend_device g_ggml_backend_metal_device;
 
@@ -3627,7 +3628,7 @@ static bool ggml_backend_metal_device_supports_buft(ggml_backend_dev_t dev, ggml
     UNUSED(dev);
 }
 
-static const struct ggml_backend_device_i ggml_backend_metal_device_i = {
+static struct ggml_backend_device_i ggml_backend_metal_device_i = {
     /* .get_name             = */ ggml_backend_metal_device_get_name,
     /* .get_description      = */ ggml_backend_metal_device_get_description,
     /* .get_memory           = */ ggml_backend_metal_device_get_memory,
@@ -3647,13 +3648,7 @@ static const struct ggml_backend_device_i ggml_backend_metal_device_i = {
 
 // backend registry
 
-static struct ggml_backend_device g_ggml_backend_metal_device = (struct ggml_backend_device) {
-    /* .iface   = */ ggml_backend_metal_device_i,
-    /* .reg     = */ &g_ggml_backend_metal_reg,
-    /* .context = */ NULL,
-};
-
-static const char * ggml_backend_metal_reg_name(ggml_backend_reg_t reg) {
+static const char * ggml_backend_metal_reg_get_name(ggml_backend_reg_t reg) {
     return "Metal";
 
     GGML_UNUSED(reg);
@@ -3674,18 +3669,27 @@ static ggml_backend_dev_t ggml_backend_metal_reg_device_get(ggml_backend_reg_t r
     GGML_UNUSED(index);
 }
 
-static const struct ggml_backend_reg_i ggml_backend_metal_reg_i = {
-    /* .get_name         = */ ggml_backend_metal_reg_name,
+static struct ggml_backend_reg_i ggml_backend_metal_reg_i = {
+    /* .get_name         = */ ggml_backend_metal_reg_get_name,
     /* .device_count     = */ ggml_backend_metal_reg_device_count,
     /* .device_get       = */ ggml_backend_metal_reg_device_get,
     /* .get_proc_address = */ NULL,
 };
 
-static struct ggml_backend_reg g_ggml_backend_metal_reg = {
-    /* .iface   = */ ggml_backend_metal_reg_i,
-    /* .context = */ NULL,
-};
-
 ggml_backend_reg_t ggml_backend_metal_reg(void) {
+    // TODO: make this thread-safe somehow?
+    {
+        g_ggml_backend_metal_reg = (struct ggml_backend_reg) {
+            /* .iface   = */ ggml_backend_metal_reg_i,
+                /* .context = */ NULL,
+        };
+
+        g_ggml_backend_metal_device = (struct ggml_backend_device) {
+            /* .iface   = */ ggml_backend_metal_device_i,
+                /* .reg     = */ &g_ggml_backend_metal_reg,
+                /* .context = */ NULL,
+        };
+    }
+
     return &g_ggml_backend_metal_reg;
 }
