@@ -1059,6 +1059,89 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
     };
 }
 
+// xtc
+
+struct llama_sampler_xtc {
+    const float  probability;
+    const float  threshold;
+    const float  threshold_max;
+    const size_t min_keep;
+};
+
+static const char * llama_sampler_xtc_name(const struct llama_sampler * /*smpl*/) {
+    return "xtc";
+}
+
+static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    const auto * ctx = (llama_sampler_xtc *) smpl->ctx;
+
+    if (ctx->probability <= 0.0f || ctx->threshold <= 0.0f || cur_p->size <= 1 || ctx->min_keep <= 2) {
+        return;
+    }
+
+    std::random_device rd;
+    float chance = (float)(rd()%100)/100;
+    if (chance > ctx->probability) return;
+    // in case it's not sorted/recalculated yet
+    llama_sampler_softmax_impl(cur_p);
+
+    int removed = 0;
+    // going through all candidates from back to front, easier to keep the last of probables
+    for (int i = (cur_p->size - 1); i >= 0; --i) {
+        if (cur_p->data[i].p >= ctx->threshold && cur_p->data[i].p <= ctx->threshold_max) {
+            if (removed == 0 || chance <= ctx->probability) {
+                ++removed;
+                if (removed >= 2) {
+                    // .logits are used for sorting and calculating .p in llama_sample_softmax_impl
+                    cur_p->data[i].logit = -999.0f;
+                    chance = (float)(rd()%100)/100;
+                }
+            }
+        }
+    }
+
+    if (removed >= 2) {
+        // sorting with new logits, ex-last probable will be the first anyway
+        std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
+            return a.logit > b.logit;
+        });
+        cur_p->sorted = true;
+
+        // resizing now that penalized tokens are at the back
+        cur_p->size = cur_p->size - removed + 1;
+    }
+}
+
+static struct llama_sampler * llama_sampler_xtc_clone(const struct llama_sampler * smpl) {
+    const auto * ctx = (const llama_sampler_xtc *) smpl->ctx;
+    return llama_sampler_init_xtc(ctx->probability, ctx->threshold, ctx->threshold_max, ctx->min_keep);
+}
+
+static void llama_sampler_xtc_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_xtc *) smpl->ctx;
+}
+
+static struct llama_sampler_i llama_sampler_xtc_i = {
+    /* .name   = */ llama_sampler_xtc_name,
+    /* .accept = */ nullptr,
+    /* .apply  = */ llama_sample_xtc_apply,
+    /* .reset  = */ nullptr,
+    /* .clone  = */ llama_sampler_xtc_clone,
+    /* .free   = */ llama_sampler_xtc_free,
+};
+
+struct llama_sampler * llama_sampler_init_xtc(float p, float t, float t_max, size_t min_keep) {
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_xtc_i,
+        /* .ctx   = */ new llama_sampler_xtc {
+            /* .probability   = */ p,
+            /* .threshold     = */ t,
+            /* .threshold_max = */ t_max,
+            /* .min_keep      = */ min_keep,
+        },
+    };
+}
+
 // mirostat
 
 struct llama_sampler_mirostat {

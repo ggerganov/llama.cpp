@@ -2060,6 +2060,9 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
+    fprintf(stream, "xtc_p: %f # default: 0.0\n", sparams.xtc_p);
+    fprintf(stream, "xtc_t: %f # default: 0.0\n", sparams.xtc_t);
+    fprintf(stream, "xtc_t_max: %f # default: 0.0\n", sparams.xtc_t_max);
     fprintf(stream, "typ_p: %f # default: 1.0\n", sparams.typ_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
