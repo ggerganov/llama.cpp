@@ -1089,18 +1089,15 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
     // going through all candidates from back to front, easier to keep the last of probables
     for (int i = (cur_p->size - 1); i >= 0; --i) {
         if (cur_p->data[i].p >= ctx->threshold && cur_p->data[i].p <= ctx->threshold_max) {
-            if (removed == 0 || chance <= ctx->probability) {
-                ++removed;
-                if (removed >= 2) {
-                    // .logits are used for sorting and calculating .p in llama_sample_softmax_impl
-                    cur_p->data[i].logit = -999.0f;
-                    chance = (float)(rd()%100)/100;
-                }
+            ++removed;
+            if (removed > 1) {
+                // .logits are used for sorting and calculating .p in llama_sample_softmax_impl
+                cur_p->data[i].logit = -999.0f;
             }
         }
     }
 
-    if (removed >= 2) {
+    if (removed > 1) {
         // sorting with new logits, ex-last probable will be the first anyway
         std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
             return a.logit > b.logit;
