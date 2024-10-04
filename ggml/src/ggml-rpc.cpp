@@ -319,12 +319,12 @@ static std::shared_ptr<socket_t> get_socket(const std::string & endpoint) {
     return sock;
 }
 
-GGML_CALL static const char * ggml_backend_rpc_buffer_get_name(ggml_backend_buffer_t buffer) {
+static const char * ggml_backend_rpc_buffer_get_name(ggml_backend_buffer_t buffer) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     return ctx->name.c_str();
 }
 
-GGML_CALL static void ggml_backend_rpc_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+static void ggml_backend_rpc_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     // input serialization format: | remote_ptr (8 bytes) |
     std::vector<uint8_t> input(sizeof(uint64_t), 0);
@@ -337,7 +337,7 @@ GGML_CALL static void ggml_backend_rpc_buffer_free_buffer(ggml_backend_buffer_t 
     delete ctx;
 }
 
-GGML_CALL static void * ggml_backend_rpc_buffer_get_base(ggml_backend_buffer_t buffer) {
+static void * ggml_backend_rpc_buffer_get_base(ggml_backend_buffer_t buffer) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     if (ctx->base_cache.find(buffer) != ctx->base_cache.end()) {
         return ctx->base_cache[buffer];
@@ -388,7 +388,7 @@ static rpc_tensor serialize_tensor(const ggml_tensor * tensor) {
     return result;
 }
 
-GGML_CALL static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
+static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
     UNUSED(buffer);
     if (ggml_is_quantized(tensor->type)) {
         // TODO: this check is due to MATRIX_ROW_PADDING in CUDA and should be generalized
@@ -396,7 +396,7 @@ GGML_CALL static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t 
     }
 }
 
-GGML_CALL static void ggml_backend_rpc_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+static void ggml_backend_rpc_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     // input serialization format: | rpc_tensor | offset (8 bytes) | data (size bytes) |
     size_t input_size = sizeof(rpc_tensor) + sizeof(uint64_t) + size;
@@ -410,7 +410,7 @@ GGML_CALL static void ggml_backend_rpc_buffer_set_tensor(ggml_backend_buffer_t b
     GGML_ASSERT(status);
 }
 
-GGML_CALL static void ggml_backend_rpc_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+static void ggml_backend_rpc_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     // input serialization format: | rpc_tensor | offset (8 bytes) | size (8 bytes) |
     int input_size = sizeof(rpc_tensor) + 2*sizeof(uint64_t);
@@ -427,7 +427,7 @@ GGML_CALL static void ggml_backend_rpc_buffer_get_tensor(ggml_backend_buffer_t b
     memcpy(data, output.data(), size);
 }
 
-GGML_CALL static bool ggml_backend_rpc_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
+static bool ggml_backend_rpc_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
     // check if src and dst are on the same server
     ggml_backend_buffer_t src_buffer = src->buffer;
     ggml_backend_rpc_buffer_context * src_ctx = (ggml_backend_rpc_buffer_context *)src_buffer->context;
@@ -452,7 +452,7 @@ GGML_CALL static bool ggml_backend_rpc_buffer_cpy_tensor(ggml_backend_buffer_t b
     return output[0];
 }
 
-GGML_CALL static void ggml_backend_rpc_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+static void ggml_backend_rpc_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     // serialization format: | bufptr (8 bytes) | value (1 byte) |
     int input_size = sizeof(uint64_t) + sizeof(uint8_t);
@@ -477,12 +477,12 @@ static ggml_backend_buffer_i ggml_backend_rpc_buffer_interface = {
     /* .reset           = */ NULL,
 };
 
-GGML_CALL static const char * ggml_backend_rpc_buffer_type_name(ggml_backend_buffer_type_t buft) {
+static const char * ggml_backend_rpc_buffer_type_name(ggml_backend_buffer_type_t buft) {
     ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
     return buft_ctx->name.c_str();
 }
 
-GGML_CALL static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
     // input serialization format: | size (8 bytes) |
     int input_size = sizeof(uint64_t);
@@ -522,7 +522,7 @@ static size_t get_alignment(const std::shared_ptr<socket_t> & sock) {
     return alignment;
 }
 
-GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
+static size_t ggml_backend_rpc_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
     return buft_ctx->alignment;
 }
@@ -540,12 +540,12 @@ static size_t get_max_size(const std::shared_ptr<socket_t> & sock) {
     return max_size;
 }
 
-GGML_CALL static size_t ggml_backend_rpc_get_max_size(ggml_backend_buffer_type_t buft) {
+static size_t ggml_backend_rpc_get_max_size(ggml_backend_buffer_type_t buft) {
     ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
     return buft_ctx->max_size;
 }
 
-GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
+static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     UNUSED(buft);
     return ggml_nbytes(tensor);
 }
@@ -559,24 +559,24 @@ static ggml_backend_buffer_type_i ggml_backend_rpc_buffer_type_interface = {
     /* .is_host          = */ NULL,
 };
 
-GGML_CALL static const char * ggml_backend_rpc_name(ggml_backend_t backend) {
+static const char * ggml_backend_rpc_name(ggml_backend_t backend) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
 
     return rpc_ctx->name.c_str();
 }
 
-GGML_CALL static void ggml_backend_rpc_free(ggml_backend_t backend) {
+static void ggml_backend_rpc_free(ggml_backend_t backend) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
     delete rpc_ctx;
     delete backend;
 }
 
-GGML_CALL static ggml_backend_buffer_type_t ggml_backend_rpc_get_default_buffer_type(ggml_backend_t backend) {
+static ggml_backend_buffer_type_t ggml_backend_rpc_get_default_buffer_type(ggml_backend_t backend) {
     ggml_backend_rpc_context * ctx = (ggml_backend_rpc_context *)backend->context;
     return ggml_backend_rpc_buffer_type(ctx->endpoint.c_str());
 }
 
-GGML_CALL static void ggml_backend_rpc_synchronize(ggml_backend_t backend) {
+static void ggml_backend_rpc_synchronize(ggml_backend_t backend) {
     UNUSED(backend);
     // this is no-op because we don't have any async operations
 }
@@ -618,7 +618,7 @@ static void serialize_graph(const ggml_cgraph * cgraph, std::vector<uint8_t> & o
     memcpy(out_tensors, tensors.data(), n_tensors * sizeof(rpc_tensor));
 }
 
-GGML_CALL static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
     std::vector<uint8_t> input;
     serialize_graph(cgraph, input);
@@ -630,14 +630,14 @@ GGML_CALL static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t 
     return (enum ggml_status)output[0];
 }
 
-GGML_CALL static bool ggml_backend_rpc_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
+static bool ggml_backend_rpc_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
     UNUSED(backend);
     UNUSED(op);
     //TODO: call the remote backend and cache the results
     return true;
 }
 
-GGML_CALL static bool ggml_backend_rpc_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
+static bool ggml_backend_rpc_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
     if (!buft || buft->iface.get_name != ggml_backend_rpc_buffer_type_name) {
         return false;
     }
@@ -662,14 +662,11 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .supports_op             = */ ggml_backend_rpc_supports_op,
     /* .supports_buft           = */ ggml_backend_rpc_supports_buft,
     /* .offload_op              = */ NULL,
-    /* .event_new               = */ NULL,
-    /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .event_synchronize       = */ NULL,
 };
 
-GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
+GGML_API ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
     // NOTE: buffer types are allocated and never freed; this is by design
@@ -694,13 +691,14 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const
 
     ggml_backend_buffer_type_t buft = new ggml_backend_buffer_type {
         /* .iface   = */ ggml_backend_rpc_buffer_type_interface,
+        /* .device  = */ nullptr,
         /* .context = */ buft_ctx
     };
     buft_map[endpoint] = buft;
     return buft;
 }
 
-GGML_CALL ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
+ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
     ggml_backend_rpc_context * ctx = new ggml_backend_rpc_context {
         /* .endpoint  = */ endpoint,
         /* .name      = */ "RPC[" + std::string(endpoint) + "]",
@@ -709,12 +707,13 @@ GGML_CALL ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
     ggml_backend_t backend = new ggml_backend {
         /* .guid      = */ ggml_backend_rpc_guid(),
         /* .interface = */ ggml_backend_rpc_interface,
+        /* .device    = */ nullptr,
         /* .context   = */ ctx
     };
     return backend;
 }
 
-GGML_API GGML_CALL bool ggml_backend_is_rpc(ggml_backend_t backend) {
+GGML_API bool ggml_backend_is_rpc(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_rpc_guid());
 }
 
@@ -734,7 +733,7 @@ static void get_device_memory(const std::shared_ptr<socket_t> & sock, size_t * f
     *total = total_mem;
 }
 
-GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total) {
+GGML_API void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total) {
     auto sock = get_socket(endpoint);
     if (sock == nullptr) {
         *free = 0;

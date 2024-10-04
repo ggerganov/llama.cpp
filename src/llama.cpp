@@ -12,9 +12,7 @@
 #  include "ggml-rpc.h"
 #endif
 
-#ifdef GGML_USE_CUDA
-#  include "ggml-cuda.h"
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
 #  include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
 #  include "ggml-sycl.h"
@@ -610,7 +608,7 @@ enum llm_tensor {
     LLM_TENSOR_CLS_OUT,
 };
 
-static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
+static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_NAMES = {
     {
         LLM_ARCH_LLAMA,
         {
@@ -1566,32 +1564,32 @@ struct LLM_TN {
         return LLM_TENSOR_NAMES.at(arch).at(tensor);
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix) const {
+    std::string operator()(llm_tensor tensor, const char * suffix) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return LLM_TENSOR_NAMES.at(arch).at(tensor) + "." + suffix;
+        return std::string(LLM_TENSOR_NAMES.at(arch).at(tensor)) + "." + suffix;
     }
 
     std::string operator()(llm_tensor tensor, int bid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid);
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid);
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix, int bid) const {
+    std::string operator()(llm_tensor tensor, const char * suffix, int bid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid) + "." + suffix;
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix, int bid, int xid) const {
+    std::string operator()(llm_tensor tensor, const char * suffix, int bid, int xid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid, xid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid, xid) + "." + suffix;
     }
 };
 
@@ -2264,59 +2262,16 @@ static std::string llama_token_to_piece(const struct llama_model * model, llama_
     return piece;
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer) {
-    ggml_backend_buffer_type_t buft = nullptr;
-
-#if defined(GGML_USE_CUDA)
-    // host buffers should only be used when data is expected to be copied to/from the GPU
-    if (host_buffer) {
-        buft = ggml_backend_cuda_host_buffer_type();
-    }
-#elif defined(GGML_USE_SYCL)
-    if (host_buffer) {
-        buft = ggml_backend_sycl_host_buffer_type();
-    }
-#elif defined(GGML_USE_CANN)
-    if (host_buffer) {
-        buft = ggml_backend_cann_host_buffer_type();
-    }
-#elif defined(GGML_USE_CPU_HBM)
-    buft = ggml_backend_cpu_hbm_buffer_type();
-#elif defined(GGML_USE_VULKAN)
-    if (host_buffer) {
-        buft = ggml_backend_vk_host_buffer_type();
-    }
-#endif
-
-    if (buft == nullptr) {
-        buft = ggml_backend_cpu_buffer_type();
-    }
-    return buft;
-
-    GGML_UNUSED(host_buffer);
-}
-
 //
 // globals
 //
 
-struct llama_state {
-    llama_state() {
-#ifdef GGML_USE_METAL
-        ggml_backend_metal_log_set_callback(log_callback, log_callback_user_data);
-#elif defined(GGML_USE_CUDA)
-        ggml_backend_cuda_log_set_callback(log_callback, log_callback_user_data);
-#elif defined(GGML_USE_CANN)
-        ggml_backend_cann_log_set_callback(log_callback, log_callback_user_data);
-#endif
-    }
-
-    // We save the log callback globally
+struct llama_logger_state {
     ggml_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
-static llama_state g_state;
+static llama_logger_state g_logger_state;
 
 // available llama models
 enum e_model {
@@ -2920,14 +2875,17 @@ struct llama_model {
 
     std::vector<llama_layer> layers;
 
+    // gguf metadata
+    std::unordered_map<std::string, std::string> gguf_kv;
+
     llama_split_mode split_mode;
     int main_gpu;
     int n_gpu_layers;
 
-    std::vector<std::string> rpc_servers;
+    // list of devices used in this model
+    std::vector<ggml_backend_dev_t> devices;
 
-    // gguf metadata
-    std::unordered_map<std::string, std::string> gguf_kv;
+    std::vector<std::string> rpc_servers;
 
     // layer -> buffer type mapping
     struct layer_buft {
@@ -2970,11 +2928,6 @@ struct llama_model {
             ggml_free(ctx);
         }
         for (ggml_backend_buffer_t buf : bufs) {
-#ifdef GGML_USE_CUDA
-            if (ggml_backend_buffer_get_type(buf) == ggml_backend_cpu_buffer_type()) {
-                ggml_backend_cuda_unregister_host_buffer(ggml_backend_buffer_get_base(buf));
-            }
-#endif
             ggml_backend_buffer_free(buf);
         }
         while (!lora_adapters.empty()) {
@@ -3460,72 +3413,116 @@ struct llama_lora_adapter {
     }
 };
 
-static size_t llama_get_device_count(const llama_model & model) {
-    size_t count = 1;
-#if defined(GGML_USE_CUDA)
-    count = ggml_backend_cuda_get_device_count();
-#elif defined(GGML_USE_SYCL)
-    count = ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    count = ggml_backend_vk_get_device_count();
-#elif defined(GGML_USE_CANN)
-    return ggml_backend_cann_get_device_count();
-#endif
+static int llama_get_device_count(const llama_model & model) {
+    int count = (int) model.devices.size();
+
 #if defined(GGML_USE_RPC)
-    count += model.rpc_servers.size();
+    count += (int) model.rpc_servers.size();
 #endif
+
+#if defined(GGML_USE_METAL)
+    count += 1;
+#elif defined(GGML_USE_SYCL)
+    count += ggml_backend_sycl_get_device_count();
+#elif defined(GGML_USE_VULKAN)
+    count += ggml_backend_vk_get_device_count();
+#elif defined(GGML_USE_CANN)
+    count += ggml_backend_cann_get_device_count();
+#endif
+
     return count;
+
     GGML_UNUSED(model);
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int gpu) {
+static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_model & model, bool host_buffer) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#ifdef GGML_USE_RPC
-    int rpc_count = (int)model.rpc_servers.size();
-#else
-    int rpc_count = 0;
-#endif
-    int local_gpu = gpu - rpc_count;
-#if defined(GGML_USE_RPC)
-    if (gpu < rpc_count) {
-        const char * endpoint = model.rpc_servers[gpu].c_str();
-        return ggml_backend_rpc_buffer_type(endpoint);
+    if (host_buffer) {
+        for (auto * dev : model.devices) {
+            buft = ggml_backend_dev_host_buffer_type(dev);
+            if (buft != nullptr) {
+                break;
+            }
+        }
     }
-#endif
-#if defined(GGML_USE_METAL)
-    buft = ggml_backend_metal_buffer_type();
-#elif defined(GGML_USE_CUDA)
-    buft = ggml_backend_cuda_buffer_type(local_gpu);
-#elif defined(GGML_USE_VULKAN)
-    buft = ggml_backend_vk_buffer_type(local_gpu);
-#elif defined(GGML_USE_SYCL)
-    buft = ggml_backend_sycl_buffer_type(local_gpu);
-#elif defined(GGML_USE_KOMPUTE)
-    buft = ggml_backend_kompute_buffer_type(local_gpu);
-    if (buft == nullptr) {
-        LLAMA_LOG_WARN("%s: cannot use GPU %d, check `vulkaninfo --summary`\n", __func__, local_gpu);
+
+#if defined(GGML_USE_SYCL)
+    if (host_buffer) {
+        buft = ggml_backend_sycl_host_buffer_type();
     }
 #elif defined(GGML_USE_CANN)
-    buft = ggml_backend_cann_buffer_type(local_gpu);
+    if (host_buffer) {
+        buft = ggml_backend_cann_host_buffer_type();
+    }
+#elif defined(GGML_USE_CPU_HBM)
+    buft = ggml_backend_cpu_hbm_buffer_type();
+#elif defined(GGML_USE_VULKAN)
+    if (host_buffer) {
+        buft = ggml_backend_vk_host_buffer_type();
+    }
 #endif
 
     if (buft == nullptr) {
-        buft = llama_default_buffer_type_cpu(true);
+        buft = ggml_backend_cpu_buffer_type();
     }
     return buft;
+
+    GGML_UNUSED(host_buffer);
+}
+
+static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int device) {
+    ggml_backend_buffer_type_t buft = nullptr;
+
+#if defined(GGML_USE_RPC)
+    int rpc_count = (int)model.rpc_servers.size();
+    if (device < rpc_count) {
+        const char * endpoint = model.rpc_servers[device].c_str();
+        return ggml_backend_rpc_buffer_type(endpoint);
+    }
+    device -= rpc_count;
+#endif
+
+    if (device < (int)model.devices.size()) {
+        return ggml_backend_dev_buffer_type(model.devices[device]);
+    }
+    device -= (int)model.devices.size();
+
+#if defined(GGML_USE_METAL)
+    buft = ggml_backend_metal_buffer_type();
+#elif defined(GGML_USE_VULKAN)
+    buft = ggml_backend_vk_buffer_type(device);
+#elif defined(GGML_USE_SYCL)
+    buft = ggml_backend_sycl_buffer_type(device);
+#elif defined(GGML_USE_KOMPUTE)
+    buft = ggml_backend_kompute_buffer_type(device);
+#elif defined(GGML_USE_CANN)
+    buft = ggml_backend_cann_buffer_type(device);
+#endif
+
+    if (buft == nullptr) {
+        buft = llama_default_buffer_type_cpu(model, true);
+    }
+    return buft;
+
     GGML_UNUSED(model);
-    GGML_UNUSED(local_gpu);
 }
 
 static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_model & model, int fallback_gpu, const float * tensor_split) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#ifdef GGML_USE_CUDA
-    if (ggml_backend_cuda_get_device_count() > 1) {
-        buft = ggml_backend_cuda_split_buffer_type(tensor_split);
+    // find a backend that supports split buffers
+    for (size_t i = 0; i < ggml_backend_reg_count(); ++i) {
+        ggml_backend_reg_t reg = ggml_backend_reg_get(i);
+
+        auto ggml_backend_split_buffer_type_fn = (ggml_backend_split_buffer_type_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_split_buffer_type");
+        if (ggml_backend_split_buffer_type_fn) {
+            buft = ggml_backend_split_buffer_type_fn(tensor_split);
+            if (buft != nullptr) {
+                break;
+            }
+        }
     }
-#endif
 
 #ifdef GGML_USE_SYCL
     if (ggml_backend_sycl_get_device_count() > 1) {
@@ -3542,13 +3539,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
 }
 
 static size_t llama_get_device_memory(const llama_model & model, int device) {
-#ifdef GGML_USE_RPC
-    int rpc_count = (int)model.rpc_servers.size();
-#else
-    int rpc_count = 0;
-#endif
-    int local_device = device - rpc_count;
 #if defined(GGML_USE_RPC)
+    int rpc_count = (int)model.rpc_servers.size();
     if (device < rpc_count) {
         size_t total;
         size_t free;
@@ -3556,32 +3548,37 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
         return free;
     }
+    device = device - rpc_count;
 #endif
-#if defined(GGML_USE_CUDA)
+
+    if (device < (int)model.devices.size()) {
+        ggml_backend_dev_t dev = model.devices[device];
+        size_t total;
+        size_t free;
+        ggml_backend_dev_memory(dev, &free, &total);
+        return free;
+    }
+
+#if defined(GGML_USE_SYCL)
     size_t total;
     size_t free;
-    ggml_backend_cuda_get_device_memory(local_device, &free, &total);
-    return free;
-#elif defined(GGML_USE_SYCL)
-    size_t total;
-    size_t free;
-    ggml_backend_sycl_get_device_memory(local_device, &free, &total);
+    ggml_backend_sycl_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_VULKAN)
     size_t total;
     size_t free;
-    ggml_backend_vk_get_device_memory(local_device, &free, &total);
+    ggml_backend_vk_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_CANN)
     size_t total;
     size_t free;
-    ggml_backend_cann_get_device_memory(local_device, &free, &total);
+    ggml_backend_cann_get_device_memory(device, &free, &total);
     return free;
 #else
     return 1;
 #endif
     GGML_UNUSED(model);
-    GGML_UNUSED(local_device);
+    GGML_UNUSED(device);
 }
 
 //
@@ -3624,7 +3621,7 @@ static bool llama_kv_cache_init(
             buft_layer_count[model.buft_layer[i].buft]++;
         }
     } else {
-        buft_layer_count[llama_default_buffer_type_cpu(true)] = n_layer;
+        buft_layer_count[llama_default_buffer_type_cpu(model, true)] = n_layer;
     }
 
     // create a context for each buffer type
@@ -4916,7 +4913,7 @@ struct llama_model_loader {
     static const int TENSOR_NOT_REQUIRED = 1;
     static const int TENSOR_DUPLICATED   = 2;
 
-    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, int flags = 0) {
+    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::initializer_list<int64_t> & ne, int flags = 0) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, !(flags & TENSOR_NOT_REQUIRED));
 
         if (cur == NULL) {
@@ -4926,7 +4923,7 @@ struct llama_model_loader {
         return create_tensor_for(ctx, cur, flags & TENSOR_DUPLICATED);
     }
 
-    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::vector<int64_t> & ne, size_t offset, bool required = true) {
+    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::initializer_list<int64_t> & ne, size_t offset, bool required = true) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
 
         if (cur == NULL) {
@@ -4939,7 +4936,7 @@ struct llama_model_loader {
 
         std::array<int64_t, GGML_MAX_DIMS> dims;
         for (size_t i = 0; i < GGML_MAX_DIMS; ++i) {
-            dims[i] = i < ne.size() ? ne[i] : 1;
+            dims[i] = i < ne.size() ? ne.begin()[i] : 1;
         }
 
         struct ggml_tensor * tensor = ggml_view_4d(ctx, base,
@@ -5037,7 +5034,7 @@ struct llama_model_loader {
     // Returns false if cancelled by progress_callback
     bool load_all_data(
             struct ggml_context * ctx,
-            llama_buf_map & bufs_mmap,
+            llama_buf_map & bufs,
             llama_mlocks * lmlocks,
             llama_progress_callback progress_callback,
             void * progress_callback_user_data) {
@@ -5046,43 +5043,94 @@ struct llama_model_loader {
         std::vector<no_init<uint8_t>> read_buf;
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
 
-#if defined(GGML_USE_CUDA)
         // 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
         // NVMe raid configurations might require more / larger buffers.
         constexpr size_t n_buffers = 4;
         constexpr size_t buffer_size = 1 * 1024 * 1024; // 1MB
 
         std::vector<ggml_backend_buffer_t> host_buffers;
-        std::vector<void*> host_ptrs;
         std::vector<ggml_backend_event_t> events;
+        std::vector<void *> host_ptrs;
         size_t buffer_idx = 0; // buffer to use for async loads
-
-        ggml_backend_t cuda_backend = nullptr;
-        if (!use_mmap && !check_tensors) {
+        ggml_backend_t upload_backend = [&](const char * fn) -> ggml_backend_t {
+            if (use_mmap || check_tensors) {
+                return nullptr;
+            }
             // When not using mmaped io use async uploads from pinned memory to GPU memory.
-            // First determine if the CUDA backend is active, and if so, determine the device ID.
-            ggml_backend_buffer_t buf = bufs_mmap.count(0) ? bufs_mmap.at(0) : nullptr;
-            if (buf) {
-                ggml_backend_buffer_type_t buffer_type = ggml_backend_buffer_get_type(buf);
-                for (int i = 0; i < ggml_backend_cuda_get_device_count(); ++i) {
-                    auto * cuda_buffer_type = ggml_backend_cuda_buffer_type(i);
-                    if (buffer_type == cuda_buffer_type) {
-                        cuda_backend = ggml_backend_cuda_init(i);
-                        break;
-                    }
-                }
+            // First determine if the backend supports the necessary features for async uploads.
+            auto * buf = bufs.count(0) ? bufs.at(0) : nullptr;
+            if (!buf) {
+                LLAMA_LOG_DEBUG("%s: no buffer found for async uploads\n", fn);
+                return nullptr;
             }
 
-            // If the cuda backend is active create pinned memory buffers and events for synchronisation.
-            if (cuda_backend) {
-                for (size_t idx = 0; idx < n_buffers; ++idx) {
-                    host_buffers.emplace_back(ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), buffer_size));
-                    host_ptrs.emplace_back(ggml_backend_buffer_get_base(host_buffers[idx]));
-                    events.emplace_back(ggml_backend_event_new(cuda_backend));
-                }
+            auto * buft = ggml_backend_buffer_get_type(buf);
+            auto * dev = ggml_backend_buft_get_device(buft);
+            if (!dev) {
+                LLAMA_LOG_DEBUG("%s: no device found for buffer type %s for async uploads\n", fn,
+                    ggml_backend_buft_name(buft));
+                return nullptr;
             }
+
+            if (buft != ggml_backend_dev_buffer_type(dev)) {
+                LLAMA_LOG_DEBUG("%s: buffer type %s is not the default buffer type for device %s for async uploads\n", fn,
+                    ggml_backend_buft_name(buft), ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            ggml_backend_dev_props props;
+            ggml_backend_dev_get_props(dev, &props);
+            if (!props.caps.async || !props.caps.host_buffer || !props.caps.events) {
+                LLAMA_LOG_DEBUG("%s: device %s does not support async, host buffers or events\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+            if (!host_buft) {
+                LLAMA_LOG_DEBUG("%s: no host buffer type found for device %s\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            // If the backend is supported, create pinned memory buffers and events for synchronisation.
+            for (size_t idx = 0; idx < n_buffers; ++idx) {
+                auto * buf = ggml_backend_buft_alloc_buffer(host_buft, buffer_size);
+                if (!buf) {
+                    LLAMA_LOG_DEBUG("%s: failed to allocate host buffer for async uploads for device %s\n", fn,
+                        ggml_backend_dev_name(dev));
+                    return nullptr;
+                }
+
+                host_buffers.emplace_back(buf);
+                host_ptrs.emplace_back(ggml_backend_buffer_get_base(buf));
+
+                auto * event = ggml_backend_event_new(dev);
+                if (!event) {
+                    LLAMA_LOG_DEBUG("%s: failed to create event for async uploads for device %s\n", fn,
+                        ggml_backend_dev_name(dev));
+                    return nullptr;
+                }
+
+                events.emplace_back(event);
+            }
+
+            ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+            if (!backend) {
+                LLAMA_LOG_DEBUG("%s: failed to initialize backend for device %s for async uploads\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            return backend;
+        }(__func__);
+
+        if (upload_backend) {
+            LLAMA_LOG_DEBUG("%s: using async uploads for device %s, buffer type %s, backend %s\n", __func__,
+                ggml_backend_dev_name(ggml_backend_get_device(upload_backend)),
+                ggml_backend_buft_name(ggml_backend_buffer_get_type(bufs.at(0))),
+                ggml_backend_name(upload_backend));
         }
-#endif
 
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             const auto * weight = get_weight(ggml_get_name(cur));
@@ -5102,8 +5150,8 @@ struct llama_model_loader {
             if (use_mmap) {
                 const auto & mapping = mappings.at(weight->idx);
                 ggml_backend_buffer_t buf_mmap = nullptr;
-                if (bufs_mmap.count(weight->idx)) {
-                    buf_mmap = bufs_mmap.at(weight->idx);
+                if (bufs.count(weight->idx)) {
+                    buf_mmap = bufs.at(weight->idx);
                 }
                 uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
 
@@ -5139,9 +5187,8 @@ struct llama_model_loader {
                         }));
                     }
                 } else {
-#if defined(GGML_USE_CUDA)
-                    // If cuda_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
-                    if (cuda_backend) {
+                    // If upload_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
+                    if (upload_backend) {
                         file->seek(weight->offs, SEEK_SET);
 
                         size_t bytes_read = 0;
@@ -5151,17 +5198,14 @@ struct llama_model_loader {
 
                             ggml_backend_event_synchronize(events[buffer_idx]);
                             file->read_raw(host_ptrs[buffer_idx], read_iteration);
-                            ggml_backend_tensor_set_async(cuda_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
-                            ggml_backend_event_record(events[buffer_idx]);
+                            ggml_backend_tensor_set_async(upload_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
+                            ggml_backend_event_record(events[buffer_idx], upload_backend);
 
                             bytes_read += read_iteration;
                             ++buffer_idx;
                             buffer_idx %= n_buffers;
                         }
-                    }
-                    else
-#endif
-                    {
+                    } else {
                         read_buf.resize(n_size);
                         file->seek(weight->offs, SEEK_SET);
                         file->read_raw(read_buf.data(), n_size);
@@ -5176,17 +5220,15 @@ struct llama_model_loader {
             size_done += n_size;
         }
 
-#if defined(GGML_USE_CUDA)
-        // free temporary resources used for async cuda uploads
-        if (cuda_backend) {
-            for (size_t idx = 0; idx < n_buffers;++idx) {
-                ggml_backend_event_synchronize(events[idx]);
-                ggml_backend_event_free(events[idx]);
-                ggml_backend_buffer_free(host_buffers[idx]);
-            }
-            ggml_backend_free(cuda_backend);
+        // free temporary resources used for async uploads
+        for (auto * event : events) {
+            ggml_backend_event_synchronize(event);
+            ggml_backend_event_free(event);
         }
-#endif
+        for (auto * buf : host_buffers) {
+            ggml_backend_buffer_free(buf);
+        }
+        ggml_backend_free(upload_backend);
 
         // check validation results
         bool validation_failed = false;
@@ -5502,8 +5544,10 @@ static void llm_load_hparams(
                     }
                 } else {
                     switch (hparams.n_layer) {
+                        case 16: model.type = e_model::MODEL_1B; break; // Llama 3.2 1B
                         case 22: model.type = e_model::MODEL_1B; break;
                         case 26: model.type = e_model::MODEL_3B; break;
+                        case 28: model.type = e_model::MODEL_3B; break; // Llama 3.2 3B
                         // granite uses a vocab with len 49152
                         case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
                         case 36: model.type = e_model::MODEL_8B; break; // granite
@@ -6920,6 +6964,13 @@ static bool llm_load_tensors(
         void * progress_callback_user_data) {
     auto & hparams = model.hparams;
 
+    // check if the value of main_gpu is valid
+    if (llama_get_device_count(model) > 0 &&
+        split_mode != LLAMA_SPLIT_MODE_LAYER &&
+        (main_gpu < 0 || main_gpu >= llama_get_device_count(model))) {
+        throw std::runtime_error(format("invalid value for main_gpu: %d (available devices: %d)", main_gpu, llama_get_device_count(model)));
+    }
+
     model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
@@ -6929,14 +6980,14 @@ static bool llm_load_tensors(
     bool use_mmap_buffer = true;
 
     // there is very little benefit to offloading the input layer, so always keep it on the CPU
-    model.buft_input = llama_default_buffer_type_cpu(true);
+    model.buft_input = llama_default_buffer_type_cpu(model, true);
     //model.buft_input = llama_default_buffer_type_offload(main_gpu);
 
     model.buft_layer.resize(n_layer);
 
     // assign cpu layers
     for (int i = 0; i < i_gpu_start; ++i) {
-        model.buft_layer[i] = llama_default_buffer_type_cpu(true);
+        model.buft_layer[i] = llama_default_buffer_type_cpu(model, true);
     }
 
     if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
@@ -6974,7 +7025,7 @@ static bool llm_load_tensors(
             int layer_gpu = std::upper_bound(splits.begin(), splits.begin() + device_count, float(act_gpu_layers - 1)/act_gpu_layers) - splits.begin();
             model.buft_output = llama_default_buffer_type_offload(model, layer_gpu);
         } else {
-            model.buft_output = llama_default_buffer_type_cpu(true);
+            model.buft_output = llama_default_buffer_type_cpu(model, true);
         }
     } else {
         ggml_backend_buffer_type_t split_buft;
@@ -6998,7 +7049,7 @@ static bool llm_load_tensors(
                 llama_default_buffer_type_offload(model, main_gpu)
             };
         } else {
-            model.buft_output = llama_default_buffer_type_cpu(true);
+            model.buft_output = llama_default_buffer_type_cpu(model, true);
         }
     }
 
@@ -8870,7 +8921,7 @@ static bool llm_load_tensors(
         // only the mmap region containing the tensors in the model is mapped to the backend buffer
         // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
         // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
-        if (ml.use_mmap && use_mmap_buffer && buft == llama_default_buffer_type_cpu(true)) {
+        if (ml.use_mmap && use_mmap_buffer && buft == llama_default_buffer_type_cpu(model, true)) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 void * addr = nullptr;
                 size_t first, last;
@@ -8884,13 +8935,6 @@ static bool llm_load_tensors(
                 }
                 model.bufs.push_back(buf);
                 bufs.emplace(idx, buf);
-#ifdef GGML_USE_CUDA
-                if (n_layer >= n_gpu_layers) {
-                    ggml_backend_cuda_register_host_buffer(
-                        ggml_backend_buffer_get_base(buf),
-                        ggml_backend_buffer_get_size(buf));
-                }
-#endif
             }
         }
 #ifdef GGML_USE_METAL
@@ -16954,7 +16998,7 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
             lctx.embd = nullptr;
         }
 
-        lctx.buf_output = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), new_size);
+        lctx.buf_output = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(lctx.model, true), new_size);
         if (lctx.buf_output == nullptr) {
             LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
             return 0;
@@ -17023,12 +17067,6 @@ static void llama_graph_compute(
             ggml_cgraph * gf,
                     int   n_threads,
         ggml_threadpool * threadpool) {
-#ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(lctx.backend_metal)) {
-        ggml_backend_metal_set_n_cb(lctx.backend_metal, n_threads);
-    }
-#endif
-
     if (lctx.backend_cpu != nullptr) {
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
@@ -18991,21 +19029,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
 }
 
 size_t llama_max_devices(void) {
-#if defined(GGML_USE_RPC)
-    return GGML_RPC_MAX_SERVERS;
-#elif defined(GGML_USE_METAL)
-    return 1;
-#elif defined(GGML_USE_CUDA)
-    return GGML_CUDA_MAX_DEVICES;
-#elif defined(GGML_USE_SYCL)
-    return GGML_SYCL_MAX_DEVICES;
-#elif defined(GGML_USE_VULKAN)
-    return GGML_VK_MAX_DEVICES;
-#elif defined(GGML_USE_CANN)
-    return GGML_CANN_MAX_DEVICES;
-#else
-    return 1;
-#endif
+    return 16;
 }
 
 bool llama_supports_mmap(void) {
@@ -19017,12 +19041,13 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
+#if defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
     defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
-    return false;
+    return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
+        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr;
 #endif
 }
 
@@ -19087,17 +19112,30 @@ struct llama_model * llama_load_model_from_file(
             return true;
         };
     }
+
     if (params.rpc_servers != nullptr && params.rpc_servers[0] != '\0') {
         // split the servers set them into model->rpc_servers
         std::string servers(params.rpc_servers);
         size_t pos = 0;
-        while ((pos = servers.find(",")) != std::string::npos) {
+        while ((pos = servers.find(',')) != std::string::npos) {
             std::string server = servers.substr(0, pos);
             model->rpc_servers.push_back(server);
             servers.erase(0, pos + 1);
         }
         model->rpc_servers.push_back(servers);
     }
+
+    // create list of devices to use with this model
+    // currently, we use all available devices
+    // TODO: rework API to give user more control over device selection
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        // skip the CPU backend since it is handled separately
+        if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_CPU_FULL) {
+            model->devices.push_back(dev);
+        }
+    }
+
     int status = llama_model_load(path_model, *model, params);
     GGML_ASSERT(status <= 0);
     if (status < 0) {
@@ -19259,6 +19297,36 @@ struct llama_context * llama_new_context_with_model(
 
     if (!hparams.vocab_only) {
         // initialize backends
+        int main_gpu = model->main_gpu;
+
+        // with registry
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            if (main_gpu >= 0 && main_gpu < (int)model->devices.size()) {
+                ggml_backend_dev_t main_dev = model->devices[main_gpu];
+                ggml_backend_t backend = ggml_backend_dev_init(main_dev, nullptr);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(main_dev));
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
+        } else {
+            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+            for (auto * dev : model->devices) {
+                ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
+        }
+        if (main_gpu >= (int)model->devices.size()) {
+            main_gpu -= (int)model->devices.size();
+        }
+
 #if defined(GGML_USE_RPC)
         if (model->n_gpu_layers > 0) {
             for (const auto & endpoint : model->rpc_servers) {
@@ -19270,6 +19338,9 @@ struct llama_context * llama_new_context_with_model(
                 }
                 ctx->backends.push_back(backend);
             }
+        }
+        if (main_gpu >= (int)model->rpc_servers.size()) {
+            main_gpu -= (int)model->rpc_servers.size();
         }
 #endif
 
@@ -19283,28 +19354,6 @@ struct llama_context * llama_new_context_with_model(
             }
             ctx->backends.push_back(ctx->backend_metal);
         }
-#elif defined(GGML_USE_CUDA)
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-            ggml_backend_t backend = ggml_backend_cuda_init(model->main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-            for (int device = 0; device < ggml_backend_cuda_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_cuda_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
 #elif defined(GGML_USE_VULKAN)
         if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
             LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
@@ -19312,7 +19361,7 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(model->main_gpu);
+            ggml_backend_t backend = ggml_backend_vk_init(main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
                 llama_free(ctx);
@@ -19333,9 +19382,9 @@ struct llama_context * llama_new_context_with_model(
 #elif defined(GGML_USE_SYCL)
         // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
+            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
@@ -19354,7 +19403,7 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
-            auto * backend = ggml_backend_kompute_init(model->main_gpu);
+            auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
                 llama_free(ctx);
@@ -19363,29 +19412,29 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 #elif defined(GGML_USE_CANN)
-    // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-    // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
-    if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-        ggml_backend_t backend = ggml_backend_cann_init(model->main_gpu);
-        if (backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, model->main_gpu);
-            llama_free(ctx);
-            return nullptr;
-        }
-        ctx->backends.push_back(backend);
-    } else {
-        // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-        // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
-        for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
-            ggml_backend_t backend = ggml_backend_cann_init(device);
+        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
+        // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            ggml_backend_t backend = ggml_backend_cann_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
             ctx->backends.push_back(backend);
+        } else {
+            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+            // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
+            for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
+                ggml_backend_t backend = ggml_backend_cann_init(device);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
-    }
 #endif
 
 #ifdef GGML_USE_BLAS
@@ -19450,7 +19499,7 @@ struct llama_context * llama_new_context_with_model(
             for (auto * backend : ctx->backends) {
                 if (ggml_backend_is_cpu(backend)) {
                     // use host buffers for the CPU backend compute buffer
-                    backend_buft.push_back(llama_default_buffer_type_cpu(true));
+                    backend_buft.push_back(llama_default_buffer_type_cpu(*model, true));
                 } else {
                     backend_buft.push_back(ggml_backend_get_default_buffer_type(backend));
                 }
@@ -19461,17 +19510,37 @@ struct llama_context * llama_new_context_with_model(
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
 
+            // TODO: move these checks to ggml_backend_sched
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
             bool pipeline_parallel =
                 llama_get_device_count(*model) > 1 &&
                 model->n_gpu_layers > (int)model->hparams.n_layer &&
                 model->split_mode == LLAMA_SPLIT_MODE_LAYER &&
                 params.offload_kqv;
-#ifndef GGML_USE_CUDA
-            // pipeline parallelism requires support for async compute and events
-            // currently this is only implemented in the CUDA backend
-            pipeline_parallel = false;
-#endif
+
+            // pipeline parallelism requires support for async compute and events in all devices
+            if (pipeline_parallel) {
+                for (auto * backend : ctx->backends) {
+                    if (ggml_backend_is_cpu(backend)) {
+                        // ignore CPU backend
+                        continue;
+                    }
+                    auto * dev = ggml_backend_get_device(backend);
+                    if (!dev) {
+                        // backend is using old interface, not supported
+                        pipeline_parallel = false;
+                        break;
+                    }
+                    ggml_backend_dev_props props;
+                    ggml_backend_dev_get_props(dev, &props);
+                    if (!props.caps.async || !props.caps.events) {
+                        // device does not support async compute or events
+                        pipeline_parallel = false;
+                        break;
+                    }
+                }
+            }
+
             ctx->sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), max_nodes, pipeline_parallel);
 
             if (pipeline_parallel) {
@@ -21776,15 +21845,9 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 }
 
 void llama_log_set(ggml_log_callback log_callback, void * user_data) {
-    g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
-    g_state.log_callback_user_data = user_data;
-#ifdef GGML_USE_METAL
-    ggml_backend_metal_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#elif defined(GGML_USE_CUDA)
-    ggml_backend_cuda_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#elif defined(GGML_USE_CANN)
-    ggml_backend_cann_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#endif
+    ggml_log_set(log_callback, user_data);
+    g_logger_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
+    g_logger_state.log_callback_user_data = user_data;
 }
 
 static void llama_log_internal_v(ggml_log_level level, const char * format, va_list args) {
@@ -21793,12 +21856,12 @@ static void llama_log_internal_v(ggml_log_level level, const char * format, va_l
     char buffer[128];
     int len = vsnprintf(buffer, 128, format, args);
     if (len < 128) {
-        g_state.log_callback(level, buffer, g_state.log_callback_user_data);
+        g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
     } else {
         char * buffer2 = new char[len + 1];
         vsnprintf(buffer2, len + 1, format, args_copy);
         buffer2[len] = 0;
-        g_state.log_callback(level, buffer2, g_state.log_callback_user_data);
+        g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
         delete[] buffer2;
     }
     va_end(args_copy);
