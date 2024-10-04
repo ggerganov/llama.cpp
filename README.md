@@ -169,6 +169,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [AIKit](https://github.com/sozercan/aikit) (MIT)
 - [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS) (AGPL)
 - [LLMUnity](https://github.com/undreamai/LLMUnity) (MIT)
+- [Llama Assistant](https://github.com/vietanhdev/llama-assistant) (GPL)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
