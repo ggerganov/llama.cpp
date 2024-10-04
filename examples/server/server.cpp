@@ -2474,7 +2474,7 @@ static void respond(httplib::Response & res, httplib::DataSink * sink, int statu
 }
 
 static void res_error(httplib::Response & res, httplib::DataSink * sink, const json & error_data) {
-    respond(res, sink, 200, {{"error", error_data}});
+    respond(res, sink, 500, {{"error", error_data}});
 }
 
 static void res_ok(httplib::Response & res, httplib::DataSink * sink, const json & data) {
