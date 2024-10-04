@@ -1121,7 +1121,7 @@ struct server_context {
     }
 
     bool process_token(completion_token_output & result, server_slot & slot) {
-        if (!slot.is_alive()) {
+        if (slot.is_alive && !slot.is_alive()) {
             slot.truncated = false;
             slot.has_next_token = false;
 
@@ -2444,16 +2444,20 @@ static void handle_tasks(
 {
     struct State {
         std::unordered_set<int> task_ids;
+        bool is_sink_valid = true;
     };
     auto state = std::make_shared<State>();
     httplib::ContentProviderResourceReleaser resource_releaser = [state, &ctx_server](bool success) {
+        state->is_sink_valid = false;
         if (!success && state) {
             ctx_server.cancel_tasks(state->task_ids);
         }
     };
     if (!stream) {
         res.set_content_provider(MIMETYPE_JSON, [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
-            auto is_alive = [&sink]() { return sink.is_alive(); };
+            auto is_alive = [state, &sink]() {
+                return state->is_sink_valid && sink.is_alive();
+            };
             state->task_ids = create_tasks(is_alive);
             payload(state->task_ids, sink);
             ctx_server.queue_results.remove_waiting_task_ids(state->task_ids);
@@ -2461,7 +2465,9 @@ static void handle_tasks(
         }, resource_releaser);
     } else {
         res.set_chunked_content_provider(MIMETYPE_EVENT_STREAM, [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
-            auto is_alive = [&sink]() { return sink.is_alive(); };
+            auto is_alive = [state, &sink]() {
+                return state->is_sink_valid && sink.is_alive();
+            };
             state->task_ids = create_tasks(is_alive);
             payload(state->task_ids, sink);
             ctx_server.queue_results.remove_waiting_task_ids(state->task_ids);
