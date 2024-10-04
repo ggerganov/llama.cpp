@@ -2445,7 +2445,7 @@ static void handle_tasks(
     };
     if (!stream) {
         res.set_content_provider(MIMETYPE_JSON, [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
-            auto is_alive = [&sink]() { return sink.is_writable(); };
+            auto is_alive = [&sink]() { return sink.is_alive(); };
             state->task_ids = create_tasks(is_alive);
             payload(state->task_ids, sink);
             ctx_server.queue_results.remove_waiting_task_ids(state->task_ids);
@@ -2453,7 +2453,7 @@ static void handle_tasks(
         }, resource_releaser);
     } else {
         res.set_chunked_content_provider("text/event-stream", [create_tasks, payload, state, &ctx_server](size_t, httplib::DataSink & sink) {
-            auto is_alive = [&sink]() { return sink.is_writable(); };
+            auto is_alive = [&sink]() { return sink.is_alive(); };
             state->task_ids = create_tasks(is_alive);
             payload(state->task_ids, sink);
             ctx_server.queue_results.remove_waiting_task_ids(state->task_ids);

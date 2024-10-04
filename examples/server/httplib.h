@@ -457,6 +457,7 @@ public:
 
   std::function<bool(const char *data, size_t data_len)> write;
   std::function<bool()> is_writable;
+  std::function<bool()> is_alive;
   std::function<void()> done;
   std::function<void(const Headers &trailer)> done_with_trailer;
   std::ostream os;
@@ -639,6 +640,7 @@ public:
 
   virtual bool is_readable() const = 0;
   virtual bool is_writable() const = 0;
+  virtual bool is_alive() const = 0;
 
   virtual ssize_t read(char *ptr, size_t size) = 0;
   virtual ssize_t write(const char *ptr, size_t size) = 0;
@@ -2135,6 +2137,7 @@ public:
 
   bool is_readable() const override;
   bool is_writable() const override;
+  bool is_alive() const override;
   ssize_t read(char *ptr, size_t size) override;
   ssize_t write(const char *ptr, size_t size) override;
   void get_remote_ip_and_port(std::string &ip, int &port) const override;
@@ -2945,6 +2948,7 @@ public:
 
   bool is_readable() const override;
   bool is_writable() const override;
+  bool is_alive() const override;
   ssize_t read(char *ptr, size_t size) override;
   ssize_t write(const char *ptr, size_t size) override;
   void get_remote_ip_and_port(std::string &ip, int &port) const override;
@@ -2975,6 +2979,7 @@ public:
 
   bool is_readable() const override;
   bool is_writable() const override;
+  bool is_alive() const override;
   ssize_t read(char *ptr, size_t size) override;
   ssize_t write(const char *ptr, size_t size) override;
   void get_remote_ip_and_port(std::string &ip, int &port) const override;
@@ -4088,6 +4093,7 @@ inline bool write_content(Stream &strm, const ContentProvider &content_provider,
   };
 
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
+  data_sink.is_alive = [&]() -> bool { return strm.is_alive(); };
 
   while (offset < end_offset && !is_shutting_down()) {
     if (!strm.is_writable()) {
@@ -4134,6 +4140,7 @@ write_content_without_length(Stream &strm,
   };
 
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
+  data_sink.is_alive = [&]() -> bool { return strm.is_alive(); };
 
   data_sink.done = [&](void) { data_available = false; };
 
@@ -4186,6 +4193,7 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
   };
 
   data_sink.is_writable = [&]() -> bool { return strm.is_writable(); };
+  data_sink.is_alive = [&]() -> bool { return strm.is_alive(); };
 
   auto done_with_trailer = [&](const Headers *trailer) {
     if (!ok) { return; }
@@ -5484,6 +5492,10 @@ inline bool SocketStream::is_writable() const {
          is_socket_alive(sock_);
 }
 
+inline bool SocketStream::is_alive() const {
+  return is_socket_alive(sock_);
+}
+
 inline ssize_t SocketStream::read(char *ptr, size_t size) {
 #ifdef _WIN32
   size =
@@ -5557,6 +5569,8 @@ inline socket_t SocketStream::socket() const { return sock_; }
 inline bool BufferStream::is_readable() const { return true; }
 
 inline bool BufferStream::is_writable() const { return true; }
+
+inline bool BufferStream::is_alive() const { return true; }
 
 inline ssize_t BufferStream::read(char *ptr, size_t size) {
 #if defined(_MSC_VER) && _MSC_VER < 1910
@@ -8346,6 +8360,10 @@ inline bool SSLSocketStream::is_readable() const {
 inline bool SSLSocketStream::is_writable() const {
   return select_write(sock_, write_timeout_sec_, write_timeout_usec_) > 0 &&
          is_socket_alive(sock_);
+}
+
+inline bool SSLSocketStream::is_alive() const {
+  return is_socket_alive(sock_);
 }
 
 inline ssize_t SSLSocketStream::read(char *ptr, size_t size) {
