@@ -3168,8 +3168,8 @@ bool clip_image_batch_encode_vit(clip_ctx * ctx, const int n_threads, const clip
     int image_size_width  = image_size;
     int image_size_height = image_size;
     const int patch_size    = hparams.patch_size;
-    // const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
-    // const int num_positions = num_patches + (ctx->has_class_embedding ? 1 : 0);
+    const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
+    const int num_positions = num_patches + (ctx->has_class_embedding ? 1 : 0);
     if(ctx->load_image_size==nullptr){
         ctx->load_image_size= clip_image_size_init();
     }
@@ -3206,28 +3206,16 @@ bool clip_image_batch_encode_vit(clip_ctx * ctx, const int n_threads, const clip
         free(data);
     }
 
-    // copy from minicpm implementation for positional embedding.
-    // inspired from siglip:
-    //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit
-    //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit/blob/d66538faeba44480d0bfaa42145eef26f9423199/modeling_siglip.py#L316
+    {
+    // compute positions
     struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
     int* positions_data = (int*)malloc(ggml_nbytes(positions));
-    int bucket_coords_h[70];
-    int bucket_coords_w[70];
-    for (int i = 0; i < pos_h; i++){
-        bucket_coords_h[i] = std::floor(70.0*i/pos_h);
-    }
-    for (int i = 0; i < pos_w; i++){
-        bucket_coords_w[i] = std::floor(70.0*i/pos_w);
-    }
-    for (int i = 0, id = 0; i < pos_h; i++){
-        for (int j = 0; j < pos_w; j++){
-            positions_data[id++] = bucket_coords_h[i]*70 + bucket_coords_w[j];
-        }
+    for (int i = 0; i < num_patches; i++){
+        positions_data[i] = i;
     }
     ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
     free(positions_data);
-
+    }
 
 
     if (ggml_backend_is_cpu(ctx->backend)) {
