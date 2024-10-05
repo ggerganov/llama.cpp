@@ -838,6 +838,31 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         return iparams;
     }
 
+    if (params.reranking) {
+        bool ok = true;
+
+        if (llama_token_bos(model) == LLAMA_TOKEN_NULL) {
+            LOG_WRN("%s: warning: model does not have a  BOS token, reranking will not work\n", __func__);
+            ok = false;
+        }
+
+        if (llama_token_eos(model) == LLAMA_TOKEN_NULL) {
+            LOG_WRN("%s: warning: model does not have an EOS token, reranking will not work\n", __func__);
+            ok = false;
+        }
+
+        if (llama_token_sep(model) == LLAMA_TOKEN_NULL) {
+            LOG_WRN("%s: warning: model does not have a  SEP token, reranking will not work\n", __func__);
+            ok = false;
+        }
+
+        if (!ok) {
+            llama_free_model(model);
+
+            return iparams;
+        }
+    }
+
     auto cparams = llama_context_params_from_gpt_params(params);
 
     llama_context * lctx = llama_new_context_with_model(model, cparams);
@@ -855,6 +880,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         if (cvec.n_embd == -1) {
             llama_free(lctx);
             llama_free_model(model);
+
             return iparams;
         }
 
@@ -867,6 +893,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         if (err) {
             llama_free(lctx);
             llama_free_model(model);
+
             return iparams;
         }
     }
@@ -889,7 +916,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         llama_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
-    if (params.sparams.ignore_eos && llama_token_eos(model) == -1) {
+    if (params.sparams.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
         LOG_WRN("%s: warning: model does not have an EOS token, ignoring --ignore-eos\n", __func__);
         params.sparams.ignore_eos = false;
     }
@@ -930,6 +957,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
 
     iparams.model   = model;
     iparams.context = lctx;
+
     return iparams;
 }
 
