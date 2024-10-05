@@ -40,17 +40,17 @@ struct llama_vocab {
     id special_bos_id  = 1;
     id special_eos_id  = 2;
     id special_unk_id  = 0;
-    id special_sep_id  = -1;
-    id special_pad_id  = -1;
-    id special_cls_id  = -1;
-    id special_mask_id = -1;
+    id special_sep_id  = LLAMA_TOKEN_NULL;
+    id special_pad_id  = LLAMA_TOKEN_NULL;
+    id special_cls_id  = LLAMA_TOKEN_NULL;
+    id special_mask_id = LLAMA_TOKEN_NULL;
 
     id linefeed_id       = 13;
-    id special_prefix_id = -1;
-    id special_suffix_id = -1;
-    id special_middle_id = -1;
-    id special_eot_id    = -1; // TODO: move above after "eos_id", and here add "file separator" token
-    id special_eom_id    = -1;
+    id special_prefix_id = LLAMA_TOKEN_NULL;
+    id special_suffix_id = LLAMA_TOKEN_NULL;
+    id special_middle_id = LLAMA_TOKEN_NULL;
+    id special_eot_id    = LLAMA_TOKEN_NULL; // TODO: move above after "eos_id", and here add "file separator" token
+    id special_eom_id    = LLAMA_TOKEN_NULL;
 
     // set of all tokens that cause "end of generation"
     std::set<id> special_eog_ids;

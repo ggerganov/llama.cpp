@@ -2027,7 +2027,7 @@ struct server_context {
                                 continue;
                             }
 
-                            // prompt: <s>query</s><s>doc</s>
+                            // prompt: [BOS]query[EOS][SEP]doc[EOS]
                             prompt_tokens.clear();
                             prompt_tokens.push_back(llama_token_bos(model));
                             {
@@ -2035,7 +2035,7 @@ struct server_context {
                                 prompt_tokens.insert(prompt_tokens.end(), part.begin(), part.end());
                             }
                             prompt_tokens.push_back(llama_token_eos(model));
-                            prompt_tokens.push_back(llama_token_bos(model));
+                            prompt_tokens.push_back(llama_token_sep(model));
                             {
                                 const auto part = tokenize(slot.prompt[1], false);
                                 prompt_tokens.insert(prompt_tokens.end(), part.begin(), part.end());
