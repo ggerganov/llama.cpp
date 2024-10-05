@@ -127,6 +127,8 @@ extern "C" {
         bool async;
         // pinned host buffer
         bool host_buffer;
+        // creating buffers from host ptr
+        bool buffer_from_host_ptr;
         // event synchronization
         bool events;
     };

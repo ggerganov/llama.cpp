@@ -3567,12 +3567,14 @@ static const char * ggml_backend_metal_device_get_description(ggml_backend_dev_t
 }
 
 static void ggml_backend_metal_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
-    // TODO
-    *free = 0;
-    *total = 0;
-
     if (@available(macOS 10.12, iOS 16.0, *)) {
-        *total = g_state.mtl_device.recommendedMaxWorkingSetSize;
+        id<MTLDevice> device = ggml_backend_metal_get_device();
+        *total = device.recommendedMaxWorkingSetSize;
+        *free  = *total - device.currentAllocatedSize;
+        ggml_backend_metal_free_device();
+    } else {
+        *free = 1;
+        *total = 1;
     }
 
     GGML_UNUSED(dev);
@@ -3590,9 +3592,10 @@ static void ggml_backend_metal_device_get_props(ggml_backend_dev_t dev, struct g
     props->type        = ggml_backend_metal_device_get_type(dev);
     ggml_backend_metal_device_get_memory(dev, &props->memory_free, &props->memory_total);
     props->caps = (struct ggml_backend_dev_caps) {
-        /* async       */ false,
-        /* host_buffer */ false,
-        /* events      */ false,
+        /* .async                 = */ false,
+        /* .host_buffer           = */ false,
+        /* .buffer_from_host_ptr  = */ true,
+        /* .events                = */ false,
     };
 }
 
