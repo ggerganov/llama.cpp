@@ -1206,19 +1206,19 @@ static const struct ggml_backend_device_i ggml_backend_cpu_device_i = {
 
 ////////////////////////
 
-static const char * ggml_backend_cpu_reg_name(ggml_backend_reg_t reg) {
+static const char * ggml_backend_cpu_reg_get_name(ggml_backend_reg_t reg) {
     return "CPU";
 
     GGML_UNUSED(reg);
 }
 
-static size_t ggml_backend_cpu_reg_device_count(ggml_backend_reg_t reg) {
+static size_t ggml_backend_cpu_reg_get_device_count(ggml_backend_reg_t reg) {
     return 1;
 
     GGML_UNUSED(reg);
 }
 
-static ggml_backend_dev_t ggml_backend_cpu_reg_device_get(ggml_backend_reg_t reg, size_t index) {
+static ggml_backend_dev_t ggml_backend_cpu_reg_get_device(ggml_backend_reg_t reg, size_t index) {
     GGML_ASSERT(index == 0);
 
     static ggml_backend_cpu_device_context ctx;
@@ -1235,9 +1235,9 @@ static ggml_backend_dev_t ggml_backend_cpu_reg_device_get(ggml_backend_reg_t reg
 }
 
 static const struct ggml_backend_reg_i ggml_backend_cpu_reg_i = {
-    /* .get_name         = */ ggml_backend_cpu_reg_name,
-    /* .device_count     = */ ggml_backend_cpu_reg_device_count,
-    /* .device_get       = */ ggml_backend_cpu_reg_device_get,
+    /* .get_name         = */ ggml_backend_cpu_reg_get_name,
+    /* .get_device_count = */ ggml_backend_cpu_reg_get_device_count,
+    /* .get_device       = */ ggml_backend_cpu_reg_get_device,
     /* .get_proc_address = */ NULL,
 };
 
