@@ -22,6 +22,9 @@
 
 // globals
 
+// overload of MTLGPUFamilyMetal3 (not available in some environments)
+static const NSInteger MTLGPUFamilyMetal3_GGML = 5001;
+
 // initialized in ggml_backend_metal_reg
 static struct ggml_backend_reg    g_ggml_backend_metal_reg;
 static struct ggml_backend_device g_ggml_backend_metal_device;
@@ -46,7 +49,7 @@ static id<MTLDevice> ggml_backend_metal_get_device(void) {
         g_state.mtl_device = MTLCreateSystemDefaultDevice();
 
         g_state.support_simdgroup_reduction  = [g_state.mtl_device supportsFamily:MTLGPUFamilyApple7];
-        g_state.support_simdgroup_reduction |= [g_state.mtl_device supportsFamily:MTLGPUFamilyMetal3];
+        g_state.support_simdgroup_reduction |= [g_state.mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
 
         g_state.support_simdgroup_mm = [g_state.mtl_device supportsFamily:MTLGPUFamilyApple7];
     }
@@ -442,8 +445,6 @@ static struct ggml_backend_metal_context * ggml_metal_init(void) {
     // print MTL GPU family:
     GGML_LOG_INFO("%s: GPU name:   %s\n", __func__, [[ctx->device name] UTF8String]);
 
-    const NSInteger MTLGPUFamilyMetal3 = 5001;
-
     // determine max supported GPU family
     // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
@@ -462,9 +463,9 @@ static struct ggml_backend_metal_context * ggml_metal_init(void) {
             }
         }
 
-        for (int i = MTLGPUFamilyMetal3 + 5; i >= MTLGPUFamilyMetal3; --i) {
+        for (int i = MTLGPUFamilyMetal3_GGML + 5; i >= MTLGPUFamilyMetal3_GGML; --i) {
             if ([ctx->device supportsFamily:i]) {
-                GGML_LOG_INFO("%s: GPU family: MTLGPUFamilyMetal%d  (%d)\n", __func__, i - (int) MTLGPUFamilyMetal3 + 3, i);
+                GGML_LOG_INFO("%s: GPU family: MTLGPUFamilyMetal%d  (%d)\n", __func__, i - (int) MTLGPUFamilyMetal3_GGML + 3, i);
                 break;
             }
         }
