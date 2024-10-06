@@ -3258,7 +3258,7 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t s
 }
 
 static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
+    struct ggml_backend_metal_buffer_context * ctx = calloc(1, sizeof(struct ggml_backend_metal_buffer_context));
 
     const size_t size_page = sysconf(_SC_PAGESIZE);
 
@@ -3340,7 +3340,7 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
 // buffer from ptr
 
 ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size) {
-    struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
+    struct ggml_backend_metal_buffer_context * ctx = calloc(1, sizeof(struct ggml_backend_metal_buffer_context));
 
     ctx->all_data = data;
     ctx->all_size = size;

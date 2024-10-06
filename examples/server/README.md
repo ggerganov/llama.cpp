@@ -100,7 +100,7 @@ The project is under active development, and we are [looking for feedback and co
 | Argument | Explanation |
 | -------- | ----------- |
 | `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;tfs_z;typ_p;top_p;min_p;temperature) |
-| `-s, --seed SEED` | RNG seed (default: 4294967295, use random seed for 4294967295) |
+| `-s, --seed SEED` | RNG seed (default: -1, use random seed for -1) |
 | `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: kfypmt) |
 | `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
 | `--penalize-nl` | penalize newline tokens (default: false) |
