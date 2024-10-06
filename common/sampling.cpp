@@ -293,7 +293,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
         return id;
     }
 
-    // check if it the sampled token fits the grammar
+    // check if the sampled token fits the grammar
     {
         llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
         llama_token_data_array single_token_data_array = { &single_token_data, 1, -1, false };
@@ -398,7 +398,7 @@ std::vector<gpt_sampler_type> gpt_sampler_types_from_names(const std::vector<std
         { "temperature", GPT_SAMPLER_TYPE_TEMPERATURE },
     };
 
-    // since samplers names are written multiple ways
+    // since samplers names are written in multiple ways
     // make it ready for both system names and input names
     std::unordered_map<std::string, gpt_sampler_type> sampler_alt_name_map {
         { "top-k",       GPT_SAMPLER_TYPE_TOP_K },
