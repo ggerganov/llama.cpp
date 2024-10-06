@@ -3691,13 +3691,13 @@ ggml_backend_reg_t ggml_backend_metal_reg(void) {
     {
         g_ggml_backend_metal_reg = (struct ggml_backend_reg) {
             /* .iface   = */ ggml_backend_metal_reg_i,
-                /* .context = */ NULL,
+            /* .context = */ NULL,
         };
 
         g_ggml_backend_metal_device = (struct ggml_backend_device) {
             /* .iface   = */ ggml_backend_metal_device_i,
-                /* .reg     = */ &g_ggml_backend_metal_reg,
-                /* .context = */ NULL,
+            /* .reg     = */ &g_ggml_backend_metal_reg,
+            /* .context = */ NULL,
         };
     }
 
