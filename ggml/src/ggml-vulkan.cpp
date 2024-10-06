@@ -1070,10 +1070,25 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
     try {
         buf->device_memory = device->device.allocateMemory({ mem_req.size, memory_type_index });
     } catch (const vk::SystemError& e) {
-        // Out of Host/Device memory, clean up buffer
-        device->device.destroyBuffer(buf->buffer);
-        buf->size = 0;
-        throw e;
+        if (buf->memory_property_flags != fallback_flags) {
+            // Try again with fallback flags
+            memory_type_index = find_properties(&mem_props, &mem_req, fallback_flags);
+            buf->memory_property_flags = fallback_flags;
+
+            try {
+                buf->device_memory = device->device.allocateMemory({ mem_req.size, memory_type_index });
+            }
+            catch (const vk::SystemError& e) {
+                device->device.destroyBuffer(buf->buffer);
+                buf->size = 0;
+                throw e;
+            }
+        } else {
+            // Out of Host/Device memory, clean up buffer
+            device->device.destroyBuffer(buf->buffer);
+            buf->size = 0;
+            throw e;
+        }
     }
     buf->ptr = nullptr;
 
