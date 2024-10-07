@@ -88,6 +88,7 @@ extern "C" {
 
         void (*free)(ggml_backend_t backend);
 
+        // Will be moved to the device interface
         // buffer allocation
         ggml_backend_buffer_type_t (*get_default_buffer_type)(ggml_backend_t backend);
 
@@ -112,17 +113,9 @@ extern "C" {
 
         // IMPORTANT: these functions have been moved to the device interface and will be removed from the backend interface
         //            new backends should implement the device interface instead
-
         // These functions are being moved to the device interface
-        // check if the backend can compute an operation
         bool (*supports_op)  (ggml_backend_t backend, const struct ggml_tensor * op);
-
-        // check if the backend can use tensors allocated in a buffer type
         bool (*supports_buft)(ggml_backend_t backend, ggml_backend_buffer_type_t buft);
-
-        // check if the backend wants to run an operation, even if the weights are allocated in a CPU buffer
-        // these should be expensive operations with large batch sizes that may benefit from running on this backend
-        // even if the weight has to be copied from the CPU temporarily
         bool (*offload_op)   (ggml_backend_t backend, const struct ggml_tensor * op);
 
         // (optional) event synchronization
@@ -184,9 +177,8 @@ extern "C" {
         // check if the backend can use tensors allocated in a buffer type
         bool (*supports_buft)(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft);
 
-        // check if the backend wants to run an operation, even if the weights are allocated in a CPU buffer
-        // these should be expensive operations with large batch sizes that may benefit from running on this backend
-        // even if the weight has to be copied from the CPU temporarily
+        // (optional) check if the backend wants to run an operation, even if the weights are allocated in an incompatible buffer
+        // these should be expensive operations that may benefit from running on this backend instead of the CPU backend
         bool (*offload_op)(ggml_backend_dev_t dev, const struct ggml_tensor * op);
 
         // (optional) event synchronization
