@@ -497,11 +497,12 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
     if (@available(macOS 10.12, iOS 16.0, *)) {
         GGML_LOG_INFO("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, device.recommendedMaxWorkingSetSize / 1e6);
     }
-#elif TARGET_OS_OSX
-    if (device.maxTransferRate != 0) {
-        GGML_LOG_INFO("%s: maxTransferRate               = %8.2f MB/s\n", __func__, device.maxTransferRate / 1e6);
-    } else {
-        GGML_LOG_INFO("%s: maxTransferRate               = built-in GPU\n", __func__);
+    if (@available(macOS 10.15, *)) {
+        if (device.maxTransferRate != 0) {
+            GGML_LOG_INFO("%s: maxTransferRate               = %8.2f MB/s\n", __func__, device.maxTransferRate / 1e6);
+        } else {
+            GGML_LOG_INFO("%s: maxTransferRate               = built-in GPU\n", __func__);
+        }
     }
 #endif
 
