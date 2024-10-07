@@ -80,7 +80,7 @@ class OpenAPIMethod:
         if self.body:
             body = kwargs.pop(self.body['name'], None)
             if self.body['required']:
-                assert body is not None, f'Missing required body parameter: {self.body['name']}'
+                assert body is not None, f'Missing required body parameter: {self.body["name"]}'
         else:
             body = None
 
@@ -174,6 +174,7 @@ async def main(
     model: str = 'gpt-4o',
     tools: Optional[list[str]] = None,
     max_iterations: Optional[int] = 10,
+    system: Optional[str] = None,
     verbose: bool = False,
     cache_prompt: bool = True,
     seed: Optional[int] = None,
@@ -192,12 +193,18 @@ async def main(
 
     sys.stdout.write(f'🛠️  Tools: {", ".join(tool_map.keys()) if tool_map else "<none>"}\n')
 
-    messages = [
+    messages = []
+    if system:
+        messages.append(dict(
+            role='system',
+            content=system,
+        ))
+    messages.append(
         dict(
             role='user',
             content=goal,
         )
-    ]
+    )
 
     headers = {
         'Content-Type': 'application/json',
@@ -221,10 +228,10 @@ async def main(
                 print(f'Calling {url} with {json.dumps(payload, indent=2)}', file=sys.stderr)
             async with aiohttp.ClientSession(headers=headers) as session:
                 async with session.post(url, json=payload) as response:
-                    if verbose:
-                        print(f'Response: {response}', file=sys.stderr)
                     response.raise_for_status()
                     response = await response.json()
+                    if verbose:
+                        print(f'Response: {json.dumps(response, indent=2)}', file=sys.stderr)
 
             assert len(response['choices']) == 1
             choice = response['choices'][0]

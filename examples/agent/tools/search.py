@@ -1,3 +1,4 @@
+import sys
 from pydantic import Field
 import aiohttp
 import itertools
@@ -67,6 +68,8 @@ async def brave_search(*, query: str) -> List[Dict]:
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as res:
+            if not res.ok:
+                raise Exception(await res.text())
             res.raise_for_status()
             response = await res.json()
 

@@ -63,14 +63,11 @@ def main(host: str = '0.0.0.0', port: int = 8000, verbose: bool = False, include
         return True
 
     app = fastapi.FastAPI()
-    for name, fn in python_tools.items():
+    for name, fn in ALL_TOOLS.items():
         if accept_tool(name):
             app.post(f'/{name}')(fn)
             if name != 'python':
                 python_tools[name] = fn
-
-    for name, fn in ALL_TOOLS.items():
-        app.post(f'/{name}')(fn)
 
     uvicorn.run(app, host=host, port=port)
 
