@@ -170,6 +170,7 @@ extern "C" {
 
     // Functions that may be obtained using ggml_backend_reg_get_proc_address
     typedef ggml_backend_buffer_type_t (*ggml_backend_split_buffer_type_t)(const float *);
+    typedef void (*ggml_backend_set_n_threads_t)(ggml_backend_t, int);
 
     //
     // Backend registry

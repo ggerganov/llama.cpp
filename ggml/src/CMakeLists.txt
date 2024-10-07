@@ -190,22 +190,24 @@ if (GGML_BLAS)
             # see https://gitlab.kitware.com/cmake/cmake/-/issues/20268
             find_package(PkgConfig REQUIRED)
             if (${GGML_BLAS_VENDOR} MATCHES "Generic")
-                pkg_check_modules(DepBLAS REQUIRED blas)
+                pkg_check_modules(DepBLAS blas)
             elseif (${GGML_BLAS_VENDOR} MATCHES "OpenBLAS")
                 # As of openblas v0.3.22, the 64-bit is named openblas64.pc
                 pkg_check_modules(DepBLAS openblas64)
                 if (NOT DepBLAS_FOUND)
-                    pkg_check_modules(DepBLAS REQUIRED openblas)
+                    pkg_check_modules(DepBLAS openblas)
                 endif()
             elseif (${GGML_BLAS_VENDOR} MATCHES "FLAME")
-                pkg_check_modules(DepBLAS REQUIRED blis)
+                add_compile_definitions(GGML_BLAS_USE_BLIS)
+                pkg_check_modules(DepBLAS blis)
             elseif (${GGML_BLAS_VENDOR} MATCHES "ATLAS")
-                pkg_check_modules(DepBLAS REQUIRED blas-atlas)
+                pkg_check_modules(DepBLAS blas-atlas)
             elseif (${GGML_BLAS_VENDOR} MATCHES "FlexiBLAS")
-                pkg_check_modules(DepBLAS REQUIRED flexiblas_api)
+                pkg_check_modules(DepBLAS flexiblas_api)
             elseif (${GGML_BLAS_VENDOR} MATCHES "Intel")
+                add_compile_definitions(GGML_BLAS_USE_MKL)
                 # all Intel* libraries share the same include path
-                pkg_check_modules(DepBLAS REQUIRED mkl-sdl)
+                pkg_check_modules(DepBLAS mkl-sdl)
             elseif (${GGML_BLAS_VENDOR} MATCHES "NVHPC")
                 # this doesn't provide pkg-config
                 # suggest to assign BLAS_INCLUDE_DIRS on your own
@@ -1359,6 +1361,10 @@ if (MATH_LIBRARY)
     if (NOT WIN32 OR NOT GGML_SYCL)
         list(APPEND GGML_EXTRA_LIBS_PRIVATE m)
     endif()
+endif()
+
+if (CMAKE_SYSTEM_NAME MATCHES "Android")
+    list(APPEND GGML_EXTRA_LIBS_PRIVATE dl) # Must be linked explicitly
 endif()
 
 list(REMOVE_DUPLICATES GGML_EXTRA_LIBS_PRIVATE)
