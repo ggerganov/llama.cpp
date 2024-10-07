@@ -290,7 +290,10 @@ struct gpt_params {
     std::string ssl_file_key  = "";                                                                         // NOLINT
     std::string ssl_file_cert = "";                                                                         // NOLINT
 
-    bool endpoint_slots   = true;
+    // "advanced" endpoints are disabled by default for better security
+    bool webui            = true;
+    bool endpoint_slots   = false;
+    bool endpoint_props   = false; // only control POST requests, not GET
     bool endpoint_metrics = false;
 
     bool log_json = false;
