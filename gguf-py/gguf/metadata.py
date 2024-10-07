@@ -348,12 +348,12 @@ class Metadata:
             use_model_card_metadata("author", "model_creator")
             use_model_card_metadata("basename", "model_type")
 
-            if "base_model" in model_card or "base_models" in model_card:
+            if "base_model" in model_card or "base_models" in model_card or "base_model_sources" in model_card:
                 # This represents the parent models that this is based on
                 # Example: stabilityai/stable-diffusion-xl-base-1.0. Can also be a list (for merges)
                 # Example of merges: https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0.1/blob/main/README.md
                 metadata_base_models = []
-                base_model_value = model_card.get("base_model", model_card.get("base_models", None))
+                base_model_value = model_card.get("base_model", model_card.get("base_models", model_card.get("base_model_sources", None)))
 
                 if base_model_value is not None:
                     if isinstance(base_model_value, str):
@@ -402,14 +402,16 @@ class Metadata:
 
                     elif isinstance(model_id, dict):
                         base_model = model_id
+
                     else:
                         logger.error(f"base model entry '{str(model_id)}' not in a known format")
+
                     metadata.base_models.append(base_model)
 
-            if "datasets" in model_card or "dataset" in model_card:
+            if "datasets" in model_card or "dataset" in model_card or "dataset_sources" in model_card:
                 # This represents the datasets that this was trained from
                 metadata_datasets = []
-                dataset_value = model_card.get("datasets", model_card.get("dataset", None))
+                dataset_value = model_card.get("datasets", model_card.get("dataset", model_card.get("dataset_sources", None)))
 
                 if dataset_value is not None:
                     if isinstance(dataset_value, str):
@@ -458,8 +460,10 @@ class Metadata:
 
                     elif isinstance(dataset_id, dict):
                         dataset = dataset_id
+
                     else:
                         logger.error(f"dataset entry '{str(dataset_id)}' not in a known format")
+
                     metadata.datasets.append(dataset)
 
             use_model_card_metadata("license", "license")
