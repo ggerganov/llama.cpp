@@ -185,7 +185,7 @@ static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::
             };
         }
     }
-    static std::regex function_regex("\\{[\\s\\n\\r]*\"name\": \"([^\"]+)\", \"parameters\": ");
+    static std::regex function_regex("\\{(?:\"type\": \"function\", |[\\s\\n\\r]*)\"name\": \"([^\"]+)\", \"parameters\": ");
     static std::regex close_regex("\\}");
     return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ true);
 }
@@ -270,7 +270,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         tool_rules.push_back(
                             builder.add_rule(
                                 name + "-call",
-                                "\"\\n\"? \"{\" space \"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                                "\"\\n\"? \"{\" ( \"\\\"type\\\": \\\"function\\\", \" | space ) \"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                                     builder.add_schema(name + "-args", parameters) +
                                 " \"}\""));
                         if (allow_content && !eagerly_match_any_json) {
@@ -281,6 +281,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                             handler.grammar_trigger_words.push_back("{\n\t\"name\": \"" + name + "\"");
                             handler.grammar_trigger_words.push_back("{\n  \"name\": \"" + name + "\"");
                             handler.grammar_trigger_words.push_back("{\n    \"name\": \"" + name + "\"");
+                            handler.grammar_trigger_words.push_back("{\"type\": \"function\", \"name\": \"" + name + "\"");
                         }
                     }
                 }

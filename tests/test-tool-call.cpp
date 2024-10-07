@@ -253,6 +253,11 @@ static void test_parsing() {
       "{\n    \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       just_special_function_call);
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\"type\": \"function\", \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
+      "",
+      just_special_function_call);
+
     // No match: function unknown
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
