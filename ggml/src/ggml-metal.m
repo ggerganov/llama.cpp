@@ -3465,10 +3465,12 @@ static const char * ggml_backend_metal_name(ggml_backend_t backend) {
 }
 
 static void ggml_backend_metal_free(ggml_backend_t backend) {
-    struct ggml_backend_metal_context * ctx = (struct ggml_backend_metal_context *)backend->context;
+    struct ggml_backend_metal_context        * ctx     = backend->context;
     struct ggml_backend_metal_device_context * ctx_dev = backend->device->context;
+
     ggml_backend_metal_device_rel(ctx_dev);
     ggml_metal_free(ctx);
+
     free(backend);
 }
 
