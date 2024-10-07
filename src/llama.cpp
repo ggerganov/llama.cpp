@@ -2807,6 +2807,42 @@ struct llama_kv_cache {
     }
 };
 
+class llama_kv_cache_state {
+    struct llama_kv_cache_state_short {
+        uint32_t head = 0;
+        uint32_t size = 0;
+        uint32_t used = 0;
+        uint32_t n    = 0;
+
+        std::vector<llama_kv_cell> cells;
+    } old_state;
+
+    bool saved = false;
+
+public:
+    void save_state(const llama_kv_cache& cache) {
+        old_state.head  = cache.head;
+        old_state.size  = cache.size;
+        old_state.used  = cache.used;
+        old_state.n     = cache.n;
+        old_state.cells = cache.cells;
+
+        saved = true;
+    }
+
+    void restore(llama_kv_cache& cache) {
+        if (saved) {
+            cache.head  = old_state.head;
+            cache.size  = old_state.size;
+            cache.used  = old_state.used;
+            cache.n     = old_state.n;
+            cache.cells = std::move(old_state.cells);
+
+            saved = false;
+        }
+    }
+};
+
 struct llama_control_vector {
     std::vector<struct ggml_tensor *> tensors; // per layer
     std::vector<struct ggml_context *> ctxs;
@@ -17042,7 +17078,7 @@ static void llama_output_reorder(struct llama_context * ctx) {
     }
 }
 
-static void llama_graph_compute(
+static enum ggml_status llama_graph_compute(
           llama_context & lctx,
             ggml_cgraph * gf,
                     int   n_threads,
@@ -17058,9 +17094,11 @@ static void llama_graph_compute(
     }
 #endif
 
-    ggml_backend_sched_graph_compute_async(lctx.sched, gf);
+    auto status = ggml_backend_sched_graph_compute_async(lctx.sched, gf);
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
+
+    return status;
 }
 
 // decode a batch of tokens by evaluating the transformer
@@ -17109,6 +17147,7 @@ static int llama_decode_internal(
     lctx.n_queued_tokens += n_tokens_all;
 
     auto & kv_self = lctx.kv_self;
+    llama_kv_cache_state kv_cache_state_holder;
 
     const int64_t n_embd  = hparams.n_embd;
     const int64_t n_vocab = hparams.n_vocab;
@@ -17186,6 +17225,7 @@ static int llama_decode_internal(
         // non-causal masks do not use the KV cache
         if (hparams.causal_attn) {
             llama_kv_cache_update(&lctx);
+            kv_cache_state_holder.save_state(kv_self);
 
             // if we have enough unused cells before the current head ->
             //   better to start searching from the beginning of the cache, hoping to fill it
@@ -17242,7 +17282,19 @@ static int llama_decode_internal(
 
         llama_set_inputs(lctx, ubatch);
 
-        llama_graph_compute(lctx, gf, n_threads, threadpool);
+        const auto compute_status = llama_graph_compute(lctx, gf, n_threads, threadpool);
+        if (compute_status != GGML_STATUS_SUCCESS) {
+            kv_cache_state_holder.restore(kv_self);
+            switch (compute_status) {
+                case GGML_STATUS_ABORTED:
+                    return 2;
+                case GGML_STATUS_ALLOC_FAILED:
+                    return -2;
+                case GGML_STATUS_FAILED:
+                default:
+                    return -3;
+            }
+        }
 
         // update the kv ring buffer
         {
@@ -17476,7 +17528,18 @@ static int llama_encode_internal(
 
     llama_set_inputs(lctx, ubatch);
 
-    llama_graph_compute(lctx, gf, n_threads, threadpool);
+    const auto compute_status = llama_graph_compute(lctx, gf, n_threads, threadpool);
+    switch (compute_status) {
+        case GGML_STATUS_SUCCESS:
+            break;
+        case GGML_STATUS_ABORTED:
+            return 2;
+        case GGML_STATUS_ALLOC_FAILED:
+            return -2;
+        case GGML_STATUS_FAILED:
+        default:
+            return -3;
+    }
 
     // extract embeddings
     if (embd) {
