@@ -1,6 +1,6 @@
 // This file defines tests for various GGML ops and backends.
 // For the forward pass it asserts that the results of multiple backends computing the same GGML ops are consistent.
-// For the backwards pass it asserts that the gradients from backpropagation are consistent
+// For the backward pass it asserts that the gradients from backpropagation are consistent
 // with the gradients obtained via the method of finite differences ("grad" mode, this is optional).
 // It is also possible to check the performance ("perf" mode).
 //
@@ -116,6 +116,11 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
         ggml_backend_tensor_set(tensor, data.data(), 0, ggml_nbytes(tensor));
+    } else if (tensor->type == GGML_TYPE_I64) {
+        // Integers with a size of 8 bytes can be set by mirroring the float data, the specific values are again not really meaningful.
+        const size_t nbytes_half = ggml_nbytes(tensor)/2;
+        ggml_backend_tensor_set(tensor, data.data(), 0*nbytes_half, nbytes_half);
+        ggml_backend_tensor_set(tensor, data.data(), 1*nbytes_half, nbytes_half);
     } else {
         GGML_ABORT("fatal error");
     }
@@ -145,6 +150,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                         tv.push_back(ggml_bf16_to_fp32(*(ggml_bf16_t*)&buf[i]));
                     } else if (t->type == GGML_TYPE_F32) {
                         tv.push_back(*(float *) &buf[i]);
+                    } else if (t->type == GGML_TYPE_I64) {
+                        tv.push_back((float)*(int64_t *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
                         tv.push_back((float)*(int32_t *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I16) {
@@ -672,14 +679,11 @@ struct test_case {
         }
 
         // run
-        ggml_backend_synchronize(backend);
-
         int64_t total_time_us = 0;
         int total_runs = 0;
         do {
             int64_t start_time = ggml_time_us();
             ggml_backend_graph_compute(backend, gf);
-            ggml_backend_synchronize(backend);
             int64_t end_time = ggml_time_us();
 
             total_time_us += end_time - start_time;
@@ -740,7 +744,7 @@ struct test_case {
 
         ggml_tensor * out = build_graph(ctx);
 
-        if (op_name != nullptr && op_desc(out) != op_name) {
+        if ((op_name != nullptr && op_desc(out) != op_name) || out->op == GGML_OP_OPT_STEP_ADAMW) {
             //printf("  %s: skipping\n", op_desc(out).c_str());
             ggml_free(ctx);
             return true;
@@ -749,11 +753,6 @@ struct test_case {
         printf("  %s(%s): ", op_desc(out).c_str(), vars().c_str());
         fflush(stdout);
 
-        if (out->grad == nullptr) {
-            printf("backwards pass not supported \n");
-            ggml_free(ctx);
-            return true;
-        }
         if (out->type != GGML_TYPE_F32) {
             ggml_free(ctx);
             printf("not supported [%s->type != FP32]\n", out->name);
@@ -762,17 +761,25 @@ struct test_case {
 
         // check if the backend supports the ops
         bool supported = true;
+        bool any_params = false;
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (!ggml_backend_supports_op(backend, t)) {
                 printf("not supported [%s] ", ggml_backend_name(backend));
                 supported = false;
                 break;
             }
-            if ((t->flags & GGML_TENSOR_FLAG_PARAM) && t->type != GGML_TYPE_F32) {
-                printf("not supported [%s->type != FP32] ", t->name);
-                supported = false;
-                break;
+            if ((t->flags & GGML_TENSOR_FLAG_PARAM)) {
+                any_params = true;
+                if (t->type != GGML_TYPE_F32) {
+                    printf("not supported [%s->type != FP32] ", t->name);
+                    supported = false;
+                    break;
+                }
             }
+        }
+        if (!any_params) {
+            printf("not supported [%s] \n", op_name);
+            supported = false;
         }
         if (!supported) {
             printf("\n");
@@ -801,7 +808,7 @@ struct test_case {
 
         ggml_build_forward_expand(gf, out);
         ggml_graph_cpy(gf, gb);
-        ggml_build_backward_expand(ctx, gf, gb, false, false);
+        ggml_build_backward_expand(ctx, gf, gb, false);
         if (expect.size() != 1 || expect[0] != 0.0f) {
             GGML_ASSERT(ggml_graph_n_nodes(gb) > ggml_graph_n_nodes(gf));
             for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
@@ -984,7 +991,7 @@ struct test_example : public test_case {
     }
     // In order to also check the gradients for your op, add calls like ggml_set_param(ctx, a)
     // immediately after you create the tensors.
-    // This is optional and only makes sense if a backwards pass has actually been implemented for the new op.
+    // This is optional and only makes sense if a backward pass has actually been implemented for the new op.
 };
 
 
@@ -1116,6 +1123,71 @@ struct test_get_rows : public test_case {
     }
 };
 
+// GGML_OP_ARGMAX
+struct test_argmax : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+
+    std::string vars() override {
+        return VARS_TO_STR2(type, ne);
+    }
+
+    test_argmax(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne = {10, 100, 1, 1})
+        : type(type), ne(ne) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_set_name(a, "a");
+
+        ggml_tensor * out = ggml_argmax(ctx, a);
+        ggml_set_name(out, "out");
+
+        return out;
+    }
+
+    double max_nmse_err() override {
+        return 0.0;
+    }
+};
+
+// GGML_OP_COUNT_EQUAL
+struct test_count_equal : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+
+    std::string vars() override {
+        return VARS_TO_STR2(type, ne);
+    }
+
+    test_count_equal(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne = {4, 500, 1, 1})
+        : type(type), ne(ne) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_set_name(a, "a");
+
+        ggml_tensor * a_argmax = ggml_argmax(ctx, a);
+        ggml_set_name(a_argmax, "a_argmax");
+
+        ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_set_name(b, "b");
+
+        ggml_tensor * b_argmax = ggml_argmax(ctx, a);
+        ggml_set_name(b_argmax, "b_argmax");
+
+        ggml_tensor * out = ggml_count_equal(ctx, a_argmax, b_argmax);
+        ggml_set_name(out, "out");
+
+        return out;
+    }
+
+    double max_nmse_err() override {
+        return 0.0;
+    }
+};
+
 // GGML_OP_REPEAT
 struct test_repeat : public test_case {
     const ggml_type type;
@@ -1223,7 +1295,7 @@ struct test_set : public test_case {
             offset += ((ne_dst[i] - ne[i])/2)*dst->nb[i];
         }
         ggml_tensor * out = ggml_set(ctx, dst, src,
-            // The backwards pass requires setting a contiguous region:
+            // The backward pass requires setting a contiguous region:
             src->nb[1], src->nb[2], src->nb[3], offset);
         ggml_set_name(out, "out");
 
@@ -1335,7 +1407,7 @@ struct test_bin_bcast : public test_case {
         ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_set_name(b, "b");
 
-        // The backwards pass supports broadcasting only for GGML_ADD:
+        // The backward pass supports broadcasting only for GGML_ADD:
         const bool grad_supported = op == ggml_add || ggml_are_same_shape(a, b);
         if (grad_supported) {
             ggml_set_param(ctx, a);
@@ -1830,7 +1902,7 @@ struct test_log : public test_case {
 
     void initialize_tensors(ggml_context * ctx) override {
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-            // log(1) == 0, cluster values there to keep the sum low for better precision in the backwards pass:
+            // log(1) == 0, cluster values there to keep the sum low for better precision in the backward pass:
             init_tensor_uniform(t, 0.9f, 1.1f);
         }
     }
@@ -2748,7 +2820,10 @@ struct test_opt_step_adamw : public test_case {
         ggml_set_param(ctx, a); // Despite tensor a having gradients the output tensor will not.
         ggml_set_name(a, "a");
 
-        ggml_tensor * out = ggml_opt_step_adamw(ctx, a, alpha, beta1, beta2, eps, wd);
+        ggml_tensor * grad = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], ne[2], ne[3]);
+        ggml_set_name(grad, "grad");
+
+        ggml_tensor * out = ggml_opt_step_adamw(ctx, a, grad, alpha, beta1, beta2, eps, wd);
         ggml_set_name(out, "out");
 
         return out;
@@ -3257,7 +3332,10 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_conv_transpose_1d({3,2,1,1}, {3,1,2,1}, 1, 0, 1));
     test_cases.emplace_back(new test_conv_transpose_1d({2,1,1,1}, {3,1,1,1}, 1, 0, 1));
 
-    for (int ne3 : {1, 3}) { // CUDA backwards pass only supports ne3 == 1
+    test_cases.emplace_back(new test_argmax());
+    test_cases.emplace_back(new test_count_equal());
+
+    for (int ne3 : {1, 3}) { // CUDA backward pass only supports ne3 == 1
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {1, 1, 1, 1}));
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {2, 1, 1, 1}));
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {1, 2, 1, 1}));
@@ -3275,8 +3353,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_dup(GGML_TYPE_F16, {10, 10, 5, 1}, {0, 2, 1, 3})); // dup by rows
     test_cases.emplace_back(new test_dup(GGML_TYPE_F32, {10, 10, 5, 1}, {1, 0, 2, 3}));
     test_cases.emplace_back(new test_dup(GGML_TYPE_F16, {10, 10, 5, 1}, {1, 0, 2, 3})); // dup dst not-contiguous
-    test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {0, 2, 1, 3}));
-    test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {1, 2, 0, 3}));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10,  8, 3, 1}, {0, 2, 1, 3}));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10,  8, 3, 1}, {1, 2, 0, 3}));
 
     for (int dim = 1; dim < GGML_MAX_DIMS; ++dim) {
         test_cases.emplace_back(new test_set(GGML_TYPE_F32, GGML_TYPE_F32, {6, 5, 4, 3}, dim));
@@ -3717,20 +3795,22 @@ int main(int argc, char ** argv) {
     }
 
     // enumerate backends
-    printf("Testing %zu backends\n\n", ggml_backend_reg_get_count());
+    printf("Testing %zu devices\n\n", ggml_backend_dev_count());
 
     size_t n_ok = 0;
 
-    for (size_t i = 0; i < ggml_backend_reg_get_count(); i++) {
-        printf("Backend %zu/%zu (%s)\n", i + 1, ggml_backend_reg_get_count(), ggml_backend_reg_get_name(i));
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
 
-        if (backend_filter != NULL && strcmp(backend_filter, ggml_backend_reg_get_name(i)) != 0) {
+        printf("Backend %zu/%zu: %s\n", i + 1, ggml_backend_dev_count(), ggml_backend_dev_name(dev));
+
+        if (backend_filter != NULL && strcmp(backend_filter, ggml_backend_dev_name(dev)) != 0) {
             printf("  Skipping\n");
             n_ok++;
             continue;
         }
 
-        ggml_backend_t backend = ggml_backend_reg_init_backend(i, NULL);
+        ggml_backend_t backend = ggml_backend_dev_init(dev, NULL);
         GGML_ASSERT(backend != NULL);
 
         if (backend_filter == NULL && ggml_backend_is_cpu(backend) && mode != MODE_GRAD) {
@@ -3745,7 +3825,11 @@ int main(int argc, char ** argv) {
             ggml_backend_cpu_set_n_threads(backend, std::thread::hardware_concurrency() / 2);
         }
 
-        printf("  Backend name: %s\n", ggml_backend_name(backend));
+        printf("  Device description: %s\n", ggml_backend_dev_description(dev));
+        size_t free, total; // NOLINT
+        ggml_backend_dev_memory(dev, &free, &total);
+        printf("  Device memory: %zu MB (%zu MB free)\n", total / 1024 / 1024, free / 1024 / 1024);
+        printf("\n");
 
         bool ok = test_backend(backend, mode, op_name_filter);
 
@@ -3762,9 +3846,9 @@ int main(int argc, char ** argv) {
         ggml_backend_free(backend);
     }
 
-    printf("%zu/%zu backends passed\n", n_ok, ggml_backend_reg_get_count());
+    printf("%zu/%zu backends passed\n", n_ok, ggml_backend_dev_count());
 
-    if (n_ok != ggml_backend_reg_get_count()) {
+    if (n_ok != ggml_backend_dev_count()) {
         printf("\033[1;31mFAIL\033[0m\n");
         return 1;
     }

@@ -331,6 +331,10 @@ if __name__ == '__main__':
                 self.gguf_writer.add_float32(gguf.Keys.Adapter.LORA_ALPHA, self.lora_alpha)
                 super().set_gguf_parameters()
 
+            def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
+                # Never add extra tensors (e.g. rope_freqs) for LoRA adapters
+                return ()
+
             def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
                 tensor_map: dict[str, PartialLoraTensor] = {}
 
@@ -392,7 +396,6 @@ if __name__ == '__main__':
             dry_run=args.dry_run,
             dir_lora_model=dir_lora,
             lora_alpha=alpha,
-            is_lora=True,
         )
 
         logger.info("Exporting model...")
