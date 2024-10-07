@@ -19100,8 +19100,13 @@ struct llama_model * llama_load_model_from_file(
 
             case GGML_BACKEND_DEVICE_TYPE_GPU:
             case GGML_BACKEND_DEVICE_TYPE_GPU_FULL:
+            {
+                size_t free, total; // NOLINT
+                ggml_backend_dev_memory(dev, &free, &total);
+                LLAMA_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
                 model->devices.push_back(dev);
                 break;
+            }
         }
     }
 

@@ -555,7 +555,6 @@ struct ggml_backend_registry {
         register_backend(ggml_backend_cuda_reg());
 #endif
 #ifdef GGML_USE_METAL
-
         register_backend(ggml_backend_metal_reg());
 #endif
 #ifdef GGML_USE_VULKAN
@@ -565,7 +564,7 @@ struct ggml_backend_registry {
         register_backend(ggml_backend_blas_reg());
 #endif
 
-        // TODO: sycl, vulkan, kompute, cann
+        // TODO: sycl, kompute, cann
 
         register_backend(ggml_backend_cpu_reg());
     }
