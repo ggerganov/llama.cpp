@@ -44,12 +44,12 @@ static bool eval_string(struct llama_context *ctx_llama, const char *str, int n_
 
     std::string              str2 = str;
     std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
-    printf("!!prompt to eval!!: %s", str);
-    printf("----------------------\n");
-    // for (auto token : embd_inp){
-    //     printf("%6d, ", token);
-    // }
-    printf("\n");
+    // printf("!!prompt to eval!!: %s", str);
+    // printf("----------------------\n");
+    // // for (auto token : embd_inp){
+    // //     printf("%6d, ", token);
+    // // }
+    // printf("\n");
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
@@ -217,23 +217,23 @@ static void process_prompt(struct llava_context *ctx_llava, struct llava_image_e
         user_prompt = prompt.substr(image_pos + std::string("<image>").length());
         LOG_TEE("system_prompt: %s\n", system_prompt.c_str());
         // phi3-tokenizer https://github.com/ggerganov/llama.cpp/issues/7938
-        if (params->verbose_prompt)
-        {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
-            for (int i = 0; i < (int)tmp.size(); i++)
-            {
-                LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
-            }
-        }
+        // if (params->verbose_prompt)
+        // {
+        //     auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+        //     for (int i = 0; i < (int)tmp.size(); i++)
+        //     {
+        //         LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+        //     }
+        // }
         LOG_TEE("user_prompt: %s\n", user_prompt.c_str());
-        if (params->verbose_prompt)
-        {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
-            for (int i = 0; i < (int)tmp.size(); i++)
-            {
-                LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
-            }
-        }
+        // if (params->verbose_prompt)
+        // {
+        //     auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+        //     for (int i = 0; i < (int)tmp.size(); i++)
+        //     {
+        //         LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+        //     }
+        // }
     }
     else
     {
@@ -280,11 +280,11 @@ static void process_prompt(struct llava_context *ctx_llava, struct llava_image_e
         response += tmp;
         // printf("%s", tmp);
         if (strcmp(tmp, "<|end|>") == 0){
-            printf("\n STOP GENERATING because I saw <|end|>\n");
+            // printf("\n STOP GENERATING because I saw <|end|>\n");
             break;
         }
         if (strcmp(tmp, "</s>") == 0) {
-            printf("\n STOP GENERATING because I saw </s>\n");
+            // printf("\n STOP GENERATING because I saw </s>\n");
             break;
         }
         if (strstr(tmp, "###")) break;  // Yi-VL behavior
@@ -327,7 +327,6 @@ static struct llava_context *llava_init_context(gpt_params *params, llama_model 
     }
 
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/1);
-
     llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
     ctx_params.n_ctx =
         params->n_ctx < 2048 ? 2048 : params->n_ctx;  // we need a longer context size to process image embeddings
@@ -349,11 +348,7 @@ static struct llava_context *llava_init_context(gpt_params *params, llama_model 
 }
 
 static void llava_free(struct llava_context * ctx_llava) {
-    if (ctx_llava->ctx_clip) {
-        printf(
-            "YD:::Segmentation fault here; Because header.n_kv is empty\n clip_free->gguf_free(ctx->ctx_gguf)-> for "
-            "(uint64_t i = 0; i < ctx->header.n_kv; ++i)\n");
-        exit(1);
+    if (ctx_llava->ctx_clip) {        
         clip_free(ctx_llava->ctx_clip);
         ctx_llava->ctx_clip = NULL;
     }
@@ -528,7 +523,6 @@ int main(int argc, char ** argv) {
     if (prompt_contains_image(params.prompt))
     {
         auto ctx_llava = llava_init_context(&params, model);
-
         auto image_embed = load_image(ctx_llava, &params, "");
 
         // process the prompt
@@ -543,11 +537,11 @@ int main(int argc, char ** argv) {
     {
         for (auto &image : params.image)
         {
-            printf("image: %s\n", image.c_str());
+            // printf("image: %s\n", image.c_str());
             auto ctx_llava = llava_init_context(&params, model);
 
             auto image_embed = load_image(ctx_llava, &params, image);
-            printf("n_image_pos: %d\n", image_embed->n_image_pos);
+            // printf("n_image_pos: %d\n", image_embed->n_image_pos);
             if (!image_embed)
             {
                 std::cerr << "error: failed to load image " << image << ". Terminating\n\n";
@@ -575,6 +569,6 @@ int main(int argc, char ** argv) {
     //     ctx_llava->model = NULL;
     //     llava_free(ctx_llava);
     // }
-    printf("Remember to remove print_tensor function in xgenmm.cpp and clip.cpp\n");
+    // printf("Remember to remove print_tensor function in xgenmm.cpp and clip.cpp\n");
     return 0;
 }

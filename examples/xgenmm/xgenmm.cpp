@@ -534,7 +534,7 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
         scale_factor = (float)current_height / (float)original_height;
         int new_width = int(original_width * scale_factor);
         int padding = (current_width - new_width) / 2;
-        printf("new_width: %d, padding: %d\n", new_width, padding);
+        // printf("new_width: %d, padding: %d\n", new_width, padding);
         for (int i = 0; i < current_height; i++){
             for (int j = 0; j < current_width; j++){
                 if (j < padding || j >= current_width - padding)
@@ -561,33 +561,6 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
     ggml_graph_compute_with_ctx(mask.ctx, gf, 1);
     attention_mask = gf->nodes[gf->n_nodes - 1];
     // memcpy(image_embd_v_m_mask_out, (float *)attention_mask->data, ggml_nbytes(attention_mask));
-    
-    // {
-    //     printf((" =========================     DEBUG  =========================\n"));
-    //     printf("Load pre-computed image embeddings and attention_mask\n");
-    //     std::string      filename = "/export/home/ggml/examples/projectors/receipt_5patches_vision_features.gguf";
-    //     tensor_from_gguf tensor;
-    //     bool             is_successful = load_tensor_from_file(filename.c_str(), tensor);
-    //     if (!is_successful)
-    //     {
-    //         fprintf(stderr, "%s: load_tensor_from_file() failed\n", __func__);
-    //         return 1;
-    //     }
-    //     result = tensor.data;
-    //     // print_tensor(result, "result", 1);
-    //     filename = "/export/home/ggml/examples/projectors/receipt_5patches_vision_attn_masks.gguf";
-    //     is_successful = load_tensor_from_file(filename.c_str(), tensor);
-    //     if (!is_successful)
-    //     {
-    //         fprintf(stderr, "%s: load_tensor_from_file() failed\n", __func__);
-    //         return 1;
-    //     }
-    //     attention_mask = tensor.data;
-    //     // print_tensor(attention_mask, "attention_mask", 1);
-    //     num_patches_width = 2;
-    //     num_patches_height = 2;
-    // }
-    
 
     // compute attnetion masks outside of the graph
     struct ggml_tensor * attn_bias_input;
@@ -639,7 +612,7 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
     int batch_size = num_patches_width * num_patches_height + 1;
     // print_tensor(attn_bias_input, "attn_bias_input", 1);
     // print_tensor(result, "result", 1);
-    printf("batch_size: %d\n", batch_size);
+    // printf("batch_size: %d\n", batch_size);
     const bool encoded = clip_image_encode_tokenizer(
         ctx_clip, batch_size, result, attn_bias_input, image_embd);
     if (!encoded){
@@ -982,6 +955,7 @@ bool llava_image_embed_make_with_clip_img(clip_ctx *ctx_clip, int n_threads, con
         free(image_embd);
         return false;
     }
+    
     *image_embd_out = image_embd;
     *n_img_pos_out = n_img_pos;
 

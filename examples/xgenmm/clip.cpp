@@ -1504,6 +1504,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
     // kv
     const int n_kv = gguf_get_n_kv(ctx);
+
+    // std::cout << "do I have n_kv here at clip.cpp "<< __LINE__  << "? : " << gguf_get_n_kv(ctx) <<std::endl;
+
     LOG_TEE("%s: loaded meta data with %d key-value pairs and %d tensors from %s\n",
         __func__, n_kv, n_tensors, fname);
     {
@@ -1981,7 +1984,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         size_t compute_memory_buffer_size = ggml_gallocr_get_buffer_size(new_clip->compute_alloc, 0);
         LOG_TEE("%s: compute allocated memory: %.2f MB\n", __func__, compute_memory_buffer_size /1024.0/1024.0);
     }
-
     return new_clip;
 }
 
@@ -2424,7 +2426,6 @@ int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip) {
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
 bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch * res_imgs) {
-
     if(clip_is_minicpmv(ctx)){
         int max_slice_nums = 9;
         std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img, max_slice_nums);
@@ -2497,7 +2498,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
                 possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
             }
             std::pair<int, int> best_resolution = select_best_resolution({img->nx, img->ny}, possible_resolutions);
-            printf("best_resolution: %d %d\n", best_resolution.first, best_resolution.second);
+            // printf("best_resolution: %d %d\n", best_resolution.first, best_resolution.second);
             // clip_image_save_to_bmp(*img, "input.bmp");
             resize_and_pad_image(*img, *temp, best_resolution);  // we do not pad with mean-bg color anymore in llava-1.6
             // clip_image_save_to_bmp(*temp, "resized.bmp");
@@ -2624,7 +2625,6 @@ ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx) {
 void clip_free(clip_ctx * ctx) {
     ggml_free(ctx->ctx_data);
     gguf_free(ctx->ctx_gguf);
-    
     ggml_backend_buffer_free(ctx->params_buffer);
     ggml_backend_free(ctx->backend);
     ggml_gallocr_free(ctx->compute_alloc);
@@ -2807,10 +2807,8 @@ bool clip_image_encode_tokenizer(struct clip_ctx * ctx, int batch_size, ggml_ten
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
     ggml_backend_graph_compute(ctx->backend, gf);
     struct ggml_tensor * llm_inputs = gf->nodes[gf->n_nodes - 1];
-    print_my_tensor(llm_inputs, "llm_inputs", 1);
-    // exit(0);
     ggml_backend_tensor_get(llm_inputs, image_embd, 0, ggml_nbytes(llm_inputs));
-    clip_free(ctx);
+    // clip_free(ctx);  // debug: llava_ctx was freed here, now free all the 'ctx' memory outside.
     return true;
 }
 
