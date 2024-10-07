@@ -3820,9 +3820,11 @@ int main(int argc, char ** argv) {
             continue;
         }
 
-        if (ggml_backend_is_cpu(backend)) {
+        ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+        auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+        if (ggml_backend_set_n_threads_fn) {
             // TODO: better value for n_threads
-            ggml_backend_cpu_set_n_threads(backend, std::thread::hardware_concurrency() / 2);
+            ggml_backend_set_n_threads_fn(backend, std::thread::hardware_concurrency());
         }
 
         printf("  Device description: %s\n", ggml_backend_dev_description(dev));
