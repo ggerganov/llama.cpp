@@ -1522,8 +1522,6 @@ struct server_context {
             return has_number;
         };
 
-        bool is_singleton = prompt.is_string() || (prompt.is_array() && is_valid_singleton_array(prompt));
-
         // if the prompt is a singleton (i.e. a string, a list of tokens, or a mixed array of strings and tokens), we only need to create a single task
         if (prompt.is_string() || (prompt.is_array() && is_valid_singleton_array(prompt))) {
             data["index"] = 0;

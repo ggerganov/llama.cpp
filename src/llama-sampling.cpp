@@ -1583,7 +1583,7 @@ struct llama_sampler_dry {
     ring_buffer<llama_token> last_tokens;
 };
 
-std::vector<llama_token> llama_tokenize(
+static std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_special,
@@ -1602,9 +1602,9 @@ std::vector<llama_token> llama_tokenize(
     return result;
 }
 
-std::string llama_detokenize(const struct llama_model * model, const std::vector<llama_token> & tokens, bool special) {
-    if (model == nullptr) {
-        return "??";
+static std::string llama_detokenize(const struct llama_model * model, const std::vector<llama_token> & tokens, bool special) {
+    if (model == nullptr) {     // model is passed as nullptr in test-sampling.cpp
+        return "";
     }
     std::string text;
     text.resize(std::max(text.capacity(), tokens.size()));
@@ -1621,13 +1621,14 @@ std::string llama_detokenize(const struct llama_model * model, const std::vector
     return text;
 }
 
-std::string llama_detokenize_single(const struct llama_model * model, llama_token token, bool special) {
+static std::string llama_detokenize_single(const struct llama_model * model, llama_token token, bool special) {
     std::vector<llama_token> tokens = {token};
     return llama_detokenize(model, tokens, special);
 }
 
+#ifdef DEBUG
 // For DRY debugging
-std::string detokenize_for_display(const struct llama_model * model, llama_token token, bool special) {
+static std::string detokenize_for_display(const struct llama_model * model, llama_token token, bool special) {
     std::string token_text = llama_detokenize_single(model, token, special);
     size_t pos = 0;
     while ((pos = token_text.find('\n', pos)) != std::string::npos) {
@@ -1639,31 +1640,32 @@ std::string detokenize_for_display(const struct llama_model * model, llama_token
 }
 
 // For DRY debugging
-void dry_print_ring_buffer_debug(const llama_sampler_dry * ctx, int max_tokens_per_side = 100) {
+static void dry_print_ring_buffer_debug(const llama_sampler_dry * ctx, int max_tokens_per_side = 100) {
     const size_t total_tokens = ctx->last_tokens.size();
     size_t tokens_to_print = total_tokens;
+    size_t mps = (max_tokens_per_side >= 0) ? static_cast<size_t>(max_tokens_per_side) : 0;
 
-    if (max_tokens_per_side != -1) {
-        tokens_to_print = std::min(total_tokens, static_cast<size_t>(max_tokens_per_side) * 2);
+    if (max_tokens_per_side < 0) {
+        tokens_to_print = total_tokens;
     }
 
     std::vector<std::pair<int, std::string>> token_info;
     token_info.reserve(tokens_to_print);
 
     // Collect token information
-    if (max_tokens_per_side == -1 || total_tokens <= tokens_to_print) {
+    if (max_tokens_per_side < 0 || total_tokens <= tokens_to_print) {
         for (size_t i = 0; i < total_tokens; ++i) {
             llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
             std::string token_text = detokenize_for_display(ctx->model, token, true);
             token_info.emplace_back(token, std::move(token_text));
         }
     } else {
-        for (size_t i = 0; i < max_tokens_per_side; ++i) {
+        for (size_t i = 0; i < mps; ++i) {
             llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
             std::string token_text = detokenize_for_display(ctx->model, token, true);
             token_info.emplace_back(token, std::move(token_text));
         }
-        for (size_t i = total_tokens - max_tokens_per_side; i < total_tokens; ++i) {
+        for (size_t i = total_tokens - mps; i < total_tokens; ++i) {
             llama_token token = ctx->last_tokens.rat(total_tokens - 1 - i);
             std::string token_text = detokenize_for_display(ctx->model, token, true);
             token_info.emplace_back(token, std::move(token_text));
@@ -1686,14 +1688,14 @@ void dry_print_ring_buffer_debug(const llama_sampler_dry * ctx, int max_tokens_p
 
     // Print tokens
     for (size_t i = 0; i < tokens_to_print; ++i) {
-        size_t true_index = (max_tokens_per_side == -1 || total_tokens <= tokens_to_print) ? i :
-            (i < max_tokens_per_side) ? i : (total_tokens - tokens_to_print + i);
+        size_t true_index = (max_tokens_per_side < 0 || total_tokens <= tokens_to_print) ? i :
+            (i < mps) ? i : (total_tokens - tokens_to_print + i);
         LLAMA_LOG_INFO("%-*zu | %-*d | %-*s\n",
             (int)max_index_width, true_index,
             (int)max_token_width, token_info[i].first,
             (int)max_text_width, token_info[i].second.c_str());
         // Add a separator between oldest and newest tokens if applicable
-        if (max_tokens_per_side != -1 && total_tokens > tokens_to_print && i == max_tokens_per_side - 1) {
+        if (max_tokens_per_side > 0 && total_tokens > tokens_to_print && i == mps - 1) {
             LLAMA_LOG_INFO("%s\n", std::string(max_index_width + max_token_width + max_text_width + 6, '.').c_str());
         }
     }
@@ -1707,7 +1709,7 @@ struct CandidateInfo {
 };
 
 // For DRY debugging
-std::vector<CandidateInfo> get_top_n_candidates(const llama_token_data_array * cur_p, size_t n) {
+static std::vector<CandidateInfo> get_top_n_candidates(const llama_token_data_array * cur_p, size_t n) {
     std::vector<CandidateInfo> candidates;
     candidates.reserve(cur_p->size);
 
@@ -1721,6 +1723,7 @@ std::vector<CandidateInfo> get_top_n_candidates(const llama_token_data_array * c
     candidates.resize(std::min(n, candidates.size()));
     return candidates;
 }
+#endif // DEBUG
 
 static void GetOverlappingTokenSequences(const struct llama_model * model, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
     const int n_vocab = llama_n_vocab(model);
@@ -1766,7 +1769,7 @@ static void GetOverlappingTokenSequences(const struct llama_model * model, const
 
 
 
-static const char * llama_sampler_dry_name(const struct llama_sampler * smpl) {
+static const char * llama_sampler_dry_name(const struct llama_sampler * /*smpl*/) {
     return "dry";
 }
 
@@ -1798,7 +1801,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
 
     // Step 1: Look for restart sequences
     int rep_limit = last_n_repeat;
-    for (size_t i = 0; i < last_n_repeat; ++i) {
+    for (int i = 0; i < last_n_repeat; ++i) {
         llama_token token = ctx->last_tokens.rat(i);
         auto its = ctx->dry_processed_breakers.equal_range(token);
         if (its.first == ctx->dry_processed_breakers.end()) {
@@ -1809,7 +1812,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
             int seq_len = (int)it->second.size();
             if (seq_len > longest_match && seq_len <= (int)i) {
                 bool match = true;
-                for (size_t offset = 0; offset < seq_len; ++offset) {
+                for (int offset = 0; offset < seq_len; ++offset) {
                     if (it->second[offset] != ctx->last_tokens.rat(i - offset - 1)) {
                         match = false;
                         break;
@@ -1868,7 +1871,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
     }
 
     // Step 3: Find maximum repeat length for each token
-    for (size_t i = 0; i < last_n_repeat - 1; ++i) {
+    for (int i = 0; i < last_n_repeat - 1; ++i) {
         int repeat_len = ctx->dry_repeat_count[i];
         if (repeat_len >= ctx->dry_allowed_length) {
             llama_token token = ctx->last_tokens.rat(last_n_repeat - 2 - i);
@@ -1891,7 +1894,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
     const size_t top_n = 10;
     std::vector<CandidateInfo> top_n_before = get_top_n_candidates(cur_p, top_n);
 
-#endif
+#endif // DEBUG
 
     for (size_t i = 0; i < cur_p->size; ++i) {
         const auto& af_kvp = ctx->dry_max_token_repeat.find(cur_p->data[i].id);
@@ -1910,7 +1913,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
                 std::string token_text = detokenize_for_display(ctx->model, cur_p->data[i].id, true);
                 LLAMA_LOG_INFO("  Applied penalty %.4f to token %d (%s) (repeat length %d)\n",
                         penalty, cur_p->data[i].id, token_text.c_str(), af_kvp->second);
-#endif
+#endif // DEBUG
         }
     }
 
@@ -1996,16 +1999,16 @@ struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, 
     return new llama_sampler {
         /* .iface = */ &llama_sampler_dry_i,
         /* .ctx   = */ new llama_sampler_dry {
-            /* .model               = */ model,
-            /* .total_context_size  = */ context_size,
-            /* .dry_multiplier      = */ dry_multiplier,
-            /* .dry_base            = */ dry_base,
-            /* .dry_allowed_length  = */ dry_allowed_length,
-            /* .dry_penalty_last_n  = */ dry_penalty_last_n,
+            /* .model                  = */ model,
+            /* .total_context_size     = */ context_size,
+            /* .dry_multiplier         = */ dry_multiplier,
+            /* .dry_base               = */ dry_base,
+            /* .dry_allowed_length     = */ dry_allowed_length,
+            /* .dry_penalty_last_n     = */ dry_penalty_last_n,
             /* .dry_processed_breakers = */ {},
-            /* .dry_repeat_count    = */ std::vector<int>(effective_dry_penalty_last_n, 0),
-            /* .dry_max_token_repeat = */ {},
-            /* .last_tokens         = */ ring_buffer<llama_token>(effective_dry_penalty_last_n),
+            /* .dry_repeat_count       = */ std::vector<int>(effective_dry_penalty_last_n, 0),
+            /* .dry_max_token_repeat   = */ {},
+            /* .last_tokens            = */ ring_buffer<llama_token>(effective_dry_penalty_last_n),
         },
     };
 }

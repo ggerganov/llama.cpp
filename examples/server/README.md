@@ -358,13 +358,13 @@ node index.js
 
     `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
 
-    `dry_multiplier`: Set the DRY (Don't Repeat Yourself) sampling multiplier. Default: `0.0`, which is disabled.
+    `dry_multiplier`: Set the DRY (Don't Repeat Yourself) repetition penalty multiplier. Default: `0.0`, which is disabled.
 
-    `dry_base`: Set the DRY sampling base value. Default: `1.75`
+    `dry_base`: Set the DRY repetition penalty base value. Default: `1.75`
 
-    `dry_allowed_length`: Set the allowed length for DRY sampling. Default: `2`
+    `dry_allowed_length`: Tokens that extend repetition beyond this receive exponentially increasing penalty: multiplier * base ^ (length of repeating sequence before token - allowed length). Default: `2`
 
-    `dry_penalty_last_n`: Set DRY penalty for the last n tokens. Default: `-1`, where `0` is disabled and `-1` is context size.
+    `dry_penalty_last_n`: How many tokens to scan for repetitions. Default: `-1`, where `0` is disabled and `-1` is context size.
 
     `dry_sequence_breakers`: Specify an array of sequence breakers for DRY sampling. Can be provided as a JSON array of strings or as a JSON-encoded string representing an array of strings. Default: `["\n", ":", "\"", "*"]`
 
