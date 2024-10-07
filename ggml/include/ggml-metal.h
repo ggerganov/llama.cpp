@@ -43,7 +43,9 @@ GGML_API ggml_backend_t ggml_backend_metal_init(void);
 
 GGML_API bool ggml_backend_is_metal(ggml_backend_t backend);
 
-GGML_API ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size);
+GGML_DEPRECATED(
+        GGML_API ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size),
+        "obsoleted by the new device interface - https://github.com/ggerganov/llama.cpp/pull/9713");
 
 GGML_API void ggml_backend_metal_set_abort_callback(ggml_backend_t backend, ggml_abort_callback abort_callback, void * user_data);
 
@@ -56,6 +58,8 @@ GGML_API bool ggml_backend_metal_supports_family(ggml_backend_t backend, int fam
 
 // capture all command buffers committed the next time `ggml_backend_graph_compute` is called
 GGML_API void ggml_backend_metal_capture_next_compute(ggml_backend_t backend);
+
+GGML_API ggml_backend_reg_t ggml_backend_metal_reg(void);
 
 #ifdef __cplusplus
 }
