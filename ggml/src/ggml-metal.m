@@ -3428,6 +3428,10 @@ static void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
         }
     }
 
+    if(ctx->encode_async) {
+        Block_release(ctx->encode_async);
+    }
+    
     ctx->encode_async = Block_copy(^(size_t iter) {
         const int cb_idx = iter;
         const int n_cb_l = ctx->n_cb;
