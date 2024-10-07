@@ -553,14 +553,13 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_METAL
         register_backend(ggml_backend_metal_reg());
 #endif
-
 #ifdef GGML_USE_BLAS
         register_backend(ggml_backend_blas_reg());
 #endif
 
-        register_backend(ggml_backend_cpu_reg());
-
         // TODO: sycl, vulkan, kompute, cann
+
+        register_backend(ggml_backend_cpu_reg());
     }
 
     void register_backend(ggml_backend_reg_t reg) {
