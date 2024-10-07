@@ -2553,7 +2553,7 @@ extern "C" {
         ggml_gemm_t              gemm;
     };
 
-    GGML_API const struct ggml_type_traits * ggml_internal_get_type_traits(enum ggml_type type);
+    GGML_API const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
 }

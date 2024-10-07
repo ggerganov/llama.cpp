@@ -5287,7 +5287,7 @@ static void ggml_vk_dequantize_data(const void * from, float * to, size_t ne, gg
         return;
     }
 
-    const auto * tt = ggml_internal_get_type_traits(quant);
+    const auto * tt = ggml_get_type_traits(quant);
 
     ggml_to_float_t dequant_fn = tt->to_float;
 

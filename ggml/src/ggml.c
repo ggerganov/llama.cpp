@@ -1151,7 +1151,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
 };
 
 // For internal test use
-const struct ggml_type_traits * ggml_internal_get_type_traits(enum ggml_type type) {
+const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type) {
     GGML_ASSERT(type < GGML_TYPE_COUNT);
     return &type_traits[type];
 }

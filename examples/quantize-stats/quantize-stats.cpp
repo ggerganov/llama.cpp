@@ -371,7 +371,7 @@ int main(int argc, char ** argv) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
-        const auto *  qfns = ggml_internal_get_type_traits(type);
+        const auto *  qfns = ggml_get_type_traits(type);
         if (qfns->from_float && qfns->to_float) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));

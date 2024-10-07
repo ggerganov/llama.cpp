@@ -314,7 +314,7 @@ struct lora_merge_ctx {
             // optionally dequantize it
             printf("%s :   + dequantize base tensor from %s to F32\n", __func__, ggml_type_name(base->type));
             auto nels = ggml_nelements(inp_base);
-            const auto * qtype = ggml_internal_get_type_traits(base->type);
+            const auto * qtype = ggml_get_type_traits(base->type);
             std::vector<uint8_t> dequant_buf(nels * sizeof(float));
             qtype->to_float(read_buf.data(), (float *)dequant_buf.data(), nels);
             ggml_backend_tensor_set(inp_base, dequant_buf.data(), 0, dequant_buf.size());

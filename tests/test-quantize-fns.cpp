@@ -83,7 +83,7 @@ static float dot_product_error(
     std::vector<uint8_t> tmp_q1(2*test_size);
     std::vector<uint8_t> tmp_q2(2*test_size);
 
-    const auto * vdot = ggml_internal_get_type_traits(qfns->vec_dot_type);
+    const auto * vdot = ggml_get_type_traits(qfns->vec_dot_type);
 
     qfns->from_float(test_data1, tmp_q1.data(), test_size);
     vdot->from_float(test_data2, tmp_q2.data(), test_size);
@@ -131,7 +131,7 @@ int main(int argc, char * argv[]) {
 
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
-        const auto * qfns = ggml_internal_get_type_traits(type);
+        const auto * qfns = ggml_get_type_traits(type);
 
         // deprecated - skip
         if (qfns->blck_size == 0) {

@@ -122,7 +122,7 @@ static void usage(char * argv[]) {
     printf("  --type TYPE           set test type as");
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
-        const auto * qfns = ggml_internal_get_type_traits(type);
+        const auto * qfns = ggml_get_type_traits(type);
         if (ggml_type_name(type) != NULL) {
             if (qfns->from_float && qfns->to_float) {
                 printf(" %s", ggml_type_name(type));
@@ -270,7 +270,7 @@ int main(int argc, char * argv[]) {
 
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
-        const auto * qfns = ggml_internal_get_type_traits(type);
+        const auto * qfns = ggml_get_type_traits(type);
         if (!params.include_types.empty() && ggml_type_name(type) && std::find(params.include_types.begin(), params.include_types.end(), ggml_type_name(type)) == params.include_types.end()) {
             continue;
         }
@@ -328,7 +328,7 @@ int main(int argc, char * argv[]) {
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
                     auto quantize_fn = [&](void) -> float {
-                        const auto * vdot = ggml_internal_get_type_traits(qfns->vec_dot_type);
+                        const auto * vdot = ggml_get_type_traits(qfns->vec_dot_type);
                         vdot->from_float(test_data1, test_q1, size);
                         return test_q1[0];
                     };

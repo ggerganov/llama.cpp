@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
 
     auto ggml_type = type == 0 ? GGML_TYPE_Q4_0 : GGML_TYPE_Q4_1;
 
-    const auto * funcs = ggml_internal_get_type_traits(ggml_type);
+    const auto * funcs = ggml_get_type_traits(ggml_type);
 
     Stat simple, ggml;
 
