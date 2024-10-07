@@ -40,7 +40,7 @@ static struct ggml_backend_metal_device_context {
     bool support_simdgroup_mm;
 
     char name[128];
-} g_state = {
+} g_ggml_ctx_dev_main = {
     /*.mtl_device                  =*/ nil,
     /*.mtl_device_ref_count        =*/ 0,
     /*.support_simdgroup_reduction =*/ false,
@@ -3396,7 +3396,7 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
         size_aligned += (size_page - (size_aligned % size_page));
     }
 
-    id<MTLDevice> device = ggml_backend_metal_device_acq(&g_state);
+    id<MTLDevice> device = ggml_backend_metal_device_acq(&g_ggml_ctx_dev_main);
 
     // the buffer fits into the max buffer size allowed by the device
     if (size_aligned <= device.maxBufferLength) {
@@ -3792,7 +3792,7 @@ ggml_backend_reg_t ggml_backend_metal_reg(void) {
         g_ggml_backend_metal_device = (struct ggml_backend_device) {
             /* .iface   = */ ggml_backend_metal_device_i,
             /* .reg     = */ &g_ggml_backend_metal_reg,
-            /* .context = */ &g_state,
+            /* .context = */ &g_ggml_ctx_dev_main,
         };
     }
 
