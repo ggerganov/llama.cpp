@@ -8903,7 +8903,8 @@ static bool llm_load_tensors(
         bufs.reserve(n_max_backend_buffer);
 
         // check if this backend device supports buffer_from_host_ptr
-        ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft);
+        // when using a host buffer as the CPU bakcend buffer, use the CPU device to prioritize using buffer_from_host_ptr over the host buffer
+        ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft == llama_default_buffer_type_cpu(model, true) ? ggml_backend_cpu_buffer_type() : buft);
         bool buffer_from_host_ptr_supported = false;
         if (dev) {
             ggml_backend_dev_props props;
