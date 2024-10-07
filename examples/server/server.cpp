@@ -2525,7 +2525,6 @@ int main(int argc, char ** argv) {
             "/health",
             "/models",
             "/v1/models",
-            "/props",
         };
 
         // If API key is not set, skip validation
@@ -3277,7 +3276,7 @@ int main(int argc, char ** argv) {
     // register API routes
     svr->Get ("/health",              handle_health); // public endpoint (no API key check)
     svr->Get ("/metrics",             handle_metrics);
-    svr->Get ("/props",               handle_props);  // public endpoint (no API key check)
+    svr->Get ("/props",               handle_props);
     svr->Post("/props",               handle_props_change);
     svr->Get ("/models",              handle_models); // public endpoint (no API key check)
     svr->Get ("/v1/models",           handle_models); // public endpoint (no API key check)
