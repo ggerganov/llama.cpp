@@ -60,7 +60,7 @@ static id<MTLDevice> ggml_backend_metal_device_acq(struct ggml_backend_metal_dev
 
         ctx->support_simdgroup_mm = [ctx->mtl_device supportsFamily:MTLGPUFamilyApple7];
 
-        strncpy(ctx->name, [[ctx->mtl_device name] UTF8String], sizeof(ctx->name));
+        strncpy(ctx->name, [[ctx->mtl_device name] UTF8String], sizeof(ctx->name) - 1);
     }
 
     ctx->mtl_device_ref_count++;
