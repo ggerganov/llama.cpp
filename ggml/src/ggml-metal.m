@@ -239,8 +239,6 @@ struct ggml_backend_metal_context {
     struct ggml_cgraph * gf;
 
     // the callback given to the thread pool
-    // TODO: ideally, this should be created once, utilizing the command buffer state above
-    //       for some reason, doing it like this leads to a crash
     void (^encode_async)(size_t ith);
 
     // n_cb command buffers + 1 used by the main thread
@@ -438,7 +436,6 @@ static struct ggml_backend_metal_context * ggml_metal_init(void) {
     ctx->capture_scope = nil;
 
     ctx->gf = nil;
-    Block_release(ctx->encode_async);
     ctx->encode_async = nil;
     for (int i = 0; i < GGML_METAL_MAX_COMMAND_BUFFERS; ++i) {
         ctx->command_buffers[i] = nil;
@@ -683,6 +680,8 @@ static void ggml_metal_free(struct ggml_backend_metal_context * ctx) {
     for (int i = 0; i < GGML_METAL_KERNEL_TYPE_COUNT; ++i) {
         [ctx->kernels[i].pipeline release];
     }
+
+    Block_release(ctx->encode_async);
 
     [ctx->queue release];
     [ctx->device release];
