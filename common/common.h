@@ -110,7 +110,7 @@ struct gpt_sampler_params {
     float   top_p             = 0.95f; // 1.0 = disabled
     float   min_p             = 0.05f; // 0.0 = disabled
     float   xtc_p             = 0.50f; // 0.0 = disabled
-    float   xtc_t             = 0.10f; // 0.0 or 1.0 = disabled
+    float   xtc_t             = 0.10f; // 1.0 = disabled
     float   xtc_t_max         = 1.00f; // 0.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
     float   typ_p             = 1.00f; // typical_p, 1.0 = disabled
@@ -294,10 +294,7 @@ struct gpt_params {
     std::string ssl_file_key  = "";                                                                         // NOLINT
     std::string ssl_file_cert = "";                                                                         // NOLINT
 
-    // "advanced" endpoints are disabled by default for better security
-    bool webui            = true;
-    bool endpoint_slots   = false;
-    bool endpoint_props   = false; // only control POST requests, not GET
+    bool endpoint_slots   = true;
     bool endpoint_metrics = false;
 
     bool log_json = false;

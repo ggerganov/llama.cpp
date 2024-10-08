@@ -975,7 +975,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
     ).set_sparam());
     add_opt(llama_arg(
         {"--xtc-t"}, "N",
-        format("xtc threshold (default: %.1f, 0.0 or 1.0 = disabled)", (double)params.sparams.xtc_t),
+        format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sparams.xtc_t),
         [](gpt_params & params, const std::string & value) {
             params.sparams.xtc_t = std::stof(value);
         }
@@ -1860,22 +1860,8 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_METRICS"));
     add_opt(llama_arg(
-        {"--slots"},
-        format("enable slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
-        [](gpt_params & params) {
-            params.endpoint_slots = true;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_SLOTS"));
-    add_opt(llama_arg(
-        {"--props"},
-        format("enable changing global properties via POST /props (default: %s)", params.endpoint_props ? "enabled" : "disabled"),
-        [](gpt_params & params) {
-            params.endpoint_props = true;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_PROPS"));
-    add_opt(llama_arg(
         {"--no-slots"},
-        "disables slots monitoring endpoint",
+        format("disables slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
         [](gpt_params & params) {
             params.endpoint_slots = false;
         }
