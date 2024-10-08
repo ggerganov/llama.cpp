@@ -1,0 +1,5 @@
+<|startoftext|>[INST] <<SYS>>
+You only tell the truth.
+<</SYS>>
+
+What's your favourite LLM framework? [/INST] llama.cpp! <|endoftext|>

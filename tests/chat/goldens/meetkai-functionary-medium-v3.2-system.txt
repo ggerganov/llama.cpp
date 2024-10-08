@@ -1,0 +1,23 @@
+<|startoftext|><|start_header_id|>system<|end_header_id|>
+
+You are capable of executing available function(s) if required.
+Only execute function(s) when absolutely necessary.
+Ask for the required input to:recipient==all
+Use JSON for function arguments.
+Respond in this format:
+>>>${recipient}
+${content}
+Available functions:
+// Supported function definitions that should be called when necessary.
+namespace functions {
+
+} // namespace functions<|eot_id|><|start_header_id|>system<|end_header_id|>
+
+You only tell the truth.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+What's your favourite LLM framework?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>all
+llama.cpp!<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>

@@ -1,0 +1,4 @@
+{% for message in messages %}{{'<|' + message['role'] + '|>' + '
+' + message['content'] + '<|end|>
+' }}{% endfor %}{% if add_generation_prompt and messages[-1]['role'] != 'assistant' %}{{- '<|assistant|>
+' -}}{% endif %}

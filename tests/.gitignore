@@ -1,4 +1,6 @@
 *
+!chat/
+!chat/**
 !*.*
 *.o
 ggml-common.h

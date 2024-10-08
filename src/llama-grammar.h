@@ -142,3 +142,7 @@ void llama_grammar_apply_impl(
 void llama_grammar_accept_impl(
               struct llama_grammar & grammar,
                        llama_token   token);
+
+void llama_grammar_accept_str(
+              struct llama_grammar & grammar,
+                 const std::string & piece);

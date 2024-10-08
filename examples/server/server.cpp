@@ -132,8 +132,6 @@ struct slot_params {
     int32_t  n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
     int32_t  n_predict = -1; // new tokens to predict
 
-    std::vector<std::string> antiprompt;
-
     json input_prefix;
     json input_suffix;
 };
@@ -184,6 +182,8 @@ struct server_slot {
 
     std::string oaicompat_model;
     std::string stopping_word;
+
+    llama_antiprompts antiprompts;
 
     // sampling
     json json_schema;
@@ -281,34 +281,6 @@ struct server_slot {
             {"predicted_per_token_ms", t_token_generation / n_decoded},
             {"predicted_per_second",   1e3 / t_token_generation * n_decoded},
         };
-    }
-
-    size_t find_stopping_strings(const std::string & text, const size_t last_token_size, const stop_type type) {
-        size_t stop_pos = std::string::npos;
-
-        for (const std::string & word : params.antiprompt) {
-            size_t pos;
-
-            if (type == STOP_TYPE_FULL) {
-                const size_t tmp      = word.size() + last_token_size;
-                const size_t from_pos = text.size() > tmp ? text.size() - tmp : 0;
-
-                pos = text.find(word, from_pos);
-            } else {
-                pos = find_partial_stop_string(word, text);
-            }
-
-            if (pos != std::string::npos && (stop_pos == std::string::npos || pos < stop_pos)) {
-                if (type == STOP_TYPE_FULL) {
-                    stopped_word   = true;
-                    stopping_word  = word;
-                    has_next_token = false;
-                }
-                stop_pos = pos;
-            }
-        }
-
-        return stop_pos;
     }
 
     void print_timings() const {
@@ -689,12 +661,26 @@ struct server_context {
         return true;
     }
 
-    bool validate_model_chat_template() const {
+    bool validate_model_chat_template(bool use_jinja) const {
         llama_chat_message chat[] = {{"user", "test"}};
 
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        if (use_jinja) {
+            auto chat_template = llama_chat_template_from_model(model);
+            try {
+                chat_template.apply({{
+                    {"role", "user"},
+                    {"content", "test"},
+                }}, json(), true);
+                return true;
+            } catch (const std::exception & e) {
+                SRV_ERR("failed to apply template: %s\n", e.what());
+                return false;
+            }
+        } else {
+            const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
 
-        return res > 0;
+            return res > 0;
+        }
     }
 
     void init() {
@@ -1010,16 +996,27 @@ struct server_context {
         }
 
         {
-            slot.params.antiprompt.clear();
+            slot.antiprompts.clear();
+            slot.sparams.grammar_trigger_words.clear();
 
-            const auto & stop = data.find("stop");
-            if (stop != data.end() && stop->is_array()) {
-                for (const auto & word : *stop) {
-                    if (!word.empty()) {
-                        slot.params.antiprompt.push_back(word);
+            auto copy_string_array = [&](const json & data, const std::string & key, std::vector<std::string> & vec) {
+                const auto & arr = data.find(key);
+                if (arr != data.end() && arr->is_array()) {
+                    for (const auto & word : *arr) {
+                        if (word.is_string()) {
+                            vec.push_back(word);
+                        }
                     }
                 }
-            }
+            };
+
+            std::vector<std::string> stop_words;
+
+            copy_string_array(data, "stop", stop_words);
+            copy_string_array(data, "grammar_trigger_words", slot.sparams.grammar_trigger_words);
+
+            slot.antiprompts.build(ctx, stop_words, slot.sparams.grammar_trigger_words);
+
         }
 
         {
@@ -1121,6 +1118,18 @@ struct server_context {
         const std::string token_str = llama_token_to_piece(ctx, result.tok, params.special);
         slot.sampled = result.tok;
 
+        auto match = slot.antiprompts.findSingleTokenMatch(result.tok);
+        if (match.pos != std::string::npos && !match.is_partial) {
+            if (match.is_grammar_trigger) {
+                gpt_sampler_trigger_grammar(model, slot.smpl, llama_token_to_piece(ctx, result.tok, params.special));
+            } else {
+                slot.stopped_word   = true;
+                slot.stopping_word  = match.pattern;
+                slot.has_next_token = false;
+                return false;
+            }
+        }
+
         // search stop word and delete it
         slot.generated_text += token_str;
         slot.has_next_token = true;
@@ -1150,23 +1159,33 @@ struct server_context {
         if (!incomplete) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
-            const std::string str_test = slot.generated_text.substr(pos);
-            bool is_stop_full = false;
+            match = slot.antiprompts.findFirstMatch(slot.generated_text, pos);
 
-            size_t stop_pos = slot.find_stopping_strings(str_test, token_str.size(), STOP_TYPE_FULL);
-            if (stop_pos != std::string::npos) {
+            bool is_stop_full = false;
+            bool is_grammar_trigger = false;
+            size_t length = slot.generated_text.size();
+
+            // If there is a lazy grammar trigger word at stop_pos, enable the lazy grammar
+            if (match.is_grammar_trigger && gpt_sampler_trigger_grammar(model, slot.smpl, match.pattern)) {
+                is_grammar_trigger = true;
+                length = match.pos + match.matchLength;
+            } else if (!match.is_grammar_trigger && match.pos != std::string::npos && !match.is_partial) {
+                slot.stopped_word   = true;
+                slot.stopping_word  = match.pattern;
+                slot.has_next_token = false;
+
                 is_stop_full = true;
-                slot.generated_text.erase(
-                    slot.generated_text.begin() + pos + stop_pos,
-                    slot.generated_text.end());
-                pos = std::min(slot.n_sent_text, slot.generated_text.size());
-            } else {
-                is_stop_full = false;
-                stop_pos = slot.find_stopping_strings(str_test, token_str.size(), STOP_TYPE_PARTIAL);
+                // length = pos + match.pos;
+                length = match.pos;
             }
 
+            slot.generated_text.erase(
+                slot.generated_text.begin() + length,
+                slot.generated_text.end());
+            pos = std::min(slot.n_sent_text, length);
+
             // check if there is any token to predict
-            if (stop_pos == std::string::npos || (!slot.has_next_token && !is_stop_full && stop_pos > 0)) {
+            if (match.pos == std::string::npos || (!slot.has_next_token && !is_grammar_trigger && !is_stop_full && match.pos > 0)) {
                 // no send the stop word in the response
                 result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
                 slot.n_sent_text += result.text_to_send.size();
@@ -1254,7 +1273,8 @@ struct server_context {
             {"mirostat_tau",              slot.sparams.mirostat_tau},
             {"mirostat_eta",              slot.sparams.mirostat_eta},
             {"penalize_nl",               slot.sparams.penalize_nl},
-            {"stop",                      slot.params.antiprompt},
+            {"stop",                      slot.antiprompts.stop_words},
+            {"grammar_trigger",           slot.antiprompts.grammar_trigger_words},
             {"max_tokens",                slot.params.n_predict}, // User configured n_predict
             {"n_keep",                    slot.params.n_keep},
             {"n_discard",                 slot.params.n_discard},
@@ -2881,6 +2901,8 @@ int main(int argc, char ** argv) {
             { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
+            { "bos_token",                   llama_token_to_piece(ctx_server.ctx, llama_token_bos(ctx_server.model), true) },
+            { "eos_token",                   llama_token_to_piece(ctx_server.ctx, llama_token_eos(ctx_server.model), true) },
             { "chat_template",               curr_tmpl.c_str() },
         };
 
@@ -2954,7 +2976,16 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
+        static auto chat_template = llama_chat_template_from_model(ctx_server.model, params.chat_template.empty() ? nullptr : params.chat_template.c_str());
+        static auto tool_call_style = llama_tool_call_style_detect(chat_template);
+
+        json data;
+        try {
+            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), chat_template, tool_call_style, params.use_jinja);
+        } catch (const std::exception & e) {
+            res_error(res, format_error_response(e.what(), ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
 
         std::vector<server_task> tasks = ctx_server.create_tasks_cmpl(data, SERVER_TASK_CMPL_TYPE_NORMAL);
         ctx_server.queue_results.add_waiting_tasks(tasks);
@@ -2967,8 +2998,12 @@ int main(int argc, char ** argv) {
         if (!stream) {
             ctx_server.receive_cmpl_results(task_ids, [&](const std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
-                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose);
-                res_ok(res, result_oai);
+                try {
+                    json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, tool_call_style, /*.streaming =*/ false, verbose);
+                    res_ok(res, result_oai);
+                } catch (const std::runtime_error & e) {
+                    res_error(res, format_error_response(e.what(), ERROR_TYPE_SERVER));
+                }
             }, [&](const json & error_data) {
                 res_error(res, error_data);
             });
@@ -3359,7 +3394,7 @@ int main(int argc, char ** argv) {
 
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
-        if (!ctx_server.validate_model_chat_template()) {
+        if (!ctx_server.validate_model_chat_template(params.use_jinja)) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             params.chat_template = "chatml";
         }

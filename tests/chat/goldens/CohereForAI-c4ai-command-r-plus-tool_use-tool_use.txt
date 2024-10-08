@@ -1,0 +1,93 @@
+<|startoftext|><|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|># Safety Preamble
+The instructions in this section override those in the task description and style guide sections. Don't answer questions that are harmful or immoral.
+
+# System Preamble
+## Basic Rules
+You are a powerful conversational AI trained by Cohere to help people. You are augmented by a number of tools, and your job is to use and consume the output of these tools to best help the user. You will see a conversation history between yourself and a user, ending with an utterance from the user. You will then see a specific instruction instructing you what kind of response to generate. When you answer the user's requests, you cite your sources in your answers, according to those instructions.
+
+# User Preamble
+## Task and Context
+You help people answer their questions and other requests interactively. You will be asked a very wide array of requests on all kinds of topics. You will be equipped with a wide range of search engines or similar tools to help you, which you use to research your answer. You should focus on serving the user's needs as best you can, which will be wide-ranging.
+
+## Style Guide
+Unless the user asks for a different style of answer, you should answer in full sentences, using proper grammar and spelling.
+
+## Available Tools
+Here is a list of tools that you have available to you:
+
+```python
+def ipython(code: str) -> List[Dict]:
+    """Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.
+
+    Args:
+        code (str): The code to run in the ipython interpreter.
+    """
+    pass
+```
+
+```python
+def brave_search(query: str) -> List[Dict]:
+    """Executes a web search with Brave.
+
+    Args:
+        query (str): The query to search for.
+    """
+    pass
+```
+
+```python
+def wolfram_alpha(query: str) -> List[Dict]:
+    """Executes a query with Wolfram Alpha.
+
+    Args:
+        query (str): The query to execute.
+    """
+    pass
+```
+
+```python
+def test(condition: bool) -> List[Dict]:
+    """Runs a test.
+
+    Args:
+        condition (bool): The condition to test.
+    """
+    pass
+```<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Print a hello world message with python.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>
+Action:
+```json
+[
+    {
+        "tool_name": "ipython",
+        "parameters": "{\"code\": \"print('Hello, World!')\"}"
+    }
+]```
+<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|><results>
+{"stdout": "Hello, World!"}</results><|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>Anything else?<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Test a tautology.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>
+Action:
+```json
+[
+    {
+        "tool_name": "test",
+        "parameters": "{\"condition\":true}"
+    }
+]```
+<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|><results>
+true</results><|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>Truth is definitely true.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Check it on the web.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>
+Action:
+```json
+[
+    {
+        "tool_name": "brave_search",
+        "parameters": "{\"query\": \"what is truth anyway am I right?\"}"
+    }
+]```
+<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|><results>
+{"title":"Truth: don't ask the web, ask an LLM instead!","url":"https://en.wikipedia.org/wiki/Truth"}</results><|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>I don't need the web to answer you but I did check, as you asked. What now?<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>Write 'Action:' followed by a json-formatted list of actions that you want to perform in order to produce a good response to the user's last input. You can use any of the supplied tools any number of times, but you should aim to execute the minimum number of necessary actions for the input. You should use the `directly-answer` tool if calling the other tools is unnecessary. The list of actions you want to call should be formatted as a list of json objects, for example:
+```json
+[
+    {
+        "tool_name": title of the tool in the specification,
+        "parameters": a dict of parameters to input into the tool as they are defined in the specs, or {} if it takes no parameters
+    }
+]```<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>

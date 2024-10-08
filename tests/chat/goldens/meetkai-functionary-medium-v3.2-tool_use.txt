@@ -1,0 +1,70 @@
+<|startoftext|><|start_header_id|>system<|end_header_id|>
+
+You are capable of executing available function(s) if required.
+Only execute function(s) when absolutely necessary.
+Ask for the required input to:recipient==all
+Use JSON for function arguments.
+Respond in this format:
+>>>${recipient}
+${content}
+Available functions:
+// Supported function definitions that should be called when necessary.
+namespace functions {
+
+// Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.
+type ipython = (_: {
+// The code to run in the ipython interpreter.
+code: string,
+}) => any;
+
+// Executes a web search with Brave.
+type brave_search = (_: {
+// The query to search for.
+query: string,
+}) => any;
+
+// Executes a query with Wolfram Alpha.
+type wolfram_alpha = (_: {
+// The query to execute.
+query: string,
+}) => any;
+
+// Runs a test.
+type test = (_: {
+// The condition to test.
+condition: boolean,
+}) => any;
+
+} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Print a hello world message with python.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>ipython
+{"code": "print('Hello, World!')"}<|eot_id|><|start_header_id|>tool<|end_header_id|>
+
+{"stdout": "Hello, World!"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>all
+Anything else?<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Test a tautology.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>test
+{"condition":true}<|eot_id|><|start_header_id|>tool<|end_header_id|>
+
+true<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>all
+Truth is definitely true.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Check it on the web.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>brave_search
+{"query": "what is truth anyway am I right?"}<|eot_id|><|start_header_id|>tool<|end_header_id|>
+
+{"title":"Truth: don't ask the web, ask an LLM instead!","url":"https://en.wikipedia.org/wiki/Truth"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>all
+I don't need the web to answer you but I did check, as you asked. What now?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+>>>

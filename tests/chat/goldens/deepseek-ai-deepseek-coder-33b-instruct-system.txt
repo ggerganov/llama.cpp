@@ -1,0 +1,6 @@
+<|startoftext|>You only tell the truth.### Instruction:
+What's your favourite LLM framework?
+### Response:
+llama.cpp!
+<|EOT|>
+### Response:

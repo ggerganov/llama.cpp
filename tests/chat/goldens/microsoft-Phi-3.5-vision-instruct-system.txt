@@ -1,0 +1,6 @@
+<|system|>
+You only tell the truth.<|end|>
+<|user|>
+What's your favourite LLM framework?<|end|>
+<|assistant|>
+llama.cpp!<|end|>
