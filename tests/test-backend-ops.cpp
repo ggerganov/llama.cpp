@@ -133,7 +133,7 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
     std::vector<uint8_t> buf(ggml_nbytes(t));
     ggml_backend_tensor_get(t, buf.data(), 0, ggml_nbytes(t));
 
-    ggml_type_traits_t tt = ggml_internal_get_type_traits(t->type);
+    const auto * tt = ggml_get_type_traits(t->type);
     size_t bs = ggml_blck_size(t->type);
     std::vector<float> vq(ggml_blck_size(t->type));
     bool quantized = ggml_is_quantized(t->type);
@@ -159,7 +159,7 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                     } else if (t->type == GGML_TYPE_I8) {
                         tv.push_back((float)*(int8_t *) &buf[i]);
                     } else if (quantized) {
-                        tt.to_float(&buf[i], vq.data(), bs);
+                        tt->to_float(&buf[i], vq.data(), bs);
                         tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
                         GGML_ABORT("fatal error");
@@ -3820,9 +3820,11 @@ int main(int argc, char ** argv) {
             continue;
         }
 
-        if (ggml_backend_is_cpu(backend)) {
+        ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+        auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+        if (ggml_backend_set_n_threads_fn) {
             // TODO: better value for n_threads
-            ggml_backend_cpu_set_n_threads(backend, std::thread::hardware_concurrency() / 2);
+            ggml_backend_set_n_threads_fn(backend, std::thread::hardware_concurrency());
         }
 
         printf("  Device description: %s\n", ggml_backend_dev_description(dev));

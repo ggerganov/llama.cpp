@@ -2311,7 +2311,7 @@ const std::unordered_set<uint32_t> unicode_set_whitespace = {
 0x003000,
 };
 
-// list is always in ascending order, to enable binary searh
+// list is always in ascending order, to enable binary search
 const std::initializer_list<std::pair<uint32_t, uint32_t>> unicode_map_lowercase = {
 {0x000041, 0x000061},
 {0x000042, 0x000062},
@@ -3748,7 +3748,7 @@ const std::initializer_list<std::pair<uint32_t, uint32_t>> unicode_map_lowercase
 {0x01E921, 0x01E943},
 };
 
-// list is always in ascending order, to enable binary searh
+// list is always in ascending order, to enable binary search
 const std::initializer_list<std::pair<uint32_t, uint32_t>> unicode_map_uppercase = {
 {0x000061, 0x000041},
 {0x000062, 0x000042},

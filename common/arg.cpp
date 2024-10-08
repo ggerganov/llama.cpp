@@ -1839,8 +1839,22 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_METRICS"));
     add_opt(llama_arg(
+        {"--slots"},
+        format("enable slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
+        [](gpt_params & params) {
+            params.endpoint_slots = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_SLOTS"));
+    add_opt(llama_arg(
+        {"--props"},
+        format("enable changing global properties via POST /props (default: %s)", params.endpoint_props ? "enabled" : "disabled"),
+        [](gpt_params & params) {
+            params.endpoint_props = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_PROPS"));
+    add_opt(llama_arg(
         {"--no-slots"},
-        format("disables slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
+        "disables slots monitoring endpoint",
         [](gpt_params & params) {
             params.endpoint_slots = false;
         }
