@@ -2535,7 +2535,7 @@ extern "C" {
     typedef void (*ggml_gemm_t)     (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x,
                                        const void * GGML_RESTRICT y, int nr, int nc);
 
-    typedef struct {
+    struct ggml_type_traits {
         const char             * type_name;
         int64_t                  blck_size;
         int64_t                  blck_size_interleave; // interleave elements in blocks
@@ -2551,9 +2551,9 @@ extern "C" {
         int64_t                  ncols; // number of columns to process simultaneously
         ggml_gemv_t              gemv;
         ggml_gemm_t              gemm;
-    } ggml_type_traits_t;
+    };
 
-    GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
+    GGML_API const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
 }
