@@ -285,7 +285,7 @@ static void bench(llama_sampler * cnstr, const char * cnstr_name, const std::vec
     }
     const int64_t t_end = ggml_time_us();
     llama_sampler_free(cnstr);
-    printf("%-42s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
+    printf("%-47s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
 }
 
 #define BENCH(__cnstr, __data, __n_iter) bench((__cnstr), #__cnstr, (__data), (__n_iter))
@@ -332,10 +332,18 @@ int main(void) {
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  0.76f);
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  1.00f);
 
+    printf("XTC should:\n");
     test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.1f},                         0.99f, 0.10f, 1.00f);
     test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.1f},                   0.99f, 0.10f, 0.35f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.2f, 0.1f},                   0.99f, 0.20f, 1.00f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.3f, 0.2f, 0.1f},             0.99f, 0.30f, 1.00f);
     test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.1f},             0.99f, 0.10f, 0.25f);
     test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.2f, 0.1f},             0.99f, 0.20f, 0.35f);
+    printf("XTC should not:\n");
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.10f, 0.15f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.20f, 0.25f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.30f, 0.35f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.40f, 1.00f);
 
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f}, 0.25f);
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f, 0.25f}, 0.75f);
