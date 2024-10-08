@@ -1109,7 +1109,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
 
     size_t to_remove = pos_last - (1 + pos_first);
 
-    if (to_remove < ctx->min_keep || to_remove < 1) return;
+    if (cur_p->size - to_remove < ctx->min_keep || to_remove < 1) return;
 
     for (size_t i = pos_first + 1; i < cur_p->size - to_remove + 1; ++i) {
         cur_p->data[i] = cur_p->data[i + to_remove];
