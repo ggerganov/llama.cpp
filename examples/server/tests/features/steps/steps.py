@@ -1299,7 +1299,8 @@ async def wait_for_slots_status(context,
 
     async with aiohttp.ClientSession(timeout=DEFAULT_TIMEOUT_SECONDS) as session:
         while True:
-            async with await session.get(f'{base_url}/slots', params=params) as slots_response:
+            headers = {'Authorization': f'Bearer {context.server_api_key}'}
+            async with await session.get(f'{base_url}/slots', params=params, headers=headers) as slots_response:
                 status_code = slots_response.status
                 slots = await slots_response.json()
                 if context.debug:

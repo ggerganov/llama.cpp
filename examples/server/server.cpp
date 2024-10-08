@@ -3249,7 +3249,7 @@ int main(int argc, char ** argv) {
 
     if (!params.api_keys.empty()) {
         // for now, if API key is set, web UI is unusable
-        svr->Get("/", [&](const httplib::Request & req, httplib::Response & res) {
+        svr->Get("/", [&](const httplib::Request &, httplib::Response & res) {
             return res.set_content("Web UI is disabled because API key is set.", "text/html; charset=utf-8");
         });
     } else {
