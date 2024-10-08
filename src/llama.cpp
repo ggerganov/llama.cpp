@@ -3413,9 +3413,7 @@ static int llama_get_device_count(const llama_model & model) {
     count += (int) model.rpc_servers.size();
 #endif
 
-#if defined(GGML_USE_SYCL)
-    count += ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
     count += ggml_backend_vk_get_device_count();
 #elif defined(GGML_USE_CANN)
     count += ggml_backend_cann_get_device_count();
@@ -3438,11 +3436,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
         }
     }
 
-#if defined(GGML_USE_SYCL)
-    if (host_buffer) {
-        buft = ggml_backend_sycl_host_buffer_type();
-    }
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_CANN)
     if (host_buffer) {
         buft = ggml_backend_cann_host_buffer_type();
     }
@@ -3481,8 +3475,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
 
 #if defined(GGML_USE_VULKAN)
     buft = ggml_backend_vk_buffer_type(device);
-#elif defined(GGML_USE_SYCL)
-    buft = ggml_backend_sycl_buffer_type(device);
 #elif defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
 #elif defined(GGML_USE_CANN)
@@ -3513,12 +3505,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
         }
     }
 
-#ifdef GGML_USE_SYCL
-    if (ggml_backend_sycl_get_device_count() > 1) {
-        buft = ggml_backend_sycl_split_buffer_type(tensor_split);
-    }
-#endif
-
     if (buft == nullptr) {
         buft = llama_default_buffer_type_offload(model, fallback_gpu);
     }
@@ -3548,12 +3534,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         return free;
     }
 
-#if defined(GGML_USE_SYCL)
-    size_t total;
-    size_t free;
-    ggml_backend_sycl_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
     size_t total;
     size_t free;
     ggml_backend_vk_get_device_memory(device, &free, &total);
@@ -19021,10 +19002,11 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
-    // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
-    return true;
+#if defined(GGML_USE_VULKAN) || defined(GGML_USE_KOMPUTE) ||                   \
+    defined(GGML_USE_RPC)
+  // Defined when llama.cpp is compiled with support for offloading model layers
+  // to GPU.
+  return true;
 #else
     return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
         ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr;
@@ -19343,28 +19325,6 @@ struct llama_context * llama_new_context_with_model(
                 ggml_backend_t backend = ggml_backend_vk_init(device);
                 if (backend == nullptr) {
                     LLAMA_LOG_ERROR("%s: failed to initialize Vulkan%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_SYCL)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_LAYER requires a backend for each GPU
-            for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
-                ggml_backend_t backend = ggml_backend_sycl_init(i);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d for No.%d backend\n", __func__, i, i);
                     llama_free(ctx);
                     return nullptr;
                 }
