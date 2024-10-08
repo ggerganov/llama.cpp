@@ -65,8 +65,8 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
 
     // convert src0 to float
     if (type != GGML_TYPE_F32) {
-        ggml_type_traits_t type_traits = ggml_internal_get_type_traits(type);
-        ggml_to_float_t const to_float = type_traits.to_float;
+        const auto * type_traits = ggml_get_type_traits(type);
+        ggml_to_float_t const to_float = type_traits->to_float;
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
@@ -420,19 +420,21 @@ static bool ggml_backend_blas_device_supports_op(ggml_backend_dev_t dev, const s
             // TODO: find the optimal value
             const int64_t min_batch = 32;
 
-            return (ggml_is_contiguous(src0) &&
-                    ggml_is_contiguous(src1) &&
-                    src1->type == GGML_TYPE_F32 &&
-                    (ne0 >= min_batch && ne1 >= min_batch && ne10 >= min_batch));
+            return ggml_is_contiguous(src0) &&
+                   ggml_is_contiguous(src1) &&
+                   src1->type == GGML_TYPE_F32 &&
+                   (ne0 >= min_batch && ne1 >= min_batch && ne10 >= min_batch) &&
+                   (src0->type == GGML_TYPE_F32 || ggml_get_type_traits(src0->type)->to_float != NULL);
         }
 
         case GGML_OP_OUT_PROD:
-            return (op->src[0]->type == GGML_TYPE_F32 &&
-                    op->src[1]->type == GGML_TYPE_F32 &&
-                    ggml_is_matrix(src0) &&
-                    ggml_is_matrix(src1) &&
-                    ggml_is_contiguous(src0) &&
-                    (ggml_is_contiguous(src1) || ggml_is_transposed(src1)));
+            return op->src[0]->type == GGML_TYPE_F32 &&
+                   op->src[1]->type == GGML_TYPE_F32 &&
+                   ggml_is_matrix(src0) &&
+                   ggml_is_matrix(src1) &&
+                   ggml_is_contiguous(src0) &&
+                   (ggml_is_contiguous(src1) || ggml_is_transposed(src1)) &&
+                   (src0->type == GGML_TYPE_F32 || ggml_get_type_traits(src0->type)->to_float != NULL);
 
         default:
             return false;

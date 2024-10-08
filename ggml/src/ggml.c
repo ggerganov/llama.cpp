@@ -729,7 +729,7 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
 static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t * restrict x, size_t bx, ggml_fp16_t * restrict y, size_t by, int nrc);
 static void ggml_vec_dot_bf16(int n, float * restrict s, size_t bs, ggml_bf16_t * restrict x, size_t bx, ggml_bf16_t * restrict y, size_t by, int nrc);
 
-static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
+static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_I8] = {
         .type_name                = "i8",
         .blck_size                = 1,
@@ -1151,9 +1151,9 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
 };
 
 // For internal test use
-ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
+const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type) {
     GGML_ASSERT(type < GGML_TYPE_COUNT);
-    return type_traits[type];
+    return &type_traits[type];
 }
 
 //

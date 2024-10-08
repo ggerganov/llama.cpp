@@ -17872,10 +17872,9 @@ static void llama_tensor_dequantize_internal(
     }
     float * f32_output = (float *) output.data();
 
-    ggml_type_traits_t qtype;
+    const ggml_type_traits * qtype = ggml_get_type_traits(tensor->type);
     if (ggml_is_quantized(tensor->type)) {
-        qtype = ggml_internal_get_type_traits(tensor->type);
-        if (qtype.to_float == NULL) {
+        if (qtype->to_float == NULL) {
             throw std::runtime_error(format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor->type)));
         }
     } else if (tensor->type != GGML_TYPE_F16 &&
@@ -17889,7 +17888,7 @@ static void llama_tensor_dequantize_internal(
         } else if (tensor->type == GGML_TYPE_BF16) {
             ggml_bf16_to_fp32_row((ggml_bf16_t *)tensor->data, f32_output, nelements);
         } else if (ggml_is_quantized(tensor->type)) {
-            qtype.to_float(tensor->data, f32_output, nelements);
+            qtype->to_float(tensor->data, f32_output, nelements);
         } else {
             GGML_ABORT("fatal error"); // unreachable
         }
@@ -17925,7 +17924,7 @@ static void llama_tensor_dequantize_internal(
             } else if (typ == GGML_TYPE_BF16) {
                 ggml_bf16_to_fp32_row((ggml_bf16_t *)inbuf, outbuf, nels);
             } else {
-                qtype.to_float(inbuf, outbuf, nels);
+                qtype->to_float(inbuf, outbuf, nels);
             }
         };
         workers.emplace_back(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems);
