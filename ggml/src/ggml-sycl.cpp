@@ -5348,7 +5348,7 @@ static void ggml_backend_sycl_device_event_free(ggml_backend_dev_t dev, ggml_bac
 
 static void ggml_backend_sycl_device_event_synchronize(ggml_backend_dev_t dev, ggml_backend_event_t event) {
   GGML_UNUSED(dev);
-  
+
   if (event == nullptr || event->context == nullptr) {
     return;
   }
