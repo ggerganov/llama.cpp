@@ -1387,6 +1387,7 @@ def start_server_background(context):
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
     server_listen_addr = context.server_fqdn
     server_args = [
+        '--slots', # requires to get slot status via /slots endpoint
         '--host', server_listen_addr,
         '--port', context.server_port,
     ]
