@@ -9,25 +9,29 @@ set -euo pipefail
 
 PORT=${PORT:-8088}
 BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+DATA_DIR=${DATA_DIR:-$HOME/.llama.cpp/agent/tools/data}
+UV_CACHE_DIR=${UV_CACHE_DIR:-$HOME/.llama.cpp/agent/tools/uv_cache}
 
-excludes=()
-if [[ -z "${BRAVE_SEARCH_API_KEY:-}" ]]; then
-    echo "#" >&2
-    echo "# Please set BRAVE_SEARCH_API_KEY environment variable in order to enable the brave_search tool" >&2
-    echo "#" >&2
-    excludes+=( "brave_search" )
-fi
+mkdir -p "$DATA_DIR"
+mkdir -p "$UV_CACHE_DIR"
 
 args=( --port $PORT "$@" )
-if [[ "${#excludes[@]}" -gt 0 ]]; then
-    args+=( --exclude="$(IFS=\|; echo "${excludes[*]}")" )
-fi
+echo "# Warming up the uv cache"
+docker run \
+    -w /src \
+    -v $PWD/examples/agent:/src \
+    -v "$UV_CACHE_DIR":/root/.cache/uv:rw \
+    --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
+    uv run serve_tools.py --help
 
 echo "# Running inside docker: serve_tools.py ${args[*]}"
 docker run \
     -p $PORT:$PORT \
     -w /src \
     -v $PWD/examples/agent:/src \
-    --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
+    -v "$UV_CACHE_DIR":/root/.cache/uv \
+    -v "$DATA_DIR":/data:rw \
+    --env "MEMORY_SQLITE_DB=/data/memory.db" \
+    --env "BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY" \
     --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
     uv run serve_tools.py "${args[@]}"
