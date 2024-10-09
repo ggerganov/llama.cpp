@@ -117,6 +117,7 @@ struct gpt_sampler_params {
     float   penalty_repeat    = 1.00f; // 1.0 = disabled
     float   penalty_freq      = 0.00f; // 0.0 = disabled
     float   penalty_present   = 0.00f; // 0.0 = disabled
+    float   penalty_repeat_sigmoid_growth = 0.00f; // 0.0 = disabled
     int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
