@@ -1644,6 +1644,145 @@ struct llama_sampler * llama_sampler_init_logit_bias(
     };
 }
 
+// infill
+
+struct llama_sampler_infill {
+    const struct llama_vocab * vocab;
+
+    const float p;
+    const float p_eog;
+};
+
+static const char * llama_sampler_infill_name(const struct llama_sampler * /*smpl*/) {
+    return "infill";
+}
+
+static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    auto * ctx = (llama_sampler_infill *) smpl->ctx;
+
+    llama_sampler_softmax_impl(cur_p);
+
+    // print cur_p:
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        LLAMA_LOG_DEBUG("infill: cur_p[%zu] = { id: %d, p: %f, logit: %f }\n", i, cur_p->data[i].id, cur_p->data[i].p, cur_p->data[i].logit);
+    }
+
+    float p_max     = 0.0f;
+    float p_eog_sum = 0.0f;
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        p_max = fmaxf(p_max, cur_p->data[i].p);
+        if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+            p_eog_sum += cur_p->data[i].p;
+        }
+    }
+
+    if (p_max < 0.90f && p_eog_sum > ctx->p_eog) {
+        LLAMA_LOG_DEBUG("infill: all EOG tokens are more likely than p_eog (%f), keeping only EOG tokens\n", ctx->p_eog);
+
+        // keep just the EOG tokens
+        const auto size_org = cur_p->size;
+
+        cur_p->size = 0;
+
+        for (size_t i = 0; i < size_org; ++i) {
+            if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+                cur_p->data[cur_p->size++] = cur_p->data[i];
+            }
+        }
+
+        return;
+    }
+
+    // combine tokens with common prefix
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        for (size_t j = 0; j < cur_p->size; ++j) {
+            if (cur_p->data[i].logit == -INFINITY) {
+                break;
+            }
+
+            if (i == j || cur_p->data[j].logit == -INFINITY) {
+                continue;
+            }
+
+            if (llama_token_is_prefix_impl(*ctx->vocab, cur_p->data[i].id, cur_p->data[j].id)) {
+                if (cur_p->data[i].p > cur_p->data[j].p) {
+                    cur_p->data[i].p += cur_p->data[j].p;
+                    cur_p->data[j].logit = -INFINITY;
+                } else {
+                    cur_p->data[j].p += cur_p->data[i].p;
+                    cur_p->data[i].logit = -INFINITY;
+                }
+            }
+        }
+    }
+
+    // mask non-EOG tokens with prob < ctx->p
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        if (cur_p->data[i].p < ctx->p && !llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+            cur_p->data[i].logit = -INFINITY;
+        }
+    }
+
+    // determine the token with max logit
+    float l_max = -INFINITY;
+    int   i_max = -1;
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        if (cur_p->data[i].logit > l_max) {
+            l_max = cur_p->data[i].logit;
+            i_max = i;
+        }
+    }
+
+    // if all probs are -INFINITY -> reduce cur_p to single EOG token
+    if (i_max == -1) {
+        cur_p->size = 1;
+        cur_p->data[0].id = llama_token_eot_impl(*ctx->vocab);
+        cur_p->data[0].logit = 1.0f;
+
+        return;
+    }
+
+    cur_p->size = 1;
+    cur_p->data[0] = cur_p->data[i_max];
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        LLAMA_LOG_DEBUG("after : cur_p[%zu] = { id: %d, p: %f, logit: %f }\n", i, cur_p->data[i].id, cur_p->data[i].p, cur_p->data[i].logit);
+    }
+}
+
+static struct llama_sampler * llama_sampler_infill_clone(const struct llama_sampler * smpl) {
+    const auto * ctx = (const llama_sampler_infill *) smpl->ctx;
+    return llama_sampler_init_infill_impl(*ctx->vocab, ctx->p, ctx->p_eog);
+}
+
+static void llama_sampler_infill_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_infill *) smpl->ctx;
+}
+
+static struct llama_sampler_i llama_sampler_infill_i = {
+    /* .name   = */ llama_sampler_infill_name,
+    /* .accept = */ nullptr,
+    /* .apply  = */ llama_sampler_infill_apply,
+    /* .reset  = */ nullptr,
+    /* .clone  = */ llama_sampler_infill_clone,
+    /* .free   = */ llama_sampler_infill_free,
+};
+
+struct llama_sampler * llama_sampler_init_infill_impl(
+        const struct llama_vocab & vocab,
+                           float   p,
+                           float   p_eog) {
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_infill_i,
+        /* .ctx   = */ new llama_sampler_infill {
+            /* .vocab = */ &vocab,
+            /* .p     = */ p,
+            /* .p_eog = */ p_eog,
+        },
+    };
+}
+
 // utils
 
 uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl) {

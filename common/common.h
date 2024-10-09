@@ -90,6 +90,7 @@ enum gpt_sampler_type {
     GPT_SAMPLER_TYPE_TFS_Z       = 4,
     GPT_SAMPLER_TYPE_TYPICAL_P   = 5,
     GPT_SAMPLER_TYPE_TEMPERATURE = 6,
+    GPT_SAMPLER_TYPE_INFILL      = 7,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -113,6 +114,8 @@ struct gpt_sampler_params {
     float   temp              = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
     float   dynatemp_range    = 0.00f; // 0.0 = disabled
     float   dynatemp_exponent = 1.00f; // controls how entropy maps to temperature in dynamic temperature sampler
+    float   infill_p          = 0.80f;
+    float   infill_p_eog      = 0.01f;
     int32_t penalty_last_n    = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
     float   penalty_repeat    = 1.00f; // 1.0 = disabled
     float   penalty_freq      = 0.00f; // 0.0 = disabled
@@ -130,7 +133,7 @@ struct gpt_sampler_params {
         GPT_SAMPLER_TYPE_TYPICAL_P,
         GPT_SAMPLER_TYPE_TOP_P,
         GPT_SAMPLER_TYPE_MIN_P,
-        GPT_SAMPLER_TYPE_TEMPERATURE
+        GPT_SAMPLER_TYPE_TEMPERATURE,
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling

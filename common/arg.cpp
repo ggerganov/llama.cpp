@@ -948,6 +948,20 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_sparam());
     add_opt(llama_arg(
+        {"--infill-p"}, "N",
+        string_format("infill p threshold (default: %.1f)", (double)params.sparams.infill_p),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.infill_p = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
+        {"--infill-p-eog"}, "N",
+        string_format("infill p_eog threshold (default: %.1f)", (double)params.sparams.infill_p_eog),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.infill_p_eog = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
         {"--typical"}, "N",
         string_format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typ_p),
         [](gpt_params & params, const std::string & value) {

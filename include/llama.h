@@ -952,6 +952,12 @@ extern "C" {
                                int32_t   lstrip,
                                   bool   special);
 
+    // check if token0 is contained as a prefix in token1
+    LLAMA_API bool llama_token_is_prefix(
+              const struct llama_model * model,
+                           llama_token   token0,
+                           llama_token   token1);
+
     /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
     /// @param text The char pointer must be large enough to hold the resulting text.
     /// @return Returns the number of chars/bytes on success, no more than text_len_max.
@@ -1144,6 +1150,26 @@ extern "C" {
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
 
+    // 1. if there is a high-prob token (>= 0.9f) - pick it
+    // 2. if sum of EOG probs is larger than p_eog -> mask non-EOG tokens away
+    // 3. combine probs of tokens that have the same prefix
+    //
+    // example:
+    //
+    // - before:
+    //   "hel":   0.5
+    //   "hell":  0.2
+    //   "hello": 0.1
+    //   "dummy": 0.1
+    //
+    // - after:
+    //   "hel":   0.8
+    //   "dummy": 0.1
+    //
+    LLAMA_API struct llama_sampler * llama_sampler_init_infill(
+            const struct llama_model * model,
+                               float   p,
+                               float   p_eog);
 
     // Returns the seed used by the sampler if applicable, LLAMA_DEFAULT_SEED otherwise
     LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);

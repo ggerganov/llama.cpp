@@ -48,7 +48,7 @@ struct llama_vocab {
     id special_cls_id  = LLAMA_TOKEN_NULL;
     id special_mask_id = LLAMA_TOKEN_NULL;
 
-    id linefeed_id    = 13;
+    id linefeed_id = 13;
 
     // fim tokens
     id special_fim_pre_id = LLAMA_TOKEN_NULL;
@@ -148,6 +148,12 @@ int32_t llama_token_to_piece_impl(
                          int32_t   length,
                          int32_t   lstrip,
                             bool   special);
+
+// check if token0 is contained as a prefix in token1
+bool llama_token_is_prefix_impl(
+        const struct llama_vocab & vocab,
+                     llama_token   token0,
+                     llama_token   token1);
 
 int32_t llama_detokenize_impl(
         const struct llama_vocab & vocab,

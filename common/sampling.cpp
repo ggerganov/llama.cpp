@@ -193,6 +193,9 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
                     case GPT_SAMPLER_TYPE_TEMPERATURE:
                         llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                         break;
+                    case GPT_SAMPLER_TYPE_INFILL:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model, params.infill_p, params.infill_p_eog));
+                        break;
                     default:
                         GGML_ASSERT(false && "unknown sampler type");
                 }
@@ -372,6 +375,7 @@ char gpt_sampler_type_to_chr(enum gpt_sampler_type cnstr) {
         case GPT_SAMPLER_TYPE_TOP_P:       return 'p';
         case GPT_SAMPLER_TYPE_MIN_P:       return 'm';
         case GPT_SAMPLER_TYPE_TEMPERATURE: return 't';
+        case GPT_SAMPLER_TYPE_INFILL:      return 'i';
         default : return '?';
     }
 }
@@ -384,6 +388,7 @@ std::string gpt_sampler_type_to_str(enum gpt_sampler_type cnstr) {
         case GPT_SAMPLER_TYPE_TOP_P:       return "top_p";
         case GPT_SAMPLER_TYPE_MIN_P:       return "min_p";
         case GPT_SAMPLER_TYPE_TEMPERATURE: return "temperature";
+        case GPT_SAMPLER_TYPE_INFILL:      return "infill";
         default : return "";
     }
 }
@@ -396,6 +401,7 @@ std::vector<gpt_sampler_type> gpt_sampler_types_from_names(const std::vector<std
         { "min_p",       GPT_SAMPLER_TYPE_MIN_P },
         { "tfs_z",       GPT_SAMPLER_TYPE_TFS_Z },
         { "temperature", GPT_SAMPLER_TYPE_TEMPERATURE },
+        { "infill",      GPT_SAMPLER_TYPE_INFILL }
     };
 
     // since samplers names are written multiple ways
@@ -441,7 +447,8 @@ std::vector<gpt_sampler_type> gpt_sampler_types_from_chars(const std::string & c
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TYPICAL_P),   GPT_SAMPLER_TYPE_TYPICAL_P },
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TOP_P),       GPT_SAMPLER_TYPE_TOP_P },
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_MIN_P),       GPT_SAMPLER_TYPE_MIN_P },
-        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TEMPERATURE), GPT_SAMPLER_TYPE_TEMPERATURE }
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TEMPERATURE), GPT_SAMPLER_TYPE_TEMPERATURE },
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_INFILL),      GPT_SAMPLER_TYPE_INFILL },
     };
 
     std::vector<gpt_sampler_type> samplers;
