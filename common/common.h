@@ -477,7 +477,7 @@ struct common_chat_msg {
 };
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-bool llama_chat_verify_template(const std::string & tmpl);
+bool common_chat_verify_template(const std::string & tmpl);
 
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
@@ -535,7 +535,7 @@ struct common_control_vector_load_info {
 
 // Load control vectors, scale each by strength, and add them together.
 // On error, returns {-1, empty}
-common_control_vector_data llama_control_vector_load(const std::vector<common_control_vector_load_info> & load_infos);
+common_control_vector_data common_control_vector_load(const std::vector<common_control_vector_load_info> & load_infos);
 
 //
 // Split utils

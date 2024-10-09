@@ -876,7 +876,7 @@ struct common_init_result llama_init_from_gpt_params(gpt_params & params) {
         if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
         if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
 
-        const auto cvec = llama_control_vector_load(params.control_vectors);
+        const auto cvec = common_control_vector_load(params.control_vectors);
         if (cvec.n_embd == -1) {
             llama_free(lctx);
             llama_free_model(model);
@@ -1112,7 +1112,7 @@ static bool curl_perform_with_retry(const std::string& url, CURL* curl, int max_
     return false;
 }
 
-static bool llama_download_file(const std::string & url, const std::string & path, const std::string & hf_token) {
+static bool common_download_file(const std::string & url, const std::string & path, const std::string & hf_token) {
 
     // Initialize libcurl
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
@@ -1182,15 +1182,15 @@ static bool llama_download_file(const std::string & url, const std::string & pat
     }
 
     // Send a HEAD request to retrieve the etag and last-modified headers
-    struct llama_load_model_from_url_headers {
+    struct common_load_model_from_url_headers {
         std::string etag;
         std::string last_modified;
     };
-    llama_load_model_from_url_headers headers;
+    common_load_model_from_url_headers headers;
     {
         typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
-            llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
+            common_load_model_from_url_headers *headers = (common_load_model_from_url_headers *) userdata;
 
             static std::regex header_regex("([^:]+): (.*)\r\n");
             static std::regex etag_regex("ETag", std::regex_constants::icase);
@@ -1326,7 +1326,7 @@ static bool llama_download_file(const std::string & url, const std::string & pat
     return true;
 }
 
-struct llama_model * llama_load_model_from_url(
+struct llama_model * common_load_model_from_url(
         const char * model_url,
         const char * path_model,
         const char * hf_token,
@@ -1337,7 +1337,7 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
-    if (!llama_download_file(model_url, path_model, hf_token)) {
+    if (!common_download_file(model_url, path_model, hf_token)) {
         return NULL;
     }
 
@@ -1390,7 +1390,7 @@ struct llama_model * llama_load_model_from_url(
                 char split_url[LLAMA_CURL_MAX_URL_LENGTH] = {0};
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
-                return llama_download_file(split_url, split_path, hf_token);
+                return common_download_file(split_url, split_path, hf_token);
             }, idx));
         }
 
@@ -1405,7 +1405,7 @@ struct llama_model * llama_load_model_from_url(
     return llama_load_model_from_file(path_model, params);
 }
 
-struct llama_model * llama_load_model_from_hf(
+struct llama_model * common_load_model_from_hf(
         const char * repo,
         const char * model,
         const char * path_model,
@@ -1425,7 +1425,7 @@ struct llama_model * llama_load_model_from_hf(
     model_url += "/resolve/main/";
     model_url += model;
 
-    return llama_load_model_from_url(model_url.c_str(), path_model, hf_token, params);
+    return common_load_model_from_url(model_url.c_str(), path_model, hf_token, params);
 }
 
 #else
@@ -1545,7 +1545,7 @@ std::string common_detokenize(llama_context * ctx, const std::vector<llama_token
 // Chat template utils
 //
 
-bool llama_chat_verify_template(const std::string & tmpl) {
+bool common_chat_verify_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
     int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
@@ -1765,7 +1765,7 @@ float common_embd_similarity_cos(const float * embd1, const float * embd2, int n
 // Control vector utils
 //
 
-static common_control_vector_data llama_control_vector_load_one(const common_control_vector_load_info & load_info) {
+static common_control_vector_data common_control_vector_load_one(const common_control_vector_load_info & load_info) {
     common_control_vector_data result = { -1, {} };
 
     ggml_context * ctx = nullptr;
@@ -1850,11 +1850,11 @@ static common_control_vector_data llama_control_vector_load_one(const common_con
     return result;
 }
 
-common_control_vector_data llama_control_vector_load(const std::vector<common_control_vector_load_info> & load_infos) {
+common_control_vector_data common_control_vector_load(const std::vector<common_control_vector_load_info> & load_infos) {
     common_control_vector_data result = { -1, {} };
 
     for (const auto & info : load_infos) {
-        auto cur = llama_control_vector_load_one(info);
+        auto cur = common_control_vector_load_one(info);
 
         if (cur.n_embd == -1) {
             result.n_embd = -1;

@@ -1876,7 +1876,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         "if suffix/prefix are specified, template will be disabled\n"
         "only commonly used templates are accepted:\nhttps://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
         [](gpt_params & params, const std::string & value) {
-            if (!llama_chat_verify_template(value)) {
+            if (!common_chat_verify_template(value)) {
                 throw std::runtime_error(format(
                     "error: the supplied chat template is not supported: %s\n"
                     "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",
