@@ -136,6 +136,13 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
 }
 
 int main(int argc, char ** argv) {
+#if defined (__OpenBSD__)
+    if (pledge("stdio rpath", "") == -1) {
+        fprintf(stderr, "%s: error: pledge failed\n", __func__);
+        return 1;
+    }
+#endif
+
     gpt_params params;
     g_params = &params;
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN, print_usage)) {
