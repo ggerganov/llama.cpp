@@ -180,6 +180,8 @@ enum ggml_cgraph_eval_order {
     GGML_CGRAPH_EVAL_ORDER_COUNT
 };
 
+struct ggml_profile_data;
+
 struct ggml_cgraph {
     int size;
     int n_nodes;
@@ -188,6 +190,8 @@ struct ggml_cgraph {
     struct ggml_tensor ** nodes;
     struct ggml_tensor ** grads;
     struct ggml_tensor ** leafs;
+
+    struct ggml_profile_data * prof;
 
     struct ggml_hash_set visited_hash_set;
 
