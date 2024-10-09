@@ -40,8 +40,6 @@
 #include "ggml-sycl/presets.hpp"
 #include "ggml-sycl/gemm.hpp"
 
-#define UNUSED GGML_UNUSED
-
 static bool g_sycl_loaded = false;
 
 static ggml_sycl_device_info ggml_sycl_init() {
@@ -495,13 +493,13 @@ catch (sycl::exception const &exc) {
 
 static size_t ggml_backend_sycl_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     return 128;
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static size_t ggml_backend_sycl_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
     return dpct::get_current_device().get_max_mem_alloc_size();
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static size_t ggml_backend_sycl_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
@@ -516,7 +514,7 @@ static size_t ggml_backend_sycl_buffer_type_get_alloc_size(ggml_backend_buffer_t
 
     return size;
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static const ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
@@ -703,7 +701,7 @@ struct ggml_backend_sycl_split_buffer_context {
 static const char * ggml_backend_sycl_split_buffer_get_name(ggml_backend_buffer_t buffer) {
     return GGML_SYCL_NAME "_Split";
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
@@ -719,7 +717,7 @@ static void * ggml_backend_sycl_split_buffer_get_base(ggml_backend_buffer_t buff
     // the pointers are stored in the tensor extras, this is just a dummy address and never dereferenced
     return (void *)0x1000;
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static void
@@ -912,8 +910,8 @@ catch (sycl::exception const &exc) {
 }
 
 static void ggml_backend_sycl_split_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
-    UNUSED(buffer);
-    UNUSED(value);
+    GGML_UNUSED(buffer);
+    GGML_UNUSED(value);
 }
 
 static struct ggml_backend_buffer_i ggml_backend_sycl_split_buffer_interface = {
@@ -934,7 +932,7 @@ static struct ggml_backend_buffer_i ggml_backend_sycl_split_buffer_interface = {
 static const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
     return GGML_SYCL_NAME "_Split";
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
@@ -949,7 +947,7 @@ static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc_buffer(gg
 
 static size_t ggml_backend_sycl_split_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     return 128;
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static size_t ggml_backend_sycl_split_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
@@ -982,7 +980,7 @@ static size_t ggml_backend_sycl_split_buffer_type_get_alloc_size(ggml_backend_bu
 static bool ggml_backend_sycl_split_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
     return false;
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static ggml_backend_buffer_type_i ggml_backend_sycl_split_buffer_type_interface = {
@@ -1039,13 +1037,13 @@ ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * ten
 static const char * ggml_backend_sycl_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
     return GGML_SYCL_NAME "_Host";
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static const char * ggml_backend_sycl_host_buffer_name(ggml_backend_buffer_t buffer) {
     return GGML_SYCL_NAME "_Host";
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_sycl_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -4962,7 +4960,7 @@ static void ggml_backend_sycl_synchronize(ggml_backend_t backend) try {
     const queue_ptr stream = sycl_ctx->stream(sycl_ctx->device, 0);
     SYCL_CHECK(CHECK_TRY_ERROR((stream)->wait()));
 
-    UNUSED(backend);
+    GGML_UNUSED(backend);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -5117,11 +5115,12 @@ static void ggml_backend_sycl_device_get_props(ggml_backend_dev_t dev, ggml_back
 #else
     bool events = true;
 #endif
+
     props->caps = {
-        /* async       */ true,
-        /* host_buffer */ host_buffer,
+        /* .async                 = */ true,
+        /* .host_buffer           = */ host_buffer,
         /* .buffer_from_host_ptr  = */ false,
-        /* events      */ events,
+        /* .events                = */ events,
     };
 }
 
@@ -5293,7 +5292,7 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
             return false;
     }
 
-    UNUSED(dev);
+    GGML_UNUSED(dev);
 }
 
 static bool ggml_backend_sycl_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
