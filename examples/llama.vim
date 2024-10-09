@@ -44,6 +44,7 @@ function! llama#fim() abort
 
     let l:suffix = ""
         \ . l:line_cur_suffix
+        \ . "\n"
         \ . join(l:lines_suffix, "\n")
         \ . "\n"
 
@@ -111,7 +112,7 @@ function! llama#fim() abort
 
     call nvim_buf_set_extmark(l:bufnr, s:ns_id, l:pos_y - 1, l:pos_x - 1, {
         \ 'virt_text': [[s:content[0], 'llama_hint']],
-        \ 'virt_text_win_col': virtcol('.')
+        \ 'virt_text_win_col': l:pos_x == 1 ? 0 : virtcol('.')
         \ })
 
     call nvim_buf_set_extmark(l:bufnr, s:ns_id, l:pos_y - 1, 0, {
