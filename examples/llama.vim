@@ -138,33 +138,33 @@ function! llama#fim() abort
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
 
-    let s:id_vt_fim  = nvim_create_namespace('vt_fim')
-    let s:id_vt_info = nvim_create_namespace('vt_info')
+    let l:id_vt_fim  = nvim_create_namespace('vt_fim')
+    let l:id_vt_info = nvim_create_namespace('vt_info')
 
     " construct the info message:
     if l:has_info
         " prefix the info string with whitespace in order to offset it to the right of the fim overlay
         let l:prefix = repeat(' ', len(s:content[0]) - len(l:line_cur_suffix) + 3)
 
-        let l:info = printf("%s // prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f ms",
+        let l:info = printf("%s | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f.2 ms",
             \ l:prefix,
             \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
             \ l:n_gen, l:t_gen_ms, l:s_gen,
             \ 1000.0 * reltimefloat(reltime(l:t_start))
             \ )
 
-        call nvim_buf_set_extmark(l:bufnr, s:id_vt_info, l:pos_y - 1, l:pos_x - 1, {
+        call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, l:pos_y - 1, l:pos_x - 1, {
             \ 'virt_text': [[l:info, 'llama_hl_info']],
             \ 'virt_text_pos': 'eol',
             \ })
     endif
 
-    call nvim_buf_set_extmark(l:bufnr, s:id_vt_fim, l:pos_y - 1, l:pos_x - 1, {
+    call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, l:pos_y - 1, l:pos_x - 1, {
         \ 'virt_text': [[s:content[0], 'llama_hl_hint']],
         \ 'virt_text_win_col': l:pos_x == 1 ? 0 : virtcol('.')
         \ })
 
-    call nvim_buf_set_extmark(l:bufnr, s:id_vt_fim, l:pos_y - 1, 0, {
+    call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, l:pos_y - 1, 0, {
         \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hl_hint']]}),
         \ 'virt_text_win_col': virtcol('.')
         \ })
@@ -224,11 +224,11 @@ function! llama#cancel_vt_fim()
     " clear the virtual text
     let l:bufnr = bufnr('%')
 
-    let s:id_vt_fim  = nvim_create_namespace('vt_fim')
-    let s:id_vt_info = nvim_create_namespace('vt_info')
+    let l:id_vt_fim  = nvim_create_namespace('vt_fim')
+    let l:id_vt_info = nvim_create_namespace('vt_info')
 
-    call nvim_buf_clear_namespace(l:bufnr, s:id_vt_fim,  0, -1)
-    call nvim_buf_clear_namespace(l:bufnr, s:id_vt_info, 0, -1)
+    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
+    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_info, 0, -1)
 
     " remove the key mappings
     if exists('s:mapping_on') && s:mapping_on
