@@ -37,7 +37,7 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::common_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = common_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
@@ -159,14 +159,14 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         user_prompt = prompt.substr(image_pos + std::string("<image>").length());
         LOG_INF("system_prompt: %s\n", system_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = ::common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
                 LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
         LOG_INF("user_prompt: %s\n", user_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = ::common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
                 LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
@@ -176,7 +176,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         system_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
         user_prompt = prompt + "\nASSISTANT:";
         if (params->verbose_prompt) {
-            auto tmp = ::common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
                 LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }

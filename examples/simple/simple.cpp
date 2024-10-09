@@ -64,7 +64,7 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
 
     std::vector<llama_token> tokens_list;
-    tokens_list = ::common_tokenize(ctx, params.prompt, true);
+    tokens_list = common_tokenize(ctx, params.prompt, true);
 
     const int n_ctx    = llama_n_ctx(ctx);
     const int n_kv_req = tokens_list.size() + (n_predict - tokens_list.size());

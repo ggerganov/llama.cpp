@@ -38,7 +38,7 @@ int main(int argc, char ** argv){
 
     // tokenize the prompt
     std::vector<llama_token> inp;
-    inp = ::common_tokenize(ctx, params.prompt, true, true);
+    inp = common_tokenize(ctx, params.prompt, true, true);
 
     llama_ngram_cache ngram_cache_context;
     llama_ngram_cache ngram_cache_dynamic;

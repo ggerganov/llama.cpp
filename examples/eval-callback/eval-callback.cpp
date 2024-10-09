@@ -129,7 +129,7 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 static bool run(llama_context * ctx, const gpt_params & params) {
     const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
 
-    std::vector<llama_token> tokens = ::common_tokenize(ctx, params.prompt, add_bos);
+    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, add_bos);
 
     if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), 0, 0))) {
         LOG_ERR("%s : failed to eval\n", __func__);

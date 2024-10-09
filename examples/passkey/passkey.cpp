@@ -92,10 +92,10 @@ int main(int argc, char ** argv) {
 
     // tokenize the prompt
     std::vector<llama_token> tokens_list;
-    tokens_list = ::common_tokenize(ctx, params.prompt, true);
+    tokens_list = common_tokenize(ctx, params.prompt, true);
 
     // tokenize the prefix and use it as a sink
-    const int n_tokens_prefix = ::common_tokenize(ctx, prompt_prefix, true).size();
+    const int n_tokens_prefix = common_tokenize(ctx, prompt_prefix, true).size();
 
     const int n_tokens_all = tokens_list.size();
 

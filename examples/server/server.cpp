@@ -771,10 +771,10 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = ::common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+                        p = common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
                         first = false;
                     } else {
-                        p = ::common_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
+                        p = common_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
                     }
 
                     prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
@@ -788,7 +788,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+            prompt_tokens = common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
         }
 
         return prompt_tokens;
@@ -1073,7 +1073,7 @@ struct server_context {
         system_tokens.clear();
 
         if (!system_prompt.empty()) {
-            system_tokens = ::common_tokenize(ctx, system_prompt, true);
+            system_tokens = common_tokenize(ctx, system_prompt, true);
 
             const int32_t n_batch = llama_n_batch(ctx);
             const int32_t n_tokens_prompt = system_tokens.size();

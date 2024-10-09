@@ -365,7 +365,7 @@ int main(int raw_argc, char ** raw_argv) {
     const bool parse_special = !no_parse_special;
 
     std::vector<llama_token> tokens;
-    tokens = ::common_tokenize(model, prompt, add_bos, parse_special);
+    tokens = common_tokenize(model, prompt, add_bos, parse_special);
 
     if (printing_ids) {
         printf("[");

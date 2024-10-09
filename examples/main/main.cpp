@@ -296,7 +296,7 @@ int main(int argc, char ** argv) {
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_DBG("tokenize the prompt\n");
-            embd_inp = ::common_tokenize(ctx, prompt, true, true);
+            embd_inp = common_tokenize(ctx, prompt, true, true);
         } else {
             LOG_DBG("use session tokens\n");
             embd_inp = session_tokens;
@@ -415,7 +415,7 @@ int main(int argc, char ** argv) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_INF("Reverse prompt: '%s'\n", antiprompt.c_str());
                 if (params.verbose_prompt) {
-                    auto tmp = ::common_tokenize(ctx, antiprompt, false, true);
+                    auto tmp = common_tokenize(ctx, antiprompt, false, true);
                     for (int i = 0; i < (int) tmp.size(); i++) {
                         LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx, tmp[i]).c_str());
                     }
@@ -430,7 +430,7 @@ int main(int argc, char ** argv) {
         if (!params.input_prefix.empty()) {
             LOG_INF("Input prefix: '%s'\n", params.input_prefix.c_str());
             if (params.verbose_prompt) {
-                auto tmp = ::common_tokenize(ctx, params.input_prefix, true, true);
+                auto tmp = common_tokenize(ctx, params.input_prefix, true, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
                     LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx, tmp[i]).c_str());
                 }
@@ -440,7 +440,7 @@ int main(int argc, char ** argv) {
         if (!params.input_suffix.empty()) {
             LOG_INF("Input suffix: '%s'\n", params.input_suffix.c_str());
             if (params.verbose_prompt) {
-                auto tmp = ::common_tokenize(ctx, params.input_suffix, false, true);
+                auto tmp = common_tokenize(ctx, params.input_suffix, false, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
                     LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx, tmp[i]).c_str());
                 }
@@ -788,7 +788,7 @@ int main(int argc, char ** argv) {
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = ::common_tokenize(ctx, params.antiprompt.front(), false, true);
+                        const auto first_antiprompt = common_tokenize(ctx, params.antiprompt.front(), false, true);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
@@ -862,9 +862,9 @@ int main(int argc, char ** argv) {
                         ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
                         : std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
-                    const auto line_pfx = ::common_tokenize(ctx, params.input_prefix, false, true);
-                    const auto line_inp = ::common_tokenize(ctx, user_inp,            false, format_chat);
-                    const auto line_sfx = ::common_tokenize(ctx, params.input_suffix, false, true);
+                    const auto line_pfx = common_tokenize(ctx, params.input_prefix, false, true);
+                    const auto line_inp = common_tokenize(ctx, user_inp,            false, format_chat);
+                    const auto line_sfx = common_tokenize(ctx, params.input_suffix, false, true);
 
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
 

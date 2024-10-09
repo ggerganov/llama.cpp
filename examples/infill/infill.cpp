@@ -202,8 +202,8 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
     std::vector<llama_token> embd_end;
-    std::vector<llama_token> inp_pfx = ::common_tokenize(ctx, params.input_prefix, false);
-    std::vector<llama_token> inp_sfx = ::common_tokenize(ctx, params.input_suffix, false);
+    std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
+    std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
     GGML_ASSERT(llama_token_prefix(model) >= 0);
     GGML_ASSERT(llama_token_suffix(model) >= 0);
@@ -505,8 +505,8 @@ int main(int argc, char ** argv) {
                 }
 
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = ::common_tokenize(ctx, params.input_prefix, false);
-                std::vector<llama_token> inp_sfx = ::common_tokenize(ctx, params.input_suffix, false);
+                std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
+                std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
                 inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
                 inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
@@ -579,7 +579,7 @@ int main(int argc, char ** argv) {
 
                     const size_t original_size = embd_inp.size();
 
-                    const auto line_inp = ::common_tokenize(ctx, buffer, false);
+                    const auto line_inp = common_tokenize(ctx, buffer, false);
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
 
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());

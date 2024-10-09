@@ -185,7 +185,7 @@ int main(int argc, char ** argv) {
 
     // tokenize the prompts and trim
     for (auto & chunk : chunks) {
-        auto inp = ::common_tokenize(ctx, chunk.textdata, true, false);
+        auto inp = common_tokenize(ctx, chunk.textdata, true, false);
         if (inp.size() > n_batch) {
             LOG_ERR("%s: chunk size (%lld) exceeds batch size (%lld), increase batch size and re-run\n",
                     __func__, (long long int) inp.size(), (long long int) n_batch);

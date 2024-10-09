@@ -31,7 +31,7 @@ int main(int argc, char ** argv){
 
     // tokenize the prompt
     std::vector<llama_token> inp;
-    inp = ::common_tokenize(ctx, params.prompt, true, true);
+    inp = common_tokenize(ctx, params.prompt, true, true);
     fprintf(stderr, "%s: tokenization done\n", __func__);
 
 
