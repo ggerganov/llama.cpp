@@ -27,6 +27,8 @@ let s:default_config = {
 let g:llama_config = get(g:, 'llama_config', s:default_config)
 
 function! llama#fim() abort
+    let l:t_start = reltime()
+
     let l:pos_x = col('.')
     let l:pos_y = line('.')
     let l:max_y = line('$')
@@ -149,9 +151,11 @@ function! llama#fim() abort
 
     " construct the info message:
     if l:has_timing
-        let l:info = printf("prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s)",
+        let l:info = printf("prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f ms",
             \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
-            \ l:n_gen, l:t_gen_ms, l:s_gen)
+            \ l:n_gen, l:t_gen_ms, l:s_gen,
+            \ 1000.0 * reltimefloat(reltime(l:t_start))
+            \ )
 
         call nvim_buf_set_extmark(l:bufnr, s:id_vt_info, l:pos_y - 1, l:pos_x - 1, {
             \ 'virt_text': [[l:info, 'llama_hl_info']],
