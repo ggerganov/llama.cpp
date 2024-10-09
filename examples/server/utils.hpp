@@ -309,7 +309,7 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
     const std::string str =
         std::string(event) + ": " +
         data.dump(-1, ' ', false, json::error_handler_t::replace) +
-        "\n\n"; // note: these newlines are important (not sure why though, if you know, add a comment to explain)
+        "\n\n"; // The server-sent events standard requires each event to end with 2 newlines.
 
     LOG_DBG("data stream, to_send: %s", str.c_str());
 
