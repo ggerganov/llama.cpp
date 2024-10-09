@@ -9,6 +9,11 @@
 #include <unordered_set>
 #include <vector>
 
+#if defined(LLAMA_USE_CURL)
+#include <curl/curl.h>
+#include <curl/easy.h>
+#endif
+
 using json = nlohmann::ordered_json;
 
 template <typename Iterator>
@@ -387,15 +392,21 @@ static std::string format_literal(const std::string & literal) {
     return "\"" + escaped + "\"";
 }
 
+static size_t json_schema_ref_curl_write_callback(char *ptr, size_t size, size_t nmemb, void *data) {
+    auto &response = *static_cast<std::ostringstream *>(data);
+    response.write((char *)ptr, size * nmemb);
+    return size * nmemb;
+}
+
 class SchemaConverter {
 private:
     std::function<json(const std::string &)> _fetch_json;
     bool _dotall;
     std::map<std::string, std::string> _rules;
-    std::unordered_map<std::string, json> _refs;
-    std::unordered_set<std::string> _refs_being_resolved;
     std::vector<std::string> _errors;
     std::vector<std::string> _warnings;
+    std::unordered_map<std::string, json> _external_refs;
+    std::vector<json> _ref_context;
 
     std::string _add_rule(const std::string & name, const std::string & rule) {
         std::string esc_name = regex_replace(name, INVALID_RULE_CHARS_RE, "-");
@@ -683,17 +694,6 @@ private:
         return out.str();
     }
 
-    std::string _resolve_ref(const std::string & ref) {
-        std::string ref_name = ref.substr(ref.find_last_of('/') + 1);
-        if (_rules.find(ref_name) == _rules.end() && _refs_being_resolved.find(ref) == _refs_being_resolved.end()) {
-            _refs_being_resolved.insert(ref);
-            json resolved = _refs[ref];
-            ref_name = visit(resolved, ref_name);
-            _refs_being_resolved.erase(ref);
-        }
-        return ref_name;
-    }
-
     std::string _build_object_rule(
         const std::vector<std::pair<std::string, json>> & properties,
         const std::unordered_set<std::string> & required,
@@ -807,77 +807,103 @@ private:
     }
 
 public:
-    SchemaConverter(
-        const std::function<json(const std::string &)> & fetch_json,
-        bool dotall)
-          : _fetch_json(fetch_json), _dotall(dotall)
+    SchemaConverter(bool dotall) : _dotall(dotall)
     {
         _rules["space"] = SPACE_RULE;
-    }
 
-    void resolve_refs(json & schema, const std::string & url) {
-        /*
-        * Resolves all $ref fields in the given schema, fetching any remote schemas,
-        * replacing each $ref with absolute reference URL and populates _refs with the
-        * respective referenced (sub)schema dictionaries.
-        */
-        std::function<void(json &)> visit_refs = [&](json & n) {
-            if (n.is_array()) {
-                for (auto & x : n) {
-                    visit_refs(x);
-                }
-            } else if (n.is_object()) {
-                if (n.contains("$ref")) {
-                    std::string ref = n["$ref"];
-                    if (_refs.find(ref) == _refs.end()) {
-                        json target;
-                        if (ref.find("https://") == 0) {
-                            std::string base_url = ref.substr(0, ref.find('#'));
-                            auto it = _refs.find(base_url);
-                            if (it != _refs.end()) {
-                                target = it->second;
-                            } else {
-                                // Fetch the referenced schema and resolve its refs
-                                auto referenced = _fetch_json(ref);
-                                resolve_refs(referenced, base_url);
-                                _refs[base_url] = referenced;
-                            }
-                            if (ref.find('#') == std::string::npos || ref.substr(ref.find('#') + 1).empty()) {
-                                return;
-                            }
-                        } else if (ref.find("#/") == 0) {
-                            target = schema;
-                            n["$ref"] = url + ref;
-                            ref = url + ref;
-                        } else {
-                            _errors.push_back("Unsupported ref: " + ref);
-                            return;
-                        }
-                        std::string pointer = ref.substr(ref.find('#') + 1);
-                        std::vector<std::string> tokens = split(pointer, "/");
-                        for (size_t i = 1; i < tokens.size(); ++i) {
-                            std::string sel = tokens[i];
-                            if (target.is_null() || !target.contains(sel)) {
-                                _errors.push_back("Error resolving ref " + ref + ": " + sel + " not in " + target.dump());
-                                return;
-                            }
-                            target = target[sel];
-                        }
-                        _refs[ref] = target;
-                    }
-                } else {
-                    for (auto & kv : n.items()) {
-                        visit_refs(kv.value());
-                    }
-                }
+#if defined(LLAMA_USE_CURL)
+        _fetch_json = [&](const std::string & url) {
+            // TODO: implement HTTP caching semantics.
+            static std::unordered_map<std::string, json> cache;
+            auto it = cache.find(url);
+            if (it != cache.end()) {
+                return it->second;
             }
-        };
+            std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
+            if (!curl) {
+                fprintf(stderr, "%s: error initializing libcurl\n", __func__);
+                return json::object();
+            }
 
-        visit_refs(schema);
+            std::ostringstream response;
+            curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+
+    #if defined(_WIN32)
+            // CURLSSLOPT_NATIVE_CA tells libcurl to use standard certificate store of
+            //   operating system. Currently implemented under MS-Windows.
+            curl_easy_setopt(curl.get(), CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+    #endif
+
+            curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L); // hide head request progress
+            curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, &json_schema_ref_curl_write_callback);
+            curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
+            CURLcode res = curl_easy_perform(curl.get());
+            if (res != CURLE_OK) {
+                throw std::runtime_error("Failed to fetch " + url + ": " + curl_easy_strerror(res));
+            }
+            response << '\0';
+            return cache[url] = json::parse(response.str());
+        };
+#else
+        _fetch_json = [&](const std::string &) {
+            _errors.push_back("Fetching external refs not supported, please recompile with CURL support.");
+            return json::object();
+        };
+#endif
     }
 
     std::string _generate_constant_rule(const json & value) {
         return format_literal(value.dump());
+    }
+
+    struct ResolvedRef {
+        json target;
+        std::string name;
+        bool is_local;
+    };
+
+    ResolvedRef _resolve_ref(const std::string & ref) {
+        auto parts = split(ref, "#");
+        if (parts.size() > 2) {
+            _errors.push_back("Unsupported ref: " + ref);
+            return {json(), "", false};
+        }
+        const auto & url = parts[0];
+        json target;
+        bool is_local = url.empty();
+        if (is_local) {
+            if (_ref_context.empty()) {
+                _errors.push_back("Error resolving ref " + ref + ": no context");
+                return {json(), "", false};
+            }
+            target = _ref_context.back();
+        } else {
+            auto it = _external_refs.find(url);
+            if (it != _external_refs.end()) {
+                target = it->second;
+            } else if (url.rfind("https://", 0) == 0) {
+                // Fetch the referenced schema and resolve its refs
+                target = _fetch_json(url);
+                _external_refs[url] = target;
+            } else {
+                _errors.push_back("Error resolving ref " + ref + ": unsupported url scheme");
+                return {json(), "", false};
+            }
+        }
+        if (parts.size() == 1) {
+            return {target, "", is_local};
+        }
+        auto tokens = split(parts[1], "/");
+        for (size_t i = 1; i < tokens.size(); ++i) {
+            const auto & sel = tokens[i];
+            if (target.is_null() || !target.contains(sel)) {
+                _errors.push_back("Error resolving ref " + ref + ": " + sel + " not in " + target.dump());
+                return {json(), "", false};
+            }
+            target = target[sel];
+        }
+        return {target, tokens.empty() ? "" : tokens[tokens.size() - 1], is_local};
     }
 
     std::string visit(const json & schema, const std::string & name) {
@@ -885,8 +911,27 @@ public:
         std::string schema_format = schema.contains("format") ? schema["format"].get<std::string>() : "";
         std::string rule_name = is_reserved_name(name) ? name + "-" : name.empty() ? "root" : name;
 
-        if (schema.contains("$ref")) {
-            return _add_rule(rule_name, _resolve_ref(schema["$ref"]));
+        if (_ref_context.empty()) {
+            _ref_context.push_back(schema);
+            auto ret = visit(schema, name);
+            _ref_context.pop_back();
+            return ret;
+        }
+
+        if (schema.contains("$ref") && schema["$ref"].is_string()) {
+            const auto & ref = schema["$ref"].get<std::string>();
+            auto resolved = _resolve_ref(ref);
+            if (resolved.target.is_null()) {
+                return "";
+            }
+            if (!resolved.is_local) {
+                _ref_context.push_back(resolved.target);
+            }
+            auto ret = visit(resolved.target, (name.empty() || resolved.name.empty()) ? name : resolved.name);
+            if (!resolved.is_local) {
+                _ref_context.pop_back();
+            }
+            return ret;
         } else if (schema.contains("oneOf") || schema.contains("anyOf")) {
             std::vector<json> alt_schemas = schema.contains("oneOf") ? schema["oneOf"].get<std::vector<json>>() : schema["anyOf"].get<std::vector<json>>();
             return _add_rule(rule_name, _generate_union_rule(name, alt_schemas));
@@ -906,55 +951,6 @@ public:
                 enum_values.push_back(_generate_constant_rule(v));
             }
             return _add_rule(rule_name, "(" + join(enum_values.begin(), enum_values.end(), " | ") + ") space");
-        } else if ((schema_type.is_null() || schema_type == "object")
-                && (schema.contains("properties") ||
-                    (schema.contains("additionalProperties") && schema["additionalProperties"] != true))) {
-            std::unordered_set<std::string> required;
-            if (schema.contains("required") && schema["required"].is_array()) {
-                for (const auto & item : schema["required"]) {
-                    if (item.is_string()) {
-                        required.insert(item.get<std::string>());
-                    }
-                }
-            }
-            std::vector<std::pair<std::string, json>> properties;
-            if (schema.contains("properties")) {
-                for (const auto & prop : schema["properties"].items()) {
-                    properties.emplace_back(prop.key(), prop.value());
-                }
-            }
-            return _add_rule(rule_name,
-                _build_object_rule(
-                    properties, required, name,
-                    schema.contains("additionalProperties") ? schema["additionalProperties"] : json()));
-        } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("allOf")) {
-            std::unordered_set<std::string> required;
-            std::vector<std::pair<std::string, json>> properties;
-            std::string hybrid_name = name;
-            std::function<void(const json &, bool)> add_component = [&](const json & comp_schema, bool is_required) {
-                if (comp_schema.contains("$ref")) {
-                    add_component(_refs[comp_schema["$ref"]], is_required);
-                } else if (comp_schema.contains("properties")) {
-                    for (const auto & prop : comp_schema["properties"].items()) {
-                        properties.emplace_back(prop.key(), prop.value());
-                        if (is_required) {
-                            required.insert(prop.key());
-                        }
-                    }
-                } else {
-                  // todo warning
-                }
-            };
-            for (auto & t : schema["allOf"]) {
-                if (t.contains("anyOf")) {
-                    for (auto & tt : t["anyOf"]) {
-                        add_component(tt, false);
-                    }
-                } else {
-                    add_component(t, true);
-                }
-            }
-            return _add_rule(rule_name, _build_object_rule(properties, required, hybrid_name, json()));
         } else if ((schema_type.is_null() || schema_type == "array") && (schema.contains("items") || schema.contains("prefixItems"))) {
             json items = schema.contains("items") ? schema["items"] : schema["prefixItems"];
             if (items.is_array()) {
@@ -1005,8 +1001,71 @@ public:
             _build_min_max_int(min_value, max_value, out);
             out << ") space";
             return _add_rule(rule_name, out.str());
-        } else if (schema.empty() || schema_type == "object") {
-            return _add_rule(rule_name, _add_primitive("object", PRIMITIVE_RULES.at("object")));
+        } else if ((schema_type.is_null() || schema_type == "object")) {
+            std::unordered_set<std::string> required;
+            std::vector<std::pair<std::string, json>> properties;
+            auto is_explicit_object = schema_type == "object";
+            json additional_properties;
+            if (schema.contains("additionalProperties")) {
+                is_explicit_object = true;
+                additional_properties = schema["additionalProperties"];
+            }
+            if (schema.contains("properties") && schema["properties"].is_object()) {
+                is_explicit_object = true;
+                for (const auto & prop : schema["properties"].items()) {
+                    if (prop.value().is_object()) {
+                        properties.emplace_back(prop.key(), prop.value());
+                    }
+                }
+            }
+            if (schema.contains("required") && schema["required"].is_array()) {
+                for (const auto & item : schema["required"]) {
+                    if (item.is_string()) {
+                        required.insert(item.get<std::string>());
+                    }
+                }
+            }
+            if (schema.contains("allOf") && schema["allOf"].is_array()) {
+                std::function<void(const json &, bool)> add_component = [&](const json & comp_schema, bool is_required) {
+                    if (comp_schema.contains("$ref") && comp_schema["$ref"].is_string()) {
+                        auto resolved = _resolve_ref(comp_schema["$ref"].get<std::string>());
+                        add_component(resolved.target, is_required);
+                    } else if (comp_schema.contains("properties")) {
+                        for (const auto & prop : comp_schema["properties"].items()) {
+                            properties.emplace_back(prop.key(), prop.value());
+                            if (is_required) {
+                                required.insert(prop.key());
+                            }
+                        }
+                        if (comp_schema.contains("additionalProperties")) {
+                            if (additional_properties.is_null()) {
+                                additional_properties = comp_schema["additionalProperties"];
+                            } else if (additional_properties != comp_schema["additionalProperties"]) {
+                                _warnings.push_back("Inconsistent additionalProperties in allOf");
+                            }
+                        }
+                    } else {
+                        _warnings.push_back("Unsupported allOf schema");
+                    }
+                };
+                for (auto & t : schema["allOf"]) {
+                    if (t.contains("anyOf")) {
+                        for (auto & tt : t["anyOf"]) {
+                            add_component(tt, false);
+                        }
+                    } else {
+                        add_component(t, true);
+                    }
+                }
+            }
+            if (properties.empty() && (additional_properties == true || additional_properties.is_null())) {
+                return _add_rule(rule_name, _add_primitive("object", PRIMITIVE_RULES.at("object")));
+            }
+            auto default_additional_properties = is_explicit_object ? json() : json(false);
+            return _add_rule(rule_name,
+                _build_object_rule(
+                    properties, required, name,
+                    additional_properties.is_null() ? default_additional_properties : additional_properties));
         } else {
             if (!schema_type.is_string() || PRIMITIVE_RULES.find(schema_type.get<std::string>()) == PRIMITIVE_RULES.end()) {
                 _errors.push_back("Unrecognized schema: " + schema.dump());
@@ -1036,9 +1095,8 @@ public:
 };
 
 std::string json_schema_to_grammar(const json & schema) {
-    SchemaConverter converter([](const std::string &) { return json::object(); }, /* dotall= */ false);
+    SchemaConverter converter(/* dotall= */ false);
     auto copy = schema;
-    converter.resolve_refs(copy, "input");
     converter.visit(copy, "");
     converter.check_errors();
     return converter.format_grammar();
