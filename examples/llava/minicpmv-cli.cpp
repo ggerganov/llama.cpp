@@ -29,7 +29,7 @@ static struct llama_model * llava_init(gpt_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(*params);
+    llama_model_params model_params = common_model_params_from_gpt_params(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -45,7 +45,7 @@ static struct llava_context * llava_init_context(gpt_params * params, llama_mode
         prompt = "describe the image in detail.";
     }
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
+    llama_context_params ctx_params = common_context_params_from_gpt_params(*params);
     if (params->n_ctx < 2048) {
         // warn user here, "Image processing requires at least 2048 context, setting context to 2048"
         LOG_WRN("%s: Image processing requires at least 2048 context, setting context to 2048\n" , __func__);
@@ -114,7 +114,7 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = ::common_tokenize(ctx_llama, str2, add_bos, true);
     return eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
 }
 
@@ -171,7 +171,7 @@ static const char * sample(struct gpt_sampler * smpl,
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past);
     return ret.c_str();

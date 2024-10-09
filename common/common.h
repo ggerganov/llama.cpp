@@ -24,12 +24,12 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
-struct llama_lora_adapter_info {
+struct common_lora_adapter_info {
     std::string path;
     float scale;
 };
 
-struct llama_lora_adapter_container : llama_lora_adapter_info {
+struct common_lora_adapter_container : common_lora_adapter_info {
     struct llama_lora_adapter * adapter;
 };
 
@@ -39,7 +39,7 @@ extern char const * LLAMA_COMMIT;
 extern char const * LLAMA_COMPILER;
 extern char const * LLAMA_BUILD_TARGET;
 
-struct llama_control_vector_load_info;
+struct common_control_vector_load_info;
 
 //
 // CPU utils
@@ -208,9 +208,9 @@ struct gpt_params {
     std::vector<llama_model_kv_override> kv_overrides;
 
     bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_lora_adapter_apply)
-    std::vector<llama_lora_adapter_info> lora_adapters; // lora adapter path with user defined scale
+    std::vector<common_lora_adapter_info> lora_adapters; // lora adapter path with user defined scale
 
-    std::vector<llama_control_vector_load_info> control_vectors; // control vector with user defined scale
+    std::vector<common_control_vector_load_info> control_vectors; // control vector with user defined scale
 
     int32_t verbosity                  = 0;
     int32_t control_vector_layer_start = -1; // layer range for control vector
@@ -404,29 +404,29 @@ std::string fs_get_cache_file(const std::string & filename);
 // Model utils
 //
 
-struct llama_init_result {
+struct common_init_result {
     struct llama_model   * model   = nullptr;
     struct llama_context * context = nullptr;
-    std::vector<llama_lora_adapter_container> lora_adapters;
+    std::vector<common_lora_adapter_container> lora_adapters;
 };
 
-struct llama_init_result    llama_init_from_gpt_params(gpt_params & params);
+struct common_init_result    llama_init_from_gpt_params(gpt_params & params);
 
-struct llama_model_params     llama_model_params_from_gpt_params    (const gpt_params & params);
-struct llama_context_params   llama_context_params_from_gpt_params  (const gpt_params & params);
+struct llama_model_params     common_model_params_from_gpt_params    (const gpt_params & params);
+struct llama_context_params   common_context_params_from_gpt_params  (const gpt_params & params);
 struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
-struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct llama_model * common_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct llama_model * common_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
 
 // clear LoRA adapters from context, then apply new list of adapters
-void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters);
+void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters);
 
 // Batch utils
 
-void llama_batch_clear(struct llama_batch & batch);
+void common_batch_clear(struct llama_batch & batch);
 
-void llama_batch_add(
+void common_batch_add(
                  struct llama_batch & batch,
                         llama_token   id,
                           llama_pos   pos,
@@ -439,13 +439,13 @@ void llama_batch_add(
 
 // tokenizes a string into a vector of tokens
 // should work similar to Python's `tokenizer.encode`
-std::vector<llama_token> llama_tokenize(
+std::vector<llama_token> common_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);
 
-std::vector<llama_token> llama_tokenize(
+std::vector<llama_token> common_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_special,
@@ -453,7 +453,7 @@ std::vector<llama_token> llama_tokenize(
 
 // tokenizes a token into a piece, optionally renders special/control tokens
 // should work similar to Python's `tokenizer.id_to_piece`
-std::string llama_token_to_piece(
+std::string common_token_to_piece(
         const struct llama_context * ctx,
                        llama_token   token,
                        bool          special = true);
@@ -461,7 +461,7 @@ std::string llama_token_to_piece(
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
 // optionally renders special/control tokens
-std::string llama_detokenize(
+std::string common_detokenize(
                          llama_context * ctx,
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
@@ -471,7 +471,7 @@ std::string llama_detokenize(
 //
 
 // same with llama_chat_message, but uses std::string
-struct llama_chat_msg {
+struct common_chat_msg {
     std::string role;
     std::string content;
 };
@@ -482,20 +482,20 @@ bool llama_chat_verify_template(const std::string & tmpl);
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
-std::string llama_chat_apply_template(const struct llama_model * model,
+std::string common_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
-        const std::vector<llama_chat_msg> & chat,
+        const std::vector<common_chat_msg> & chat,
         bool add_ass);
 
 // Format single message, while taking into account the position of that message in chat history
-std::string llama_chat_format_single(const struct llama_model * model,
+std::string common_chat_format_single(const struct llama_model * model,
         const std::string & tmpl,
-        const std::vector<llama_chat_msg> & past_msg,
-        const llama_chat_msg & new_msg,
+        const std::vector<common_chat_msg> & past_msg,
+        const common_chat_msg & new_msg,
         bool add_ass);
 
 // Returns an example of formatted chat
-std::string llama_chat_format_example(const struct llama_model * model,
+std::string common_chat_format_example(const struct llama_model * model,
         const std::string & tmpl);
 
 //
@@ -503,31 +503,31 @@ std::string llama_chat_format_example(const struct llama_model * model,
 //
 
 // Dump the KV cache view with the number of sequences per cell.
-void llama_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size = 80);
+void common_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size = 80);
 
 // Dump the KV cache view showing individual sequences in each cell (long output).
-void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
+void common_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
 
 //
 // Embedding utils
 //
 
-void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm = 2);
+void common_embd_normalize(const float * inp, float * out, int n, int embd_norm = 2);
 
-float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n);
+float common_embd_similarity_cos(const float * embd1, const float * embd2, int n);
 
 //
 // Control vector utils
 //
 
-struct llama_control_vector_data {
+struct common_control_vector_data {
     int n_embd;
 
     // stores data for layers [1, n_layer] where n_layer = data.size() / n_embd
     std::vector<float> data;
 };
 
-struct llama_control_vector_load_info {
+struct common_control_vector_load_info {
     float strength;
 
     std::string fname;
@@ -535,7 +535,7 @@ struct llama_control_vector_load_info {
 
 // Load control vectors, scale each by strength, and add them together.
 // On error, returns {-1, empty}
-llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos);
+common_control_vector_data llama_control_vector_load(const std::vector<common_control_vector_load_info> & load_infos);
 
 //
 // Split utils

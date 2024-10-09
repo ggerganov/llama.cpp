@@ -436,7 +436,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = ::common_tokenize(ctx, params.prompt, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
@@ -607,7 +607,7 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = llama_init_from_gpt_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;

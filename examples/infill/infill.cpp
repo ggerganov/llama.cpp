@@ -174,7 +174,7 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = llama_init_from_gpt_params(params);
 
     model = llama_init.model;
     ctx = llama_init.context;
@@ -202,8 +202,8 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
     std::vector<llama_token> embd_end;
-    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+    std::vector<llama_token> inp_pfx = ::common_tokenize(ctx, params.input_prefix, false);
+    std::vector<llama_token> inp_sfx = ::common_tokenize(ctx, params.input_suffix, false);
 
     GGML_ASSERT(llama_token_prefix(model) >= 0);
     GGML_ASSERT(llama_token_suffix(model) >= 0);
@@ -257,13 +257,13 @@ int main(int argc, char ** argv) {
         LOG_INF("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         LOG_INF("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            LOG_INF("%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
+            LOG_INF("%6d -> '%s'\n", embd_inp[i], common_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (params.n_keep > 0) {
         LOG_INF("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                LOG_CNT("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
+                LOG_CNT("%s", common_token_to_piece(ctx, embd_inp[i]).c_str());
             }
             LOG_CNT("'\n");
         }
@@ -446,7 +446,7 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo) {
             for (auto id : embd) {
-                const std::string token_str = llama_token_to_piece(ctx, id);
+                const std::string token_str = common_token_to_piece(ctx, id);
                 LOG("%s", token_str.c_str());
 
                 if (embd.size() > 1) {
@@ -468,7 +468,7 @@ int main(int argc, char ** argv) {
             if ((gpt_sampler_last(smpl) == llama_token_eot(model) || is_interacting) && params.interactive){
                 if (is_interacting && !params.interactive_first) {
                     // print an eot token
-                    LOG("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
+                    LOG("%s", common_token_to_piece(ctx, llama_token_eot(model)).c_str());
                 }
                 LOG("\n");
                 console::set_display(console::user_input);
@@ -505,8 +505,8 @@ int main(int argc, char ** argv) {
                 }
 
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+                std::vector<llama_token> inp_pfx = ::common_tokenize(ctx, params.input_prefix, false);
+                std::vector<llama_token> inp_sfx = ::common_tokenize(ctx, params.input_suffix, false);
 
                 inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
                 inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
@@ -579,7 +579,7 @@ int main(int argc, char ** argv) {
 
                     const size_t original_size = embd_inp.size();
 
-                    const auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    const auto line_inp = ::common_tokenize(ctx, buffer, false);
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
 
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
@@ -587,7 +587,7 @@ int main(int argc, char ** argv) {
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
                         const llama_token token = embd_inp[i];
                         output_tokens.push_back(token);
-                        output_ss << llama_token_to_piece(ctx, token);
+                        output_ss << common_token_to_piece(ctx, token);
                     }
 
                     n_remain -= line_inp.size();
@@ -620,7 +620,7 @@ int main(int argc, char ** argv) {
         }
     }
     if (!params.interactive && n_remain <= 0) {
-        LOG("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
+        LOG("%s", common_token_to_piece(ctx, llama_token_eot(model)).c_str());
     }
 
     LOG("\n");

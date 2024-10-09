@@ -358,7 +358,7 @@ std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, 
 
         GGML_ASSERT(id != LLAMA_TOKEN_NULL && "null token in the sampling history - should not happen");
 
-        result += llama_token_to_piece(ctx_main, id);
+        result += common_token_to_piece(ctx_main, id);
     }
 
     return result;

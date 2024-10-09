@@ -348,7 +348,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
 
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = ::common_tokenize(ctx, params.prompt, true);
 
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -500,7 +500,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = ::common_tokenize(ctx, params.prompt, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
@@ -844,7 +844,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         hs_cur.gold_ending_idx = std::stoi( prompt_lines[idx*6+1] );
         for (size_t j = 0; j < 4; j++) {
             hs_cur.ending[j] = prompt_lines[idx*6+2+j];
-            hs_cur.seq_tokens[j] = ::llama_tokenize(ctx, hs_cur.context + " " + hs_cur.ending[j], true);
+            hs_cur.seq_tokens[j] = ::common_tokenize(ctx, hs_cur.context + " " + hs_cur.ending[j], true);
         }
 
         // determine the common prefix of the endings
@@ -900,7 +900,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         size_t i1 = i0;
         size_t i_logits = 0; // this tells us how many logits were needed before this point in the batch
 
-        llama_batch_clear(batch);
+        common_batch_clear(batch);
 
         // batch as much tasks as possible into the available context
         // each task has 4 unique sequence ids - one for each ending
@@ -916,7 +916,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             }
 
             for (size_t i = 0; i < hs_cur.common_prefix; ++i) {
-                llama_batch_add(batch, hs_cur.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3 }, false);
+                common_batch_add(batch, hs_cur.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3 }, false);
             }
             batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
             n_logits += 1;
@@ -926,7 +926,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
                 // TODO: don't evaluate the last token of each sequence
                 for (size_t i = hs_cur.common_prefix; i < seq_tokens_size; ++i) {
                     const bool needs_logits = i < seq_tokens_size - 1;
-                    llama_batch_add(batch, hs_cur.seq_tokens[s][i], i, { s0 + s }, needs_logits);
+                    common_batch_add(batch, hs_cur.seq_tokens[s][i], i, { s0 + s }, needs_logits);
                     n_logits += needs_logits;
                 }
             }
@@ -1136,8 +1136,8 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     LOG_INF("%s : tokenizing selected tasks\n", __func__);
 
     for (auto & task : data) {
-        task.seq_tokens[0] = ::llama_tokenize(ctx, task.first + task.choices[0] + task.second, true);
-        task.seq_tokens[1] = ::llama_tokenize(ctx, task.first + task.choices[1] + task.second, true);
+        task.seq_tokens[0] = ::common_tokenize(ctx, task.first + task.choices[0] + task.second, true);
+        task.seq_tokens[1] = ::common_tokenize(ctx, task.first + task.choices[1] + task.second, true);
 
         task.common_prefix = 0;
         for (size_t k = 0; k < task.seq_tokens[0].size(); k++) {
@@ -1152,8 +1152,8 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             task.seq_tokens[0].size() - task.common_prefix +
             task.seq_tokens[1].size() - task.common_prefix;
 
-        task.n_base1 = ::llama_tokenize(ctx, task.first + task.choices[0], true).size();
-        task.n_base2 = ::llama_tokenize(ctx, task.first + task.choices[1], true).size();
+        task.n_base1 = ::common_tokenize(ctx, task.first + task.choices[0], true).size();
+        task.n_base2 = ::common_tokenize(ctx, task.first + task.choices[1], true).size();
     }
 
     LOG_INF("%s : calculating winogrande score over selected tasks.\n", __func__);
@@ -1184,7 +1184,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         size_t i1 = i0;
         size_t i_logits = 0;
 
-        llama_batch_clear(batch);
+        common_batch_clear(batch);
 
         while (n_cur + (int) data[i1].required_tokens <= n_ctx) {
             int n_logits = 0;
@@ -1194,7 +1194,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             }
 
             for (size_t i = 0; i < data[i1].common_prefix; ++i) {
-                llama_batch_add(batch, data[i1].seq_tokens[0][i], i, { s0 + 0, s0 + 1 }, false);
+                common_batch_add(batch, data[i1].seq_tokens[0][i], i, { s0 + 0, s0 + 1 }, false);
             }
             batch.logits[batch.n_tokens - 1] = true;
             n_logits += 1;
@@ -1202,7 +1202,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             for (int s = 0; s < 2; ++s) {
                 // TODO: end before the last token, no need to predict past the end of the sequences
                 for (size_t i = data[i1].common_prefix; i < data[i1].seq_tokens[s].size(); ++i) {
-                    llama_batch_add(batch, data[i1].seq_tokens[s][i], i, { s0 + s }, true);
+                    common_batch_add(batch, data[i1].seq_tokens[s][i], i, { s0 + s }, true);
                     n_logits += 1;
                 }
             }
@@ -1359,7 +1359,7 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choic
             }
             return false;
         }
-        task.seq_tokens.emplace_back(::llama_tokenize(ctx, task.question + " " + answer, true));
+        task.seq_tokens.emplace_back(::common_tokenize(ctx, task.question + " " + answer, true));
     }
     auto min_len = task.seq_tokens.front().size();
     for (auto& seq : task.seq_tokens) {
@@ -1536,7 +1536,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
         size_t i1 = i0;
         size_t i_logits = 0; // this tells us how many logits were needed before this point in the batch
 
-        llama_batch_clear(batch);
+        common_batch_clear(batch);
 
         // batch as much tasks as possible into the available context
         // each task has 4 unique sequence ids - one for each ending
@@ -1559,7 +1559,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
 
             for (size_t i = 0; i < cur_task.common_prefix; ++i) {
                 //llama_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
-                llama_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
+                common_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
             }
             batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
             n_logits += 1;
@@ -1569,7 +1569,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
                 // TODO: don't evaluate the last token of each sequence
                 for (size_t i = cur_task.common_prefix; i < seq_tokens_size; ++i) {
                     const bool needs_logits = i < seq_tokens_size - 1;
-                    llama_batch_add(batch, cur_task.seq_tokens[s][i], i, { s0 + s }, needs_logits);
+                    common_batch_add(batch, cur_task.seq_tokens[s][i], i, { s0 + s }, needs_logits);
                     n_logits += needs_logits;
                 }
             }
@@ -2004,7 +2004,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model and apply lora adapter, if any
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = llama_init_from_gpt_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;

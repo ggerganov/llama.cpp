@@ -23,7 +23,7 @@ int main(int argc, char ** argv){
     llama_numa_init(params.numa);
 
     // load the model
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = llama_init_from_gpt_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -31,7 +31,7 @@ int main(int argc, char ** argv){
 
     // tokenize the prompt
     std::vector<llama_token> inp;
-    inp = ::llama_tokenize(ctx, params.prompt, true, true);
+    inp = ::common_tokenize(ctx, params.prompt, true, true);
     fprintf(stderr, "%s: tokenization done\n", __func__);
 
 

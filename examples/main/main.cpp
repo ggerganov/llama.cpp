@@ -127,9 +127,9 @@ static void sigint_handler(int signo) {
 }
 #endif
 
-static std::string chat_add_and_format(struct llama_model * model, std::vector<llama_chat_msg> & chat_msgs, const std::string & role, const std::string & content) {
-    llama_chat_msg new_msg{role, content};
-    auto formatted = llama_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
+static std::string chat_add_and_format(struct llama_model * model, std::vector<common_chat_msg> & chat_msgs, const std::string & role, const std::string & content) {
+    common_chat_msg new_msg{role, content};
+    auto formatted = common_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
     LOG_DBG("formatted: '%s'\n", formatted.c_str());
     return formatted;
@@ -189,7 +189,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx = nullptr;
     gpt_sampler * smpl = nullptr;
 
-    std::vector<llama_chat_msg> chat_msgs;
+    std::vector<common_chat_msg> chat_msgs;
 
     g_model = &model;
     g_ctx = &ctx;
@@ -197,7 +197,7 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = llama_init_from_gpt_params(params);
 
     model = llama_init.model;
     ctx = llama_init.context;
@@ -246,7 +246,7 @@ int main(int argc, char ** argv) {
     // print chat template example in conversation mode
     if (params.conversation) {
         if (params.enable_chat_template) {
-            LOG_INF("%s: chat template example:\n%s\n", __func__, llama_chat_format_example(model, params.chat_template).c_str());
+            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(model, params.chat_template).c_str());
         } else {
             LOG_INF("%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
         }
@@ -296,7 +296,7 @@ int main(int argc, char ** argv) {
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_DBG("tokenize the prompt\n");
-            embd_inp = ::llama_tokenize(ctx, prompt, true, true);
+            embd_inp = ::common_tokenize(ctx, prompt, true, true);
         } else {
             LOG_DBG("use session tokens\n");
             embd_inp = session_tokens;
@@ -379,13 +379,13 @@ int main(int argc, char ** argv) {
         LOG_INF("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         LOG_INF("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            LOG_INF("%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
+            LOG_INF("%6d -> '%s'\n", embd_inp[i], common_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (params.n_keep > add_bos) {
             LOG_INF("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                LOG_CNT("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
+                LOG_CNT("%s", common_token_to_piece(ctx, embd_inp[i]).c_str());
             }
             LOG_CNT("'\n");
         }
@@ -415,9 +415,9 @@ int main(int argc, char ** argv) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_INF("Reverse prompt: '%s'\n", antiprompt.c_str());
                 if (params.verbose_prompt) {
-                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
+                    auto tmp = ::common_tokenize(ctx, antiprompt, false, true);
                     for (int i = 0; i < (int) tmp.size(); i++) {
-                        LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                        LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx, tmp[i]).c_str());
                     }
                 }
             }
@@ -430,9 +430,9 @@ int main(int argc, char ** argv) {
         if (!params.input_prefix.empty()) {
             LOG_INF("Input prefix: '%s'\n", params.input_prefix.c_str());
             if (params.verbose_prompt) {
-                auto tmp = ::llama_tokenize(ctx, params.input_prefix, true, true);
+                auto tmp = ::common_tokenize(ctx, params.input_prefix, true, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
-                    LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                    LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx, tmp[i]).c_str());
                 }
             }
         }
@@ -440,9 +440,9 @@ int main(int argc, char ** argv) {
         if (!params.input_suffix.empty()) {
             LOG_INF("Input suffix: '%s'\n", params.input_suffix.c_str());
             if (params.verbose_prompt) {
-                auto tmp = ::llama_tokenize(ctx, params.input_suffix, false, true);
+                auto tmp = ::common_tokenize(ctx, params.input_suffix, false, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
-                    LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                    LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx, tmp[i]).c_str());
                 }
             }
         }
@@ -521,7 +521,7 @@ int main(int argc, char ** argv) {
 
     antiprompt_ids.reserve(params.antiprompt.size());
     for (const std::string & antiprompt : params.antiprompt) {
-        antiprompt_ids.emplace_back(::llama_tokenize(ctx, antiprompt, false, true));
+        antiprompt_ids.emplace_back(::common_tokenize(ctx, antiprompt, false, true));
     }
 
     if (llama_model_has_encoder(model)) {
@@ -714,7 +714,7 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo && display) {
             for (auto id : embd) {
-                const std::string token_str = llama_token_to_piece(ctx, id, params.special);
+                const std::string token_str = common_token_to_piece(ctx, id, params.special);
 
                 // Console/Stream Output
                 LOG("%s", token_str.c_str());
@@ -788,7 +788,7 @@ int main(int argc, char ** argv) {
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false, true);
+                        const auto first_antiprompt = ::common_tokenize(ctx, params.antiprompt.front(), false, true);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
@@ -804,7 +804,7 @@ int main(int argc, char ** argv) {
             // if current token is not EOG, we add it to current assistant message
             if (params.conversation) {
                 const auto id = gpt_sampler_last(smpl);
-                assistant_ss << llama_token_to_piece(ctx, id, false);
+                assistant_ss << common_token_to_piece(ctx, id, false);
             }
 
             if (n_past > 0 && is_interacting) {
@@ -862,9 +862,9 @@ int main(int argc, char ** argv) {
                         ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
                         : std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
-                    const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
-                    const auto line_inp = ::llama_tokenize(ctx, user_inp,            false, format_chat);
-                    const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true);
+                    const auto line_pfx = ::common_tokenize(ctx, params.input_prefix, false, true);
+                    const auto line_inp = ::common_tokenize(ctx, user_inp,            false, format_chat);
+                    const auto line_sfx = ::common_tokenize(ctx, params.input_suffix, false, true);
 
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
 
@@ -882,7 +882,7 @@ int main(int argc, char ** argv) {
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
                         const llama_token token = embd_inp[i];
                         output_tokens.push_back(token);
-                        output_ss << llama_token_to_piece(ctx, token);
+                        output_ss << common_token_to_piece(ctx, token);
                     }
 
                     // reset assistant message
