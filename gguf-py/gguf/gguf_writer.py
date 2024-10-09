@@ -236,6 +236,8 @@ class GGUFWriter:
             kv_bytes = bytearray()
 
             for key, val in kv_data.items():
+                if key == "general.license" and isinstance(val.value, list):
+                    val.value = ",".join(val.value)
                 kv_bytes += self._pack_val(key, GGUFValueType.STRING, add_vtype=False)
                 kv_bytes += self._pack_val(val.value, val.type, add_vtype=True)
 
