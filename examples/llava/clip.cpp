@@ -1466,7 +1466,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
         else {
             std::string proj_type = PROJECTOR_TYPE_NAMES[new_clip->proj_type];
-            throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
+            LOG_TEE("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str());
+            clip_free(new_clip);
+            gguf_free(ctx);
+            return nullptr;
         }
 
         vision_model.layers.resize(hparams.n_layer);
@@ -2462,6 +2465,10 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     type = static_cast<ggml_type>(itype);
 
     auto * ctx_clip = clip_model_load(fname_inp, 2);
+    if (!ctx_clip) {
+        LOG_TEE("Failed to load model from file %s", fname_inp);
+        return false;
+    }
 
     const auto & ctx_src = ctx_clip->ctx_gguf;
     const auto & ctx_data = ctx_clip->ctx_data;
@@ -2611,7 +2618,8 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     }
 
     std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
-    throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
+    LOG_TEE("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str());
+    return 0;
 }
 
 int clip_is_minicpmv(const struct clip_ctx * ctx) {
