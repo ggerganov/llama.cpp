@@ -74,7 +74,7 @@ function! llama#fim() abort
         \ )
 
     let l:can_accept = v:true
-    let l:has_timing = v:false
+    let l:has_info   = v:false
 
     let l:n_prompt    = 0
     let l:t_prompt_ms = 1.0
@@ -112,8 +112,8 @@ function! llama#fim() abort
 
         " if response.timings
         if len(get(l:response, 'timings', {})) > 0
-            let l:has_timing = v:true
-            let l:timings = get(l:response, 'timings', {})
+            let l:has_info = v:true
+            let l:timings  = get(l:response, 'timings', {})
 
             let l:n_prompt    = get(l:timings, 'prompt_n', 0)
             let l:t_prompt_ms = get(l:timings, 'prompt_ms', 1)
@@ -133,11 +133,31 @@ function! llama#fim() abort
     let s:pos_dx = len(s:content[-1])
     let s:content[-1] .= l:line_cur_suffix
 
+    call llama#cancel_vt_fim()
+
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
 
     let s:id_vt_fim  = nvim_create_namespace('vt_fim')
     let s:id_vt_info = nvim_create_namespace('vt_info')
+
+    " construct the info message:
+    if l:has_info
+        " prefix the info string with whitespace in order to offset it to the right of the fim overlay
+        let l:prefix = repeat(' ', len(s:content[0]) - len(l:line_cur_suffix) + 3)
+
+        let l:info = printf("%s // prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f ms",
+            \ l:prefix,
+            \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
+            \ l:n_gen, l:t_gen_ms, l:s_gen,
+            \ 1000.0 * reltimefloat(reltime(l:t_start))
+            \ )
+
+        call nvim_buf_set_extmark(l:bufnr, s:id_vt_info, l:pos_y - 1, l:pos_x - 1, {
+            \ 'virt_text': [[l:info, 'llama_hl_info']],
+            \ 'virt_text_pos': 'eol',
+            \ })
+    endif
 
     call nvim_buf_set_extmark(l:bufnr, s:id_vt_fim, l:pos_y - 1, l:pos_x - 1, {
         \ 'virt_text': [[s:content[0], 'llama_hl_hint']],
@@ -149,21 +169,9 @@ function! llama#fim() abort
         \ 'virt_text_win_col': virtcol('.')
         \ })
 
-    " construct the info message:
-    if l:has_timing
-        let l:info = printf("prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f ms",
-            \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
-            \ l:n_gen, l:t_gen_ms, l:s_gen,
-            \ 1000.0 * reltimefloat(reltime(l:t_start))
-            \ )
-
-        call nvim_buf_set_extmark(l:bufnr, s:id_vt_info, l:pos_y - 1, l:pos_x - 1, {
-            \ 'virt_text': [[l:info, 'llama_hl_info']],
-            \ 'virt_text_pos': 'right_align',
-            \ })
-    endif
-
     " accept suggestion with Tab and reject it with any other key
+    let s:mapping_on = v:true
+
     if l:can_accept
         inoremap <buffer> <Tab> <C-O>:call llama#accept_vt_fim()<CR>
     else
@@ -216,30 +224,37 @@ function! llama#cancel_vt_fim()
     " clear the virtual text
     let l:bufnr = bufnr('%')
 
+    let s:id_vt_fim  = nvim_create_namespace('vt_fim')
+    let s:id_vt_info = nvim_create_namespace('vt_info')
+
     call nvim_buf_clear_namespace(l:bufnr, s:id_vt_fim,  0, -1)
     call nvim_buf_clear_namespace(l:bufnr, s:id_vt_info, 0, -1)
 
-    " remove the mappings
-    iunmap <buffer> <Tab>
+    " remove the key mappings
+    if exists('s:mapping_on') && s:mapping_on
+        iunmap <buffer> <Tab>
 
-    for l:key in range(32, 127) + [8, 27]
-        if l:key != 0x7C
-            if l:key == 8
-                execute 'iunmap <buffer> <Bs>'
-            elseif l:key == 27
-                execute 'iunmap <buffer> <Esc>'
-            elseif l:key == 32
-                execute 'iunmap <buffer> <Space>'
-            elseif l:key == 127
-                execute 'iunmap <buffer> <Del>'
-            else
-                execute 'iunmap <buffer> ' . nr2char(l:key)
+        for l:key in range(32, 127) + [8, 27]
+            if l:key != 0x7C
+                if l:key == 8
+                    execute 'iunmap <buffer> <Bs>'
+                elseif l:key == 27
+                    execute 'iunmap <buffer> <Esc>'
+                elseif l:key == 32
+                    execute 'iunmap <buffer> <Space>'
+                elseif l:key == 127
+                    execute 'iunmap <buffer> <Del>'
+                else
+                    execute 'iunmap <buffer> ' . nr2char(l:key)
+                endif
             endif
-        endif
-    endfor
+        endfor
 
-    iunmap <buffer> <Up>
-    iunmap <buffer> <Down>
-    iunmap <buffer> <Left>
-    iunmap <buffer> <Right>
+        iunmap <buffer> <Up>
+        iunmap <buffer> <Down>
+        iunmap <buffer> <Left>
+        iunmap <buffer> <Right>
+
+        let s:mapping_on = v:false
+    endif
 endfunction
