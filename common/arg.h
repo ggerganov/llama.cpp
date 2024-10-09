@@ -10,7 +10,7 @@
 // CLI argument parsing
 //
 
-struct llama_arg {
+struct common_arg {
     std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
     std::vector<const char *> args;
     const char * value_hint   = nullptr; // help text or example for arg value
@@ -23,28 +23,28 @@ struct llama_arg {
     void (*handler_str_str)(gpt_params & params, const std::string &, const std::string &) = nullptr;
     void (*handler_int)    (gpt_params & params, int) = nullptr;
 
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const char * value_hint,
         const std::string & help,
         void (*handler)(gpt_params & params, const std::string &)
     ) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
 
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const char * value_hint,
         const std::string & help,
         void (*handler)(gpt_params & params, int)
     ) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
 
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const std::string & help,
         void (*handler)(gpt_params & params)
     ) : args(args), help(help), handler_void(handler) {}
 
     // support 2 values for arg
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const char * value_hint,
         const char * value_hint_2,
@@ -52,9 +52,9 @@ struct llama_arg {
         void (*handler)(gpt_params & params, const std::string &, const std::string &)
     ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
 
-    llama_arg & set_examples(std::initializer_list<enum llama_example> examples);
-    llama_arg & set_env(const char * env);
-    llama_arg & set_sparam();
+    common_arg & set_examples(std::initializer_list<enum llama_example> examples);
+    common_arg & set_env(const char * env);
+    common_arg & set_sparam();
     bool in_example(enum llama_example ex);
     bool get_value_from_env(std::string & output);
     bool has_value_from_env();
@@ -64,7 +64,7 @@ struct llama_arg {
 struct gpt_params_context {
     enum llama_example ex = LLAMA_EXAMPLE_COMMON;
     gpt_params & params;
-    std::vector<llama_arg> options;
+    std::vector<common_arg> options;
     void(*print_usage)(int, char **) = nullptr;
     gpt_params_context(gpt_params & params) : params(params) {}
 };
