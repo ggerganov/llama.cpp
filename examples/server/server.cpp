@@ -2102,7 +2102,7 @@ struct server_context {
 
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
-
+                                
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
                                     gpt_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
