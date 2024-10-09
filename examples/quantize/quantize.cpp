@@ -24,22 +24,30 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "IQ2_XS",   LLAMA_FTYPE_MOSTLY_IQ2_XS,   " 2.31 bpw quantization",            },
     { "IQ2_S",    LLAMA_FTYPE_MOSTLY_IQ2_S,    " 2.5  bpw quantization",            },
     { "IQ2_M",    LLAMA_FTYPE_MOSTLY_IQ2_M,    " 2.7  bpw quantization",            },
+    { "IQ2_XL",   LLAMA_FTYPE_MOSTLY_IQ2_XL,   " 2.85 bpw quantization mix",        },
+    { "IQ1_XS",   LLAMA_FTYPE_MOSTLY_IQ1_XS,   " 1.6-1.7 bpw quantization mix",     },
     { "IQ1_S",    LLAMA_FTYPE_MOSTLY_IQ1_S,    " 1.56 bpw quantization",            },
     { "IQ1_M",    LLAMA_FTYPE_MOSTLY_IQ1_M,    " 1.75 bpw quantization",            },
+    { "IQ1_XL",   LLAMA_FTYPE_MOSTLY_IQ1_XL,   " 1.90 bpw quantization",            },
     { "TQ1_0",    LLAMA_FTYPE_MOSTLY_TQ1_0,    " 1.69 bpw ternarization",           },
     { "TQ2_0",    LLAMA_FTYPE_MOSTLY_TQ2_0,    " 2.06 bpw ternarization",           },
     { "Q2_K",     LLAMA_FTYPE_MOSTLY_Q2_K,     " 2.96G, +3.5199 ppl @ Llama-3-8B",  },
     { "Q2_K_S",   LLAMA_FTYPE_MOSTLY_Q2_K_S,   " 2.96G, +3.1836 ppl @ Llama-3-8B",  },
+    { "Q2_K_L",   LLAMA_FTYPE_MOSTLY_Q2_K_L,   " 3.20G, +3.1836 ppl @ Llama-3-8B",  },
     { "IQ3_XXS",  LLAMA_FTYPE_MOSTLY_IQ3_XXS,  " 3.06 bpw quantization",            },
     { "IQ3_S",    LLAMA_FTYPE_MOSTLY_IQ3_S,    " 3.44 bpw quantization",            },
-    { "IQ3_M",    LLAMA_FTYPE_MOSTLY_IQ3_M,    " 3.66 bpw quantization mix",        },
+    { "IQ3_M",    LLAMA_FTYPE_MOSTLY_IQ3_M,    " 3.70 bpw quantization mix",        },
+    { "IQ3_XL",   LLAMA_FTYPE_MOSTLY_IQ3_XL,   " 3.90 bpw quantization mix",        },
+    { "IQ3_XXL",  LLAMA_FTYPE_MOSTLY_IQ3_XXL,  " 4.10 bpw quantization mix",        },
     { "Q3_K",     LLAMA_FTYPE_MOSTLY_Q3_K_M,   "alias for Q3_K_M"                   },
     { "IQ3_XS",   LLAMA_FTYPE_MOSTLY_IQ3_XS,   " 3.3 bpw quantization",             },
     { "Q3_K_S",   LLAMA_FTYPE_MOSTLY_Q3_K_S,   " 3.41G, +1.6321 ppl @ Llama-3-8B",  },
     { "Q3_K_M",   LLAMA_FTYPE_MOSTLY_Q3_K_M,   " 3.74G, +0.6569 ppl @ Llama-3-8B",  },
-    { "Q3_K_L",   LLAMA_FTYPE_MOSTLY_Q3_K_L,   " 4.03G, +0.5562 ppl @ Llama-3-8B",  },
+    { "Q3_K_L",   LLAMA_FTYPE_MOSTLY_Q3_K_L,   " 4.10 bpw quantization mix",        },
+    { "Q3_K_XL",  LLAMA_FTYPE_MOSTLY_Q3_K_XL,  " 4.03G, +0.5562 ppl @ Llama-3-8B",  },
     { "IQ4_NL",   LLAMA_FTYPE_MOSTLY_IQ4_NL,   " 4.50 bpw non-linear quantization", },
     { "IQ4_XS",   LLAMA_FTYPE_MOSTLY_IQ4_XS,   " 4.25 bpw non-linear quantization", },
+    { "IQ4_XSR",  LLAMA_FTYPE_MOSTLY_IQ4_XSR,  " 4.xx bpw non-linear quantization", },
     { "Q4_K",     LLAMA_FTYPE_MOSTLY_Q4_K_M,   "alias for Q4_K_M",                  },
     { "Q4_K_S",   LLAMA_FTYPE_MOSTLY_Q4_K_S,   " 4.37G, +0.2689 ppl @ Llama-3-8B",  },
     { "Q4_K_M",   LLAMA_FTYPE_MOSTLY_Q4_K_M,   " 4.58G, +0.1754 ppl @ Llama-3-8B",  },
@@ -422,13 +430,13 @@ int main(int argc, char ** argv) {
     }
 
     if ((params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS ||
-         params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  ||
-         params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S ||
+         params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_M   ||
+         params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K    ||
          params.ftype == LLAMA_FTYPE_MOSTLY_IQ1_S  ||
          params.ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) && imatrix_data.empty()) {
-        fprintf(stderr, "\n==========================================================================================================\n");
-        fprintf(stderr, "Please do not use IQ1_S, IQ1_M, IQ2_S, IQ2_XXS, IQ2_XS or Q2_K_S quantization without an importance matrix\n");
-        fprintf(stderr, "==========================================================================================================\n\n\n");
+        fprintf(stderr, "\n==========================================================================================\n");
+        fprintf(stderr, "Please do not use IQ1_*, IQ2_*, Q2_K_S, or Q2_K quantization without an importance matrix!\n");
+        fprintf(stderr, "==========================================================================================\n\n\n");
         return 1;
     }
 
