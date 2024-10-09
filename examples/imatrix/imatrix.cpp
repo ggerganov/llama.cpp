@@ -43,7 +43,7 @@ public:
     bool load_imatrix(const char * file_name);
 private:
     std::unordered_map<std::string, Stats> m_stats;
-    common_params                             m_params;
+    common_params                          m_params;
     std::mutex                             m_mutex;
     int                                    m_last_call = 0;
     std::vector<float>                     m_src1_data;

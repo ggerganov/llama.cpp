@@ -35,8 +35,8 @@
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
-static common_sampler             ** g_smpl;
-static common_params               * g_params;
+static common_sampler          ** g_smpl;
+static common_params            * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
@@ -166,7 +166,7 @@ int main(int argc, char ** argv) {
 
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
-    common_sampler  * smpl = nullptr;
+    common_sampler * smpl = nullptr;
 
     g_model = &model;
     g_ctx = &ctx;
