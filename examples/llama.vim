@@ -127,14 +127,16 @@ function! llama#fim() abort
         inoremap <buffer> <Tab> <C-O>:call llama#cancel_virtual_text()<CR>
     endif
 
-    for l:key in range(33, 127) + [8, 27]
+    for l:key in range(32, 127) + [8, 27]
         if l:key != 0x7C
             if l:key == 8
-                execute 'inoremap <buffer> <Bs>  <C-O>:call llama#cancel_virtual_text()<CR><Bs>'
+                execute 'inoremap <buffer> <Bs>    <C-O>:call llama#cancel_virtual_text()<CR><Bs>'
             elseif l:key == 27
-                execute 'inoremap <buffer> <Esc> <C-O>:call llama#cancel_virtual_text()<CR><Esc>'
+                execute 'inoremap <buffer> <Esc>   <C-O>:call llama#cancel_virtual_text()<CR><Esc>'
+            elseif l:key == 32
+                execute 'inoremap <buffer> <Space> <C-O>:call llama#cancel_virtual_text()<CR><Space>'
             elseif l:key == 127
-                execute 'inoremap <buffer> <Del> <C-O>:call llama#cancel_virtual_text()<CR><Del>'
+                execute 'inoremap <buffer> <Del>   <C-O>:call llama#cancel_virtual_text()<CR><Del>'
             else
                 execute 'inoremap <buffer> ' . nr2char(l:key) . ' <C-O>:call llama#cancel_virtual_text()<CR>' . nr2char(l:key)
             endif
@@ -153,11 +155,7 @@ function! llama#accept_virtual_text()
 
     let l:line_cur = getline('.')
 
-    let l:pos0 = l:pos_x - 2
-
-    if l:pos_x == len(l:line_cur)
-        let l:pos0 = l:pos_x - 1
-    endif
+    let l:pos0 = l:pos_x == len(l:line_cur) ? l:pos_x - 1 : l:pos_x - 2
 
     " insert the suggestion at the cursor location
     call setline(l:pos_y, l:line_cur[:l:pos0] . s:content[0])
@@ -179,12 +177,14 @@ function! llama#cancel_virtual_text()
     " remove the mappings
     iunmap <buffer> <Tab>
 
-    for l:key in range(33, 127) + [8, 27]
+    for l:key in range(32, 127) + [8, 27]
         if l:key != 0x7C
             if l:key == 8
                 execute 'iunmap <buffer> <Bs>'
             elseif l:key == 27
                 execute 'iunmap <buffer> <Esc>'
+            elseif l:key == 32
+                execute 'iunmap <buffer> <Space>'
             elseif l:key == 127
                 execute 'iunmap <buffer> <Del>'
             else
