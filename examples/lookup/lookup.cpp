@@ -13,13 +13,13 @@
 #include <vector>
 
 int main(int argc, char ** argv){
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     // max. number of additional tokens to draft if match is found
     const int n_draft = params.n_draft;
@@ -31,7 +31,7 @@ int main(int argc, char ** argv){
     llama_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -102,7 +102,7 @@ int main(int argc, char ** argv){
 
     bool has_eos = false;
 
-    struct gpt_sampler * smpl = gpt_sampler_init(model, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model, params.sparams);
 
     std::vector<llama_token> draft;
 
@@ -126,9 +126,9 @@ int main(int argc, char ** argv){
         int i_dft = 0;
         while (true) {
             // sample from the target model
-            llama_token id = gpt_sampler_sample(smpl, ctx, i_dft);
+            llama_token id = common_sampler_sample(smpl, ctx, i_dft);
 
-            gpt_sampler_accept(smpl, id, true);
+            common_sampler_accept(smpl, id, true);
 
             const std::string token_str = common_token_to_piece(ctx, id);
 
@@ -237,9 +237,9 @@ int main(int argc, char ** argv){
     LOG_INF("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
     LOG_INF("\ntarget:\n\n");
-    gpt_perf_print(ctx, smpl);
+    common_perf_print(ctx, smpl);
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
 
     llama_batch_free(batch_tgt);
 

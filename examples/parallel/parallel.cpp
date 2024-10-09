@@ -54,7 +54,7 @@ static std::vector<std::string> k_prompts = {
 struct client {
     ~client() {
         if (smpl) {
-            gpt_sampler_free(smpl);
+            common_sampler_free(smpl);
         }
     }
 
@@ -75,7 +75,7 @@ struct client {
     std::string prompt;
     std::string response;
 
-    struct gpt_sampler * smpl = nullptr;
+    struct common_sampler * smpl = nullptr;
 };
 
 static void print_date_time() {
@@ -103,13 +103,13 @@ static std::vector<std::string> split_string(const std::string& input, char deli
 int main(int argc, char ** argv) {
     srand(1234);
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PARALLEL)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PARALLEL)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     // number of simultaneous "clients" to simulate
     const int32_t n_clients = params.n_parallel;
@@ -130,7 +130,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the target model
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -160,7 +160,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.smpl = gpt_sampler_init(model, params.sparams);
+        client.smpl = common_sampler_init(model, params.sparams);
     }
 
     std::vector<llama_token> tokens_system;
@@ -252,7 +252,7 @@ int main(int argc, char ** argv) {
                     client.prompt   = client.input + "\nAssistant:";
                     client.response = "";
 
-                    gpt_sampler_reset(client.smpl);
+                    common_sampler_reset(client.smpl);
 
                     // do not prepend BOS because we have a system prompt!
                     std::vector<llama_token> tokens_prompt;
@@ -340,9 +340,9 @@ int main(int argc, char ** argv) {
                 //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
-                const llama_token id = gpt_sampler_sample(client.smpl, ctx, client.i_batch - i);
+                const llama_token id = common_sampler_sample(client.smpl, ctx, client.i_batch - i);
 
-                gpt_sampler_accept(client.smpl, id, true);
+                common_sampler_accept(client.smpl, id, true);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients

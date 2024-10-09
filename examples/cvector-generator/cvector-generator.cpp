@@ -370,7 +370,7 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
  * Load prompt files and completion file.
  * Then format each pair of prompt + completion to make an entry.
  */
-static int prepare_entries(gpt_params & params, train_context & ctx_train) {
+static int prepare_entries(common_params & params, train_context & ctx_train) {
     // load prompts
     std::vector<std::string> positive_prompts = ctrlvec_load_prompt_file(params.cvector_positive_file, true);
     std::vector<std::string> negative_prompts = ctrlvec_load_prompt_file(params.cvector_negative_file, true);
@@ -388,9 +388,9 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
         return 1;
     }
 
@@ -413,7 +413,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model to get hparams
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;

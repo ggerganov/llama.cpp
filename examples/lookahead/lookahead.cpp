@@ -37,13 +37,13 @@ struct ngram_container {
 };
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     const int W = 15; // lookahead window
     const int N = 5;  // n-gram size
@@ -56,7 +56,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the target model
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -115,7 +115,7 @@ int main(int argc, char ** argv) {
     llama_batch batch = llama_batch_init(params.n_ctx, 0, W + G + 1);
 
     // target model sampling context
-    struct gpt_sampler * smpl = gpt_sampler_init(model, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model, params.sparams);
 
     // verification n-grams
     std::vector<ngram_data> ngrams_cur(G);
@@ -156,9 +156,9 @@ int main(int argc, char ** argv) {
 
     // sample first token
     {
-        id = gpt_sampler_sample(smpl, ctx, 0);
+        id = common_sampler_sample(smpl, ctx, 0);
 
-        gpt_sampler_accept(smpl, id, true);
+        common_sampler_accept(smpl, id, true);
 
         {
             const std::string token_str = common_token_to_piece(ctx, id);
@@ -281,9 +281,9 @@ int main(int argc, char ** argv) {
             }
 
             // sample the next token
-            id = gpt_sampler_sample(smpl, ctx, i_batch);
+            id = common_sampler_sample(smpl, ctx, i_batch);
 
-            gpt_sampler_accept(smpl, id, true);
+            common_sampler_accept(smpl, id, true);
 
             // print
             {
@@ -358,7 +358,7 @@ int main(int argc, char ** argv) {
                 if (v == 0) {
                     // sample from the last level
                     for (int i = 0; i < W; i++) {
-                        tokens_j[N - 2][i] = gpt_sampler_sample(smpl, ctx, ngrams_cur.size()*(N-1) + W*(N - 2) + i);
+                        tokens_j[N - 2][i] = common_sampler_sample(smpl, ctx, ngrams_cur.size()*(N-1) + W*(N - 2) + i);
                     }
                 } else {
                     for (int i = 0; i < W; i++) {
@@ -466,9 +466,9 @@ int main(int argc, char ** argv) {
     LOG_INF("n_accept  = %d\n", n_accept);
 
     LOG_INF("\n");
-    gpt_perf_print(ctx, smpl);
+    common_perf_print(ctx, smpl);
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
 
     llama_kv_cache_view_free(&kvc_view);
 

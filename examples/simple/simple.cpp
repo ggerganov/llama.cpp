@@ -12,16 +12,16 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
     params.prompt = "Hello my name is";
     params.n_predict = 32;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     // total length of the sequence including the prompt
     const int n_predict = params.n_predict;
@@ -33,7 +33,7 @@ int main(int argc, char ** argv) {
 
     // initialize the model
 
-    llama_model_params model_params = common_model_params_from_gpt_params(params);
+    llama_model_params model_params = common_model_params_from_common_params(params);
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -44,7 +44,7 @@ int main(int argc, char ** argv) {
 
     // initialize the context
 
-    llama_context_params ctx_params = common_context_params_from_gpt_params(params);
+    llama_context_params ctx_params = common_context_params_from_common_params(params);
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 

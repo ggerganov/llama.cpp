@@ -50,8 +50,8 @@ static void write_table(std::ofstream & file, std::vector<common_arg *> & opts) 
 static void export_md(std::string fname, llama_example ex) {
     std::ofstream file(fname, std::ofstream::out | std::ofstream::trunc);
 
-    gpt_params params;
-    auto ctx_arg = gpt_params_parser_init(params, ex);
+    common_params params;
+    auto ctx_arg = common_params_parser_init(params, ex);
 
     std::vector<common_arg *> common_options;
     std::vector<common_arg *> sparam_options;

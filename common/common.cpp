@@ -362,10 +362,10 @@ bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_MAX_N_THREAD
     return true;
 }
 
-void gpt_init() {
+void common_init() {
     llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_thold) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
+        if (LOG_DEFAULT_LLAMA <= common_log_verbosity_thold) {
+            common_log_add(common_log_main(), level, "%s", text);
         }
     }, NULL);
 
@@ -378,7 +378,7 @@ void gpt_init() {
     LOG_INF("build: %d (%s) with %s for %s%s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET, build_type);
 }
 
-std::string gpt_params_get_system_info(const gpt_params & params) {
+std::string common_params_get_system_info(const common_params & params) {
     std::ostringstream os;
 
     os << "system_info: n_threads = " << params.cpuparams.n_threads;
@@ -819,9 +819,9 @@ std::string fs_get_cache_file(const std::string & filename) {
 //
 // Model utils
 //
-struct common_init_result llama_init_from_gpt_params(gpt_params & params) {
+struct common_init_result common_init_from_common_params(common_params & params) {
     common_init_result iparams;
-    auto mparams = common_model_params_from_gpt_params(params);
+    auto mparams = common_model_params_from_common_params(params);
 
     llama_model * model = nullptr;
 
@@ -863,7 +863,7 @@ struct common_init_result llama_init_from_gpt_params(gpt_params & params) {
         }
     }
 
-    auto cparams = common_context_params_from_gpt_params(params);
+    auto cparams = common_context_params_from_common_params(params);
 
     llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
@@ -970,7 +970,7 @@ void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_l
     }
 }
 
-struct llama_model_params common_model_params_from_gpt_params(const gpt_params & params) {
+struct llama_model_params common_model_params_from_common_params(const common_params & params) {
     auto mparams = llama_model_default_params();
 
     if (params.n_gpu_layers != -1) {
@@ -1022,7 +1022,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
     throw std::runtime_error("Invalid cache type: " + s);
 }
 
-struct llama_context_params common_context_params_from_gpt_params(const gpt_params & params) {
+struct llama_context_params common_context_params_from_common_params(const common_params & params) {
     auto cparams = llama_context_default_params();
 
     cparams.n_ctx             = params.n_ctx;
@@ -1946,7 +1946,7 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
     }
 }
 
-void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const llama_context * lctx,
+void yaml_dump_non_result_info(FILE * stream, const common_params & params, const llama_context * lctx,
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
     const auto & sparams = params.sparams;
 

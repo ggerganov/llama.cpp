@@ -13,13 +13,13 @@
 #include <vector>
 
 int main(int argc, char ** argv){
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     const int n_draft = params.n_draft;
 
@@ -28,7 +28,7 @@ int main(int argc, char ** argv){
     llama_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;

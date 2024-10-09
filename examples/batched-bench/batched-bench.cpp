@@ -15,13 +15,13 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_BENCH, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_BENCH, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     int is_pp_shared = params.is_pp_shared;
 
@@ -36,7 +36,7 @@ int main(int argc, char ** argv) {
 
     // initialize the model
 
-    llama_model_params model_params = common_model_params_from_gpt_params(params);
+    llama_model_params model_params = common_model_params_from_common_params(params);
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -45,7 +45,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_context_params ctx_params = common_context_params_from_gpt_params(params);
+    llama_context_params ctx_params = common_context_params_from_common_params(params);
 
     // ensure enough sequences are available
     ctx_params.n_seq_max = n_pl.empty() ? 1 : *std::max_element(n_pl.begin(), n_pl.end());

@@ -79,13 +79,13 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     params.embedding = true;
     // For non-causal models, batch size must be equal to ubatch size
@@ -95,7 +95,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -122,7 +122,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
 
     // split the prompt into lines

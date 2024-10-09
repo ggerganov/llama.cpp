@@ -82,14 +82,14 @@ enum llama_example {
     LLAMA_EXAMPLE_COUNT,
 };
 
-enum gpt_sampler_type {
-    GPT_SAMPLER_TYPE_NONE        = 0,
-    GPT_SAMPLER_TYPE_TOP_K       = 1,
-    GPT_SAMPLER_TYPE_TOP_P       = 2,
-    GPT_SAMPLER_TYPE_MIN_P       = 3,
-    GPT_SAMPLER_TYPE_TFS_Z       = 4,
-    GPT_SAMPLER_TYPE_TYPICAL_P   = 5,
-    GPT_SAMPLER_TYPE_TEMPERATURE = 6,
+enum common_sampler_type {
+    COMMON_SAMPLER_TYPE_NONE        = 0,
+    COMMON_SAMPLER_TYPE_TOP_K       = 1,
+    COMMON_SAMPLER_TYPE_TOP_P       = 2,
+    COMMON_SAMPLER_TYPE_MIN_P       = 3,
+    COMMON_SAMPLER_TYPE_TFS_Z       = 4,
+    COMMON_SAMPLER_TYPE_TYPICAL_P   = 5,
+    COMMON_SAMPLER_TYPE_TEMPERATURE = 6,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -99,7 +99,7 @@ enum dimre_method {
 };
 
 // sampler parameters
-struct gpt_sampler_params {
+struct common_sampler_params {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
 
     int32_t n_prev            = 64;    // number of previous tokens to remember
@@ -124,13 +124,13 @@ struct gpt_sampler_params {
     bool    ignore_eos        = false;
     bool    no_perf           = false; // disable performance metrics
 
-    std::vector<enum gpt_sampler_type> samplers = {
-        GPT_SAMPLER_TYPE_TOP_K,
-        GPT_SAMPLER_TYPE_TFS_Z,
-        GPT_SAMPLER_TYPE_TYPICAL_P,
-        GPT_SAMPLER_TYPE_TOP_P,
-        GPT_SAMPLER_TYPE_MIN_P,
-        GPT_SAMPLER_TYPE_TEMPERATURE
+    std::vector<enum common_sampler_type> samplers = {
+        COMMON_SAMPLER_TYPE_TOP_K,
+        COMMON_SAMPLER_TYPE_TFS_Z,
+        COMMON_SAMPLER_TYPE_TYPICAL_P,
+        COMMON_SAMPLER_TYPE_TOP_P,
+        COMMON_SAMPLER_TYPE_MIN_P,
+        COMMON_SAMPLER_TYPE_TEMPERATURE
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
@@ -141,7 +141,7 @@ struct gpt_sampler_params {
     std::string print() const;
 };
 
-struct gpt_params {
+struct common_params {
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =     0; // context size
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
@@ -183,7 +183,7 @@ struct gpt_params {
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
-    struct gpt_sampler_params sparams;
+    struct common_sampler_params sparams;
 
     std::string model                = ""; // model path                                                    // NOLINT
     std::string model_draft          = ""; // draft model for speculative decoding                          // NOLINT
@@ -348,9 +348,9 @@ struct gpt_params {
 
 // call once at the start of a program if it uses libcommon
 // initializes the logging system and prints info about the build
-void gpt_init();
+void common_init();
 
-std::string gpt_params_get_system_info(const gpt_params & params);
+std::string common_params_get_system_info(const common_params & params);
 
 bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);
 bool parse_cpu_mask(const std::string& mask, bool(&boolmask)[GGML_MAX_N_THREADS]);
@@ -410,10 +410,10 @@ struct common_init_result {
     std::vector<common_lora_adapter_container> lora_adapters;
 };
 
-struct common_init_result    llama_init_from_gpt_params(gpt_params & params);
+struct common_init_result     common_init_from_common_params(common_params & params);
 
-struct llama_model_params     common_model_params_from_gpt_params    (const gpt_params & params);
-struct llama_context_params   common_context_params_from_gpt_params  (const gpt_params & params);
+struct llama_model_params     common_model_params_from_common_params  (const common_params & params);
+struct llama_context_params   common_context_params_from_common_params(const common_params & params);
 struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
 
 struct llama_model * common_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
@@ -554,5 +554,5 @@ void yaml_dump_vector_int      (FILE * stream, const char * prop_name, const std
 void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const char * data);
 
 void yaml_dump_non_result_info(
-    FILE * stream, const gpt_params & params, const llama_context * lctx,
+    FILE * stream, const common_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);

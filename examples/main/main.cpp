@@ -33,8 +33,8 @@
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
-static gpt_sampler             ** g_smpl;
-static gpt_params               * g_params;
+static common_sampler             ** g_smpl;
+static common_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
@@ -63,7 +63,7 @@ static bool file_is_empty(const std::string & path) {
 }
 
 static void write_logfile(
-    const llama_context * ctx, const gpt_params & params, const llama_model * model,
+    const llama_context * ctx, const common_params & params, const llama_model * model,
     const std::vector<llama_token> & input_tokens, const std::string & output,
     const std::vector<llama_token> & output_tokens
 ) {
@@ -114,12 +114,12 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             LOG("\n");
-            gpt_perf_print(*g_ctx, *g_smpl);
+            common_perf_print(*g_ctx, *g_smpl);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
 
             // make sure all logs are flushed
             LOG("Interrupted by user\n");
-            gpt_log_pause(gpt_log_main());
+            common_log_pause(common_log_main());
 
             _exit(130);
         }
@@ -136,13 +136,13 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<c
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
     g_params = &params;
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     auto & sparams = params.sparams;
 
@@ -187,7 +187,7 @@ int main(int argc, char ** argv) {
 
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
-    gpt_sampler * smpl = nullptr;
+    common_sampler * smpl = nullptr;
 
     std::vector<common_chat_msg> chat_msgs;
 
@@ -197,7 +197,7 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     model = llama_init.model;
     ctx = llama_init.context;
@@ -255,7 +255,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
         LOG_INF("\n");
     }
 
@@ -448,15 +448,15 @@ int main(int argc, char ** argv) {
         }
     }
 
-    smpl = gpt_sampler_init(model, sparams);
+    smpl = common_sampler_init(model, sparams);
     if (!smpl) {
         LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         return 1;
     }
 
-    LOG_INF("sampler seed: %u\n",     gpt_sampler_get_seed(smpl));
+    LOG_INF("sampler seed: %u\n",     common_sampler_get_seed(smpl));
     LOG_INF("sampler params: \n%s\n", sparams.print().c_str());
-    LOG_INF("sampler chain: %s\n",    gpt_sampler_print(smpl).c_str());
+    LOG_INF("sampler chain: %s\n",    common_sampler_print(smpl).c_str());
 
     LOG_INF("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
@@ -679,9 +679,9 @@ int main(int argc, char ** argv) {
                 LOG_DBG("saved session to %s\n", path_session.c_str());
             }
 
-            const llama_token id = gpt_sampler_sample(smpl, ctx, -1);
+            const llama_token id = common_sampler_sample(smpl, ctx, -1);
 
-            gpt_sampler_accept(smpl, id, /* accept_grammar= */ true);
+            common_sampler_accept(smpl, id, /* accept_grammar= */ true);
 
             // LOG_DBG("last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
@@ -702,7 +702,7 @@ int main(int argc, char ** argv) {
 
                 // push the prompt in the sampling context in order to apply repetition penalties later
                 // for the prompt, we don't apply grammar rules
-                gpt_sampler_accept(smpl, embd_inp[n_consumed], /* accept_grammar= */ false);
+                common_sampler_accept(smpl, embd_inp[n_consumed], /* accept_grammar= */ false);
 
                 ++n_consumed;
                 if ((int) embd.size() >= params.n_batch) {
@@ -743,7 +743,7 @@ int main(int argc, char ** argv) {
             // check for reverse prompt in the last n_prev tokens
             if (!params.antiprompt.empty()) {
                 const int n_prev = 32;
-                const std::string last_output = gpt_sampler_prev_str(smpl, ctx, n_prev);
+                const std::string last_output = common_sampler_prev_str(smpl, ctx, n_prev);
 
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
@@ -765,7 +765,7 @@ int main(int argc, char ** argv) {
                 }
 
                 // check for reverse prompt using special tokens
-                llama_token last_token = gpt_sampler_last(smpl);
+                llama_token last_token = common_sampler_last(smpl);
                 for (std::vector<llama_token> ids : antiprompt_ids) {
                     if (ids.size() == 1 && last_token == ids[0]) {
                         if (params.interactive) {
@@ -782,7 +782,7 @@ int main(int argc, char ** argv) {
             }
 
             // deal with end of generation tokens in interactive mode
-            if (llama_token_is_eog(model, gpt_sampler_last(smpl))) {
+            if (llama_token_is_eog(model, common_sampler_last(smpl))) {
                 LOG_DBG("found an EOG token\n");
 
                 if (params.interactive) {
@@ -803,7 +803,7 @@ int main(int argc, char ** argv) {
 
             // if current token is not EOG, we add it to current assistant message
             if (params.conversation) {
-                const auto id = gpt_sampler_last(smpl);
+                const auto id = common_sampler_last(smpl);
                 assistant_ss << common_token_to_piece(ctx, id, false);
             }
 
@@ -899,7 +899,7 @@ int main(int argc, char ** argv) {
 
             if (n_past > 0) {
                 if (is_interacting) {
-                    gpt_sampler_reset(smpl);
+                    common_sampler_reset(smpl);
                 }
                 is_interacting = false;
             }
@@ -925,10 +925,10 @@ int main(int argc, char ** argv) {
     }
 
     LOG("\n\n");
-    gpt_perf_print(ctx, smpl);
+    common_perf_print(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
 
     llama_free(ctx);
     llama_free_model(model);

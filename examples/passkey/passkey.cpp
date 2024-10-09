@@ -15,17 +15,17 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
     params.n_junk = 250;
     params.n_keep = 32;
     params.i_pos  = -1;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PASSKEY, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PASSKEY, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     int n_junk = params.n_junk;
     int n_keep = params.n_keep;
@@ -61,7 +61,7 @@ int main(int argc, char ** argv) {
 
     // initialize the model
 
-    llama_model_params model_params = common_model_params_from_gpt_params(params);
+    llama_model_params model_params = common_model_params_from_common_params(params);
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -72,7 +72,7 @@ int main(int argc, char ** argv) {
 
     // initialize the context
 
-    llama_context_params ctx_params = common_context_params_from_gpt_params(params);
+    llama_context_params ctx_params = common_context_params_from_common_params(params);
 
     ctx_params.n_ctx = llama_n_ctx_train(model)*n_grp + n_keep;
 

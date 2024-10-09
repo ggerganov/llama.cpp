@@ -152,16 +152,16 @@ static std::string gritlm_instruction(const std::string & instruction) {
 }
 
 int main(int argc, char * argv[]) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
-    llama_model_params mparams = common_model_params_from_gpt_params(params);
-    llama_context_params cparams = common_context_params_from_gpt_params(params);
+    llama_model_params mparams = common_model_params_from_common_params(params);
+    llama_context_params cparams = common_context_params_from_common_params(params);
 
     llama_backend_init();
 

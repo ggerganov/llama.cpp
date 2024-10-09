@@ -35,7 +35,7 @@ struct results_log_softmax {
 };
 
 static void write_logfile(
-    const llama_context * ctx, const gpt_params & params, const llama_model * model,
+    const llama_context * ctx, const common_params & params, const llama_model * model,
     const struct results_perplexity & results
 ) {
     if (params.logdir.empty()) {
@@ -337,7 +337,7 @@ static void process_logits(int n_vocab, const float * logits, const int * tokens
     }
 }
 
-static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & params) {
+static results_perplexity perplexity_v2(llama_context * ctx, const common_params & params) {
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
@@ -472,7 +472,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
     return {tokens, std::exp(nll / count), logit_history, prob_history};
 }
 
-static results_perplexity perplexity(llama_context * ctx, const gpt_params & params, const int32_t n_ctx) {
+static results_perplexity perplexity(llama_context * ctx, const common_params & params, const int32_t n_ctx) {
     if (params.ppl_stride > 0) {
         return perplexity_v2(ctx, params);
     }
@@ -763,7 +763,7 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
     }
 }
 
-static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
+static void hellaswag_score(llama_context * ctx, const common_params & params) {
     // Calculates hellaswag score (acc_norm) from prompt
     //
     // Data extracted from the HellaSwag validation dataset (MIT license) https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
@@ -1102,7 +1102,7 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string 
  *    0,Sarah was a much better surgeon than Maria so _ always got the easier cases.,Sarah,Maria,2
  *
  */
-static void winogrande_score(llama_context * ctx, const gpt_params & params) {
+static void winogrande_score(llama_context * ctx, const common_params & params) {
 
     constexpr int k_min_trailing_ctx = 3;
 
@@ -1403,7 +1403,7 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choic
 //     git@hf.co:datasets/Stevross/mmlu
 //     https://huggingface.co/datasets/truthful_qa
 //
-static void multiple_choice_score(llama_context * ctx, const gpt_params & params) {
+static void multiple_choice_score(llama_context * ctx, const common_params & params) {
 
     std::istringstream strstream(params.prompt);
     uint32_t n_task;
@@ -1683,7 +1683,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
     LOG_INF("\n");
 }
 
-static void kl_divergence(llama_context * ctx, const gpt_params & params) {
+static void kl_divergence(llama_context * ctx, const common_params & params) {
     if (params.logits_file.empty()) {
         LOG_ERR("%s: you must provide a name of a file containing the log probabilities of the base model\n", __func__);
         return;
@@ -1955,17 +1955,17 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
     params.n_ctx = 512;
     params.logits_all = true;
     params.escape = false;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PERPLEXITY)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PERPLEXITY)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     const int32_t n_ctx = params.n_ctx;
 
@@ -2004,7 +2004,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model and apply lora adapter, if any
-    common_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_common_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -2023,7 +2023,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
 
     struct results_perplexity results;
