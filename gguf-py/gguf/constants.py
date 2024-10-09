@@ -64,15 +64,27 @@ class Keys:
         BASE_MODEL_AUTHOR          = "general.base_model.{id}.author"
         BASE_MODEL_VERSION         = "general.base_model.{id}.version"
         BASE_MODEL_ORGANIZATION    = "general.base_model.{id}.organization"
+        BASE_MODEL_DESCRIPTION     = "general.base_model.{id}.description"
         BASE_MODEL_URL             = "general.base_model.{id}.url" # Model Website/Paper
         BASE_MODEL_DOI             = "general.base_model.{id}.doi"
         BASE_MODEL_UUID            = "general.base_model.{id}.uuid"
         BASE_MODEL_REPO_URL        = "general.base_model.{id}.repo_url" # Model Source Repository (git/svn/etc...)
 
+        # Dataset Source
+        DATASET_COUNT           = "general.dataset.count"
+        DATASET_NAME            = "general.dataset.{id}.name"
+        DATASET_AUTHOR          = "general.dataset.{id}.author"
+        DATASET_VERSION         = "general.dataset.{id}.version"
+        DATASET_ORGANIZATION    = "general.dataset.{id}.organization"
+        DATASET_DESCRIPTION     = "general.dataset.{id}.description"
+        DATASET_URL             = "general.dataset.{id}.url" # Model Website/Paper
+        DATASET_DOI             = "general.dataset.{id}.doi"
+        DATASET_UUID            = "general.dataset.{id}.uuid"
+        DATASET_REPO_URL        = "general.dataset.{id}.repo_url" # Model Source Repository (git/svn/etc...)
+
         # Array based KV stores
         TAGS                       = "general.tags"
         LANGUAGES                  = "general.languages"
-        DATASETS                   = "general.datasets"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"
