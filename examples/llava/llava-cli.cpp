@@ -219,7 +219,7 @@ static struct llama_model * llava_init(common_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = common_model_params_from_common_params(*params);
+    llama_model_params model_params = common_model_params_to_llama(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -240,7 +240,7 @@ static struct llava_context * llava_init_context(common_params * params, llama_m
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
 
-    llama_context_params ctx_params = common_context_params_from_common_params(*params);
+    llama_context_params ctx_params = common_context_params_to_llama(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);

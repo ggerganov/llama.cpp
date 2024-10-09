@@ -29,7 +29,7 @@ static struct llama_model * llava_init(common_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = common_model_params_from_common_params(*params);
+    llama_model_params model_params = common_model_params_to_llama(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -45,7 +45,7 @@ static struct llava_context * llava_init_context(common_params * params, llama_m
         prompt = "describe the image in detail.";
     }
 
-    llama_context_params ctx_params = common_context_params_from_common_params(*params);
+    llama_context_params ctx_params = common_context_params_to_llama(*params);
     if (params->n_ctx < 2048) {
         // warn user here, "Image processing requires at least 2048 context, setting context to 2048"
         LOG_WRN("%s: Image processing requires at least 2048 context, setting context to 2048\n" , __func__);

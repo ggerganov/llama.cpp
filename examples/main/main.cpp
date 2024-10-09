@@ -197,7 +197,7 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-    common_init_result llama_init = common_init_from_common_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     model = llama_init.model;
     ctx = llama_init.context;

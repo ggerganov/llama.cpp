@@ -28,7 +28,7 @@ int main(int argc, char ** argv) {
     std::string result2;
 
     // init
-    common_init_result llama_init = common_init_from_common_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -92,7 +92,7 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
 
     // make new context
-    auto * ctx2 = llama_new_context_with_model(model, common_context_params_from_common_params(params));
+    auto * ctx2 = llama_new_context_with_model(model, common_context_params_to_llama(params));
 
     llama_sampler * smpl2 = llama_sampler_chain_init(sparams);
 
@@ -152,7 +152,7 @@ int main(int argc, char ** argv) {
     }
 
     // make new context
-    auto * ctx3 = llama_new_context_with_model(model, common_context_params_from_common_params(params));
+    auto * ctx3 = llama_new_context_with_model(model, common_context_params_to_llama(params));
 
     llama_sampler * smpl3 = llama_sampler_chain_init(sparams);
 

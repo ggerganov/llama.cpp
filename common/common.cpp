@@ -819,9 +819,9 @@ std::string fs_get_cache_file(const std::string & filename) {
 //
 // Model utils
 //
-struct common_init_result common_init_from_common_params(common_params & params) {
+struct common_init_result common_init_from_params(common_params & params) {
     common_init_result iparams;
-    auto mparams = common_model_params_from_common_params(params);
+    auto mparams = common_model_params_to_llama(params);
 
     llama_model * model = nullptr;
 
@@ -863,7 +863,7 @@ struct common_init_result common_init_from_common_params(common_params & params)
         }
     }
 
-    auto cparams = common_context_params_from_common_params(params);
+    auto cparams = common_context_params_to_llama(params);
 
     llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
@@ -970,7 +970,7 @@ void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_l
     }
 }
 
-struct llama_model_params common_model_params_from_common_params(const common_params & params) {
+struct llama_model_params common_model_params_to_llama(const common_params & params) {
     auto mparams = llama_model_default_params();
 
     if (params.n_gpu_layers != -1) {
@@ -1022,7 +1022,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
     throw std::runtime_error("Invalid cache type: " + s);
 }
 
-struct llama_context_params common_context_params_from_common_params(const common_params & params) {
+struct llama_context_params common_context_params_to_llama(const common_params & params) {
     auto cparams = llama_context_default_params();
 
     cparams.n_ctx             = params.n_ctx;

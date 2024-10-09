@@ -160,8 +160,8 @@ int main(int argc, char * argv[]) {
 
     common_init();
 
-    llama_model_params mparams = common_model_params_from_common_params(params);
-    llama_context_params cparams = common_context_params_from_common_params(params);
+    llama_model_params mparams = common_model_params_to_llama(params);
+    llama_context_params cparams = common_context_params_to_llama(params);
 
     llama_backend_init();
 

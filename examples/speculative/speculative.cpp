@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx_dft = NULL;
 
     // load the target model
-    common_init_result llama_init_tgt = common_init_from_common_params(params);
+    common_init_result llama_init_tgt = common_init_from_params(params);
     model_tgt = llama_init_tgt.model;
     ctx_tgt = llama_init_tgt.context;
 
@@ -78,7 +78,7 @@ int main(int argc, char ** argv) {
     }
 
     params.cpuparams_batch.n_threads = params.draft_cpuparams_batch.n_threads;
-    common_init_result llama_init_dft = common_init_from_common_params(params);
+    common_init_result llama_init_dft = common_init_from_params(params);
     model_dft = llama_init_dft.model;
     ctx_dft = llama_init_dft.context;
 

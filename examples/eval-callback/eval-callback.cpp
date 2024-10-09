@@ -160,7 +160,7 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    common_init_result llama_init = common_init_from_common_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
