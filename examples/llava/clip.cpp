@@ -567,7 +567,7 @@ struct clip_ctx {
     ggml_backend_t backend       = NULL;
     ggml_gallocr_t compute_alloc = NULL;
 
-    struct clip_image_size * load_image_size;
+    struct clip_image_size * load_image_size = NULL;
 };
 
 static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct clip_image_size * load_image_size, bool is_inf = false) {
