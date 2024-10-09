@@ -11,12 +11,13 @@
 "
 
 " color of the suggested text
-highlight llama_hint guifg=#ff772f
+highlight llama_hl_hint guifg=#ff772f
+highlight llama_hl_info guifg=#77ff2f
 
 let s:default_config = {
     \ 'endpoint':    'http://127.0.0.1:8012/infill',
-    \ 'n_prefix':    32,
-    \ 'n_suffix':    32,
+    \ 'n_prefix':    128,
+    \ 'n_suffix':    128,
     \ 'n_predict':   64,
     \ 'n_probs':     3,
     \ 'temperature': 0.1,
@@ -71,6 +72,16 @@ function! llama#fim() abort
         \ )
 
     let l:can_accept = v:true
+    let l:has_timing = v:false
+
+    let l:n_prompt    = 0
+    let l:t_prompt_ms = 1.0
+    let l:s_prompt    = 0
+
+    let l:n_gen    = 0
+    let l:t_gen_ms = 1.0
+    let l:s_gen    = 0
+
     let s:content = []
 
     let l:raw = system(l:curl_command)
@@ -96,6 +107,20 @@ function! llama#fim() abort
         while len(s:content) > 0 && s:content[-1] == ""
             call remove(s:content, -1)
         endwhile
+
+        " if response.timings
+        if len(get(l:response, 'timings', {})) > 0
+            let l:has_timing = v:true
+            let l:timings = get(l:response, 'timings', {})
+
+            let l:n_prompt    = get(l:timings, 'prompt_n', 0)
+            let l:t_prompt_ms = get(l:timings, 'prompt_ms', 1)
+            let l:s_prompt    = get(l:timings, 'prompt_per_second', 0)
+
+            let l:n_gen    = get(l:timings, 'predicted_n', 0)
+            let l:t_gen_ms = get(l:timings, 'predicted_ms', 1)
+            let l:s_gen    = get(l:timings, 'predicted_per_second', 0)
+        endif
     endif
 
     if len(s:content) == 0
@@ -108,48 +133,62 @@ function! llama#fim() abort
 
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
-    let s:ns_id = nvim_create_namespace('llama_virtual_text')
 
-    call nvim_buf_set_extmark(l:bufnr, s:ns_id, l:pos_y - 1, l:pos_x - 1, {
-        \ 'virt_text': [[s:content[0], 'llama_hint']],
+    let s:id_vt_fim  = nvim_create_namespace('vt_fim')
+    let s:id_vt_info = nvim_create_namespace('vt_info')
+
+    call nvim_buf_set_extmark(l:bufnr, s:id_vt_fim, l:pos_y - 1, l:pos_x - 1, {
+        \ 'virt_text': [[s:content[0], 'llama_hl_hint']],
         \ 'virt_text_win_col': l:pos_x == 1 ? 0 : virtcol('.')
         \ })
 
-    call nvim_buf_set_extmark(l:bufnr, s:ns_id, l:pos_y - 1, 0, {
-        \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hint']]}),
+    call nvim_buf_set_extmark(l:bufnr, s:id_vt_fim, l:pos_y - 1, 0, {
+        \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hl_hint']]}),
         \ 'virt_text_win_col': virtcol('.')
         \ })
 
+    " construct the info message:
+    if l:has_timing
+        let l:info = printf("prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s)",
+            \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
+            \ l:n_gen, l:t_gen_ms, l:s_gen)
+
+        call nvim_buf_set_extmark(l:bufnr, s:id_vt_info, l:pos_y - 1, l:pos_x - 1, {
+            \ 'virt_text': [[l:info, 'llama_hl_info']],
+            \ 'virt_text_pos': 'right_align',
+            \ })
+    endif
+
     " accept suggestion with Tab and reject it with any other key
     if l:can_accept
-        inoremap <buffer> <Tab> <C-O>:call llama#accept_virtual_text()<CR>
+        inoremap <buffer> <Tab> <C-O>:call llama#accept_vt_fim()<CR>
     else
-        inoremap <buffer> <Tab> <C-O>:call llama#cancel_virtual_text()<CR>
+        inoremap <buffer> <Tab> <C-O>:call llama#cancel_vt_fim()<CR>
     endif
 
     for l:key in range(32, 127) + [8, 27]
         if l:key != 0x7C
             if l:key == 8
-                execute 'inoremap <buffer> <Bs>    <C-O>:call llama#cancel_virtual_text()<CR><Bs>'
+                execute 'inoremap <buffer> <Bs>    <C-O>:call llama#cancel_vt_fim()<CR><Bs>'
             elseif l:key == 27
-                execute 'inoremap <buffer> <Esc>   <C-O>:call llama#cancel_virtual_text()<CR><Esc>'
+                execute 'inoremap <buffer> <Esc>   <C-O>:call llama#cancel_vt_fim()<CR><Esc>'
             elseif l:key == 32
-                execute 'inoremap <buffer> <Space> <C-O>:call llama#cancel_virtual_text()<CR><Space>'
+                execute 'inoremap <buffer> <Space> <C-O>:call llama#cancel_vt_fim()<CR><Space>'
             elseif l:key == 127
-                execute 'inoremap <buffer> <Del>   <C-O>:call llama#cancel_virtual_text()<CR><Del>'
+                execute 'inoremap <buffer> <Del>   <C-O>:call llama#cancel_vt_fim()<CR><Del>'
             else
-                execute 'inoremap <buffer> ' . nr2char(l:key) . ' <C-O>:call llama#cancel_virtual_text()<CR>' . nr2char(l:key)
+                execute 'inoremap <buffer> ' . nr2char(l:key) . ' <C-O>:call llama#cancel_vt_fim()<CR>' . nr2char(l:key)
             endif
         endif
     endfor
 
-    inoremap <buffer> <Up>    <C-O>:call llama#cancel_virtual_text()<CR><Up>
-    inoremap <buffer> <Down>  <C-O>:call llama#cancel_virtual_text()<CR><Down>
-    inoremap <buffer> <Left>  <C-O>:call llama#cancel_virtual_text()<CR><Left>
-    inoremap <buffer> <Right> <C-O>:call llama#cancel_virtual_text()<CR><Right>
+    inoremap <buffer> <Up>    <C-O>:call llama#cancel_vt_fim()<CR><Up>
+    inoremap <buffer> <Down>  <C-O>:call llama#cancel_vt_fim()<CR><Down>
+    inoremap <buffer> <Left>  <C-O>:call llama#cancel_vt_fim()<CR><Left>
+    inoremap <buffer> <Right> <C-O>:call llama#cancel_vt_fim()<CR><Right>
 endfunction
 
-function! llama#accept_virtual_text()
+function! llama#accept_vt_fim()
     let l:pos_x = col('.')
     let l:pos_y = line('.')
 
@@ -166,13 +205,15 @@ function! llama#accept_virtual_text()
     " move the cursor to the end of the accepted text
     call cursor(l:pos_y + len(s:content) - 1, l:pos_x + s:pos_dx)
 
-    call llama#cancel_virtual_text()
+    call llama#cancel_vt_fim()
 endfunction
 
-function! llama#cancel_virtual_text()
+function! llama#cancel_vt_fim()
     " clear the virtual text
     let l:bufnr = bufnr('%')
-    call nvim_buf_clear_namespace(l:bufnr, s:ns_id, 0, -1)
+
+    call nvim_buf_clear_namespace(l:bufnr, s:id_vt_fim,  0, -1)
+    call nvim_buf_clear_namespace(l:bufnr, s:id_vt_info, 0, -1)
 
     " remove the mappings
     iunmap <buffer> <Tab>
