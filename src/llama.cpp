@@ -18996,8 +18996,12 @@ bool llama_supports_gpu_offload(void) {
 #else
     return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr ||
-           ggml_backend_reg_by_name("RPC") != nullptr;
+           llama_supports_rpc();
 #endif
+}
+
+bool llama_supports_rpc(void) {
+    return ggml_backend_reg_by_name("RPC") != nullptr;
 }
 
 void llama_backend_init(void) {
