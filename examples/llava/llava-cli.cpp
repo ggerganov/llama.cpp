@@ -191,7 +191,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG("\n");
 
-    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams, llama_n_ctx(ctx_llava->ctx_llama));
     if (!smpl) {
         LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);

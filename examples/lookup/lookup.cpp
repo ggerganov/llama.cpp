@@ -102,7 +102,7 @@ int main(int argc, char ** argv){
 
     bool has_eos = false;
 
-    struct gpt_sampler * smpl = gpt_sampler_init(model, params.sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(model, params.sparams, max_context_size);
 
     std::vector<llama_token> draft;
 

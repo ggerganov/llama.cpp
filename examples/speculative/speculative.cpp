@@ -178,7 +178,7 @@ int main(int argc, char ** argv) {
     bool has_eos = false;
 
     // target model sampling context (reuse the llama_context's sampling instance)
-    struct gpt_sampler * smpl = gpt_sampler_init(model_tgt, params.sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(model_tgt, params.sparams, max_context_size);
 
     struct llama_sampler * softmax = llama_sampler_init_softmax();
 
@@ -187,7 +187,7 @@ int main(int argc, char ** argv) {
 
     for (int s = 0; s < n_seq_dft; ++s) {
         // allocate gpt_sampler for each draft sequence
-        drafts[s].smpl = gpt_sampler_init(model_dft, params.sparams);
+        drafts[s].smpl = gpt_sampler_init(model_dft, params.sparams, max_context_size);
     }
 
     llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
