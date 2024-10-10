@@ -4999,17 +4999,13 @@ static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_
 static void ggml_backend_sycl_event_record(ggml_backend_t backend, ggml_backend_event_t event)
 try
 {
-    if (event == nullptr || event->context == nullptr) {
-        return;
-    }
-
     ggml_backend_sycl_context *sycl_ctx =
         (ggml_backend_sycl_context *)backend->context;
     sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
 
     const queue_ptr &stream = sycl_ctx->stream(sycl_ctx->device, 0);
     // Record the current state of the queue
-    *sycl_event = stream->ext_oneapi_submit_barrier();
+    SYCL_CHECK(CHECK_TRY_ERROR(*sycl_event = stream->ext_oneapi_submit_barrier()));
 }
 catch (sycl::exception const &exc)
 {
@@ -5019,10 +5015,6 @@ catch (sycl::exception const &exc)
 }
 
 static void ggml_backend_sycl_event_wait(ggml_backend_t backend, ggml_backend_event_t event) try {
-    if (event == nullptr || event->context == nullptr) {
-        return;
-    }
-
     ggml_backend_sycl_context* sycl_ctx = static_cast<ggml_backend_sycl_context*>(backend->context);
     sycl::event* sycl_event = static_cast<sycl::event*>(event->context);
 
@@ -5345,15 +5337,15 @@ static void ggml_backend_sycl_device_event_free(ggml_backend_dev_t dev, ggml_bac
 }
 
 
-static void ggml_backend_sycl_device_event_synchronize(ggml_backend_dev_t dev, ggml_backend_event_t event) {
+static void ggml_backend_sycl_device_event_synchronize(ggml_backend_dev_t dev, ggml_backend_event_t event) try {
   GGML_UNUSED(dev);
-
-  if (event == nullptr || event->context == nullptr) {
-    return;
-  }
 
   sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
   SYCL_CHECK(CHECK_TRY_ERROR(sycl_event->wait()));
+} catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
 }
 
 static const ggml_backend_device_i ggml_backend_sycl_device_interface = {
