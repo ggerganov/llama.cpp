@@ -907,7 +907,7 @@ int main(int argc, char ** argv) {
 
         // end of generation
         if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !(params.interactive)) {
-            LOG(" [end of text]\n");
+            LOG_INF(" [end of text]\n");
             break;
         }
 
@@ -920,11 +920,11 @@ int main(int argc, char ** argv) {
     }
 
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
-        LOG("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
+        LOG_INF("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
-    LOG("\n\n");
+    LOG_INF("\n\n");
     gpt_perf_print(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
