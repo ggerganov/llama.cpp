@@ -1,159 +1,141 @@
 import argparse
 import glob
 import os
+from typing import Any, Dict
+
 import torch
-from safetensors import safe_open
-from safetensors.torch import save_file
-from typing import Any, ContextManager, cast
-
-# Function to determine if file is a SafeTensor file
-def is_safetensor_file(file_path):
-    return file_path.endswith('.safetensors')
-
-
-# Unified loading function
-def load_model(file_path):
-    if is_safetensor_file(file_path):
-        tensors = {}
-        with cast(ContextManager[Any], safe_open(file_path, framework="pt", device="cpu")) as f:
-            for key in f.keys():
-                tensors[key] = f.get_tensor(key).clone()
-                # output shape
-                print(f"{key} : {tensors[key].shape}")
-        return tensors, 'safetensor'
-    else:
-        return torch.load(file_path, map_location=torch.device('cpu')), 'pytorch'
+from gguf import *
+from transformers import (
+    Qwen2VLForConditionalGeneration,  
+    Qwen2VLProcessor,
+    AutoProcessor,
+    Qwen2VLConfig
+)
 
 
-# Unified saving function
-def save_model(model, file_path, file_type):
-    if file_type == 'safetensor':
-        # safe_save(model, file_path)
-        save_file(model, file_path)
-    else:
-        torch.save(model, file_path)
+VISION = "clip.vision"
 
 
-# Adapted function to clean vision tower from checkpoint
-def clean_vision_tower_from_checkpoint(checkpoint_path):
-    checkpoint, file_type = load_model(checkpoint_path)
-    # file_type = 'pytorch'
-    model_path = os.path.dirname(checkpoint_path)
-    print(f"Searching for vision tower tensors in {checkpoint_path}")
-    clip_tensors = [k for k, v in checkpoint.items() if (k.startswith("model.vision_tower") or k.startswith("vit."))]
+def k(raw_key: str, arch: str) -> str:
+    return raw_key.format(arch=arch)
 
-    if len(clip_tensors) > 0:
-        print(f"Found {len(clip_tensors)} tensors to extract from {checkpoint_path}")
-        # Adapted for file type
-        clip_path = os.path.join(model_path, "llava.clip")
 
-        if os.path.exists(clip_path):
-            print(f"Loading existing llava.clip from {clip_path}")
-            existing_clip, _ = load_model(clip_path)
+def to_gguf_name(name: str) -> str:
+    og = name
+    name = name.replace("text_model", "t").replace("vision_model", "v")
+    name = name.replace("blocks", "blk").replace("embeddings.", "")
+    name = name.replace("attn.", "attn_")
+    name = name.replace("mlp.fc1", "ffn_down").replace("mlp.fc2", "ffn_up").replace("proj.", "out.")
+    # name = name.replace("layrnorm", "ln").replace("layer_norm", "ln").replace("layernorm", "ln")
+    name = name.replace("norm1", "ln1").replace("norm2", "ln2")
+    name = name.replace("merger.mlp", 'mm')
+    print(f"[to_gguf_name] {og} --> {name}")
+    return name
+
+
+def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
+    vision_model = qwen2vl.visual
+    tensor_map = {}
+    for name, ten in vision_model.state_dict().items():
+        ten = ten.numpy().astype(dtype)
+        if 'qkv' in name:
+            if ten.ndim == 2: # weight
+                c3, _ = ten.shape
+            else:             # bias
+                c3 = ten.shape[0]
+            c = c3//3
+            wq = ten[:c]
+            wk = ten[c: c * 2]
+            wv = ten[c * 2:]
+            tensor_map[to_gguf_name(f"vision_model.{name}").replace("qkv", "q")] = wq
+            tensor_map[to_gguf_name(f"vision_model.{name}").replace("qkv", "k")] = wk
+            tensor_map[to_gguf_name(f"vision_model.{name}").replace("qkv", "v")] = wv
+            # breakpoint()
+        elif 'merger' in name:
+            if name.endswith("ln_q.weight"):
+                tensor_map['v.post_ln.weight'] = ten
+            elif name.endswith("ln_q.bias"):
+                tensor_map['v.post_ln.bias'] = ten
+            else:
+                # "merger.mlp.%d.weight/bias" --> "mm.%d.weight/bias"
+                tensor_map[to_gguf_name(name)] = ten
+        elif 'patch_embed.proj.weight' in name:
+            # NOTE: split Conv3D into Conv2Ds
+            c1, c2, kt, kh, kw = ten.shape
+            assert kt == 2, "Current implmentation only support temporal_patch_size of 2"
+            tensor_map["v.patch_embd.weight"] = ten[:, :, 0, ...]
+            tensor_map["v.patch_embd.weight.1"] = ten[:, :, 1, ...]
         else:
-            print(f"Creating new llava.clip at {clip_path}")
-            existing_clip = {}
-        # Update existing_clip with new tensors, avoid duplicates
-        for name in clip_tensors:
-            simple_name = name[name.index('vision_model.'):] if 'vision_model.' in name else name
-            print(f"Adding {simple_name} to llava.clip")
-            if simple_name not in existing_clip:
-                existing_clip[simple_name] = checkpoint[name]
-
-        # Save the updated clip tensors back to llava.clip
-        save_model(existing_clip, clip_path, 'pytorch')
-
-        # Remove the tensors from the original checkpoint
-        for name in clip_tensors:
-            del checkpoint[name]
-
-        checkpoint_path = checkpoint_path
-        return True
-    return False
-
-def find_relevant_checkpoints(checkpoint_paths, newline_criteria, projector):
-    newline_checkpoint_path = None
-    projector_checkpoint_path = None
-
-    for path in checkpoint_paths:
-        checkpoint, _ = load_model(path)
-        if newline_criteria(checkpoint) and newline_checkpoint_path is None:
-            newline_checkpoint_path = path
-        if projector(checkpoint):
-            projector_checkpoint_path = path
-
-    return newline_checkpoint_path, projector_checkpoint_path
-
-def newline_criteria(checkpoint):
-    return any(k.startswith("model.image_newline") for k in checkpoint.keys())
-
-def proj_criteria(checkpoint):
-    return any(k.startswith("model.mm_projector") or k.startswith("vision_proj.") for k in checkpoint.keys())
+            tensor_map[to_gguf_name(f"vision_model.{name}")] = ten
+        
+    tensor_map["v.position_embd.weight"] = np.zeros([10, 10], dtype=dtype)  # dummy tensor, just here as a placeholder
+    return tensor_map
 
 
-# Command-line interface setup
-ap = argparse.ArgumentParser()
-ap.add_argument("-m", "--model", required=True, help="Path to LLaVA v1.5+ model")
-ap.add_argument("-C", "--clean-vision-tower", action="store_true", help="Remove any vision tower from the model files")
-args = ap.parse_args()
+def main(data_type='fp32'):
+    if data_type == 'fp32':
+        dtype = torch.float32
+        np_dtype = np.float32
+        ftype = 0
+    elif data_type == 'fp16':
+        dtype = torch.float16
+        np_dtype = np.float16
+        ftype = 1
+    else:
+        raise ValueError()
+    
+    model_name = "Qwen/Qwen2-VL-2B-Instruct"
+    qwen2vl = Qwen2VLForConditionalGeneration.from_pretrained(
+        model_name, torch_dtype=dtype, device_map="cpu"
+    )
+    cfg: Qwen2VLConfig = qwen2vl.config
+    vcfg = cfg.vision_config
+    rope_cfg = cfg.rope_scaling
 
-if args.clean_vision_tower:
-    # Generalized to handle both PyTorch and SafeTensors models
-    model_files = sorted(glob.glob(f"{args.model}/*"), key=os.path.getmtime, reverse=True)
-    # checkpoint_paths = [path for path in model_files if (path.endswith('.bin') and path.startswith('pytorch')) or (path.endswith('.safetensors') and path.startswith('model'))]
-    checkpoint_paths = [path for path in model_files if (path.endswith('.bin') and 'pytorch' in path.split('/')[-1].split('\\')[-1]) or (path.endswith('.safetensors') and 'model' in path.split('/')[-1].split('\\')[-1])]
-    for projector_checkpoint_path in checkpoint_paths:
-        print(f"Cleaning {projector_checkpoint_path}")
-        if not clean_vision_tower_from_checkpoint(projector_checkpoint_path):
-            print(f"No vision tower found in {projector_checkpoint_path}")
-            # we break once none is found, so far all models append them at the end
-            # break
-    print("Done! All vision tower tensors are removed from the model files and stored in llava.clip file.")
 
-# Now we look for the projector in the last checkpoint
-model_files = sorted(glob.glob(f"{args.model}/*"), key=os.path.getmtime, reverse=True)
-checkpoint_paths = [path for path in model_files if (path.endswith('.bin') and 'pytorch' in path.split('/')[-1].split('\\')[-1]) or (path.endswith('.safetensors') and 'model' in path.split('/')[-1].split('\\')[-1])]
-# last_checkpoint_path = checkpoint_paths[0]
-# first_checkpoint_path = checkpoint_paths[-1]
-newline_checkpoint_path, projector_checkpoint_path = find_relevant_checkpoints(checkpoint_paths, newline_criteria, proj_criteria)
+    fname_out = "qwen2vl-vision.gguf"
+    fout = GGUFWriter(path=fname_out, arch="clip")
+    fout.add_description("image encoder for Qwen2VL")
 
-print(f"Taking projector from {projector_checkpoint_path}")
-first_mm_tensors = []
-first_checkpoint = None
-if newline_checkpoint_path is not None:
-    print(f"Taking newline from {newline_checkpoint_path}")
-    first_checkpoint, file_type = load_model(newline_checkpoint_path)
-    first_mm_tensors = [k for k, v in first_checkpoint.items() if k.startswith("model.image_newline")]
+    fout.add_file_type(ftype)
+    fout.add_bool("clip.has_text_encoder", False)
+    fout.add_bool("clip.has_vision_encoder", True)
+    fout.add_bool("clip.has_qwen2vl_merger", True)
+    fout.add_string("clip.projector_type", "qwen2vl_merger")
 
-# Load the checkpoint
-mm_tensors = []
-last_checkpoint = None
-if projector_checkpoint_path is not None:
-    last_checkpoint, file_type = load_model(projector_checkpoint_path)
-    mm_tensors = [k for k, v in last_checkpoint.items() if k.startswith("model.mm_projector") or k.startswith("vision_proj.")]
+    if 'silu' in cfg.vision_config.hidden_act.lower():
+        fout.add_bool("clip.use_silu", True)
+        fout.add_bool("clip.use_gelu", False)
+    elif 'gelu' in cfg.vision_config.hidden_act.lower():
+        fout.add_bool("clip.use_silu", False)
+        fout.add_bool("clip.use_gelu", True)
+    else:
+        raise ValueError()
 
-if len(mm_tensors) == 0:
-    if last_checkpoint is not None:
-        for k, v in last_checkpoint.items():
-            print(k)
-    print(f"Found {len(mm_tensors)} tensors to extract out of {len(last_checkpoint) if last_checkpoint is not None else 0} tensors.")
-    print("No tensors found. Is this a LLaVA model?")
-    exit()
+    tensor_map = find_vision_tensors(qwen2vl, np_dtype)
+    for name, data in tensor_map.items():
+        fout.add_tensor(name, data)
 
-print(f"Found {len(mm_tensors)} tensors to extract.")
-print(f"Found additional {len(first_mm_tensors)} tensors to extract.")
-# projector = {name: checkpoint.[name].float() for name in mm_tensors}
-projector = {}
-for name in mm_tensors:
-    assert last_checkpoint is not None
-    projector[name] = last_checkpoint[name].float()
-for name in first_mm_tensors:
-    assert first_checkpoint is not None
-    projector[name] = first_checkpoint[name].float()
+    fout.add_uint32("clip.vision.patch_size", vcfg.patch_size)
+    fout.add_uint32("clip.vision.image_size", 14*40)  # some reasonable size that is divable by (14*2)
+    fout.add_uint32(k(KEY_EMBEDDING_LENGTH, VISION), vcfg.embed_dim)
+    fout.add_uint32("clip.vision.projection_dim", vcfg.hidden_size)
+    fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), vcfg.num_heads)
+    fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), 1e-6)
+    fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), vcfg.depth)
+    fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, VISION), 0)  # BUG: not sure what this does
+    fout.add_name(model_name)
+    # fout.add_string("clip.vision.mm_patch_merge_type", v_hparams["mm_patch_merge_type"])
 
-if len(projector) > 0:
-    save_model(projector, f"{args.model}/llava.projector", 'pytorch')
+    processor: Qwen2VLProcessor = AutoProcessor.from_pretrained(model_name)
+    # breakpoint()
+    fout.add_array("clip.vision.image_mean", processor.image_processor.image_mean)
+    fout.add_array("clip.vision.image_std", processor.image_processor.image_std)
 
-print("Done!")
-print(f"Now you can convert {args.model} to a a regular LLaMA GGUF file.")
-print(f"Also, use {args.model}/llava.projector to prepare a llava-encoder.gguf file.")
+    fout.write_header_to_file()
+    fout.write_kv_data_to_file()
+    fout.write_tensors_to_file()
+    fout.close()
+
+
+main()

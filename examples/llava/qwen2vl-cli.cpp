@@ -650,6 +650,32 @@ static void tmp_test_mrope_2d(struct llava_context * ctx_llava, gpt_params * par
     }
 }
 
+
+static void tmp_dump_img_embed(struct llava_context * ctx_llava, gpt_params * params) {
+    // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
+    int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
+    // int ne = n_embd * image_embed->n_image_pos;
+    int ne = n_embd * 4;
+    float vals[56 * 56 * 3];
+    float embd[ne];
+    for (int i = 0; i < 56*56*3; i++)
+    {
+        vals[i] = (float)(i % (56 * 56)) / (56*56);
+    }
+    // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
+    tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
+
+    std::ofstream outFile("img_embed.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
+
+        outFile.close();
+        std::cout << "Data successfully written to mrope.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+}
+
 /*
     -----------------------------------------------------------------------------------------------------------------
 */
@@ -693,7 +719,8 @@ int main(int argc, char ** argv) {
         auto ctx_llava = llava_init_context(&params, model);
 
         // process the prompt
-        tmp_test_4d_reshape(ctx_llava, &params);
+        tmp_dump_img_embed(ctx_llava, &params);
+        // tmp_test_4d_reshape(ctx_llava, &params);
         // tmp_test_rope(ctx_llava, &params);
         // tmp_test_mrope(ctx_llava, &params);
         // tmp_test_mrope_2d(ctx_llava, &params);
