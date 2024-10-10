@@ -151,7 +151,7 @@ static std::string get_gpu_info() {
     int count = ggml_backend_sycl_get_device_count();
     for (int i = 0; i < count; i++) {
         char buf[128];
-        ggml_sycl_get_device_description(i, buf, sizeof(buf));
+        ggml_backend_sycl_get_device_description(i, buf, sizeof(buf));
         id += buf;
         if (i < count - 1) {
             id += "/";
