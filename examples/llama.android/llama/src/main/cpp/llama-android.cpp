@@ -283,9 +283,6 @@ Java_android_llama_cpp_LLamaAndroid_new_1batch(JNIEnv *, jobject, jint n_tokens,
         nullptr,
         nullptr,
         nullptr,
-        0,
-        0,
-        0,
     };
 
     if (embd) {
