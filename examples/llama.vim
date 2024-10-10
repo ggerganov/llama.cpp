@@ -98,9 +98,9 @@ function! llama#fim(is_auto) abort
         \ 'infill_p_eog':     0.001,
         \ 'stream':           v:false,
         \ 'samplers':         ["top_k", "infill"],
+       "\ 'cache_prompt':     v:true,
         \ 't_max_prompt_ms':  g:llama_config.t_max_prompt_ms,
-        \ 't_max_predict_ms': g:llama_config.t_max_predict_ms,
-        \ 'cache_prompt':     v:true
+        \ 't_max_predict_ms': g:llama_config.t_max_predict_ms
         \ })
 
     let l:curl_command = printf(
@@ -111,10 +111,21 @@ function! llama#fim(is_auto) abort
     " send the request asynchronously
     let s:current_job = jobstart(l:curl_command, {
         \ 'on_stdout': function('s:fim_on_stdout'),
-        \ 'on_exit': function('s:fim_on_exit'),
+        \ 'on_exit':   function('s:fim_on_exit'),
         \ 'stdout_buffered': v:true,
         \ 'is_auto': a:is_auto
         \ })
+
+    " this trick is needed to avoid the cursor shifting upon C-O when at the end of the line
+    if !a:is_auto
+        augroup llama_insert
+            autocmd!
+        augroup END
+
+        if g:llama_config.auto_fim
+            call timer_start(0, {-> s:fim_auto_enable()})
+        endif
+    endif
 endfunction
 
 function! llama#fim_accept()
@@ -151,9 +162,16 @@ function! llama#fim_cancel()
 
     augroup llama_insert
         autocmd!
-        if g:llama_config.auto_fim
-            autocmd CursorMovedI * call s:fim_auto()
-        endif
+    augroup END
+
+    if g:llama_config.auto_fim
+        call s:fim_auto_enable()
+    endif
+endfunction
+
+function! s:fim_auto_enable()
+    augroup llama_insert
+        autocmd CursorMovedI * call s:fim_auto()
     augroup END
 endfunction
 
@@ -176,6 +194,9 @@ endfunction
 
 function! s:fim_on_stdout(job_id, data, event) dict
     let l:raw = join(a:data, "\n")
+    if len(l:raw) == 0
+        return
+    endif
 
     let s:can_accept = v:true
     let l:has_info   = v:false
@@ -191,13 +212,6 @@ function! s:fim_on_stdout(job_id, data, event) dict
     if s:can_accept && v:shell_error
         if !self.is_auto
             call add(s:content, "<| curl error: is the server on? |>")
-        endif
-        let s:can_accept = v:false
-    endif
-
-    if s:can_accept && l:raw == ""
-        if !self.is_auto
-            call add(s:content, "<| empty response: is the server on? |>")
         endif
         let s:can_accept = v:false
     endif
@@ -232,7 +246,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
 
     if len(s:content) == 0
         if !self.is_auto
-            call add(s:content, "<| nothing to suggest |>")
+            call add(s:content, "<| EOT |>")
         endif
         let s:can_accept = v:false
     endif
@@ -272,7 +286,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
 
     call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, s:pos_x - 1, {
         \ 'virt_text': [[s:content[0], 'llama_hl_hint']],
-        \ 'virt_text_win_col': s:pos_x == len(s:line_cur) ? virtcol('.') : virtcol('.') - 1
+        \ 'virt_text_win_col': virtcol('.') - 1
         \ })
 
     call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, 0, {
