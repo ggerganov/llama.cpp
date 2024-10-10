@@ -1,6 +1,6 @@
 " sample config:
 "
-"   - Ctrl+F - trigger FIM completion
+"   - Ctrl+F - trigger FIM completion manually
 "
 " run this once to initialise the plugin:
 "
@@ -31,46 +31,30 @@ function! llama#init()
 
     let s:line_cur = ''
 
+    let s:line_cur_prefix = ''
+    let s:line_cur_suffix = ''
+
     let s:pos_dx = 0
     let s:content = []
     let s:can_accept = v:false
 
     let s:timer_fim = -1
-    let s:t_fim_last = reltime()
+    let s:t_fim_last  = reltime()
+    let s:t_fim_start = reltime()
+
+    let s:current_job = v:null
 
     augroup llama
         autocmd!
         autocmd InsertEnter * inoremap <buffer> <silent> <C-F> <C-O>:call llama#fim(v:false)<CR>
+        autocmd InsertLeave * call llama#fim_cancel()
     augroup END
 
     silent! call llama#fim_cancel()
 endfunction
 
-" setup accept/cancel events
-function! llama#on_hint(id_timer)
-    inoremap <buffer> <Tab> <C-O>:call llama#fim_accept()<CR>
-    inoremap <buffer> <Esc> <C-O>:call llama#fim_cancel()<CR><Esc>
-
-    augroup llama_insert
-        autocmd!
-        autocmd CursorMovedI * call llama#fim_cancel()
-    augroup END
-endfunction
-
-function! llama#fim_auto()
-    if reltimefloat(reltime(s:t_fim_last)) < 0.50
-        if s:timer_fim != -1
-            call timer_stop(s:timer_fim)
-            let s:timer_fim = -1
-        endif
-    endif
-
-    let s:t_fim_last = reltime()
-    let s:timer_fim = timer_start(500, {-> llama#fim(v:true)})
-endfunction
-
 function! llama#fim(is_auto) abort
-    let l:t_start = reltime()
+    let s:t_fim_start = reltime()
 
     let s:content = []
     let s:can_accept = v:false
@@ -86,16 +70,16 @@ function! llama#fim(is_auto) abort
 
     let s:pos_x0 = s:pos_x == len(s:line_cur) ? s:pos_x : s:pos_x - 1
 
-    let l:line_cur_prefix = strpart(s:line_cur, 0, s:pos_x0)
-    let l:line_cur_suffix = strpart(s:line_cur, s:pos_x0)
+    let s:line_cur_prefix = strpart(s:line_cur, 0, s:pos_x0)
+    let s:line_cur_suffix = strpart(s:line_cur, s:pos_x0)
 
     let l:prefix = ""
         \ . join(l:lines_prefix, "\n")
         \ . "\n"
-        \ . l:line_cur_prefix
+        \ . s:line_cur_prefix
 
     let l:suffix = ""
-        \ . l:line_cur_suffix
+        \ . s:line_cur_suffix
         \ . "\n"
         \ . join(l:lines_suffix, "\n")
         \ . "\n"
@@ -116,11 +100,79 @@ function! llama#fim(is_auto) abort
         \ 'samplers':       ["top_k", "infill"]
         \ })
 
-    " request completion from the server
     let l:curl_command = printf(
         \ "curl --silent --no-buffer --request POST --url %s --header \"Content-Type: application/json\" --data %s",
         \ g:llama_config.endpoint, shellescape(l:request)
         \ )
+
+    " send the request asynchronously
+    let s:current_job = jobstart(l:curl_command, {
+        \ 'on_stdout': function('s:fim_on_stdout'),
+        \ 'on_exit': function('s:fim_on_exit'),
+        \ 'stdout_buffered': v:true,
+        \ 'is_auto': a:is_auto
+        \ })
+endfunction
+
+function! llama#fim_accept()
+    " insert the suggestion at the cursor location
+    if s:can_accept && len(s:content) > 0
+        call setline(s:pos_y, s:line_cur[:(s:pos_x0 - 1)] . s:content[0])
+        if len(s:content) > 1
+            call append(s:pos_y, s:content[1:-1])
+        endif
+
+        " move the cursor to the end of the accepted text
+        call cursor(s:pos_y + len(s:content) - 1, s:pos_x + s:pos_dx)
+    endif
+
+    call llama#fim_cancel()
+endfunction
+
+function! llama#fim_cancel()
+    if s:current_job != v:null
+        call jobstop(s:current_job)
+    endif
+
+    " clear the virtual text
+    let l:bufnr = bufnr('%')
+
+    let l:id_vt_fim  = nvim_create_namespace('vt_fim')
+    let l:id_vt_info = nvim_create_namespace('vt_info')
+
+    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
+    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_info, 0, -1)
+
+    silent! iunmap <buffer> <Tab>
+    silent! iunmap <buffer> <Esc>
+
+    augroup llama_insert
+        autocmd!
+        if g:llama_config.auto_fim
+            autocmd CursorMovedI * call s:fim_auto()
+        endif
+    augroup END
+endfunction
+
+function! s:fim_auto()
+    if s:current_job != v:null
+        call jobstop(s:current_job)
+    endif
+
+    if reltimefloat(reltime(s:t_fim_last)) < 0.001*250
+        if s:timer_fim != -1
+            call timer_stop(s:timer_fim)
+            let s:timer_fim = -1
+        endif
+    endif
+
+    let s:t_fim_last = reltime()
+    let s:timer_fim = timer_start(250, {-> llama#fim(v:true)})
+endfunction
+
+
+function! s:fim_on_stdout(job_id, data, event) dict
+    let l:raw = join(a:data, "\n")
 
     let s:can_accept = v:true
     let l:has_info   = v:false
@@ -133,17 +185,15 @@ function! llama#fim(is_auto) abort
     let l:t_gen_ms = 1.0
     let l:s_gen    = 0
 
-    " TODO: async this
-    let l:raw = system(l:curl_command)
     if s:can_accept && v:shell_error
-        if !a:is_auto
+        if !self.is_auto
             call add(s:content, "<| curl error: is the server on? |>")
         endif
         let s:can_accept = v:false
     endif
 
     if s:can_accept && l:raw == ""
-        if !a:is_auto
+        if !self.is_auto
             call add(s:content, "<| empty response: is the server on? |>")
         endif
         let s:can_accept = v:false
@@ -178,7 +228,7 @@ function! llama#fim(is_auto) abort
     endif
 
     if len(s:content) == 0
-        if !a:is_auto
+        if !self.is_auto
             call add(s:content, "<| nothing to suggest |>")
         endif
         let s:can_accept = v:false
@@ -189,7 +239,7 @@ function! llama#fim(is_auto) abort
     endif
 
     let s:pos_dx = len(s:content[-1])
-    let s:content[-1] .= l:line_cur_suffix
+    let s:content[-1] .= s:line_cur_suffix
 
     call llama#fim_cancel()
 
@@ -202,13 +252,13 @@ function! llama#fim(is_auto) abort
     " construct the info message:
     if l:has_info
         " prefix the info string with whitespace in order to offset it to the right of the fim overlay
-        let l:prefix = repeat(' ', len(s:content[0]) - len(l:line_cur_suffix) + 3)
+        let l:prefix = repeat(' ', len(s:content[0]) - len(s:line_cur_suffix) + 3)
 
         let l:info = printf("%s | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f.2 ms",
             \ l:prefix,
             \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
             \ l:n_gen, l:t_gen_ms, l:s_gen,
-            \ 1000.0 * reltimefloat(reltime(l:t_start))
+            \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
             \ )
 
         call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, s:pos_y - 1, s:pos_x - 1, {
@@ -227,42 +277,20 @@ function! llama#fim(is_auto) abort
         \ 'virt_text_win_col': virtcol('.')
         \ })
 
-    " need to async this call because the <C-O> in insert mode causes the cursor to move when at the end of the line
-    call timer_start(0, 'llama#on_hint')
-endfunction
-
-function! llama#fim_accept()
-    " insert the suggestion at the cursor location
-    if s:can_accept && len(s:content) > 0
-        call setline(s:pos_y, s:line_cur[:(s:pos_x0 - 1)] . s:content[0])
-        if len(s:content) > 1
-            call append(s:pos_y, s:content[1:-1])
-        endif
-
-        " move the cursor to the end of the accepted text
-        call cursor(s:pos_y + len(s:content) - 1, s:pos_x + s:pos_dx)
-    endif
-
-    call llama#fim_cancel()
-endfunction
-
-function! llama#fim_cancel()
-    " clear the virtual text
-    let l:bufnr = bufnr('%')
-
-    let l:id_vt_fim  = nvim_create_namespace('vt_fim')
-    let l:id_vt_info = nvim_create_namespace('vt_info')
-
-    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
-    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_info, 0, -1)
-
-    silent! iunmap <buffer> <Tab>
-    silent! iunmap <buffer> <Esc>
+    " setup accept/cancel events
+    inoremap <buffer> <Tab> <C-O>:call llama#fim_accept()<CR>
+    inoremap <buffer> <Esc> <C-O>:call llama#fim_cancel()<CR><Esc>
 
     augroup llama_insert
         autocmd!
-        if g:llama_config.auto_fim
-            autocmd CursorMovedI * call llama#fim_auto()
-        endif
+        autocmd CursorMovedI * call llama#fim_cancel()
     augroup END
+endfunction
+
+function! s:fim_on_exit(job_id, exit_code, event) dict
+    if a:exit_code != 0
+        echom "Job failed with exit code: " . a:exit_code
+    endif
+
+    let s:current_job = v:null
 endfunction
