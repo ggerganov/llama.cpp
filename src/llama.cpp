@@ -18512,7 +18512,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // do not quantize norm tensors
         quantize &= name.find("_norm.weight") == std::string::npos;
 
-        quantize &= params->quantize_output_tensor || name != "output.weight";
+        // While there's an effort to avoid hardcoded tensor names,
+        // --leave-output-tensor should still exclude any tensor named
+        // *output.weight instead of just output.weight.
+        quantize &= params->quantize_output_tensor || (name.find("output.weight") == std::string::npos);
         quantize &= !params->only_copy;
 
         // do not quantize expert gating tensors
