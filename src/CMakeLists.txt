@@ -31,3 +31,5 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
 endif()
+
+set_source_files_properties(unicode-data.cpp PROPERTIES COMPILE_FLAGS -O1)
