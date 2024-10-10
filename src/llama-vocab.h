@@ -37,20 +37,26 @@ struct llama_vocab {
     std::map<std::pair<std::string, std::string>, int> bpe_ranks;
 
     // default LLaMA special tokens
+    // TODO: should we set all of these to LLAMA_TOKEN_NULL?
     id special_bos_id  = 1;
     id special_eos_id  = 2;
+    id special_eot_id  = LLAMA_TOKEN_NULL;
+    id special_eom_id  = LLAMA_TOKEN_NULL;
     id special_unk_id  = 0;
     id special_sep_id  = LLAMA_TOKEN_NULL;
     id special_pad_id  = LLAMA_TOKEN_NULL;
     id special_cls_id  = LLAMA_TOKEN_NULL;
     id special_mask_id = LLAMA_TOKEN_NULL;
 
-    id linefeed_id       = 13;
-    id special_prefix_id = LLAMA_TOKEN_NULL;
-    id special_suffix_id = LLAMA_TOKEN_NULL;
-    id special_middle_id = LLAMA_TOKEN_NULL;
-    id special_eot_id    = LLAMA_TOKEN_NULL; // TODO: move above after "eos_id", and here add "file separator" token
-    id special_eom_id    = LLAMA_TOKEN_NULL;
+    id linefeed_id    = 13;
+
+    // fim tokens
+    id special_fim_pre_id = LLAMA_TOKEN_NULL;
+    id special_fim_suf_id = LLAMA_TOKEN_NULL;
+    id special_fim_mid_id = LLAMA_TOKEN_NULL;
+    id special_fim_pad_id = LLAMA_TOKEN_NULL;
+    id special_fim_rep_id = LLAMA_TOKEN_NULL; // repo
+    id special_fim_sep_id = LLAMA_TOKEN_NULL; // file separator
 
     // set of all tokens that cause "end of generation"
     std::set<id> special_eog_ids;
@@ -104,19 +110,26 @@ bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token t
 
 llama_token llama_token_bos_impl(const struct llama_vocab & vocab);
 llama_token llama_token_eos_impl(const struct llama_vocab & vocab);
+llama_token llama_token_eot_impl(const struct llama_vocab & vocab);
+llama_token llama_token_eom_impl(const struct llama_vocab & vocab);
 llama_token llama_token_cls_impl(const struct llama_vocab & vocab);
 llama_token llama_token_sep_impl(const struct llama_vocab & vocab);
 llama_token llama_token_nl_impl (const struct llama_vocab & vocab);
 llama_token llama_token_pad_impl(const struct llama_vocab & vocab);
 
-bool llama_add_bos_token_impl(const struct llama_vocab & vocab);
-bool llama_add_eos_token_impl(const struct llama_vocab & vocab);
-
 llama_token llama_token_prefix_impl(const struct llama_vocab & vocab);
 llama_token llama_token_middle_impl(const struct llama_vocab & vocab);
 llama_token llama_token_suffix_impl(const struct llama_vocab & vocab);
-llama_token llama_token_eot_impl   (const struct llama_vocab & vocab);
-llama_token llama_token_eom_impl   (const struct llama_vocab & vocab);
+
+llama_token llama_token_fim_pre_impl(const struct llama_vocab & vocab);
+llama_token llama_token_fim_suf_impl(const struct llama_vocab & vocab);
+llama_token llama_token_fim_mid_impl(const struct llama_vocab & vocab);
+llama_token llama_token_fim_pad_impl(const struct llama_vocab & vocab);
+llama_token llama_token_fim_rep_impl(const struct llama_vocab & vocab);
+llama_token llama_token_fim_sep_impl(const struct llama_vocab & vocab);
+
+bool llama_add_bos_token_impl(const struct llama_vocab & vocab);
+bool llama_add_eos_token_impl(const struct llama_vocab & vocab);
 
 int32_t llama_tokenize_impl(
         const struct llama_vocab & vocab,
