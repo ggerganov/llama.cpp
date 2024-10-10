@@ -15741,6 +15741,12 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
         case GGML_TYPE_I64:
             // nothing to validate
             break;
+        case GGML_TYPE_I1:
+        case GGML_TYPE_I2:
+        case GGML_TYPE_I3:
+        case GGML_TYPE_I4:
+            // nothing to validate
+            break;
         default:
             {
                 fprintf(stderr, "%s: invalid type %d\n", __func__, type);

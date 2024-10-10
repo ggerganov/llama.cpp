@@ -84,6 +84,10 @@
 #include <Accelerate/Accelerate.h>
 #endif
 
+#if defined(GGML_USE_TMAC)
+#include "ggml-tmac.h"
+#endif
+
 // floating point type used to accumulate sums
 typedef double ggml_float;
 
@@ -7478,6 +7482,155 @@ static void ggml_compute_forward_mul_mat(
 UseGgmlGemm1:;
 #endif
 
+// TODO: Refactor t-mac as ggml-backend,
+//       as ggml-blas.cpp has been moved to backend
+#if defined(GGML_USE_TMAC)
+    if (ggml_tmac_can_mul_mat(src0, src1, dst)) {
+        const int bits = ggml_tmac_get_type_bits(type);
+        // src0: weight,     ne00 = k, ne01 = n
+        // src1: activation, ne10 = k, ne11 = m
+        char * wdata = params->wdata;
+
+        struct tmac_tensor_extra * wt = src0->extra;
+        char * cur_wdata = wdata;
+        tmac_float_type * tmac_f_ptr = wdata;
+        if (sizeof(tmac_float_type) == 2) {
+            cur_wdata = wdata + MAX(ne10, ne01) * ne11 * sizeof(tmac_float_type);
+        };
+        int8_t * qlut = cur_wdata;
+        tmac_float_type * lut_scales = (tmac_float_type *) (qlut + ne10 * ne11 * 4);
+        tmac_float_type * lut_biases = (tmac_float_type *) (lut_scales + wt->lut_scales_size * ne11);
+
+        GGML_ASSERT(src1->type == GGML_TYPE_F32);
+        tmac_float_type * act_input;
+        if (sizeof(tmac_float_type) == 2) {
+            act_input = tmac_f_ptr;
+        } else {
+            act_input = src1->data;
+        }
+        for (int ine11 = ith; ine11 < ne11; ine11 += nth) {
+            if (sizeof(tmac_float_type) == 2) {
+                ggml_fp32_to_fp16_row((const float *) src1->data + ne10 * ine11, act_input + ne10 * ine11, ne10);
+            }
+            ggml_tmac_mul_mat_task_init(act_input + ne10 * ine11,
+                                        qlut + ne10 * ine11 * 4,
+                                        lut_scales + wt->lut_scales_size * ine11,
+                                        lut_biases + wt->lut_scales_size * ine11,
+                                        ne01, ne00, 1, bits);
+        }
+
+        if (ith == 0) {
+            // Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
+            atomic_store_explicit(&params->threadpool->current_chunk, nth, memory_order_relaxed);
+        }
+
+        ggml_barrier(params->threadpool);
+
+        tmac_float_type * act_output;
+        if (sizeof(tmac_float_type) == 2) {
+            act_output = tmac_f_ptr;
+        } else {
+            act_output = dst->data;
+        }
+// TODO: remove TVM threadpool if ensuring unused
+#if defined(TMAC_USE_TVM_THREADPOOL)
+        if (ith != 0) {
+            return;
+        }
+        // TODO: schedule ne11(m) in T-MAC
+        for (int ine11 = 0; ine11 < ne11; ine11++) {
+            const int qlut_offset       = ne10 * ine11 * 4;
+            const int lut_scales_offset = wt->lut_scales_size * ine11;
+            const int dst_offset        = ne0 * ine11;
+
+            ggml_tmac_mul_mat_task_compute(wt->qweights,
+                                           wt->scales,
+                                           qlut + qlut_offset,
+                                           lut_scales + lut_scales_offset,
+                                           lut_biases + lut_scales_offset,
+                                           act_output + dst_offset,
+                                           ne01, ne00, 1, bits);
+        }
+        if (sizeof(tmac_float_type) == 2) {
+            ggml_fp16_to_fp32_row(tmac_f_ptr, dst->data, ne00 * ne01);
+        }
+#else  // #if defined(TMAC_USE_TVM_THREADPOOL)
+        const int n_tile_num = wt->n_tile_num;
+        // Currently, T-MAC requires ne0 devisible by n_tile_num
+        GGML_ASSERT(ne0 % n_tile_num == 0);
+
+        const int64_t w_size       = ne00 * ne01 * bits / 8;
+        const int64_t w_chunk_size = w_size / n_tile_num;
+
+        const int64_t nr0 = ne0;
+        const int64_t nr1 = ne1 * ne2 * ne3;
+
+        // Adopt the same style with current llama.cpp impl
+        // But different chunk size for 0/1 dim.
+        // No scrap.
+        const int chunk_size0 = ne0 / n_tile_num;
+        const int chunk_size1 = 8;  // TODO: tune in T-MAC
+
+        // nchunk0 == n_tile_num
+        int64_t nchunk0 = (nr0 + chunk_size0 - 1) / chunk_size0;
+        int64_t nchunk1 = (nr1 + chunk_size1 - 1) / chunk_size1;
+
+        int64_t dr0 = chunk_size0;
+        int64_t dr1 = chunk_size1;
+
+        // Rechunk
+        if ((nchunk1 == 1) && (nchunk0 > nth * 4)) {
+            // dr0 should be divisible by chunk_size0
+            dr0 = (ne0 / (nth * 4) / chunk_size0) * chunk_size0;
+            nchunk0 = (nr0 + dr0 - 1) / dr0;
+        }
+
+        int current_chunk = ith;
+
+        while (current_chunk < nchunk0 * nchunk1) {
+            const int64_t ith0 = current_chunk % nchunk0;
+            const int64_t ith1 = current_chunk / nchunk0;
+
+            const int64_t ir0_start = dr0 * ith0;
+            const int64_t ir0_end   = MIN(ir0_start + dr0, nr0);
+
+            const int64_t ir1_start = dr1 * ith1;
+            const int64_t ir1_end   = MIN(ir1_start + dr1, nr1);
+
+            // inline ggml_compute_forward_mul_mat_one_chunk here for simplicity
+            for (int64_t ichunk0 = ir0_start / chunk_size0; ichunk0 < ir0_end / chunk_size0; ichunk0++) {
+                const int64_t w_offset      = ichunk0 * w_chunk_size;
+                const int64_t scales_offset = ichunk0 * wt->scales_size / n_tile_num;
+
+                for (int64_t ine11 = ir1_start; ine11 < ir1_end; ine11++) {
+                    const int64_t qlut_offset       = ne10 * ine11 * 4;
+                    const int64_t lut_scales_offset = wt->lut_scales_size * ine11;
+                    const int64_t dst_offset        = ne0 * ine11 + ichunk0 * chunk_size0;
+
+                    ggml_tmac_mul_mat_task_compute(wt->qweights + w_offset,
+                                                   wt->scales + scales_offset,
+                                                   qlut + qlut_offset,
+                                                   lut_scales + lut_scales_offset,
+                                                   lut_biases + lut_scales_offset,
+                                                   act_output + dst_offset,
+                                                   chunk_size0, ne00, 1, bits);
+                    if (sizeof(tmac_float_type) == 2) {
+                        ggml_fp16_to_fp32_row(act_output + dst_offset, (float *) dst->data + dst_offset, chunk_size0);
+                    }
+                }
+            }
+
+            if (nth >= nchunk0 * nchunk1) {
+                break;
+            }
+
+            current_chunk = atomic_fetch_add_explicit(&params->threadpool->current_chunk, 1, memory_order_relaxed);
+        }
+#endif  // #if defined(TMAC_USE_TVM_THREADPOOL)
+        return;
+    }  // if (ggml_tmac_can_mul_mat(src0, src1, dst))
+#endif  // #if defined(GGML_USE_TMAC)
+
     if (src1->type != vec_dot_type) {
         char * wdata = params->wdata;
 
@@ -9123,6 +9276,10 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_I32:
         case GGML_TYPE_I64:
         case GGML_TYPE_F64:
+        case GGML_TYPE_I1:
+        case GGML_TYPE_I2:
+        case GGML_TYPE_I3:
+        case GGML_TYPE_I4:
         case GGML_TYPE_COUNT:
             {
                 GGML_ABORT("fatal error");
@@ -13172,6 +13329,11 @@ struct ggml_cplan ggml_graph_plan(
                 {
                     const enum ggml_type vec_dot_type = type_traits_cpu[node->src[0]->type].vec_dot_type;
 
+#if defined(GGML_USE_TMAC)
+                    if (ggml_tmac_can_mul_mat(node->src[0], node->src[1], node)) {
+                        cur = ggml_tmac_mul_mat_get_wsize(node->src[0], node->src[1], node);
+                    } else
+#endif
                     if (node->src[1]->type != vec_dot_type) {
                         cur = ggml_row_size(vec_dot_type, ggml_nelements(node->src[1]));
                     }
@@ -13706,6 +13868,10 @@ void ggml_cpu_init(void) {
 
 #if defined(__ARM_ARCH)
         ggml_init_arm_arch_features();
+#endif
+
+#if defined(GGML_USE_TMAC)
+        ggml_tmac_init();
 #endif
 
         is_first_call = false;

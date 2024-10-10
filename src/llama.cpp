@@ -9,6 +9,10 @@
 #include "ggml-backend.h"
 #include "ggml-cpp.h"
 
+#ifdef GGML_USE_TMAC
+#  include "ggml-tmac.h"
+#endif
+
 // TODO: replace with ggml API call
 #define QK_K 256
 
@@ -4434,6 +4438,10 @@ struct llama_model_loader {
                 case GGML_TYPE_Q4_0_4_4: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_4; break;
                 case GGML_TYPE_Q4_0_4_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_8; break;
                 case GGML_TYPE_Q4_0_8_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_8_8; break;
+                case GGML_TYPE_I1:      ftype = LLAMA_FTYPE_MOSTLY_INT_N;   break;
+                case GGML_TYPE_I2:      ftype = LLAMA_FTYPE_MOSTLY_INT_N;   break;
+                case GGML_TYPE_I3:      ftype = LLAMA_FTYPE_MOSTLY_INT_N;   break;
+                case GGML_TYPE_I4:      ftype = LLAMA_FTYPE_MOSTLY_INT_N;   break;
                 default:
                     {
                         LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
@@ -4775,7 +4783,9 @@ struct llama_model_loader {
 
     void done_getting_tensors() const {
         if (n_created != n_tensors) {
-            throw std::runtime_error(format("%s: wrong number of tensors; expected %d, got %d", __func__, n_tensors, n_created));
+            // Zero bias in some HuggingFace models will cause n_tensors mismatch
+            // Consider removing zero bias in convert_hf_to_gguf.py?
+            // throw std::runtime_error(format("%s: wrong number of tensors; expected %d, got %d", __func__, n_tensors, n_created));
         }
     }
 
@@ -5032,6 +5042,11 @@ struct llama_model_loader {
             }
 
             size_done += n_size;
+
+#if defined(GGML_USE_TMAC)
+            // Do pre-transformation to reduce first-run latency
+            ggml_tmac_transform_tensor(cur);
+#endif
         }
 
         // free temporary resources used for async uploads
@@ -5171,6 +5186,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_0:     return "Q5_0";
         case LLAMA_FTYPE_MOSTLY_Q5_1:     return "Q5_1";
         case LLAMA_FTYPE_MOSTLY_Q8_0:     return "Q8_0";
+        case LLAMA_FTYPE_MOSTLY_INT_N:    return "INT_N";
         case LLAMA_FTYPE_MOSTLY_Q2_K:     return "Q2_K - Medium";
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:   return "Q2_K - Small";
         case LLAMA_FTYPE_MOSTLY_Q3_K_S:   return "Q3_K - Small";
@@ -17183,6 +17199,13 @@ static void llama_graph_compute(
             ggml_cgraph * gf,
                     int   n_threads,
         ggml_threadpool * threadpool) {
+#ifdef GGML_USE_TMAC
+    #ifdef TMAC_USE_TVM_THREADPOOL
+        ggml_tmac_set_n_threads(n_threads);
+        n_threads = 1;
+    #endif
+#endif
+
     if (lctx.backend_cpu != nullptr) {
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
@@ -18442,6 +18465,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
         case LLAMA_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
         case LLAMA_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
+        case LLAMA_FTYPE_MOSTLY_INT_N:default_type = GGML_TYPE_I2;   break;
 
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:
@@ -18746,6 +18770,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
             if (params->output_tensor_type < GGML_TYPE_COUNT && strcmp(tensor->name, "output.weight") == 0) {
                 new_type = params->output_tensor_type;
+            }
+            if (tensor->type == GGML_TYPE_I1 ||
+                tensor->type == GGML_TYPE_I2 ||
+                tensor->type == GGML_TYPE_I3 ||
+                tensor->type == GGML_TYPE_I4) {
+                // no need quantize for iN
+                new_type = tensor->type;
             }
 
             // If we've decided to quantize to the same type the tensor is already

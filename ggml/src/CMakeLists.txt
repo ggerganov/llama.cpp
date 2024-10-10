@@ -870,6 +870,38 @@ if (GGML_KOMPUTE)
     endif()
 endif()
 
+if (GGML_TMAC)
+    find_package(TMAC)
+
+    if (TMAC_FOUND)
+        message(STATUS "TMAC found")
+
+        list(APPEND GGML_CDEF_PUBLIC GGML_USE_TMAC)
+
+        set(GGML_HEADERS_TMAC ../include/ggml-tmac.h)
+        set(GGML_SOURCES_TMAC ggml-tmac.cpp)
+
+        link_directories(${TMAC_LIB_DIR})
+        file(COPY ${TMAC_LIB_DIR}/kcfg.ini DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+        # TODO: link t_mac_object when GGML_TMAC_SYSLIB
+
+        if (GGML_TMAC_TVM_THREADPOOL)
+            add_compile_definitions(TMAC_USE_TVM_THREADPOOL)
+            set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} t_mac)
+        else()
+            if ((NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang") OR
+                (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
+                message(FATAL_ERROR "Clang is required for T-MAC compilation")
+            endif()
+
+            set(GGML_EXTRA_LIBS_PRIVATE ${GGML_EXTRA_LIBS_PRIVATE} t_mac_no_tvm)
+            set(GGML_SOURCES_TMAC ${GGML_SOURCES_TMAC} ${TMAC_KERNELS_SOURCE})
+        endif()
+    else()
+        message(WARNING "TMAC not found")
+    endif()
+endif()
+
 if (GGML_CPU_HBM)
     find_library(memkind memkind REQUIRED)
 
@@ -1170,6 +1202,26 @@ if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
             list(APPEND ARCH_FLAGS -mno-unaligned-access)
         endif()
+        if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" AND GGML_TMAC AND TMAC_FOUND)
+            # We need fullfp16 for T-MAC
+            # TODO: we need to simplify this logic through check_cxx_source_compiles or Presets?
+            check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmlaq_f32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_MATMUL_INT8)
+            if (GGML_COMPILER_SUPPORT_MATMUL_INT8)
+                # Device with armv8.7a+ cpu, e.g., WSL on Surface Laptop 7
+                # based on arm64-windows-llvm.cmake
+                list(APPEND ARCH_FLAGS -march=armv8.7-a+fp16 -fvectorize -ffp-model=fast -fno-finite-math-only)
+                add_compile_definitions(__ARM_FEATURE_MATMUL_INT8)
+            else ()
+                # Jetson AGX Orin, Raspberry Pi 5
+                list(APPEND ARCH_FLAGS -march=armv8.2a+fp16)
+            endif ()
+        endif()
+        if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ARM64" AND GGML_TMAC AND TMAC_FOUND)
+            # ARM Windows with LLVM clang GNU interface
+            # We need fullfp16 for T-MAC
+            # TODO: check_cxx_source_compiles
+            list(APPEND ARCH_FLAGS -march=armv8.2a+fp16)
+        endif()
         if (GGML_SVE)
             list(APPEND ARCH_FLAGS -march=armv8.6-a+sve)
         endif()
@@ -1184,7 +1236,9 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
             # TODO: improve, should not reference files from the parent folder
             include(../cmake/FindSIMD.cmake)
         endif ()
-        if (GGML_AVX512)
+        # Can't use GGML_AVX512 with Clang for MSVC
+        # with error: conflicting types for '_m_prefetchw
+        if (GGML_AVX512 AND (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang") AND (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
             list(APPEND ARCH_FLAGS /arch:AVX512)
             # MSVC has no compile-time flags enabling specific
             # AVX512 extensions, neither it defines the
@@ -1388,6 +1442,7 @@ add_library(ggml
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             ${GGML_SOURCES_AMX}       ${GGML_HEADERS_AMX}
             ${GGML_SOURCES_CANN}      ${GGML_HEADERS_CANN}
+            ${GGML_SOURCES_TMAC}      ${GGML_HEADERS_TMAC}
             ggml-aarch64.c            ggml-aarch64.h
             )
 

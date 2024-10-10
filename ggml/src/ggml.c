@@ -541,6 +541,42 @@ static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t *
 static void ggml_vec_dot_bf16(int n, float * restrict s, size_t bs, ggml_bf16_t * restrict x, size_t bx, ggml_bf16_t * restrict y, size_t by, int nrc);
 
 static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+    [GGML_TYPE_I1] = {
+        .type_name                = "i1",
+        .blck_size                = 8,
+        .type_size                = sizeof(int8_t),
+        .is_quantized             = false,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
+        .vec_dot_type             = GGML_TYPE_F32,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_I2] = {
+        .type_name                = "i2",
+        .blck_size                = 4,
+        .type_size                = sizeof(int8_t),
+        .is_quantized             = false,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
+        .vec_dot_type             = GGML_TYPE_F32,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_I3] = {
+        .type_name                = "i3",
+        .blck_size                = 2,
+        .type_size                = sizeof(int8_t),
+        .is_quantized             = false,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
+        .vec_dot_type             = GGML_TYPE_F32,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_I4] = {
+        .type_name                = "i4",
+        .blck_size                = 2,
+        .type_size                = sizeof(int8_t),
+        .is_quantized             = false,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
+        .vec_dot_type             = GGML_TYPE_F32,
+        .nrows                    = 1,
+    },
     [GGML_TYPE_I8] = {
         .type_name                = "i8",
         .blck_size                = 1,
@@ -1161,6 +1197,14 @@ size_t ggml_nbytes(const struct ggml_tensor * tensor) {
             nbytes += (tensor->ne[i] - 1)*tensor->nb[i];
         }
     }
+#if defined(GGML_USE_TMAC)
+    if(tensor->type == GGML_TYPE_I1 ||
+       tensor->type == GGML_TYPE_I2 ||
+       tensor->type == GGML_TYPE_I3 ||
+       tensor->type == GGML_TYPE_I4){
+        nbytes = ggml_tmac_get_nbytes(tensor);
+    }
+#endif
 
     return nbytes;
 }
