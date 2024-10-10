@@ -967,6 +967,27 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_sparam());
     add_opt(llama_arg(
+        {"-xtc-p", "--xtc-probability"}, "N",
+        format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_probability),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.xtc_probability = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
+        {"-xtc-t", "--xtc-threshold"}, "N",
+        format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sparams.xtc_threshold),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.xtc_threshold = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
+        {"-xtc-t-max", "--xtc-threshold-max"}, "N",
+        format("xtc upper threshold (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_threshold_max),
+        [](gpt_params & params, const std::string & value) {
+            params.sparams.xtc_threshold_max = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(llama_arg(
         {"--tfs"}, "N",
         format("tail free sampling, parameter z (default: %.1f, 1.0 = disabled)", (double)params.sparams.tfs_z),
         [](gpt_params & params, const std::string & value) {

@@ -1059,6 +1059,114 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
     };
 }
 
+// xtc
+
+struct llama_sampler_xtc {
+    const float    probability;
+    const float    threshold;
+    const float    threshold_max;
+    const size_t   min_keep;
+
+    const uint32_t seed;
+    uint32_t       seed_cur;
+
+    std::mt19937   rng;
+};
+
+static const char * llama_sampler_xtc_name(const struct llama_sampler * /*smpl*/) {
+    return "xtc";
+}
+
+static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    auto * ctx = (llama_sampler_xtc *) smpl->ctx;
+
+    if (ctx->probability <= 0.0f
+        || ctx->threshold > 0.5f
+        || ctx->threshold_max <= 0.0f
+        || ctx->threshold_max <= ctx->threshold
+        || cur_p->size <= 2) {
+        return;
+    }
+
+    std::uniform_real_distribution<float> distance(0.0f, 1.0f);
+    float chance = distance(ctx->rng);
+    if (chance > ctx->probability) return;
+
+    // in case it's not sorted/recalculated yet
+    llama_sampler_softmax_impl(cur_p);
+
+    int pos_first = -1;
+    int pos_last = 0;
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        if (cur_p->data[i].p - ctx->threshold >= -1e-5) {
+            if (cur_p->data[i].p - ctx->threshold_max > 1e-3) pos_first = i;
+            pos_last = i;
+        } else {
+            break;
+        }
+    }
+
+    size_t to_remove = pos_last - (1 + pos_first);
+
+    if (cur_p->size - to_remove < ctx->min_keep || to_remove < 1) return;
+
+    for (size_t i = pos_first + 1; i < cur_p->size - to_remove + 1; ++i) {
+        cur_p->data[i] = cur_p->data[i + to_remove];
+    }
+
+    cur_p->size = cur_p->size - to_remove;
+}
+
+static struct llama_sampler * llama_sampler_xtc_clone(const struct llama_sampler * smpl) {
+    const auto * ctx = (const llama_sampler_xtc *) smpl->ctx;
+    auto * result = llama_sampler_init_xtc(ctx->probability, ctx->threshold, ctx->threshold_max, ctx->min_keep, ctx->seed);
+
+    // copy the state
+    {
+        auto * result_ctx = (llama_sampler_xtc *) result->ctx;
+
+        result_ctx->rng = ctx->rng;
+    }
+
+    return result;
+}
+
+static void llama_sampler_xtc_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_xtc *) smpl->ctx;
+}
+
+static void llama_sampler_xtc_reset(struct llama_sampler * smpl) {
+    auto * ctx = (llama_sampler_xtc *) smpl->ctx;
+    ctx->seed_cur = get_rng_seed(ctx->seed);
+    ctx->rng.seed(ctx->seed_cur);
+}
+
+static struct llama_sampler_i llama_sampler_xtc_i = {
+    /* .name   = */ llama_sampler_xtc_name,
+    /* .accept = */ nullptr,
+    /* .apply  = */ llama_sample_xtc_apply,
+    /* .reset  = */ llama_sampler_xtc_reset,
+    /* .clone  = */ llama_sampler_xtc_clone,
+    /* .free   = */ llama_sampler_xtc_free,
+};
+
+struct llama_sampler * llama_sampler_init_xtc(float p, float t, float t_max, size_t min_keep, uint32_t seed) {
+    auto seed_cur = get_rng_seed(seed);
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_xtc_i,
+        /* .ctx   = */ new llama_sampler_xtc {
+            /* .probability   = */ p,
+            /* .threshold     = */ t,
+            /* .threshold_max = */ t_max,
+            /* .min_keep      = */ min_keep,
+            /* .seed          = */ seed,
+            /* .seed_cur      = */ seed_cur,
+            /* .rng           = */ std::mt19937(seed_cur),
+        },
+    };
+}
+
 // mirostat
 
 struct llama_sampler_mirostat {
