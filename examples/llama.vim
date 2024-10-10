@@ -12,14 +12,14 @@ highlight llama_hl_hint guifg=#ff772f
 highlight llama_hl_info guifg=#77ff2f
 
 let s:default_config = {
-    \ 'endpoint':    'http://127.0.0.1:8012/infill',
-    \ 'n_prefix':    128,
-    \ 'n_suffix':    128,
-    \ 'n_predict':   64,
-    \ 'n_probs':     3,
-    \ 'temperature': 0.1,
-    \ 'auto_fim':    v:true,
-    \ 'stop':        ["\n"]
+    \ 'endpoint':         'http://127.0.0.1:8012/infill',
+    \ 'n_prefix':         128,
+    \ 'n_suffix':         128,
+    \ 'n_predict':        64,
+    \ 't_max_prompt_ms':  300,
+    \ 't_max_predict_ms': 200,
+    \ 'auto_fim':         v:true,
+    \ 'stop':             ["\n"]
     \ }
 
 let g:llama_config = get(g:, 'llama_config', s:default_config)
@@ -48,6 +48,8 @@ function! llama#init()
         autocmd!
         autocmd InsertEnter * inoremap <buffer> <silent> <C-F> <C-O>:call llama#fim(v:false)<CR>
         autocmd InsertLeave * call llama#fim_cancel()
+
+        autocmd CursorMoved * call llama#fim_cancel()
     augroup END
 
     silent! call llama#fim_cancel()
@@ -85,19 +87,20 @@ function! llama#fim(is_auto) abort
         \ . "\n"
 
     let l:request = json_encode({
-        \ 'prompt':         "",
-        \ 'input_prefix':   l:prefix,
-        \ 'input_suffix':   l:suffix,
-       "\ 'stop':           g:llama_config.stop,
-        \ 'n_predict':      g:llama_config.n_predict,
-       "\ 'n_probs':        g:llama_config.n_probs,
-        \ 'penalty_last_n': 0,
-        \ 'temperature':    g:llama_config.temperature,
-        \ 'top_k':          5,
-        \ 'infill_p':       0.20,
-        \ 'infill_p_eog':   0.001,
-        \ 'stream':         v:false,
-        \ 'samplers':       ["top_k", "infill"]
+        \ 'prompt':           "",
+        \ 'input_prefix':     l:prefix,
+        \ 'input_suffix':     l:suffix,
+       "\ 'stop':             g:llama_config.stop,
+        \ 'n_predict':        g:llama_config.n_predict,
+        \ 'penalty_last_n':   0,
+        \ 'top_k':            5,
+        \ 'infill_p':         0.20,
+        \ 'infill_p_eog':     0.001,
+        \ 'stream':           v:false,
+        \ 'samplers':         ["top_k", "infill"],
+        \ 't_max_prompt_ms':  g:llama_config.t_max_prompt_ms,
+        \ 't_max_predict_ms': g:llama_config.t_max_predict_ms,
+        \ 'cache_prompt':     v:true
         \ })
 
     let l:curl_command = printf(
@@ -181,9 +184,9 @@ function! s:fim_on_stdout(job_id, data, event) dict
     let l:t_prompt_ms = 1.0
     let l:s_prompt    = 0
 
-    let l:n_gen    = 0
-    let l:t_gen_ms = 1.0
-    let l:s_gen    = 0
+    let l:n_predict    = 0
+    let l:t_predict_ms = 1.0
+    let l:s_predict    = 0
 
     if s:can_accept && v:shell_error
         if !self.is_auto
@@ -221,9 +224,9 @@ function! s:fim_on_stdout(job_id, data, event) dict
             let l:t_prompt_ms = get(l:timings, 'prompt_ms', 1)
             let l:s_prompt    = get(l:timings, 'prompt_per_second', 0)
 
-            let l:n_gen    = get(l:timings, 'predicted_n', 0)
-            let l:t_gen_ms = get(l:timings, 'predicted_ms', 1)
-            let l:s_gen    = get(l:timings, 'predicted_per_second', 0)
+            let l:n_predict    = get(l:timings, 'predicted_n', 0)
+            let l:t_predict_ms = get(l:timings, 'predicted_ms', 1)
+            let l:s_predict    = get(l:timings, 'predicted_per_second', 0)
         endif
     endif
 
@@ -256,8 +259,8 @@ function! s:fim_on_stdout(job_id, data, event) dict
 
         let l:info = printf("%s | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f.2 ms",
             \ l:prefix,
-            \ l:n_prompt, l:t_prompt_ms, l:s_prompt,
-            \ l:n_gen, l:t_gen_ms, l:s_gen,
+            \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
+            \ l:n_predict, l:t_predict_ms, l:s_predict,
             \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
             \ )
 
