@@ -10,32 +10,15 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
-> [!IMPORTANT]
-[2024 Jun 12] Binaries have been renamed w/ a `llama-` prefix. `main` is now `llama-cli`, `server` is `llama-server`, etc (https://github.com/ggerganov/llama.cpp/pull/7809)
-
 ## Recent API changes
 
-- [2024 Jun 26] The source code and CMake build scripts have been restructured https://github.com/ggerganov/llama.cpp/pull/8006
-- [2024 Apr 21] `llama_token_to_piece` can now optionally render special tokens https://github.com/ggerganov/llama.cpp/pull/6807
-- [2024 Apr 4] State and session file functions reorganized under `llama_state_*` https://github.com/ggerganov/llama.cpp/pull/6341
-- [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
-- [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
-- [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
-- [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
-- [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
+- [Changelog for `libllama` API](https://github.com/ggerganov/llama.cpp/issues/9289)
+- [Changelog for `llama-server` REST API](https://github.com/ggerganov/llama.cpp/issues/9291)
 
 ## Hot topics
 
-- **`convert.py` has been deprecated and moved to `examples/convert_legacy_llama.py`, please use `convert_hf_to_gguf.py`** https://github.com/ggerganov/llama.cpp/pull/7430
-- Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021
-- BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
-- MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
-- Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
-- Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
-- Multi-GPU pipeline parallelism support https://github.com/ggerganov/llama.cpp/pull/6017
-- Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
-- Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
-- Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
+- **Hugging Face Inference Endpoints now support GGUF out of the box! https://github.com/ggerganov/llama.cpp/discussions/9669**
+- Hugging Face GGUF editor: [discussion](https://github.com/ggerganov/llama.cpp/discussions/9268) | [tool](https://huggingface.co/spaces/CISCai/gguf-editor)
 
 ----
 
@@ -95,6 +78,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
 - [x] [OLMo](https://allenai.org/olmo)
+- [x] [OLMoE](https://huggingface.co/allenai/OLMoE-1B-7B-0924)
 - [x] [Granite models](https://huggingface.co/collections/ibm-granite/granite-code-models-6624c5cec322e4c148c8b330)
 - [x] [GPT-NeoX](https://github.com/EleutherAI/gpt-neox) + [Pythia](https://github.com/EleutherAI/pythia)
 - [x] [Snowflake-Arctic MoE](https://huggingface.co/collections/Snowflake/arctic-66290090abe542894a5ac520)
@@ -105,6 +89,10 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Open Elm models](https://huggingface.co/collections/apple/openelm-instruct-models-6619ad295d7ae9f868b759ca)
 - [x] [ChatGLM3-6b](https://huggingface.co/THUDM/chatglm3-6b) + [ChatGLM4-9b](https://huggingface.co/THUDM/glm-4-9b)
 - [x] [SmolLM](https://huggingface.co/collections/HuggingFaceTB/smollm-6695016cad7167254ce15966)
+- [x] [EXAONE-3.0-7.8B-Instruct](https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct)
+- [x] [FalconMamba Models](https://huggingface.co/collections/tiiuae/falconmamba-7b-66b9a580324dd1598b0f6d4a)
+- [x] [Jais](https://huggingface.co/inceptionai/jais-13b-chat)
+- [x] [Bielik-11B-v2.3](https://huggingface.co/collections/speakleash/bielik-11b-v23-66ee813238d9b526a072408a)
 
 (instructions for supporting more models: [HOWTO-add-model.md](./docs/development/HOWTO-add-model.md))
 
@@ -126,6 +114,7 @@ Typically finetunes of the base models below are supported as well.
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
 - Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
 - JS/TS (llama.cpp server client): [lgrammel/modelfusion](https://modelfusion.dev/integration/model-provider/llamacpp)
+- JS/TS (Programmable Prompt Engine CLI): [offline-ai/cli](https://github.com/offline-ai/cli)
 - JavaScript/Wasm (works in browser): [tangledgroup/llama-cpp-wasm](https://github.com/tangledgroup/llama-cpp-wasm)
 - Typescript/Wasm (nicer API, available on npm): [ngxson/wllama](https://github.com/ngxson/wllama)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
@@ -179,17 +168,23 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
 - [AIKit](https://github.com/sozercan/aikit) (MIT)
 - [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS) (AGPL)
+- [LLMUnity](https://github.com/undreamai/LLMUnity) (MIT)
+- [Llama Assistant](https://github.com/vietanhdev/llama-assistant) (GPL)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
 **Tools:**
 
 - [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
+- [akx/ollama-dl](https://github.com/akx/ollama-dl) – download models from the Ollama library to be used directly with llama.cpp
 - [crashr/gppm](https://github.com/crashr/gppm) – launch llama.cpp instances utilizing NVIDIA Tesla P40 or P100 GPUs with reduced idle power consumption
+- [gpustack/gguf-parser](https://github.com/gpustack/gguf-parser-go/tree/main/cmd/gguf-parser) - review/check the GGUF file and estimate the memory usage
+- [Styled Lines](https://marketplace.unity.com/packages/tools/generative-ai/styled-lines-llama-cpp-model-292902) (proprietary licensed, async wrapper of inference part for game development in Unity3d with prebuild Mobile and Web platform wrappers and a model example)
 
 **Infrastructure:**
 
 - [Paddler](https://github.com/distantmagic/paddler) - Stateful load balancer custom-tailored for llama.cpp
+- [GPUStack](https://github.com/gpustack/gpustack) - Manage GPU clusters for running LLMs
 
 **Games:**
 - [Lucy's Labyrinth](https://github.com/MorganRO8/Lucys_Labyrinth) - A simple maze game where agents controlled by an AI model will try to trick you.
@@ -422,6 +417,7 @@ Please refer to [Build llama.cpp locally](./docs/build.md)
 | [CUDA](./docs/build.md#cuda) | Nvidia GPU |
 | [hipBLAS](./docs/build.md#hipblas) | AMD GPU |
 | [Vulkan](./docs/build.md#vulkan) | GPU |
+| [CANN](./docs/build.md#cann) | Ascend NPU |
 
 ## Tools
 
@@ -449,7 +445,7 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 - Contributors can open PRs
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
 - Collaborators will be invited based on contributions
-- Any help with managing issues and PRs is very appreciated!
+- Any help with managing issues, PRs and projects is very appreciated!
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
 - Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)

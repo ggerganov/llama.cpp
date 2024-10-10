@@ -5,7 +5,6 @@ BUILD_TARGETS = \
 	llama-batched \
 	llama-batched-bench \
 	llama-bench \
-	llama-benchmark-matmult \
 	llama-cli \
 	llama-convert-llama2c-to-ggml \
 	llama-embedding \
@@ -19,6 +18,7 @@ BUILD_TARGETS = \
 	llama-imatrix \
 	llama-infill \
 	llama-llava-cli \
+	llama-minicpmv-cli\
 	llama-lookahead \
 	llama-lookup \
 	llama-lookup-create \
@@ -38,10 +38,12 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-vdot \
 	llama-cvector-generator \
+	llama-gen-docs \
 	tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
+	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
 	tests/test-chat-template \
@@ -51,6 +53,7 @@ TEST_TARGETS = \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
 	tests/test-llama-grammar \
+	tests/test-log \
 	tests/test-model-load-cancel \
 	tests/test-opt \
 	tests/test-quantize-fns \
@@ -64,7 +67,7 @@ TEST_TARGETS = \
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
 LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
-	retrieval speculative infill tokenize benchmark-matmult parallel export-lora lookahead lookup passkey gritlm
+	retrieval speculative infill tokenize parallel export-lora lookahead lookup passkey gritlm
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
 #  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
@@ -143,6 +146,14 @@ endif
 ifdef LLAMA_NO_METAL
 GGML_NO_METAL := 1
 DEPRECATE_WARNING := 1
+endif
+
+ifdef LLAMA_DISABLE_LOGS
+REMOVE_WARNING := 1
+endif
+
+ifdef LLAMA_SERVER_VERBOSE
+REMOVE_WARNING := 1
 endif
 
 ifndef UNAME_S
@@ -348,18 +359,10 @@ ifdef LLAMA_SANITIZE_UNDEFINED
 	MK_LDFLAGS  += -fsanitize=undefined -g
 endif
 
-ifdef LLAMA_SERVER_VERBOSE
-	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
-endif
-
 ifdef LLAMA_SERVER_SSL
 	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
 	MK_LDFLAGS += -lssl -lcrypto
 endif
-
-ifdef LLAMA_DISABLE_LOGS
-	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
 
 # warnings
 WARN_FLAGS = \
@@ -431,7 +434,7 @@ endif
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 
-ifndef RISCV
+ifndef RISCV_CROSS_COMPILE
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
@@ -511,7 +514,12 @@ ifneq ($(filter loongarch64%,$(UNAME_M)),)
 	MK_CXXFLAGS += -mlasx
 endif
 
-else
+ifneq ($(filter riscv64%,$(UNAME_M)),)
+	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
+	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
+endif
+
+else # RISC-V CROSS COMPILATION
 	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
@@ -602,7 +610,7 @@ ifdef GGML_CUDA
 
 		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include
 		MK_LDFLAGS   += -lmusa -lmublas -lmusart -lpthread -ldl -lrt -L$(CUDA_PATH)/lib -L/usr/lib64
-		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_22
+		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22
 	else
 		ifneq ('', '$(wildcard /opt/cuda)')
 			CUDA_PATH ?= /opt/cuda
@@ -610,7 +618,7 @@ ifdef GGML_CUDA
 			CUDA_PATH ?= /usr/local/cuda
 		endif
 
-		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
+		MK_CPPFLAGS  += -DGGML_USE_CUDA -DGGML_CUDA_USE_GRAPHS -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include
 		MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
 		MK_NVCCFLAGS += -use_fast_math
 	endif # GGML_MUSA
@@ -760,6 +768,10 @@ endif
 
 ifdef GGML_VULKAN_MEMORY_DEBUG
 	MK_CPPFLAGS  += -DGGML_VULKAN_MEMORY_DEBUG
+endif
+
+ifdef GGML_VULKAN_PERF
+	MK_CPPFLAGS  += -DGGML_VULKAN_PERF
 endif
 
 ifdef GGML_VULKAN_VALIDATE
@@ -918,11 +930,12 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
+	common/arg.o \
+	common/log.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
 	common/train.o \
-	common/grammar-parser.o \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
@@ -1015,6 +1028,14 @@ $(info   - LLAMA_NO_CCACHE)
 $(info )
 endif
 
+ifdef REMOVE_WARNING
+$(info !!! REMOVAL WARNING !!!)
+$(info The following LLAMA_ options have been removed and are no longer supported)
+$(info   - LLAMA_DISABLE_LOGS   (https://github.com/ggerganov/llama.cpp/pull/9418))
+$(info   - LLAMA_SERVER_VERBOSE (https://github.com/ggerganov/llama.cpp/pull/9418))
+$(info )
+endif
+
 #
 # Build libraries
 #
@@ -1033,10 +1054,11 @@ ggml/src/ggml-alloc.o: \
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
 ggml/src/ggml-backend.o: \
-	ggml/src/ggml-backend.c \
+	ggml/src/ggml-backend.cpp \
+	ggml/src/ggml-backend-impl.h \
 	ggml/include/ggml.h \
 	ggml/include/ggml-backend.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 ggml/src/ggml-quants.o: \
 	ggml/src/ggml-quants.c \
@@ -1151,6 +1173,16 @@ common/common.o: \
 	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+common/arg.o: \
+	common/arg.cpp \
+	common/arg.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/log.o: \
+	common/log.cpp \
+	common/log.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 common/sampling.o: \
 	common/sampling.cpp \
 	common/sampling.h \
@@ -1160,11 +1192,6 @@ common/sampling.o: \
 common/console.o: \
 	common/console.cpp \
 	common/console.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-common/grammar-parser.o: \
-	common/grammar-parser.cpp \
-	common/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/json-schema-to-grammar.o: \
@@ -1206,6 +1233,7 @@ clean:
 	rm -rvf ggml/*.dll
 	rm -rvf ggml/*.so
 	rm -vrf ggml/src/*.o
+	rm -rvf ggml/src/llamafile/*.o
 	rm -rvf common/build-info.cpp
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
@@ -1333,7 +1361,7 @@ llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp \
-	$(OBJ_GGML) $(OBJ_LLAMA)
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1427,6 +1455,7 @@ llama-server: \
 	examples/server/system-prompts.js.hpp \
 	examples/server/prompt-formats.js.hpp \
 	examples/server/json-schema-to-grammar.mjs.hpp \
+	examples/server/loading.html.hpp \
 	common/json.hpp \
 	common/stb_image.h \
 	$(OBJ_ALL)
@@ -1442,6 +1471,11 @@ examples/server/%.hpp: examples/server/public/% Makefile
 		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
 
+llama-gen-docs: examples/gen-docs/gen-docs.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
@@ -1452,15 +1486,20 @@ libllava.a: examples/llava/llava.cpp \
 	$(CXX) $(CXXFLAGS) -static -fPIC -c $< -o $@ -Wno-cast-qual
 
 llama-llava-cli: examples/llava/llava-cli.cpp \
-	examples/llava/clip.h \
-	examples/llava/clip.cpp \
-	examples/llava/llava.h \
 	examples/llava/llava.cpp \
+	examples/llava/llava.h \
+	examples/llava/clip.cpp \
+	examples/llava/clip.h \
 	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) -c examples/llava/clip.cpp  -o $(call GET_OBJ_FILE, examples/llava/clip.cpp) -Wno-cast-qual
-	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
+
+llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
+	examples/llava/llava.cpp \
+	examples/llava/llava.h \
+	examples/llava/clip.cpp \
+	examples/llava/clip.h \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
 
 ifeq ($(UNAME_S),Darwin)
 swift: examples/batched.swift
@@ -1484,17 +1523,17 @@ common/build-info.o: common/build-info.cpp
 
 tests: $(TEST_TARGETS)
 
-llama-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp \
-	$(OBJ_GGML) common/build-info.o
+tests/test-arg-parser: tests/test-arg-parser.cpp \
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-run-benchmark-matmult: llama-benchmark-matmult
-	./$@
-
-.PHONY: run-benchmark-matmult swift
-
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-log: tests/test-log.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
