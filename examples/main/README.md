@@ -243,19 +243,19 @@ Example usage: `--mirostat 2 --mirostat-lr 0.05 --mirostat-ent 3.0`
 
 ### XTC Sampling
 
--   `--xtc-p N`: Sets the chance for token removal (checked once on sampler start) (default: 0.5).
--   `--xtc-t N`: Sets a minimum probability threshold for tokens to be removed (default: 0.1).
--   `--xtc-t-max N`: Sets a maximum probability threshold for tokens to be removed (highly expetrimental) (default: 1.0).
+-   `--xtc-probability N`: Sets the chance for token removal (checked once on sampler start) (default: 0.0).
+-   `--xtc-threshold N`: Sets a minimum probability threshold for tokens to be removed (default: 0.1).
+-   `--xtc-threshold-max N`: Sets a maximum probability threshold for tokens to be removed (highly experimental) (default: 1.0).
 
-Exclude Top Choices (XTC) is a unique sampler that is designed to remove top tokens from consideration and avoid more obvious and repetitive answers. With a chance of `xtc-p` it searches for tokens with probabilities of `xtc-t` threshold and above, then removes all such tokens except the least probable one.
+Exclude Top Choices (XTC) is a unique sampler that is designed to remove top tokens from consideration and avoid more obvious and repetitive outputs. With a chance of `xtc-p` it searches for tokens with probabilities of `xtc-threshold` and above, then removes all such tokens except the least probable one.
 
-By removing top tokens XTC can improve variety of answers, break writing clichés and inhibit repition, since clichés and repeated phrases are usually more likely to appear. By keeping the last top token XTC ensures that the answer is still coherent. XTC is meant to be used for creative tasks, but feel free to experiment with different settings for different models.
+By removing top tokens XTC can improve the variety of answers, break writing clichés and inhibit repition, since clichés and repeated phrases are usually more likely to appear. By keeping the last token above the threshold, XTC ensures that the answer is still coherent. XTC is meant to be used for creative tasks, but feel free to experiment with different settings for different models.
 
-The additional `xtc-t-max` parameter may help with finetuned models that already give relatively creative output, meaning that clichés and repetitive phrases may appear at lower probabilities. It allows to remove tokens from a middle range which will always be specific to a model, requiring careful experimenting. Leave `xtc-t-max` on default 1.0 for all base/instruct models.
+The additional `xtc-threshold-max` parameter may help with finetuned models that already give relatively creative output, meaning that clichés and repetitive phrases may appear at lower probabilities. It allows to remove tokens from a middle range which will always be specific to a model, requiring careful experimenting. Leave `xtc-threshold-max` on default 1.0 for all base/instruct models.
 
-Being experimental and unique, XTC is not included in the default sampling queue. You can start from a recommended combination of Min-P followed by XTC on its default settings: `--sampling-seq mx --min-p 0.02`.
+Being experimental and unique, XTC is disabled by default. The recommended combination of samplers is Min-P followed by XTC on its default settings: `--sampling-seq mx --min-p 0.02 -xtc-p 0.5`.
 
-Example usage: `--xtc-p 0.5 --xtc-t 0.1 --xtc-t-max 1.0`
+Example usage: `-xtc-p 0.5 -xtc-t 0.1 -xtc-t-max 1.0`
 
 ### Logit Bias
 

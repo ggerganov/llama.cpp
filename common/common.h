@@ -109,9 +109,9 @@ struct gpt_sampler_params {
     int32_t top_k             = 40;    // <= 0 to use vocab size
     float   top_p             = 0.95f; // 1.0 = disabled
     float   min_p             = 0.05f; // 0.0 = disabled
-    float   xtc_p             = 0.50f; // 0.0 = disabled
-    float   xtc_t             = 0.10f; // 1.0 = disabled
-    float   xtc_t_max         = 1.00f; // 0.0 = disabled
+    float   xtc_probability   = 0.00f; // 0.0 = disabled
+    float   xtc_threshold     = 0.10f; // 0.5 = disabled
+    float   xtc_threshold_max = 1.00f; // 0.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
     float   typ_p             = 1.00f; // typical_p, 1.0 = disabled
     float   temp              = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
@@ -134,6 +134,7 @@ struct gpt_sampler_params {
         GPT_SAMPLER_TYPE_TYPICAL_P,
         GPT_SAMPLER_TYPE_TOP_P,
         GPT_SAMPLER_TYPE_MIN_P,
+        GPT_SAMPLER_TYPE_XTC,
         GPT_SAMPLER_TYPE_TEMPERATURE
     };
 
