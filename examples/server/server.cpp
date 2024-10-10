@@ -128,9 +128,12 @@ struct slot_params {
     bool stream       = true;
     bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
 
-    int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
-    int32_t  n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
-    int32_t  n_predict = -1; // new tokens to predict
+    int32_t n_keep    =  0; // number of tokens to keep from initial prompt
+    int32_t n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
+    int32_t n_predict = -1; // new tokens to predict
+
+    int64_t t_max_prompt_ms  = -1;
+    int64_t t_max_predict_ms = -1;
 
     std::vector<std::string> antiprompt;
 
@@ -968,6 +971,10 @@ struct server_context {
             }
         }
 
+        // time limits
+        slot.params.t_max_prompt_ms  = json_value(data, "t_max_prompt_ms",  default_params.t_max_prompt_ms);
+        slot.params.t_max_predict_ms = json_value(data, "t_max_predict_ms", default_params.t_max_predict_ms);
+
         {
             slot.sparams.logit_bias.clear();
 
@@ -1181,6 +1188,13 @@ struct server_context {
             slot.has_next_token = false;
 
             SLT_DBG(slot, "stopped by limit, n_decoded = %d, n_predict = %d\n", slot.n_decoded, slot.params.n_predict);
+        }
+
+        if (slot.params.t_max_predict_ms > 0 && (ggml_time_us() - slot.t_start_generation > 1000.0f*slot.params.t_max_predict_ms)) {
+            slot.stopped_limit  = true;
+            slot.has_next_token = false;
+
+            SLT_DBG(slot, "stopped by time limit, n_decoded = %d, t_max_predict_ms = %d ms\n", slot.n_decoded, (int) slot.params.t_max_predict_ms);
         }
 
         // if context shift is disabled, we stop when it reaches the context limit
@@ -2003,6 +2017,13 @@ struct server_context {
                                 {
                                     auto prefix_tokens = tokenize(slot.params.input_prefix, false, false);
                                     auto suffix_tokens = tokenize(slot.params.input_suffix, false, false);
+
+                                    // for now pick context to fit in a single batch
+                                    const int n_suffix_take = std::min<int>(suffix_tokens.size(), n_batch/2);
+                                    const int n_prefix_take = std::min<int>(prefix_tokens.size(), (n_batch - 3) - n_suffix_take);
+
+                                    prefix_tokens.erase(prefix_tokens.begin(), prefix_tokens.begin() + prefix_tokens.size() - n_prefix_take);
+                                    suffix_tokens.resize(n_suffix_take);
 
                                     prefix_tokens.insert(prefix_tokens.begin(), llama_token_fim_pre(model));
                                     suffix_tokens.insert(suffix_tokens.begin(), llama_token_fim_suf(model));
