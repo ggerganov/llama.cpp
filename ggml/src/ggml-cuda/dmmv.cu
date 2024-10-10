@@ -480,10 +480,7 @@ static __global__ void dequantize_mul_mat_vec(const void * __restrict__ vx, cons
             if ( y_offset == 1 ) {
                 // load 2 dfloats into register in a single instruction
                 const dfloat2 y_reg = *((dfloat2 *) &(y[iybs + iqs + j/qr]));
-                tmp += __hmul2(v, {
-                        y_reg.x;
-                        y_reg.y;
-                    });
+                tmp += __hmul2(v, y_reg);
             }
             else {
                 tmp += __hmul2(v, {
