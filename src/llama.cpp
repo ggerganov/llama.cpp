@@ -6577,6 +6577,7 @@ static void llm_load_vocab(
                         || t.first == "<end_of_turn>"
                         || t.first == "<|endoftext|>"
                         || t.first == "<EOT>"
+                        || t.first == "<｜end▁of▁sentence｜>" // DeepSeek
                    ) {
                     vocab.special_eot_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
@@ -6591,7 +6592,7 @@ static void llm_load_vocab(
             if (vocab.special_eom_id == LLAMA_TOKEN_NULL) {
                 if (false
                         || t.first == "<|eom_id|>"
-                   ) {
+                        ) {
                     vocab.special_eom_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -6604,9 +6605,11 @@ static void llm_load_vocab(
             // find FIM_PRE token: "<|fim_prefix|>", "<fim-prefix>", "<PRE>", etc.
             if (vocab.special_fim_pre_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        || t.first == "<|fim_prefix|>"
+                        || t.first == "<|fim_prefix|>"  // Qwen
                         || t.first == "<fim-prefix>"
-                        || t.first == "<PRE>") {
+                        || t.first == "<｜fim▁begin｜>" // DeepSeek
+                        || t.first == "<PRE>"
+                        ) {
                     vocab.special_fim_pre_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -6619,9 +6622,11 @@ static void llm_load_vocab(
             // find FIM_SUF token: "<|fim_suffix|>", "<fim-suffix>", "<SUF>", etc.
             if (vocab.special_fim_suf_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        || t.first == "<|fim_suffix|>"
+                        || t.first == "<|fim_suffix|>" // Qwen
                         || t.first == "<fim-suffix>"
-                        || t.first == "<SUF>") {
+                        || t.first == "<｜fim▁hole｜>" // DeepSeek
+                        || t.first == "<SUF>"
+                        ) {
                     vocab.special_fim_suf_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -6634,9 +6639,11 @@ static void llm_load_vocab(
             // find FIM_MID token: "<|fim_middle|>", "<fim-middle>", "<MID>", etc.
             if (vocab.special_fim_mid_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        || t.first == "<|fim_middle|>"
+                        || t.first == "<|fim_middle|>" // Qwen
                         || t.first == "<fim-middle>"
-                        || t.first == "<MID>") {
+                        || t.first == "<｜fim▁end｜>"  // DeepSeek
+                        || t.first == "<MID>"
+                        ) {
                     vocab.special_fim_mid_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -6649,9 +6656,10 @@ static void llm_load_vocab(
             // find FIM_PAD token: "<|fim_pad|>", "<fim-pad>", "<PAD>", etc.
             if (vocab.special_fim_pad_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        || t.first == "<|fim_pad|>"
+                        || t.first == "<|fim_pad|>" // Qwen
                         || t.first == "<fim-pad>"
-                        || t.first == "<PAD>") {
+                        || t.first == "<PAD>"
+                        ) {
                     vocab.special_fim_pad_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -6664,10 +6672,11 @@ static void llm_load_vocab(
             // find FIM_REP token: "<|fim_repo|>", "<fim-repo>", "<REP>", etc.
             if (vocab.special_fim_rep_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        || t.first == "<|fim_repo|>"
+                        || t.first == "<|fim_repo|>"  // Qwen
                         || t.first == "<|repo_name|>"
                         || t.first == "<fim-repo>"
-                        || t.first == "<REPO>") {
+                        || t.first == "<REPO>"
+                        ) {
                     vocab.special_fim_rep_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -6680,7 +6689,8 @@ static void llm_load_vocab(
             // find FIM_SEP token: "<|file_sep|>"
             if (vocab.special_fim_sep_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        || t.first == "<|file_sep|>") {
+                        || t.first == "<|file_sep|>" // Qwen
+                        ) {
                     vocab.special_fim_sep_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
                         LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
@@ -19512,7 +19522,7 @@ struct llama_context * llama_new_context_with_model(
             }
 
             LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
-                (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
+                      (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
                 ggml_type_name(type_k), (float)memory_size_k / (1024.0f * 1024.0f),
                 ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
         }
