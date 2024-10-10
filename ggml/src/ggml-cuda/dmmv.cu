@@ -419,8 +419,8 @@ static __device__ void convert_f16(const void * vx, const int64_t ib, const int 
     // load 2 halfs into register in a single instruction
     const half2 x_reg = *((half2 *) &(x[ib + iqs]));
     // automatic half -> float type cast if dfloat == float
-    v.x = x_reg.x;
-    v.y = x_reg.y;
+    v.x = __low2float(x_reg);
+    v.y = __high2float(x_reg);
 }
 
 static constexpr __device__ dequantize_kernel_t get_dequantize_kernel(ggml_type type) {
