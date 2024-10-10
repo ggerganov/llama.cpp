@@ -117,8 +117,6 @@ struct common_sampler_params {
     float   temp              = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
     float   dynatemp_range    = 0.00f; // 0.0 = disabled
     float   dynatemp_exponent = 1.00f; // controls how entropy maps to temperature in dynamic temperature sampler
-    float   infill_p          = 0.80f;
-    float   infill_p_eog      = 0.01f;
     int32_t penalty_last_n    = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
     float   penalty_repeat    = 1.00f; // 1.0 = disabled
     float   penalty_freq      = 0.00f; // 0.0 = disabled
