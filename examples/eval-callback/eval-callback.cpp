@@ -126,10 +126,10 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
     return true;
 }
 
-static bool run(llama_context * ctx, const gpt_params & params) {
+static bool run(llama_context * ctx, const common_params & params) {
     const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
+    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, add_bos);
 
     if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), 0, 0))) {
         LOG_ERR("%s : failed to eval\n", __func__);
@@ -142,13 +142,13 @@ static bool run(llama_context * ctx, const gpt_params & params) {
 int main(int argc, char ** argv) {
     callback_data cb_data;
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -160,7 +160,7 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -172,7 +172,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
         LOG_INF("\n");
     }
 
