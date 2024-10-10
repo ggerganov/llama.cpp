@@ -1353,15 +1353,15 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.image.emplace_back(value);
         }
     ).set_examples({LLAMA_EXAMPLE_LLAVA}));
-#ifdef GGML_USE_RPC
-    add_opt(common_arg(
-        {"--rpc"}, "SERVERS",
-        "comma separated list of RPC servers",
-        [](common_params & params, const std::string & value) {
-            params.rpc_servers = value;
-        }
-    ).set_env("LLAMA_ARG_RPC"));
-#endif
+    if (llama_supports_rpc()) {
+        add_opt(common_arg(
+            {"--rpc"}, "SERVERS",
+            "comma separated list of RPC servers",
+            [](common_params & params, const std::string & value) {
+                params.rpc_servers = value;
+            }
+        ).set_env("LLAMA_ARG_RPC"));
+    }
     add_opt(common_arg(
         {"--mlock"},
         "force system to keep model in RAM rather than swapping or compressing",
