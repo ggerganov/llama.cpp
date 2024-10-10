@@ -90,6 +90,7 @@ enum gpt_sampler_type {
     GPT_SAMPLER_TYPE_TFS_Z       = 4,
     GPT_SAMPLER_TYPE_TYPICAL_P   = 5,
     GPT_SAMPLER_TYPE_TEMPERATURE = 6,
+    GPT_SAMPLER_TYPE_INFILL      = 7,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -130,7 +131,7 @@ struct gpt_sampler_params {
         GPT_SAMPLER_TYPE_TYPICAL_P,
         GPT_SAMPLER_TYPE_TOP_P,
         GPT_SAMPLER_TYPE_MIN_P,
-        GPT_SAMPLER_TYPE_TEMPERATURE
+        GPT_SAMPLER_TYPE_TEMPERATURE,
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling

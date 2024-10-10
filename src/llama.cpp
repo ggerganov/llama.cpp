@@ -6767,6 +6767,10 @@ static void llm_load_vocab(
             vocab.special_eog_ids.insert(vocab.special_eom_id);
             LLAMA_LOG_WARN("%s: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
+
+        if (vocab.special_fim_sep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_sep_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_sep_id);
+        }
     }
 
     // build special tokens cache
@@ -21476,6 +21480,13 @@ int32_t llama_token_to_piece(
     return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
 }
 
+bool llama_token_is_prefix(
+    const struct llama_model * model,
+                 llama_token   token0,
+                 llama_token   token1) {
+    return llama_token_is_prefix_impl(model->vocab, token0, token1);
+}
+
 int32_t llama_detokenize(
     const struct llama_model * model,
            const llama_token * tokens,
@@ -21804,6 +21815,10 @@ int32_t llama_chat_apply_template(
 // TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
+}
+
+struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
+    return llama_sampler_init_infill_impl(model->vocab);
 }
 
 //
