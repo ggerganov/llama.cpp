@@ -194,7 +194,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
                         llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                         break;
                     case GPT_SAMPLER_TYPE_INFILL:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model, params.infill_p, params.infill_p_eog));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
                         break;
                     default:
                         GGML_ASSERT(false && "unknown sampler type");

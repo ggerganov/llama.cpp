@@ -1150,8 +1150,11 @@ extern "C" {
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
 
-    // 1. if there is a high-prob token (>= 0.9f) - pick it
-    // 2. if sum of EOG probs is larger than p_eog -> mask non-EOG tokens away
+    // this sampler is meant to be used for fill-in-the-middle infilling
+    // it's supposed to be used after top_k sampling and will leave a single candidate token
+    //
+    // 1. if there is a high-prob token (>= 0.9f) -> pick it
+    // 2. if the sum of the EOG probs times the number of candidates is higher than the sum of the other probs -> pick EOG
     // 3. combine probs of tokens that have the same prefix
     //
     // example:
@@ -1166,10 +1169,9 @@ extern "C" {
     //   "hel":   0.8
     //   "dummy": 0.1
     //
-    LLAMA_API struct llama_sampler * llama_sampler_init_infill(
-            const struct llama_model * model,
-                               float   p,
-                               float   p_eog);
+    // 4. pick the token with the highest probability
+    //
+    LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model);
 
     // Returns the seed used by the sampler if applicable, LLAMA_DEFAULT_SEED otherwise
     LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);

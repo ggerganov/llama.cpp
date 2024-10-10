@@ -1648,9 +1648,6 @@ struct llama_sampler * llama_sampler_init_logit_bias(
 
 struct llama_sampler_infill {
     const struct llama_vocab * vocab;
-
-    const float p;
-    const float p_eog;
 };
 
 static const char * llama_sampler_infill_name(const struct llama_sampler * /*smpl*/) {
@@ -1668,17 +1665,23 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     }
 
     float p_max     = 0.0f;
+    float p_txt_sum = 0.0f;
     float p_eog_sum = 0.0f;
 
     for (size_t i = 0; i < cur_p->size; ++i) {
         p_max = fmaxf(p_max, cur_p->data[i].p);
         if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
             p_eog_sum += cur_p->data[i].p;
+        } else {
+            p_txt_sum += cur_p->data[i].p;
         }
     }
 
-    if (p_max < 0.90f && p_eog_sum > ctx->p_eog) {
-        LLAMA_LOG_DEBUG("infill: all EOG tokens are more likely than p_eog (%f), keeping only EOG tokens\n", ctx->p_eog);
+    const float rat = p_txt_sum / p_eog_sum;
+    LLAMA_LOG_DEBUG("infill: p_max = %.2f, p_txt_sum = %.2f, p_eog_sum = %.2f, rat = %.2f, n = %zu\n", p_max, p_txt_sum, p_eog_sum, rat, cur_p->size);
+
+    if (p_max < 0.90f && p_eog_sum*cur_p->size > p_txt_sum) {
+        LLAMA_LOG_DEBUG("infill: the ratio p_txt/p_eog = %.2f is too low -> sampling EOG\n", p_txt_sum/p_eog_sum);
 
         // keep just the EOG tokens
         const auto size_org = cur_p->size;
@@ -1717,9 +1720,9 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
         }
     }
 
-    // mask non-EOG tokens with prob < ctx->p
+    // mask non-EOG tokens with prob < 0.2
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if (cur_p->data[i].p < ctx->p && !llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+        if (cur_p->data[i].p < 0.2 && !llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
             cur_p->data[i].logit = -INFINITY;
         }
     }
@@ -1753,7 +1756,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
 
 static struct llama_sampler * llama_sampler_infill_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_infill *) smpl->ctx;
-    return llama_sampler_init_infill_impl(*ctx->vocab, ctx->p, ctx->p_eog);
+    return llama_sampler_init_infill_impl(*ctx->vocab);
 }
 
 static void llama_sampler_infill_free(struct llama_sampler * smpl) {
@@ -1770,15 +1773,11 @@ static struct llama_sampler_i llama_sampler_infill_i = {
 };
 
 struct llama_sampler * llama_sampler_init_infill_impl(
-        const struct llama_vocab & vocab,
-                           float   p,
-                           float   p_eog) {
+        const struct llama_vocab & vocab) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_infill_i,
         /* .ctx   = */ new llama_sampler_infill {
             /* .vocab = */ &vocab,
-            /* .p     = */ p,
-            /* .p_eog = */ p_eog,
         },
     };
 }

@@ -93,9 +93,7 @@ function! llama#fim(is_auto) abort
        "\ 'stop':             g:llama_config.stop,
         \ 'n_predict':        g:llama_config.n_predict,
         \ 'penalty_last_n':   0,
-        \ 'top_k':            5,
-        \ 'infill_p':         0.20,
-        \ 'infill_p_eog':     0.001,
+        \ 'top_k':            100,
         \ 'stream':           v:false,
         \ 'samplers':         ["top_k", "infill"],
        "\ 'cache_prompt':     v:true,
@@ -180,7 +178,7 @@ function! s:fim_auto()
         call jobstop(s:current_job)
     endif
 
-    if reltimefloat(reltime(s:t_fim_last)) < 0.001*250
+    if reltimefloat(reltime(s:t_fim_last)) < 500*0.001
         if s:timer_fim != -1
             call timer_stop(s:timer_fim)
             let s:timer_fim = -1
@@ -188,7 +186,7 @@ function! s:fim_auto()
     endif
 
     let s:t_fim_last = reltime()
-    let s:timer_fim = timer_start(250, {-> llama#fim(v:true)})
+    let s:timer_fim = timer_start(500, {-> llama#fim(v:true)})
 endfunction
 
 

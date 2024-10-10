@@ -21817,8 +21817,8 @@ struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * mod
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
 
-struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model, float p, float p_eog) {
-    return llama_sampler_init_infill_impl(model->vocab, p, p_eog);
+struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
+    return llama_sampler_init_infill_impl(model->vocab);
 }
 
 //
