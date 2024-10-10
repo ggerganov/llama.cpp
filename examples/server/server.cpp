@@ -873,8 +873,6 @@ struct server_context {
         slot.sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
         slot.sparams.typ_p             = json_value(data, "typical_p",         default_sparams.typ_p);
         slot.sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
-        slot.sparams.infill_p          = json_value(data, "infill_p",          default_sparams.infill_p);
-        slot.sparams.infill_p_eog      = json_value(data, "infill_p_eog",      default_sparams.infill_p_eog);
         slot.sparams.dynatemp_range    = json_value(data, "dynatemp_range",    default_sparams.dynatemp_range);
         slot.sparams.dynatemp_exponent = json_value(data, "dynatemp_exponent", default_sparams.dynatemp_exponent);
         slot.sparams.penalty_last_n    = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
@@ -1243,8 +1241,6 @@ struct server_context {
             {"xtc_threshold",             slot.sparams.xtc_threshold},
             {"tfs_z",                     slot.sparams.tfs_z},
             {"typical_p",                 slot.sparams.typ_p},
-            {"infill_p",                  slot.sparams.infill_p},
-            {"infill_p_eog",              slot.sparams.infill_p_eog},
             {"repeat_last_n",             slot.sparams.penalty_last_n},
             {"repeat_penalty",            slot.sparams.penalty_repeat},
             {"presence_penalty",          slot.sparams.penalty_present},
