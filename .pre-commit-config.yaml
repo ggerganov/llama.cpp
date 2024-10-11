@@ -13,4 +13,3 @@ repos:
   rev: 7.0.0
   hooks:
   -   id: flake8
-      additional_dependencies: [flake8-no-print]
