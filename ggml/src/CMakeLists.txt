@@ -887,7 +887,7 @@ if (GGML_TMAC)
 
         if (GGML_TMAC_TVM_THREADPOOL)
             add_compile_definitions(TMAC_USE_TVM_THREADPOOL)
-            set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} t_mac)
+            set(GGML_EXTRA_LIBS_PRIVATE ${GGML_EXTRA_LIBS_PRIVATE} t_mac)
         else()
             if ((NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang") OR
                 (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
