@@ -21144,6 +21144,7 @@ struct llama_batch_allocr {
             logits[logits.size() - 1] = true;
             batch.logits = logits.data();
         }
+        return batch;
     }
 };
 

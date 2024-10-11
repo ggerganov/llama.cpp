@@ -508,11 +508,20 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
                 tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
-            // TODO: use batch.logits to save computations instead of relying on logits_all == true
-            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+            llama_batch batch = llama_batch_init(batch_size, 0, 1);
+            for (int i = 0; i < batch_size; i++) {
+                batch. token[i] = tokens[batch_start + i];
+                batch.   pos[i] = j*n_batch + i;
+                batch.logits[i] = true;
+                batch.seq_id[i][0] = 0;
+            }
+
+            if (llama_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
                 return false;
             }
+
+            llama_batch_free(batch);
 
             // restore the original token in case it was set to BOS
             tokens[batch_start] = token_org;

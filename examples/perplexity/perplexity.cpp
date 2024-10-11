@@ -409,12 +409,21 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
 
+            llama_batch batch = llama_batch_init(batch_size, 0, 1);
+            for (int i = 0; i < batch_size; i++) {
+                batch. token[i] = tokens[batch_start + i];
+                batch.   pos[i] = j*n_batch + i;
+                batch.logits[i] = true;
+                batch.seq_id[i][0] = 0;
+            }
+
             //LOG_DBG("    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
-            // TODO: use llama_batch.logits instead of relying on logits_all == true
-            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+            if (llama_decode(ctx, batch)) {
                 //LOG_ERR("%s : failed to eval\n", __func__);
                 return {tokens, -1, logit_history, prob_history};
             }
+
+            llama_batch_free(batch);
 
             // save original token and restore it after eval
             const auto token_org = tokens[batch_start];
@@ -699,7 +708,6 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
             batch.n_seq_id + i,
             batch.seq_id   + i,
             batch.logits   + i,
-            0, 0, 0, // unused
         };
 
         const int ret = llama_decode(ctx, batch_view);
@@ -1790,11 +1798,20 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
                 tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
-            // TODO: use llama_batch.logits instead of relying on logits_all == true
-            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+            llama_batch batch = llama_batch_init(batch_size, 0, 1);
+            for (int i = 0; i < batch_size; i++) {
+                batch. token[i] = tokens[batch_start + i];
+                batch.   pos[i] = j*n_batch + i;
+                batch.logits[i] = true;
+                batch.seq_id[i][0] = 0;
+            }
+
+            if (llama_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
                 return;
             }
+
+            llama_batch_free(batch);
 
             // restore the original token in case it was set to BOS
             tokens[batch_start] = token_org;

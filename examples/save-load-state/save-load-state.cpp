@@ -49,7 +49,7 @@ int main(int argc, char ** argv) {
     auto tokens = llama_tokenize(ctx, params.prompt, true);
 
     // evaluate prompt
-    llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), n_past, 0));
+    llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size()));
     n_past += tokens.size();
 
     // save state (rng, logits, embedding and kv_cache) to file
@@ -77,7 +77,7 @@ int main(int argc, char ** argv) {
         printf("%s", next_token_str.c_str());
         result0 += next_token_str;
 
-        if (llama_decode(ctx, llama_batch_get_one(&next_token, 1, n_past, 0))) {
+        if (llama_decode(ctx, llama_batch_get_one(&next_token, 1))) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx);
             llama_free_model(model);
@@ -133,7 +133,7 @@ int main(int argc, char ** argv) {
         printf("%s", next_token_str.c_str());
         result1 += next_token_str;
 
-        if (llama_decode(ctx2, llama_batch_get_one(&next_token, 1, n_past, 0))) {
+        if (llama_decode(ctx2, llama_batch_get_one(&next_token, 1))) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx2);
             llama_free_model(model);
@@ -221,7 +221,7 @@ int main(int argc, char ** argv) {
         printf("%s", next_token_str.c_str());
         result2 += next_token_str;
 
-        if (llama_decode(ctx3, llama_batch_get_one(&next_token, 1, n_past, 1))) {
+        if (llama_decode(ctx3, llama_batch_get_one(&next_token, 1))) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx3);
             llama_free_model(model);
