@@ -274,29 +274,56 @@ mkdir llama-client
 cd llama-client
 ```
 
-Create a index.js file and put this inside:
+Create an index.js file and put this inside:
 
 ```javascript
-const prompt = `Building a website can be done in 10 simple steps:`;
+const prompt = `Building a website can be done in 10 simple steps:`
 
-async function Test() {
+async function test() {
     let response = await fetch("http://127.0.0.1:8080/completion", {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({
             prompt,
-            n_predict: 512,
+            n_predict: 64,
         })
     })
     console.log((await response.json()).content)
 }
 
-Test()
+test()
 ```
 
 And run it:
 
 ```bash
 node index.js
+```
+
+Alternative script to test streaming mode (chunk splitting and error handling should be enhanced for production use):
+
+```javascript
+(async () => {
+    const response = await fetch("http://localhost:8080/completion", {
+        method: "POST",
+        body: JSON.stringify({
+            prompt: "To write an essay quickly",
+            n_predict: 256,
+            stream: true
+        })
+    })
+    for await (const chunk of response.body.pipeThrough(new TextDecoderStream("utf-8"))) {
+        for (const event of chunk.split(/(?<=\n\n)/v)) {
+            if (event.startsWith("error")) {
+                break
+            }
+            const data = JSON.parse(event.substring(6))
+            if (data.stop) {
+                break
+            }
+            process.stdout.write(data.content)
+        }
+    }
+})()
 ```
 
 ## API Endpoints
@@ -339,7 +366,7 @@ node index.js
     `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.
     By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
 
-    `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
+    `stream`: Allows receiving each predicted token in real-time instead of waiting for the completion to finish (uses a different response format). To enable this, set to `true`.
 
     `stop`: Specify a JSON array of stopping strings.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
@@ -424,6 +451,16 @@ Notice that each `probs` is an array of length `n_probs`.
 - `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
 - `tokens_evaluated`: Number of tokens evaluated in total from the prompt
 - `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
+
+In streaming mode, response chunks currently use the following format, with chunks separated by `\n\n`:
+
+```
+data: {"content":" token","stop":false,"id_slot":0,"multimodal":false,"index":0}
+
+data: {"content":",","stop":false,"id_slot":0,"multimodal":false,"index":0}
+```
+
+Although this resembles the [Server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) standard, the `EventSource` interface cannot be used due to its lack of `POST` request support.
 
 ### POST `/tokenize`: Tokenize a given text
 
