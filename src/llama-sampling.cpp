@@ -1791,11 +1791,8 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     for (size_t i = 0; i < cur_p->size; ++i) {
         LOG_DBG_CUR("%s: cur_p[%3zu] = { id: %6d, p: %.6f, logit: %6.3f }\n", __func__, i, cur_p->data[i].id, cur_p->data[i].p, cur_p->data[i].logit);
     }
+#endif
 
-<<<<<<< HEAD
-=======
-    float p_max     = 0.0f;
->>>>>>> af919ec1 (llama : simplify infill sampler)
     float p_txt_sum = 0.0f;
     float p_eog_sum = 0.0f;
 
@@ -1807,20 +1804,12 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
         }
     }
 
-<<<<<<< HEAD
     const float rat = p_eog_sum == 0.0 ? INFINITY : p_txt_sum / p_eog_sum; GGML_UNUSED(rat);
 
     LOG_DBG_CUR("%s: p_txt_sum = %.2f, p_eog_sum = %.2f, rat = %.2f, n = %zu\n", __func__, p_txt_sum, p_eog_sum, rat, cur_p->size);
 
     if (3*p_eog_sum*cur_p->size > p_txt_sum) {
         LOG_DBG_CUR("%s: the ratio p_txt/p_eog = %.2f is too low -> sampling EOG\n", __func__, p_txt_sum/p_eog_sum);
-=======
-    const float rat = p_txt_sum / p_eog_sum;
-    LLAMA_LOG_DEBUG("infill: p_max = %.2f, p_txt_sum = %.2f, p_eog_sum = %.2f, rat = %.2f, n = %zu\n", p_max, p_txt_sum, p_eog_sum, rat, cur_p->size);
-
-    if (p_max < 0.90f && p_eog_sum*cur_p->size > p_txt_sum) {
-        LLAMA_LOG_DEBUG("infill: the ratio p_txt/p_eog = %.2f is too low -> sampling EOG\n", p_txt_sum/p_eog_sum);
->>>>>>> af919ec1 (llama : simplify infill sampler)
 
         // keep just the EOG tokens
         const auto size_org = cur_p->size;
@@ -1891,7 +1880,6 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
         }
     }
 
-<<<<<<< HEAD
     size_t n_non_eog = 0;
 
     size_t size_org = cur_p->size;
@@ -1908,12 +1896,6 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
-=======
-    // mask non-EOG tokens with prob < 0.2
-    for (size_t i = 0; i < cur_p->size; ++i) {
-        if (cur_p->data[i].p < 0.2 && !llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
-            cur_p->data[i].logit = -INFINITY;
->>>>>>> af919ec1 (llama : simplify infill sampler)
         }
 
         if (!is_eog) {
