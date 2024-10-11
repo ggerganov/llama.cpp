@@ -570,8 +570,10 @@ struct ggml_backend_registry {
     }
 
     void register_backend(ggml_backend_reg_t reg) {
+#ifndef NDEBUG
         GGML_LOG_DEBUG("%s: registered backend %s (%zu devices)\n",
             __func__, ggml_backend_reg_name(reg), ggml_backend_reg_dev_count(reg));
+#endif
         backends.push_back(reg);
         for (size_t i = 0; i < ggml_backend_reg_dev_count(reg); i++) {
             register_device(ggml_backend_reg_dev_get(reg, i));
@@ -579,7 +581,9 @@ struct ggml_backend_registry {
     }
 
     void register_device(ggml_backend_dev_t device) {
+#ifndef NDEBUG
         GGML_LOG_DEBUG("%s: registered device %s (%s)\n", __func__, ggml_backend_dev_name(device), ggml_backend_dev_description(device));
+#endif
         devices.push_back(device);
     }
 };
