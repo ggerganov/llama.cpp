@@ -4,6 +4,8 @@
 
 #include "llama-grammar.h"
 
+#include "llama-impl.h"
+
 #include <unordered_map>
 
 struct llama_vocab;
