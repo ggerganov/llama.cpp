@@ -43,6 +43,9 @@ jobs:
           - { tag: "light-cuda", dockerfile: ".devops/llama-cli-cuda.Dockerfile", platforms: "linux/amd64" }
           - { tag: "server-cuda", dockerfile: ".devops/llama-server-cuda.Dockerfile", platforms: "linux/amd64" }
           - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "light-musa", dockerfile: ".devops/llama-cli-musa.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-musa", dockerfile: ".devops/llama-server-musa.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "full-musa", dockerfile: ".devops/full-musa.Dockerfile", platforms: "linux/amd64" }
           # Note: the rocm images are failing due to a compiler error and are disabled until this is fixed to allow the workflow to complete
           #- { tag: "light-rocm", dockerfile: ".devops/llama-cli-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
           #- { tag: "server-rocm", dockerfile: ".devops/llama-server-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }

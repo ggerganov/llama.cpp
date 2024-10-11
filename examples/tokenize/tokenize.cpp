@@ -365,7 +365,7 @@ int main(int raw_argc, char ** raw_argv) {
     const bool parse_special = !no_parse_special;
 
     std::vector<llama_token> tokens;
-    tokens = ::llama_tokenize(model, prompt, add_bos, parse_special);
+    tokens = common_tokenize(model, prompt, add_bos, parse_special);
 
     if (printing_ids) {
         printf("[");
@@ -380,7 +380,7 @@ int main(int raw_argc, char ** raw_argv) {
         } else {
             bool invalid_utf8 = false;
             printf("%6d -> '", tokens[i]);
-            write_utf8_cstr_to_stdout(llama_token_to_piece(ctx, tokens[i]).c_str(), invalid_utf8);
+            write_utf8_cstr_to_stdout(common_token_to_piece(ctx, tokens[i]).c_str(), invalid_utf8);
             if (invalid_utf8) {
                 printf("' (utf-8 decode failure)\n");
             } else {

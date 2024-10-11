@@ -24,8 +24,8 @@ int main() {
                 }
 
                 if (rand () % 10 < 5) {
-                    gpt_log_set_timestamps(gpt_log_main(), rand() % 2);
-                    gpt_log_set_prefix    (gpt_log_main(), rand() % 2);
+                    common_log_set_timestamps(common_log_main(), rand() % 2);
+                    common_log_set_prefix    (common_log_main(), rand() % 2);
                 }
             }
         });

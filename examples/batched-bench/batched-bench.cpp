@@ -15,13 +15,13 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_BENCH, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_BENCH, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     int is_pp_shared = params.is_pp_shared;
 
@@ -36,7 +36,7 @@ int main(int argc, char ** argv) {
 
     // initialize the model
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(params);
+    llama_model_params model_params = common_model_params_to_llama(params);
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -45,7 +45,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(params);
+    llama_context_params ctx_params = common_context_params_to_llama(params);
 
     // ensure enough sequences are available
     ctx_params.n_seq_max = n_pl.empty() ? 1 : *std::max_element(n_pl.begin(), n_pl.end());
@@ -92,7 +92,7 @@ int main(int argc, char ** argv) {
     // warm up
     {
         for (int i = 0; i < 16; ++i) {
-            llama_batch_add(batch, 0, i, { 0 }, false);
+            common_batch_add(batch, 0, i, { 0 }, false);
         }
 
         if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
@@ -122,11 +122,11 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
-                llama_batch_clear(batch);
+                common_batch_clear(batch);
 
                 for (int i = 0; i < pp; ++i) {
                     for (int j = 0; j < (is_pp_shared ? 1 : pl); ++j) {
-                        llama_batch_add(batch, 0, i, { j }, false);
+                        common_batch_add(batch, 0, i, { j }, false);
                     }
                 }
                 batch.logits[batch.n_tokens - 1] = true;
@@ -151,10 +151,10 @@ int main(int argc, char ** argv) {
                 const auto t_tg_start = ggml_time_us();
 
                 for (int i = 0; i < tg; ++i) {
-                    llama_batch_clear(batch);
+                    common_batch_clear(batch);
 
                     for (int j = 0; j < pl; ++j) {
-                        llama_batch_add(batch, 0, pp + i, { j }, true);
+                        common_batch_add(batch, 0, pp + i, { j }, true);
                     }
 
                     if (!decode_helper(ctx, batch, ctx_params.n_batch)) {

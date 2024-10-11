@@ -44,26 +44,26 @@ static float array_rmse(const float * a1, const float * a2, size_t n) {
 }
 
 // Total quantization error on test data
-static float total_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
+static float total_quantization_error(const ggml_type_traits * qfns, size_t test_size, const float * test_data) {
     std::vector<uint8_t> tmp_q(2*test_size);
     std::vector<float> tmp_out(test_size);
 
-    qfns.from_float(test_data, tmp_q.data(), test_size);
-    qfns.to_float(tmp_q.data(), tmp_out.data(), test_size);
+    qfns->from_float(test_data, tmp_q.data(), test_size);
+    qfns->to_float(tmp_q.data(), tmp_out.data(), test_size);
     return array_rmse(test_data, tmp_out.data(), test_size);
 }
 
 // Total quantization error on test data
-static float reference_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
+static float reference_quantization_error(const ggml_type_traits * qfns, size_t test_size, const float * test_data) {
     std::vector<uint8_t> tmp_q(2*test_size);
     std::vector<float> tmp_out(test_size);
     std::vector<float> tmp_out_ref(test_size);
 
-    qfns.from_float(test_data, tmp_q.data(), test_size);
-    qfns.to_float(tmp_q.data(), tmp_out.data(), test_size);
+    qfns->from_float(test_data, tmp_q.data(), test_size);
+    qfns->to_float(tmp_q.data(), tmp_out.data(), test_size);
 
-    qfns.from_float_ref(test_data, tmp_q.data(), test_size);
-    qfns.to_float(tmp_q.data(), tmp_out_ref.data(), test_size);
+    qfns->from_float_ref(test_data, tmp_q.data(), test_size);
+    qfns->to_float(tmp_q.data(), tmp_out_ref.data(), test_size);
 
     return array_rmse(tmp_out.data(), tmp_out_ref.data(), test_size);
 }
@@ -78,18 +78,18 @@ static float dot_product(const float * a1, const float * a2, size_t test_size) {
 
 // Total dot product error
 static float dot_product_error(
-    ggml_type_traits_t & qfns, size_t test_size, const float * test_data1, const float *test_data2
+    const ggml_type_traits * qfns, size_t test_size, const float * test_data1, const float *test_data2
 ) {
     std::vector<uint8_t> tmp_q1(2*test_size);
     std::vector<uint8_t> tmp_q2(2*test_size);
 
-    auto vdot = ggml_internal_get_type_traits(qfns.vec_dot_type);
+    const auto * vdot = ggml_get_type_traits(qfns->vec_dot_type);
 
-    qfns.from_float(test_data1, tmp_q1.data(), test_size);
-    vdot.from_float(test_data2, tmp_q2.data(), test_size);
+    qfns->from_float(test_data1, tmp_q1.data(), test_size);
+    vdot->from_float(test_data2, tmp_q2.data(), test_size);
 
     float result = INFINITY;
-    qfns.vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
+    qfns->vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
 
     const float dot_ref = dot_product(test_data1, test_data2, test_size);
 
@@ -131,10 +131,10 @@ int main(int argc, char * argv[]) {
 
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
-        ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
+        const auto * qfns = ggml_get_type_traits(type);
 
         // deprecated - skip
-        if (qfns.blck_size == 0) {
+        if (qfns->blck_size == 0) {
             continue;
         }
 
@@ -143,7 +143,7 @@ int main(int argc, char * argv[]) {
         printf("Testing %s\n", ggml_type_name((ggml_type) i));
         ggml_quantize_init(ei);
 
-        if (qfns.from_float && qfns.to_float) {
+        if (qfns->from_float && qfns->to_float) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
             const float max_quantization_error =
                 type == GGML_TYPE_TQ1_0   ? MAX_QUANTIZATION_TOTAL_ERROR_TERNARY :

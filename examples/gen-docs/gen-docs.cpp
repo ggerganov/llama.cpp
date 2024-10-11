@@ -11,7 +11,7 @@ static void write_table_header(std::ofstream & file) {
     file << "| -------- | ----------- |\n";
 }
 
-static void write_table_entry(std::ofstream & file, const llama_arg & opt) {
+static void write_table_entry(std::ofstream & file, const common_arg & opt) {
     file << "| `";
     // args
     for (const auto & arg : opt.args) {
@@ -40,7 +40,7 @@ static void write_table_entry(std::ofstream & file, const llama_arg & opt) {
     file << "` | " << md_help << " |\n";
 }
 
-static void write_table(std::ofstream & file, std::vector<llama_arg *> & opts) {
+static void write_table(std::ofstream & file, std::vector<common_arg *> & opts) {
     write_table_header(file);
     for (const auto & opt : opts) {
         write_table_entry(file, *opt);
@@ -50,12 +50,12 @@ static void write_table(std::ofstream & file, std::vector<llama_arg *> & opts) {
 static void export_md(std::string fname, llama_example ex) {
     std::ofstream file(fname, std::ofstream::out | std::ofstream::trunc);
 
-    gpt_params params;
-    auto ctx_arg = gpt_params_parser_init(params, ex);
+    common_params params;
+    auto ctx_arg = common_params_parser_init(params, ex);
 
-    std::vector<llama_arg *> common_options;
-    std::vector<llama_arg *> sparam_options;
-    std::vector<llama_arg *> specific_options;
+    std::vector<common_arg *> common_options;
+    std::vector<common_arg *> sparam_options;
+    std::vector<common_arg *> specific_options;
     for (auto & opt : ctx_arg.options) {
         // in case multiple LLAMA_EXAMPLE_* are set, we prioritize the LLAMA_EXAMPLE_* matching current example
         if (opt.is_sparam) {

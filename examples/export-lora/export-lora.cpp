@@ -128,7 +128,7 @@ struct lora_merge_ctx {
 
     lora_merge_ctx(
             std::string & base_fname,
-            std::vector<llama_lora_adapter_info> & lora_files,
+            std::vector<common_lora_adapter_info> & lora_files,
             std::string & outfile,
             int n_threads) : base_model(base_fname, 0), n_threads(n_threads), fout(outfile, std::ios::binary) {
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
@@ -314,9 +314,9 @@ struct lora_merge_ctx {
             // optionally dequantize it
             printf("%s :   + dequantize base tensor from %s to F32\n", __func__, ggml_type_name(base->type));
             auto nels = ggml_nelements(inp_base);
-            ggml_type_traits_t qtype = ggml_internal_get_type_traits(base->type);
+            const auto * qtype = ggml_get_type_traits(base->type);
             std::vector<uint8_t> dequant_buf(nels * sizeof(float));
-            qtype.to_float(read_buf.data(), (float *)dequant_buf.data(), nels);
+            qtype->to_float(read_buf.data(), (float *)dequant_buf.data(), nels);
             ggml_backend_tensor_set(inp_base, dequant_buf.data(), 0, dequant_buf.size());
         } else {
             ggml_backend_tensor_set(inp_base, read_buf.data(), 0, ggml_nbytes(inp_base));
@@ -400,9 +400,9 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 

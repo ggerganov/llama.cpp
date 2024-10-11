@@ -122,7 +122,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-aarch64.h      -> ggml/src/ggml-aarch64.h
     # src/ggml-alloc.c        -> ggml/src/ggml-alloc.c
     # src/ggml-backend-impl.h -> ggml/src/ggml-backend-impl.h
-    # src/ggml-backend.c      -> ggml/src/ggml-backend.c
+    # src/ggml-backend.cpp    -> ggml/src/ggml-backend.cpp
     # src/ggml-cann/*         -> ggml/src/ggml-cann/
     # src/ggml-cann.cpp       -> ggml/src/ggml-cann.cpp
     # src/ggml-common.h       -> ggml/src/ggml-common.h
@@ -169,7 +169,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml-aarch64\.h/\1ggml\/src\/ggml-aarch64.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-alloc\.c/\1ggml\/src\/ggml-alloc.c/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-backend-impl\.h/\1ggml\/src\/ggml-backend-impl.h/g' \
-        -e 's/([[:space:]]|[ab]\/)src\/ggml-backend\.c/\1ggml\/src\/ggml-backend.c/g' \
+        -e 's/([[:space:]]|[ab]\/)src\/ggml-backend\.cpp/\1ggml\/src\/ggml-backend.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\//\1ggml\/src\/ggml-cann\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\.cpp/\1ggml\/src\/ggml-cann.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-common\.h/\1ggml\/src\/ggml-common.h/g' \

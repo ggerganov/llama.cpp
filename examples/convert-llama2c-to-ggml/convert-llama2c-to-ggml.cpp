@@ -872,7 +872,7 @@ static std::string basename(const std::string &path) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
+    common_init();
 
     struct train_params params = get_default_train_params();
     if (!params_parse(argc, argv, &params)) {

@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < nthread; i++) {
         threads[i] = std::thread([&, i]() {
             for (const auto & test_kv : k_tests) {
-                const std::vector<llama_token> res = llama_tokenize(ctx, test_kv.first, add_special, false);
+                const std::vector<llama_token> res = common_tokenize(ctx, test_kv.first, add_special, false);
 
                 // here only print the result of the first thread
                 // because the other threads are running the same tests
@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
 
                 printf("\n");
                 printf("src: '%s'\n", test_kv.first.c_str());
-                printf("res: '%s'\n", llama_detokenize(ctx, res).c_str());
+                printf("res: '%s'\n", common_detokenize(ctx, res).c_str());
                 printf("tok: ");
                 for (const auto & tok : res) {
                     printf("%d ", tok);
@@ -229,16 +229,16 @@ int main(int argc, char **argv) {
                 if (!correct) {
                     fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
                     fprintf(stderr, "%s : detokenized to: '%s' instead of '%s'\n", __func__,
-                        llama_detokenize(ctx, res).c_str(),
-                        llama_detokenize(ctx, test_kv.second).c_str());
+                        common_detokenize(ctx, res).c_str(),
+                        common_detokenize(ctx, test_kv.second).c_str());
                     fprintf(stderr, "%s : expected tokens: ", __func__);
                     for (const auto & t : test_kv.second) {
-                        fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
+                        fprintf(stderr, "%6d '%s', ", t, common_token_to_piece(ctx, t).c_str());
                     }
                     fprintf(stderr, "\n");
                     fprintf(stderr, "%s : got tokens:      ", __func__);
                     for (const auto & t : res) {
-                        fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
+                        fprintf(stderr, "%6d '%s', ", t, common_token_to_piece(ctx, t).c_str());
                     }
                     fprintf(stderr, "\n");
 
@@ -273,7 +273,7 @@ int main(int argc, char **argv) {
         {
             const auto t_start = ggml_time_us();
 
-            res = llama_tokenize(ctx, text, add_special, false);
+            res = common_tokenize(ctx, text, add_special, false);
 
             const auto t_end = ggml_time_us();
 
