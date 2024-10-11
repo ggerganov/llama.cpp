@@ -37,13 +37,13 @@ struct Stats {
 class IMatrixCollector {
 public:
     IMatrixCollector() = default;
-    void set_params(gpt_params params) { m_params = std::move(params); }
+    void set_params(common_params params) { m_params = std::move(params); }
     bool collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data);
     void save_imatrix(int ncall = -1) const;
     bool load_imatrix(const char * file_name);
 private:
     std::unordered_map<std::string, Stats> m_stats;
-    gpt_params                             m_params;
+    common_params                          m_params;
     std::mutex                             m_mutex;
     int                                    m_last_call = 0;
     std::vector<float>                     m_src1_data;
@@ -428,7 +428,7 @@ static void process_logits(
     }
 }
 
-static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
+static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
     GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
     const int n_ctx = llama_n_ctx(ctx);
@@ -436,7 +436,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
@@ -568,17 +568,17 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
     params.n_ctx = 512;
     params.logits_all = true;
     params.escape = false;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_IMATRIX, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_IMATRIX, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     params.n_batch = std::min(params.n_batch, params.n_ctx);
 
@@ -607,7 +607,7 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -625,7 +625,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
 
     if (!compute_imatrix(ctx, params)) {

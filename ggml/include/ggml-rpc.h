@@ -17,7 +17,11 @@ GGML_API ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * en
 
 GGML_API void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total);
 
-GGML_API void start_rpc_server(ggml_backend_t backend, const char * endpoint, size_t free_mem, size_t total_mem);
+GGML_API void ggml_backend_rpc_start_server(ggml_backend_t backend, const char * endpoint, size_t free_mem, size_t total_mem);
+
+GGML_API ggml_backend_reg_t ggml_backend_rpc_reg(void);
+
+GGML_API ggml_backend_dev_t ggml_backend_rpc_add_device(const char * endpoint);
 
 #ifdef  __cplusplus
 }

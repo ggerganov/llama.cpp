@@ -25,11 +25,11 @@ static void show_additional_info(int /*argc*/, char ** argv) {
     LOG("\nnote: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
-static struct llama_model * llava_init(gpt_params * params) {
+static struct llama_model * llava_init(common_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(*params);
+    llama_model_params model_params = common_model_params_to_llama(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -39,13 +39,13 @@ static struct llama_model * llava_init(gpt_params * params) {
     return model;
 }
 
-static struct llava_context * llava_init_context(gpt_params * params, llama_model * model) {
+static struct llava_context * llava_init_context(common_params * params, llama_model * model) {
     auto prompt = params->prompt;
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
     }
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
+    llama_context_params ctx_params = common_context_params_to_llama(*params);
     if (params->n_ctx < 2048) {
         // warn user here, "Image processing requires at least 2048 context, setting context to 2048"
         LOG_WRN("%s: Image processing requires at least 2048 context, setting context to 2048\n" , __func__);
@@ -79,7 +79,7 @@ static void llava_free(struct llava_context * ctx_llava) {
     llama_backend_free();
 }
 
-static struct clip_ctx * clip_init_context(gpt_params * params) {
+static struct clip_ctx * clip_init_context(common_params * params) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
@@ -114,7 +114,7 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = common_tokenize(ctx_llama, str2, add_bos, true);
     return eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
 }
 
@@ -129,7 +129,7 @@ static void process_eval_image_embed(struct llava_context * ctx_llava, const str
     llava_image_embed_free(slice_embed);
 }
 
-static void process_image(struct llava_context * ctx_llava, struct llava_image_embed * embeds, gpt_params * params, int &n_past) {
+static void process_image(struct llava_context * ctx_llava, struct llava_image_embed * embeds, common_params * params, int &n_past) {
     std::string system_prompt;
     int idx = 0;
     int num_image_embeds = embeds->n_image_pos / clip_n_patches(ctx_llava->ctx_clip);
@@ -162,22 +162,22 @@ static void process_image(struct llava_context * ctx_llava, struct llava_image_e
     LOG_INF("%s: image token past: %d\n", __func__, n_past);
 }
 
-static const char * sample(struct gpt_sampler * smpl,
+static const char * sample(struct common_sampler * smpl,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
-    gpt_sampler_accept(smpl, id, true);
+    const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
+    common_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past);
     return ret.c_str();
 }
 
-static struct llava_context * minicpmv_init(gpt_params * params, const std::string & fname, int &n_past){
+static struct llava_context * minicpmv_init(common_params * params, const std::string & fname, int &n_past){
     auto * ctx_clip = clip_init_context(params);
     auto * embeds = llava_image_embed_make_with_filename(ctx_clip, params->cpuparams.n_threads, fname.c_str());
     if (!embeds) {
@@ -213,7 +213,7 @@ static struct llava_context * minicpmv_init(gpt_params * params, const std::stri
     return ctx_llava;
 }
 
-static struct gpt_sampler * llama_init(struct llava_context * ctx_llava, gpt_params * params, const std::string & prompt, int & n_past, bool is_first = false){
+static struct common_sampler * llama_init(struct llava_context * ctx_llava, common_params * params, const std::string & prompt, int & n_past, bool is_first = false){
     std::string user_prompt = prompt;
     int has_minicpmv_projector = clip_is_minicpmv(ctx_llava->ctx_clip);
     if (!is_first) {
@@ -237,11 +237,11 @@ static struct gpt_sampler * llama_init(struct llava_context * ctx_llava, gpt_par
 
     LOG_INF("\n");
 
-    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
+    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sparams);
     return smpl;
 }
 
-static const char * llama_loop(struct llava_context * ctx_llava,struct gpt_sampler * smpl, int &n_past){
+static const char * llama_loop(struct llava_context * ctx_llava,struct common_sampler * smpl, int &n_past){
 
     const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past);
     return tmp;
@@ -250,13 +250,13 @@ static const char * llama_loop(struct llava_context * ctx_llava,struct gpt_sampl
 int main(int argc, char ** argv) {
     ggml_time_init();
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, show_additional_info)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, show_additional_info)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     if (params.mmproj.empty() || (params.image.empty())) {
         show_additional_info(argc, argv);
@@ -290,7 +290,7 @@ int main(int argc, char ** argv) {
 
                 fflush(stdout);
             }
-            gpt_sampler_free(smpl);
+            common_sampler_free(smpl);
         }else {
             while (true) {
                 LOG("<user>");
@@ -309,7 +309,7 @@ int main(int argc, char ** argv) {
                     if (strstr(response.c_str(), "<user>")) break; // minicpm-v
                     fflush(stdout);
                 }
-                gpt_sampler_free(smpl);
+                common_sampler_free(smpl);
             }
         }
         printf("\n");
