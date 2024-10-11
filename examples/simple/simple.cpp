@@ -138,7 +138,7 @@ int main(int argc, char ** argv) {
 
     // prepare a batch for the prompt
 
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size(), 0, 0);
+    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());
 
     // main loop
 
@@ -175,7 +175,7 @@ int main(int argc, char ** argv) {
             fflush(stdout);
 
             // prepare the next batch with the sampled token
-            batch = llama_batch_get_one(&new_token_id, 1, n_pos, 0);
+            batch = llama_batch_get_one(&new_token_id, 1);
 
             n_decode += 1;
         }
