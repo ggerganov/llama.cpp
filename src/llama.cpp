@@ -21134,7 +21134,7 @@ int32_t llama_encode(
           struct llama_batch   batch) {
     llama_batch_allocr batch_allocr(ctx, batch);
     const int ret = llama_encode_internal(*ctx, batch_allocr.batch);
-    if (ret < 0) {
+    if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
     }
 
@@ -21146,7 +21146,7 @@ int32_t llama_decode(
           struct llama_batch   batch) {
     llama_batch_allocr batch_allocr(ctx, batch);
     const int ret = llama_decode_internal(*ctx, batch_allocr.batch);
-    if (ret < 0) {
+    if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
