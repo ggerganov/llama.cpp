@@ -128,7 +128,7 @@ struct lora_merge_ctx {
 
     lora_merge_ctx(
             std::string & base_fname,
-            std::vector<llama_lora_adapter_info> & lora_files,
+            std::vector<common_lora_adapter_info> & lora_files,
             std::string & outfile,
             int n_threads) : base_model(base_fname, 0), n_threads(n_threads), fout(outfile, std::ios::binary) {
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
@@ -400,9 +400,9 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 

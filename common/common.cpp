@@ -362,10 +362,10 @@ bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_MAX_N_THREAD
     return true;
 }
 
-void gpt_init() {
+void common_init() {
     llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_thold) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
+        if (LOG_DEFAULT_LLAMA <= common_log_verbosity_thold) {
+            common_log_add(common_log_main(), level, "%s", text);
         }
     }, NULL);
 
@@ -378,7 +378,7 @@ void gpt_init() {
     LOG_INF("build: %d (%s) with %s for %s%s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET, build_type);
 }
 
-std::string gpt_params_get_system_info(const gpt_params & params) {
+std::string common_params_get_system_info(const common_params & params) {
     std::ostringstream os;
 
     os << "system_info: n_threads = " << params.cpuparams.n_threads;
@@ -493,7 +493,7 @@ std::string string_from(const struct llama_context * ctx, const std::vector<llam
             first = false;
         }
 
-        auto detokenized = llama_token_to_piece(ctx, token);
+        auto detokenized = common_token_to_piece(ctx, token);
 
         detokenized.erase(
             std::remove_if(
@@ -524,7 +524,7 @@ std::string string_from(const struct llama_context * ctx, const struct llama_bat
             first = false;
         }
 
-        auto detokenized = llama_token_to_piece(ctx, batch.token[i]);
+        auto detokenized = common_token_to_piece(ctx, batch.token[i]);
 
         detokenized.erase(
                 std::remove_if(
@@ -819,16 +819,16 @@ std::string fs_get_cache_file(const std::string & filename) {
 //
 // Model utils
 //
-struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
-    llama_init_result iparams;
-    auto mparams = llama_model_params_from_gpt_params(params);
+struct common_init_result common_init_from_params(common_params & params) {
+    common_init_result iparams;
+    auto mparams = common_model_params_to_llama(params);
 
     llama_model * model = nullptr;
 
     if (!params.hf_repo.empty() && !params.hf_file.empty()) {
-        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
+        model = common_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
     } else if (!params.model_url.empty()) {
-        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
+        model = common_load_model_from_url(params.model_url.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
     } else {
         model = llama_load_model_from_file(params.model.c_str(), mparams);
     }
@@ -863,7 +863,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         }
     }
 
-    auto cparams = llama_context_params_from_gpt_params(params);
+    auto cparams = common_context_params_to_llama(params);
 
     llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
@@ -876,7 +876,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
         if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
 
-        const auto cvec = llama_control_vector_load(params.control_vectors);
+        const auto cvec = common_control_vector_load(params.control_vectors);
         if (cvec.n_embd == -1) {
             llama_free(lctx);
             llama_free_model(model);
@@ -900,7 +900,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
 
     // load and optionally apply lora adapters
     for (auto & la : params.lora_adapters) {
-        llama_lora_adapter_container loaded_la;
+        common_lora_adapter_container loaded_la;
         loaded_la.path = la.path;
         loaded_la.scale = la.scale;
         loaded_la.adapter = llama_lora_adapter_init(model, la.path.c_str());
@@ -913,7 +913,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         iparams.lora_adapters.push_back(loaded_la); // copy to list of loaded adapters
     }
     if (!params.lora_init_without_apply) {
-        llama_lora_adapters_apply(lctx, iparams.lora_adapters);
+        common_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
     if (params.sparams.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
@@ -961,7 +961,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
     return iparams;
 }
 
-void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters) {
+void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters) {
     llama_lora_adapter_clear(ctx);
     for (auto & la : lora_adapters) {
         if (la.scale != 0.0f) {
@@ -970,7 +970,7 @@ void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lor
     }
 }
 
-struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & params) {
+struct llama_model_params common_model_params_to_llama(const common_params & params) {
     auto mparams = llama_model_default_params();
 
     if (params.n_gpu_layers != -1) {
@@ -1022,7 +1022,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
     throw std::runtime_error("Invalid cache type: " + s);
 }
 
-struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
+struct llama_context_params common_context_params_to_llama(const common_params & params) {
     auto cparams = llama_context_default_params();
 
     cparams.n_ctx             = params.n_ctx;
@@ -1112,7 +1112,7 @@ static bool curl_perform_with_retry(const std::string& url, CURL* curl, int max_
     return false;
 }
 
-static bool llama_download_file(const std::string & url, const std::string & path, const std::string & hf_token) {
+static bool common_download_file(const std::string & url, const std::string & path, const std::string & hf_token) {
 
     // Initialize libcurl
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
@@ -1182,15 +1182,15 @@ static bool llama_download_file(const std::string & url, const std::string & pat
     }
 
     // Send a HEAD request to retrieve the etag and last-modified headers
-    struct llama_load_model_from_url_headers {
+    struct common_load_model_from_url_headers {
         std::string etag;
         std::string last_modified;
     };
-    llama_load_model_from_url_headers headers;
+    common_load_model_from_url_headers headers;
     {
         typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
-            llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
+            common_load_model_from_url_headers *headers = (common_load_model_from_url_headers *) userdata;
 
             static std::regex header_regex("([^:]+): (.*)\r\n");
             static std::regex etag_regex("ETag", std::regex_constants::icase);
@@ -1326,7 +1326,7 @@ static bool llama_download_file(const std::string & url, const std::string & pat
     return true;
 }
 
-struct llama_model * llama_load_model_from_url(
+struct llama_model * common_load_model_from_url(
         const char * model_url,
         const char * path_model,
         const char * hf_token,
@@ -1337,7 +1337,7 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
-    if (!llama_download_file(model_url, path_model, hf_token)) {
+    if (!common_download_file(model_url, path_model, hf_token)) {
         return NULL;
     }
 
@@ -1390,7 +1390,7 @@ struct llama_model * llama_load_model_from_url(
                 char split_url[LLAMA_CURL_MAX_URL_LENGTH] = {0};
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
-                return llama_download_file(split_url, split_path, hf_token);
+                return common_download_file(split_url, split_path, hf_token);
             }, idx));
         }
 
@@ -1405,7 +1405,7 @@ struct llama_model * llama_load_model_from_url(
     return llama_load_model_from_file(path_model, params);
 }
 
-struct llama_model * llama_load_model_from_hf(
+struct llama_model * common_load_model_from_hf(
         const char * repo,
         const char * model,
         const char * path_model,
@@ -1425,12 +1425,12 @@ struct llama_model * llama_load_model_from_hf(
     model_url += "/resolve/main/";
     model_url += model;
 
-    return llama_load_model_from_url(model_url.c_str(), path_model, hf_token, params);
+    return common_load_model_from_url(model_url.c_str(), path_model, hf_token, params);
 }
 
 #else
 
-struct llama_model * llama_load_model_from_url(
+struct llama_model * common_load_model_from_url(
         const char * /*model_url*/,
         const char * /*path_model*/,
         const char * /*hf_token*/,
@@ -1439,7 +1439,7 @@ struct llama_model * llama_load_model_from_url(
     return nullptr;
 }
 
-struct llama_model * llama_load_model_from_hf(
+struct llama_model * common_load_model_from_hf(
         const char * /*repo*/,
         const char * /*model*/,
         const char * /*path_model*/,
@@ -1455,11 +1455,11 @@ struct llama_model * llama_load_model_from_hf(
 // Batch utils
 //
 
-void llama_batch_clear(struct llama_batch & batch) {
+void common_batch_clear(struct llama_batch & batch) {
     batch.n_tokens = 0;
 }
 
-void llama_batch_add(
+void common_batch_add(
                  struct llama_batch & batch,
                         llama_token   id,
                           llama_pos   pos,
@@ -1482,15 +1482,15 @@ void llama_batch_add(
 // Vocab utils
 //
 
-std::vector<llama_token> llama_tokenize(
+std::vector<llama_token> common_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special) {
-    return llama_tokenize(llama_get_model(ctx), text, add_special, parse_special);
+    return common_tokenize(llama_get_model(ctx), text, add_special, parse_special);
 }
 
-std::vector<llama_token> llama_tokenize(
+std::vector<llama_token> common_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_special,
@@ -1509,7 +1509,7 @@ std::vector<llama_token> llama_tokenize(
     return result;
 }
 
-std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
     const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
@@ -1525,7 +1525,7 @@ std::string llama_token_to_piece(const struct llama_context * ctx, llama_token t
     return piece;
 }
 
-std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
+std::string common_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
     std::string text;
     text.resize(std::max(text.capacity(), tokens.size()));
     int32_t n_chars = llama_detokenize(llama_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
@@ -1545,15 +1545,15 @@ std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token>
 // Chat template utils
 //
 
-bool llama_chat_verify_template(const std::string & tmpl) {
+bool common_chat_verify_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
     int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
 }
 
-std::string llama_chat_apply_template(const struct llama_model * model,
+std::string common_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
-        const std::vector<llama_chat_msg> & msgs,
+        const std::vector<common_chat_msg> & msgs,
         bool add_ass) {
     int alloc_size = 0;
     bool fallback = false; // indicate if we must fallback to default chatml
@@ -1595,42 +1595,42 @@ std::string llama_chat_apply_template(const struct llama_model * model,
     return formatted_chat;
 }
 
-std::string llama_chat_format_single(const struct llama_model * model,
+std::string common_chat_format_single(const struct llama_model * model,
         const std::string & tmpl,
-        const std::vector<llama_chat_msg> & past_msg,
-        const llama_chat_msg & new_msg,
+        const std::vector<common_chat_msg> & past_msg,
+        const common_chat_msg & new_msg,
         bool add_ass) {
     std::ostringstream ss;
-    auto fmt_past_msg = past_msg.empty() ? "" : llama_chat_apply_template(model, tmpl, past_msg, false);
-    std::vector<llama_chat_msg> chat_new(past_msg);
+    auto fmt_past_msg = past_msg.empty() ? "" : common_chat_apply_template(model, tmpl, past_msg, false);
+    std::vector<common_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
     if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
         ss << "\n";
     };
     // format chat with new_msg
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = llama_chat_apply_template(model, tmpl, chat_new, add_ass);
+    auto fmt_new_msg = common_chat_apply_template(model, tmpl, chat_new, add_ass);
     // get the diff part
     ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return ss.str();
 }
 
-std::string llama_chat_format_example(const struct llama_model * model,
+std::string common_chat_format_example(const struct llama_model * model,
         const std::string & tmpl) {
-    std::vector<llama_chat_msg> msgs = {
+    std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant"},
         {"user",      "Hello"},
         {"assistant", "Hi there"},
         {"user",      "How are you?"},
     };
-    return llama_chat_apply_template(model, tmpl, msgs, true);
+    return common_chat_apply_template(model, tmpl, msgs, true);
 }
 
 //
 // KV cache utils
 //
 
-void llama_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size) {
+void common_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = ".123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d",
@@ -1653,7 +1653,7 @@ void llama_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size) {
     printf("\n=== Done dumping\n");
 }
 
-void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size) {
+void common_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d\n",
@@ -1705,7 +1705,7 @@ void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_siz
 // Embedding utils
 //
 
-void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm) {
+void common_embd_normalize(const float * inp, float * out, int n, int embd_norm) {
     double sum = 0.0;
 
     switch (embd_norm) {
@@ -1739,7 +1739,7 @@ void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm) 
     }
 }
 
-float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n){
+float common_embd_similarity_cos(const float * embd1, const float * embd2, int n){
     double sum  = 0.0;
     double sum1 = 0.0;
     double sum2 = 0.0;
@@ -1765,8 +1765,8 @@ float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n)
 // Control vector utils
 //
 
-static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
-    llama_control_vector_data result = { -1, {} };
+static common_control_vector_data common_control_vector_load_one(const common_control_vector_load_info & load_info) {
+    common_control_vector_data result = { -1, {} };
 
     ggml_context * ctx = nullptr;
     struct gguf_init_params meta_gguf_params = {
@@ -1850,11 +1850,11 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
     return result;
 }
 
-llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos) {
-    llama_control_vector_data result = { -1, {} };
+common_control_vector_data common_control_vector_load(const std::vector<common_control_vector_load_info> & load_infos) {
+    common_control_vector_data result = { -1, {} };
 
     for (const auto & info : load_infos) {
-        auto cur = llama_control_vector_load_one(info);
+        auto cur = common_control_vector_load_one(info);
 
         if (cur.n_embd == -1) {
             result.n_embd = -1;
@@ -1946,7 +1946,7 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
     }
 }
 
-void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const llama_context * lctx,
+void yaml_dump_non_result_info(FILE * stream, const common_params & params, const llama_context * lctx,
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
     const auto & sparams = params.sparams;
 

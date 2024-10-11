@@ -8,10 +8,6 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef GGML_USE_RPC
-#  include "ggml-rpc.h"
-#endif
-
 #if defined(GGML_USE_VULKAN)
 #  include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
@@ -3404,10 +3400,6 @@ struct llama_lora_adapter {
 static int llama_get_device_count(const llama_model & model) {
     int count = (int) model.devices.size();
 
-#if defined(GGML_USE_RPC)
-    count += (int) model.rpc_servers.size();
-#endif
-
 #if defined(GGML_USE_SYCL)
     count += ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
@@ -3459,15 +3451,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
 
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int device) {
     ggml_backend_buffer_type_t buft = nullptr;
-
-#if defined(GGML_USE_RPC)
-    int rpc_count = (int)model.rpc_servers.size();
-    if (device < rpc_count) {
-        const char * endpoint = model.rpc_servers[device].c_str();
-        return ggml_backend_rpc_buffer_type(endpoint);
-    }
-    device -= rpc_count;
-#endif
 
     if (device < (int)model.devices.size()) {
         return ggml_backend_dev_buffer_type(model.devices[device]);
@@ -3523,18 +3506,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
 }
 
 static size_t llama_get_device_memory(const llama_model & model, int device) {
-#if defined(GGML_USE_RPC)
-    int rpc_count = (int)model.rpc_servers.size();
-    if (device < rpc_count) {
-        size_t total;
-        size_t free;
-        const char * endpoint = model.rpc_servers[device].c_str();
-        ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
-        return free;
-    }
-    device = device - rpc_count;
-#endif
-
     if (device < (int)model.devices.size()) {
         ggml_backend_dev_t dev = model.devices[device];
         size_t total;
@@ -19019,13 +18990,18 @@ bool llama_supports_mlock(void) {
 
 bool llama_supports_gpu_offload(void) {
 #if defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
+    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
     return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr;
+           ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr ||
+           llama_supports_rpc();
 #endif
+}
+
+bool llama_supports_rpc(void) {
+    return ggml_backend_reg_by_name("RPC") != nullptr;
 }
 
 void llama_backend_init(void) {
@@ -19102,6 +19078,36 @@ struct llama_model * llama_load_model_from_file(
         model->rpc_servers.push_back(servers);
     }
 
+    // add RPC devices
+    if (!model->rpc_servers.empty()) {
+        ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
+        if (!rpc_reg) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        // ggml_backend_dev_t ggml_backend_rpc_add_device(const char * endpoint);
+        using ggml_backend_rpc_add_device_t = ggml_backend_dev_t (*)(const char *);
+        ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
+        if (!ggml_backend_rpc_add_device_fn) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        for (const std::string & server : model->rpc_servers) {
+            ggml_backend_dev_t dev = ggml_backend_rpc_add_device_fn(server.c_str());
+            if (dev) {
+                model->devices.push_back(dev);
+            } else {
+                LLAMA_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
+                llama_free_model(model);
+                return nullptr;
+            }
+        }
+    }
+
     // create list of devices to use with this model
     // currently, we use all available devices
     // TODO: rework API to give user more control over device selection
@@ -19128,7 +19134,7 @@ struct llama_model * llama_load_model_from_file(
         } else if (status == -2) {
             LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
-        delete model;
+        llama_free_model(model);
         return nullptr;
     }
 
@@ -19310,23 +19316,6 @@ struct llama_context * llama_new_context_with_model(
         if (main_gpu >= (int)model->devices.size()) {
             main_gpu -= (int)model->devices.size();
         }
-
-#if defined(GGML_USE_RPC)
-        if (model->n_gpu_layers > 0) {
-            for (const auto & endpoint : model->rpc_servers) {
-                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-        if (main_gpu >= (int)model->rpc_servers.size()) {
-            main_gpu -= (int)model->rpc_servers.size();
-        }
-#endif
 
 #if defined(GGML_USE_VULKAN)
         if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {

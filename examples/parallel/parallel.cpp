@@ -54,7 +54,7 @@ static std::vector<std::string> k_prompts = {
 struct client {
     ~client() {
         if (smpl) {
-            gpt_sampler_free(smpl);
+            common_sampler_free(smpl);
         }
     }
 
@@ -75,7 +75,7 @@ struct client {
     std::string prompt;
     std::string response;
 
-    struct gpt_sampler * smpl = nullptr;
+    struct common_sampler * smpl = nullptr;
 };
 
 static void print_date_time() {
@@ -103,13 +103,13 @@ static std::vector<std::string> split_string(const std::string& input, char deli
 int main(int argc, char ** argv) {
     srand(1234);
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PARALLEL)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PARALLEL)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     // number of simultaneous "clients" to simulate
     const int32_t n_clients = params.n_parallel;
@@ -130,7 +130,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the target model
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -160,11 +160,11 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.smpl = gpt_sampler_init(model, params.sparams);
+        client.smpl = common_sampler_init(model, params.sparams);
     }
 
     std::vector<llama_token> tokens_system;
-    tokens_system = ::llama_tokenize(ctx, k_system, true);
+    tokens_system = common_tokenize(ctx, k_system, true);
     const int32_t n_tokens_system = tokens_system.size();
 
     llama_seq_id g_seq_id = 0;
@@ -189,7 +189,7 @@ int main(int argc, char ** argv) {
         LOG_INF("%s: Evaluating the system prompt ...\n", __func__);
 
         for (int32_t i = 0; i < n_tokens_system; ++i) {
-            llama_batch_add(batch, tokens_system[i], i, { 0 }, false);
+            common_batch_add(batch, tokens_system[i], i, { 0 }, false);
         }
 
         if (llama_decode(ctx, batch) != 0) {
@@ -210,10 +210,10 @@ int main(int argc, char ** argv) {
     while (true) {
         if (dump_kv_cache) {
             llama_kv_cache_view_update(ctx, &kvc_view);
-            llama_kv_cache_dump_view_seqs(kvc_view, 40);
+            common_kv_cache_dump_view_seqs(kvc_view, 40);
         }
 
-        llama_batch_clear(batch);
+        common_batch_clear(batch);
 
         // decode any currently ongoing sequences
         for (auto & client : clients) {
@@ -223,7 +223,7 @@ int main(int argc, char ** argv) {
 
             client.i_batch = batch.n_tokens;
 
-            llama_batch_add(batch, client.sampled, n_tokens_system + client.n_prompt + client.n_decoded, { client.id + 1 }, true);
+            common_batch_add(batch, client.sampled, n_tokens_system + client.n_prompt + client.n_decoded, { client.id + 1 }, true);
 
             client.n_decoded += 1;
         }
@@ -252,14 +252,14 @@ int main(int argc, char ** argv) {
                     client.prompt   = client.input + "\nAssistant:";
                     client.response = "";
 
-                    gpt_sampler_reset(client.smpl);
+                    common_sampler_reset(client.smpl);
 
                     // do not prepend BOS because we have a system prompt!
                     std::vector<llama_token> tokens_prompt;
-                    tokens_prompt = ::llama_tokenize(ctx, client.prompt, false);
+                    tokens_prompt = common_tokenize(ctx, client.prompt, false);
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
-                        llama_batch_add(batch, tokens_prompt[i], i + n_tokens_system, { client.id + 1 }, false);
+                        common_batch_add(batch, tokens_prompt[i], i + n_tokens_system, { client.id + 1 }, false);
                     }
 
                     // extract the logits only for the last token
@@ -340,9 +340,9 @@ int main(int argc, char ** argv) {
                 //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
-                const llama_token id = gpt_sampler_sample(client.smpl, ctx, client.i_batch - i);
+                const llama_token id = common_sampler_sample(client.smpl, ctx, client.i_batch - i);
 
-                gpt_sampler_accept(client.smpl, id, true);
+                common_sampler_accept(client.smpl, id, true);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients
@@ -350,7 +350,7 @@ int main(int argc, char ** argv) {
                     client.t_start_gen = ggml_time_us();
                 }
 
-                const std::string token_str = llama_token_to_piece(ctx, id);
+                const std::string token_str = common_token_to_piece(ctx, id);
 
                 client.response += token_str;
                 client.sampled = id;
