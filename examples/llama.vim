@@ -39,10 +39,11 @@ highlight llama_hl_hint guifg=#ff772f
 highlight llama_hl_info guifg=#77ff2f
 
 " endpoint:         llama.cpp server endpoint
-" n_prefix:         number of lines to include in the prefix
-" n_suffix:         number of lines to include in the suffix
+" n_prefix:         number of lines before the cursor location to include in the prefix
+" n_suffix:         number of lines after  the cursor location to include in the suffix
 " n_predict:        max number of tokens to predict
-" t_max_prompt_ms:  max alloted time for the text generation
+" t_max_prompt_ms:  max alloted time for the prompt generation (TODO: not yet supported)
+" t_max_predict_ms: max alloted time for the prediction
 " show_info:        show extra info about the inference
 " auto_fim:         trigger FIM completion automatically on cursor movement
 let s:default_config = {
