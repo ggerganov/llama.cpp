@@ -8,10 +8,6 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef GGML_USE_RPC
-#  include "ggml-rpc.h"
-#endif
-
 #if defined(GGML_USE_VULKAN)
 #  include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
@@ -20,14 +16,6 @@
 #   include "ggml-kompute.h"
 #elif defined(GGML_USE_CANN)
 #   include "ggml-cann.h"
-#endif
-
-#ifdef GGML_USE_BLAS
-#  include "ggml-blas.h"
-#endif
-
-#ifdef GGML_USE_METAL
-#  include "ggml-metal.h"
 #endif
 
 // TODO: replace with ggml API call
@@ -2412,7 +2400,7 @@ struct llama_hparams {
 
     // needed by encoder-decoder models (e.g. T5, FLAN-T5)
     // ref: https://github.com/ggerganov/llama.cpp/pull/8141
-    llama_token dec_start_token_id = -1;
+    llama_token dec_start_token_id = LLAMA_TOKEN_NULL;
 
     enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
@@ -3267,12 +3255,8 @@ struct llama_context {
     std::unordered_map<struct llama_lora_adapter *, float> lora_adapters;
 
     std::vector<ggml_backend_t> backends;
-#ifdef GGML_USE_METAL
-    ggml_backend_t backend_metal = nullptr;
-#endif
-#ifdef GGML_USE_BLAS
-    ggml_backend_t backend_blas = nullptr;
-#endif
+    std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
+
     ggml_backend_t backend_cpu = nullptr;
 
     ggml_threadpool_t threadpool       = nullptr;
@@ -3391,13 +3375,7 @@ struct llama_lora_adapter {
 static int llama_get_device_count(const llama_model & model) {
     int count = (int) model.devices.size();
 
-#if defined(GGML_USE_RPC)
-    count += (int) model.rpc_servers.size();
-#endif
-
-#if defined(GGML_USE_METAL)
-    count += 1;
-#elif defined(GGML_USE_SYCL)
+#if defined(GGML_USE_SYCL)
     count += ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
     count += ggml_backend_vk_get_device_count();
@@ -3449,23 +3427,12 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int device) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#if defined(GGML_USE_RPC)
-    int rpc_count = (int)model.rpc_servers.size();
-    if (device < rpc_count) {
-        const char * endpoint = model.rpc_servers[device].c_str();
-        return ggml_backend_rpc_buffer_type(endpoint);
-    }
-    device -= rpc_count;
-#endif
-
     if (device < (int)model.devices.size()) {
         return ggml_backend_dev_buffer_type(model.devices[device]);
     }
     device -= (int)model.devices.size();
 
-#if defined(GGML_USE_METAL)
-    buft = ggml_backend_metal_buffer_type();
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
     buft = ggml_backend_vk_buffer_type(device);
 #elif defined(GGML_USE_SYCL)
     buft = ggml_backend_sycl_buffer_type(device);
@@ -3514,18 +3481,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
 }
 
 static size_t llama_get_device_memory(const llama_model & model, int device) {
-#if defined(GGML_USE_RPC)
-    int rpc_count = (int)model.rpc_servers.size();
-    if (device < rpc_count) {
-        size_t total;
-        size_t free;
-        const char * endpoint = model.rpc_servers[device].c_str();
-        ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
-        return free;
-    }
-    device = device - rpc_count;
-#endif
-
     if (device < (int)model.devices.size()) {
         ggml_backend_dev_t dev = model.devices[device];
         size_t total;
@@ -8893,48 +8848,40 @@ static bool llm_load_tensors(
         llama_buf_map bufs;
         bufs.reserve(n_max_backend_buffer);
 
-        // only the mmap region containing the tensors in the model is mapped to the backend buffer
-        // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
-        // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
-        if (ml.use_mmap && use_mmap_buffer && buft == llama_default_buffer_type_cpu(model, true)) {
+        // check if this backend device supports buffer_from_host_ptr
+        // when using a host buffer as the CPU bakcend buffer, use the CPU device to prioritize using buffer_from_host_ptr over the host buffer
+        ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft == llama_default_buffer_type_cpu(model, true) ? ggml_backend_cpu_buffer_type() : buft);
+        bool buffer_from_host_ptr_supported = false;
+        if (dev) {
+            ggml_backend_dev_props props;
+            ggml_backend_dev_get_props(dev, &props);
+            buffer_from_host_ptr_supported = props.caps.buffer_from_host_ptr;
+        }
+
+        if (ml.use_mmap && use_mmap_buffer && buffer_from_host_ptr_supported) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
+                // only the mmap region containing the tensors in the model is mapped to the backend buffer
+                // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
+                // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
                 void * addr = nullptr;
-                size_t first, last;
+                size_t first, last; // NOLINT
                 ml.get_mapping_range(&first, &last, &addr, idx, ctx);
                 if (first >= last) {
                     continue;
                 }
-                ggml_backend_buffer_t buf = ggml_backend_cpu_buffer_from_ptr((char *) addr + first, last - first);
-                if (buf == nullptr) {
-                    throw std::runtime_error("unable to allocate backend CPU buffer");
-                }
-                model.bufs.push_back(buf);
-                bufs.emplace(idx, buf);
-            }
-        }
-#ifdef GGML_USE_METAL
-        else if (ml.use_mmap && use_mmap_buffer && buft == ggml_backend_metal_buffer_type()) {
-            for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 const size_t max_size = ggml_get_max_tensor_size(ctx);
-                void * addr = nullptr;
-                size_t first, last;
-                ml.get_mapping_range(&first, &last, &addr, idx, ctx);
-                if (first >= last) {
-                    continue;
-                }
-                ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
+                ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(dev, (char *) addr + first, last - first, max_size);
                 if (buf == nullptr) {
-                    throw std::runtime_error("unable to allocate backend metal buffer");
+                    throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
                 }
                 model.bufs.push_back(buf);
                 bufs.emplace(idx, buf);
             }
         }
-#endif
         else {
             ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
             if (buf == nullptr) {
-                throw std::runtime_error("unable to allocate backend buffer");
+                throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
             }
             model.bufs.push_back(buf);
             if (use_mlock && ggml_backend_buffer_is_host(buf)) {
@@ -17043,17 +16990,19 @@ static void llama_graph_compute(
                     int   n_threads,
         ggml_threadpool * threadpool) {
     if (lctx.backend_cpu != nullptr) {
-        ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
-#ifdef GGML_USE_BLAS
-    if (lctx.backend_blas != nullptr) {
-        ggml_backend_blas_set_n_threads(lctx.backend_blas, n_threads);
-    }
-#endif
 
-    ggml_backend_sched_graph_compute_async(lctx.sched, gf);
+    // set the number of threads for all the backends
+    for (const auto & set_n_threads_fn : lctx.set_n_threads_fns) {
+        set_n_threads_fn.second(set_n_threads_fn.first, n_threads);
+    }
+
+    auto err = ggml_backend_sched_graph_compute_async(lctx.sched, gf);
+    if (err != GGML_STATUS_SUCCESS) {
+        LLAMA_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, err);
+    }
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
@@ -17869,10 +17818,9 @@ static void llama_tensor_dequantize_internal(
     }
     float * f32_output = (float *) output.data();
 
-    ggml_type_traits_t qtype;
+    const ggml_type_traits * qtype = ggml_get_type_traits(tensor->type);
     if (ggml_is_quantized(tensor->type)) {
-        qtype = ggml_internal_get_type_traits(tensor->type);
-        if (qtype.to_float == NULL) {
+        if (qtype->to_float == NULL) {
             throw std::runtime_error(format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor->type)));
         }
     } else if (tensor->type != GGML_TYPE_F16 &&
@@ -17886,7 +17834,7 @@ static void llama_tensor_dequantize_internal(
         } else if (tensor->type == GGML_TYPE_BF16) {
             ggml_bf16_to_fp32_row((ggml_bf16_t *)tensor->data, f32_output, nelements);
         } else if (ggml_is_quantized(tensor->type)) {
-            qtype.to_float(tensor->data, f32_output, nelements);
+            qtype->to_float(tensor->data, f32_output, nelements);
         } else {
             GGML_ABORT("fatal error"); // unreachable
         }
@@ -17922,7 +17870,7 @@ static void llama_tensor_dequantize_internal(
             } else if (typ == GGML_TYPE_BF16) {
                 ggml_bf16_to_fp32_row((ggml_bf16_t *)inbuf, outbuf, nels);
             } else {
-                qtype.to_float(inbuf, outbuf, nels);
+                qtype->to_float(inbuf, outbuf, nels);
             }
         };
         workers.emplace_back(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems);
@@ -19016,14 +18964,19 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
+#if defined(GGML_USE_VULKAN) || \
+    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
     return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr;
+           ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr ||
+           llama_supports_rpc();
 #endif
+}
+
+bool llama_supports_rpc(void) {
+    return ggml_backend_reg_by_name("RPC") != nullptr;
 }
 
 void llama_backend_init(void) {
@@ -19100,14 +19053,51 @@ struct llama_model * llama_load_model_from_file(
         model->rpc_servers.push_back(servers);
     }
 
+    // add RPC devices
+    if (!model->rpc_servers.empty()) {
+        ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
+        if (!rpc_reg) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        // ggml_backend_dev_t ggml_backend_rpc_add_device(const char * endpoint);
+        using ggml_backend_rpc_add_device_t = ggml_backend_dev_t (*)(const char *);
+        ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
+        if (!ggml_backend_rpc_add_device_fn) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        for (const std::string & server : model->rpc_servers) {
+            ggml_backend_dev_t dev = ggml_backend_rpc_add_device_fn(server.c_str());
+            if (dev) {
+                model->devices.push_back(dev);
+            } else {
+                LLAMA_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
+                llama_free_model(model);
+                return nullptr;
+            }
+        }
+    }
+
     // create list of devices to use with this model
     // currently, we use all available devices
     // TODO: rework API to give user more control over device selection
     for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-        // skip the CPU backend since it is handled separately
-        if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_CPU_FULL) {
-            model->devices.push_back(dev);
+        switch (ggml_backend_dev_type(dev)) {
+            case GGML_BACKEND_DEVICE_TYPE_CPU:
+            case GGML_BACKEND_DEVICE_TYPE_CPU_FULL:
+                // skip CPU backends since they are `handled separately
+                break;
+
+            case GGML_BACKEND_DEVICE_TYPE_GPU:
+            case GGML_BACKEND_DEVICE_TYPE_GPU_FULL:
+                model->devices.push_back(dev);
+                break;
         }
     }
 
@@ -19119,7 +19109,7 @@ struct llama_model * llama_load_model_from_file(
         } else if (status == -2) {
             LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
-        delete model;
+        llama_free_model(model);
         return nullptr;
     }
 
@@ -19302,34 +19292,7 @@ struct llama_context * llama_new_context_with_model(
             main_gpu -= (int)model->devices.size();
         }
 
-#if defined(GGML_USE_RPC)
-        if (model->n_gpu_layers > 0) {
-            for (const auto & endpoint : model->rpc_servers) {
-                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-        if (main_gpu >= (int)model->rpc_servers.size()) {
-            main_gpu -= (int)model->rpc_servers.size();
-        }
-#endif
-
-#if defined(GGML_USE_METAL)
-        if (model->n_gpu_layers > 0) {
-            ctx->backend_metal = ggml_backend_metal_init();
-            if (ctx->backend_metal == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Metal backend\n", __func__);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(ctx->backend_metal);
-        }
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
         if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
             LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
             llama_free(ctx);
@@ -19412,14 +19375,19 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 
-#ifdef GGML_USE_BLAS
-        ctx->backend_blas = ggml_backend_blas_init();
-        if (ctx->backend_blas == nullptr) {
-            LLAMA_LOG_WARN("%s: failed to initialize BLAS backend\n", __func__);
-        } else {
-            ctx->backends.push_back(ctx->backend_blas);
+        // add other backends (such as BLAS)
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+                ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
-#endif
 
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
@@ -19428,6 +19396,18 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         ctx->backends.push_back(ctx->backend_cpu);
+
+        // create a list of the set_n_threads functions in the backends
+        for (auto * backend : ctx->backends) {
+            ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+            ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+            if (reg) {
+                auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+                if (ggml_backend_set_n_threads_fn) {
+                    ctx->set_n_threads_fns.emplace_back(backend, ggml_backend_set_n_threads_fn);
+                }
+            }
+        }
 
         if (!llama_kv_cache_init(ctx->kv_self, ctx, type_k, type_v, kv_size, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);

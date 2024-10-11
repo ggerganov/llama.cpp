@@ -26,20 +26,20 @@ struct seq_draft {
     std::vector<llama_token> tokens;
     std::vector<std::vector<llama_token_data>> dists;
 
-    struct gpt_sampler * smpl = nullptr;
+    struct common_sampler * smpl = nullptr;
 };
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
     // needed to get candidate probs even for temp <= 0.0
     params.sparams.n_probs = 128;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     if (params.model_draft.empty()) {
         LOG_ERR("%s: --model-draft is required\n", __func__);
@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx_dft = NULL;
 
     // load the target model
-    llama_init_result llama_init_tgt = llama_init_from_gpt_params(params);
+    common_init_result llama_init_tgt = common_init_from_params(params);
     model_tgt = llama_init_tgt.model;
     ctx_tgt = llama_init_tgt.context;
 
@@ -78,7 +78,7 @@ int main(int argc, char ** argv) {
     }
 
     params.cpuparams_batch.n_threads = params.draft_cpuparams_batch.n_threads;
-    llama_init_result llama_init_dft = llama_init_from_gpt_params(params);
+    common_init_result llama_init_dft = common_init_from_params(params);
     model_dft = llama_init_dft.model;
     ctx_dft = llama_init_dft.context;
 
@@ -124,8 +124,8 @@ int main(int argc, char ** argv) {
             if (std::strcmp(token_text_tgt, token_text_dft) != 0) {
                 LOG_ERR("%s: draft model vocab must match target model to use speculation but ", __func__);
                 LOG_ERR("token %d content differs - target '%s', draft '%s'\n", i,
-                        llama_token_to_piece(ctx_tgt, i).c_str(),
-                        llama_token_to_piece(ctx_dft, i).c_str());
+                        common_token_to_piece(ctx_tgt, i).c_str(),
+                        common_token_to_piece(ctx_dft, i).c_str());
                 return 1;
             }
         }
@@ -134,7 +134,7 @@ int main(int argc, char ** argv) {
 
     // Tokenize the prompt
     std::vector<llama_token> inp;
-    inp = ::llama_tokenize(ctx_tgt, params.prompt, true, true);
+    inp = common_tokenize(ctx_tgt, params.prompt, true, true);
 
     const int max_context_size     = llama_n_ctx(ctx_tgt);
     const int max_tokens_list_size = max_context_size - 4;
@@ -147,7 +147,7 @@ int main(int argc, char ** argv) {
     LOG("\n\n");
 
     for (auto id : inp) {
-        LOG("%s", llama_token_to_piece(ctx_tgt, id).c_str());
+        LOG("%s", common_token_to_piece(ctx_tgt, id).c_str());
     }
 
     const int n_input = inp.size();
@@ -178,7 +178,7 @@ int main(int argc, char ** argv) {
     bool has_eos = false;
 
     // target model sampling context (reuse the llama_context's sampling instance)
-    struct gpt_sampler * smpl = gpt_sampler_init(model_tgt, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
 
     struct llama_sampler * softmax = llama_sampler_init_softmax();
 
@@ -186,8 +186,8 @@ int main(int argc, char ** argv) {
     std::vector<seq_draft> drafts(n_seq_dft);
 
     for (int s = 0; s < n_seq_dft; ++s) {
-        // allocate gpt_sampler for each draft sequence
-        drafts[s].smpl = gpt_sampler_init(model_dft, params.sparams);
+        // allocate llama_sampler for each draft sequence
+        drafts[s].smpl = common_sampler_init(model_dft, params.sparams);
     }
 
     llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
@@ -229,9 +229,9 @@ int main(int argc, char ** argv) {
                 bool accept = false;
                 if (params.sparams.temp > 0) {
                     // stochastic verification
-                    gpt_sampler_sample(smpl, ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft], true);
+                    common_sampler_sample(smpl, ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft], true);
 
-                    auto & dist_tgt = *gpt_sampler_get_candidates(smpl);
+                    auto & dist_tgt = *common_sampler_get_candidates(smpl);
 
                     float p_tgt = 0.0f;
                     float p_dft = 0.0f;
@@ -277,13 +277,13 @@ int main(int argc, char ** argv) {
                             s_keep = s;
                             accept = true;
                             token_id = drafts[s].tokens[i_dft];
-                            token_str = llama_token_to_piece(ctx_tgt, token_id);
-                            gpt_sampler_accept(smpl, token_id, true);
+                            token_str = common_token_to_piece(ctx_tgt, token_id);
+                            common_sampler_accept(smpl, token_id, true);
 
                             LOG_DBG("draft token %d of sequence %d (%d, '%s') accepted\n", i_dft, s, token_id, token_str.c_str());
                             break;
                         } else {
-                            LOG_DBG("draft token %d of sequence %d (%d, '%s') rejected\n", i_dft, s, drafts[s].tokens[i_dft], llama_token_to_piece(ctx_tgt, drafts[s].tokens[i_dft]).c_str());
+                            LOG_DBG("draft token %d of sequence %d (%d, '%s') rejected\n", i_dft, s, drafts[s].tokens[i_dft], common_token_to_piece(ctx_tgt, drafts[s].tokens[i_dft]).c_str());
                             drafts[s].active = false;
 
                             // calculate residual probability
@@ -349,19 +349,19 @@ int main(int argc, char ** argv) {
                         const int idx = dist(rng);
 
                         token_id = dist_tgt.data[idx].id;
-                        gpt_sampler_accept(smpl, token_id, true);
-                        token_str = llama_token_to_piece(ctx_tgt, token_id);
+                        common_sampler_accept(smpl, token_id, true);
+                        token_str = common_token_to_piece(ctx_tgt, token_id);
                     }
                 } else {
                     // greedy verification
 
                     // sample from the target model
                     LOG_DBG("sampling target: s_keep = %3d, i_dft = %3d, i_batch_tgt = %3d\n", s_keep, i_dft, drafts[s_keep].i_batch_tgt[i_dft]);
-                    token_id = gpt_sampler_sample(smpl, ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft]);
+                    token_id = common_sampler_sample(smpl, ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft]);
 
-                    gpt_sampler_accept(smpl, token_id, true);
+                    common_sampler_accept(smpl, token_id, true);
 
-                    token_str = llama_token_to_piece(ctx_tgt, token_id);
+                    token_str = common_token_to_piece(ctx_tgt, token_id);
 
                     for (int s = 0; s < n_seq_dft; ++s) {
                         if (!drafts[s].active) {
@@ -431,8 +431,8 @@ int main(int argc, char ** argv) {
             drafts[0].dists.push_back(std::vector<llama_token_data>());
             drafts[0].i_batch_tgt.push_back(0);
 
-            llama_batch_clear(batch_dft);
-            llama_batch_add  (batch_dft, token_id, n_past_dft, { 0 }, true);
+            common_batch_clear(batch_dft);
+            common_batch_add  (batch_dft, token_id, n_past_dft, { 0 }, true);
 
             llama_kv_cache_seq_rm(ctx_dft, 0, n_past_dft, -1);
             // LOG_DBG("dft batch: %s\n", LOG_BATCH_TOSTR_PRETTY(ctx_dft, batch_dft).c_str());
@@ -446,9 +446,9 @@ int main(int argc, char ** argv) {
         }
 
         if (drafts[0].smpl) {
-            gpt_sampler_free(drafts[0].smpl);
+            common_sampler_free(drafts[0].smpl);
         }
-        drafts[0].smpl = gpt_sampler_clone(smpl);
+        drafts[0].smpl = common_sampler_clone(smpl);
 
         int n_seq_cur  = 1;
         int n_past_cur = n_past_dft;
@@ -461,8 +461,8 @@ int main(int argc, char ** argv) {
         drafts[0].drafting    = true;
         drafts[0].i_batch_dft = 0;
 
-        llama_batch_clear(batch_tgt);
-        llama_batch_add  (batch_tgt, drafts[0].tokens[0], n_past_tgt, { 0 }, true);
+        common_batch_clear(batch_tgt);
+        common_batch_add  (batch_tgt, drafts[0].tokens[0], n_past_tgt, { 0 }, true);
 
         // sample n_draft tokens from the draft model using tree-based sampling
         for (int i = 0; i < n_draft; ++i) {
@@ -477,13 +477,13 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
-                gpt_sampler_sample(drafts[s].smpl, ctx_dft, drafts[s].i_batch_dft, true);
+                common_sampler_sample(drafts[s].smpl, ctx_dft, drafts[s].i_batch_dft, true);
 
-                const auto * cur_p = gpt_sampler_get_candidates(drafts[s].smpl);
+                const auto * cur_p = common_sampler_get_candidates(drafts[s].smpl);
 
                 for (int k = 0; k < std::min(n_seq_dft + 3, (int) cur_p->size); ++k) {
                     LOG_DBG(" - draft candidate %3d for seq %3d, pos %3d: %6d (%8.3f) '%s'\n",
-                            k, s, i, cur_p->data[k].id, cur_p->data[k].p, llama_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
+                            k, s, i, cur_p->data[k].id, cur_p->data[k].p, common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
                 }
 
                 std::vector<int> sa(1, s);
@@ -518,9 +518,9 @@ int main(int argc, char ** argv) {
                         drafts[n_seq_cur].i_batch_tgt = drafts[s].i_batch_tgt;
 
                         if (drafts[n_seq_cur].smpl) {
-                            gpt_sampler_free(drafts[n_seq_cur].smpl);
+                            common_sampler_free(drafts[n_seq_cur].smpl);
                         }
-                        drafts[n_seq_cur].smpl = gpt_sampler_clone(drafts[s].smpl);
+                        drafts[n_seq_cur].smpl = common_sampler_clone(drafts[s].smpl);
 
                         sa.push_back(n_seq_cur);
 
@@ -536,7 +536,7 @@ int main(int argc, char ** argv) {
 
                     const int s = sa[is];
 
-                    gpt_sampler_accept(drafts[s].smpl, id, true);
+                    common_sampler_accept(drafts[s].smpl, id, true);
 
                     drafts[s].tokens.push_back(id);
                     // save cur_p.data into drafts[s].dists
@@ -545,12 +545,12 @@ int main(int argc, char ** argv) {
                     // add unique drafted tokens to the target batch
                     drafts[s].i_batch_tgt.push_back(batch_tgt.n_tokens);
 
-                    llama_batch_add(batch_tgt, id, n_past_tgt + i + 1, { s }, true);
+                    common_batch_add(batch_tgt, id, n_past_tgt + i + 1, { s }, true);
 
                     // add the token to the batch for batched decoding with the draft model
                     drafts[s].i_batch_dft = batch_dft.n_tokens;
 
-                    llama_batch_add(batch_dft, id, n_past_cur, { s }, true);
+                    common_batch_add(batch_dft, id, n_past_cur, { s }, true);
 
                     if (batch_tgt.n_tokens > n_draft) {
                         drafts[s].drafting = false;
@@ -617,11 +617,11 @@ int main(int argc, char ** argv) {
 
     LOG_INF("\n");
     LOG_INF("target:\n\n");
-    gpt_perf_print(ctx_tgt, smpl);
+    common_perf_print(ctx_tgt, smpl);
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
     for (int s = 0; s < n_seq_dft; ++s) {
-        gpt_sampler_free(drafts[s].smpl);
+        common_sampler_free(drafts[s].smpl);
     }
 
     llama_sampler_free(softmax);

@@ -63,7 +63,7 @@ option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
 option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 
 # utils
-option(LLAMA_BUILD_COMMON "llama: build common utils library" ON)
+option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
@@ -201,12 +201,12 @@ if (LLAMA_BUILD_COMMON)
     add_subdirectory(common)
 endif()
 
-if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
     add_subdirectory(tests)
 endif()
 
-if (LLAMA_BUILD_EXAMPLES)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
     add_subdirectory(pocs)
 endif()
