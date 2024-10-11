@@ -188,8 +188,8 @@ struct server_slot {
     // sampling
     json json_schema;
 
-    struct gpt_sampler_params sparams;
-    struct gpt_sampler * smpl = nullptr;
+    struct common_sampler_params sparams;
+    struct common_sampler * smpl = nullptr;
 
     llama_token sampled;
 
@@ -231,7 +231,7 @@ struct server_slot {
         generated_token_probs.clear();
     }
 
-    bool has_budget(gpt_params &global_params) {
+    bool has_budget(common_params &global_params) {
         if (params.n_predict == -1 && global_params.n_predict == -1) {
             return true; // limitless
         }
@@ -611,9 +611,9 @@ struct server_response {
 struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
-    std::vector<llama_lora_adapter_container> loras;
+    std::vector<common_lora_adapter_container> loras;
 
-    gpt_params params;
+    common_params params;
 
     llama_batch batch = {};
 
@@ -655,20 +655,20 @@ struct server_context {
         // Clear any sampling context
         for (server_slot & slot : slots) {
             if (slot.smpl != nullptr) {
-                gpt_sampler_free(slot.smpl);
+                common_sampler_free(slot.smpl);
             }
         }
 
         llama_batch_free(batch);
     }
 
-    bool load_model(const gpt_params & params_) {
+    bool load_model(const common_params & params_) {
         params = params_;
 
         // dedicate one sequence to the system prompt
         params.n_parallel += 1;
 
-        llama_init_result llama_init = llama_init_from_gpt_params(params);
+        common_init_result llama_init = common_init_from_params(params);
 
         model = llama_init.model;
         ctx   = llama_init.context;
@@ -771,10 +771,10 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+                        p = common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
                         first = false;
                     } else {
-                        p = ::llama_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
+                        p = common_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
                     }
 
                     prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
@@ -788,7 +788,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+            prompt_tokens = common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
         }
 
         return prompt_tokens;
@@ -999,7 +999,7 @@ struct server_context {
                                 slot.sparams.logit_bias.push_back({tok, bias});
                             }
                         } else if (el[0].is_string()) {
-                            auto toks = llama_tokenize(model, el[0].get<std::string>(), false);
+                            auto toks = common_tokenize(model, el[0].get<std::string>(), false);
                             for (auto tok : toks) {
                                 slot.sparams.logit_bias.push_back({tok, bias});
                             }
@@ -1031,7 +1031,7 @@ struct server_context {
                         sampler_names.emplace_back(name);
                     }
                 }
-                slot.sparams.samplers = gpt_sampler_types_from_names(sampler_names, false);
+                slot.sparams.samplers = common_sampler_types_from_names(sampler_names, false);
             } else {
                 slot.sparams.samplers = default_sparams.samplers;
             }
@@ -1039,10 +1039,10 @@ struct server_context {
 
         {
             if (slot.smpl != nullptr) {
-                gpt_sampler_free(slot.smpl);
+                common_sampler_free(slot.smpl);
             }
 
-            slot.smpl = gpt_sampler_init(model, slot.sparams);
+            slot.smpl = common_sampler_init(model, slot.sparams);
             if (slot.smpl == nullptr) {
                 // for now, the only error that may happen here is invalid grammar
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
@@ -1073,7 +1073,7 @@ struct server_context {
         system_tokens.clear();
 
         if (!system_prompt.empty()) {
-            system_tokens = ::llama_tokenize(ctx, system_prompt, true);
+            system_tokens = common_tokenize(ctx, system_prompt, true);
 
             const int32_t n_batch = llama_n_batch(ctx);
             const int32_t n_tokens_prompt = system_tokens.size();
@@ -1081,10 +1081,10 @@ struct server_context {
             for (int32_t i = 0; i < n_tokens_prompt; i += n_batch) {
                 const int32_t n_tokens = std::min(n_batch, n_tokens_prompt - i);
 
-                llama_batch_clear(batch);
+                common_batch_clear(batch);
 
                 for (int32_t j = 0; j < n_tokens; ++j) {
-                    llama_batch_add(batch, system_tokens[i + j], i + j, { 0 }, false);
+                    common_batch_add(batch, system_tokens[i + j], i + j, { 0 }, false);
                 }
 
                 if (llama_decode(ctx, batch) != 0) {
@@ -1113,7 +1113,7 @@ struct server_context {
 
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = llama_token_to_piece(ctx, result.tok, params.special);
+        const std::string token_str = common_token_to_piece(ctx, result.tok, params.special);
         slot.sampled = result.tok;
 
         // search stop word and delete it
@@ -1224,7 +1224,7 @@ struct server_context {
         std::vector<std::string> samplers;
         samplers.reserve(slot.sparams.samplers.size());
         for (const auto & sampler : slot.sparams.samplers) {
-            samplers.emplace_back(gpt_sampler_type_to_str(sampler));
+            samplers.emplace_back(common_sampler_type_to_str(sampler));
         }
 
         return json {
@@ -1232,7 +1232,7 @@ struct server_context {
             {"n_predict",                 slot.n_predict},     // Server configured n_predict
             {"model",                     params.model_alias},
             {"seed",                      slot.sparams.seed},
-            {"seed_cur",                  slot.smpl ? gpt_sampler_get_seed(slot.smpl) : 0},
+            {"seed_cur",                  slot.smpl ? common_sampler_get_seed(slot.smpl) : 0},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
@@ -1297,7 +1297,7 @@ struct server_context {
         };
 
         if (slot.sparams.n_probs > 0) {
-            const std::vector<llama_token> to_send_toks = llama_tokenize(ctx, tkn.text_to_send, false);
+            const std::vector<llama_token> to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
             const size_t probs_pos      = std::min(slot.n_sent_token_probs,                       slot.generated_token_probs.size());
             const size_t probs_stop_pos = std::min(slot.n_sent_token_probs + to_send_toks.size(), slot.generated_token_probs.size());
 
@@ -1347,7 +1347,7 @@ struct server_context {
         if (slot.sparams.n_probs > 0) {
             std::vector<completion_token_output> probs;
             if (!slot.params.stream && slot.stopped_word) {
-                const std::vector<llama_token> stop_word_toks = llama_tokenize(ctx, slot.stopping_word, false);
+                const std::vector<llama_token> stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
 
                 size_t safe_offset = std::min(slot.generated_token_probs.size(), stop_word_toks.size());
                 probs = std::vector<completion_token_output>(
@@ -1401,7 +1401,7 @@ struct server_context {
                 continue;
             }
 
-            llama_embd_normalize(embd, embd_res.data(), n_embd);
+            common_embd_normalize(embd, embd_res.data(), n_embd);
 
             res.data = json {
                 {"embedding", embd_res},
@@ -1835,7 +1835,7 @@ struct server_context {
                 } break;
             case SERVER_TASK_TYPE_SET_LORA:
                 {
-                    llama_lora_adapters_apply(ctx, loras);
+                    common_lora_adapters_apply(ctx, loras);
                     server_task_result result;
                     result.id = task.id;
                     result.stop = true;
@@ -1921,7 +1921,7 @@ struct server_context {
         }
 
         // start populating the batch for this iteration
-        llama_batch_clear(batch);
+        common_batch_clear(batch);
 
         // frist, add sampled tokens from any ongoing sequences
         for (auto & slot : slots) {
@@ -1935,7 +1935,7 @@ struct server_context {
 
             // TODO: we always have to take into account the "system_tokens"
             //       this is not great and needs to be improved somehow
-            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id + 1 }, true);
+            common_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id + 1 }, true);
 
             slot.n_past += 1;
 
@@ -2092,7 +2092,7 @@ struct server_context {
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
 
-                            gpt_sampler_reset(slot.smpl);
+                            common_sampler_reset(slot.smpl);
 
                             if (!slot.params.cache_prompt) {
                                 slot.n_past_se = 0;
@@ -2105,7 +2105,7 @@ struct server_context {
 
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
-                                    gpt_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
+                                    common_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
                                 }
                             }
                         }
@@ -2159,7 +2159,7 @@ struct server_context {
                         slot.n_past_se = 0;
                         slot.ga_i = 0;
                         // TODO: is the system prompt ever in the sampling context?
-                        gpt_sampler_reset(slot.smpl);
+                        common_sampler_reset(slot.smpl);
                     }
 
                     // remove the non-common part from the cache
@@ -2184,7 +2184,7 @@ struct server_context {
                             }
                         }
 
-                        llama_batch_add(batch, prompt_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id + 1 }, false);
+                        common_batch_add(batch, prompt_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id + 1 }, false);
 
                         if (slot.params.cache_prompt) {
                             slot.cache_tokens.push_back(prompt_tokens[slot.n_past]);
@@ -2322,9 +2322,9 @@ struct server_context {
                 }
 
                 completion_token_output result;
-                const llama_token id = gpt_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
+                const llama_token id = common_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
 
-                gpt_sampler_accept(slot.smpl, id, true);
+                common_sampler_accept(slot.smpl, id, true);
 
                 slot.n_decoded += 1;
                 if (slot.n_decoded == 1) {
@@ -2335,7 +2335,7 @@ struct server_context {
 
                 result.tok = id;
 
-                const auto * cur_p = gpt_sampler_get_candidates(slot.smpl);
+                const auto * cur_p = common_sampler_get_candidates(slot.smpl);
 
                 for (size_t i = 0; i < (size_t) slot.sparams.n_probs; ++i) {
                     result.probs.push_back({
@@ -2399,13 +2399,13 @@ inline void signal_handler(int signal) {
 
 int main(int argc, char ** argv) {
     // own arguments required by this example
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     // enabling this will output extra debug information in the HTTP responses from the server
     // see format_final_response_oaicompat()
@@ -2427,7 +2427,7 @@ int main(int argc, char ** argv) {
 
     LOG_INF("system info: n_threads = %d, n_threads_batch = %d, total_threads = %d\n", params.cpuparams.n_threads, params.cpuparams_batch.n_threads, std::thread::hardware_concurrency());
     LOG_INF("\n");
-    LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+    LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     LOG_INF("\n");
 
     std::unique_ptr<httplib::Server> svr;
@@ -3014,7 +3014,7 @@ int main(int argc, char ** argv) {
 
             if (with_pieces) {
                 for (const auto& token : tokens) {
-                    std::string piece = llama_token_to_piece(ctx_server.ctx, token);
+                    std::string piece = common_token_to_piece(ctx_server.ctx, token);
                     json piece_json;
 
                     // Check if the piece is valid UTF-8
@@ -3357,7 +3357,7 @@ int main(int argc, char ** argv) {
     }
 
     // print sample chat example to make it clear which template is used
-    LOG_INF("%s: chat template, built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.empty(), llama_chat_format_example(ctx_server.model, params.chat_template).c_str());
+    LOG_INF("%s: chat template, built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.empty(), common_chat_format_example(ctx_server.model, params.chat_template).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));
