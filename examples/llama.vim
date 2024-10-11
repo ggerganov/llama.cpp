@@ -325,7 +325,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
         " prefix the info string with whitespace in order to offset it to the right of the fim overlay
         let l:prefix = repeat(' ', len(s:content[0]) - len(s:line_cur_suffix) + 3)
 
-        let l:info = printf("%s | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %f.2 ms",
+        let l:info = printf("%s | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
             \ l:prefix,
             \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
             \ l:n_predict, l:t_predict_ms, l:s_predict,
