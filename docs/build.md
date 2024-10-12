@@ -198,6 +198,8 @@ The following compilation options are also available to tweak performance:
 
 ### MUSA
 
+This provides GPU acceleration using the MUSA cores of your Moore Threads MTT GPU. Make sure to have the MUSA SDK installed. You can download it from here: [MUSA SDK](https://developer.mthreads.com/sdk/download/musa).
+
 - Using `make`:
   ```bash
   make GGML_MUSA=1
@@ -208,6 +210,12 @@ The following compilation options are also available to tweak performance:
   cmake -B build -DGGML_MUSA=ON
   cmake --build build --config Release
   ```
+
+The environment variable [`MUSA_VISIBLE_DEVICES`](https://docs.mthreads.com/musa-sdk/musa-sdk-doc-online/programming_guide/Z%E9%99%84%E5%BD%95/) can be used to specify which GPU(s) will be used.
+
+The environment variable `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` can be used to enable unified memory in Linux. This allows swapping to system RAM instead of crashing when the GPU VRAM is exhausted.
+
+Most of the compilation options available for CUDA should also be available for MUSA, though they haven't been thoroughly tested yet.
 
 ### hipBLAS
 
