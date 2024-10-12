@@ -949,14 +949,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"-xtc-p", "--xtc-probability"}, "N",
-        format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_probability),
+        string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_probability),
         [](common_params & params, const std::string & value) {
             params.sparams.xtc_probability = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"-xtc-t", "--xtc-threshold"}, "N",
-        format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sparams.xtc_threshold),
+        string_format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sparams.xtc_threshold),
         [](common_params & params, const std::string & value) {
             params.sparams.xtc_threshold = std::stof(value);
         }
