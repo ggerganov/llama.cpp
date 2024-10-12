@@ -2082,9 +2082,12 @@ struct server_context {
 
                     // keep only the common part
                     int p0 = slot.n_past;
+
                     if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, p0, -1)) {
                         // could not partially delete (likely using a non-Transformer model)
                         llama_kv_cache_seq_rm(ctx, slot.id + 1, -1, -1);
+
+                        p0 = 0;
 
                         // there is no common part left
                         slot.n_past = 0;
@@ -2773,7 +2776,6 @@ int main(int argc, char ** argv) {
 
     const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
         json data = {
-            { "system_prompt",               "[unavailable]" },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
             { "chat_template",               llama_get_chat_template(ctx_server.model) },
