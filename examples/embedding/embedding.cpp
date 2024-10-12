@@ -28,7 +28,7 @@ static std::vector<std::string> split_lines(const std::string & s, const std::st
 static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, llama_seq_id seq_id) {
     size_t n_tokens = tokens.size();
     for (size_t i = 0; i < n_tokens; i++) {
-        llama_batch_add(batch, tokens[i], i, { seq_id }, true);
+        common_batch_add(batch, tokens[i], i, { seq_id }, true);
     }
 }
 
@@ -74,18 +74,18 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         }
 
         float * out = output + embd_pos * n_embd;
-        llama_embd_normalize(embd, out, n_embd, embd_norm);
+        common_embd_normalize(embd, out, n_embd, embd_norm);
     }
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     params.embedding = true;
     // For non-causal models, batch size must be equal to ubatch size
@@ -95,7 +95,7 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     llama_model * model = llama_init.model;
     llama_context * ctx = llama_init.context;
@@ -122,7 +122,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
 
     // split the prompt into lines
@@ -135,7 +135,7 @@ int main(int argc, char ** argv) {
     // tokenize the prompts and trim
     std::vector<std::vector<int32_t>> inputs;
     for (const auto & prompt : prompts) {
-        auto inp = ::llama_tokenize(ctx, prompt, true, true);
+        auto inp = common_tokenize(ctx, prompt, true, true);
         if (inp.size() > n_batch) {
             LOG_ERR("%s: number of tokens in input line (%lld) exceeds batch size (%lld), increase batch size and re-run\n",
                     __func__, (long long int) inp.size(), (long long int) n_batch);
@@ -159,7 +159,7 @@ int main(int argc, char ** argv) {
             LOG_INF("%s: prompt %d: '%s'\n", __func__, i, prompts[i].c_str());
             LOG_INF("%s: number of tokens in prompt = %zu\n", __func__, inputs[i].size());
             for (int j = 0; j < (int) inputs[i].size(); j++) {
-                LOG("%6d -> '%s'\n", inputs[i][j], llama_token_to_piece(ctx, inputs[i][j]).c_str());
+                LOG("%6d -> '%s'\n", inputs[i][j], common_token_to_piece(ctx, inputs[i][j]).c_str());
             }
             LOG("\n\n");
         }
@@ -199,7 +199,7 @@ int main(int argc, char ** argv) {
             batch_decode(ctx, batch, out, s, n_embd, params.embd_normalize);
             e += pooling_type == LLAMA_POOLING_TYPE_NONE ? batch.n_tokens : s;
             s = 0;
-            llama_batch_clear(batch);
+            common_batch_clear(batch);
         }
 
         // add to batch
@@ -263,7 +263,7 @@ int main(int argc, char ** argv) {
                 LOG("\n");
                 for (int i = 0; i < n_prompts; i++) {
                     for (int j = 0; j < n_prompts; j++) {
-                        float sim = llama_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
+                        float sim = common_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
                         LOG("%6.2f ", sim);
                     }
                     LOG("%1.10s", prompts[i].c_str());
@@ -296,7 +296,7 @@ int main(int argc, char ** argv) {
             for (int i = 0;;) { // at least two iteration (n_embd_count > 1)
                 LOG("    [");
                 for (int j = 0;;) { // at least two iteration (n_embd_count > 1)
-                    float sim = llama_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
+                    float sim = common_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
                     LOG("%6.2f", sim);
                     j++;
                     if (j < n_embd_count) LOG(", "); else break;

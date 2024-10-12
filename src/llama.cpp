@@ -8,13 +8,7 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef GGML_USE_RPC
-#  include "ggml-rpc.h"
-#endif
-
-#ifdef GGML_USE_CUDA
-#  include "ggml-cuda.h"
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
 #  include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
 #  include "ggml-sycl.h"
@@ -22,14 +16,6 @@
 #   include "ggml-kompute.h"
 #elif defined(GGML_USE_CANN)
 #   include "ggml-cann.h"
-#endif
-
-#ifdef GGML_USE_BLAS
-#  include "ggml-blas.h"
-#endif
-
-#ifdef GGML_USE_METAL
-#  include "ggml-metal.h"
 #endif
 
 // TODO: replace with ggml API call
@@ -362,6 +348,8 @@ enum llm_kv {
     LLM_KV_TOKENIZER_MERGES,
     LLM_KV_TOKENIZER_BOS_ID,
     LLM_KV_TOKENIZER_EOS_ID,
+    LLM_KV_TOKENIZER_EOT_ID,
+    LLM_KV_TOKENIZER_EOM_ID,
     LLM_KV_TOKENIZER_UNK_ID,
     LLM_KV_TOKENIZER_SEP_ID,
     LLM_KV_TOKENIZER_PAD_ID,
@@ -374,14 +362,20 @@ enum llm_kv {
     LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP,
     LLM_KV_TOKENIZER_HF_JSON,
     LLM_KV_TOKENIZER_RWKV,
-    LLM_KV_TOKENIZER_PREFIX_ID,
-    LLM_KV_TOKENIZER_SUFFIX_ID,
-    LLM_KV_TOKENIZER_MIDDLE_ID,
-    LLM_KV_TOKENIZER_EOT_ID,
-    LLM_KV_TOKENIZER_EOM_ID,
+    LLM_KV_TOKENIZER_FIM_PRE_ID,
+    LLM_KV_TOKENIZER_FIM_SUF_ID,
+    LLM_KV_TOKENIZER_FIM_MID_ID,
+    LLM_KV_TOKENIZER_FIM_PAD_ID,
+    LLM_KV_TOKENIZER_FIM_REP_ID,
+    LLM_KV_TOKENIZER_FIM_SEP_ID,
 
     LLM_KV_ADAPTER_TYPE,
     LLM_KV_ADAPTER_LORA_ALPHA,
+
+    // deprecated:
+    LLM_KV_TOKENIZER_PREFIX_ID,
+    LLM_KV_TOKENIZER_SUFFIX_ID,
+    LLM_KV_TOKENIZER_MIDDLE_ID,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -439,58 +433,66 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_SLIDING_WINDOW,         "%s.attention.sliding_window"         },
     { LLM_KV_ATTENTION_SCALE,                  "%s.attention.scale"                  },
 
-    { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
-    { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
-    { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"                    },
-    { LLM_KV_ROPE_SCALING_TYPE,             "%s.rope.scaling.type"                    },
-    { LLM_KV_ROPE_SCALING_FACTOR,           "%s.rope.scaling.factor"                  },
-    { LLM_KV_ROPE_SCALING_ATTN_FACTOR,      "%s.rope.scaling.attn_factor"             },
-    { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
-    { LLM_KV_ROPE_SCALING_FINETUNED,        "%s.rope.scaling.finetuned"               },
-    { LLM_KV_ROPE_SCALING_YARN_LOG_MUL,     "%s.rope.scaling.yarn_log_multiplier"     },
+    { LLM_KV_ROPE_DIMENSION_COUNT,             "%s.rope.dimension_count"                 },
+    { LLM_KV_ROPE_FREQ_BASE,                   "%s.rope.freq_base"                       },
+    { LLM_KV_ROPE_SCALE_LINEAR,                "%s.rope.scale_linear"                    },
+    { LLM_KV_ROPE_SCALING_TYPE,                "%s.rope.scaling.type"                    },
+    { LLM_KV_ROPE_SCALING_FACTOR,              "%s.rope.scaling.factor"                  },
+    { LLM_KV_ROPE_SCALING_ATTN_FACTOR,         "%s.rope.scaling.attn_factor"             },
+    { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,        "%s.rope.scaling.original_context_length" },
+    { LLM_KV_ROPE_SCALING_FINETUNED,           "%s.rope.scaling.finetuned"               },
+    { LLM_KV_ROPE_SCALING_YARN_LOG_MUL,        "%s.rope.scaling.yarn_log_multiplier"     },
 
-    { LLM_KV_SPLIT_NO,                      "split.no"            },
-    { LLM_KV_SPLIT_COUNT,                   "split.count"         },
-    { LLM_KV_SPLIT_TENSORS_COUNT,           "split.tensors.count" },
+    { LLM_KV_SPLIT_NO,                         "split.no"            },
+    { LLM_KV_SPLIT_COUNT,                      "split.count"         },
+    { LLM_KV_SPLIT_TENSORS_COUNT,              "split.tensors.count" },
 
-    { LLM_KV_SSM_CONV_KERNEL,               "%s.ssm.conv_kernel"    },
-    { LLM_KV_SSM_INNER_SIZE,                "%s.ssm.inner_size"     },
-    { LLM_KV_SSM_STATE_SIZE,                "%s.ssm.state_size"     },
-    { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
-    { LLM_KV_SSM_GROUP_COUNT,               "%s.ssm.group_count"    },
-    { LLM_KV_SSM_DT_B_C_RMS,                "%s.ssm.dt_b_c_rms"     },
+    { LLM_KV_SSM_CONV_KERNEL,                  "%s.ssm.conv_kernel"    },
+    { LLM_KV_SSM_INNER_SIZE,                   "%s.ssm.inner_size"     },
+    { LLM_KV_SSM_STATE_SIZE,                   "%s.ssm.state_size"     },
+    { LLM_KV_SSM_TIME_STEP_RANK,               "%s.ssm.time_step_rank" },
+    { LLM_KV_SSM_GROUP_COUNT,                  "%s.ssm.group_count"    },
+    { LLM_KV_SSM_DT_B_C_RMS,                   "%s.ssm.dt_b_c_rms"     },
 
-    { LLM_KV_WKV_HEAD_SIZE,                 "%s.wkv.head_size" },
+    { LLM_KV_WKV_HEAD_SIZE,                    "%s.wkv.head_size" },
 
-    { LLM_KV_TOKENIZER_MODEL,                "tokenizer.ggml.model"                    },
-    { LLM_KV_TOKENIZER_PRE,                  "tokenizer.ggml.pre"                      },
-    { LLM_KV_TOKENIZER_LIST,                 "tokenizer.ggml.tokens"                   },
-    { LLM_KV_TOKENIZER_TOKEN_TYPE,           "tokenizer.ggml.token_type"               },
-    { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,     "tokenizer.ggml.token_type_count"         },
-    { LLM_KV_TOKENIZER_SCORES,               "tokenizer.ggml.scores"                   },
-    { LLM_KV_TOKENIZER_MERGES,               "tokenizer.ggml.merges"                   },
-    { LLM_KV_TOKENIZER_BOS_ID,               "tokenizer.ggml.bos_token_id"             },
-    { LLM_KV_TOKENIZER_EOS_ID,               "tokenizer.ggml.eos_token_id"             },
-    { LLM_KV_TOKENIZER_UNK_ID,               "tokenizer.ggml.unknown_token_id"         },
-    { LLM_KV_TOKENIZER_SEP_ID,               "tokenizer.ggml.seperator_token_id"       },
-    { LLM_KV_TOKENIZER_PAD_ID,               "tokenizer.ggml.padding_token_id"         },
-    { LLM_KV_TOKENIZER_CLS_ID,               "tokenizer.ggml.cls_token_id"             },
-    { LLM_KV_TOKENIZER_MASK_ID,              "tokenizer.ggml.mask_token_id"            },
-    { LLM_KV_TOKENIZER_ADD_BOS,              "tokenizer.ggml.add_bos_token"            },
-    { LLM_KV_TOKENIZER_ADD_EOS,              "tokenizer.ggml.add_eos_token"            },
-    { LLM_KV_TOKENIZER_ADD_PREFIX,           "tokenizer.ggml.add_space_prefix"         },
-    { LLM_KV_TOKENIZER_REMOVE_EXTRA_WS,      "tokenizer.ggml.remove_extra_whitespaces" },
-    { LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP, "tokenizer.ggml.precompiled_charsmap"     },
-    { LLM_KV_TOKENIZER_HF_JSON,              "tokenizer.huggingface.json"              },
-    { LLM_KV_TOKENIZER_RWKV,                 "tokenizer.rwkv.world"                    },
-    { LLM_KV_TOKENIZER_PREFIX_ID,            "tokenizer.ggml.prefix_token_id"          },
-    { LLM_KV_TOKENIZER_SUFFIX_ID,            "tokenizer.ggml.suffix_token_id"          },
-    { LLM_KV_TOKENIZER_MIDDLE_ID,            "tokenizer.ggml.middle_token_id"          },
-    { LLM_KV_TOKENIZER_EOT_ID,               "tokenizer.ggml.eot_token_id"             },
-    { LLM_KV_TOKENIZER_EOM_ID,               "tokenizer.ggml.eom_token_id"             },
+    { LLM_KV_TOKENIZER_MODEL,                  "tokenizer.ggml.model"                    },
+    { LLM_KV_TOKENIZER_PRE,                    "tokenizer.ggml.pre"                      },
+    { LLM_KV_TOKENIZER_LIST,                   "tokenizer.ggml.tokens"                   },
+    { LLM_KV_TOKENIZER_TOKEN_TYPE,             "tokenizer.ggml.token_type"               },
+    { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,       "tokenizer.ggml.token_type_count"         },
+    { LLM_KV_TOKENIZER_SCORES,                 "tokenizer.ggml.scores"                   },
+    { LLM_KV_TOKENIZER_MERGES,                 "tokenizer.ggml.merges"                   },
+    { LLM_KV_TOKENIZER_BOS_ID,                 "tokenizer.ggml.bos_token_id"             },
+    { LLM_KV_TOKENIZER_EOS_ID,                 "tokenizer.ggml.eos_token_id"             },
+    { LLM_KV_TOKENIZER_EOT_ID,                 "tokenizer.ggml.eot_token_id"             },
+    { LLM_KV_TOKENIZER_EOM_ID,                 "tokenizer.ggml.eom_token_id"             },
+    { LLM_KV_TOKENIZER_UNK_ID,                 "tokenizer.ggml.unknown_token_id"         },
+    { LLM_KV_TOKENIZER_SEP_ID,                 "tokenizer.ggml.seperator_token_id"       },
+    { LLM_KV_TOKENIZER_PAD_ID,                 "tokenizer.ggml.padding_token_id"         },
+    { LLM_KV_TOKENIZER_CLS_ID,                 "tokenizer.ggml.cls_token_id"             },
+    { LLM_KV_TOKENIZER_MASK_ID,                "tokenizer.ggml.mask_token_id"            },
+    { LLM_KV_TOKENIZER_ADD_BOS,                "tokenizer.ggml.add_bos_token"            },
+    { LLM_KV_TOKENIZER_ADD_EOS,                "tokenizer.ggml.add_eos_token"            },
+    { LLM_KV_TOKENIZER_ADD_PREFIX,             "tokenizer.ggml.add_space_prefix"         },
+    { LLM_KV_TOKENIZER_REMOVE_EXTRA_WS,        "tokenizer.ggml.remove_extra_whitespaces" },
+    { LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP,   "tokenizer.ggml.precompiled_charsmap"     },
+    { LLM_KV_TOKENIZER_HF_JSON,                "tokenizer.huggingface.json"              },
+    { LLM_KV_TOKENIZER_RWKV,                   "tokenizer.rwkv.world"                    },
+    { LLM_KV_TOKENIZER_FIM_PRE_ID,             "tokenizer.ggml.fim_pre_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_SUF_ID,             "tokenizer.ggml.fim_suf_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_MID_ID,             "tokenizer.ggml.fim_mid_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_PAD_ID,             "tokenizer.ggml.fim_pad_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_REP_ID,             "tokenizer.ggml.fim_rep_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_SEP_ID,             "tokenizer.ggml.fim_sep_token_id"         },
 
-    { LLM_KV_ADAPTER_TYPE,                  "adapter.type"       },
-    { LLM_KV_ADAPTER_LORA_ALPHA,            "adapter.lora.alpha" },
+    { LLM_KV_ADAPTER_TYPE,                     "adapter.type"       },
+    { LLM_KV_ADAPTER_LORA_ALPHA,               "adapter.lora.alpha" },
+
+    // deprecated
+    { LLM_KV_TOKENIZER_PREFIX_ID,              "tokenizer.ggml.prefix_token_id" },
+    { LLM_KV_TOKENIZER_SUFFIX_ID,              "tokenizer.ggml.suffix_token_id" },
+    { LLM_KV_TOKENIZER_MIDDLE_ID,              "tokenizer.ggml.middle_token_id" },
 };
 
 struct LLM_KV {
@@ -615,7 +617,7 @@ enum llm_tensor {
     LLM_TENSOR_CLS_OUT,
 };
 
-static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
+static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_NAMES = {
     {
         LLM_ARCH_LLAMA,
         {
@@ -1587,32 +1589,32 @@ struct LLM_TN {
         return LLM_TENSOR_NAMES.at(arch).at(tensor);
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix) const {
+    std::string operator()(llm_tensor tensor, const char * suffix) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return LLM_TENSOR_NAMES.at(arch).at(tensor) + "." + suffix;
+        return std::string(LLM_TENSOR_NAMES.at(arch).at(tensor)) + "." + suffix;
     }
 
     std::string operator()(llm_tensor tensor, int bid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid);
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid);
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix, int bid) const {
+    std::string operator()(llm_tensor tensor, const char * suffix, int bid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid) + "." + suffix;
     }
 
-    std::string operator()(llm_tensor tensor, const std::string & suffix, int bid, int xid) const {
+    std::string operator()(llm_tensor tensor, const char * suffix, int bid, int xid) const {
         if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
             return "__missing__";
         }
-        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor).c_str(), bid, xid) + "." + suffix;
+        return ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid, xid) + "." + suffix;
     }
 };
 
@@ -2285,59 +2287,16 @@ static std::string llama_token_to_piece(const struct llama_model * model, llama_
     return piece;
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer) {
-    ggml_backend_buffer_type_t buft = nullptr;
-
-#if defined(GGML_USE_CUDA)
-    // host buffers should only be used when data is expected to be copied to/from the GPU
-    if (host_buffer) {
-        buft = ggml_backend_cuda_host_buffer_type();
-    }
-#elif defined(GGML_USE_SYCL)
-    if (host_buffer) {
-        buft = ggml_backend_sycl_host_buffer_type();
-    }
-#elif defined(GGML_USE_CANN)
-    if (host_buffer) {
-        buft = ggml_backend_cann_host_buffer_type();
-    }
-#elif defined(GGML_USE_CPU_HBM)
-    buft = ggml_backend_cpu_hbm_buffer_type();
-#elif defined(GGML_USE_VULKAN)
-    if (host_buffer) {
-        buft = ggml_backend_vk_host_buffer_type();
-    }
-#endif
-
-    if (buft == nullptr) {
-        buft = ggml_backend_cpu_buffer_type();
-    }
-    return buft;
-
-    GGML_UNUSED(host_buffer);
-}
-
 //
 // globals
 //
 
-struct llama_state {
-    llama_state() {
-#ifdef GGML_USE_METAL
-        ggml_backend_metal_log_set_callback(log_callback, log_callback_user_data);
-#elif defined(GGML_USE_CUDA)
-        ggml_backend_cuda_log_set_callback(log_callback, log_callback_user_data);
-#elif defined(GGML_USE_CANN)
-        ggml_backend_cann_log_set_callback(log_callback, log_callback_user_data);
-#endif
-    }
-
-    // We save the log callback globally
+struct llama_logger_state {
     ggml_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
-static llama_state g_state;
+static llama_logger_state g_logger_state;
 
 // available llama models
 enum e_model {
@@ -2479,7 +2438,7 @@ struct llama_hparams {
 
     // needed by encoder-decoder models (e.g. T5, FLAN-T5)
     // ref: https://github.com/ggerganov/llama.cpp/pull/8141
-    llama_token dec_start_token_id = -1;
+    llama_token dec_start_token_id = LLAMA_TOKEN_NULL;
 
     enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
@@ -2948,14 +2907,17 @@ struct llama_model {
 
     std::vector<llama_layer> layers;
 
+    // gguf metadata
+    std::unordered_map<std::string, std::string> gguf_kv;
+
     llama_split_mode split_mode;
     int main_gpu;
     int n_gpu_layers;
 
-    std::vector<std::string> rpc_servers;
+    // list of devices used in this model
+    std::vector<ggml_backend_dev_t> devices;
 
-    // gguf metadata
-    std::unordered_map<std::string, std::string> gguf_kv;
+    std::vector<std::string> rpc_servers;
 
     // layer -> buffer type mapping
     struct layer_buft {
@@ -2998,11 +2960,6 @@ struct llama_model {
             ggml_free(ctx);
         }
         for (ggml_backend_buffer_t buf : bufs) {
-#ifdef GGML_USE_CUDA
-            if (ggml_backend_buffer_get_type(buf) == ggml_backend_cpu_buffer_type()) {
-                ggml_backend_cuda_unregister_host_buffer(ggml_backend_buffer_get_base(buf));
-            }
-#endif
             ggml_backend_buffer_free(buf);
         }
         while (!lora_adapters.empty()) {
@@ -3367,12 +3324,8 @@ struct llama_context {
     std::unordered_map<struct llama_lora_adapter *, float> lora_adapters;
 
     std::vector<ggml_backend_t> backends;
-#ifdef GGML_USE_METAL
-    ggml_backend_t backend_metal = nullptr;
-#endif
-#ifdef GGML_USE_BLAS
-    ggml_backend_t backend_blas = nullptr;
-#endif
+    std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
+
     ggml_backend_t backend_cpu = nullptr;
 
     ggml_threadpool_t threadpool       = nullptr;
@@ -3486,72 +3439,99 @@ struct llama_lora_adapter {
     }
 };
 
-static size_t llama_get_device_count(const llama_model & model) {
-    size_t count = 1;
-#if defined(GGML_USE_CUDA)
-    count = ggml_backend_cuda_get_device_count();
-#elif defined(GGML_USE_SYCL)
-    count = ggml_backend_sycl_get_device_count();
+static int llama_get_device_count(const llama_model & model) {
+    int count = (int) model.devices.size();
+
+#if defined(GGML_USE_SYCL)
+    count += ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
-    count = ggml_backend_vk_get_device_count();
+    count += ggml_backend_vk_get_device_count();
 #elif defined(GGML_USE_CANN)
-    return ggml_backend_cann_get_device_count();
+    count += ggml_backend_cann_get_device_count();
 #endif
-#if defined(GGML_USE_RPC)
-    count += model.rpc_servers.size();
-#endif
+
     return count;
+
     GGML_UNUSED(model);
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int gpu) {
+static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_model & model, bool host_buffer) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#ifdef GGML_USE_RPC
-    int rpc_count = (int)model.rpc_servers.size();
-#else
-    int rpc_count = 0;
-#endif
-    int local_gpu = gpu - rpc_count;
-#if defined(GGML_USE_RPC)
-    if (gpu < rpc_count) {
-        const char * endpoint = model.rpc_servers[gpu].c_str();
-        return ggml_backend_rpc_buffer_type(endpoint);
+    if (host_buffer) {
+        for (auto * dev : model.devices) {
+            buft = ggml_backend_dev_host_buffer_type(dev);
+            if (buft != nullptr) {
+                break;
+            }
+        }
     }
-#endif
-#if defined(GGML_USE_METAL)
-    buft = ggml_backend_metal_buffer_type();
-#elif defined(GGML_USE_CUDA)
-    buft = ggml_backend_cuda_buffer_type(local_gpu);
-#elif defined(GGML_USE_VULKAN)
-    buft = ggml_backend_vk_buffer_type(local_gpu);
-#elif defined(GGML_USE_SYCL)
-    buft = ggml_backend_sycl_buffer_type(local_gpu);
-#elif defined(GGML_USE_KOMPUTE)
-    buft = ggml_backend_kompute_buffer_type(local_gpu);
-    if (buft == nullptr) {
-        LLAMA_LOG_WARN("%s: cannot use GPU %d, check `vulkaninfo --summary`\n", __func__, local_gpu);
+
+#if defined(GGML_USE_SYCL)
+    if (host_buffer) {
+        buft = ggml_backend_sycl_host_buffer_type();
     }
 #elif defined(GGML_USE_CANN)
-    buft = ggml_backend_cann_buffer_type(local_gpu);
+    if (host_buffer) {
+        buft = ggml_backend_cann_host_buffer_type();
+    }
+#elif defined(GGML_USE_CPU_HBM)
+    buft = ggml_backend_cpu_hbm_buffer_type();
+#elif defined(GGML_USE_VULKAN)
+    if (host_buffer) {
+        buft = ggml_backend_vk_host_buffer_type();
+    }
 #endif
 
     if (buft == nullptr) {
-        buft = llama_default_buffer_type_cpu(true);
+        buft = ggml_backend_cpu_buffer_type();
     }
     return buft;
+
+    GGML_UNUSED(host_buffer);
+}
+
+static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int device) {
+    ggml_backend_buffer_type_t buft = nullptr;
+
+    if (device < (int)model.devices.size()) {
+        return ggml_backend_dev_buffer_type(model.devices[device]);
+    }
+    device -= (int)model.devices.size();
+
+#if defined(GGML_USE_VULKAN)
+    buft = ggml_backend_vk_buffer_type(device);
+#elif defined(GGML_USE_SYCL)
+    buft = ggml_backend_sycl_buffer_type(device);
+#elif defined(GGML_USE_KOMPUTE)
+    buft = ggml_backend_kompute_buffer_type(device);
+#elif defined(GGML_USE_CANN)
+    buft = ggml_backend_cann_buffer_type(device);
+#endif
+
+    if (buft == nullptr) {
+        buft = llama_default_buffer_type_cpu(model, true);
+    }
+    return buft;
+
     GGML_UNUSED(model);
-    GGML_UNUSED(local_gpu);
 }
 
 static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_model & model, int fallback_gpu, const float * tensor_split) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#ifdef GGML_USE_CUDA
-    if (ggml_backend_cuda_get_device_count() > 1) {
-        buft = ggml_backend_cuda_split_buffer_type(tensor_split);
+    // find a backend that supports split buffers
+    for (size_t i = 0; i < ggml_backend_reg_count(); ++i) {
+        ggml_backend_reg_t reg = ggml_backend_reg_get(i);
+
+        auto ggml_backend_split_buffer_type_fn = (ggml_backend_split_buffer_type_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_split_buffer_type");
+        if (ggml_backend_split_buffer_type_fn) {
+            buft = ggml_backend_split_buffer_type_fn(tensor_split);
+            if (buft != nullptr) {
+                break;
+            }
+        }
     }
-#endif
 
 #ifdef GGML_USE_SYCL
     if (ggml_backend_sycl_get_device_count() > 1) {
@@ -3568,46 +3548,34 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
 }
 
 static size_t llama_get_device_memory(const llama_model & model, int device) {
-#ifdef GGML_USE_RPC
-    int rpc_count = (int)model.rpc_servers.size();
-#else
-    int rpc_count = 0;
-#endif
-    int local_device = device - rpc_count;
-#if defined(GGML_USE_RPC)
-    if (device < rpc_count) {
+    if (device < (int)model.devices.size()) {
+        ggml_backend_dev_t dev = model.devices[device];
         size_t total;
         size_t free;
-        const char * endpoint = model.rpc_servers[device].c_str();
-        ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
+        ggml_backend_dev_memory(dev, &free, &total);
         return free;
     }
-#endif
-#if defined(GGML_USE_CUDA)
+
+#if defined(GGML_USE_SYCL)
     size_t total;
     size_t free;
-    ggml_backend_cuda_get_device_memory(local_device, &free, &total);
-    return free;
-#elif defined(GGML_USE_SYCL)
-    size_t total;
-    size_t free;
-    ggml_backend_sycl_get_device_memory(local_device, &free, &total);
+    ggml_backend_sycl_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_VULKAN)
     size_t total;
     size_t free;
-    ggml_backend_vk_get_device_memory(local_device, &free, &total);
+    ggml_backend_vk_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_CANN)
     size_t total;
     size_t free;
-    ggml_backend_cann_get_device_memory(local_device, &free, &total);
+    ggml_backend_cann_get_device_memory(device, &free, &total);
     return free;
 #else
     return 1;
 #endif
     GGML_UNUSED(model);
-    GGML_UNUSED(local_device);
+    GGML_UNUSED(device);
 }
 
 //
@@ -3650,7 +3618,7 @@ static bool llama_kv_cache_init(
             buft_layer_count[model.buft_layer[i].buft]++;
         }
     } else {
-        buft_layer_count[llama_default_buffer_type_cpu(true)] = n_layer;
+        buft_layer_count[llama_default_buffer_type_cpu(model, true)] = n_layer;
     }
 
     // create a context for each buffer type
@@ -4951,7 +4919,7 @@ struct llama_model_loader {
     static const int TENSOR_NOT_REQUIRED = 1;
     static const int TENSOR_DUPLICATED   = 2;
 
-    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, int flags = 0) {
+    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::initializer_list<int64_t> & ne, int flags = 0) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, !(flags & TENSOR_NOT_REQUIRED));
 
         if (cur == NULL) {
@@ -4961,7 +4929,7 @@ struct llama_model_loader {
         return create_tensor_for(ctx, cur, flags & TENSOR_DUPLICATED);
     }
 
-    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::vector<int64_t> & ne, size_t offset, bool required = true) {
+    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::initializer_list<int64_t> & ne, size_t offset, bool required = true) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
 
         if (cur == NULL) {
@@ -4974,7 +4942,7 @@ struct llama_model_loader {
 
         std::array<int64_t, GGML_MAX_DIMS> dims;
         for (size_t i = 0; i < GGML_MAX_DIMS; ++i) {
-            dims[i] = i < ne.size() ? ne[i] : 1;
+            dims[i] = i < ne.size() ? ne.begin()[i] : 1;
         }
 
         struct ggml_tensor * tensor = ggml_view_4d(ctx, base,
@@ -5072,7 +5040,7 @@ struct llama_model_loader {
     // Returns false if cancelled by progress_callback
     bool load_all_data(
             struct ggml_context * ctx,
-            llama_buf_map & bufs_mmap,
+            llama_buf_map & bufs,
             llama_mlocks * lmlocks,
             llama_progress_callback progress_callback,
             void * progress_callback_user_data) {
@@ -5081,43 +5049,94 @@ struct llama_model_loader {
         std::vector<no_init<uint8_t>> read_buf;
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
 
-#if defined(GGML_USE_CUDA)
         // 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
         // NVMe raid configurations might require more / larger buffers.
         constexpr size_t n_buffers = 4;
         constexpr size_t buffer_size = 1 * 1024 * 1024; // 1MB
 
         std::vector<ggml_backend_buffer_t> host_buffers;
-        std::vector<void*> host_ptrs;
         std::vector<ggml_backend_event_t> events;
+        std::vector<void *> host_ptrs;
         size_t buffer_idx = 0; // buffer to use for async loads
-
-        ggml_backend_t cuda_backend = nullptr;
-        if (!use_mmap && !check_tensors) {
+        ggml_backend_t upload_backend = [&](const char * fn) -> ggml_backend_t {
+            if (use_mmap || check_tensors) {
+                return nullptr;
+            }
             // When not using mmaped io use async uploads from pinned memory to GPU memory.
-            // First determine if the CUDA backend is active, and if so, determine the device ID.
-            ggml_backend_buffer_t buf = bufs_mmap.count(0) ? bufs_mmap.at(0) : nullptr;
-            if (buf) {
-                ggml_backend_buffer_type_t buffer_type = ggml_backend_buffer_get_type(buf);
-                for (int i = 0; i < ggml_backend_cuda_get_device_count(); ++i) {
-                    auto * cuda_buffer_type = ggml_backend_cuda_buffer_type(i);
-                    if (buffer_type == cuda_buffer_type) {
-                        cuda_backend = ggml_backend_cuda_init(i);
-                        break;
-                    }
-                }
+            // First determine if the backend supports the necessary features for async uploads.
+            auto * buf = bufs.count(0) ? bufs.at(0) : nullptr;
+            if (!buf) {
+                LLAMA_LOG_DEBUG("%s: no buffer found for async uploads\n", fn);
+                return nullptr;
             }
 
-            // If the cuda backend is active create pinned memory buffers and events for synchronisation.
-            if (cuda_backend) {
-                for (size_t idx = 0; idx < n_buffers; ++idx) {
-                    host_buffers.emplace_back(ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), buffer_size));
-                    host_ptrs.emplace_back(ggml_backend_buffer_get_base(host_buffers[idx]));
-                    events.emplace_back(ggml_backend_event_new(cuda_backend));
-                }
+            auto * buft = ggml_backend_buffer_get_type(buf);
+            auto * dev = ggml_backend_buft_get_device(buft);
+            if (!dev) {
+                LLAMA_LOG_DEBUG("%s: no device found for buffer type %s for async uploads\n", fn,
+                    ggml_backend_buft_name(buft));
+                return nullptr;
             }
+
+            if (buft != ggml_backend_dev_buffer_type(dev)) {
+                LLAMA_LOG_DEBUG("%s: buffer type %s is not the default buffer type for device %s for async uploads\n", fn,
+                    ggml_backend_buft_name(buft), ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            ggml_backend_dev_props props;
+            ggml_backend_dev_get_props(dev, &props);
+            if (!props.caps.async || !props.caps.host_buffer || !props.caps.events) {
+                LLAMA_LOG_DEBUG("%s: device %s does not support async, host buffers or events\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+            if (!host_buft) {
+                LLAMA_LOG_DEBUG("%s: no host buffer type found for device %s\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            // If the backend is supported, create pinned memory buffers and events for synchronisation.
+            for (size_t idx = 0; idx < n_buffers; ++idx) {
+                auto * buf = ggml_backend_buft_alloc_buffer(host_buft, buffer_size);
+                if (!buf) {
+                    LLAMA_LOG_DEBUG("%s: failed to allocate host buffer for async uploads for device %s\n", fn,
+                        ggml_backend_dev_name(dev));
+                    return nullptr;
+                }
+
+                host_buffers.emplace_back(buf);
+                host_ptrs.emplace_back(ggml_backend_buffer_get_base(buf));
+
+                auto * event = ggml_backend_event_new(dev);
+                if (!event) {
+                    LLAMA_LOG_DEBUG("%s: failed to create event for async uploads for device %s\n", fn,
+                        ggml_backend_dev_name(dev));
+                    return nullptr;
+                }
+
+                events.emplace_back(event);
+            }
+
+            ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+            if (!backend) {
+                LLAMA_LOG_DEBUG("%s: failed to initialize backend for device %s for async uploads\n", fn,
+                    ggml_backend_dev_name(dev));
+                return nullptr;
+            }
+
+            return backend;
+        }(__func__);
+
+        if (upload_backend) {
+            LLAMA_LOG_DEBUG("%s: using async uploads for device %s, buffer type %s, backend %s\n", __func__,
+                ggml_backend_dev_name(ggml_backend_get_device(upload_backend)),
+                ggml_backend_buft_name(ggml_backend_buffer_get_type(bufs.at(0))),
+                ggml_backend_name(upload_backend));
         }
-#endif
 
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             const auto * weight = get_weight(ggml_get_name(cur));
@@ -5137,8 +5156,8 @@ struct llama_model_loader {
             if (use_mmap) {
                 const auto & mapping = mappings.at(weight->idx);
                 ggml_backend_buffer_t buf_mmap = nullptr;
-                if (bufs_mmap.count(weight->idx)) {
-                    buf_mmap = bufs_mmap.at(weight->idx);
+                if (bufs.count(weight->idx)) {
+                    buf_mmap = bufs.at(weight->idx);
                 }
                 uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
 
@@ -5174,9 +5193,8 @@ struct llama_model_loader {
                         }));
                     }
                 } else {
-#if defined(GGML_USE_CUDA)
-                    // If cuda_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
-                    if (cuda_backend) {
+                    // If upload_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
+                    if (upload_backend) {
                         file->seek(weight->offs, SEEK_SET);
 
                         size_t bytes_read = 0;
@@ -5186,17 +5204,14 @@ struct llama_model_loader {
 
                             ggml_backend_event_synchronize(events[buffer_idx]);
                             file->read_raw(host_ptrs[buffer_idx], read_iteration);
-                            ggml_backend_tensor_set_async(cuda_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
-                            ggml_backend_event_record(events[buffer_idx]);
+                            ggml_backend_tensor_set_async(upload_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
+                            ggml_backend_event_record(events[buffer_idx], upload_backend);
 
                             bytes_read += read_iteration;
                             ++buffer_idx;
                             buffer_idx %= n_buffers;
                         }
-                    }
-                    else
-#endif
-                    {
+                    } else {
                         read_buf.resize(n_size);
                         file->seek(weight->offs, SEEK_SET);
                         file->read_raw(read_buf.data(), n_size);
@@ -5211,17 +5226,15 @@ struct llama_model_loader {
             size_done += n_size;
         }
 
-#if defined(GGML_USE_CUDA)
-        // free temporary resources used for async cuda uploads
-        if (cuda_backend) {
-            for (size_t idx = 0; idx < n_buffers;++idx) {
-                ggml_backend_event_synchronize(events[idx]);
-                ggml_backend_event_free(events[idx]);
-                ggml_backend_buffer_free(host_buffers[idx]);
-            }
-            ggml_backend_free(cuda_backend);
+        // free temporary resources used for async uploads
+        for (auto * event : events) {
+            ggml_backend_event_synchronize(event);
+            ggml_backend_event_free(event);
         }
-#endif
+        for (auto * buf : host_buffers) {
+            ggml_backend_buffer_free(buf);
+        }
+        ggml_backend_free(upload_backend);
 
         // check validation results
         bool validation_failed = false;
@@ -6234,14 +6247,14 @@ static void llm_load_vocab(
             vocab.type = LLAMA_VOCAB_TYPE_NONE;
 
             // default special tokens
-            vocab.special_bos_id  = -1;
-            vocab.special_eos_id  = -1;
-            vocab.special_unk_id  = -1;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
-            vocab.linefeed_id     = -1;
+            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_eos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_unk_id  = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
+            vocab.linefeed_id     = LLAMA_TOKEN_NULL;
 
             // read vocab size from metadata
             if (!ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab, false)) {
@@ -6258,16 +6271,16 @@ static void llm_load_vocab(
             vocab.special_bos_id  = 1;
             vocab.special_eos_id  = 2;
             vocab.special_unk_id  = 0;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
         } else if (tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
             // default special tokens
-            vocab.special_bos_id  = -1;
-            vocab.special_eos_id  = -1;
+            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_eos_id  = LLAMA_TOKEN_NULL;
             vocab.special_unk_id  = 100;
             vocab.special_sep_id  = 102;
             vocab.special_pad_id  = 0;
@@ -6303,22 +6316,22 @@ static void llm_load_vocab(
             // default special tokens
             vocab.special_bos_id  = 11;
             vocab.special_eos_id  = 11;
-            vocab.special_unk_id  = -1;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
+            vocab.special_unk_id  = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
         } else if (tokenizer_model == "t5") {
             vocab.type = LLAMA_VOCAB_TYPE_UGM;
 
             // default special tokens
-            vocab.special_bos_id  = -1;
+            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
             vocab.special_eos_id  = 1;
             vocab.special_unk_id  = 2;
-            vocab.special_sep_id  = -1;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
             vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
 
             const int precompiled_charsmap_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP).c_str());
             if (precompiled_charsmap_keyidx != -1) {
@@ -6341,11 +6354,11 @@ static void llm_load_vocab(
             vocab.type = LLAMA_VOCAB_TYPE_RWKV;
 
             // default special tokens
-            vocab.special_bos_id = -1;
-            vocab.special_eos_id = -1;
-            vocab.special_unk_id = -1;
-            vocab.special_sep_id = -1;
-            vocab.special_pad_id = -1;
+            vocab.special_bos_id = LLAMA_TOKEN_NULL;
+            vocab.special_eos_id = LLAMA_TOKEN_NULL;
+            vocab.special_unk_id = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id = LLAMA_TOKEN_NULL;
         } else {
             throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
         }
@@ -6429,7 +6442,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "chatglm-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM4;
-                vocab.special_bos_id  = -1;
+                vocab.special_bos_id = LLAMA_TOKEN_NULL;
             } else if (
                 tokenizer_pre == "viking") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
@@ -6555,44 +6568,6 @@ static void llm_load_vocab(
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
-        // For Fill-In-the-Middle (FIM)/infill models which where converted
-        // prior to support of FIM special tokens in GGUF, the following
-        // will allow those models to continue to work. The general names
-        // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
-        // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
-        // new versions of these models have been published.
-        std::string gen_name;
-        ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
-
-        std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
-            [](unsigned char c){ return std::tolower(c); });
-
-        if (gen_name.find("code") != std::string::npos) {
-            if (model.arch == LLM_ARCH_LLAMA
-              && 32010 < vocab.id_to_token.size()
-              && vocab.id_to_token[32007].text.find("<PRE>") != std::string::npos
-              && vocab.id_to_token[32008].text.find("<SUF>") != std::string::npos
-              && vocab.id_to_token[32009].text.find("<MID>") != std::string::npos
-              && vocab.id_to_token[32010].text.find("<EOT>") != std::string::npos) {
-                vocab.special_prefix_id = 32007;
-                vocab.special_suffix_id = 32008;
-                vocab.special_middle_id = 32009;
-                vocab.special_eot_id    = 32010;
-            } else if (model.arch == LLM_ARCH_GEMMA
-              && 107 < vocab.id_to_token.size()
-              && vocab.id_to_token[67].text == "<|fim_prefix|>"
-              && vocab.id_to_token[69].text == "<|fim_suffix|>"
-              && vocab.id_to_token[68].text == "<|fim_middle|>"
-              && vocab.id_to_token[107].text == "<end_of_turn>") {
-                vocab.special_prefix_id = 67;
-                vocab.special_suffix_id = 69;
-                vocab.special_middle_id = 68;
-                // TODO: this is not EOT, it is "file separator" token, needs fix
-                //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
-                //vocab.special_eot_id    = 70;
-                vocab.special_eot_id    = 107;
-            }
-        }
         try {
             vocab.linefeed_id = llama_byte_to_token_impl(vocab, '\n');
         } catch (const std::exception & e) {
@@ -6620,18 +6595,26 @@ static void llm_load_vocab(
     // special tokens
     {
         const std::vector<std::pair<enum llm_kv, int32_t &>> special_token_types = {
-            { LLM_KV_TOKENIZER_BOS_ID,    vocab.special_bos_id    },
-            { LLM_KV_TOKENIZER_EOS_ID,    vocab.special_eos_id    },
-            { LLM_KV_TOKENIZER_UNK_ID,    vocab.special_unk_id    },
-            { LLM_KV_TOKENIZER_SEP_ID,    vocab.special_sep_id    },
-            { LLM_KV_TOKENIZER_PAD_ID,    vocab.special_pad_id    },
-            { LLM_KV_TOKENIZER_CLS_ID,    vocab.special_cls_id    },
-            { LLM_KV_TOKENIZER_MASK_ID,   vocab.special_mask_id   },
-            { LLM_KV_TOKENIZER_PREFIX_ID, vocab.special_prefix_id },
-            { LLM_KV_TOKENIZER_SUFFIX_ID, vocab.special_suffix_id },
-            { LLM_KV_TOKENIZER_MIDDLE_ID, vocab.special_middle_id },
-            { LLM_KV_TOKENIZER_EOT_ID,    vocab.special_eot_id    },
-            { LLM_KV_TOKENIZER_EOM_ID,    vocab.special_eom_id    },
+            { LLM_KV_TOKENIZER_BOS_ID,     vocab.special_bos_id     },
+            { LLM_KV_TOKENIZER_EOS_ID,     vocab.special_eos_id     },
+            { LLM_KV_TOKENIZER_EOT_ID,     vocab.special_eot_id     },
+            { LLM_KV_TOKENIZER_EOM_ID,     vocab.special_eom_id     },
+            { LLM_KV_TOKENIZER_UNK_ID,     vocab.special_unk_id     },
+            { LLM_KV_TOKENIZER_SEP_ID,     vocab.special_sep_id     },
+            { LLM_KV_TOKENIZER_PAD_ID,     vocab.special_pad_id     },
+            { LLM_KV_TOKENIZER_CLS_ID,     vocab.special_cls_id     },
+            { LLM_KV_TOKENIZER_MASK_ID,    vocab.special_mask_id    },
+            { LLM_KV_TOKENIZER_FIM_PRE_ID, vocab.special_fim_pre_id },
+            { LLM_KV_TOKENIZER_FIM_SUF_ID, vocab.special_fim_suf_id },
+            { LLM_KV_TOKENIZER_FIM_MID_ID, vocab.special_fim_mid_id },
+            { LLM_KV_TOKENIZER_FIM_PAD_ID, vocab.special_fim_pad_id },
+            { LLM_KV_TOKENIZER_FIM_REP_ID, vocab.special_fim_rep_id },
+            { LLM_KV_TOKENIZER_FIM_SEP_ID, vocab.special_fim_sep_id },
+
+            // deprecated
+            { LLM_KV_TOKENIZER_PREFIX_ID, vocab.special_fim_pre_id },
+            { LLM_KV_TOKENIZER_SUFFIX_ID, vocab.special_fim_suf_id },
+            { LLM_KV_TOKENIZER_MIDDLE_ID, vocab.special_fim_mid_id },
         };
 
         for (const auto & it : special_token_types) {
@@ -6662,22 +6645,21 @@ static void llm_load_vocab(
             }
         }
 
-        // find EOT token: "<|eot_id|>", "<|im_end|>", "<end_of_turn>", etc.
-        //
-        // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOT_ID
-        //       for now, we apply this workaround to find the EOT token based on its text
-        if (vocab.special_eot_id == -1) {
-            for (const auto & t : vocab.token_to_id) {
+        // auto-detect special tokens by text
+        // TODO: convert scripts should provide these tokens through the KV metadata LLM_KV_TOKENIZER_...
+        //       for now, we apply this workaround to find the tokens based on their text
+
+        for (const auto & t : vocab.token_to_id) {
+            // find EOT token: "<|eot_id|>", "<|im_end|>", "<end_of_turn>", etc.
+            if (vocab.special_eot_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        // TODO: gemma "<end_of_turn>" is exported as a normal token, so the following check does not work
-                        //       need to fix convert script
-                        //vocab.id_to_token[t.second].type == LLAMA_TOKEN_TYPE_CONTROL &&
                         || t.first == "<|eot_id|>"
                         || t.first == "<|im_end|>"
                         || t.first == "<|end|>"
                         || t.first == "<end_of_turn>"
                         || t.first == "<|endoftext|>"
                         || t.first == "<EOT>"
+                        || t.first == "<｜end▁of▁sentence｜>" // DeepSeek
                    ) {
                     vocab.special_eot_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
@@ -6685,23 +6667,118 @@ static void llm_load_vocab(
                                 __func__, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
-                    break;
                 }
             }
-        }
 
-        // find EOM token: "<|eom_id|>"
-        //
-        // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOM_ID
-        //       for now, we apply this workaround to find the EOM token based on its text
-        if (vocab.special_eom_id == -1) {
-            const auto & t = vocab.token_to_id.find("<|eom_id|>");
-            if (t != vocab.token_to_id.end()) {
-                vocab.special_eom_id = t->second;
-                if ((vocab.id_to_token[t->second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                    LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                        __func__, t->first.c_str());
-                    vocab.id_to_token[t->second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+            // find EOM token: "<|eom_id|>"
+            if (vocab.special_eom_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|eom_id|>"
+                        ) {
+                    vocab.special_eom_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_PRE token: "<|fim_prefix|>", "<fim-prefix>", "<PRE>", etc.
+            if (vocab.special_fim_pre_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_prefix|>"  // Qwen
+                        || t.first == "<fim-prefix>"
+                        || t.first == "<｜fim▁begin｜>" // DeepSeek
+                        || t.first == "<PRE>"
+                        ) {
+                    vocab.special_fim_pre_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_SUF token: "<|fim_suffix|>", "<fim-suffix>", "<SUF>", etc.
+            if (vocab.special_fim_suf_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_suffix|>" // Qwen
+                        || t.first == "<fim-suffix>"
+                        || t.first == "<｜fim▁hole｜>" // DeepSeek
+                        || t.first == "<SUF>"
+                        ) {
+                    vocab.special_fim_suf_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_MID token: "<|fim_middle|>", "<fim-middle>", "<MID>", etc.
+            if (vocab.special_fim_mid_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_middle|>" // Qwen
+                        || t.first == "<fim-middle>"
+                        || t.first == "<｜fim▁end｜>"  // DeepSeek
+                        || t.first == "<MID>"
+                        ) {
+                    vocab.special_fim_mid_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_PAD token: "<|fim_pad|>", "<fim-pad>", "<PAD>", etc.
+            if (vocab.special_fim_pad_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_pad|>" // Qwen
+                        || t.first == "<fim-pad>"
+                        || t.first == "<PAD>"
+                        ) {
+                    vocab.special_fim_pad_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_REP token: "<|fim_repo|>", "<fim-repo>", "<REP>", etc.
+            if (vocab.special_fim_rep_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_repo|>"  // Qwen
+                        || t.first == "<|repo_name|>"
+                        || t.first == "<fim-repo>"
+                        || t.first == "<REPO>"
+                        ) {
+                    vocab.special_fim_rep_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_SEP token: "<|file_sep|>"
+            if (vocab.special_fim_sep_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|file_sep|>" // Qwen
+                        ) {
+                    vocab.special_fim_sep_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
                 }
             }
         }
@@ -6729,17 +6806,17 @@ static void llm_load_vocab(
             }
         }
 
-        if (vocab.special_eos_id != -1 && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
+        if (vocab.special_eos_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eos_id);
             LLAMA_LOG_WARN("%s: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
 
-        if (vocab.special_eot_id != -1 && vocab.special_eog_ids.count(vocab.special_eot_id) == 0) {
+        if (vocab.special_eot_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eot_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eot_id);
             LLAMA_LOG_WARN("%s: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
 
-        if (vocab.special_eom_id != -1 && vocab.special_eog_ids.count(vocab.special_eom_id) == 0) {
+        if (vocab.special_eom_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eom_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eom_id);
             LLAMA_LOG_WARN("%s: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
@@ -6934,20 +7011,24 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: general.name     = %s\n",    __func__, model.name.c_str());
 
     // special tokens
-    if (vocab.special_bos_id    != -1) { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,  vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
-    if (vocab.special_eos_id    != -1) { LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,  vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
-    if (vocab.special_unk_id    != -1) { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,  vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
-    if (vocab.special_sep_id    != -1) { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,  vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
-    if (vocab.special_pad_id    != -1) { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,  vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
-    if (vocab.special_cls_id    != -1) { LLAMA_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,  vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
-    if (vocab.special_mask_id   != -1) { LLAMA_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id, vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
+    if (vocab.special_bos_id  != -1)    { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,     vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
+    if (vocab.special_eos_id  != -1)    { LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,     vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
+    if (vocab.special_eot_id  != -1)    { LLAMA_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,     vocab.id_to_token[vocab.special_eot_id].text.c_str() );  }
+    if (vocab.special_eom_id  != -1)    { LLAMA_LOG_INFO( "%s: EOM token        = %d '%s'\n", __func__, vocab.special_eom_id,     vocab.id_to_token[vocab.special_eom_id].text.c_str() );  }
+    if (vocab.special_unk_id  != -1)    { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,     vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
+    if (vocab.special_sep_id  != -1)    { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,     vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
+    if (vocab.special_pad_id  != -1)    { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,     vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
+    if (vocab.special_cls_id  != -1)    { LLAMA_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,     vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
+    if (vocab.special_mask_id != -1)    { LLAMA_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id,    vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
 
-    if (vocab.linefeed_id       != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,       vocab.id_to_token[vocab.linefeed_id].text.c_str() );       }
-    if (vocab.special_prefix_id != -1) { LLAMA_LOG_INFO( "%s: PRE token        = %d '%s'\n", __func__, vocab.special_prefix_id, vocab.id_to_token[vocab.special_prefix_id].text.c_str() ); }
-    if (vocab.special_suffix_id != -1) { LLAMA_LOG_INFO( "%s: SUF token        = %d '%s'\n", __func__, vocab.special_suffix_id, vocab.id_to_token[vocab.special_suffix_id].text.c_str() ); }
-    if (vocab.special_middle_id != -1) { LLAMA_LOG_INFO( "%s: MID token        = %d '%s'\n", __func__, vocab.special_middle_id, vocab.id_to_token[vocab.special_middle_id].text.c_str() ); }
-    if (vocab.special_eot_id    != -1) { LLAMA_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,    vocab.id_to_token[vocab.special_eot_id].text.c_str() );    }
-    if (vocab.special_eom_id    != -1) { LLAMA_LOG_INFO( "%s: EOM token        = %d '%s'\n", __func__, vocab.special_eom_id,    vocab.id_to_token[vocab.special_eom_id].text.c_str() );    }
+    if (vocab.linefeed_id != -1)        { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,        vocab.id_to_token[vocab.linefeed_id].text.c_str() ); }
+
+    if (vocab.special_fim_pre_id != -1) { LLAMA_LOG_INFO( "%s: FIM PRE token    = %d '%s'\n", __func__, vocab.special_fim_pre_id, vocab.id_to_token[vocab.special_fim_pre_id].text.c_str() ); }
+    if (vocab.special_fim_suf_id != -1) { LLAMA_LOG_INFO( "%s: FIM SUF token    = %d '%s'\n", __func__, vocab.special_fim_suf_id, vocab.id_to_token[vocab.special_fim_suf_id].text.c_str() ); }
+    if (vocab.special_fim_mid_id != -1) { LLAMA_LOG_INFO( "%s: FIM MID token    = %d '%s'\n", __func__, vocab.special_fim_mid_id, vocab.id_to_token[vocab.special_fim_mid_id].text.c_str() ); }
+    if (vocab.special_fim_pad_id != -1) { LLAMA_LOG_INFO( "%s: FIM PAD token    = %d '%s'\n", __func__, vocab.special_fim_pad_id, vocab.id_to_token[vocab.special_fim_pad_id].text.c_str() ); }
+    if (vocab.special_fim_rep_id != -1) { LLAMA_LOG_INFO( "%s: FIM REP token    = %d '%s'\n", __func__, vocab.special_fim_rep_id, vocab.id_to_token[vocab.special_fim_rep_id].text.c_str() ); }
+    if (vocab.special_fim_sep_id != -1) { LLAMA_LOG_INFO( "%s: FIM SEP token    = %d '%s'\n", __func__, vocab.special_fim_sep_id, vocab.id_to_token[vocab.special_fim_sep_id].text.c_str() ); }
 
     for (const auto & id : vocab.special_eog_ids) {
         LLAMA_LOG_INFO( "%s: EOG token        = %d '%s'\n", __func__, id, vocab.id_to_token[id].text.c_str() );
@@ -6990,6 +7071,13 @@ static bool llm_load_tensors(
         void * progress_callback_user_data) {
     auto & hparams = model.hparams;
 
+    // check if the value of main_gpu is valid
+    if (llama_get_device_count(model) > 0 &&
+        split_mode != LLAMA_SPLIT_MODE_LAYER &&
+        (main_gpu < 0 || main_gpu >= llama_get_device_count(model))) {
+        throw std::runtime_error(format("invalid value for main_gpu: %d (available devices: %d)", main_gpu, llama_get_device_count(model)));
+    }
+
     model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
@@ -6999,14 +7087,14 @@ static bool llm_load_tensors(
     bool use_mmap_buffer = true;
 
     // there is very little benefit to offloading the input layer, so always keep it on the CPU
-    model.buft_input = llama_default_buffer_type_cpu(true);
+    model.buft_input = llama_default_buffer_type_cpu(model, true);
     //model.buft_input = llama_default_buffer_type_offload(main_gpu);
 
     model.buft_layer.resize(n_layer);
 
     // assign cpu layers
     for (int i = 0; i < i_gpu_start; ++i) {
-        model.buft_layer[i] = llama_default_buffer_type_cpu(true);
+        model.buft_layer[i] = llama_default_buffer_type_cpu(model, true);
     }
 
     if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
@@ -7044,7 +7132,7 @@ static bool llm_load_tensors(
             int layer_gpu = std::upper_bound(splits.begin(), splits.begin() + device_count, float(act_gpu_layers - 1)/act_gpu_layers) - splits.begin();
             model.buft_output = llama_default_buffer_type_offload(model, layer_gpu);
         } else {
-            model.buft_output = llama_default_buffer_type_cpu(true);
+            model.buft_output = llama_default_buffer_type_cpu(model, true);
         }
     } else {
         ggml_backend_buffer_type_t split_buft;
@@ -7068,7 +7156,7 @@ static bool llm_load_tensors(
                 llama_default_buffer_type_offload(model, main_gpu)
             };
         } else {
-            model.buft_output = llama_default_buffer_type_cpu(true);
+            model.buft_output = llama_default_buffer_type_cpu(model, true);
         }
     }
 
@@ -8988,55 +9076,40 @@ static bool llm_load_tensors(
         llama_buf_map bufs;
         bufs.reserve(n_max_backend_buffer);
 
-        // only the mmap region containing the tensors in the model is mapped to the backend buffer
-        // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
-        // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
-        if (ml.use_mmap && use_mmap_buffer && buft == llama_default_buffer_type_cpu(true)) {
+        // check if this backend device supports buffer_from_host_ptr
+        // when using a host buffer as the CPU bakcend buffer, use the CPU device to prioritize using buffer_from_host_ptr over the host buffer
+        ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft == llama_default_buffer_type_cpu(model, true) ? ggml_backend_cpu_buffer_type() : buft);
+        bool buffer_from_host_ptr_supported = false;
+        if (dev) {
+            ggml_backend_dev_props props;
+            ggml_backend_dev_get_props(dev, &props);
+            buffer_from_host_ptr_supported = props.caps.buffer_from_host_ptr;
+        }
+
+        if (ml.use_mmap && use_mmap_buffer && buffer_from_host_ptr_supported) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
+                // only the mmap region containing the tensors in the model is mapped to the backend buffer
+                // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
+                // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
                 void * addr = nullptr;
-                size_t first, last;
+                size_t first, last; // NOLINT
                 ml.get_mapping_range(&first, &last, &addr, idx, ctx);
                 if (first >= last) {
                     continue;
                 }
-                ggml_backend_buffer_t buf = ggml_backend_cpu_buffer_from_ptr((char *) addr + first, last - first);
-                if (buf == nullptr) {
-                    throw std::runtime_error("unable to allocate backend CPU buffer");
-                }
-                model.bufs.push_back(buf);
-                bufs.emplace(idx, buf);
-#ifdef GGML_USE_CUDA
-                if (n_layer >= n_gpu_layers) {
-                    ggml_backend_cuda_register_host_buffer(
-                        ggml_backend_buffer_get_base(buf),
-                        ggml_backend_buffer_get_size(buf));
-                }
-#endif
-            }
-        }
-#ifdef GGML_USE_METAL
-        else if (ml.use_mmap && use_mmap_buffer && buft == ggml_backend_metal_buffer_type()) {
-            for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 const size_t max_size = ggml_get_max_tensor_size(ctx);
-                void * addr = nullptr;
-                size_t first, last;
-                ml.get_mapping_range(&first, &last, &addr, idx, ctx);
-                if (first >= last) {
-                    continue;
-                }
-                ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
+                ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(dev, (char *) addr + first, last - first, max_size);
                 if (buf == nullptr) {
-                    throw std::runtime_error("unable to allocate backend metal buffer");
+                    throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
                 }
                 model.bufs.push_back(buf);
                 bufs.emplace(idx, buf);
             }
         }
-#endif
         else {
             ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
             if (buf == nullptr) {
-                throw std::runtime_error("unable to allocate backend buffer");
+                throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
             }
             model.bufs.push_back(buf);
             if (use_mlock && ggml_backend_buffer_is_host(buf)) {
@@ -17194,7 +17267,7 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
             lctx.embd = nullptr;
         }
 
-        lctx.buf_output = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), new_size);
+        lctx.buf_output = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(lctx.model, true), new_size);
         if (lctx.buf_output == nullptr) {
             LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
             return 0;
@@ -17264,17 +17337,19 @@ static void llama_graph_compute(
                     int   n_threads,
         ggml_threadpool * threadpool) {
     if (lctx.backend_cpu != nullptr) {
-        ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
-#ifdef GGML_USE_BLAS
-    if (lctx.backend_blas != nullptr) {
-        ggml_backend_blas_set_n_threads(lctx.backend_blas, n_threads);
-    }
-#endif
 
-    ggml_backend_sched_graph_compute_async(lctx.sched, gf);
+    // set the number of threads for all the backends
+    for (const auto & set_n_threads_fn : lctx.set_n_threads_fns) {
+        set_n_threads_fn.second(set_n_threads_fn.first, n_threads);
+    }
+
+    auto err = ggml_backend_sched_graph_compute_async(lctx.sched, gf);
+    if (err != GGML_STATUS_SUCCESS) {
+        LLAMA_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, err);
+    }
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
@@ -18090,10 +18165,9 @@ static void llama_tensor_dequantize_internal(
     }
     float * f32_output = (float *) output.data();
 
-    ggml_type_traits_t qtype;
+    const ggml_type_traits * qtype = ggml_get_type_traits(tensor->type);
     if (ggml_is_quantized(tensor->type)) {
-        qtype = ggml_internal_get_type_traits(tensor->type);
-        if (qtype.to_float == NULL) {
+        if (qtype->to_float == NULL) {
             throw std::runtime_error(format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor->type)));
         }
     } else if (tensor->type != GGML_TYPE_F16 &&
@@ -18107,7 +18181,7 @@ static void llama_tensor_dequantize_internal(
         } else if (tensor->type == GGML_TYPE_BF16) {
             ggml_bf16_to_fp32_row((ggml_bf16_t *)tensor->data, f32_output, nelements);
         } else if (ggml_is_quantized(tensor->type)) {
-            qtype.to_float(tensor->data, f32_output, nelements);
+            qtype->to_float(tensor->data, f32_output, nelements);
         } else {
             GGML_ABORT("fatal error"); // unreachable
         }
@@ -18143,7 +18217,7 @@ static void llama_tensor_dequantize_internal(
             } else if (typ == GGML_TYPE_BF16) {
                 ggml_bf16_to_fp32_row((ggml_bf16_t *)inbuf, outbuf, nels);
             } else {
-                qtype.to_float(inbuf, outbuf, nels);
+                qtype->to_float(inbuf, outbuf, nels);
             }
         };
         workers.emplace_back(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems);
@@ -19225,21 +19299,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
 }
 
 size_t llama_max_devices(void) {
-#if defined(GGML_USE_RPC)
-    return GGML_RPC_MAX_SERVERS;
-#elif defined(GGML_USE_METAL)
-    return 1;
-#elif defined(GGML_USE_CUDA)
-    return GGML_CUDA_MAX_DEVICES;
-#elif defined(GGML_USE_SYCL)
-    return GGML_SYCL_MAX_DEVICES;
-#elif defined(GGML_USE_VULKAN)
-    return GGML_VK_MAX_DEVICES;
-#elif defined(GGML_USE_CANN)
-    return GGML_CANN_MAX_DEVICES;
-#else
-    return 1;
-#endif
+    return 16;
 }
 
 bool llama_supports_mmap(void) {
@@ -19251,13 +19311,19 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
+#if defined(GGML_USE_VULKAN) || \
+    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
-    return false;
+    return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
+           ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr ||
+           llama_supports_rpc();
 #endif
+}
+
+bool llama_supports_rpc(void) {
+    return ggml_backend_reg_by_name("RPC") != nullptr;
 }
 
 void llama_backend_init(void) {
@@ -19321,17 +19387,67 @@ struct llama_model * llama_load_model_from_file(
             return true;
         };
     }
+
     if (params.rpc_servers != nullptr && params.rpc_servers[0] != '\0') {
         // split the servers set them into model->rpc_servers
         std::string servers(params.rpc_servers);
         size_t pos = 0;
-        while ((pos = servers.find(",")) != std::string::npos) {
+        while ((pos = servers.find(',')) != std::string::npos) {
             std::string server = servers.substr(0, pos);
             model->rpc_servers.push_back(server);
             servers.erase(0, pos + 1);
         }
         model->rpc_servers.push_back(servers);
     }
+
+    // add RPC devices
+    if (!model->rpc_servers.empty()) {
+        ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
+        if (!rpc_reg) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        // ggml_backend_dev_t ggml_backend_rpc_add_device(const char * endpoint);
+        using ggml_backend_rpc_add_device_t = ggml_backend_dev_t (*)(const char *);
+        ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
+        if (!ggml_backend_rpc_add_device_fn) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        for (const std::string & server : model->rpc_servers) {
+            ggml_backend_dev_t dev = ggml_backend_rpc_add_device_fn(server.c_str());
+            if (dev) {
+                model->devices.push_back(dev);
+            } else {
+                LLAMA_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
+                llama_free_model(model);
+                return nullptr;
+            }
+        }
+    }
+
+    // create list of devices to use with this model
+    // currently, we use all available devices
+    // TODO: rework API to give user more control over device selection
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        switch (ggml_backend_dev_type(dev)) {
+            case GGML_BACKEND_DEVICE_TYPE_CPU:
+            case GGML_BACKEND_DEVICE_TYPE_CPU_FULL:
+                // skip CPU backends since they are `handled separately
+                break;
+
+            case GGML_BACKEND_DEVICE_TYPE_GPU:
+            case GGML_BACKEND_DEVICE_TYPE_GPU_FULL:
+                model->devices.push_back(dev);
+                break;
+        }
+    }
+
     int status = llama_model_load(path_model, *model, params);
     GGML_ASSERT(status <= 0);
     if (status < 0) {
@@ -19340,7 +19456,7 @@ struct llama_model * llama_load_model_from_file(
         } else if (status == -2) {
             LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
-        delete model;
+        llama_free_model(model);
         return nullptr;
     }
 
@@ -19493,60 +19609,44 @@ struct llama_context * llama_new_context_with_model(
 
     if (!hparams.vocab_only) {
         // initialize backends
-#if defined(GGML_USE_RPC)
-        if (model->n_gpu_layers > 0) {
-            for (const auto & endpoint : model->rpc_servers) {
-                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
+        int main_gpu = model->main_gpu;
+
+        // with registry
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            if (main_gpu >= 0 && main_gpu < (int)model->devices.size()) {
+                ggml_backend_dev_t main_dev = model->devices[main_gpu];
+                ggml_backend_t backend = ggml_backend_dev_init(main_dev, nullptr);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(main_dev));
                     llama_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
             }
-        }
-#endif
-
-#if defined(GGML_USE_METAL)
-        if (model->n_gpu_layers > 0) {
-            ctx->backend_metal = ggml_backend_metal_init();
-            if (ctx->backend_metal == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Metal backend\n", __func__);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(ctx->backend_metal);
-        }
-#elif defined(GGML_USE_CUDA)
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-            ggml_backend_t backend = ggml_backend_cuda_init(model->main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
         } else {
             // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-            for (int device = 0; device < ggml_backend_cuda_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_cuda_init(device);
+            for (auto * dev : model->devices) {
+                ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, device);
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
                     llama_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
             }
         }
-#elif defined(GGML_USE_VULKAN)
+        if (main_gpu >= (int)model->devices.size()) {
+            main_gpu -= (int)model->devices.size();
+        }
+
+#if defined(GGML_USE_VULKAN)
         if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
             LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
             llama_free(ctx);
             return nullptr;
         }
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(model->main_gpu);
+            ggml_backend_t backend = ggml_backend_vk_init(main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
                 llama_free(ctx);
@@ -19567,9 +19667,9 @@ struct llama_context * llama_new_context_with_model(
 #elif defined(GGML_USE_SYCL)
         // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
+            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
@@ -19588,7 +19688,7 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
-            auto * backend = ggml_backend_kompute_init(model->main_gpu);
+            auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
                 llama_free(ctx);
@@ -19597,39 +19697,44 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 #elif defined(GGML_USE_CANN)
-    // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-    // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
-    if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-        ggml_backend_t backend = ggml_backend_cann_init(model->main_gpu);
-        if (backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, model->main_gpu);
-            llama_free(ctx);
-            return nullptr;
-        }
-        ctx->backends.push_back(backend);
-    } else {
-        // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-        // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
-        for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
-            ggml_backend_t backend = ggml_backend_cann_init(device);
+        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
+        // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            ggml_backend_t backend = ggml_backend_cann_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
             ctx->backends.push_back(backend);
+        } else {
+            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+            // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
+            for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
+                ggml_backend_t backend = ggml_backend_cann_init(device);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
-    }
 #endif
 
-#ifdef GGML_USE_BLAS
-        ctx->backend_blas = ggml_backend_blas_init();
-        if (ctx->backend_blas == nullptr) {
-            LLAMA_LOG_WARN("%s: failed to initialize BLAS backend\n", __func__);
-        } else {
-            ctx->backends.push_back(ctx->backend_blas);
+        // add other backends (such as BLAS)
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+                ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
-#endif
 
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
@@ -19638,6 +19743,18 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         ctx->backends.push_back(ctx->backend_cpu);
+
+        // create a list of the set_n_threads functions in the backends
+        for (auto * backend : ctx->backends) {
+            ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+            ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+            if (reg) {
+                auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+                if (ggml_backend_set_n_threads_fn) {
+                    ctx->set_n_threads_fns.emplace_back(backend, ggml_backend_set_n_threads_fn);
+                }
+            }
+        }
 
         if (!llama_kv_cache_init(ctx->kv_self, ctx, type_k, type_v, kv_size, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
@@ -19658,7 +19775,7 @@ struct llama_context * llama_new_context_with_model(
             }
 
             LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
-                (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
+                      (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
                 ggml_type_name(type_k), (float)memory_size_k / (1024.0f * 1024.0f),
                 ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
         }
@@ -19684,7 +19801,7 @@ struct llama_context * llama_new_context_with_model(
             for (auto * backend : ctx->backends) {
                 if (ggml_backend_is_cpu(backend)) {
                     // use host buffers for the CPU backend compute buffer
-                    backend_buft.push_back(llama_default_buffer_type_cpu(true));
+                    backend_buft.push_back(llama_default_buffer_type_cpu(*model, true));
                 } else {
                     backend_buft.push_back(ggml_backend_get_default_buffer_type(backend));
                 }
@@ -19695,17 +19812,37 @@ struct llama_context * llama_new_context_with_model(
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
 
+            // TODO: move these checks to ggml_backend_sched
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
             bool pipeline_parallel =
                 llama_get_device_count(*model) > 1 &&
                 model->n_gpu_layers > (int)model->hparams.n_layer &&
                 model->split_mode == LLAMA_SPLIT_MODE_LAYER &&
                 params.offload_kqv;
-#ifndef GGML_USE_CUDA
-            // pipeline parallelism requires support for async compute and events
-            // currently this is only implemented in the CUDA backend
-            pipeline_parallel = false;
-#endif
+
+            // pipeline parallelism requires support for async compute and events in all devices
+            if (pipeline_parallel) {
+                for (auto * backend : ctx->backends) {
+                    if (ggml_backend_is_cpu(backend)) {
+                        // ignore CPU backend
+                        continue;
+                    }
+                    auto * dev = ggml_backend_get_device(backend);
+                    if (!dev) {
+                        // backend is using old interface, not supported
+                        pipeline_parallel = false;
+                        break;
+                    }
+                    ggml_backend_dev_props props;
+                    ggml_backend_dev_get_props(dev, &props);
+                    if (!props.caps.async || !props.caps.events) {
+                        // device does not support async compute or events
+                        pipeline_parallel = false;
+                        break;
+                    }
+                }
+            }
+
             ctx->sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), max_nodes, pipeline_parallel);
 
             if (pipeline_parallel) {
@@ -21496,6 +21633,10 @@ llama_token llama_token_eos(const struct llama_model * model) {
     return llama_token_eos_impl(model->vocab);
 }
 
+llama_token llama_token_eot(const struct llama_model * model) {
+    return llama_token_eot_impl(model->vocab);
+}
+
 llama_token llama_token_cls(const struct llama_model * model) {
     return llama_token_cls_impl(model->vocab);
 }
@@ -21532,8 +21673,28 @@ llama_token llama_token_suffix(const struct llama_model * model) {
     return llama_token_suffix_impl(model->vocab);
 }
 
-llama_token llama_token_eot(const struct llama_model * model) {
-    return llama_token_eot_impl(model->vocab);
+llama_token llama_token_fim_pre(const struct llama_model * model) {
+    return llama_token_fim_pre_impl(model->vocab);
+}
+
+llama_token llama_token_fim_suf(const struct llama_model * model) {
+    return llama_token_fim_suf_impl(model->vocab);
+}
+
+llama_token llama_token_fim_mid(const struct llama_model * model) {
+    return llama_token_fim_mid_impl(model->vocab);
+}
+
+llama_token llama_token_fim_pad(const struct llama_model * model) {
+    return llama_token_fim_pad_impl(model->vocab);
+}
+
+llama_token llama_token_fim_rep(const struct llama_model * model) {
+    return llama_token_fim_rep_impl(model->vocab);
+}
+
+llama_token llama_token_fim_sep(const struct llama_model * model) {
+    return llama_token_fim_sep_impl(model->vocab);
 }
 
 //
@@ -22014,15 +22175,9 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 }
 
 void llama_log_set(ggml_log_callback log_callback, void * user_data) {
-    g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
-    g_state.log_callback_user_data = user_data;
-#ifdef GGML_USE_METAL
-    ggml_backend_metal_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#elif defined(GGML_USE_CUDA)
-    ggml_backend_cuda_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#elif defined(GGML_USE_CANN)
-    ggml_backend_cann_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#endif
+    ggml_log_set(log_callback, user_data);
+    g_logger_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
+    g_logger_state.log_callback_user_data = user_data;
 }
 
 static void llama_log_internal_v(ggml_log_level level, const char * format, va_list args) {
@@ -22031,12 +22186,12 @@ static void llama_log_internal_v(ggml_log_level level, const char * format, va_l
     char buffer[128];
     int len = vsnprintf(buffer, 128, format, args);
     if (len < 128) {
-        g_state.log_callback(level, buffer, g_state.log_callback_user_data);
+        g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
     } else {
         char * buffer2 = new char[len + 1];
         vsnprintf(buffer2, len + 1, format, args_copy);
         buffer2[len] = 0;
-        g_state.log_callback(level, buffer2, g_state.log_callback_user_data);
+        g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
         delete[] buffer2;
     }
     va_end(args_copy);
