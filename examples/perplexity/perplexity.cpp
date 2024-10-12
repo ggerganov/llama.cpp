@@ -423,6 +423,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
             //LOG_DBG("    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
             if (llama_decode(ctx, batch)) {
                 //LOG_ERR("%s : failed to eval\n", __func__);
+                llama_batch_free(batch);
                 return {tokens, -1, logit_history, prob_history};
             }
 
@@ -1821,6 +1822,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
             if (llama_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
+                llama_batch_free(batch);
                 return;
             }
 

@@ -518,6 +518,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
 
             if (llama_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
+                llama_batch_free(batch);
                 return false;
             }
 
