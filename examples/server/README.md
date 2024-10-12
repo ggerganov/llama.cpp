@@ -149,7 +149,6 @@ The project is under active development, and we are [looking for feedback and co
 | `--ssl-cert-file FNAME` | path to file a PEM-encoded SSL certificate<br/>(env: LLAMA_ARG_SSL_CERT_FILE) |
 | `-to, --timeout N` | server read/write timeout in seconds (default: 600)<br/>(env: LLAMA_ARG_TIMEOUT) |
 | `--threads-http N` | number of threads used to process HTTP requests (default: -1)<br/>(env: LLAMA_ARG_THREADS_HTTP) |
-| `-spf, --system-prompt-file FNAME` | set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications |
 | `--metrics` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
 | `--slots` | enable slots monitoring endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_SLOTS) |
 | `--props` | enable changing global properties via POST /props (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_PROPS) |
@@ -320,7 +319,6 @@ node index.js
 
       - The prompt is a string or an array with the first element given as a string
       - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
-      - The system prompt is empty
 
     `temperature`: Adjust the randomness of the generated text. Default: `0.8`
 
@@ -536,14 +534,12 @@ This endpoint is public (no API key check). By default, it is read-only. To make
 
 ```json
 {
-  "system_prompt": "",
   "default_generation_settings": { ... },
   "total_slots": 1,
   "chat_template": ""
 }
 ```
 
-- `system_prompt` - the system prompt (initial prompt of all slots). Please note that this does not take into account the chat template. It will append the prompt at the beginning of formatted prompt.
 - `default_generation_settings` - the default generation settings for the `/completion` endpoint, which has the same fields as the `generation_settings` response object from the `/completion` endpoint.
 - `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 - `chat_template` - the model's original Jinja2 prompt template
@@ -554,7 +550,7 @@ To use this endpoint with POST method, you need to start server with `--props`
 
 *Options:*
 
-- `system_prompt`: Change the system prompt (initial prompt of all slots). Please note that this does not take into account the chat template. It will append the prompt at the beginning of formatted prompt.
+- None yet
 
 ### POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
 
