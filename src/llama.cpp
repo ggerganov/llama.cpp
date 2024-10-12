@@ -18463,7 +18463,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
         case LLAMA_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
         case LLAMA_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
-        case LLAMA_FTYPE_MOSTLY_INT_N:default_type = GGML_TYPE_I2;   break;
 
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:
