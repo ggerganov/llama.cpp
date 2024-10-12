@@ -119,32 +119,6 @@ std::string common_arg::to_string() {
 // utils
 //
 
-#ifdef __GNUC__
-#ifdef __MINGW32__
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
-#else
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
-#endif
-#else
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
-#endif
-
-LLAMA_COMMON_ATTRIBUTE_FORMAT(1, 2)
-static std::string format(const char * fmt, ...) {
-    va_list ap;
-    va_list ap2;
-    va_start(ap, fmt);
-    va_copy(ap2, ap);
-    int size = vsnprintf(NULL, 0, fmt, ap);
-    GGML_ASSERT(size >= 0 && size < INT_MAX); // NOLINT
-    std::vector<char> buf(size + 1);
-    int size2 = vsnprintf(buf.data(), size + 1, fmt, ap2);
-    GGML_ASSERT(size2 == size);
-    va_end(ap2);
-    va_end(ap);
-    return std::string(buf.data(), size);
-}
-
 static void common_params_handle_model_default(common_params & params) {
     if (!params.hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
@@ -199,7 +173,7 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
                     continue;
                 }
             } catch (std::exception & e) {
-                throw std::invalid_argument(format(
+                throw std::invalid_argument(string_format(
                     "error while handling environment variable \"%s\": %s\n\n", opt.env, e.what()));
             }
         }
@@ -220,7 +194,7 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
         if (arg_to_options.find(arg) == arg_to_options.end()) {
-            throw std::invalid_argument(format("error: invalid argument: %s", arg.c_str()));
+            throw std::invalid_argument(string_format("error: invalid argument: %s", arg.c_str()));
         }
         auto opt = *arg_to_options[arg];
         if (opt.has_value_from_env()) {
@@ -252,7 +226,7 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
                 continue;
             }
         } catch (std::exception & e) {
-            throw std::invalid_argument(format(
+            throw std::invalid_argument(string_format(
                 "error while handling argument \"%s\": %s\n\n"
                 "usage:\n%s\n\nto show complete usage, run with -h",
                 arg.c_str(), e.what(), arg_to_options[arg]->to_string().c_str()));
@@ -391,28 +365,28 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--verbose-prompt"},
-        format("print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false"),
+        string_format("print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false"),
         [](common_params & params) {
             params.verbose_prompt = true;
         }
     ));
     add_opt(common_arg(
         {"--no-display-prompt"},
-        format("don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false"),
+        string_format("don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false"),
         [](common_params & params) {
             params.display_prompt = false;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(common_arg(
         {"-co", "--color"},
-        format("colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false"),
+        string_format("colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false"),
         [](common_params & params) {
             params.use_color = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL, LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP}));
     add_opt(common_arg(
         {"-t", "--threads"}, "N",
-        format("number of threads to use during generation (default: %d)", params.cpuparams.n_threads),
+        string_format("number of threads to use during generation (default: %d)", params.cpuparams.n_threads),
         [](common_params & params, int value) {
             params.cpuparams.n_threads = value;
             if (params.cpuparams.n_threads <= 0) {
@@ -472,14 +446,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--cpu-strict"}, "<0|1>",
-        format("use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu),
+        string_format("use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu),
         [](common_params & params, const std::string & value) {
             params.cpuparams.strict_cpu = std::stoul(value);
         }
     ));
     add_opt(common_arg(
         {"--prio"}, "N",
-        format("set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority),
+        string_format("set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority),
         [](common_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
@@ -489,7 +463,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--poll"}, "<0...100>",
-        format("use polling level to wait for work (0 - no polling, default: %u)\n", (unsigned) params.cpuparams.poll),
+        string_format("use polling level to wait for work (0 - no polling, default: %u)\n", (unsigned) params.cpuparams.poll),
         [](common_params & params, const std::string & value) {
             params.cpuparams.poll = std::stoul(value);
         }
@@ -523,7 +497,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--prio-batch"}, "N",
-        format("set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams_batch.priority),
+        string_format("set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams_batch.priority),
         [](common_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
@@ -567,7 +541,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"--prio-draft"}, "N",
-        format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams.priority),
+        string_format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams.priority),
         [](common_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
@@ -611,7 +585,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"--prio-batch-draft"}, "N",
-        format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams_batch.priority),
+        string_format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams_batch.priority),
         [](common_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
@@ -628,14 +602,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"--draft"}, "N",
-        format("number of tokens to draft for speculative decoding (default: %d)", params.n_draft),
+        string_format("number of tokens to draft for speculative decoding (default: %d)", params.n_draft),
         [](common_params & params, int value) {
             params.n_draft = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP}));
     add_opt(common_arg(
         {"-ps", "--p-split"}, "N",
-        format("speculative decoding split probability (default: %.1f)", (double)params.p_split),
+        string_format("speculative decoding split probability (default: %.1f)", (double)params.p_split),
         [](common_params & params, const std::string & value) {
             params.p_split = std::stof(value);
         }
@@ -656,56 +630,56 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_LOOKUP}));
     add_opt(common_arg(
         {"-c", "--ctx-size"}, "N",
-        format("size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx),
+        string_format("size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx),
         [](common_params & params, int value) {
             params.n_ctx = value;
         }
     ).set_env("LLAMA_ARG_CTX_SIZE"));
     add_opt(common_arg(
         {"-n", "--predict", "--n-predict"}, "N",
-        format("number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict),
+        string_format("number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict),
         [](common_params & params, int value) {
             params.n_predict = value;
         }
     ).set_env("LLAMA_ARG_N_PREDICT"));
     add_opt(common_arg(
         {"-b", "--batch-size"}, "N",
-        format("logical maximum batch size (default: %d)", params.n_batch),
+        string_format("logical maximum batch size (default: %d)", params.n_batch),
         [](common_params & params, int value) {
             params.n_batch = value;
         }
     ).set_env("LLAMA_ARG_BATCH"));
     add_opt(common_arg(
         {"-ub", "--ubatch-size"}, "N",
-        format("physical maximum batch size (default: %d)", params.n_ubatch),
+        string_format("physical maximum batch size (default: %d)", params.n_ubatch),
         [](common_params & params, int value) {
             params.n_ubatch = value;
         }
     ).set_env("LLAMA_ARG_UBATCH"));
     add_opt(common_arg(
         {"--keep"}, "N",
-        format("number of tokens to keep from the initial prompt (default: %d, -1 = all)", params.n_keep),
+        string_format("number of tokens to keep from the initial prompt (default: %d, -1 = all)", params.n_keep),
         [](common_params & params, int value) {
             params.n_keep = value;
         }
     ));
     add_opt(common_arg(
         {"--no-context-shift"},
-        format("disables context shift on inifinite text generation (default: %s)", params.ctx_shift ? "disabled" : "enabled"),
+        string_format("disables context shift on inifinite text generation (default: %s)", params.ctx_shift ? "disabled" : "enabled"),
         [](common_params & params) {
             params.ctx_shift = false;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_NO_CONTEXT_SHIFT"));
     add_opt(common_arg(
         {"--chunks"}, "N",
-        format("max number of chunks to process (default: %d, -1 = all)", params.n_chunks),
+        string_format("max number of chunks to process (default: %d, -1 = all)", params.n_chunks),
         [](common_params & params, int value) {
             params.n_chunks = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX, LLAMA_EXAMPLE_PERPLEXITY, LLAMA_EXAMPLE_RETRIEVAL}));
     add_opt(common_arg(
         {"-fa", "--flash-attn"},
-        format("enable Flash Attention (default: %s)", params.flash_attn ? "enabled" : "disabled"),
+        string_format("enable Flash Attention (default: %s)", params.flash_attn ? "enabled" : "disabled"),
         [](common_params & params) {
             params.flash_attn = true;
         }
@@ -721,7 +695,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--no-perf"},
-        format("disable internal libllama performance timings (default: %s)", params.no_perf ? "true" : "false"),
+        string_format("disable internal libllama performance timings (default: %s)", params.no_perf ? "true" : "false"),
         [](common_params & params) {
             params.no_perf = true;
             params.sparams.no_perf = true;
@@ -733,7 +707,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             // store the external file name in params
             params.prompt_file = value;
@@ -749,7 +723,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             params.in_files.push_back(value);
         }
@@ -760,7 +734,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream file(value, std::ios::binary);
             if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             // store the external file name in params
             params.prompt_file = value;
@@ -772,7 +746,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"-e", "--escape"},
-        format("process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\) (default: %s)", params.escape ? "true" : "false"),
+        string_format("process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\) (default: %s)", params.escape ? "true" : "false"),
         [](common_params & params) {
             params.escape = true;
         }
@@ -786,7 +760,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"-ptc", "--print-token-count"}, "N",
-        format("print token count every N tokens (default: %d)", params.n_print),
+        string_format("print token count every N tokens (default: %d)", params.n_print),
         [](common_params & params, int value) {
             params.n_print = value;
         }
@@ -821,14 +795,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(common_arg(
         {"-sp", "--special"},
-        format("special tokens output enabled (default: %s)", params.special ? "true" : "false"),
+        string_format("special tokens output enabled (default: %s)", params.special ? "true" : "false"),
         [](common_params & params) {
             params.special = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"-cnv", "--conversation"},
-        format(
+        string_format(
             "run in conversation mode:\n"
             "- does not print special tokens and suffix/prefix\n"
             "- interactive mode is also enabled\n"
@@ -841,14 +815,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(common_arg(
         {"-i", "--interactive"},
-        format("run in interactive mode (default: %s)", params.interactive ? "true" : "false"),
+        string_format("run in interactive mode (default: %s)", params.interactive ? "true" : "false"),
         [](common_params & params) {
             params.interactive = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(common_arg(
         {"-if", "--interactive-first"},
-        format("run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false"),
+        string_format("run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false"),
         [](common_params & params) {
             params.interactive_first = true;
         }
@@ -893,7 +867,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(common_arg(
         {"--spm-infill"},
-        format(
+        string_format(
             "use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: %s)",
             params.spm_infill ? "enabled" : "disabled"
         ),
@@ -903,7 +877,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_INFILL}));
     add_opt(common_arg(
         {"--samplers"}, "SAMPLERS",
-        format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
+        string_format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
         [](common_params & params, const std::string & value) {
             const auto sampler_names = string_split(value, ';');
             params.sparams.samplers = common_sampler_types_from_names(sampler_names, true);
@@ -911,14 +885,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"-s", "--seed"}, "SEED",
-        format("RNG seed (default: %d, use random seed for %d)", params.sparams.seed, LLAMA_DEFAULT_SEED),
+        string_format("RNG seed (default: %d, use random seed for %d)", params.sparams.seed, LLAMA_DEFAULT_SEED),
         [](common_params & params, const std::string & value) {
             params.sparams.seed = std::stoul(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--sampling-seq"}, "SEQUENCE",
-        format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
+        string_format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
         [](common_params & params, const std::string & value) {
             params.sparams.samplers = common_sampler_types_from_chars(value);
         }
@@ -932,14 +906,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--penalize-nl"},
-        format("penalize newline tokens (default: %s)", params.sparams.penalize_nl ? "true" : "false"),
+        string_format("penalize newline tokens (default: %s)", params.sparams.penalize_nl ? "true" : "false"),
         [](common_params & params) {
             params.sparams.penalize_nl = true;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--temp"}, "N",
-        format("temperature (default: %.1f)", (double)params.sparams.temp),
+        string_format("temperature (default: %.1f)", (double)params.sparams.temp),
         [](common_params & params, const std::string & value) {
             params.sparams.temp = std::stof(value);
             params.sparams.temp = std::max(params.sparams.temp, 0.0f);
@@ -947,42 +921,42 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--top-k"}, "N",
-        format("top-k sampling (default: %d, 0 = disabled)", params.sparams.top_k),
+        string_format("top-k sampling (default: %d, 0 = disabled)", params.sparams.top_k),
         [](common_params & params, int value) {
             params.sparams.top_k = value;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--top-p"}, "N",
-        format("top-p sampling (default: %.1f, 1.0 = disabled)", (double)params.sparams.top_p),
+        string_format("top-p sampling (default: %.1f, 1.0 = disabled)", (double)params.sparams.top_p),
         [](common_params & params, const std::string & value) {
             params.sparams.top_p = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--min-p"}, "N",
-        format("min-p sampling (default: %.1f, 0.0 = disabled)", (double)params.sparams.min_p),
+        string_format("min-p sampling (default: %.1f, 0.0 = disabled)", (double)params.sparams.min_p),
         [](common_params & params, const std::string & value) {
             params.sparams.min_p = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--tfs"}, "N",
-        format("tail free sampling, parameter z (default: %.1f, 1.0 = disabled)", (double)params.sparams.tfs_z),
+        string_format("tail free sampling, parameter z (default: %.1f, 1.0 = disabled)", (double)params.sparams.tfs_z),
         [](common_params & params, const std::string & value) {
             params.sparams.tfs_z = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--typical"}, "N",
-        format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typ_p),
+        string_format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typ_p),
         [](common_params & params, const std::string & value) {
             params.sparams.typ_p = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--repeat-last-n"}, "N",
-        format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", params.sparams.penalty_last_n),
+        string_format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", params.sparams.penalty_last_n),
         [](common_params & params, int value) {
             params.sparams.penalty_last_n = value;
             params.sparams.n_prev = std::max(params.sparams.n_prev, params.sparams.penalty_last_n);
@@ -990,42 +964,42 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--repeat-penalty"}, "N",
-        format("penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)", (double)params.sparams.penalty_repeat),
+        string_format("penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)", (double)params.sparams.penalty_repeat),
         [](common_params & params, const std::string & value) {
             params.sparams.penalty_repeat = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--presence-penalty"}, "N",
-        format("repeat alpha presence penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_present),
+        string_format("repeat alpha presence penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_present),
         [](common_params & params, const std::string & value) {
             params.sparams.penalty_present = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--frequency-penalty"}, "N",
-        format("repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_freq),
+        string_format("repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_freq),
         [](common_params & params, const std::string & value) {
             params.sparams.penalty_freq = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dynatemp-range"}, "N",
-        format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sparams.dynatemp_range),
+        string_format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sparams.dynatemp_range),
         [](common_params & params, const std::string & value) {
             params.sparams.dynatemp_range = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dynatemp-exp"}, "N",
-        format("dynamic temperature exponent (default: %.1f)", (double)params.sparams.dynatemp_exponent),
+        string_format("dynamic temperature exponent (default: %.1f)", (double)params.sparams.dynatemp_exponent),
         [](common_params & params, const std::string & value) {
             params.sparams.dynatemp_exponent = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat"}, "N",
-        format("use Mirostat sampling.\nTop K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n"
+        string_format("use Mirostat sampling.\nTop K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n"
         "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sparams.mirostat),
         [](common_params & params, int value) {
             params.sparams.mirostat = value;
@@ -1033,14 +1007,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat-lr"}, "N",
-        format("Mirostat learning rate, parameter eta (default: %.1f)", (double)params.sparams.mirostat_eta),
+        string_format("Mirostat learning rate, parameter eta (default: %.1f)", (double)params.sparams.mirostat_eta),
         [](common_params & params, const std::string & value) {
             params.sparams.mirostat_eta = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat-ent"}, "N",
-        format("Mirostat target entropy, parameter tau (default: %.1f)", (double)params.sparams.mirostat_tau),
+        string_format("Mirostat target entropy, parameter tau (default: %.1f)", (double)params.sparams.mirostat_tau),
         [](common_params & params, const std::string & value) {
             params.sparams.mirostat_tau = std::stof(value);
         }
@@ -1069,7 +1043,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--grammar"}, "GRAMMAR",
-        format("BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", params.sparams.grammar.c_str()),
+        string_format("BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", params.sparams.grammar.c_str()),
         [](common_params & params, const std::string & value) {
             params.sparams.grammar = value;
         }
@@ -1080,7 +1054,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             std::copy(
                 std::istreambuf_iterator<char>(file),
@@ -1150,49 +1124,49 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_ROPE_FREQ_SCALE"));
     add_opt(common_arg(
         {"--yarn-orig-ctx"}, "N",
-        format("YaRN: original context size of model (default: %d = model training context size)", params.yarn_orig_ctx),
+        string_format("YaRN: original context size of model (default: %d = model training context size)", params.yarn_orig_ctx),
         [](common_params & params, int value) {
             params.yarn_orig_ctx = value;
         }
     ).set_env("LLAMA_ARG_YARN_ORIG_CTX"));
     add_opt(common_arg(
         {"--yarn-ext-factor"}, "N",
-        format("YaRN: extrapolation mix factor (default: %.1f, 0.0 = full interpolation)", (double)params.yarn_ext_factor),
+        string_format("YaRN: extrapolation mix factor (default: %.1f, 0.0 = full interpolation)", (double)params.yarn_ext_factor),
         [](common_params & params, const std::string & value) {
             params.yarn_ext_factor = std::stof(value);
         }
     ).set_env("LLAMA_ARG_YARN_EXT_FACTOR"));
     add_opt(common_arg(
         {"--yarn-attn-factor"}, "N",
-        format("YaRN: scale sqrt(t) or attention magnitude (default: %.1f)", (double)params.yarn_attn_factor),
+        string_format("YaRN: scale sqrt(t) or attention magnitude (default: %.1f)", (double)params.yarn_attn_factor),
         [](common_params & params, const std::string & value) {
             params.yarn_attn_factor = std::stof(value);
         }
     ).set_env("LLAMA_ARG_YARN_ATTN_FACTOR"));
     add_opt(common_arg(
         {"--yarn-beta-slow"}, "N",
-        format("YaRN: high correction dim or alpha (default: %.1f)", (double)params.yarn_beta_slow),
+        string_format("YaRN: high correction dim or alpha (default: %.1f)", (double)params.yarn_beta_slow),
         [](common_params & params, const std::string & value) {
             params.yarn_beta_slow = std::stof(value);
         }
     ).set_env("LLAMA_ARG_YARN_BETA_SLOW"));
     add_opt(common_arg(
         {"--yarn-beta-fast"}, "N",
-        format("YaRN: low correction dim or beta (default: %.1f)", (double)params.yarn_beta_fast),
+        string_format("YaRN: low correction dim or beta (default: %.1f)", (double)params.yarn_beta_fast),
         [](common_params & params, const std::string & value) {
             params.yarn_beta_fast = std::stof(value);
         }
     ).set_env("LLAMA_ARG_YARN_BETA_FAST"));
     add_opt(common_arg(
         {"-gan", "--grp-attn-n"}, "N",
-        format("group-attention factor (default: %d)", params.grp_attn_n),
+        string_format("group-attention factor (default: %d)", params.grp_attn_n),
         [](common_params & params, int value) {
             params.grp_attn_n = value;
         }
     ).set_env("LLAMA_ARG_GRP_ATTN_N"));
     add_opt(common_arg(
         {"-gaw", "--grp-attn-w"}, "N",
-        format("group-attention width (default: %.1f)", (double)params.grp_attn_w),
+        string_format("group-attention width (default: %.1f)", (double)params.grp_attn_w),
         [](common_params & params, int value) {
             params.grp_attn_w = value;
         }
@@ -1213,7 +1187,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_NO_KV_OFFLOAD"));
     add_opt(common_arg(
         {"-ctk", "--cache-type-k"}, "TYPE",
-        format("KV cache data type for K (default: %s)", params.cache_type_k.c_str()),
+        string_format("KV cache data type for K (default: %s)", params.cache_type_k.c_str()),
         [](common_params & params, const std::string & value) {
             // TODO: get the type right here
             params.cache_type_k = value;
@@ -1221,7 +1195,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(common_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
-        format("KV cache data type for V (default: %s)", params.cache_type_v.c_str()),
+        string_format("KV cache data type for V (default: %s)", params.cache_type_v.c_str()),
         [](common_params & params, const std::string & value) {
             // TODO: get the type right here
             params.cache_type_v = value;
@@ -1229,7 +1203,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(
         {"--perplexity", "--all-logits"},
-        format("return logits for all tokens in the batch (default: %s)", params.logits_all ? "true" : "false"),
+        string_format("return logits for all tokens in the batch (default: %s)", params.logits_all ? "true" : "false"),
         [](common_params & params) {
             params.logits_all = true;
         }
@@ -1243,7 +1217,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(common_arg(
         {"--hellaswag-tasks"}, "N",
-        format("number of tasks to use when computing the HellaSwag score (default: %zu)", params.hellaswag_tasks),
+        string_format("number of tasks to use when computing the HellaSwag score (default: %zu)", params.hellaswag_tasks),
         [](common_params & params, int value) {
             params.hellaswag_tasks = value;
         }
@@ -1257,7 +1231,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(common_arg(
         {"--winogrande-tasks"}, "N",
-        format("number of tasks to use when computing the Winogrande score (default: %zu)", params.winogrande_tasks),
+        string_format("number of tasks to use when computing the Winogrande score (default: %zu)", params.winogrande_tasks),
         [](common_params & params, int value) {
             params.winogrande_tasks = value;
         }
@@ -1271,7 +1245,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(common_arg(
         {"--multiple-choice-tasks"}, "N",
-        format("number of tasks to use when computing the multiple choice score (default: %zu)", params.multiple_choice_tasks),
+        string_format("number of tasks to use when computing the multiple choice score (default: %zu)", params.multiple_choice_tasks),
         [](common_params & params, int value) {
             params.multiple_choice_tasks = value;
         }
@@ -1292,42 +1266,42 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(common_arg(
         {"--ppl-stride"}, "N",
-        format("stride for perplexity calculation (default: %d)", params.ppl_stride),
+        string_format("stride for perplexity calculation (default: %d)", params.ppl_stride),
         [](common_params & params, int value) {
             params.ppl_stride = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(common_arg(
         {"--ppl-output-type"}, "<0|1>",
-        format("output type for perplexity calculation (default: %d)", params.ppl_output_type),
+        string_format("output type for perplexity calculation (default: %d)", params.ppl_output_type),
         [](common_params & params, int value) {
             params.ppl_output_type = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(common_arg(
         {"-dt", "--defrag-thold"}, "N",
-        format("KV cache defragmentation threshold (default: %.1f, < 0 - disabled)", (double)params.defrag_thold),
+        string_format("KV cache defragmentation threshold (default: %.1f, < 0 - disabled)", (double)params.defrag_thold),
         [](common_params & params, const std::string & value) {
             params.defrag_thold = std::stof(value);
         }
     ).set_env("LLAMA_ARG_DEFRAG_THOLD"));
     add_opt(common_arg(
         {"-np", "--parallel"}, "N",
-        format("number of parallel sequences to decode (default: %d)", params.n_parallel),
+        string_format("number of parallel sequences to decode (default: %d)", params.n_parallel),
         [](common_params & params, int value) {
             params.n_parallel = value;
         }
     ).set_env("LLAMA_ARG_N_PARALLEL"));
     add_opt(common_arg(
         {"-ns", "--sequences"}, "N",
-        format("number of sequences to decode (default: %d)", params.n_sequences),
+        string_format("number of sequences to decode (default: %d)", params.n_sequences),
         [](common_params & params, int value) {
             params.n_sequences = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PARALLEL}));
     add_opt(common_arg(
         {"-cb", "--cont-batching"},
-        format("enable continuous batching (a.k.a dynamic batching) (default: %s)", params.cont_batching ? "enabled" : "disabled"),
+        string_format("enable continuous batching (a.k.a dynamic batching) (default: %s)", params.cont_batching ? "enabled" : "disabled"),
         [](common_params & params) {
             params.cont_batching = true;
         }
@@ -1451,7 +1425,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             std::vector<std::string> split_arg{ it, {} };
             if (split_arg.size() >= llama_max_devices()) {
                 throw std::invalid_argument(
-                    format("got %d input configs, but system only has %d devices", (int)split_arg.size(), (int)llama_max_devices())
+                    string_format("got %d input configs, but system only has %d devices", (int)split_arg.size(), (int)llama_max_devices())
                 );
             }
             for (size_t i = 0; i < llama_max_devices(); ++i) {
@@ -1468,7 +1442,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_TENSOR_SPLIT"));
     add_opt(common_arg(
         {"-mg", "--main-gpu"}, "INDEX",
-        format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
+        string_format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
         [](common_params & params, int value) {
             params.main_gpu = value;
             if (!llama_supports_gpu_offload()) {
@@ -1478,7 +1452,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_MAIN_GPU"));
     add_opt(common_arg(
         {"--check-tensors"},
-        format("check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false"),
+        string_format("check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false"),
         [](common_params & params) {
             params.check_tensors = true;
         }
@@ -1489,7 +1463,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false",
         [](common_params & params, const std::string & value) {
             if (!string_parse_kv_override(value.c_str(), params.kv_overrides)) {
-                throw std::runtime_error(format("error: Invalid type for KV override: %s\n", value.c_str()));
+                throw std::runtime_error(string_format("error: Invalid type for KV override: %s\n", value.c_str()));
             }
         }
     ));
@@ -1543,7 +1517,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"-m", "--model"}, "FNAME",
         ex == LLAMA_EXAMPLE_EXPORT_LORA
             ? std::string("model path from which to load base model")
-            : format(
+            : string_format(
                 "model path (default: `models/$filename` with filename from `--hf-file` "
                 "or `--model-url` if set, otherwise %s)", DEFAULT_MODEL_PATH
             ),
@@ -1592,42 +1566,42 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream file(value, std::ios::binary);
             if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             params.context_files.push_back(value);
         }
     ).set_examples({LLAMA_EXAMPLE_RETRIEVAL}));
     add_opt(common_arg(
         {"--chunk-size"}, "N",
-        format("minimum length of embedded text chunks (default: %d)", params.chunk_size),
+        string_format("minimum length of embedded text chunks (default: %d)", params.chunk_size),
         [](common_params & params, int value) {
             params.chunk_size = value;
         }
     ).set_examples({LLAMA_EXAMPLE_RETRIEVAL}));
     add_opt(common_arg(
         {"--chunk-separator"}, "STRING",
-        format("separator between chunks (default: '%s')", params.chunk_separator.c_str()),
+        string_format("separator between chunks (default: '%s')", params.chunk_separator.c_str()),
         [](common_params & params, const std::string & value) {
             params.chunk_separator = value;
         }
     ).set_examples({LLAMA_EXAMPLE_RETRIEVAL}));
     add_opt(common_arg(
         {"--junk"}, "N",
-        format("number of times to repeat the junk text (default: %d)", params.n_junk),
+        string_format("number of times to repeat the junk text (default: %d)", params.n_junk),
         [](common_params & params, int value) {
             params.n_junk = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PASSKEY}));
     add_opt(common_arg(
         {"--pos"}, "N",
-        format("position of the passkey in the junk text (default: %d)", params.i_pos),
+        string_format("position of the passkey in the junk text (default: %d)", params.i_pos),
         [](common_params & params, int value) {
             params.i_pos = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PASSKEY}));
     add_opt(common_arg(
         {"-o", "--output", "--output-file"}, "FNAME",
-        format("output file (default: '%s')",
+        string_format("output file (default: '%s')",
             ex == LLAMA_EXAMPLE_EXPORT_LORA
                 ? params.lora_outfile.c_str()
                 : ex == LLAMA_EXAMPLE_CVECTOR_GENERATOR
@@ -1641,42 +1615,42 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_IMATRIX, LLAMA_EXAMPLE_CVECTOR_GENERATOR, LLAMA_EXAMPLE_EXPORT_LORA}));
     add_opt(common_arg(
         {"-ofreq", "--output-frequency"}, "N",
-        format("output the imatrix every N iterations (default: %d)", params.n_out_freq),
+        string_format("output the imatrix every N iterations (default: %d)", params.n_out_freq),
         [](common_params & params, int value) {
             params.n_out_freq = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(common_arg(
         {"--save-frequency"}, "N",
-        format("save an imatrix copy every N iterations (default: %d)", params.n_save_freq),
+        string_format("save an imatrix copy every N iterations (default: %d)", params.n_save_freq),
         [](common_params & params, int value) {
             params.n_save_freq = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(common_arg(
         {"--process-output"},
-        format("collect data for the output tensor (default: %s)", params.process_output ? "true" : "false"),
+        string_format("collect data for the output tensor (default: %s)", params.process_output ? "true" : "false"),
         [](common_params & params) {
             params.process_output = true;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(common_arg(
         {"--no-ppl"},
-        format("do not compute perplexity (default: %s)", params.compute_ppl ? "true" : "false"),
+        string_format("do not compute perplexity (default: %s)", params.compute_ppl ? "true" : "false"),
         [](common_params & params) {
             params.compute_ppl = false;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(common_arg(
         {"--chunk", "--from-chunk"}, "N",
-        format("start processing the input from chunk N (default: %d)", params.i_chunk),
+        string_format("start processing the input from chunk N (default: %d)", params.i_chunk),
         [](common_params & params, int value) {
             params.i_chunk = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(common_arg(
         {"-pps"},
-        format("is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false"),
+        string_format("is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false"),
         [](common_params & params) {
             params.is_pp_shared = true;
         }
@@ -1707,7 +1681,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
     add_opt(common_arg(
         {"--embd-normalize"}, "N",
-        format("normalisation for embendings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
+        string_format("normalisation for embendings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
         [](common_params & params, int value) {
             params.embd_normalize = value;
         }
@@ -1728,35 +1702,35 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(common_arg(
         {"--host"}, "HOST",
-        format("ip address to listen (default: %s)", params.hostname.c_str()),
+        string_format("ip address to listen (default: %s)", params.hostname.c_str()),
         [](common_params & params, const std::string & value) {
             params.hostname = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_HOST"));
     add_opt(common_arg(
         {"--port"}, "PORT",
-        format("port to listen (default: %d)", params.port),
+        string_format("port to listen (default: %d)", params.port),
         [](common_params & params, int value) {
             params.port = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_PORT"));
     add_opt(common_arg(
         {"--path"}, "PATH",
-        format("path to serve static files from (default: %s)", params.public_path.c_str()),
+        string_format("path to serve static files from (default: %s)", params.public_path.c_str()),
         [](common_params & params, const std::string & value) {
             params.public_path = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_STATIC_PATH"));
     add_opt(common_arg(
         {"--embedding", "--embeddings"},
-        format("restrict to only support embedding use case; use only with dedicated embedding models (default: %s)", params.embedding ? "enabled" : "disabled"),
+        string_format("restrict to only support embedding use case; use only with dedicated embedding models (default: %s)", params.embedding ? "enabled" : "disabled"),
         [](common_params & params) {
             params.embedding = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_EMBEDDINGS"));
     add_opt(common_arg(
         {"--reranking", "--rerank"},
-        format("enable reranking endpoint on server (default: %s)", params.reranking ? "enabled" : "disabled"),
+        string_format("enable reranking endpoint on server (default: %s)", params.reranking ? "enabled" : "disabled"),
         [](common_params & params) {
             params.reranking = true;
         }
@@ -1774,7 +1748,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream key_file(value);
             if (!key_file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             std::string key;
             while (std::getline(key_file, key)) {
@@ -1801,7 +1775,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SSL_CERT_FILE"));
     add_opt(common_arg(
         {"-to", "--timeout"}, "N",
-        format("server read/write timeout in seconds (default: %d)", params.timeout_read),
+        string_format("server read/write timeout in seconds (default: %d)", params.timeout_read),
         [](common_params & params, int value) {
             params.timeout_read  = value;
             params.timeout_write = value;
@@ -1809,7 +1783,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_TIMEOUT"));
     add_opt(common_arg(
         {"--threads-http"}, "N",
-        format("number of threads used to process HTTP requests (default: %d)", params.n_threads_http),
+        string_format("number of threads used to process HTTP requests (default: %d)", params.n_threads_http),
         [](common_params & params, int value) {
             params.n_threads_http = value;
         }
@@ -1820,7 +1794,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
             std::string system_prompt;
             std::copy(
@@ -1833,21 +1807,21 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"--metrics"},
-        format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),
+        string_format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),
         [](common_params & params) {
             params.endpoint_metrics = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_METRICS"));
     add_opt(common_arg(
         {"--slots"},
-        format("enable slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
+        string_format("enable slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
         [](common_params & params) {
             params.endpoint_slots = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_SLOTS"));
     add_opt(common_arg(
         {"--props"},
-        format("enable changing global properties via POST /props (default: %s)", params.endpoint_props ? "enabled" : "disabled"),
+        string_format("enable changing global properties via POST /props (default: %s)", params.endpoint_props ? "enabled" : "disabled"),
         [](common_params & params) {
             params.endpoint_props = true;
         }
@@ -1877,7 +1851,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         "only commonly used templates are accepted:\nhttps://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
         [](common_params & params, const std::string & value) {
             if (!common_chat_verify_template(value)) {
-                throw std::runtime_error(format(
+                throw std::runtime_error(string_format(
                     "error: the supplied chat template is not supported: %s\n"
                     "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",
                     value.c_str()
@@ -1888,14 +1862,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
     add_opt(common_arg(
         {"-sps", "--slot-prompt-similarity"}, "SIMILARITY",
-        format("how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity),
+        string_format("how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity),
         [](common_params & params, const std::string & value) {
             params.slot_prompt_similarity = std::stof(value);
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"--lora-init-without-apply"},
-        format("load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"),
+        string_format("load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"),
         [](common_params & params) {
             params.lora_init_without_apply = true;
         }
@@ -1920,28 +1894,28 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--positive-file"}, "FNAME",
-        format("positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str()),
+        string_format("positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str()),
         [](common_params & params, const std::string & value) {
             params.cvector_positive_file = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(common_arg(
         {"--negative-file"}, "FNAME",
-        format("negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str()),
+        string_format("negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str()),
         [](common_params & params, const std::string & value) {
             params.cvector_negative_file = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(common_arg(
         {"--pca-batch"}, "N",
-        format("batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch),
+        string_format("batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch),
         [](common_params & params, int value) {
             params.n_pca_batch = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(common_arg(
         {"--pca-iter"}, "N",
-        format("number of iterations used for PCA (default: %d)", params.n_pca_iterations),
+        string_format("number of iterations used for PCA (default: %d)", params.n_pca_iterations),
         [](common_params & params, int value) {
             params.n_pca_iterations = value;
         }
