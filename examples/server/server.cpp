@@ -1083,7 +1083,7 @@ struct server_context {
             }
 
             // check if there is any token to predict
-            if (stop_pos == std::string::npos || (!slot.has_next_token && !is_stop_full && stop_pos > 0)) {
+            if (stop_pos == std::string::npos || is_stop_full || (!slot.has_next_token && !is_stop_full && stop_pos > 0)) {
                 // no send the stop word in the response
                 result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
                 slot.n_sent_text += result.text_to_send.size();
