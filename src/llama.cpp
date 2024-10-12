@@ -21199,7 +21199,8 @@ struct llama_batch_allocr {
             batch.n_seq_id = n_seq_id.data();
         }
         if (!batch.seq_id) {
-            seq_id.resize(batch.n_tokens);
+            seq_id.resize(batch.n_tokens + 1);
+            seq_id[batch.n_tokens] = NULL;
             for (int32_t i = 0; i < batch.n_tokens; i++) {
                 seq_id[i] = seq_id_0.data();
             }
