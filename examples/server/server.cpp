@@ -753,12 +753,7 @@ struct server_context {
         metrics.init();
     }
 
-    std::vector<llama_token> tokenize(const json & json_prompt, bool add_special) const {
-        // TODO: currently, we tokenize using special tokens by default
-        //       this is not always correct (see https://github.com/ggerganov/llama.cpp/pull/4160#issuecomment-1824826216)
-        //       but it's better compared to completely ignoring ChatML and other chat templates
-        const bool TMP_FORCE_SPECIAL = true;
-
+    std::vector<llama_token> tokenize(const json & json_prompt, bool add_special, bool parse_special) const {
         // If `add_bos` is true, we only add BOS, when json_prompt is a string,
         // or the first element of the json_prompt array is a string.
         std::vector<llama_token> prompt_tokens;
@@ -771,10 +766,10 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+                        p = common_tokenize(ctx, s, add_special, parse_special);
                         first = false;
                     } else {
-                        p = common_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
+                        p = common_tokenize(ctx, s, false, parse_special);
                     }
 
                     prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
@@ -788,7 +783,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = common_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+            prompt_tokens = common_tokenize(ctx, s, add_special, parse_special);
         }
 
         return prompt_tokens;
@@ -1215,7 +1210,7 @@ struct server_context {
                     slot.params.n_predict, n_ctx_train);
         }
 
-        SLT_DBG(slot, "n_decoded = %d, n_remaining = %d, next token: '%s'\n", slot.n_decoded, slot.n_remaining, token_str.c_str());
+        SLT_DBG(slot, "n_decoded = %d, n_remaining = %d, next token: %5d '%s'\n", slot.n_decoded, slot.n_remaining, result.tok, token_str.c_str());
 
         return slot.has_next_token; // continue
     }
@@ -1483,9 +1478,8 @@ struct server_context {
         if (prompt.is_string() || json_is_array_of_numbers(prompt)) {
             data["index"] = 0;
             create_task(data, false, nullptr);
-        }
-        // otherwise, it's a multiple-prompt task, we break it into smaller tasks
-        else if (prompt.is_array()) {
+        } else if (prompt.is_array()) {
+            // otherwise, it's a multiple-prompt task, we break it into smaller tasks
             std::vector<json> prompts = prompt;
             if (cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
                 // prompts[0] is the question
@@ -1510,9 +1504,8 @@ struct server_context {
                     }
                 }
             }
-        }
-        // invalid case
-        else {
+        } else {
+            // invalid case
             throw std::runtime_error(error_msg);
         }
 
@@ -1785,6 +1778,9 @@ struct server_context {
                     }
                     slot->cache_tokens.resize(token_count);
 
+                    // TODO: maybe detokenize the slot->cache_tokens instead?
+                    slot->prompt = string_format("[restored %d tokens from file]", (int) token_count);
+
                     const int64_t t_end = ggml_time_us();
                     const double t_restore_ms = (t_end - t_start) / 1000.0;
 
@@ -1971,69 +1967,68 @@ struct server_context {
                         slot.t_start_process_prompt = ggml_time_us();
                         slot.t_start_generation = 0;
 
-                        if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_INFILL) {
-                            const bool add_bos = llama_add_bos_token(model);
-                            bool suff_rm_leading_spc = true;
-                            if (params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
-                                params.input_suffix.erase(0, 1);
-                                suff_rm_leading_spc = false;
-                            }
+                        switch (slot.cmpl_type) {
+                            case SERVER_TASK_CMPL_TYPE_NORMAL:
+                            case SERVER_TASK_CMPL_TYPE_EMBEDDING:
+                                {
+                                    prompt_tokens = tokenize(slot.prompt, system_prompt.empty(), true); // add BOS if there isn't system prompt
+                                } break;
+                            case SERVER_TASK_CMPL_TYPE_RERANK:
+                                {
+                                    // require slot.prompt to be array of 2 strings
+                                    if (!slot.prompt.is_array() || slot.prompt.size() != 2) {
+                                        SLT_ERR(slot, "%s", "invalid prompt for rerank task\n");
+                                        slot.release();
+                                        send_error(slot, "invalid prompt for rerank task", ERROR_TYPE_INVALID_REQUEST);
+                                        continue;
+                                    }
 
-                            auto prefix_tokens = tokenize(slot.params.input_prefix, false);
-                            auto suffix_tokens = tokenize(slot.params.input_suffix, false);
+                                    // prompt: [BOS]query[EOS][SEP]doc[EOS]
+                                    prompt_tokens.clear();
+                                    prompt_tokens.push_back(llama_token_bos(model));
+                                    {
+                                        const auto part = tokenize(slot.prompt[0], false, false);
+                                        prompt_tokens.insert(prompt_tokens.end(), part.begin(), part.end());
+                                    }
+                                    prompt_tokens.push_back(llama_token_eos(model));
+                                    prompt_tokens.push_back(llama_token_sep(model));
+                                    {
+                                        const auto part = tokenize(slot.prompt[1], false, false);
+                                        prompt_tokens.insert(prompt_tokens.end(), part.begin(), part.end());
+                                    }
+                                    prompt_tokens.push_back(llama_token_eos(model));
+                                } break;
+                            case SERVER_TASK_CMPL_TYPE_INFILL:
+                                {
+                                    auto prefix_tokens = tokenize(slot.params.input_prefix, false, false);
+                                    auto suffix_tokens = tokenize(slot.params.input_suffix, false, false);
 
-                            const int space_token = 29871; // TODO: this should not be hardcoded
-                            if (suff_rm_leading_spc && !suffix_tokens.empty() && suffix_tokens[0] == space_token) {
-                                suffix_tokens.erase(suffix_tokens.begin());
-                            }
+                                    prefix_tokens.insert(prefix_tokens.begin(), llama_token_fim_pre(model));
+                                    suffix_tokens.insert(suffix_tokens.begin(), llama_token_fim_suf(model));
 
-                            prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
-                            suffix_tokens.insert(suffix_tokens.begin(), llama_token_suffix(model));
+                                    auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
+                                    auto embd_end = params.spm_infill ? prefix_tokens : suffix_tokens;
 
-                            auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
-                            auto embd_end = params.spm_infill ? prefix_tokens : suffix_tokens;
-                            if (add_bos) {
-                                embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
-                            }
-                            embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
+                                    if (llama_add_bos_token(model)) {
+                                        embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+                                    }
 
-                            const llama_token middle_token = llama_token_middle(model);
-                            if (middle_token >= 0) {
-                                embd_inp.push_back(middle_token);
-                            }
+                                    embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
+                                    embd_inp.push_back(llama_token_fim_mid(model));
 
-                            prompt_tokens = embd_inp;
-                        } else if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
-                            // require slot.prompt to be array of 2 strings
-                            if (!slot.prompt.is_array() || slot.prompt.size() != 2) {
-                                SLT_ERR(slot, "%s", "invalid prompt for rerank task\n");
-                                slot.release();
-                                send_error(slot, "invalid prompt for rerank task", ERROR_TYPE_INVALID_REQUEST);
-                                continue;
-                            }
-
-                            // prompt: [BOS]query[EOS][SEP]doc[EOS]
-                            prompt_tokens.clear();
-                            prompt_tokens.push_back(llama_token_bos(model));
-                            {
-                                const auto part = tokenize(slot.prompt[0], false);
-                                prompt_tokens.insert(prompt_tokens.end(), part.begin(), part.end());
-                            }
-                            prompt_tokens.push_back(llama_token_eos(model));
-                            prompt_tokens.push_back(llama_token_sep(model));
-                            {
-                                const auto part = tokenize(slot.prompt[1], false);
-                                prompt_tokens.insert(prompt_tokens.end(), part.begin(), part.end());
-                            }
-                            prompt_tokens.push_back(llama_token_eos(model));
-                        } else {
-                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
+                                    prompt_tokens = std::move(embd_inp);
+                                } break;
                         }
 
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
                         SLT_INF(slot, "prompt tokenized, n_ctx_slot = %d, n_keep = %d, n_prompt_tokens = %d\n", slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
+
+                        // print prompt tokens:
+                        for (int i = 0; i < (int) prompt_tokens.size(); i++) {
+                            SLT_DBG(slot, "prompt token %3d: %6d '%s'\n", i, prompt_tokens[i], common_token_to_piece(ctx, prompt_tokens[i]).c_str());
+                        }
 
                         // empty prompt passed -> release the slot and send empty response
                         if (prompt_tokens.empty()) {
@@ -2924,7 +2919,23 @@ int main(int argc, char ** argv) {
         return handle_completions_generic(SERVER_TASK_CMPL_TYPE_NORMAL, data, res);
     };
 
-    const auto handle_infill = [&handle_completions_generic](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_infill = [&ctx_server, &res_error, &handle_completions_generic](const httplib::Request & req, httplib::Response & res) {
+        std::string err;
+        if (llama_token_fim_pre(ctx_server.model) == LLAMA_TOKEN_NULL) {
+            err += "prefix token is missing. ";
+        }
+        if (llama_token_fim_suf(ctx_server.model) == LLAMA_TOKEN_NULL) {
+            err += "suffix token is missing. ";
+        }
+        if (llama_token_fim_mid(ctx_server.model) == LLAMA_TOKEN_NULL) {
+            err += "middle token is missing. ";
+        }
+
+        if (!err.empty()) {
+            res_error(res, format_error_response(string_format("Infill is not supported by this model: %s", err.c_str()), ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         json data = json::parse(req.body);
         return handle_completions_generic(SERVER_TASK_CMPL_TYPE_INFILL, data, res);
     };
@@ -3010,7 +3021,8 @@ int main(int argc, char ** argv) {
         if (body.count("content") != 0) {
             const bool add_special = json_value(body, "add_special", false);
             const bool with_pieces = json_value(body, "with_pieces", false);
-            std::vector<llama_token> tokens = ctx_server.tokenize(body.at("content"), add_special);
+
+            std::vector<llama_token> tokens = ctx_server.tokenize(body.at("content"), add_special, true);
 
             if (with_pieces) {
                 for (const auto& token : tokens) {
