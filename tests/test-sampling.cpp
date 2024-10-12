@@ -111,7 +111,7 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
     }
 }
 
-static void test_xtc(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p, float t, float t_max) {
+static void test_xtc(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p, float t) {
     const size_t n_vocab = probs.size();
 
     std::vector<llama_token_data> cur;
@@ -124,7 +124,7 @@ static void test_xtc(const std::vector<float> & probs, const std::vector<float> 
     llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
     APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
-    APPLY(llama_sampler_init_xtc(p, t, t_max, 0, 0), &cur_p);
+    APPLY(llama_sampler_init_xtc(p, t, 0, 0), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -306,7 +306,7 @@ static void test_perf() {
     BENCH(llama_sampler_init_min_p    (0.2f, 1),                data, 32);
     BENCH(llama_sampler_init_tail_free(0.5f, 1),                data, 32);
     BENCH(llama_sampler_init_typical  (0.5f, 1),                data, 32);
-    BENCH(llama_sampler_init_xtc      (1.0f, 0.1f, 0.8f, 1, 1), data, 32);
+    BENCH(llama_sampler_init_xtc      (1.0f, 0.1f, 1, 1),       data, 32);
     BENCH(llama_sampler_init_softmax  (),                       data, 32);
 }
 
@@ -333,17 +333,12 @@ int main(void) {
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  1.00f);
 
     printf("XTC should:\n");
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.1f},                         0.99f, 0.10f, 1.00f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.1f},                   0.99f, 0.10f, 0.35f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.2f, 0.1f},                   0.99f, 0.20f, 1.00f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.3f, 0.2f, 0.1f},             0.99f, 0.30f, 1.00f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.1f},             0.99f, 0.10f, 0.25f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.2f, 0.1f},             0.99f, 0.20f, 0.35f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.1f},                                0.99f, 0.10f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.2f, 0.1f},                          0.99f, 0.20f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.3f, 0.2f, 0.1f},                    0.99f, 0.30f);
+
     printf("XTC should not:\n");
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.10f, 0.15f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.20f, 0.25f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.30f, 0.35f);
-    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},       0.99f, 0.40f, 1.00f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},              0.99f, 0.40f);
 
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f}, 0.25f);
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f, 0.25f}, 0.75f);

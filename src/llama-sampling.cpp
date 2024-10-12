@@ -1064,7 +1064,6 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
 struct llama_sampler_xtc {
     const float    probability;
     const float    threshold;
-    const float    threshold_max;
     const size_t   min_keep;
 
     const uint32_t seed;
@@ -1082,8 +1081,6 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
 
     if (ctx->probability <= 0.0f
         || ctx->threshold > 0.5f
-        || ctx->threshold_max <= 0.0f
-        || ctx->threshold_max <= ctx->threshold
         || cur_p->size <= 2) {
         return;
     }
@@ -1095,35 +1092,29 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
     // in case it's not sorted/recalculated yet
     llama_sampler_softmax_impl(cur_p);
 
-    int pos_first = -1;
     int pos_last = 0;
 
     for (size_t i = 0; i < cur_p->size; ++i) {
         if (cur_p->data[i].p - ctx->threshold >= -1e-5) {
-            if (cur_p->data[i].p - ctx->threshold_max > 1e-3) pos_first = i;
             pos_last = i;
-        } else {
-            break;
-        }
+        } else break;
     }
 
-    int to_remove = pos_last - (1 + pos_first);
+    if (cur_p->size - pos_last >= ctx->min_keep && pos_last > 0) {
 
-    if (cur_p->size - to_remove >= ctx->min_keep && to_remove > 0) {
+        size_t last_idx = cur_p->size - pos_last;
 
-        size_t last_idx = cur_p->size - to_remove;
-
-        for (size_t i = pos_first + 1; i <= last_idx; ++i) {
-            cur_p->data[i] = cur_p->data[i + to_remove];
+        for (size_t i = 0; i <= last_idx; ++i) {
+            cur_p->data[i] = cur_p->data[i + pos_last];
         }
 
-        cur_p->size = cur_p->size - to_remove;
+        cur_p->size = cur_p->size - pos_last;
     }
 }
 
 static struct llama_sampler * llama_sampler_xtc_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_xtc *) smpl->ctx;
-    auto * result = llama_sampler_init_xtc(ctx->probability, ctx->threshold, ctx->threshold_max, ctx->min_keep, ctx->seed);
+    auto * result = llama_sampler_init_xtc(ctx->probability, ctx->threshold, ctx->min_keep, ctx->seed);
 
     // copy the state
     {
@@ -1154,14 +1145,13 @@ static struct llama_sampler_i llama_sampler_xtc_i = {
     /* .free   = */ llama_sampler_xtc_free,
 };
 
-struct llama_sampler * llama_sampler_init_xtc(float p, float t, float t_max, size_t min_keep, uint32_t seed) {
+struct llama_sampler * llama_sampler_init_xtc(float p, float t, size_t min_keep, uint32_t seed) {
     auto seed_cur = get_rng_seed(seed);
     return new llama_sampler {
         /* .iface = */ &llama_sampler_xtc_i,
         /* .ctx   = */ new llama_sampler_xtc {
             /* .probability   = */ p,
             /* .threshold     = */ t,
-            /* .threshold_max = */ t_max,
             /* .min_keep      = */ min_keep,
             /* .seed          = */ seed,
             /* .seed_cur      = */ seed_cur,

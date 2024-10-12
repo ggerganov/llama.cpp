@@ -112,7 +112,6 @@ struct common_sampler_params {
     float   min_p             = 0.05f; // 0.0 = disabled
     float   xtc_probability   = 0.00f; // 0.0 = disabled
     float   xtc_threshold     = 0.10f; // 0.5 = disabled
-    float   xtc_threshold_max = 1.00f; // 0.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
     float   typ_p             = 1.00f; // typical_p, 1.0 = disabled
     float   temp              = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities

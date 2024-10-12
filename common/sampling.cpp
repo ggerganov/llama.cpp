@@ -130,10 +130,10 @@ std::string common_sampler_params::print() const {
 
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
-            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, xtc_threshold_max = %.3f, typical_p = %.3f, temp = %.3f\n"
+            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, temp = %.3f\n"
             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
             penalty_last_n, penalty_repeat, penalty_freq, penalty_present,
-            top_k, tfs_z, top_p, min_p, xtc_probability, xtc_threshold, xtc_threshold_max, typ_p, temp,
+            top_k, tfs_z, top_p, min_p, xtc_probability, xtc_threshold, typ_p, temp,
             mirostat, mirostat_eta, mirostat_tau);
 
     return std::string(result);
@@ -185,7 +185,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                         llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
                         break;
                     case COMMON_SAMPLER_TYPE_XTC:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.xtc_threshold_max, params.min_keep, params.seed));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
                         break;
                     case COMMON_SAMPLER_TYPE_TFS_Z:
                         llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));

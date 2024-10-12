@@ -893,7 +893,6 @@ struct server_context {
         slot.sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
         slot.sparams.xtc_probability   = json_value(data, "xtc_probability",   default_sparams.xtc_probability);
         slot.sparams.xtc_threshold     = json_value(data, "xtc_threshold",     default_sparams.xtc_threshold);
-        slot.sparams.xtc_threshold_max = json_value(data, "xtc_threshold_max", default_sparams.xtc_threshold_max);
         slot.sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
         slot.sparams.typ_p             = json_value(data, "typical_p",         default_sparams.typ_p);
         slot.sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
@@ -1244,7 +1243,6 @@ struct server_context {
             {"min_p",                     slot.sparams.min_p},
             {"xtc_probability",           slot.sparams.xtc_probability},
             {"xtc_threshold",             slot.sparams.xtc_threshold},
-            {"xtc_threshold_max",         slot.sparams.xtc_threshold_max},
             {"tfs_z",                     slot.sparams.tfs_z},
             {"typical_p",                 slot.sparams.typ_p},
             {"repeat_last_n",             slot.sparams.penalty_last_n},

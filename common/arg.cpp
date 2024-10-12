@@ -988,13 +988,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"-xtc-t-max", "--xtc-threshold-max"}, "N",
-        format("xtc upper threshold (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_threshold_max),
-        [](common_params & params, const std::string & value) {
-            params.sparams.xtc_threshold_max = std::stof(value);
-        }
-    ).set_sparam());
-    add_opt(common_arg(
         {"--typical"}, "N",
         format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typ_p),
         [](common_params & params, const std::string & value) {
