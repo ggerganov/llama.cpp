@@ -367,6 +367,12 @@ class Model:
                     break
 
             for new_name, data_torch in (self._modify_tensors(data_torch, name, bid)):
+                # Some GPTQ models have empty bias tensors which are not in the model architecture.
+                # These tensors will cause tensor number check to fail, so we have to skip them.
+                if new_name.endswith(".bias") and np.all(LazyTorchTensor.to_eager(data_torch).numpy() == 0):
+                    logger.info(f"Skipping empty bias tensor: {new_name}")
+                    continue
+
                 data = data_torch.squeeze().numpy()
 
                 # if data ends up empty, it means data_torch was a scalar tensor -> restore
