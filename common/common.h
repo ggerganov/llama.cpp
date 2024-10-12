@@ -282,7 +282,6 @@ struct common_params {
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT
     std::string chat_template = "";                                                                         // NOLINT
-    std::string system_prompt = "";                                                                         // NOLINT
     bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
@@ -352,14 +351,27 @@ void common_init();
 
 std::string common_params_get_system_info(const common_params & params);
 
-bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);
-bool parse_cpu_mask(const std::string& mask, bool(&boolmask)[GGML_MAX_N_THREADS]);
-void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr);
+bool parse_cpu_range(const std::string & range, bool(&boolmask)[GGML_MAX_N_THREADS]);
+bool parse_cpu_mask(const std::string & mask, bool(&boolmask)[GGML_MAX_N_THREADS]);
+void postprocess_cpu_params(cpu_params & cpuparams, const cpu_params * role_model = nullptr);
 bool set_process_priority(enum ggml_sched_priority prio);
 
 //
 // String utils
 //
+
+#ifdef __GNUC__
+#ifdef __MINGW32__
+#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#else
+#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#endif
+#else
+#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
+#endif
+
+LLAMA_COMMON_ATTRIBUTE_FORMAT(1, 2)
+std::string string_format(const char * fmt, ...);
 
 std::vector<std::string> string_split(std::string input, char separator);
 
