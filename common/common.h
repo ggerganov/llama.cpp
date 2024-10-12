@@ -282,7 +282,6 @@ struct common_params {
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT
     std::string chat_template = "";                                                                         // NOLINT
-    std::string system_prompt = "";                                                                         // NOLINT
     bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
