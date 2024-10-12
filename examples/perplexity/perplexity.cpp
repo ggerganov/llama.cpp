@@ -408,16 +408,15 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
         // clear the KV cache
         llama_kv_cache_clear(ctx);
 
+        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
 
-            llama_batch batch = llama_batch_init(batch_size, 0, 1);
+            common_batch_clear(batch);
             for (int i = 0; i < batch_size; i++) {
-                batch. token[i] = tokens[batch_start + i];
-                batch.   pos[i] = j*n_batch + i;
-                batch.logits[i] = true;
-                batch.seq_id[i][0] = 0;
+                common_batch_add(batch, tokens[batch_start + i], j*n_batch + i, {0}, true);
             }
 
             //LOG_DBG("    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
@@ -426,8 +425,6 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
                 llama_batch_free(batch);
                 return {tokens, -1, logit_history, prob_history};
             }
-
-            llama_batch_free(batch);
 
             // save original token and restore it after eval
             const auto token_org = tokens[batch_start];
@@ -444,6 +441,8 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
                 tokens[batch_start] = token_org;
             }
         }
+
+        llama_batch_free(batch);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
