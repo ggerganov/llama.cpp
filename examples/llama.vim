@@ -17,7 +17,7 @@
 "
 " start the llama.cpp server with a FIM-compatible model. for example:
 "
-"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa --ubatch-size 1024 --batch-size 2048 --cache-reuse 512
+"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa --ubatch-size 512 --batch-size 1024 --cache-reuse 512
 "
 "   --batch-size [512, model max context]
 "
@@ -54,7 +54,9 @@ highlight llama_hl_info guifg=#77ff2f
 "
 "  - completion request
 "  - yank
-"  - reading a file
+"  - entering a buffer
+"  - leaving a buffer
+"  - writing a file
 "
 " ring context parameters:
 "
@@ -208,6 +210,36 @@ function! s:pick_chunk(text, no_mod, do_evict)
     endif
 
     call add(s:ring_chunks, {'data': l:chunk, 'str': l:chunk_str, 'time': reltime()})
+
+    " send asynchronous job with the new extra context so that it is ready for the next FIM
+    let l:extra_context = []
+    for l:chunk in s:ring_chunks
+        call add(l:extra_context, l:chunk.str)
+    endfor
+
+    let l:request = json_encode({
+        \ 'prompt':           "",
+        \ 'input_prefix':     "",
+        \ 'input_suffix':     "",
+        \ 'n_predict':        1,
+        \ 'penalty_last_n':   0,
+        \ 'top_k':            100,
+        \ 'stream':           v:false,
+        \ 'samplers':         ["top_k", "infill"],
+        \ 'cache_prompt':     v:true,
+        \ 'extra_context':    l:extra_context,
+        \ 't_max_prompt_ms':  1,
+        \ 't_max_predict_ms': 1
+        \ })
+
+    let l:curl_command = printf(
+        \ "curl --silent --no-buffer --request POST --url %s --header \"Content-Type: application/json\" --data %s",
+        \ g:llama_config.endpoint, shellescape(l:request)
+        \ )
+
+    call jobstart(l:curl_command, {
+        \ 'on_exit':   function('s:fim_on_exit')
+        \ })
 endfunction
 
 function! llama#fim(is_auto) abort
@@ -245,21 +277,6 @@ function! llama#fim(is_auto) abort
         \ . join(l:lines_suffix, "\n")
         \ . "\n"
 
-    " TODO: per-file location
-    let l:delta_y = abs(s:pos_y - s:pos_y_pick)
-
-    " only gather chunks if the cursor has moved a lot
-    if a:is_auto && l:delta_y > 32
-        " randomly pick a prefix or a suffix chunk
-        if s:rand(0, 1)
-            call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
-        else
-            call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false, v:false)
-        endif
-
-        let s:pos_y_pick = s:pos_y
-    endif
-
     " array of strings
     let l:extra_context = []
     for l:chunk in s:ring_chunks
@@ -293,6 +310,21 @@ function! llama#fim(is_auto) abort
         \ 'stdout_buffered': v:true,
         \ 'is_auto': a:is_auto
         \ })
+
+    " TODO: per-file location
+    let l:delta_y = abs(s:pos_y - s:pos_y_pick)
+
+    " only gather chunks if the cursor has moved a lot
+    if a:is_auto && l:delta_y > 32
+        " randomly pick a prefix or a suffix chunk
+        if s:rand(0, 1)
+            call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
+        else
+            call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false, v:false)
+        endif
+
+        let s:pos_y_pick = s:pos_y
+    endif
 
     " this trick is needed to avoid the cursor shifting upon C-O when at the end of the line
     if !a:is_auto
@@ -427,7 +459,8 @@ function! s:fim_on_stdout(job_id, data, event) dict
         let l:generation_settings = get(l:response, 'generation_settings', {})
         let l:n_ctx = get(l:generation_settings, 'n_ctx', 0)
 
-        let l:n_cached = get(l:response, 'tokens_cached', 0)
+        let l:n_cached  = get(l:response, 'tokens_cached', 0)
+        let l:truncated = get(l:response, 'truncated', v:false)
 
         " if response.timings is available
         if len(get(l:response, 'timings', {})) > 0
@@ -466,22 +499,31 @@ function! s:fim_on_stdout(job_id, data, event) dict
     let l:id_vt_fim  = nvim_create_namespace('vt_fim')
     let l:id_vt_info = nvim_create_namespace('vt_info')
 
-    " construct the info message and display it to the right of the current line
+    " construct the info message
     if g:llama_config.show_info > 0 && l:has_info
         " prefix the info string with whitespace in order to offset it to the right of the fim overlay
         let l:prefix = repeat(' ', len(s:content[0]) - len(s:line_cur_suffix) + 3)
 
-        let l:info = printf("%s | context: %d / %d / %d / %d | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
-            \ g:llama_config.show_info == 2 ? l:prefix : '',
-            \ l:n_cached,  l:n_ctx, len(s:ring_chunks), s:ring_n_evict,
-            \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
-            \ l:n_predict, l:t_predict_ms, l:s_predict,
-            \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
-            \ )
+        if l:truncated
+            let l:info = printf("%s | WARNING: the context is full: %d / %d, increase the server context size or reduce g:llama_config.ring_n_chunks",
+                \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
+                \ l:n_cached, l:n_ctx
+                \ )
+        else
+            let l:info = printf("%s | context: %d / %d / %d / %d | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
+                \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
+                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), s:ring_n_evict,
+                \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
+                \ l:n_predict, l:t_predict_ms, l:s_predict,
+                \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
+                \ )
+        endif
 
         if g:llama_config.show_info == 1
+            "" display it in the statusline
             let &statusline = l:info
         elseif g:llama_config.show_info == 2
+            " display it to the right of the current line
             call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, s:pos_y - 1, s:pos_x - 1, {
                 \ 'virt_text': [[l:info, 'llama_hl_info']],
                 \ 'virt_text_pos': 'eol',
