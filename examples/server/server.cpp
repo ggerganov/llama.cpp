@@ -139,7 +139,6 @@ struct slot_params {
 
     json input_prefix;
     json input_suffix;
-
     json extra_context;
 };
 
@@ -915,11 +914,19 @@ struct server_context {
 
         SLT_DBG(slot, "extra_context chunks: %d\n", (int) slot.params.extra_context.size());
         for (const auto & chunk : slot.params.extra_context) {
-            if (chunk.is_string()) {
-                SLT_DBG(slot, "chunk: \n%s\n", chunk.get<std::string>().c_str());
-            } else {
-                SLT_DBG(slot, "%s", "chunk is not a string - skipping\n");
+            // { "text": string, "filename": string }
+            if (!chunk.contains("text") || !chunk["text"].is_string()) {
+                send_error(task, "extra_context chunk must contain a \"text\" field with a string value", ERROR_TYPE_INVALID_REQUEST);
+                return false;
             }
+
+            // filename is optional
+            if (chunk.contains("filename") && !chunk["filename"].is_string()) {
+                send_error(task, "extra_context chunk's \"filename\" field must be a string", ERROR_TYPE_INVALID_REQUEST);
+                return false;
+            }
+
+            SLT_DBG(slot, "extra_context chunk in file '%s':\n%s\n", chunk.value("filename", "").c_str(), chunk.value("text", "").c_str());
         }
 
         // get prompt
@@ -1947,22 +1954,57 @@ struct server_context {
                                 } break;
                             case SERVER_TASK_CMPL_TYPE_INFILL:
                                 {
+                                    // use FIM repo-level pattern:
+                                    // ref: https://arxiv.org/pdf/2409.12186
+                                    //
+                                    // [FIM_REP]myproject
+                                    // [FIM_SEP]filename0
+                                    // extra chunk 0
+                                    // [FIM_SEP]filename1
+                                    // extra chunk 1
+                                    // ...
+                                    // [FIM_SEP]filename
+                                    // [FIM_PRE]prefix[FIM_SUF]suffix[FIM_MID]
+                                    //
                                     auto prefix_tokens = tokenize(slot.params.input_prefix, false, false);
                                     auto suffix_tokens = tokenize(slot.params.input_suffix, false, false);
 
                                     slot.extra_tokens.clear();
-                                    for (const auto & e : slot.params.extra_context) {
-                                        if (e.is_string()) {
+                                    if (llama_token_fim_rep(model) != LLAMA_TOKEN_NULL) {
+                                        static const auto k_fim_repo = tokenize("myproject\n", false, false);
+
+                                        slot.extra_tokens.push_back(llama_token_fim_rep(model));
+                                        slot.extra_tokens.insert(slot.extra_tokens.end(), k_fim_repo.begin(), k_fim_repo.end());
+                                    }
+
+                                    for (const auto & chunk : slot.params.extra_context) {
+                                        // { "text": string, "filename": string }
+                                        const std::string text     = chunk.value("text", "");
+                                        const std::string filename = chunk.value("filename", "tmp");
+
+                                        if (llama_token_fim_sep(model) != LLAMA_TOKEN_NULL) {
+                                            const auto k_fim_file = tokenize(filename + "\n", false, false);
+
+                                            slot.extra_tokens.insert(slot.extra_tokens.end(), llama_token_fim_sep(model));
+                                            slot.extra_tokens.insert(slot.extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
+                                        } else {
                                             // chunk separator in binary form to avoid confusing the AI
                                             static const char k_chunk_prefix_str[] = {0x0a, 0x0a, 0x2d, 0x2d, 0x2d, 0x20, 0x73, 0x6e, 0x69, 0x70, 0x70, 0x65, 0x74, 0x20, 0x2d, 0x2d, 0x2d, 0x0a, 0x0a, 0x00};
                                             static const auto k_chunk_prefix_tokens = tokenize(k_chunk_prefix_str, false, false);
-                                            slot.extra_tokens.insert(slot.extra_tokens.end(), k_chunk_prefix_tokens.begin(), k_chunk_prefix_tokens.end());
 
-                                            const auto part = tokenize(e, false, false);
-                                            slot.extra_tokens.insert(slot.extra_tokens.end(), part.begin(), part.end());
-                                        } else {
-                                            SLT_WRN(slot, "%s", "extra context element is not a string\n");
+                                            slot.extra_tokens.insert(slot.extra_tokens.end(), k_chunk_prefix_tokens.begin(), k_chunk_prefix_tokens.end());
                                         }
+
+                                        const auto chunk_tokens = tokenize(text, false, false);
+                                        slot.extra_tokens.insert(slot.extra_tokens.end(), chunk_tokens.begin(), chunk_tokens.end());
+                                    }
+
+                                    if (llama_token_fim_sep(model) != LLAMA_TOKEN_NULL) {
+                                        // TODO: current filename
+                                        static const auto k_fim_file = tokenize("filename\n", false, false);
+
+                                        slot.extra_tokens.insert(slot.extra_tokens.end(), llama_token_fim_sep(model));
+                                        slot.extra_tokens.insert(slot.extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
                                     }
 
                                     // for now pick FIM context to fit in a batch (ratio prefix:suffix = 3:1, TODO: configurable?)
@@ -2094,11 +2136,15 @@ struct server_context {
 
                                     while (head_c < slot.cache_tokens.size() &&
                                            head_p < prompt_tokens.size()) {
-                                        if (llama_token_is_control(model, slot.cache_tokens[head_c])) {
+                                        if (llama_token_is_control(model, slot.cache_tokens[head_c]) &&
+                                            slot.cache_tokens[head_c] != llama_token_fim_rep(model) &&
+                                            slot.cache_tokens[head_c] != llama_token_fim_sep(model)) {
                                             break;
                                         }
 
-                                        if (llama_token_is_control(model, prompt_tokens[head_p])) {
+                                        if (llama_token_is_control(model, prompt_tokens[head_p]) &&
+                                            prompt_tokens[head_p] != llama_token_fim_rep(model) &&
+                                            prompt_tokens[head_p] != llama_token_fim_sep(model)) {
                                             break;
                                         }
 
@@ -2107,11 +2153,15 @@ struct server_context {
                                         while (head_c + n_match < slot.cache_tokens.size() &&
                                                head_p + n_match < prompt_tokens.size()     &&
                                                slot.cache_tokens[head_c + n_match] == prompt_tokens[head_p + n_match]) {
-                                            if (llama_token_is_control(model, slot.cache_tokens[head_c + n_match])) {
+                                            if (llama_token_is_control(model, slot.cache_tokens[head_c + n_match]) &&
+                                                slot.cache_tokens[head_c + n_match] != llama_token_fim_rep(model) &&
+                                                slot.cache_tokens[head_c + n_match] != llama_token_fim_sep(model)) {
                                                 break;
                                             }
 
-                                            if (llama_token_is_control(model, prompt_tokens[head_p + n_match])) {
+                                            if (llama_token_is_control(model, prompt_tokens[head_p + n_match]) &&
+                                                prompt_tokens[head_p + n_match] != llama_token_fim_rep(model) &&
+                                                prompt_tokens[head_p + n_match] != llama_token_fim_sep(model)) {
                                                 break;
                                             }
 
