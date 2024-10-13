@@ -6725,10 +6725,6 @@ static void llm_load_vocab(
             vocab.special_eog_ids.insert(vocab.special_eom_id);
             LLAMA_LOG_WARN("%s: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
-
-        if (vocab.special_fim_sep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_sep_id) == 0) {
-            vocab.special_eog_ids.insert(vocab.special_fim_sep_id);
-        }
     }
 
     // build special tokens cache
