@@ -499,6 +499,11 @@ function! s:fim_on_stdout(job_id, data, event) dict
     let s:pos_dx = len(s:content[-1])
     let s:content[-1] .= s:line_cur_suffix
 
+    " truncate the suggestion if it repeats the next line
+    if len(s:content) > 1 && s:content[1] == getline(s:pos_y + 1)
+        let s:content = [s:content[0]]
+    endif
+
     call llama#fim_cancel()
 
     " display virtual text with the suggestion
