@@ -139,6 +139,8 @@ struct slot_params {
 
     json input_prefix;
     json input_suffix;
+
+    json extra_context;
 };
 
 struct server_slot {
@@ -170,6 +172,7 @@ struct server_slot {
 
     // when a task is submitted, we first tokenize the prompt and store it here
     std::vector<llama_token> prompt_tokens;
+    std::vector<llama_token> extra_tokens;
 
     std::string generated_text;
     std::vector<llama_token> cache_tokens;
@@ -906,8 +909,18 @@ struct server_context {
         }
 
         // infill
-        slot.params.input_prefix = json_value(data, "input_prefix", default_params.input_prefix);
-        slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
+        slot.params.input_prefix  = json_value(data, "input_prefix",  default_params.input_prefix);
+        slot.params.input_suffix  = json_value(data, "input_suffix",  default_params.input_suffix);
+        slot.params.extra_context = json_value(data, "extra_context", default_params.extra_context);
+
+        SLT_DBG(slot, "extra_context chunks: %d\n", (int) slot.params.extra_context.size());
+        for (const auto & chunk : slot.params.extra_context) {
+            if (chunk.is_string()) {
+                SLT_DBG(slot, "chunk: \n%s\n", chunk.get<std::string>().c_str());
+            } else {
+                SLT_DBG(slot, "%s", "chunk is not a string - skipping\n");
+            }
+        }
 
         // get prompt
         if (task.cmpl_type != SERVER_TASK_CMPL_TYPE_INFILL) {
@@ -1937,9 +1950,27 @@ struct server_context {
                                     auto prefix_tokens = tokenize(slot.params.input_prefix, false, false);
                                     auto suffix_tokens = tokenize(slot.params.input_suffix, false, false);
 
-                                    // for now pick context to fit in a single batch (ratio prefix:suffix = 3:1, TODO: configurable?)
-                                    const int n_suffix_take = std::min<int>(suffix_tokens.size(), n_batch/4);
+                                    slot.extra_tokens.clear();
+                                    for (const auto & e : slot.params.extra_context) {
+                                        if (e.is_string()) {
+                                            // chunk separator in binary form to avoid confusing the AI
+                                            static const char k_chunk_prefix_str[] = {0x0a, 0x0a, 0x2d, 0x2d, 0x2d, 0x20, 0x73, 0x6e, 0x69, 0x70, 0x70, 0x65, 0x74, 0x20, 0x2d, 0x2d, 0x2d, 0x0a, 0x0a, 0x00};
+                                            static const auto k_chunk_prefix_tokens = tokenize(k_chunk_prefix_str, false, false);
+                                            slot.extra_tokens.insert(slot.extra_tokens.end(), k_chunk_prefix_tokens.begin(), k_chunk_prefix_tokens.end());
+
+                                            const auto part = tokenize(e, false, false);
+                                            slot.extra_tokens.insert(slot.extra_tokens.end(), part.begin(), part.end());
+                                        } else {
+                                            SLT_WRN(slot, "%s", "extra context element is not a string\n");
+                                        }
+                                    }
+
+                                    // for now pick FIM context to fit in a batch (ratio prefix:suffix = 3:1, TODO: configurable?)
+                                    const int n_suffix_take = std::min<int>(suffix_tokens.size(), (n_batch)/4);
                                     const int n_prefix_take = std::min<int>(prefix_tokens.size(), (n_batch - 3) - n_suffix_take);
+
+                                    // fill the rest of the context with extra chunks
+                                    const int n_extra_take = std::min<int>(std::max<int>(0, slot.n_ctx - (n_batch) - 2*slot.n_predict), slot.extra_tokens.size());
 
                                     prefix_tokens.erase(prefix_tokens.begin(), prefix_tokens.begin() + prefix_tokens.size() - n_prefix_take);
                                     suffix_tokens.resize(n_suffix_take);
@@ -1953,6 +1984,11 @@ struct server_context {
                                     if (llama_add_bos_token(model)) {
                                         embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
                                     }
+
+                                    SLT_DBG(slot, "extra: n_ctx = %d, n_extra_take = %d, n_extra = %d\n", slot.n_ctx, n_extra_take, (int) slot.extra_tokens.size());
+
+                                    // put the extra context before the FIM prefix
+                                    embd_inp.insert(embd_inp.begin(), slot.extra_tokens.end() - n_extra_take, slot.extra_tokens.end());
 
                                     embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
                                     embd_inp.push_back(llama_token_fim_mid(model));
