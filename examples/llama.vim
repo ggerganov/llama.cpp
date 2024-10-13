@@ -178,7 +178,7 @@ function! s:pick_chunk(text, no_mod, do_evict)
         let l:chunk = a:text[l:l0:l:l1]
     endif
 
-    let l:chunk_str = join(l:chunk, "\n")
+    let l:chunk_str = join(l:chunk, "\n") . "\n"
 
     " check if this chunk is already added
     let l:exist = v:false
@@ -209,12 +209,16 @@ function! s:pick_chunk(text, no_mod, do_evict)
         call remove(s:ring_chunks, 0)
     endif
 
-    call add(s:ring_chunks, {'data': l:chunk, 'str': l:chunk_str, 'time': reltime()})
+    call add(s:ring_chunks, {'data': l:chunk, 'str': l:chunk_str, 'time': reltime(), 'filename': expand('%')})
 
     " send asynchronous job with the new extra context so that it is ready for the next FIM
     let l:extra_context = []
     for l:chunk in s:ring_chunks
-        call add(l:extra_context, l:chunk.str)
+        call add(l:extra_context, {
+            \ 'text':     l:chunk.str,
+            \ 'time':     l:chunk.time,
+            \ 'filename': l:chunk.filename
+            \ })
     endfor
 
     let l:request = json_encode({
@@ -277,10 +281,14 @@ function! llama#fim(is_auto) abort
         \ . join(l:lines_suffix, "\n")
         \ . "\n"
 
-    " array of strings
+    " prepare the extra context data
     let l:extra_context = []
     for l:chunk in s:ring_chunks
-        call add(l:extra_context, l:chunk.str)
+        call add(l:extra_context, {
+            \ 'text':     l:chunk.str,
+            \ 'time':     l:chunk.time,
+            \ 'filename': l:chunk.filename
+            \ })
     endfor
 
     let l:request = json_encode({
