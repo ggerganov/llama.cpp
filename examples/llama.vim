@@ -70,11 +70,11 @@ let s:default_config = {
     \ 'n_suffix':         128,
     \ 'n_predict':        64,
     \ 't_max_prompt_ms':  500,
-    \ 't_max_predict_ms': 200,
+    \ 't_max_predict_ms': 500,
     \ 'show_info':        2,
     \ 'auto_fim':         v:true,
     \ 'max_line_suffix':  8,
-    \ 'ring_n_chunks':    32,
+    \ 'ring_n_chunks':    16,
     \ 'ring_chunk_size':  128,
     \ 'ring_scope':       1024,
     \ }
