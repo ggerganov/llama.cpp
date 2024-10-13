@@ -524,8 +524,29 @@ Takes a prefix and a suffix and returns the predicted completion as stream.
 
 - `input_prefix`: Set the prefix of the code to infill.
 - `input_suffix`: Set the suffix of the code to infill.
+- `prompt`: Added after the `FIM_MID` token
+- `extra_context`: Additional context inserted before the FIM prefix. See https://github.com/ggerganov/llama.cpp/pull/9874
 
 It also accepts all the options of `/completion`.
+
+If the model has `FIM_REPO` and `FIM_FILE_SEP` tokens, the [repo-level pattern](https://arxiv.org/pdf/2409.12186) is used:
+
+```txt
+<FIM_REP>myproject
+<FIM_SEP>{chunk 0 filename}
+{chunk 0 text}
+<FIM_SEP>{chunk 1 filename}
+{chunk 1 text}
+...
+<FIM_SEP>filename
+<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
+
+If the tokens are missing, then the extra context is simply prefixed at the start:
+
+```txt
+[extra_context]<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
 
 ### **GET** `/props`: Get server global properties.
 
