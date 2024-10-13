@@ -277,7 +277,8 @@ struct common_params {
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
-    int     n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
+    int32_t n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
+    int32_t n_cache_reuse  = 0;            // min chunk size to reuse from the cache via KV shifting
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT
