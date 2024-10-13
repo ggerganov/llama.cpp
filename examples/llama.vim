@@ -120,7 +120,9 @@ function! llama#init()
 
         autocmd TextYankPost   * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false) | endif
 
+        " gather chunks upon entering/leaving a buffer
         autocmd BufEnter       * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true)})
+        autocmd BufLeave       * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true)
     augroup END
 
     silent! call llama#fim_cancel()
@@ -146,6 +148,7 @@ function! s:pick_chunk(text, no_mod)
     endif
 
     " check if this chunk is already added
+    " TODO: smarter check for string similarity to evict old chunks that are very similart to the new one
     let l:exist = v:false
     for i in range(len(s:ring_n_chunks))
         if s:ring_n_chunks[i] == l:chunk
@@ -204,7 +207,7 @@ function! llama#fim(is_auto) abort
         " pick a prefix chunk
         call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false)
 
-        "" pick a suffix chunk
+        " pick a suffix chunk
         call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false)
 
         let s:pos_y_pick = s:pos_y
