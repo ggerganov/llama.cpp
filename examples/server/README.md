@@ -524,6 +524,12 @@ Takes a prefix and a suffix and returns the predicted completion as stream.
 
 - `input_prefix`: Set the prefix of the code to infill.
 - `input_suffix`: Set the suffix of the code to infill.
+- `prompt`: Added after the `FIM_MID` token
+- `extra_context`: Additional context inserted before the FIM prefix. See https://github.com/ggerganov/llama.cpp/pull/9874
+
+```txt
+[extra_context]<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
 
 It also accepts all the options of `/completion`.
 
