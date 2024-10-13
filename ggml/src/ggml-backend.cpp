@@ -24,6 +24,8 @@
 #ifdef __APPLE__
 #include <sys/types.h>
 #include <sys/sysctl.h>
+#include <mach/mach.h>
+#include <TargetConditionals.h>
 #endif
 
 
@@ -770,12 +772,21 @@ static const char * ggml_backend_cpu_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+#ifdef TARGET_OS_OSX
+    void * data = NULL;
+    kern_return_t alloc_status = vm_allocate((vm_map_t) mach_task_self(), (vm_address_t *) &data, size, VM_FLAGS_ANYWHERE);
+    if (alloc_status != KERN_SUCCESS) {
+        GGML_LOG_ERROR("%s: failed to allocate buffer using vm_allocate with size %zu\n", __func__, size);
+        return NULL;
+    }
+#else
     size += TENSOR_ALIGNMENT;   // malloc may return an address that is not aligned
     void * data = malloc(size); // TODO: use GGML_ALIGNED_MALLOC (move to ggml-impl.h)
     if (data == NULL) {
         GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, size);
         return NULL;
     }
+#endif
 
     return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, size);
 }
