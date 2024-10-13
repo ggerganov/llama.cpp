@@ -71,7 +71,7 @@ let s:default_config = {
     \ 'show_info':        2,
     \ 'auto_fim':         v:true,
     \ 'ring_n_chunks':    32,
-    \ 'ring_chunk_size':  64,
+    \ 'ring_chunk_size':  128,
     \ 'ring_scope':       1024,
     \ }
 
@@ -119,11 +119,11 @@ function! llama#init()
 
         autocmd CursorMoved    * call llama#fim_cancel()
 
-        autocmd TextYankPost   * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false) | endif
+        autocmd TextYankPost   * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false, v:true) | endif
 
         " gather chunks upon entering/leaving a buffer
-        autocmd BufEnter       * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true)})
-        autocmd BufLeave       * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true)
+        autocmd BufEnter       * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)})
+        autocmd BufLeave       * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
     augroup END
 
     silent! call llama#fim_cancel()
@@ -148,7 +148,7 @@ function! s:chunk_sim(c0, c1)
     return 2.0 * l:common / (l:lines0 + l:lines1)
 endfunction
 
-function! s:pick_chunk(text, no_mod)
+function! s:pick_chunk(text, no_mod, do_evict)
     " do not pick chunks from buffers with pending changes or buffers that are not files
     if a:no_mod && (getbufvar(bufnr('%'), '&modified') || !buflisted(bufnr('%')) || !filereadable(expand('%')))
         return
@@ -165,8 +165,8 @@ function! s:pick_chunk(text, no_mod)
     if len(a:text) + 1 < g:llama_config.ring_chunk_size
         let l:chunk = a:text
     else
-        let l:l0 = s:rand(0, max([0, len(a:text) - g:llama_config.ring_chunk_size]))
-        let l:l1 = min([l:l0 + g:llama_config.ring_chunk_size, len(a:text)])
+        let l:l0 = s:rand(0, max([0, len(a:text) - g:llama_config.ring_chunk_size/2]))
+        let l:l1 = min([l:l0 + g:llama_config.ring_chunk_size/2, len(a:text)])
 
         let l:chunk = a:text[l:l0:l:l1]
     endif
@@ -189,8 +189,12 @@ function! s:pick_chunk(text, no_mod)
     " evict chunks that are very similar to the new one
     for i in range(len(s:ring_chunks) - 1, 0, -1)
         if s:chunk_sim(s:ring_chunks[i].data, l:chunk) > 0.9
-            call remove(s:ring_chunks, i)
-            let s:ring_n_evict += 1
+            if a:do_evict
+                call remove(s:ring_chunks, i)
+                let s:ring_n_evict += 1
+            else
+                return
+            endif
         endif
     endfor
 
@@ -237,11 +241,12 @@ function! llama#fim(is_auto) abort
 
     " only gather chunks if the cursor has moved a lot
     if a:is_auto && l:delta_y > 32
-        " pick a prefix chunk
-        call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false)
-
-        " pick a suffix chunk
-        call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false)
+        " randomly pick a prefix or a suffix chunk
+        if s:rand(0, 1)
+            call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
+        else
+            call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false, v:false)
+        endif
 
         let s:pos_y_pick = s:pos_y
     endif
