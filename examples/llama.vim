@@ -17,7 +17,7 @@
 "
 " start the llama.cpp server with a FIM-compatible model. for example:
 "
-"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa --ubatch-size 1024 --batch-size 2048
+"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa --ubatch-size 1024 --batch-size 2048 --cache-reuse 512
 "
 "   --batch-size [512, model max context]
 "
