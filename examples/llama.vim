@@ -38,26 +38,48 @@
 highlight llama_hl_hint guifg=#ff772f
 highlight llama_hl_info guifg=#77ff2f
 
-" endpoint:         llama.cpp server endpoint
-" n_prefix:         number of lines before the cursor location to include in the prefix
-" n_suffix:         number of lines after  the cursor location to include in the suffix
-" n_predict:        max number of tokens to predict
-" t_max_prompt_ms:  max alloted time for the prompt generation (TODO: not yet supported)
-" t_max_predict_ms: max alloted time for the prediction
-" show_info:        show extra info about the inference
-" auto_fim:         trigger FIM completion automatically on cursor movement
+" general parameters:
+"
+"   endpoint:         llama.cpp server endpoint
+"   n_prefix:         number of lines before the cursor location to include in the prefix
+"   n_suffix:         number of lines after  the cursor location to include in the suffix
+"   n_predict:        max number of tokens to predict
+"   t_max_prompt_ms:  max alloted time for the prompt generation (TODO: not yet supported)
+"   t_max_predict_ms: max alloted time for the prediction
+"   show_info:        show extra info about the inference (0 - disabled, 1 - statusline, 2 - inline)
+"   auto_fim:         trigger FIM completion automatically on cursor movement
+"
+" ring buffer of chunks, accumulated with time upon:
+"
+"  - completion request
+"  - yank
+"  - reading a file
+"
+" ring context parameters:
+"
+"   ring_n_chunks:    max number of chunks to pass as extra context to the server (0 to disable)
+"   ring_chunk_size:  max size of the chunks (in number of lines)
+"   ring_scope:       the range around the cursor position (in number of lines) for gathering chunks
+"
 let s:default_config = {
     \ 'endpoint':         'http://127.0.0.1:8012/infill',
-    \ 'n_prefix':         256,
-    \ 'n_suffix':         256,
+    \ 'n_prefix':         128,
+    \ 'n_suffix':         128,
     \ 'n_predict':        64,
     \ 't_max_prompt_ms':  500,
     \ 't_max_predict_ms': 200,
-    \ 'show_info':        v:true,
+    \ 'show_info':        2,
     \ 'auto_fim':         v:true,
+    \ 'ring_n_chunks':    32,
+    \ 'ring_chunk_size':  64,
+    \ 'ring_scope':       1024,
     \ }
 
 let g:llama_config = get(g:, 'llama_config', s:default_config)
+
+function! s:rand(i0, i1) abort
+    return a:i0 + rand() % (a:i1 - a:i0 + 1)
+endfunction
 
 function! llama#init()
     if !executable('curl')
@@ -76,6 +98,9 @@ function! llama#init()
     let s:line_cur_prefix = ''
     let s:line_cur_suffix = ''
 
+    let s:ring_n_chunks = []
+
+    let s:pos_y_pick = -9999 " last y where we picked a chunk
     let s:pos_dx = 0
     let s:content = []
     let s:can_accept = v:false
@@ -91,10 +116,53 @@ function! llama#init()
         autocmd InsertEnter    * inoremap <buffer> <silent> <C-F> <C-O>:call llama#fim(v:false)<CR>
         autocmd InsertLeavePre * call llama#fim_cancel()
 
-        autocmd CursorMoved * call llama#fim_cancel()
+        autocmd CursorMoved    * call llama#fim_cancel()
+
+        autocmd TextYankPost   * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false) | endif
+
+        autocmd BufEnter       * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true)})
     augroup END
 
     silent! call llama#fim_cancel()
+endfunction
+
+function! s:pick_chunk(text, no_mod)
+    " do not pick chunks from buffers with pending changes or buffers that are not files
+    if a:no_mod && (getbufvar(bufnr('%'), '&modified') || !buflisted(bufnr('%')) || !filereadable(expand('%')))
+        return
+    endif
+
+    if g:llama_config.ring_n_chunks <= 0
+        return
+    endif
+
+    if len(a:text) + 1 < g:llama_config.ring_chunk_size
+        let l:chunk = join(a:text, "\n")
+    else
+        let l:l0 = s:rand(0, len(a:text) - g:llama_config.ring_chunk_size)
+        let l:l1 = l:l0 + g:llama_config.ring_chunk_size
+
+        let l:chunk = join(a:text[l:l0:l:l1], "\n")
+    endif
+
+    " check if this chunk is already added
+    let l:exist = v:false
+    for i in range(len(s:ring_n_chunks))
+        if s:ring_n_chunks[i] == l:chunk
+            let l:exist = v:true
+            break
+        endif
+    endfor
+
+    if l:exist
+        return
+    endif
+
+    if len(s:ring_n_chunks) == g:llama_config.ring_n_chunks
+        call remove(s:ring_n_chunks, 0)
+    endif
+
+    call add(s:ring_n_chunks, l:chunk)
 endfunction
 
 function! llama#fim(is_auto) abort
@@ -128,6 +196,20 @@ function! llama#fim(is_auto) abort
         \ . join(l:lines_suffix, "\n")
         \ . "\n"
 
+    " TODO: per-file location
+    let l:delta_y = abs(s:pos_y - s:pos_y_pick)
+
+    " only gather chunks if the cursor has moved a lot
+    if a:is_auto && l:delta_y > 32
+        " pick a prefix chunk
+        call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false)
+
+        "" pick a suffix chunk
+        call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false)
+
+        let s:pos_y_pick = s:pos_y
+    endif
+
     let l:request = json_encode({
         \ 'prompt':           "",
         \ 'input_prefix':     l:prefix,
@@ -137,7 +219,8 @@ function! llama#fim(is_auto) abort
         \ 'top_k':            100,
         \ 'stream':           v:false,
         \ 'samplers':         ["top_k", "infill"],
-       "\ 'cache_prompt':     v:true,
+        \ 'cache_prompt':     v:true,
+        \ 'extra_context':    s:ring_n_chunks,
         \ 't_max_prompt_ms':  g:llama_config.t_max_prompt_ms,
         \ 't_max_predict_ms': g:llama_config.t_max_predict_ms
         \ })
@@ -235,6 +318,7 @@ function! s:fim_auto()
         call jobstop(s:current_job)
     endif
 
+    " TODO: when job cancellation is implemented on the server, reduce these timeouts
     if reltimefloat(reltime(s:t_fim_last)) < 500*0.001
         if s:timer_fim != -1
             call timer_stop(s:timer_fim)
@@ -284,6 +368,11 @@ function! s:fim_on_stdout(job_id, data, event) dict
             call remove(s:content, -1)
         endwhile
 
+        let l:generation_settings = get(l:response, 'generation_settings', {})
+        let l:n_ctx = get(l:generation_settings, 'n_ctx', 0)
+
+        let l:n_cached = get(l:response, 'tokens_cached', 0)
+
         " if response.timings is available
         if len(get(l:response, 'timings', {})) > 0
             let l:has_info = v:true
@@ -322,21 +411,26 @@ function! s:fim_on_stdout(job_id, data, event) dict
     let l:id_vt_info = nvim_create_namespace('vt_info')
 
     " construct the info message and display it to the right of the current line
-    if g:llama_config.show_info && l:has_info
+    if g:llama_config.show_info > 0 && l:has_info
         " prefix the info string with whitespace in order to offset it to the right of the fim overlay
         let l:prefix = repeat(' ', len(s:content[0]) - len(s:line_cur_suffix) + 3)
 
-        let l:info = printf("%s | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
-            \ l:prefix,
+        let l:info = printf("%s | context: %d / %d | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
+            \ g:llama_config.show_info == 2 ? l:prefix : '',
+            \ l:n_cached,  l:n_ctx,
             \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
             \ l:n_predict, l:t_predict_ms, l:s_predict,
             \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
             \ )
 
-        call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, s:pos_y - 1, s:pos_x - 1, {
-            \ 'virt_text': [[l:info, 'llama_hl_info']],
-            \ 'virt_text_pos': 'eol',
-            \ })
+        if g:llama_config.show_info == 1
+            let &statusline = l:info
+        elseif g:llama_config.show_info == 2
+            call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, s:pos_y - 1, s:pos_x - 1, {
+                \ 'virt_text': [[l:info, 'llama_hl_info']],
+                \ 'virt_text_pos': 'eol',
+                \ })
+        endif
     endif
 
     " display the suggestion
