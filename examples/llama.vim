@@ -48,6 +48,7 @@ highlight llama_hl_info guifg=#77ff2f
 "   t_max_predict_ms: max alloted time for the prediction
 "   show_info:        show extra info about the inference (0 - disabled, 1 - statusline, 2 - inline)
 "   auto_fim:         trigger FIM completion automatically on cursor movement
+"   max_line_suffix:  do not auto-trigger FIM completion if there are more than this number of characters to the right of the cursor
 "
 " ring buffer of chunks, accumulated with time upon:
 "
@@ -70,6 +71,7 @@ let s:default_config = {
     \ 't_max_predict_ms': 200,
     \ 'show_info':        2,
     \ 'auto_fim':         v:true,
+    \ 'max_line_suffix':  8,
     \ 'ring_n_chunks':    32,
     \ 'ring_chunk_size':  128,
     \ 'ring_scope':       1024,
@@ -124,6 +126,9 @@ function! llama#init()
         " gather chunks upon entering/leaving a buffer
         autocmd BufEnter       * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)})
         autocmd BufLeave       * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
+
+        " gather chunk upon saving the file
+        autocmd BufWritePost   * call s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
     augroup END
 
     silent! call llama#fim_cancel()
@@ -224,6 +229,10 @@ function! llama#fim(is_auto) abort
 
     let s:line_cur_prefix = strpart(s:line_cur, 0, s:pos_x0)
     let s:line_cur_suffix = strpart(s:line_cur, s:pos_x0)
+
+    if a:is_auto && len(s:line_cur_suffix) > g:llama_config.max_line_suffix
+        return
+    endif
 
     let l:prefix = ""
         \ . join(l:lines_prefix, "\n")
