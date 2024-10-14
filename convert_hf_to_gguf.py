@@ -331,10 +331,10 @@ class Model:
                     data_torch = torch.from_numpy(data.reshape(old_shape))
                     if self.ftype == gguf.LlamaFileType.MOSTLY_F16:
                         data_torch = data_torch.to(torch.float16)
-        else:
-            return self.modify_tensors(data_torch, name, bid)
 
-        return [(self.map_tensor_name(name), data_torch)]
+                return [(self.map_tensor_name(name), data_torch)]
+
+        return self.modify_tensors(data_torch, name, bid)
 
     def tensor_force_quant(self, name: str, new_name: str, bid: int | None, n_dims: int) -> gguf.GGMLQuantizationType | bool:
         del name, new_name, bid, n_dims  # unused
