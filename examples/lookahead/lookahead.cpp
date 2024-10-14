@@ -89,8 +89,8 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt
-    llama_decode(ctx, llama_batch_get_one( inp.data(), n_input - 1, 0,           0));
-    llama_decode(ctx, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0));
+    llama_decode(ctx, llama_batch_get_one( inp.data(), n_input - 1));
+    llama_decode(ctx, llama_batch_get_one(&inp.back(),           1));
 
     for (int s = 1; s < W + G + 1; ++s) {
         llama_kv_cache_seq_cp(ctx, 0, s, -1, -1);

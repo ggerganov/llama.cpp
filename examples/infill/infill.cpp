@@ -376,7 +376,7 @@ int main(int argc, char ** argv) {
                     n_past, n_left, n_ctx, params.n_keep, n_discard);
 
                 llama_kv_cache_seq_rm (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
-                llama_kv_cache_seq_add(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
+                llama_kv_cache_seq_add(ctx, 0, params.n_keep + 1 + n_discard, n_past + 1,    -n_discard);
 
                 n_past -= n_discard;
 
@@ -396,7 +396,7 @@ int main(int argc, char ** argv) {
 
                 LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
 
-                if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
+                if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval))) {
                     LOG_ERR("%s : failed to eval\n", __func__);
                     return 1;
                 }
