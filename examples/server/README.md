@@ -147,6 +147,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--ssl-cert-file FNAME` | path to file a PEM-encoded SSL certificate<br/>(env: LLAMA_ARG_SSL_CERT_FILE) |
 | `-to, --timeout N` | server read/write timeout in seconds (default: 600)<br/>(env: LLAMA_ARG_TIMEOUT) |
 | `--threads-http N` | number of threads used to process HTTP requests (default: -1)<br/>(env: LLAMA_ARG_THREADS_HTTP) |
+| `--cache-reuse N` | min chunk size to attempt reusing from the cache via KV shifting (default: 0)<br/>(env: LLAMA_ARG_CACHE_REUSE) |
 | `--metrics` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
 | `--slots` | enable slots monitoring endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_SLOTS) |
 | `--props` | enable changing global properties via POST /props (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_PROPS) |
@@ -523,8 +524,29 @@ Takes a prefix and a suffix and returns the predicted completion as stream.
 
 - `input_prefix`: Set the prefix of the code to infill.
 - `input_suffix`: Set the suffix of the code to infill.
+- `prompt`: Added after the `FIM_MID` token
+- `extra_context`: Additional context inserted before the FIM prefix. See https://github.com/ggerganov/llama.cpp/pull/9874
 
 It also accepts all the options of `/completion`.
+
+If the model has `FIM_REPO` and `FIM_FILE_SEP` tokens, the [repo-level pattern](https://arxiv.org/pdf/2409.12186) is used:
+
+```txt
+<FIM_REP>myproject
+<FIM_SEP>{chunk 0 filename}
+{chunk 0 text}
+<FIM_SEP>{chunk 1 filename}
+{chunk 1 text}
+...
+<FIM_SEP>filename
+<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
+
+If the tokens are missing, then the extra context is simply prefixed at the start:
+
+```txt
+[extra_context]<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
 
 ### **GET** `/props`: Get server global properties.
 
