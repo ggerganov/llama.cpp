@@ -387,7 +387,7 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
 
 void * ggml_aligned_malloc(size_t size) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
-    return _aligned_malloc(size, GGUF_DEFAULT_ALIGNMENT);
+    return _aligned_malloc(size, TENSOR_ALIGNMENT);
 #else
     if (size == 0) {
         GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
@@ -416,7 +416,7 @@ void * ggml_aligned_malloc(size_t size) {
 #elif GGML_USE_METAL
     int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
-    int result = posix_memalign(&aligned_memory, GGUF_DEFAULT_ALIGNMENT, size);
+    int result = posix_memalign(&aligned_memory, TENSOR_ALIGNMENT, size);
 #endif
     if (result != 0) {
         // Handle allocation failure
