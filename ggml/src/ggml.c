@@ -19554,9 +19554,10 @@ static void ggml_thread_cpumask_next(const bool * global_mask, bool * local_mask
 void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     if (!threadpool) return;
 
+    const int n_threads = threadpool->n_threads_max;
+    
 #ifndef GGML_USE_OPENMP
     struct ggml_compute_state* workers = threadpool->workers;
-    const int n_threads = threadpool->n_threads_max;
 
     ggml_mutex_lock(&threadpool->mutex);
 
