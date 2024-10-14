@@ -387,7 +387,7 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
 
 void * ggml_aligned_malloc(size_t size) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
-    return _aligned_malloc(size, GGML_MEM_ALIGN);
+    return _aligned_malloc(size, GGUF_DEFAULT_ALIGNMENT);
 #else
     if (size == 0) {
         GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
@@ -416,7 +416,7 @@ void * ggml_aligned_malloc(size_t size) {
 #elif GGML_USE_METAL
     int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
-    int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
+    int result = posix_memalign(&aligned_memory, GGUF_DEFAULT_ALIGNMENT, size);
 #endif
     if (result != 0) {
         // Handle allocation failure
@@ -442,11 +442,11 @@ void ggml_aligned_free(void * ptr, size_t size) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
     _aligned_free(ptr);
 #elif GGML_USE_CPU_HBM
-    if(ptr != NULL) {
+    if (ptr != NULL) {
         hbw_free(ptr);
     }
 #elif TARGET_OS_OSX
-    if(ptr != NULL) {
+    if (ptr != NULL) {
         vm_deallocate((vm_map_t)mach_task_self(), (vm_address_t)ptr, size);
     }
 #else
