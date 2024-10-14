@@ -19555,7 +19555,7 @@ void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     if (!threadpool) return;
 
     const int n_threads = threadpool->n_threads_max;
-    
+
 #ifndef GGML_USE_OPENMP
     struct ggml_compute_state* workers = threadpool->workers;
 
