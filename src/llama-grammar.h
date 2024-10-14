@@ -3,6 +3,7 @@
 #include "llama-impl.h"
 
 #include <map>
+#include <unordered_map>
 
 struct llama_vocab;
 
@@ -61,6 +62,18 @@ using llama_grammar_candidates = std::vector<llama_grammar_candidate>;
 const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar * grammar);
       llama_grammar_stacks & llama_grammar_get_stacks(      struct llama_grammar * grammar);
 
+struct VectorPointerHash {
+    size_t operator()(const llama_grammar_stack & v) const {
+        size_t seed = v.size();
+        for (const auto* ptr : v) {
+            seed ^= std::hash<const llama_grammar_element*>()(ptr) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+        return seed;
+    }
+};
+
+using llama_grammar_stacks_cache = std::unordered_map<llama_grammar_stack, llama_grammar_stacks, VectorPointerHash>;
+
 // takes a set of possible pushdown stacks on a grammar, which are required to
 // be positioned at a character range (see `llama_grammar_advance_stack`), and
 // produces the N possible stacks if the given char is accepted at those
@@ -69,7 +82,8 @@ void llama_grammar_accept(
         const llama_grammar_rules  & rules,
         const llama_grammar_stacks & stacks,
                           uint32_t   chr,
-              llama_grammar_stacks & stacks_new);
+              llama_grammar_stacks & stacks_new,
+              llama_grammar_stacks_cache & stacks_cache);
 
 std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_stack(
         const llama_grammar_rules      & rules,
