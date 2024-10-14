@@ -3,7 +3,22 @@ project("llama.cpp" C CXX)
 include(CheckIncludeFileCXX)
 
 #set(CMAKE_WARN_DEPRECATED YES)
-set(CMAKE_WARN_UNUSED_CLI YES)
+#set(CMAKE_WARN_UNUSED_CLI YES)
+
+#enable O3 flag
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-error")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
+
+#add lto
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
+#no warn
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -51,7 +66,7 @@ endif()
 #
 
 # debug
-option(LLAMA_ALL_WARNINGS           "llama: enable all compiler warnings"                   ON)
+option(LLAMA_ALL_WARNINGS           "llama: enable all compiler warnings"                   OFF)
 option(LLAMA_ALL_WARNINGS_3RD_PARTY "llama: enable all compiler warnings in 3rd party libs" OFF)
 
 # build
