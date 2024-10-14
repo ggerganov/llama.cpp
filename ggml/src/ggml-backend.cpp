@@ -24,7 +24,7 @@
 #ifdef __APPLE__
 #include <sys/types.h>
 #include <sys/sysctl.h>
-#include <mach/mach.h>
+#include <unistd.h>
 #include <TargetConditionals.h>
 #endif
 
@@ -772,11 +772,11 @@ static const char * ggml_backend_cpu_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-#ifdef TARGET_OS_OSX
+#if defined(GGML_USE_METAL) || defined(TARGET_OS_OSX)
     void * data = NULL;
-    kern_return_t alloc_status = vm_allocate((vm_map_t) mach_task_self(), (vm_address_t *) &data, size, VM_FLAGS_ANYWHERE);
-    if (alloc_status != KERN_SUCCESS) {
-        GGML_LOG_ERROR("%s: failed to allocate buffer using vm_allocate with size %zu\n", __func__, size);
+    int result = posix_memalign(&data, sysconf(_SC_PAGESIZE), size);
+    if (result != 0) {
+        GGML_LOG_ERROR("%s: failed to allocate buffer using posix_memalign with size %zu\n", __func__, size);
         return NULL;
     }
 #else
