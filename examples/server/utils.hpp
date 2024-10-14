@@ -360,9 +360,9 @@ static json oaicompat_completion_params_parse(
 
     // Handle "logprobs" field
     // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
-    if (body.contains("logprobs")) {
+    if (json_value(body, "logprobs", false)) {
         llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
-    } else if (body.contains("top_logprobs")) {
+    } else if (body.contains("top_logprobs") && !body.at("top_logprobs").is_null()) {
         throw std::runtime_error("top_logprobs requires logprobs to be set to true");
     }
 
