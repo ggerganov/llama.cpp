@@ -438,6 +438,7 @@ void * ggml_aligned_malloc(size_t size) {
 }
 
 void ggml_aligned_free(void * ptr, size_t size) {
+    GGML_UNUSED(size);
 #if defined(_MSC_VER) || defined(__MINGW32__)
     _aligned_free(ptr);
 #elif GGML_USE_CPU_HBM
