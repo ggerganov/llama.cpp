@@ -196,6 +196,11 @@ struct ggml_cgraph {
 
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);
 
+// Memory allocation
+
+void * ggml_aligned_malloc(size_t size);
+void ggml_aligned_free(void * ptr, size_t size);
+
 #ifdef __cplusplus
 }
 #endif

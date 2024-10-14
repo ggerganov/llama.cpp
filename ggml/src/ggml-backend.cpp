@@ -702,7 +702,7 @@ static void * ggml_backend_cpu_buffer_get_base(ggml_backend_buffer_t buffer) {
 }
 
 static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    GGML_ALIGNED_FREE(buffer->context, buffer->size);
+    ggml_aligned_free(buffer->context, buffer->size);
 }
 
 static void ggml_backend_cpu_buffer_memset_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
@@ -770,7 +770,7 @@ static const char * ggml_backend_cpu_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    void * data = GGML_ALIGNED_MALLOC(size);
+    void * data = ggml_aligned_malloc(size);
 
     if (data == NULL) {
         GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, size);
