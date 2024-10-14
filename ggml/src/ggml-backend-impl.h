@@ -266,15 +266,12 @@ inline static void * ggml_aligned_malloc(size_t size) {
         case KERN_SUCCESS:
             result = 0;
             break;
-        
         case KERN_INVALID_ADDRESS:
             result = EINVAL;
             break;
-
         case KERN_NO_SPACE:
             result = ENOMEM;
             break;
-
         default:
             result = EFAULT;
             break;
