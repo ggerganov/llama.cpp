@@ -95,7 +95,6 @@ function! llama#init()
 
     let s:pos_x  = 0 " cursor position upon start of completion
     let s:pos_y  = 0
-    let s:pos_x0 = 0 " pos_x corrected for end-of-line edge case
 
     let s:line_cur = ''
 
@@ -105,32 +104,40 @@ function! llama#init()
     let s:ring_chunks = []
     let s:ring_n_evict = 0
 
+    let s:hint_shown = v:false
     let s:pos_y_pick = -9999 " last y where we picked a chunk
     let s:pos_dx = 0
     let s:content = []
     let s:can_accept = v:false
 
-    let s:timer_fim = -1
-    let s:t_fim_last  = reltime()
-    let s:t_fim_start = reltime()
+    let s:t_fim_start = reltime() " used to measure total FIM time
 
     let s:current_job = v:null
 
     augroup llama
         autocmd!
-        autocmd InsertEnter    * inoremap <buffer> <silent> <C-F> <C-O>:call llama#fim(v:false)<CR>
-        autocmd InsertLeavePre * call llama#fim_cancel()
+        autocmd InsertEnter     * inoremap <buffer> <silent> <C-F> <Esc>a
+        autocmd InsertLeavePre  * call llama#fim_cancel()
 
-        autocmd CursorMoved    * call llama#fim_cancel()
+        autocmd CursorMoved     * call llama#fim_cancel()
+        autocmd CompleteChanged * call llama#fim_cancel()
 
-        autocmd TextYankPost   * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false, v:true) | endif
+        if g:llama_config.auto_fim
+            autocmd InsertEnter  * call llama#fim(v:true, v:false)
+            autocmd CursorMovedI * call llama#fim(v:true, v:false)
+            autocmd CursorHoldI  * call llama#fim(v:true, v:true)
+        else
+            autocmd CursorMovedI * call llama#fim_cancel()
+        endif
+
+        autocmd TextYankPost    * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false, v:true) | endif
 
         " gather chunks upon entering/leaving a buffer
-        autocmd BufEnter       * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)})
-        autocmd BufLeave       * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
+        autocmd BufEnter        * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)})
+        autocmd BufLeave        * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
 
         " gather chunk upon saving the file
-        autocmd BufWritePost   * call s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
+        autocmd BufWritePost    * call s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
     augroup END
 
     silent! call llama#fim_cancel()
@@ -241,18 +248,27 @@ function! s:pick_chunk(text, no_mod, do_evict)
         \ g:llama_config.endpoint, shellescape(l:request)
         \ )
 
-    call jobstart(l:curl_command, {
-        \ 'on_exit':   function('s:fim_on_exit')
-        \ })
+    call jobstart(l:curl_command, {})
 endfunction
 
-function! llama#fim(is_auto) abort
+function! llama#fim(is_auto, on_hold) abort
+    if a:on_hold && s:hint_shown
+        return
+    endif
+
+    call llama#fim_cancel()
+
+    if reltimefloat(reltime(s:t_fim_start)) < 0.5
+        let s:t_fim_start = reltime()
+        return
+    endif
+
     let s:t_fim_start = reltime()
 
     let s:content = []
     let s:can_accept = v:false
 
-    let s:pos_x = col('.')
+    let s:pos_x = col('.') - 1
     let s:pos_y = line('.')
     let l:max_y = line('$')
 
@@ -261,10 +277,8 @@ function! llama#fim(is_auto) abort
 
     let s:line_cur = getline('.')
 
-    let s:pos_x0 = s:pos_x == len(s:line_cur) ? s:pos_x : s:pos_x - 1
-
-    let s:line_cur_prefix = strpart(s:line_cur, 0, s:pos_x0)
-    let s:line_cur_suffix = strpart(s:line_cur, s:pos_x0)
+    let s:line_cur_prefix = strpart(s:line_cur, 0, s:pos_x)
+    let s:line_cur_suffix = strpart(s:line_cur, s:pos_x)
 
     if a:is_auto && len(s:line_cur_suffix) > g:llama_config.max_line_suffix
         return
@@ -311,11 +325,17 @@ function! llama#fim(is_auto) abort
         \ g:llama_config.endpoint, shellescape(l:request)
         \ )
 
+    if s:current_job != v:null
+        call jobstop(s:current_job)
+    endif
+
     " send the request asynchronously
     let s:current_job = jobstart(l:curl_command, {
         \ 'on_stdout': function('s:fim_on_stdout'),
         \ 'on_exit':   function('s:fim_on_exit'),
         \ 'stdout_buffered': v:true,
+        \ 'pos_x': s:pos_x,
+        \ 'pos_y': s:pos_y,
         \ 'is_auto': a:is_auto
         \ })
 
@@ -333,24 +353,13 @@ function! llama#fim(is_auto) abort
 
         let s:pos_y_pick = s:pos_y
     endif
-
-    " this trick is needed to avoid the cursor shifting upon C-O when at the end of the line
-    if !a:is_auto
-        augroup llama_insert
-            autocmd!
-        augroup END
-
-        if g:llama_config.auto_fim
-            call timer_start(0, {-> s:fim_auto_enable()})
-        endif
-    endif
 endfunction
 
 " if first_line == v:true accept only the first line of the response
 function! llama#fim_accept(first_line)
     " insert the suggestion at the cursor location
     if s:can_accept && len(s:content) > 0
-        call setline(s:pos_y, s:line_cur[:(s:pos_x0 - 1)] . s:content[0])
+        call setline(s:pos_y, s:line_cur[:(s:pos_x - 1)] . s:content[0])
         if len(s:content) > 1
             if !a:first_line
                 call append(s:pos_y, s:content[1:-1])
@@ -361,7 +370,7 @@ function! llama#fim_accept(first_line)
         if !a:first_line
             call cursor(s:pos_y + len(s:content) - 1, s:pos_x + s:pos_dx)
         else
-            call cursor(s:pos_y, s:pos_x + len(s:content[0]) - 1)
+            call cursor(s:pos_y, s:pos_x + len(s:content[0]))
         endif
     endif
 
@@ -369,14 +378,7 @@ function! llama#fim_accept(first_line)
 endfunction
 
 function! llama#fim_cancel()
-    if s:current_job != v:null
-        call jobstop(s:current_job)
-    endif
-
-    if s:timer_fim != -1
-        call timer_stop(s:timer_fim)
-        let s:timer_fim = -1
-    endif
+    let s:hint_shown = v:false
 
     " clear the virtual text
     let l:bufnr = bufnr('%')
@@ -391,39 +393,6 @@ function! llama#fim_cancel()
     silent! iunmap <buffer> <Tab>
     silent! iunmap <buffer> <S-Tab>
     silent! iunmap <buffer> <Esc>
-
-    augroup llama_insert
-        autocmd!
-    augroup END
-
-    if g:llama_config.auto_fim
-        call s:fim_auto_enable()
-    endif
-endfunction
-
-function! s:fim_auto_enable()
-    augroup llama_insert
-        autocmd CursorMovedI * call s:fim_auto()
-    augroup END
-endfunction
-
-" auto-start a fim job a short time after the cursor has moved
-" if there is already a job queued - cancel it
-function! s:fim_auto()
-    if s:current_job != v:null
-        call jobstop(s:current_job)
-    endif
-
-    " TODO: when job cancellation is implemented on the server, reduce these timeouts
-    if reltimefloat(reltime(s:t_fim_last)) < 500*0.001
-        if s:timer_fim != -1
-            call timer_stop(s:timer_fim)
-            let s:timer_fim = -1
-        endif
-    endif
-
-    let s:t_fim_last = reltime()
-    let s:timer_fim = timer_start(500, {-> llama#fim(v:true)})
 endfunction
 
 " callback that processes the result from the server
@@ -432,6 +401,13 @@ function! s:fim_on_stdout(job_id, data, event) dict
     if len(l:raw) == 0
         return
     endif
+
+    if self.pos_x != col('.') - 1 || self.pos_y != line('.')
+        return
+    endif
+
+    let s:pos_x = self.pos_x
+    let s:pos_y = self.pos_y
 
     let s:can_accept = v:true
     let l:has_info   = v:false
@@ -559,10 +535,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
     inoremap <buffer> <Tab>   <C-O>:call llama#fim_accept(v:false)<CR>
     inoremap <buffer> <S-Tab> <C-O>:call llama#fim_accept(v:true)<CR>
 
-    augroup llama_insert
-        autocmd!
-        autocmd CursorMovedI * call llama#fim_cancel()
-    augroup END
+    let s:hint_shown = v:true
 endfunction
 
 function! s:fim_on_exit(job_id, exit_code, event) dict
