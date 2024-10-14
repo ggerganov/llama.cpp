@@ -1085,8 +1085,8 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
         return;
     }
 
-    std::uniform_real_distribution<float> distance(0.0f, 1.0f);
-    float chance = distance(ctx->rng);
+    std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+    float chance = distribution(ctx->rng);
     if (chance > ctx->probability) return;
 
     // in case it's not sorted/recalculated yet

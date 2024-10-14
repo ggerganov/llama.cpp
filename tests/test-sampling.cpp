@@ -285,7 +285,7 @@ static void bench(llama_sampler * cnstr, const char * cnstr_name, const std::vec
     }
     const int64_t t_end = ggml_time_us();
     llama_sampler_free(cnstr);
-    printf("%-47s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
+    printf("%-43s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
 }
 
 #define BENCH(__cnstr, __data, __n_iter) bench((__cnstr), #__cnstr, (__data), (__n_iter))
