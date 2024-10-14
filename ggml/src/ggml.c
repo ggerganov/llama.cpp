@@ -19577,8 +19577,7 @@ void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     ggml_cond_destroy(&threadpool->cond);
 #endif // GGML_USE_OPENMP
 
-    const size_t workers_size = sizeof(struct ggml_compute_state) * n_threads;
-    GGML_ALIGNED_FREE(threadpool->workers, workers_size);
+    GGML_ALIGNED_FREE(threadpool->workers, sizeof(struct ggml_compute_state) * n_threads);
     GGML_ALIGNED_FREE(threadpool, sizeof(struct ggml_threadpool));
 }
 
