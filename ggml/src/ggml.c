@@ -3,16 +3,11 @@
 
 #include "ggml-backend.h"
 #include "ggml-impl.h"
+#include "ggml-backend-impl.h"
 #include "ggml-cpu-impl.h"
 #include "ggml-quants.h"
 #include "ggml.h"
 #include "ggml-aarch64.h"
-
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#include <malloc.h> // using malloc.h with MSC/MINGW
-#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
-#include <alloca.h>
-#endif
 
 #include <assert.h>
 #include <errno.h>
@@ -33,10 +28,6 @@
 
 #ifdef GGML_USE_OPENMP
 #include <omp.h>
-#endif
-
-#ifdef GGML_USE_METAL
-#include <unistd.h>
 #endif
 
 #if defined(__ARM_FEATURE_SVE) || defined(__ARM_FEATURE_MATMUL_INT8)
@@ -183,10 +174,6 @@ typedef void * thread_ret_t;
 #endif
 
 typedef pthread_t ggml_thread_t;
-
-#ifdef GGML_USE_CPU_HBM
-#include <hbwmalloc.h>
-#endif
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -386,47 +373,6 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
 //#define GGML_SOFT_MAX_ACCELERATE
 #endif
 
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#define GGML_ALIGNED_MALLOC(size) _aligned_malloc(size, GGML_MEM_ALIGN)
-#define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
-#else
-inline static void * ggml_aligned_malloc(size_t size) {
-    if (size == 0) {
-        GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
-        return NULL;
-    }
-    void * aligned_memory = NULL;
-#ifdef GGML_USE_CPU_HBM
-    int result = hbw_posix_memalign(&aligned_memory, 16, size);
-#elif GGML_USE_METAL
-    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
-#else
-    int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
-#endif
-    if (result != 0) {
-        // Handle allocation failure
-        const char *error_desc = "unknown allocation error";
-        switch (result) {
-            case EINVAL:
-                error_desc = "invalid alignment value";
-                break;
-            case ENOMEM:
-                error_desc = "insufficient memory";
-                break;
-        }
-        GGML_LOG_ERROR("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
-        GGML_ABORT("fatal error");
-        return NULL;
-    }
-    return aligned_memory;
-}
-#define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
-#ifdef GGML_USE_CPU_HBM
-#define GGML_ALIGNED_FREE(ptr)    if(NULL != ptr) hbw_free(ptr)
-#else
-#define GGML_ALIGNED_FREE(ptr)    free(ptr)
-#endif
-#endif
 
 inline static void * ggml_malloc(size_t size) {
     if (size == 0) {
@@ -3909,7 +3855,7 @@ void ggml_free(struct ggml_context * ctx) {
                     __func__, i, ggml_used_mem(ctx));
 
             if (ctx->mem_buffer_owned) {
-                GGML_ALIGNED_FREE(ctx->mem_buffer);
+                GGML_ALIGNED_FREE(ctx->mem_buffer, ctx->mem_size);
             }
 
             found = true;
@@ -19630,8 +19576,9 @@ void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     ggml_cond_destroy(&threadpool->cond);
 #endif // GGML_USE_OPENMP
 
-    GGML_ALIGNED_FREE(threadpool->workers);
-    GGML_ALIGNED_FREE(threadpool);
+    const size_t workers_size = sizeof(struct ggml_compute_state) * n_threads;
+    GGML_ALIGNED_FREE(threadpool->workers, workers_size);
+    GGML_ALIGNED_FREE(threadpool, sizeof(struct ggml_threadpool));
 }
 
 #ifndef GGML_USE_OPENMP

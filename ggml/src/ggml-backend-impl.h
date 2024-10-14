@@ -1,5 +1,25 @@
 #pragma once
 
+#include "ggml-impl.h"
+
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <malloc.h> // using malloc.h with MSC/MINGW
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
+#include <alloca.h>
+#endif
+
+#include <errno.h>
+
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
+#endif
+
+#if defined(__APPLE__)
+#include <unistd.h>
+#include <mach/mach.h>
+#include <TargetConditionals.h>
+#endif
+
 // ggml-backend internal header
 
 #include "ggml-backend.h"
@@ -221,6 +241,75 @@ extern "C" {
     void ggml_backend_device_register(ggml_backend_dev_t device);
     // TODO: backends can be loaded as a dynamic library, in which case it needs to export this function
     // typedef ggml_backend_register_t * (*ggml_backend_init)(void);
+
+
+    //
+    // Memory allocation
+    //
+
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define GGML_ALIGNED_MALLOC(size)       _aligned_malloc(size, GGML_MEM_ALIGN)
+#define GGML_ALIGNED_FREE(ptr, size)    _aligned_free(ptr)
+#else
+inline static void * ggml_aligned_malloc(size_t size) {
+    if (size == 0) {
+        GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+        return NULL;
+    }
+    void * aligned_memory = NULL;
+#ifdef GGML_USE_CPU_HBM
+    int result = hbw_posix_memalign(&aligned_memory, 16, size);
+#elif TARGET_OS_OSX
+    kern_return_t alloc_status = vm_allocate((vm_map_t) mach_task_self(), (vm_address_t *) &aligned_memory, size, VM_FLAGS_ANYWHERE);
+    int result = EFAULT;
+    switch (alloc_status) {
+        case KERN_SUCCESS:
+            result = 0;
+            break;
+        
+        case KERN_INVALID_ADDRESS:
+            result = EINVAL;
+            break;
+
+        case KERN_NO_SPACE:
+            result = ENOMEM;
+            break;
+
+        default:
+            result = EFAULT;
+            break;
+    }
+#elif GGML_USE_METAL
+    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
+#else
+    int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
+#endif
+    if (result != 0) {
+        // Handle allocation failure
+        const char *error_desc = "unknown allocation error";
+        switch (result) {
+            case EINVAL:
+                error_desc = "invalid alignment value";
+                break;
+            case ENOMEM:
+                error_desc = "insufficient memory";
+                break;
+        }
+        GGML_LOG_ERROR("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
+        GGML_ABORT("fatal error");
+        return NULL;
+    }
+    return aligned_memory;
+}
+#define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
+#ifdef GGML_USE_CPU_HBM
+#define GGML_ALIGNED_FREE(ptr, size)    if(NULL != ptr) hbw_free(ptr)
+#elif TARGET_OS_OSX
+#define GGML_ALIGNED_FREE(ptr, size)    if(NULL != ptr) vm_deallocate((vm_map_t)mach_task_self(), (vm_address_t)ptr, size)
+#else
+#define GGML_ALIGNED_FREE(ptr, size)    free(ptr)
+#endif
+#endif
 
 #ifdef  __cplusplus
 }

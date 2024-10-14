@@ -24,8 +24,6 @@
 #ifdef __APPLE__
 #include <sys/types.h>
 #include <sys/sysctl.h>
-#include <unistd.h>
-#include <TargetConditionals.h>
 #endif
 
 
@@ -704,7 +702,7 @@ static void * ggml_backend_cpu_buffer_get_base(ggml_backend_buffer_t buffer) {
 }
 
 static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    free(buffer->context);
+    GGML_ALIGNED_FREE(buffer->context, buffer->size);
 }
 
 static void ggml_backend_cpu_buffer_memset_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
@@ -772,21 +770,12 @@ static const char * ggml_backend_cpu_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-#if defined(GGML_USE_METAL) || defined(TARGET_OS_OSX)
-    void * data = NULL;
-    int result = posix_memalign(&data, sysconf(_SC_PAGESIZE), size);
-    if (result != 0) {
-        GGML_LOG_ERROR("%s: failed to allocate buffer using posix_memalign with size %zu\n", __func__, size);
-        return NULL;
-    }
-#else
-    size += TENSOR_ALIGNMENT;   // malloc may return an address that is not aligned
-    void * data = malloc(size); // TODO: use GGML_ALIGNED_MALLOC (move to ggml-impl.h)
+    void * data = GGML_ALIGNED_MALLOC(size);
+
     if (data == NULL) {
         GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, size);
         return NULL;
     }
-#endif
 
     return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, size);
 }
