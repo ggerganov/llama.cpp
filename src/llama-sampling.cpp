@@ -1081,7 +1081,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
 
     if (ctx->probability <= 0.0f
         || ctx->threshold > 0.5f
-        || cur_p->size <= 2) {
+        || cur_p->size < 2) {
         return;
     }
 
