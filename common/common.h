@@ -91,7 +91,7 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_TYPICAL_P   = 5,
     COMMON_SAMPLER_TYPE_TEMPERATURE = 6,
     COMMON_SAMPLER_TYPE_XTC         = 7,
-
+    COMMON_SAMPLER_TYPE_INFILL      = 8,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -136,7 +136,7 @@ struct common_sampler_params {
         COMMON_SAMPLER_TYPE_TOP_P,
         COMMON_SAMPLER_TYPE_MIN_P,
         COMMON_SAMPLER_TYPE_XTC,
-        COMMON_SAMPLER_TYPE_TEMPERATURE
+        COMMON_SAMPLER_TYPE_TEMPERATURE,
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
