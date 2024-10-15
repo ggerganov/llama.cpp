@@ -66,16 +66,16 @@ highlight llama_hl_info guifg=#77ff2f
 "
 let s:default_config = {
     \ 'endpoint':         'http://127.0.0.1:8012/infill',
-    \ 'n_prefix':         128,
-    \ 'n_suffix':         128,
+    \ 'n_prefix':         256,
+    \ 'n_suffix':         8,
     \ 'n_predict':        64,
     \ 't_max_prompt_ms':  500,
-    \ 't_max_predict_ms': 500,
+    \ 't_max_predict_ms': 200,
     \ 'show_info':        2,
     \ 'auto_fim':         v:true,
     \ 'max_line_suffix':  8,
-    \ 'ring_n_chunks':    16,
-    \ 'ring_chunk_size':  128,
+    \ 'ring_n_chunks':    64,
+    \ 'ring_chunk_size':  64,
     \ 'ring_scope':       1024,
     \ }
 
@@ -110,13 +110,14 @@ function! llama#init()
     let s:content = []
     let s:can_accept = v:false
 
+    let s:timer_fim = -1
     let s:t_fim_start = reltime() " used to measure total FIM time
 
     let s:current_job = v:null
 
     augroup llama
         autocmd!
-        autocmd InsertEnter     * inoremap <buffer> <silent> <C-F> <Esc>a
+        autocmd InsertEnter     * inoremap <expr> <silent> <C-F> llama#fim_inline(v:false, v:false)
         autocmd InsertLeavePre  * call llama#fim_cancel()
 
         autocmd CursorMoved     * call llama#fim_cancel()
@@ -125,7 +126,7 @@ function! llama#init()
         if g:llama_config.auto_fim
             autocmd InsertEnter  * call llama#fim(v:true, v:false)
             autocmd CursorMovedI * call llama#fim(v:true, v:false)
-            autocmd CursorHoldI  * call llama#fim(v:true, v:true)
+           "autocmd CursorHoldI  * call llama#fim(v:true, v:true)
         else
             autocmd CursorMovedI * call llama#fim_cancel()
         endif
@@ -202,7 +203,7 @@ function! s:pick_chunk(text, no_mod, do_evict)
 
     " evict chunks that are very similar to the new one
     for i in range(len(s:ring_chunks) - 1, 0, -1)
-        if s:chunk_sim(s:ring_chunks[i].data, l:chunk) > 0.9
+        if s:chunk_sim(s:ring_chunks[i].data, l:chunk) > 0.5
             if a:do_evict
                 call remove(s:ring_chunks, i)
                 let s:ring_n_evict += 1
@@ -234,9 +235,10 @@ function! s:pick_chunk(text, no_mod, do_evict)
         \ 'input_suffix':     "",
         \ 'n_predict':        1,
         \ 'penalty_last_n':   0,
-        \ 'top_k':            100,
+        \ 'top_k':            40,
+        \ 'top_p':            0.99,
         \ 'stream':           v:false,
-        \ 'samplers':         ["top_k", "infill"],
+        \ 'samplers':         ["top_k", "top_p", "infill"],
         \ 'cache_prompt':     v:true,
         \ 'extra_context':    l:extra_context,
         \ 't_max_prompt_ms':  1,
@@ -251,15 +253,27 @@ function! s:pick_chunk(text, no_mod, do_evict)
     call jobstart(l:curl_command, {})
 endfunction
 
+function! llama#fim_inline(is_auto, on_hold) abort
+    call llama#fim(a:is_auto, a:on_hold)
+    return ''
+endfunction
+
 function! llama#fim(is_auto, on_hold) abort
-    if a:on_hold && s:hint_shown
+    if a:on_hold && (s:hint_shown || (s:pos_x == col('.') - 1 && s:pos_y == line('.')))
         return
     endif
 
     call llama#fim_cancel()
 
-    if reltimefloat(reltime(s:t_fim_start)) < 0.5
+    " avoid sending repeated requests too fast
+    if reltimefloat(reltime(s:t_fim_start)) < 0.6
+        if s:timer_fim != -1
+            call timer_stop(s:timer_fim)
+            let s:timer_fim = -1
+        endif
+
         let s:t_fim_start = reltime()
+        let s:timer_fim = timer_start(600, {-> llama#fim(v:true, v:true)})
         return
     endif
 
@@ -287,6 +301,8 @@ function! llama#fim(is_auto, on_hold) abort
     let l:prefix = ""
         \ . join(l:lines_prefix, "\n")
         \ . "\n"
+
+    let l:prompt = ""
         \ . s:line_cur_prefix
 
     let l:suffix = ""
@@ -306,14 +322,15 @@ function! llama#fim(is_auto, on_hold) abort
     endfor
 
     let l:request = json_encode({
-        \ 'prompt':           "",
         \ 'input_prefix':     l:prefix,
+        \ 'prompt':           l:prompt,
         \ 'input_suffix':     l:suffix,
         \ 'n_predict':        g:llama_config.n_predict,
         \ 'penalty_last_n':   0,
-        \ 'top_k':            100,
+        \ 'top_k':            40,
+        \ 'top_p':            0.99,
         \ 'stream':           v:false,
-        \ 'samplers':         ["top_k", "infill"],
+        \ 'samplers':         ["top_k", "top_p", "infill"],
         \ 'cache_prompt':     v:true,
         \ 'extra_context':    l:extra_context,
         \ 't_max_prompt_ms':  g:llama_config.t_max_prompt_ms,
@@ -343,13 +360,10 @@ function! llama#fim(is_auto, on_hold) abort
     let l:delta_y = abs(s:pos_y - s:pos_y_pick)
 
     " only gather chunks if the cursor has moved a lot
+    " TODO: something more clever? reranking?
     if a:is_auto && l:delta_y > 32
-        " randomly pick a prefix or a suffix chunk
-        if s:rand(0, 1)
-            call s:pick_chunk(getline(max([1, s:pos_y - g:llama_config.ring_scope]), max([1, s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
-        else
-            call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]), min([l:max_y, s:pos_y + g:llama_config.ring_scope])), v:false, v:false)
-        endif
+        call s:pick_chunk(getline(max([1,       s:pos_y - g:llama_config.ring_scope]), max([1,       s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
+        call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]),   min([l:max_y, s:pos_y + g:llama_config.n_suffix + g:llama_config.ring_chunk_size])), v:false, v:false)
 
         let s:pos_y_pick = s:pos_y
     endif
@@ -367,7 +381,7 @@ function! llama#fim_accept(first_line)
         endif
 
         " move the cursor to the end of the accepted text
-        if !a:first_line
+        if !a:first_line && len(s:content) > 1
             call cursor(s:pos_y + len(s:content) - 1, s:pos_x + s:pos_dx)
         else
             call cursor(s:pos_y, s:pos_x + len(s:content[0]))
@@ -462,9 +476,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
     endif
 
     if len(s:content) == 0
-        if !self.is_auto
-            call add(s:content, "<| EOT |>")
-        endif
+        call add(s:content, "")
         let s:can_accept = v:false
     endif
 
@@ -475,7 +487,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
     let s:pos_dx = len(s:content[-1])
     let s:content[-1] .= s:line_cur_suffix
 
-    " truncate the suggestion if it repeats the next line
+    " truncate the suggestion if it repeats the following lines
     if len(s:content) > 1 && s:content[1] == getline(s:pos_y + 1)
         let s:content = [s:content[0]]
     endif
