@@ -17,11 +17,11 @@
 "
 " start the llama.cpp server with a FIM-compatible model. for example:
 "
-"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa --ubatch-size 512 --batch-size 1024 --cache-reuse 512
+"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 512
 "
 "   --batch-size [512, model max context]
 "
-"     adjust the batch size to control how much of the provided context will be used during the inference
+"     adjust the batch size to control how much of the provided local context will be used during the inference
 "     lower values will use smaller part of the context around the cursor, which will result in faster processing
 "
 "   --ubatch-size [64, 2048]
@@ -58,11 +58,12 @@ highlight llama_hl_info guifg=#77ff2f
 "  - leaving a buffer
 "  - writing a file
 "
-" ring context parameters:
+" parameters for the ring-buffer with extra context:
 "
 "   ring_n_chunks:    max number of chunks to pass as extra context to the server (0 to disable)
 "   ring_chunk_size:  max size of the chunks (in number of lines)
 "   ring_scope:       the range around the cursor position (in number of lines) for gathering chunks
+"   ring_update_ms:   how often to process queued chunks in normal mode
 "
 let s:default_config = {
     \ 'endpoint':         'http://127.0.0.1:8012/infill',
@@ -77,6 +78,7 @@ let s:default_config = {
     \ 'ring_n_chunks':    64,
     \ 'ring_chunk_size':  64,
     \ 'ring_scope':       1024,
+    \ 'ring_update_ms':   1000,
     \ }
 
 let g:llama_config = get(g:, 'llama_config', s:default_config)
@@ -101,7 +103,8 @@ function! llama#init()
     let s:line_cur_prefix = ''
     let s:line_cur_suffix = ''
 
-    let s:ring_chunks = []
+    let s:ring_chunks = [] " current set of chunks used as extra context
+    let s:ring_queued = [] " chunks that are queued to be sent for processing
     let s:ring_n_evict = 0
 
     let s:hint_shown = v:false
@@ -112,6 +115,7 @@ function! llama#init()
 
     let s:timer_fim = -1
     let s:t_fim_start = reltime() " used to measure total FIM time
+    let s:t_last_move = reltime() " last time the cursor moved
 
     let s:current_job = v:null
 
@@ -120,15 +124,14 @@ function! llama#init()
         autocmd InsertEnter     * inoremap <expr> <silent> <C-F> llama#fim_inline(v:false, v:false)
         autocmd InsertLeavePre  * call llama#fim_cancel()
 
-        autocmd CursorMoved     * call llama#fim_cancel()
+        autocmd CursorMoved     * call s:on_move()
+        autocmd CursorMovedI    * call s:on_move()
         autocmd CompleteChanged * call llama#fim_cancel()
 
         if g:llama_config.auto_fim
             autocmd InsertEnter  * call llama#fim(v:true, v:false)
             autocmd CursorMovedI * call llama#fim(v:true, v:false)
            "autocmd CursorHoldI  * call llama#fim(v:true, v:true)
-        else
-            autocmd CursorMovedI * call llama#fim_cancel()
         endif
 
         autocmd TextYankPost    * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false, v:true) | endif
@@ -142,6 +145,11 @@ function! llama#init()
     augroup END
 
     silent! call llama#fim_cancel()
+
+    " init background update of the ring buffer
+    if g:llama_config.ring_n_chunks > 0
+        call s:ring_update()
+    endif
 endfunction
 
 " TODO: figure out something better
@@ -163,6 +171,7 @@ function! s:chunk_sim(c0, c1)
     return 2.0 * l:common / (l:lines0 + l:lines1)
 endfunction
 
+" pick a chunk from the provided text and queue it for processing
 function! s:pick_chunk(text, no_mod, do_evict)
     " do not pick chunks from buffers with pending changes or buffers that are not files
     if a:no_mod && (getbufvar(bufnr('%'), '&modified') || !buflisted(bufnr('%')) || !filereadable(expand('%')))
@@ -190,8 +199,16 @@ function! s:pick_chunk(text, no_mod, do_evict)
 
     " check if this chunk is already added
     let l:exist = v:false
+
     for i in range(len(s:ring_chunks))
         if s:ring_chunks[i].data == l:chunk
+            let l:exist = v:true
+            break
+        endif
+    endfor
+
+    for i in range(len(s:ring_queued))
+        if s:ring_queued[i].data == l:chunk
             let l:exist = v:true
             break
         endif
@@ -202,6 +219,18 @@ function! s:pick_chunk(text, no_mod, do_evict)
     endif
 
     " evict chunks that are very similar to the new one
+    for i in range(len(s:ring_queued) - 1, 0, -1)
+        if s:chunk_sim(s:ring_queued[i].data, l:chunk) > 0.5
+            if a:do_evict
+                call remove(s:ring_queued, i)
+                let s:ring_n_evict += 1
+            else
+                return
+            endif
+        endif
+    endfor
+
+    " also from s:ring_chunks
     for i in range(len(s:ring_chunks) - 1, 0, -1)
         if s:chunk_sim(s:ring_chunks[i].data, l:chunk) > 0.5
             if a:do_evict
@@ -213,11 +242,36 @@ function! s:pick_chunk(text, no_mod, do_evict)
         endif
     endfor
 
+    if len(s:ring_queued) == 16
+        call remove(s:ring_queued, 0)
+    endif
+
+    call add(s:ring_queued, {'data': l:chunk, 'str': l:chunk_str, 'time': reltime(), 'filename': expand('%')})
+
+    "let &statusline = 'extra context: ' . len(s:ring_chunks) . ' / ' . len(s:ring_queued)
+endfunction
+
+" called every g:llama_config.ring_update_ms, processed chunks are moved to s:ring_chunks
+function! s:ring_update()
+    call timer_start(g:llama_config.ring_update_ms, {-> s:ring_update()})
+
+    " update only if in normal mode or if the cursor hasn't moved for a while
+    if mode() !=# 'n' && reltimefloat(reltime(s:t_last_move)) < 3.0
+        return
+    endif
+
+    if len(s:ring_queued) == 0
+        return
+    endif
+
+    " move the first queued chunk to the ring buffer
     if len(s:ring_chunks) == g:llama_config.ring_n_chunks
         call remove(s:ring_chunks, 0)
     endif
 
-    call add(s:ring_chunks, {'data': l:chunk, 'str': l:chunk_str, 'time': reltime(), 'filename': expand('%')})
+    call add(s:ring_chunks, remove(s:ring_queued, 0))
+
+    "let &statusline = 'updated context: ' . len(s:ring_chunks) . ' / ' . len(s:ring_queued)
 
     " send asynchronous job with the new extra context so that it is ready for the next FIM
     let l:extra_context = []
@@ -229,16 +283,16 @@ function! s:pick_chunk(text, no_mod, do_evict)
             \ })
     endfor
 
+    " no samplers needed here
     let l:request = json_encode({
         \ 'prompt':           "",
         \ 'input_prefix':     "",
         \ 'input_suffix':     "",
         \ 'n_predict':        1,
         \ 'penalty_last_n':   0,
-        \ 'top_k':            40,
-        \ 'top_p':            0.99,
+        \ 'temperature':      0.0,
         \ 'stream':           v:false,
-        \ 'samplers':         ["top_k", "top_p", "infill"],
+        \ 'samplers':         ["temperature"],
         \ 'cache_prompt':     v:true,
         \ 'extra_context':    l:extra_context,
         \ 't_max_prompt_ms':  1,
@@ -409,6 +463,12 @@ function! llama#fim_cancel()
     silent! iunmap <buffer> <Esc>
 endfunction
 
+function! s:on_move()
+    let s:t_last_move = reltime()
+
+    call llama#fim_cancel()
+endfunction
+
 " callback that processes the result from the server
 function! s:fim_on_stdout(job_id, data, event) dict
     let l:raw = join(a:data, "\n")
@@ -511,9 +571,9 @@ function! s:fim_on_stdout(job_id, data, event) dict
                 \ l:n_cached, l:n_ctx
                 \ )
         else
-            let l:info = printf("%s | context: %d / %d / %d / %d | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
+            let l:info = printf("%s | context: %d / %d / r=%d / q=%d / e=%d | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
                 \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
-                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), s:ring_n_evict,
+                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), len(s:ring_queued), s:ring_n_evict,
                 \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
                 \ l:n_predict, l:t_predict_ms, l:s_predict,
                 \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
