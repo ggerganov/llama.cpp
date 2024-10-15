@@ -19,6 +19,9 @@ extern "C" {
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+// required for mmap as gguf only guarantees 32-byte alignment
+#define TENSOR_ALIGNMENT 32
+
 // static_assert should be a #define, but if it's not,
 // fall back to the _Static_assert C11 keyword.
 // if C99 - static_assert is noop
