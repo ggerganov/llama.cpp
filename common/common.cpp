@@ -2104,6 +2104,8 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
+    fprintf(stream, "xtc_probability: %f # default: 0.0\n", sparams.xtc_probability);
+    fprintf(stream, "xtc_threshold: %f # default: 0.1\n", sparams.xtc_threshold);
     fprintf(stream, "typ_p: %f # default: 1.0\n", sparams.typ_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
