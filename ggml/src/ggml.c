@@ -414,7 +414,8 @@ void * ggml_aligned_malloc(size_t size) {
             break;
     }
 #elif GGML_USE_METAL
-    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
+    const auto page_size = sysconf(_SC_PAGESIZE);
+    int result = posix_memalign(&aligned_memory, MAX(TENSOR_ALIGNMENT, page_size), sysconf(_SC_PAGESIZE), size);
 #else
     int result = posix_memalign(&aligned_memory, TENSOR_ALIGNMENT, size);
 #endif
