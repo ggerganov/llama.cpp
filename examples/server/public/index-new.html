@@ -43,6 +43,8 @@
       top_k: 0, // <= 0 to use vocab size
       top_p: 1.0, // 1.0 = disabled
       min_p: 0.05, // 0 = disabled; recommended for non-english: ~ 0.4
+      xtc_probability: 0.0, // 0 = disabled;
+      xtc_threshold: 0.1, // > 0.5 disables XTC;
       tfs_z: 1.0, // 1.0 = disabled
       typical_p: 1.0, // 1.0 = disabled
       presence_penalty: 0.0, // 0.0 = disabled
@@ -836,6 +838,8 @@ return html`
           ${FloatField({ label: "TFS-Z", title: "Activates tail-free sampling, a method used to limit the prediction of tokens that are too frequent. The parameter z controls the strength of this limitation. A value of 1.0 means that this function is deactivated.", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
           ${FloatField({ label: "Frequency Penalty", title: "A penalty that is applied based on the frequency with which certain tokens occur in the training data set. A higher value results in rare tokens being favoured.", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
           ${FloatField({ label: "Typical-P", title: "Activates local typical sampling, a method used to limit the prediction of tokens that are atypical in the current context. The parameter p controls the strength of this limitation. A value of 1.0 means that this function is deactivated.", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+          ${FloatField({ label: "XTC probability", title: "Sets the chance for token removal (checked once on sampler start)", max: 1.0, min: 0.0, name: "xtc_probability", step: 0.01, value: params.value.xtc_probability })}
+          ${FloatField({ label: "XTC threshold", title: "Sets a minimum probability threshold for tokens to be removed", max: 0.5, min: 0.0, name: "xtc_threshold", step: 0.01, value: params.value.xtc_threshold })}
           ${IntField({ label: "Min Keep", title: "If greater than 0, samplers are forced to return N possible tokens at minimum. Default is 0", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
         </fieldset>
 
@@ -1132,6 +1136,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
   const snapSettings = {
     temperature: { snapValue: 1.0, snapRangeMultiplier: 6 },
     min_p: { snapValue: 0.05, snapRangeMultiplier: 2 },
+    xtc_probability: { snapValue: 0.0, snapRangeMultiplier: 4 },
+    xtc_threshold: { snapValue: 0.5, snapRangeMultiplier: 4 },
     top_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
     tfs_z: { snapValue: 1.0, snapRangeMultiplier: 4 },
     typical_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
