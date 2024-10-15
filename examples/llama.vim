@@ -17,7 +17,7 @@
 "
 " start the llama.cpp server with a FIM-compatible model. for example:
 "
-"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 512
+"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 64
 "
 "   --batch-size [512, model max context]
 "
@@ -33,8 +33,10 @@
 "
 "   :call llama#init()
 "
+" more info: https://github.com/ggerganov/llama.cpp/pull/9787/files
+"
 
-" color of the suggested text
+" colors (adjust to your liking)
 highlight llama_hl_hint guifg=#ff772f
 highlight llama_hl_info guifg=#77ff2f
 
@@ -154,6 +156,8 @@ function! llama#init()
     endif
 endfunction
 
+" compute how similar two chunks of text are
+" 0 - no similarity, 1 - high similarity
 " TODO: figure out something better
 function! s:chunk_sim(c0, c1)
     let l:lines0 = len(a:c0)
@@ -173,17 +177,23 @@ function! s:chunk_sim(c0, c1)
     return 2.0 * l:common / (l:lines0 + l:lines1)
 endfunction
 
-" pick a chunk from the provided text and queue it for processing
+" pick a random chunk of size g:llama_config.ring_chunk_size from the provided text and queue it for processing
+"
+" no_mod   - do not pick chunks from buffers with pending changes
+" do_evict - evict chunks that are very similar to the new one
+"
 function! s:pick_chunk(text, no_mod, do_evict)
     " do not pick chunks from buffers with pending changes or buffers that are not files
     if a:no_mod && (getbufvar(bufnr('%'), '&modified') || !buflisted(bufnr('%')) || !filereadable(expand('%')))
         return
     endif
 
+    " if the extra context option is disabled - do nothing
     if g:llama_config.ring_n_chunks <= 0
         return
     endif
 
+    " don't pick very small chunks
     if len(a:text) < 3
         return
     endif
@@ -220,9 +230,9 @@ function! s:pick_chunk(text, no_mod, do_evict)
         return
     endif
 
-    " evict chunks that are very similar to the new one
+    " evict queued chunks that are very similar to the new one
     for i in range(len(s:ring_queued) - 1, 0, -1)
-        if s:chunk_sim(s:ring_queued[i].data, l:chunk) > 0.5
+        if s:chunk_sim(s:ring_queued[i].data, l:chunk) > 0.9
             if a:do_evict
                 call remove(s:ring_queued, i)
                 let s:ring_n_evict += 1
@@ -234,7 +244,7 @@ function! s:pick_chunk(text, no_mod, do_evict)
 
     " also from s:ring_chunks
     for i in range(len(s:ring_chunks) - 1, 0, -1)
-        if s:chunk_sim(s:ring_chunks[i].data, l:chunk) > 0.5
+        if s:chunk_sim(s:ring_chunks[i].data, l:chunk) > 0.9
             if a:do_evict
                 call remove(s:ring_chunks, i)
                 let s:ring_n_evict += 1
@@ -244,6 +254,7 @@ function! s:pick_chunk(text, no_mod, do_evict)
         endif
     endfor
 
+    " TODO: become parameter ?
     if len(s:ring_queued) == 16
         call remove(s:ring_queued, 0)
     endif
@@ -253,7 +264,8 @@ function! s:pick_chunk(text, no_mod, do_evict)
     "let &statusline = 'extra context: ' . len(s:ring_chunks) . ' / ' . len(s:ring_queued)
 endfunction
 
-" called every g:llama_config.ring_update_ms, processed chunks are moved to s:ring_chunks
+" picks a queued chunk, sends it for processing and adds it to s:ring_chunks
+" called every g:llama_config.ring_update_ms
 function! s:ring_update()
     call timer_start(g:llama_config.ring_update_ms, {-> s:ring_update()})
 
@@ -306,15 +318,21 @@ function! s:ring_update()
         \ g:llama_config.endpoint, shellescape(l:request)
         \ )
 
+    " no callbacks because we don't need to process the response
     call jobstart(l:curl_command, {})
 endfunction
 
+" necessary for 'inoremap <expr>'
 function! llama#fim_inline(is_auto, on_hold) abort
     call llama#fim(a:is_auto, a:on_hold)
     return ''
 endfunction
 
+" the main FIM call
+" takes local context around the cursor and sends it together with the extra context
+" to the llama.cpp server for completion
 function! llama#fim(is_auto, on_hold) abort
+    " we already have a suggestion for the current cursor position
     if a:on_hold && (s:hint_shown || (s:pos_x == col('.') - 1 && s:pos_y == line('.')))
         return
     endif
@@ -415,6 +433,7 @@ function! llama#fim(is_auto, on_hold) abort
     " TODO: per-file location
     let l:delta_y = abs(s:pos_y - s:pos_y_pick)
 
+    " gather some extra context nearby and process it in the background
     " only gather chunks if the cursor has moved a lot
     " TODO: something more clever? reranking?
     if a:is_auto && l:delta_y > 32
@@ -474,7 +493,7 @@ function! s:on_move()
     call llama#fim_cancel()
 endfunction
 
-" callback that processes the result from the server
+" callback that processes the FIM result from the server and displays the suggestion
 function! s:fim_on_stdout(job_id, data, event) dict
     let l:raw = join(a:data, "\n")
     if len(l:raw) == 0
