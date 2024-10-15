@@ -196,6 +196,9 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     case COMMON_SAMPLER_TYPE_TEMPERATURE:
                         llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                         break;
+                    case COMMON_SAMPLER_TYPE_INFILL:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                        break;
                     default:
                         GGML_ASSERT(false && "unknown sampler type");
                 }
@@ -376,6 +379,7 @@ char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_MIN_P:       return 'm';
         case COMMON_SAMPLER_TYPE_TEMPERATURE: return 't';
         case COMMON_SAMPLER_TYPE_XTC:         return 'x';
+        case COMMON_SAMPLER_TYPE_INFILL:      return 'i';
         default : return '?';
     }
 }
@@ -389,6 +393,7 @@ std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_MIN_P:       return "min_p";
         case COMMON_SAMPLER_TYPE_TEMPERATURE: return "temperature";
         case COMMON_SAMPLER_TYPE_XTC:         return "xtc";
+        case COMMON_SAMPLER_TYPE_INFILL:      return "infill";
         default : return "";
     }
 }
@@ -402,6 +407,7 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
         { "tfs_z",       COMMON_SAMPLER_TYPE_TFS_Z },
         { "temperature", COMMON_SAMPLER_TYPE_TEMPERATURE },
         { "xtc",         COMMON_SAMPLER_TYPE_XTC },
+        { "infill",      COMMON_SAMPLER_TYPE_INFILL },
     };
 
     // since samplers names are written multiple ways
@@ -448,7 +454,8 @@ std::vector<common_sampler_type> common_sampler_types_from_chars(const std::stri
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TOP_P),       COMMON_SAMPLER_TYPE_TOP_P },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_MIN_P),       COMMON_SAMPLER_TYPE_MIN_P },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TEMPERATURE), COMMON_SAMPLER_TYPE_TEMPERATURE },
-        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_XTC),         COMMON_SAMPLER_TYPE_XTC }
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_XTC),         COMMON_SAMPLER_TYPE_XTC },
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_INFILL),      COMMON_SAMPLER_TYPE_INFILL },
     };
 
     std::vector<common_sampler_type> samplers;
