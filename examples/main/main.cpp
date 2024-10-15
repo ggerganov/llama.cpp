@@ -569,30 +569,30 @@ int main(int argc, char ** argv) {
                     if (!params.ctx_shift){
                         LOG_DBG("\n\n%s: context full and context shift is disabled => stopping\n", __func__);
                         break;
-                    } else {
-                        if (params.n_predict == -2) {
-                            LOG_DBG("\n\n%s: context full and n_predict == -%d => stopping\n", __func__, params.n_predict);
-                            break;
-                        }
-
-                        const int n_left    = n_past - params.n_keep;
-                        const int n_discard = n_left/2;
-
-                        LOG_DBG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
-                                n_past, n_left, n_ctx, params.n_keep, n_discard);
-
-                        llama_kv_cache_seq_rm (ctx, 0, params.n_keep            , params.n_keep + n_discard);
-                        llama_kv_cache_seq_add(ctx, 0, params.n_keep + n_discard, n_past, -n_discard);
-
-                        n_past -= n_discard;
-
-                        LOG_DBG("after swap: n_past = %d\n", n_past);
-
-                        LOG_DBG("embd: %s\n", string_from(ctx, embd).c_str());
-
-                        LOG_DBG("clear session path\n");
-                        path_session.clear();
                     }
+
+                    if (params.n_predict == -2) {
+                        LOG_DBG("\n\n%s: context full and n_predict == -%d => stopping\n", __func__, params.n_predict);
+                        break;
+                    }
+
+                    const int n_left    = n_past - params.n_keep;
+                    const int n_discard = n_left/2;
+
+                    LOG_DBG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
+                            n_past, n_left, n_ctx, params.n_keep, n_discard);
+
+                    llama_kv_cache_seq_rm (ctx, 0, params.n_keep            , params.n_keep + n_discard);
+                    llama_kv_cache_seq_add(ctx, 0, params.n_keep + n_discard, n_past, -n_discard);
+
+                    n_past -= n_discard;
+
+                    LOG_DBG("after swap: n_past = %d\n", n_past);
+
+                    LOG_DBG("embd: %s\n", string_from(ctx, embd).c_str());
+
+                    LOG_DBG("clear session path\n");
+                    path_session.clear();
                 }
             } else {
                 // context extension via Self-Extend
