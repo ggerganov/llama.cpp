@@ -1102,7 +1102,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
 
     if (cur_p->size - pos_last >= ctx->min_keep && pos_last > 0) {
         cur_p->data += pos_last;
-        cur_p->size = cur_p->size - pos_last;
+        cur_p->size -= pos_last;
     }
 }
 

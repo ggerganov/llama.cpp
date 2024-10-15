@@ -252,7 +252,7 @@ By removing top tokens XTC can improve the variety of answers, break writing cli
 
 Being experimental and unique, XTC is disabled by default. The recommended combination of samplers is Min-P followed by XTC on its default settings: `--sampling-seq mx --min-p 0.02 --xtc-probability 0.5`.
 
-Example usage: `--xtc-probability 0.5 --xtc-threshold 0.1
+Example usage: `--xtc-probability 0.5 --xtc-threshold 0.1`
 
 ### Logit Bias
 
