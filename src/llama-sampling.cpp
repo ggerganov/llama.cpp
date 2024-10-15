@@ -1095,7 +1095,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
     int pos_last = 0;
 
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if (cur_p->data[i].p - ctx->threshold >= -1e-5) {
+        if (cur_p->data[i].p >= ctx->threshold) {
             pos_last = i;
         } else break;
     }
