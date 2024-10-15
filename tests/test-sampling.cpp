@@ -111,6 +111,28 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
     }
 }
 
+static void test_xtc(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p, float t) {
+    const size_t n_vocab = probs.size();
+
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        const float logit = logf(probs[token_id]);
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
+    }
+
+    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+    APPLY(llama_sampler_init_softmax(), &cur_p);
+    DUMP(&cur_p);
+    APPLY(llama_sampler_init_xtc(p, t, 0, 0), &cur_p);
+    DUMP(&cur_p);
+
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-5);
+    }
+}
+
 static void test_typical(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
 
@@ -263,7 +285,7 @@ static void bench(llama_sampler * cnstr, const char * cnstr_name, const std::vec
     }
     const int64_t t_end = ggml_time_us();
     llama_sampler_free(cnstr);
-    printf("%-42s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
+    printf("%-43s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
 }
 
 #define BENCH(__cnstr, __data, __n_iter) bench((__cnstr), #__cnstr, (__data), (__n_iter))
@@ -279,12 +301,13 @@ static void test_perf() {
         data.emplace_back(llama_token_data{i, logit, 0.0f});
     }
 
-    BENCH(llama_sampler_init_top_k    (40),      data, 32);
-    BENCH(llama_sampler_init_top_p    (0.8f, 1), data, 32);
-    BENCH(llama_sampler_init_min_p    (0.2f, 1), data, 32);
-    BENCH(llama_sampler_init_tail_free(0.5f, 1), data, 32);
-    BENCH(llama_sampler_init_typical  (0.5f, 1), data, 32);
-    BENCH(llama_sampler_init_softmax  (),        data, 32);
+    BENCH(llama_sampler_init_top_k    (40),                     data, 32);
+    BENCH(llama_sampler_init_top_p    (0.8f, 1),                data, 32);
+    BENCH(llama_sampler_init_min_p    (0.2f, 1),                data, 32);
+    BENCH(llama_sampler_init_tail_free(0.5f, 1),                data, 32);
+    BENCH(llama_sampler_init_typical  (0.5f, 1),                data, 32);
+    BENCH(llama_sampler_init_xtc      (1.0f, 0.1f, 1, 1),       data, 32);
+    BENCH(llama_sampler_init_softmax  (),                       data, 32);
 }
 
 int main(void) {
@@ -308,6 +331,14 @@ int main(void) {
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.7f, 0.3f/0.7f},                       0.74f);
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  0.76f);
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  1.00f);
+
+    printf("XTC should:\n");
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.1f},                                0.99f, 0.09f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.2f, 0.1f},                          0.99f, 0.19f);
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.3f, 0.2f, 0.1f},                    0.99f, 0.29f);
+
+    printf("XTC should not:\n");
+    test_xtc({0.4f, 0.3f, 0.2f, 0.1f},   {0.4f, 0.3f, 0.2f, 0.1f},              0.99f, 0.39f);
 
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f}, 0.25f);
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f, 0.25f}, 0.75f);
