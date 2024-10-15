@@ -1741,7 +1741,7 @@ struct llama_sampler * llama_sampler_init_logit_bias(
 
 // infill
 
-//#define GGML_DEBUG_SAMPLER_INFILL
+#define GGML_DEBUG_SAMPLER_INFILL
 
 struct llama_sampler_infill {
     const struct llama_vocab * vocab;
