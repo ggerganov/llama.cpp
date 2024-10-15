@@ -287,16 +287,16 @@ function! s:ring_update()
 
     " no samplers needed here
     let l:request = json_encode({
-        \ 'prompt':           "",
         \ 'input_prefix':     "",
         \ 'input_suffix':     "",
+        \ 'input_extra':      l:extra_context,
+        \ 'prompt':           "",
         \ 'n_predict':        1,
         \ 'penalty_last_n':   0,
         \ 'temperature':      0.0,
         \ 'stream':           v:false,
         \ 'samplers':         ["temperature"],
         \ 'cache_prompt':     v:true,
-        \ 'extra_context':    l:extra_context,
         \ 't_max_prompt_ms':  1,
         \ 't_max_predict_ms': 1
         \ })
@@ -379,8 +379,9 @@ function! llama#fim(is_auto, on_hold) abort
 
     let l:request = json_encode({
         \ 'input_prefix':     l:prefix,
-        \ 'prompt':           l:prompt,
         \ 'input_suffix':     l:suffix,
+        \ 'input_extra':      l:extra_context,
+        \ 'prompt':           l:prompt,
         \ 'n_predict':        g:llama_config.n_predict,
         \ 'penalty_last_n':   0,
         \ 'top_k':            40,
@@ -388,7 +389,6 @@ function! llama#fim(is_auto, on_hold) abort
         \ 'stream':           v:false,
         \ 'samplers':         ["top_k", "top_p", "infill"],
         \ 'cache_prompt':     v:true,
-        \ 'extra_context':    l:extra_context,
         \ 't_max_prompt_ms':  g:llama_config.t_max_prompt_ms,
         \ 't_max_predict_ms': g:llama_config.t_max_predict_ms
         \ })
