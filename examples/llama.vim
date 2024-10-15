@@ -62,7 +62,9 @@ highlight llama_hl_info guifg=#77ff2f
 "
 "   ring_n_chunks:    max number of chunks to pass as extra context to the server (0 to disable)
 "   ring_chunk_size:  max size of the chunks (in number of lines)
-"   ring_scope:       the range around the cursor position (in number of lines) for gathering chunks
+"                     note: adjust these numbers so that you don't overrun your context
+"                           at ring_n_chunks = 64 and ring_chunk_size = 64 you need ~32k context
+"   ring_scope:       the range around the cursor position (in number of lines) for gathering chunks after FIM
 "   ring_update_ms:   how often to process queued chunks in normal mode
 "
 let s:default_config = {
@@ -416,7 +418,10 @@ function! llama#fim(is_auto, on_hold) abort
     " only gather chunks if the cursor has moved a lot
     " TODO: something more clever? reranking?
     if a:is_auto && l:delta_y > 32
+        " expand the prefix even further
         call s:pick_chunk(getline(max([1,       s:pos_y - g:llama_config.ring_scope]), max([1,       s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
+
+        " pick a suffix chunk
         call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]),   min([l:max_y, s:pos_y + g:llama_config.n_suffix + g:llama_config.ring_chunk_size])), v:false, v:false)
 
         let s:pos_y_pick = s:pos_y
