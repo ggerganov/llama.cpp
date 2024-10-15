@@ -180,8 +180,6 @@ int main(int argc, char ** argv) {
     // target model sampling context (reuse the llama_context's sampling instance)
     struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
 
-    struct llama_sampler * softmax = llama_sampler_init_softmax();
-
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
 
@@ -624,7 +622,6 @@ int main(int argc, char ** argv) {
         common_sampler_free(drafts[s].smpl);
     }
 
-    llama_sampler_free(softmax);
     llama_batch_free(batch_dft);
 
     llama_free(ctx_tgt);

@@ -203,7 +203,6 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                         GGML_ASSERT(false && "unknown sampler type");
                 }
             }
-            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
             llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
         } else if (params.mirostat == 1) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
@@ -222,7 +221,6 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
             // the following will not produce exactly the same probs as applyging softmax to the full vocabulary, but
             // it is much faster, since we avoid sorting all tokens and should give a good approximation
             llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.n_probs));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
         }
         llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
     }

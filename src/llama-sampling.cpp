@@ -427,6 +427,9 @@ static const char * llama_sampler_dist_name(const struct llama_sampler * /*smpl*
 
 static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     auto * ctx = (llama_sampler_dist *) smpl->ctx;
+
+    llama_sampler_softmax_impl(cur_p);
+
     cur_p->selected = llama_sample_dist(cur_p, ctx->rng);
 }
 

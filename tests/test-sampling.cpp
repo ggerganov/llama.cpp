@@ -24,20 +24,22 @@ static void dump(const llama_token_data_array * cur_p) {
     llama_sampler_free(cnstr); \
 } while(0)
 
+#define CUR_P_FROM_PROBS() \
+    const size_t n_vocab = probs.size(); \
+    std::vector<llama_token_data> cur; \
+    cur.reserve(n_vocab); \
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) { \
+        const float logit = logf(probs[token_id]); \
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f}); \
+    } \
+    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false }
+
 static void test_top_k(const std::vector<float> & probs, const std::vector<float> & expected_probs, int k) {
-    const size_t n_vocab = probs.size();
+    CUR_P_FROM_PROBS();
 
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-    APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
     APPLY(llama_sampler_init_top_k(k), &cur_p);
+    APPLY(llama_sampler_init_dist (0), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -47,19 +49,12 @@ static void test_top_k(const std::vector<float> & probs, const std::vector<float
 }
 
 static void test_top_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
-    const size_t n_vocab = probs.size();
+    CUR_P_FROM_PROBS();
 
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-    APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
     APPLY(llama_sampler_init_top_p(p, 1), &cur_p);
+    APPLY(llama_sampler_init_dist (0), &cur_p);
+    DUMP(&cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -69,16 +64,8 @@ static void test_top_p(const std::vector<float> & probs, const std::vector<float
 }
 
 static void test_tfs(const std::vector<float> & probs, const std::vector<float> & expected_probs, float z) {
-    const size_t n_vocab = probs.size();
+    CUR_P_FROM_PROBS();
 
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
     DUMP(&cur_p);
     APPLY(llama_sampler_init_tail_free(z, 1), &cur_p);
     DUMP(&cur_p);
@@ -90,20 +77,12 @@ static void test_tfs(const std::vector<float> & probs, const std::vector<float> 
 }
 
 static void test_min_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
-    const size_t n_vocab = probs.size();
+    CUR_P_FROM_PROBS();
 
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
     DUMP(&cur_p);
     APPLY(llama_sampler_init_min_p(p, 1), &cur_p);
+    APPLY(llama_sampler_init_dist (0),    &cur_p);
     DUMP(&cur_p);
-    APPLY(llama_sampler_init_softmax(), &cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
     for (size_t i = 0; i < cur_p.size; i++) {
@@ -112,17 +91,8 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
 }
 
 static void test_xtc(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p, float t) {
-    const size_t n_vocab = probs.size();
+    CUR_P_FROM_PROBS();
 
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-    APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
     APPLY(llama_sampler_init_xtc(p, t, 0, 0), &cur_p);
     DUMP(&cur_p);
@@ -134,16 +104,8 @@ static void test_xtc(const std::vector<float> & probs, const std::vector<float> 
 }
 
 static void test_typical(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
-    const size_t n_vocab = probs.size();
+    CUR_P_FROM_PROBS();
 
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
     DUMP(&cur_p);
     APPLY(llama_sampler_init_typical(p, 1), &cur_p);
     DUMP(&cur_p);
@@ -160,16 +122,7 @@ static void test_penalties(
 ) {
     GGML_ASSERT(probs.size() == expected_probs.size());
 
-    const size_t n_vocab = probs.size();
-
-    std::vector<llama_token_data> cur;
-    cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(probs[token_id]);
-        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+    CUR_P_FROM_PROBS();
 
     auto * sampler = llama_sampler_init_penalties(n_vocab, LLAMA_TOKEN_NULL, LLAMA_TOKEN_NULL, last_tokens.size(), repeat_penalty, alpha_frequency, alpha_presence, false, false);
 
@@ -177,10 +130,9 @@ static void test_penalties(
         llama_sampler_accept(sampler, last_tokens[i]);
     }
 
-    APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
     APPLY(sampler, &cur_p);
-    APPLY(llama_sampler_init_softmax(), &cur_p);
+    APPLY(llama_sampler_init_dist(0), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -214,7 +166,7 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
             default : GGML_ABORT("Unknown sampler");
         }
 
-        APPLY(llama_sampler_init_softmax(), &cur_p); // make sure tokens are sorted for tests
+        APPLY(llama_sampler_init_dist(0), &cur_p);
 
         const int size = cur_p.size;
 
@@ -307,21 +259,20 @@ static void test_perf() {
     BENCH(llama_sampler_init_tail_free(0.5f, 1),                data, 32);
     BENCH(llama_sampler_init_typical  (0.5f, 1),                data, 32);
     BENCH(llama_sampler_init_xtc      (1.0f, 0.1f, 1, 1),       data, 32);
-    BENCH(llama_sampler_init_softmax  (),                       data, 32);
 }
 
 int main(void) {
     ggml_time_init();
 
-    test_top_k({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f}, 1);
-    test_top_k({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f, 0.2f}, 3);
+    test_top_k({0.1f, 0.2f, 0.3f, 0.4f}, {1.0f}, 1);
+    test_top_k({0.1f, 0.2f, 0.3f, 0.4f}, {0.44444f, 0.33333f, 0.22222f}, 3);
     test_top_k({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f, 0.2f, 0.1f}, 4);
     test_top_k({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f, 0.2f, 0.1f}, 0);
 
-    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f}, 0);
-    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f}, 0.7f);
-    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f, 0.2f}, 0.8f);
-    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f, 0.2f, 0.1f}, 1);
+    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {1.0f}, 0);
+    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.571429f, 0.428571f}, 0.7f);
+    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.44444f, 0.33333f, 0.22222f}, 0.8f);
+    test_top_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f, 0.3f, 0.2f, 0.1f}, 1.0f);
 
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/1.0f, 0.3f/1.0f, 0.2f/1.0f, 0.1f/1.0f}, 0.00f);
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/1.0f, 0.3f/1.0f, 0.2f/1.0f, 0.1f/1.0f}, 0.24f);
