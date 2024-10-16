@@ -446,7 +446,7 @@ ggml_backend_reg_t ggml_backend_amx_reg(void) {
 
 #else // if defined(__AMX_INT8__)
 
-ggml_backend_t ggml_backend_amx_init(int n_threads) {
+ggml_backend_t ggml_backend_amx_init(void) {
   fprintf(stderr, "GGML is not compiled with AMX support!\n");
   return ggml_backend_t{};
 
