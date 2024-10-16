@@ -1,0 +1,1 @@
+/mnt/c/users/sviridov/test/llama.cpp/stb_image.h
