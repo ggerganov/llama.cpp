@@ -1969,13 +1969,10 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         for (size_t i = 0; i < imgs.size(); ++i) {
             for (size_t j = 0; j < imgs[i].size(); ++j) {
                 if (imgs[i][j] != nullptr) {
-                    imgs[i][j]->buf.clear();
                     delete imgs[i][j];
                 }
             }
-            imgs[i].clear();
         }
-        imgs.clear();
         return true;
     }
 
