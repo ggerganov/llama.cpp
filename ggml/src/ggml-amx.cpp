@@ -15,8 +15,6 @@
 
 #if defined(__AMX_INT8__)
 
-static const size_t TENSOR_ALIGNMENT = 64;
-
 // AMX buffer interface
 static const char * ggml_backend_amx_buffer_get_name(ggml_backend_buffer_t buffer) {
   return "AMX";
