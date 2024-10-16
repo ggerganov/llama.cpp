@@ -1663,6 +1663,14 @@ llama_token llama_token_eos_impl(const struct llama_vocab & vocab) {
     return vocab.special_eos_id;
 }
 
+llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
+    return vocab.special_eot_id;
+}
+
+llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
+    return vocab.special_eom_id;
+}
+
 llama_token llama_token_cls_impl(const struct llama_vocab & vocab) {
     return vocab.special_cls_id;
 }
@@ -1688,23 +1696,39 @@ bool llama_add_eos_token_impl(const struct llama_vocab & vocab) {
 }
 
 llama_token llama_token_prefix_impl(const struct llama_vocab & vocab) {
-    return vocab.special_prefix_id;
+    return vocab.special_fim_pre_id;
 }
 
 llama_token llama_token_middle_impl(const struct llama_vocab & vocab) {
-    return vocab.special_middle_id;
+    return vocab.special_fim_mid_id;
 }
 
 llama_token llama_token_suffix_impl(const struct llama_vocab & vocab) {
-    return vocab.special_suffix_id;
+    return vocab.special_fim_suf_id;
 }
 
-llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
-    return vocab.special_eot_id;
+llama_token llama_token_fim_pre_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_pre_id;
 }
 
-llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
-    return vocab.special_eom_id;
+llama_token llama_token_fim_suf_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_suf_id;
+}
+
+llama_token llama_token_fim_mid_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_mid_id;
+}
+
+llama_token llama_token_fim_pad_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_pad_id;
+}
+
+llama_token llama_token_fim_rep_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_rep_id;
+}
+
+llama_token llama_token_fim_sep_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_sep_id;
 }
 
 int32_t llama_tokenize_impl(
@@ -1832,6 +1856,23 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
     }
 
     return 0;
+}
+
+bool llama_token_is_prefix_impl(
+        const struct llama_vocab & vocab,
+                     llama_token   token0,
+                     llama_token   token1) {
+    char text_buf_0[128];
+    char text_buf_1[128];
+
+    const int32_t len0 = llama_token_to_piece_impl(vocab, token0, text_buf_0, sizeof(text_buf_0) - 1, 0, false);
+    const int32_t len1 = llama_token_to_piece_impl(vocab, token1, text_buf_1, sizeof(text_buf_1) - 1, 0, false);
+
+    if (len0 <= 0 || len1 <= 0) {
+        return false;
+    }
+
+    return len0 <= len1 && memcmp(text_buf_0, text_buf_1, len0) == 0;
 }
 
 int32_t llama_detokenize_impl(

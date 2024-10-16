@@ -1148,6 +1148,7 @@ ggml_backend_cann_buffer_type(int32_t device) {
         for (int32_t i = 0; i < GGML_CANN_MAX_DEVICES; i++) {
             ggml_backend_cann_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_cann_buffer_type_interface,
+                /* .device    = */ nullptr,
                 /* .context  = */
                  new ggml_backend_cann_buffer_type_context{
                     i, "CANN" + std::to_string(i)},
@@ -1868,7 +1869,7 @@ static ggml_backend_event_t ggml_backend_cann_event_new(
     ACL_CHECK(aclrtCreateEvent(&event));
 
     return new ggml_backend_event{
-        /* .backend = */ backend,
+        /* .device = */ nullptr,
         /* .context = */ event,
     };
 }
@@ -1895,10 +1896,9 @@ static void ggml_backend_cann_event_free(ggml_backend_event_t event) {
  *
  * @param event Pointer to the event structure to be recorded.
  */
-static void ggml_backend_cann_event_record(ggml_backend_event_t event) {
+static void ggml_backend_cann_event_record(ggml_backend_t backend, ggml_backend_event_t event) {
     ggml_backend_cann_context* cann_ctx =
-        (ggml_backend_cann_context*)event->backend->context;
-
+        (ggml_backend_cann_context*)backend->context;
     ACL_CHECK(aclrtRecordEvent((aclrtEvent)event->context, cann_ctx->stream()));
 }
 
@@ -1916,8 +1916,7 @@ static void ggml_backend_cann_event_wait(ggml_backend_t backend,
                                          ggml_backend_event_t event) {
     ggml_backend_cann_context* cann_ctx =
         (ggml_backend_cann_context*)backend->context;
-
-    if (ggml_backend_is_cann(event->backend)) {
+    if (ggml_backend_is_cann(backend)) {
         ACL_CHECK(aclrtStreamWaitEvent(cann_ctx->stream(),
                                        (aclrtEvent)event->context));
     } else {
