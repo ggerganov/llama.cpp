@@ -151,7 +151,7 @@ int main(int argc, char * argv[]) {
         get_backend_memory(&free_mem, &total_mem);
     }
     printf("Starting RPC server on %s, backend memory: %zu MB\n", endpoint.c_str(), free_mem / (1024 * 1024));
-    start_rpc_server(backend, endpoint.c_str(), free_mem, total_mem);
+    ggml_backend_rpc_start_server(backend, endpoint.c_str(), free_mem, total_mem);
     ggml_backend_free(backend);
     return 0;
 }

@@ -433,6 +433,7 @@ extern "C" {
     LLAMA_API bool llama_supports_mmap       (void);
     LLAMA_API bool llama_supports_mlock      (void);
     LLAMA_API bool llama_supports_gpu_offload(void);
+    LLAMA_API bool llama_supports_rpc        (void);
 
     LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
@@ -896,6 +897,7 @@ extern "C" {
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+    LLAMA_API llama_token llama_token_eot(const struct llama_model * model); // end-of-turn
     LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
     LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
@@ -904,11 +906,17 @@ extern "C" {
     LLAMA_API bool llama_add_bos_token(const struct llama_model * model);
     LLAMA_API bool llama_add_eos_token(const struct llama_model * model);
 
-    // Codellama infill tokens
-    LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
-    LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
-    LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
-    LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
+    // infill tokens
+    DEPRECATED(LLAMA_API llama_token llama_token_prefix(const struct llama_model * model), "use llama_token_fim_pre instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_middle(const struct llama_model * model), "use llama_token_fim_mid instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_suffix(const struct llama_model * model), "use llama_token_fim_suf instead");
+
+    LLAMA_API llama_token llama_token_fim_pre(const struct llama_model * model);
+    LLAMA_API llama_token llama_token_fim_suf(const struct llama_model * model);
+    LLAMA_API llama_token llama_token_fim_mid(const struct llama_model * model);
+    LLAMA_API llama_token llama_token_fim_pad(const struct llama_model * model);
+    LLAMA_API llama_token llama_token_fim_rep(const struct llama_model * model);
+    LLAMA_API llama_token llama_token_fim_sep(const struct llama_model * model);
 
     //
     // Tokenization
@@ -944,6 +952,12 @@ extern "C" {
                                int32_t   length,
                                int32_t   lstrip,
                                   bool   special);
+
+    // check if token0 is contained as a prefix in token1
+    LLAMA_API bool llama_token_is_prefix(
+              const struct llama_model * model,
+                           llama_token   token0,
+                           llama_token   token1);
 
     /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
     /// @param text The char pointer must be large enough to hold the resulting text.
@@ -1093,6 +1107,9 @@ extern "C" {
     /// @details Dynamic temperature implementation (a.k.a. entropy) described in the paper https://arxiv.org/abs/2309.02772.
     LLAMA_API struct llama_sampler * llama_sampler_init_temp_ext   (float   t, float   delta, float exponent);
 
+    /// @details XTC sampler as described in https://github.com/oobabooga/text-generation-webui/pull/6335
+    LLAMA_API struct llama_sampler * llama_sampler_init_xtc        (float   p, float   t,     size_t min_keep, uint32_t seed);
+
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
     /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
@@ -1137,6 +1154,28 @@ extern "C" {
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
 
+    // this sampler is meant to be used for fill-in-the-middle infilling
+    // it's supposed to be used after top_k + top_p sampling
+    //
+    // 1. if the sum of the EOG probs times the number of candidates is higher than the sum of the other probs -> pick EOG
+    // 2. combine probs of tokens that have the same prefix
+    //
+    // example:
+    //
+    // - before:
+    //   "hel":   0.5
+    //   "hell":  0.2
+    //   "hello": 0.1
+    //   "dummy": 0.1
+    //
+    // - after:
+    //   "hel":   0.8
+    //   "dummy": 0.1
+    //
+    // 3. discard non-EOG tokens with low prob
+    // 4. if no tokens are left -> pick EOT
+    //
+    LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model);
 
     // Returns the seed used by the sampler if applicable, LLAMA_DEFAULT_SEED otherwise
     LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);

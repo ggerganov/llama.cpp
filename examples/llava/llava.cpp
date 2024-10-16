@@ -432,7 +432,7 @@ struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * c
     bool image_embed_result = llava_image_embed_make_with_clip_img(ctx_clip, n_threads, img, &image_embed, &n_image_pos);
     if (!image_embed_result) {
         clip_image_u8_free(img);
-        LOG_ERR("%s: coulnd't embed the image\n", __func__);
+        LOG_ERR("%s: couldn't embed the image\n", __func__);
         return NULL;
     }
 

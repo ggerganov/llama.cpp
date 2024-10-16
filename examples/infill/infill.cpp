@@ -35,8 +35,8 @@
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
-static gpt_sampler             ** g_smpl;
-static gpt_params               * g_params;
+static common_sampler          ** g_smpl;
+static common_params            * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
@@ -44,7 +44,7 @@ static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
 
 static void write_logfile(
-    const llama_context * ctx, const gpt_params & params, const llama_model * model,
+    const llama_context * ctx, const common_params & params, const llama_model * model,
     const std::vector<llama_token> & input_tokens, const std::string & output,
     const std::vector<llama_token> & output_tokens
 ) {
@@ -95,12 +95,12 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             LOG("\n");
-            gpt_perf_print(*g_ctx, *g_smpl);
+            common_perf_print(*g_ctx, *g_smpl);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
 
             // make sure all logs are flushed
             LOG("Interrupted by user\n");
-            gpt_log_pause(gpt_log_main());
+            common_log_pause(common_log_main());
 
             _exit(130);
         }
@@ -109,14 +109,14 @@ static void sigint_handler(int signo) {
 #endif
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
     g_params = &params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_INFILL)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_INFILL)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     auto & sparams = params.sparams;
 
@@ -166,7 +166,7 @@ int main(int argc, char ** argv) {
 
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
-    gpt_sampler  * smpl = nullptr;
+    common_sampler * smpl = nullptr;
 
     g_model = &model;
     g_ctx = &ctx;
@@ -174,7 +174,7 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
     model = llama_init.model;
     ctx = llama_init.context;
@@ -195,21 +195,21 @@ int main(int argc, char ** argv) {
     // print system information
     {
         LOG_INF("\n");
-        LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+        LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
     const bool add_bos = llama_add_bos_token(model);
     GGML_ASSERT(!llama_add_eos_token(model));
 
     std::vector<llama_token> embd_inp;
     std::vector<llama_token> embd_end;
-    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+    std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
+    std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
-    GGML_ASSERT(llama_token_prefix(model) >= 0);
-    GGML_ASSERT(llama_token_suffix(model) >= 0);
+    GGML_ASSERT(llama_token_fim_pre(model) >= 0);
+    GGML_ASSERT(llama_token_fim_suf(model) >= 0);
 
-    inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
-    inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
+    inp_pfx.insert(inp_pfx.begin(), llama_token_fim_pre(model));
+    inp_sfx.insert(inp_sfx.begin(), llama_token_fim_suf(model));
 
     embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
     embd_end = params.spm_infill ? inp_pfx : inp_sfx;
@@ -218,7 +218,7 @@ int main(int argc, char ** argv) {
     }
     embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
 
-    const llama_token middle_token = llama_token_middle(model);
+    const llama_token middle_token = llama_token_fim_mid(model);
     if (middle_token >= 0) {
         embd_inp.push_back(middle_token);
     }
@@ -257,13 +257,13 @@ int main(int argc, char ** argv) {
         LOG_INF("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         LOG_INF("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            LOG_INF("%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
+            LOG_INF("%6d -> '%s'\n", embd_inp[i], common_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (params.n_keep > 0) {
         LOG_INF("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                LOG_CNT("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
+                LOG_CNT("%s", common_token_to_piece(ctx, embd_inp[i]).c_str());
             }
             LOG_CNT("'\n");
         }
@@ -298,11 +298,11 @@ int main(int argc, char ** argv) {
             LOG_INF("Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
-    smpl = gpt_sampler_init(model, sparams);
+    smpl = common_sampler_init(model, sparams);
 
-    LOG_INF("sampler seed: %u\n",     gpt_sampler_get_seed(smpl));
+    LOG_INF("sampler seed: %u\n",     common_sampler_get_seed(smpl));
     LOG_INF("sampler params: \n%s\n", sparams.print().c_str());
-    LOG_INF("sampler chain: %s\n",    gpt_sampler_print(smpl).c_str());
+    LOG_INF("sampler chain: %s\n",    common_sampler_print(smpl).c_str());
 
     LOG_INF("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
@@ -411,9 +411,9 @@ int main(int argc, char ** argv) {
         embd.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
-            const llama_token id = gpt_sampler_sample(smpl, ctx, -1);
+            const llama_token id = common_sampler_sample(smpl, ctx, -1);
 
-            gpt_sampler_accept(smpl, id, true);
+            common_sampler_accept(smpl, id, true);
 
             // LOG_DBG("last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
@@ -434,7 +434,7 @@ int main(int argc, char ** argv) {
 
                 // push the prompt in the sampling context in order to apply repetition penalties later
                 // for the prompt, we don't apply grammar rules
-                gpt_sampler_accept(smpl, embd_inp[n_consumed], false);
+                common_sampler_accept(smpl, embd_inp[n_consumed], false);
 
                 ++n_consumed;
                 if ((int) embd.size() >= params.n_batch) {
@@ -446,7 +446,7 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo) {
             for (auto id : embd) {
-                const std::string token_str = llama_token_to_piece(ctx, id);
+                const std::string token_str = common_token_to_piece(ctx, id);
                 LOG("%s", token_str.c_str());
 
                 if (embd.size() > 1) {
@@ -465,10 +465,10 @@ int main(int argc, char ** argv) {
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
             // deal with eot token in infill mode
-            if ((gpt_sampler_last(smpl) == llama_token_eot(model) || is_interacting) && params.interactive){
+            if ((common_sampler_last(smpl) == llama_token_eot(model) || is_interacting) && params.interactive){
                 if (is_interacting && !params.interactive_first) {
                     // print an eot token
-                    LOG("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
+                    LOG("%s", common_token_to_piece(ctx, llama_token_eot(model)).c_str());
                 }
                 LOG("\n");
                 console::set_display(console::user_input);
@@ -505,11 +505,11 @@ int main(int argc, char ** argv) {
                 }
 
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+                std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
+                std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
-                inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
-                inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
+                inp_pfx.insert(inp_pfx.begin(), llama_token_fim_pre(model));
+                inp_sfx.insert(inp_sfx.begin(), llama_token_fim_suf(model));
 
                 embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
                 embd_end = params.spm_infill ? inp_pfx : inp_sfx;
@@ -529,7 +529,7 @@ int main(int argc, char ** argv) {
                 is_interacting = false;
             }
             // deal with end of generation tokens in interactive mode
-            else if (llama_token_is_eog(model, gpt_sampler_last(smpl))) {
+            else if (llama_token_is_eog(model, common_sampler_last(smpl))) {
                 LOG_DBG("found EOS token\n");
 
                 if (params.interactive) {
@@ -579,7 +579,7 @@ int main(int argc, char ** argv) {
 
                     const size_t original_size = embd_inp.size();
 
-                    const auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    const auto line_inp = common_tokenize(ctx, buffer, false);
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
 
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
@@ -587,7 +587,7 @@ int main(int argc, char ** argv) {
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
                         const llama_token token = embd_inp[i];
                         output_tokens.push_back(token);
-                        output_ss << llama_token_to_piece(ctx, token);
+                        output_ss << common_token_to_piece(ctx, token);
                     }
 
                     n_remain -= line_inp.size();
@@ -601,7 +601,7 @@ int main(int argc, char ** argv) {
 
             if (n_past > 0) {
                 if (is_interacting) {
-                    gpt_sampler_reset(smpl);
+                    common_sampler_reset(smpl);
                 }
                 is_interacting = false;
             }
@@ -620,17 +620,17 @@ int main(int argc, char ** argv) {
         }
     }
     if (!params.interactive && n_remain <= 0) {
-        LOG("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
+        LOG("%s", common_token_to_piece(ctx, llama_token_eot(model)).c_str());
     }
 
     LOG("\n");
-    gpt_perf_print(ctx, smpl);
+    common_perf_print(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     llama_free(ctx);
     llama_free_model(model);
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
     llama_backend_free();
 
     return 0;

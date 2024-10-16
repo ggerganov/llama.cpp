@@ -57,7 +57,7 @@ static T json_value(const json & body, const std::string & key, const T & defaul
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
-    std::vector<llama_chat_msg> chat;
+    std::vector<common_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
@@ -84,10 +84,23 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat.push_back({role, content});
     }
 
-    const auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true);
+    const auto formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
+}
+
+static std::string llama_get_chat_template(const struct llama_model * model) {
+    std::string template_key = "tokenizer.chat_template";
+    // call with NULL buffer to get the total size of the string
+    int32_t res = llama_model_meta_val_str(model, template_key.c_str(), NULL, 0);
+    if (res < 0) {
+        return "";
+    } else {
+        std::vector<char> model_template(res, 0);
+        llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        return std::string(model_template.data(), model_template.size());
+    }
 }
 
 //
@@ -182,14 +195,14 @@ static std::string gen_chatcmplid() {
 // other common utils
 //
 
-static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
+static size_t longest_common_prefix(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
     return i;
 }
 
-static size_t common_part(const std::string & a, const std::string & b) {
+static size_t longest_common_prefix(const std::string & a, const std::string & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
@@ -233,7 +246,7 @@ template <class Iter>
 static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
     std::string ret;
     for (; begin != end; ++begin) {
-        ret += llama_token_to_piece(ctx, *begin);
+        ret += common_token_to_piece(ctx, *begin);
     }
 
     return ret;
@@ -241,7 +254,7 @@ static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
 
 // format incomplete utf-8 multibyte character for output
 static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
-    std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
+    std::string out = token == -1 ? "" : common_token_to_piece(ctx, token);
 
     // if the size is 1 and first bit is 1, meaning it's a partial character
     //   (size > 1 meaning it's already a known token)
@@ -347,9 +360,9 @@ static json oaicompat_completion_params_parse(
 
     // Handle "logprobs" field
     // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
-    if (body.contains("logprobs")) {
+    if (json_value(body, "logprobs", false)) {
         llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
-    } else if (body.contains("top_logprobs")) {
+    } else if (body.contains("top_logprobs") && !body.at("top_logprobs").is_null()) {
         throw std::runtime_error("top_logprobs requires logprobs to be set to true");
     }
 

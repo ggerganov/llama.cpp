@@ -37,21 +37,21 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = common_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
 
-static const char * sample(struct gpt_sampler * smpl,
+static const char * sample(struct common_sampler * smpl,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
-    gpt_sampler_accept(smpl, id, true);
+    const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
+    common_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past);
     return ret.c_str();
@@ -120,7 +120,7 @@ static void print_usage(int, char ** argv) {
     LOG("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
-static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_params * params, const std::string & fname) {
+static struct llava_image_embed * load_image(llava_context * ctx_llava, common_params * params, const std::string & fname) {
 
     // load and preprocess the image
     llava_image_embed * embed = NULL;
@@ -146,7 +146,7 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
     return embed;
 }
 
-static void process_prompt(struct llava_context * ctx_llava, struct llava_image_embed * image_embed, gpt_params * params, const std::string & prompt) {
+static void process_prompt(struct llava_context * ctx_llava, struct llava_image_embed * image_embed, common_params * params, const std::string & prompt) {
     int n_past = 0;
 
     const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
@@ -159,16 +159,16 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         user_prompt = prompt.substr(image_pos + std::string("<image>").length());
         LOG_INF("system_prompt: %s\n", system_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
         LOG_INF("user_prompt: %s\n", user_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
     } else {
@@ -176,9 +176,9 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         system_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
         user_prompt = prompt + "\nASSISTANT:";
         if (params->verbose_prompt) {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
     }
@@ -191,7 +191,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG("\n");
 
-    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
+    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sparams);
     if (!smpl) {
         LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -211,15 +211,15 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         fflush(stdout);
     }
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
     LOG("\n");
 }
 
-static struct llama_model * llava_init(gpt_params * params) {
+static struct llama_model * llava_init(common_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(*params);
+    llama_model_params model_params = common_model_params_to_llama(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -229,7 +229,7 @@ static struct llama_model * llava_init(gpt_params * params) {
     return model;
 }
 
-static struct llava_context * llava_init_context(gpt_params * params, llama_model * model) {
+static struct llava_context * llava_init_context(common_params * params, llama_model * model) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
@@ -240,7 +240,7 @@ static struct llava_context * llava_init_context(gpt_params * params, llama_mode
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
+    llama_context_params ctx_params = common_context_params_to_llama(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
@@ -272,13 +272,13 @@ static void llava_free(struct llava_context * ctx_llava) {
 int main(int argc, char ** argv) {
     ggml_time_init();
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
         print_usage(argc, argv);
