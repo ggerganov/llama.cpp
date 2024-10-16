@@ -449,8 +449,6 @@ ggml_backend_reg_t ggml_backend_amx_reg(void) {
 ggml_backend_t ggml_backend_amx_init(void) {
   fprintf(stderr, "GGML is not compiled with AMX support!\n");
   return ggml_backend_t{};
-
-  GGML_UNUSED(n_threads);
 }
 
 void ggml_backend_amx_set_n_threads(ggml_backend_t backend_amx, int n_threads) {
