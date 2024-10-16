@@ -19522,18 +19522,6 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 
-#if defined(GGML_USE_AMX)
-    {
-        ggml_backend_t backend = ggml_backend_amx_init(cparams.n_threads);
-        if (backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize AMX backend\n", __func__);
-            llama_free(ctx);
-            return nullptr;
-        }
-        ctx->backends.push_back(backend);
-    }
-#endif
-
         // add other backends (such as BLAS)
         for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
             ggml_backend_dev_t dev = ggml_backend_dev_get(i);
