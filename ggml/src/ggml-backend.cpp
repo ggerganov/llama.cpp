@@ -768,14 +768,19 @@ static const char * ggml_backend_cpu_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    void * data = ggml_aligned_malloc(size);
+    auto alloc_size = size;
+    if (alloc_size == 0) {
+        alloc_size = 1;
+    }
+
+    void * data = ggml_aligned_malloc(alloc_size);
 
     if (data == NULL) {
-        GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, size);
+        GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, alloc_size);
         return NULL;
     }
 
-    return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, size);
+    return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, alloc_size);
 }
 
 static size_t ggml_backend_cpu_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
