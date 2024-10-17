@@ -171,7 +171,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalize_nl,
                 params.ignore_eos));
 
-    if (params.temp > 0.0f) {
+    if (params.temp >= 0.0f) {
         if (params.mirostat == 0) {
             for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
@@ -214,6 +214,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
             GGML_ASSERT(false && "unknown mirostat version");
         }
     } else {
+        // negative temperatures will trigger "greedy" sampling: simply take the most likely token each time
         if (params.n_probs > 0) {
             // some use cases require to sample greedily, but still obtain the probabilities of the top tokens
             // ref: https://github.com/ggerganov/llama.cpp/pull/9605

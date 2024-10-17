@@ -1082,8 +1082,8 @@ extern "C" {
 
     // available samplers:
 
-    LLAMA_API struct llama_sampler * llama_sampler_init_greedy     (void);
-    LLAMA_API struct llama_sampler * llama_sampler_init_dist       (uint32_t seed);
+    LLAMA_API struct llama_sampler * llama_sampler_init_greedy(void);
+    LLAMA_API struct llama_sampler * llama_sampler_init_dist  (uint32_t seed);
 
     /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
     /// NOTE: Avoid using on the full vocabulary as the sorting can become slow. For example, apply top-k or top-p sampling first.
@@ -1104,6 +1104,8 @@ extern "C" {
 
     /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
     LLAMA_API struct llama_sampler * llama_sampler_init_typical    (float   p, size_t min_keep);
+
+    /// #details Updates the logits l_i` = l_i/t. When t <= 0.0f, the maximum logit is kept at it's original value, the rest are set to -inf
     LLAMA_API struct llama_sampler * llama_sampler_init_temp       (float   t);
 
     /// @details Dynamic temperature implementation (a.k.a. entropy) described in the paper https://arxiv.org/abs/2309.02772.

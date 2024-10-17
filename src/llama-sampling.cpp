@@ -915,6 +915,28 @@ static const char * llama_sampler_temp_name(const struct llama_sampler * /*smpl*
 
 static void llama_sampler_temp_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     const auto * ctx = (llama_sampler_temp *) smpl->ctx;
+
+    if (ctx->temp <= 0.0f) {
+        // find the token with the highest logit and set the rest to -inf
+        llama_token max_id = cur_p->data[0].id;
+        float max_logit = cur_p->data[0].logit;
+
+        for (size_t i = 1; i < cur_p->size; ++i) {
+            if (cur_p->data[i].logit > max_logit) {
+                max_id    = cur_p->data[i].id;
+                max_logit = cur_p->data[i].logit;
+            }
+        }
+
+        for (size_t i = 0; i < cur_p->size; ++i) {
+            if (cur_p->data[i].id != max_id) {
+                cur_p->data[i].logit = -INFINITY;
+            }
+        }
+
+        return;
+    }
+
     for (size_t i = 0; i < cur_p->size; ++i) {
         cur_p->data[i].logit /= ctx->temp;
     }
@@ -964,6 +986,7 @@ static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_toke
     if (ctx->delta > 0) {
         const float min_temp = std::max(0.0f, ctx->temp - ctx->delta);
         const float max_temp = ctx->temp + ctx->delta;
+
         float exponent_val = ctx->exponent;
 
         // no need to do anything if there is only one (or zero) candidates
