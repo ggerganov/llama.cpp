@@ -6372,3 +6372,98 @@ template [[host_name("kernel_mul_mv_id_iq3_s_f32")]]   kernel kernel_mul_mv_id_t
 template [[host_name("kernel_mul_mv_id_iq2_s_f32")]]   kernel kernel_mul_mv_id_t kernel_mul_mv_id<mmv_fn<kernel_mul_mv_iq2_s_f32_impl>>;
 template [[host_name("kernel_mul_mv_id_iq4_nl_f32")]]  kernel kernel_mul_mv_id_t kernel_mul_mv_id<mmv_fn<kernel_mul_mv_iq4_nl_f32_impl>>;
 template [[host_name("kernel_mul_mv_id_iq4_xs_f32")]]  kernel kernel_mul_mv_id_t kernel_mul_mv_id<mmv_fn<kernel_mul_mv_iq4_xs_f32_impl>>;
+
+kernel void kernel_max_pool_2d_f32(
+        device const float* src0,
+        device       float* dst,
+        constant    int32_t& k0,
+        constant    int32_t& k1,
+        constant    int32_t& s0,
+        constant    int32_t& s1,
+        constant    int32_t& p0,
+        constant    int32_t& p1,
+        constant    int64_t& IH,
+        constant    int64_t& IW,
+        constant    int64_t& OH,
+        constant    int64_t& OW,
+        constant    int64_t& parallel_elements,
+        uint        gid[[thread_position_in_grid]]) {
+
+    if (gid >= parallel_elements) {
+        return;
+    }
+
+    const int idx = gid;
+    const int I_HW = IH * IW;
+    const int O_HW = OH * OW;
+    const int nc = idx / O_HW;
+    const int cur_oh = idx % O_HW / OW;
+    const int cur_ow = idx % O_HW % OW;
+
+    device const float* i_ptr = src0 + nc * I_HW;
+    device float* o_ptr = dst + nc * O_HW;
+
+    const int start_h = cur_oh * s1 - p1;
+    const int bh = MAX(0, start_h);
+    const int eh = MIN(IH, start_h + k1);
+    const int start_w = cur_ow * s0 - p0;
+    const int bw = MAX(0, start_w);
+    const int ew = MIN(IW, start_w + k0);
+    float res = -INFINITY;
+
+    for (int i = bh; i < eh; i += 1) {
+        for (int j = bw; j < ew; j += 1) {
+            res = MAX(res, i_ptr[i * IW + j]);
+        }
+    }
+    o_ptr[cur_oh * OW + cur_ow] = res;
+}
+
+kernel void kernel_avg_pool_2d_f32(
+        device const float* src0,
+        device       float* dst,
+        constant    int32_t& k0,
+        constant    int32_t& k1,
+        constant    int32_t& s0,
+        constant    int32_t& s1,
+        constant    int32_t& p0,
+        constant    int32_t& p1,
+        constant    int64_t& IH,
+        constant    int64_t& IW,
+        constant    int64_t& OH,
+        constant    int64_t& OW,
+        constant    int64_t& parallel_elements,
+        uint        gid[[thread_position_in_grid]]) {
+
+    if (gid >= parallel_elements) {
+        return;
+    }
+
+    const int idx = gid;
+    const int I_HW = IH * IW;
+    const int O_HW = OH * OW;
+    const int nc = idx / O_HW;
+    const int cur_oh = idx % O_HW / OW;
+    const int cur_ow = idx % O_HW % OW;
+
+    device const float* i_ptr = src0 + nc * I_HW;
+    device float* o_ptr = dst + nc * O_HW;
+
+    const int start_h = cur_oh * s1 - p1;
+    const int bh = MAX(0, start_h);
+    const int eh = MIN(IH, start_h + k1);
+    const int start_w = cur_ow * s0 - p0;
+    const int bw = MAX(0, start_w);
+    const int ew = MIN(IW, start_w + k0);
+    // const float scale = 1. / ((eh - bh) * (ew - bw));
+    const float scale = 1. / (k0 * k1);
+    float res = 0;
+
+    for (int i = bh; i < eh; i += 1) {
+        for (int j = bw; j < ew; j += 1) {
+            float cur = i_ptr[i * IW + j];
+            res += cur * scale;
+        }
+    }
+    o_ptr[cur_oh * OW + cur_ow] = res;
+}
