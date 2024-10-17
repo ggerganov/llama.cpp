@@ -764,7 +764,7 @@ static void llama_grammar_advance_stack_memo(
     if (it != stacks_cache.end()) {
            advanced_stacks = it->second;
     } else {
-        // Advance stacks with memorization
+        // Advance stacks with memoization
         llama_grammar_advance_stack_memo_impl(rules, stack, advanced_stacks, stacks_cache);
         stacks_cache.insert(make_pair(stack, advanced_stacks));
     }
