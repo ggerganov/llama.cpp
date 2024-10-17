@@ -63,6 +63,33 @@ static void llama_log_softmax(float * array, size_t size) {
 }
 */
 
+static void llama_sampler_temp_impl(llama_token_data_array * cur_p, float temp) {
+    if (temp <= 0.0f) {
+        // find the token with the highest logit and set the rest to -inf
+        llama_token max_id = cur_p->data[0].id;
+        float max_logit = cur_p->data[0].logit;
+
+        for (size_t i = 1; i < cur_p->size; ++i) {
+            if (cur_p->data[i].logit > max_logit) {
+                max_id    = cur_p->data[i].id;
+                max_logit = cur_p->data[i].logit;
+            }
+        }
+
+        for (size_t i = 0; i < cur_p->size; ++i) {
+            if (cur_p->data[i].id != max_id) {
+                cur_p->data[i].logit = -INFINITY;
+            }
+        }
+
+        return;
+    }
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        cur_p->data[i].logit /= temp;
+    }
+}
+
 static void llama_sampler_softmax_impl(llama_token_data_array * cur_p) {
     GGML_ASSERT(cur_p->size > 0);
 
@@ -916,30 +943,7 @@ static const char * llama_sampler_temp_name(const struct llama_sampler * /*smpl*
 static void llama_sampler_temp_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     const auto * ctx = (llama_sampler_temp *) smpl->ctx;
 
-    if (ctx->temp <= 0.0f) {
-        // find the token with the highest logit and set the rest to -inf
-        llama_token max_id = cur_p->data[0].id;
-        float max_logit = cur_p->data[0].logit;
-
-        for (size_t i = 1; i < cur_p->size; ++i) {
-            if (cur_p->data[i].logit > max_logit) {
-                max_id    = cur_p->data[i].id;
-                max_logit = cur_p->data[i].logit;
-            }
-        }
-
-        for (size_t i = 0; i < cur_p->size; ++i) {
-            if (cur_p->data[i].id != max_id) {
-                cur_p->data[i].logit = -INFINITY;
-            }
-        }
-
-        return;
-    }
-
-    for (size_t i = 0; i < cur_p->size; ++i) {
-        cur_p->data[i].logit /= ctx->temp;
-    }
+    llama_sampler_temp_impl(cur_p, ctx->temp);
 }
 
 static struct llama_sampler * llama_sampler_temp_clone(const struct llama_sampler * smpl) {
@@ -1024,9 +1028,7 @@ static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_toke
     #endif
 
         // Apply the dynamically calculated temperature scaling
-        for (size_t i = 0; i < cur_p->size; ++i) {
-            cur_p->data[i].logit /= dyn_temp;
-        }
+        llama_sampler_temp_impl(cur_p, dyn_temp);
 
         // Re-compute softmax probabilities after scaling logits with dynamic temperature
         const double max_l_double = cur_p->data[0].logit;
@@ -1050,9 +1052,7 @@ static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_toke
         }
     #endif
     } else {
-        for (size_t i = 0; i < cur_p->size; ++i) {
-            cur_p->data[i].logit /= ctx->temp;
-        }
+        llama_sampler_temp_impl(cur_p, ctx->temp);
     }
 }
 
