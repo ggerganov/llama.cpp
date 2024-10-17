@@ -2,8 +2,6 @@
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
 
-#define K_QUANTS_PER_ITERATION 2
-
 #ifdef MUL_MAT_ID
 #define EXPERT_COUNT 8
 #endif
