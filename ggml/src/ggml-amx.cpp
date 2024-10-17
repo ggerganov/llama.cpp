@@ -289,10 +289,12 @@ static void ggml_backend_amx_device_get_props(ggml_backend_dev_t dev, struct ggm
   props->description = ggml_backend_amx_device_get_description(dev);
   props->type        = ggml_backend_amx_device_get_type(dev);
   ggml_backend_amx_device_get_memory(dev, &props->memory_free, &props->memory_total);
+
+  // `buffer_from_host_ptr` is intended to be used in mmap, when memory layout unchanged
   props->caps = {
     /* .async                 = */ false,
     /* .host_buffer           = */ false,
-    /* .buffer_from_host_ptr  = */ true,
+    /* .buffer_from_host_ptr  = */ false,
     /* .events                = */ false,
   };
 }
@@ -308,14 +310,6 @@ static ggml_backend_buffer_type_t ggml_backend_amx_device_get_buffer_type(ggml_b
   return ggml_backend_amx_buffer_type();
 
   GGML_UNUSED(dev);
-}
-
-static ggml_backend_buffer_t ggml_backend_amx_device_buffer_from_ptr(ggml_backend_dev_t dev, void * ptr, size_t size, size_t max_tensor_size) {
-  GGML_ASSERT((uintptr_t)ptr % TENSOR_ALIGNMENT == 0 && "buffer pointer must be aligned");
-  return ggml_backend_buffer_init(ggml_backend_amx_buffer_type(), ggml_backend_amx_buffer_interface, ptr, size);
-
-  GGML_UNUSED(dev);
-  GGML_UNUSED(max_tensor_size);
 }
 
 static bool ggml_backend_amx_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
@@ -378,7 +372,7 @@ static const struct ggml_backend_device_i ggml_backend_amx_device_i = {
   /* .init_backend         = */ ggml_backend_amx_device_init,
   /* .get_buffer_type      = */ ggml_backend_amx_device_get_buffer_type,
   /* .get_host_buffer_type = */ NULL,
-  /* .buffer_from_host_ptr = */ ggml_backend_amx_device_buffer_from_ptr,
+  /* .buffer_from_host_ptr = */ NULL,
   /* .supports_op          = */ ggml_backend_amx_device_supports_op,
   /* .supports_buft        = */ ggml_backend_amx_device_supports_buft,
   /* .offload_op           = */ NULL,
