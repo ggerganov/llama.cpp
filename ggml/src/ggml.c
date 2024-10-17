@@ -35,10 +35,6 @@
 #include <omp.h>
 #endif
 
-#ifdef GGML_USE_METAL
-#include <unistd.h>
-#endif
-
 #if defined(__ARM_FEATURE_SVE) || defined(__ARM_FEATURE_MATMUL_INT8)
 #undef GGML_USE_LLAMAFILE
 #endif
@@ -189,6 +185,8 @@ typedef pthread_t ggml_thread_t;
 #endif
 
 #if defined(__APPLE__)
+#include <unistd.h>
+#include <mach/mach.h>
 #include <TargetConditionals.h>
 #endif
 
@@ -386,22 +384,40 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
 //#define GGML_SOFT_MAX_ACCELERATE
 #endif
 
+
+void * ggml_aligned_malloc(size_t size) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
-#define GGML_ALIGNED_MALLOC(size) _aligned_malloc(size, GGML_MEM_ALIGN)
-#define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
+    return _aligned_malloc(size, TENSOR_ALIGNMENT);
 #else
-inline static void * ggml_aligned_malloc(size_t size) {
     if (size == 0) {
         GGML_LOG_WARN("Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
         return NULL;
     }
     void * aligned_memory = NULL;
 #ifdef GGML_USE_CPU_HBM
-    int result = hbw_posix_memalign(&aligned_memory, 16, size);
+    int result = hbw_posix_memalign(&aligned_memory, TENSOR_ALIGNMENT, size);
+#elif TARGET_OS_OSX
+    kern_return_t alloc_status = vm_allocate((vm_map_t) mach_task_self(), (vm_address_t *) &aligned_memory, size, VM_FLAGS_ANYWHERE);
+    int result = EFAULT;
+    switch (alloc_status) {
+        case KERN_SUCCESS:
+            result = 0;
+            break;
+        case KERN_INVALID_ADDRESS:
+            result = EINVAL;
+            break;
+        case KERN_NO_SPACE:
+            result = ENOMEM;
+            break;
+        default:
+            result = EFAULT;
+            break;
+    }
 #elif GGML_USE_METAL
-    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
+    const long page_size = sysconf(_SC_PAGESIZE);
+    int result = posix_memalign(&aligned_memory, MAX(TENSOR_ALIGNMENT, page_size), size);
 #else
-    int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
+    int result = posix_memalign(&aligned_memory, TENSOR_ALIGNMENT, size);
 #endif
     if (result != 0) {
         // Handle allocation failure
@@ -419,14 +435,26 @@ inline static void * ggml_aligned_malloc(size_t size) {
         return NULL;
     }
     return aligned_memory;
+#endif
 }
-#define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
-#ifdef GGML_USE_CPU_HBM
-#define GGML_ALIGNED_FREE(ptr)    if(NULL != ptr) hbw_free(ptr)
+
+void ggml_aligned_free(void * ptr, size_t size) {
+    GGML_UNUSED(size);
+#if defined(_MSC_VER) || defined(__MINGW32__)
+    _aligned_free(ptr);
+#elif GGML_USE_CPU_HBM
+    if (ptr != NULL) {
+        hbw_free(ptr);
+    }
+#elif TARGET_OS_OSX
+    if (ptr != NULL) {
+        vm_deallocate((vm_map_t)mach_task_self(), (vm_address_t)ptr, size);
+    }
 #else
-#define GGML_ALIGNED_FREE(ptr)    free(ptr)
+    free(ptr);
 #endif
-#endif
+}
+
 
 inline static void * ggml_malloc(size_t size) {
     if (size == 0) {
@@ -3869,7 +3897,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     *ctx = (struct ggml_context) {
         /*.mem_size           =*/ mem_size,
-        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
+        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : ggml_aligned_malloc(mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
         /*.no_alloc_save      =*/ params.no_alloc,
@@ -3909,7 +3937,7 @@ void ggml_free(struct ggml_context * ctx) {
                     __func__, i, ggml_used_mem(ctx));
 
             if (ctx->mem_buffer_owned) {
-                GGML_ALIGNED_FREE(ctx->mem_buffer);
+                ggml_aligned_free(ctx->mem_buffer, ctx->mem_size);
             }
 
             found = true;
@@ -19608,9 +19636,10 @@ static void ggml_thread_cpumask_next(const bool * global_mask, bool * local_mask
 void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     if (!threadpool) return;
 
+    const int n_threads = threadpool->n_threads_max;
+
 #ifndef GGML_USE_OPENMP
     struct ggml_compute_state* workers = threadpool->workers;
-    const int n_threads = threadpool->n_threads_max;
 
     ggml_mutex_lock(&threadpool->mutex);
 
@@ -19630,8 +19659,9 @@ void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     ggml_cond_destroy(&threadpool->cond);
 #endif // GGML_USE_OPENMP
 
-    GGML_ALIGNED_FREE(threadpool->workers);
-    GGML_ALIGNED_FREE(threadpool);
+    const size_t workers_size = sizeof(struct ggml_compute_state) * n_threads;
+    ggml_aligned_free(threadpool->workers, workers_size);
+    ggml_aligned_free(threadpool, sizeof(struct ggml_threadpool));
 }
 
 #ifndef GGML_USE_OPENMP
@@ -20063,7 +20093,7 @@ static struct ggml_threadpool * ggml_threadpool_new_impl(
                 struct ggml_cplan * cplan) {
 
     struct ggml_threadpool * threadpool =
-        GGML_ALIGNED_MALLOC(sizeof(struct ggml_threadpool));
+        ggml_aligned_malloc(sizeof(struct ggml_threadpool));
     {
         threadpool->cgraph           = cgraph;
         threadpool->cplan            = cplan;
@@ -20084,7 +20114,7 @@ static struct ggml_threadpool * ggml_threadpool_new_impl(
 
     // Allocate and init workers state
     const size_t workers_size = sizeof(struct ggml_compute_state) * tpp->n_threads;
-    struct ggml_compute_state * workers = GGML_ALIGNED_MALLOC(workers_size);
+    struct ggml_compute_state * workers = ggml_aligned_malloc(workers_size);
 
     memset(workers, 0, workers_size);
     for (int j = 0; j < tpp->n_threads; j++) {

@@ -3,10 +3,7 @@
 // TODO: rename llama-sampling.h/.cpp to llama-sampler.h/.cpp ?
 
 #include "llama-grammar.h"
-
 #include "llama-impl.h"
-
-#include <unordered_map>
 
 struct llama_vocab;
 struct llama_grammar;
@@ -29,3 +26,6 @@ struct llama_sampler * llama_sampler_init_grammar_impl(
         const struct llama_vocab & vocab,
                       const char * grammar_str,
                       const char * grammar_root);
+
+struct llama_sampler * llama_sampler_init_infill_impl(
+        const struct llama_vocab & vocab);

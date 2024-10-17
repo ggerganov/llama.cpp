@@ -152,6 +152,8 @@ class Keys:
         MERGES               = "tokenizer.ggml.merges"
         BOS_ID               = "tokenizer.ggml.bos_token_id"
         EOS_ID               = "tokenizer.ggml.eos_token_id"
+        EOT_ID               = "tokenizer.ggml.eot_token_id"
+        EOM_ID               = "tokenizer.ggml.eom_token_id"
         UNK_ID               = "tokenizer.ggml.unknown_token_id"
         SEP_ID               = "tokenizer.ggml.seperator_token_id"
         PAD_ID               = "tokenizer.ggml.padding_token_id"
@@ -168,11 +170,16 @@ class Keys:
         CHAT_TEMPLATE_N      = "tokenizer.chat_template.{name}"
         CHAT_TEMPLATES       = "tokenizer.chat_templates"
         # FIM/Infill special tokens constants
+        FIM_PRE_ID           = "tokenizer.ggml.fim_pre_token_id"
+        FIM_SUF_ID           = "tokenizer.ggml.fim_suf_token_id"
+        FIM_MID_ID           = "tokenizer.ggml.fim_mid_token_id"
+        FIM_PAD_ID           = "tokenizer.ggml.fim_pad_token_id"
+        FIM_REP_ID           = "tokenizer.ggml.fim_rep_token_id"
+        FIM_SEP_ID           = "tokenizer.ggml.fim_sep_token_id"
+        # deprecated:
         PREFIX_ID            = "tokenizer.ggml.prefix_token_id"
         SUFFIX_ID            = "tokenizer.ggml.suffix_token_id"
         MIDDLE_ID            = "tokenizer.ggml.middle_token_id"
-        EOT_ID               = "tokenizer.ggml.eot_token_id"
-        EOM_ID               = "tokenizer.ggml.eom_token_id"
 
     class Adapter:
         TYPE       = "adapter.type"
@@ -1579,6 +1586,8 @@ KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
 KEY_TOKENIZER_MERGES     = Keys.Tokenizer.MERGES
 KEY_TOKENIZER_BOS_ID     = Keys.Tokenizer.BOS_ID
 KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
+KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
+KEY_TOKENIZER_EOM_ID     = Keys.Tokenizer.EOM_ID
 KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
 KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
 KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
@@ -1586,8 +1595,15 @@ KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
 KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
-KEY_TOKENIZER_PRIFIX_ID  = Keys.Tokenizer.PREFIX_ID
+
+KEY_TOKENIZER_FIM_PRE_ID = Keys.Tokenizer.FIM_PRE_ID
+KEY_TOKENIZER_FIM_SUF_ID = Keys.Tokenizer.FIM_SUF_ID
+KEY_TOKENIZER_FIM_MID_ID = Keys.Tokenizer.FIM_MID_ID
+KEY_TOKENIZER_FIM_PAD_ID = Keys.Tokenizer.FIM_PAD_ID
+KEY_TOKENIZER_FIM_REP_ID = Keys.Tokenizer.FIM_REP_ID
+KEY_TOKENIZER_FIM_SEP_ID = Keys.Tokenizer.FIM_SEP_ID
+
+# deprecated
+KEY_TOKENIZER_PREFIX_ID  = Keys.Tokenizer.PREFIX_ID
 KEY_TOKENIZER_SUFFIX_ID  = Keys.Tokenizer.SUFFIX_ID
 KEY_TOKENIZER_MIDDLE_ID  = Keys.Tokenizer.MIDDLE_ID
-KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
-KEY_TOKENIZER_EOM_ID     = Keys.Tokenizer.EOM_ID

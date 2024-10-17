@@ -205,11 +205,11 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
     std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
-    GGML_ASSERT(llama_token_prefix(model) >= 0);
-    GGML_ASSERT(llama_token_suffix(model) >= 0);
+    GGML_ASSERT(llama_token_fim_pre(model) >= 0);
+    GGML_ASSERT(llama_token_fim_suf(model) >= 0);
 
-    inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
-    inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
+    inp_pfx.insert(inp_pfx.begin(), llama_token_fim_pre(model));
+    inp_sfx.insert(inp_sfx.begin(), llama_token_fim_suf(model));
 
     embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
     embd_end = params.spm_infill ? inp_pfx : inp_sfx;
@@ -218,7 +218,7 @@ int main(int argc, char ** argv) {
     }
     embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
 
-    const llama_token middle_token = llama_token_middle(model);
+    const llama_token middle_token = llama_token_fim_mid(model);
     if (middle_token >= 0) {
         embd_inp.push_back(middle_token);
     }
@@ -508,8 +508,8 @@ int main(int argc, char ** argv) {
                 std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
                 std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
-                inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
-                inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
+                inp_pfx.insert(inp_pfx.begin(), llama_token_fim_pre(model));
+                inp_sfx.insert(inp_sfx.begin(), llama_token_fim_suf(model));
 
                 embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
                 embd_end = params.spm_infill ? inp_pfx : inp_sfx;
