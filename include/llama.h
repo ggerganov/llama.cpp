@@ -953,12 +953,6 @@ extern "C" {
                                int32_t   lstrip,
                                   bool   special);
 
-    // check if token0 is contained as a prefix in token1
-    LLAMA_API bool llama_token_is_prefix(
-              const struct llama_model * model,
-                           llama_token   token0,
-                           llama_token   token1);
-
     /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
     /// @param text The char pointer must be large enough to hold the resulting text.
     /// @return Returns the number of chars/bytes on success, no more than text_len_max.
