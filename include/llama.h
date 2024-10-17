@@ -175,6 +175,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_TQ1_0         = 36, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_TQ2_0         = 37, // except 1d tensors
+        LLAMA_FTYPE_CQS                  = 99, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -360,6 +361,14 @@ extern "C" {
         enum llama_ftype ftype;              // quantize to this llama_ftype
         enum ggml_type output_tensor_type;   // output tensor type
         enum ggml_type token_embedding_type; // token embeddings tensor type
+        enum ggml_type attn_q_type;          // attention query tensor type
+        enum ggml_type attn_k_type;          // attention key tensor type
+        enum ggml_type attn_v_type;          // attention value tensor type
+        enum ggml_type attn_qkv_type;        // attention query-key-value tensor type
+        enum ggml_type attn_output_type;     // attention output tensor type
+        enum ggml_type ffn_gate_type;        // feedforward network gate type
+        enum ggml_type ffn_down_type;        // feedforward network down type
+        enum ggml_type ffn_up_type;          // feedforward network up type
         bool allow_requantize;               // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor;         // quantize output.weight
         bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
