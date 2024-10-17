@@ -73,9 +73,9 @@ let s:default_config = {
     \ 'endpoint':         'http://127.0.0.1:8012/infill',
     \ 'n_prefix':         256,
     \ 'n_suffix':         8,
-    \ 'n_predict':        64,
+    \ 'n_predict':        128,
     \ 't_max_prompt_ms':  500,
-    \ 't_max_predict_ms': 200,
+    \ 't_max_predict_ms': 1000,
     \ 'show_info':        2,
     \ 'auto_fim':         v:true,
     \ 'max_line_suffix':  8,
@@ -394,12 +394,16 @@ function! llama#fim(is_auto, on_hold) abort
             \ })
     endfor
 
+    " the indentation of the current line
+    let l:indent = strlen(matchstr(s:line_cur_prefix, '^\s*'))
+
     let l:request = json_encode({
         \ 'input_prefix':     l:prefix,
         \ 'input_suffix':     l:suffix,
         \ 'input_extra':      l:extra_context,
         \ 'prompt':           l:prompt,
         \ 'n_predict':        g:llama_config.n_predict,
+        \ 'n_indent':         l:indent,
         \ 'penalty_last_n':   0,
         \ 'top_k':            40,
         \ 'top_p':            0.99,
@@ -567,8 +571,6 @@ function! s:fim_on_stdout(job_id, data, event) dict
         return
     endif
 
-    let s:pos_dx = len(s:content[-1])
-
     " NOTE: the following is logic for discarding predictions that repeat existing text
     "       the code is quite ugly and there is very likely a simpler and more canonical way to implement this
     "
@@ -578,7 +580,12 @@ function! s:fim_on_stdout(job_id, data, event) dict
     "       helpful to re-generate the same code that is already there
 
     " truncate the suggestion if the first line is empty
-    if s:content[0] == ""
+    if len(s:content) == 1 && s:content[0] == ""
+        let s:content = [""]
+    endif
+
+    " ... and the next lines are repeated
+    if len(s:content) > 1 && s:content[0] == "" && s:content[1:] == getline(s:pos_y + 1, s:pos_y + len(s:content) - 1)
         let s:content = [""]
     endif
 
@@ -609,6 +616,17 @@ function! s:fim_on_stdout(job_id, data, event) dict
             let s:content = [""]
         endif
     endif
+
+    " keep only lines that have the same or larger whitespace prefix as s:line_cur_prefix
+    "let l:indent = strlen(matchstr(s:line_cur_prefix, '^\s*'))
+    "for i in range(1, len(s:content) - 1)
+    "    if strlen(matchstr(s:content[i], '^\s*')) < l:indent
+    "        let s:content = s:content[:i - 1]
+    "        break
+    "    endif
+    "endfor
+
+    let s:pos_dx = len(s:content[-1])
 
     let s:content[-1] .= s:line_cur_suffix
 
