@@ -684,7 +684,7 @@ static bool llama_grammar_match_partial_char(
 
 // transforms a grammar pushdown stack into N possible stacks, all ending
 // at a character range (terminal element)
-// additionally memorizes the stack to its possible stacks by mapping
+// additionally memoizes the stack to its possible stacks by mapping
 // < llama_grammar_stack, llama_grammar_stacks >
 
 static void llama_grammar_advance_stack_memo(
