@@ -33,7 +33,7 @@ struct sampler_tester {
         cur.reserve(probs.size());
         for (llama_token token_id = 0; token_id < (llama_token)probs.size(); token_id++) {
             const float logit = logf(probs[token_id]);
-            cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
+            cur.emplace_back(llama_token_data{token_id, logit, probs[token_id]});
         }
 
         cur_p = llama_token_data_array { cur.data(), cur.size(), -1, false };
