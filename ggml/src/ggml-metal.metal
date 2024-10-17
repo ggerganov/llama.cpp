@@ -795,7 +795,7 @@ kernel void kernel_ssm_conv_f32(
     x[0] = sumf;
 }
 
-// ref: ggml.c:ggml_compute_forward_ssm_scan_f32
+// ref: ggml.c:ggml_compute_forward_ssm_scan_f32, Mamba-1 part
 // TODO: optimize
 kernel void kernel_ssm_scan_f32(
         device const void * src0,
@@ -804,67 +804,165 @@ kernel void kernel_ssm_scan_f32(
         device const void * src3,
         device const void * src4,
         device const void * src5,
+        device const void * src6,
+        device const void * src7,
         device      float * dst,
         constant  int64_t & d_state,
         constant  int64_t & d_inner,
+        constant  int64_t & n_head,
+        constant  int64_t & n_group,
         constant  int64_t & n_seq_tokens,
         constant  int64_t & n_seqs,
-        constant uint64_t & nb00,
         constant uint64_t & nb01,
         constant uint64_t & nb02,
-        constant uint64_t & nb10,
+        constant uint64_t & nb03,
         constant uint64_t & nb11,
         constant uint64_t & nb12,
         constant uint64_t & nb13,
-        constant uint64_t & nb20,
         constant uint64_t & nb21,
         constant uint64_t & nb22,
-        constant uint64_t & nb30,
         constant uint64_t & nb31,
-        constant uint64_t & nb40,
         constant uint64_t & nb41,
         constant uint64_t & nb42,
-        constant uint64_t & nb50,
+        constant uint64_t & nb43,
         constant uint64_t & nb51,
         constant uint64_t & nb52,
+        constant uint64_t & nb53,
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {
-    const int64_t ir = tgpig.x;
-    const int64_t i3 = tgpig.y;
+    const int64_t i1 = 0;
+    const int64_t ir = tgpig.x; // current head
+    const int64_t i3 = tgpig.y; // current seq
+
+    const uint64_t nb00 = sizeof(float);
+    const uint64_t nb10 = sizeof(float);
+    const uint64_t nb20 = sizeof(float);
+    const uint64_t nb60 = sizeof(float);
 
     const int64_t nc  = d_state;
     const int64_t nr  = d_inner;
+    const int64_t nh  = n_head;
+    const int64_t ng  = n_group;
     const int64_t n_t = n_seq_tokens;
-    const int64_t n_s = n_seqs;
+
+    const int64_t s_off = d_inner * n_head * n_seq_tokens * n_seqs * sizeof(float);
+
+    device const int32_t * ids = (device const int32_t *) src7;
+
+    device const float * s0 = (device const float *) ((device const char *) src0 + ir*nb02 + ids[i3]*nb03);
+    device       float * s  = (device       float *) ((device       char *) dst  + ir*nb02 +      i3*nb03 + s_off);
 
     for (int64_t i2 = 0; i2 < n_t; ++i2) {
-        device const float * s0 = (device const float *) ((device const char *) src0 + ir*nb01 + i3*nb02);
-        device const float * x  = (device const float *) ((device const char *) src1 + ir*nb10 + i2*nb11 + i3*nb12);
-        device const float * dt = (device const float *) ((device const char *) src2 + ir*nb20 + i2*nb21 + i3*nb22);
-        device const float * A  = (device const float *) ((device const char *) src3 + ir*nb31);
-        device const float * B  = (device const float *) ((device const char *) src4 + i2*nb41 + i3*nb42);
-        device const float * C  = (device const float *) ((device const char *) src5 + i2*nb51 + i3*nb52);
-        device       float * y  = (device       float *) ((device       char *) dst  + ir*nb10 + i2*nb11 + i3*nb12); // TODO: do not use src1 strides
-        device       float * s  = (device       float *) ((device       char *) dst  + ir*nb01 + i3*nb02 +    nb13);
+        device const float * x  = (device const float *) ((device const char *) src1 + i1*nb10 + ir*nb11 + i2*nb12 + i3*nb13); // {dim, nh, nt, ns}
+        device const float * dt = (device const float *) ((device const char *) src2 + ir*nb20 + i2*nb21 + i3*nb22); // {nh, nt, ns}
+        device const float * A  = (device const float *) ((device const char *) src3 + ir*nb31); // {d_state, nh}
+        device const float * B  = (device const float *) ((device const char *) src4 + (ir & (ng - 1))*nb41 + i2*nb42 + i3*nb43); // {d_state, ng, nt, ns}
+        device const float * C  = (device const float *) ((device const char *) src5 + (ir & (ng - 1))*nb51 + i2*nb52 + i3*nb53); // {d_state, ng, nt, ns}
+        device const float * D  = (device const float *) ((device const char *) src6 + ir*nb60); // {nh}
+        device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*nb00); // {dim, nh, nt, ns}
 
-        if (i2 > 0) {
-            s0 = s;
-        }
-
-        // i1 == 0
-        float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
-        float x_dt = x[0] * dt_soft_plus;
+        const float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
+        const float x_dt = x[0] * dt_soft_plus;
         float sumf = 0.0f;
 
         for (int64_t i0 = 0; i0 < nc; ++i0) {
-            int64_t i = i0;
-            float state = (s0[i] * exp(dt_soft_plus * A[i])) + (B[i0] * x_dt);
+            const int64_t i = i0 + i1*nc;
+            const float state = (s0[i] * exp(dt_soft_plus * A[i0])) + (B[i0] * x_dt);
             sumf += state * C[i0];
             s[i] = state;
         }
 
-        y[0] = sumf;
+        y[0] = sumf + x[0] * D[0];
+
+        // recurse
+        s0 = s;
+    }
+}
+
+// ref: ggml.c:ggml_compute_forward_ssm_scan_f32, Mamba-2 part
+// TODO: optimize (e.g. by parallelizing over d_state)
+kernel void kernel_ssm_scan_f32_group(
+        device const void * src0,
+        device const void * src1,
+        device const void * src2,
+        device const void * src3,
+        device const void * src4,
+        device const void * src5,
+        device const void * src6,
+        device const void * src7,
+        device      float * dst,
+        constant  int64_t & d_state,
+        constant  int64_t & d_inner,
+        constant  int64_t & n_head,
+        constant  int64_t & n_group,
+        constant  int64_t & n_seq_tokens,
+        constant  int64_t & n_seqs,
+        constant uint64_t & nb01,
+        constant uint64_t & nb02,
+        constant uint64_t & nb03,
+        constant uint64_t & nb11,
+        constant uint64_t & nb12,
+        constant uint64_t & nb13,
+        constant uint64_t & nb21,
+        constant uint64_t & nb22,
+        constant uint64_t & nb31,
+        constant uint64_t & nb41,
+        constant uint64_t & nb42,
+        constant uint64_t & nb43,
+        constant uint64_t & nb51,
+        constant uint64_t & nb52,
+        constant uint64_t & nb53,
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3   ntg[[threads_per_threadgroup]]) {
+    const int64_t i1 = tgpig.x;
+    const int64_t ir = tgpig.y; // current head
+    const int64_t i3 = tgpig.z; // current seq
+
+    const uint64_t nb00 = sizeof(float);
+    const uint64_t nb10 = sizeof(float);
+    const uint64_t nb20 = sizeof(float);
+    const uint64_t nb60 = sizeof(float);
+
+    const int64_t nc  = d_state;
+    const int64_t nr  = d_inner;
+    const int64_t nh  = n_head;
+    const int64_t ng  = n_group;
+    const int64_t n_t = n_seq_tokens;
+
+    const int64_t s_off = d_inner * n_head * n_seq_tokens * n_seqs * sizeof(float);
+
+    device const int32_t * ids = (device const int32_t *) src7;
+
+    device const float * s0 = (device const float *) ((device const char *) src0 + ir*nb02 + ids[i3]*nb03);
+    device       float * s  = (device       float *) ((device       char *) dst  + ir*nb02 +      i3*nb03 + s_off);
+
+    for (int64_t i2 = 0; i2 < n_t; ++i2) {
+        device const float * x  = (device const float *) ((device const char *) src1 + i1*nb10 + ir*nb11 + i2*nb12 + i3*nb13); // {dim, nh, nt, ns}
+        device const float * dt = (device const float *) ((device const char *) src2 + ir*nb20 + i2*nb21 + i3*nb22); // {nh, nt, ns}
+        device const float * A  = (device const float *) ((device const char *) src3 + ir*nb31); // {1, nh}
+        device const float * B  = (device const float *) ((device const char *) src4 + (ir & (ng - 1))*nb41 + i2*nb42 + i3*nb43); // {d_state, ng, nt, ns}
+        device const float * C  = (device const float *) ((device const char *) src5 + (ir & (ng - 1))*nb51 + i2*nb52 + i3*nb53); // {d_state, ng, nt, ns}
+        device const float * D  = (device const float *) ((device const char *) src6 + ir*nb60); // {nh}
+        device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*nb00); // {dim, nh, nt, ns}
+
+        const float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
+        const float x_dt = x[0] * dt_soft_plus;
+        const float dA = exp(dt_soft_plus * A[0]);
+        float sumf = 0.0f;
+
+        for (int64_t i0 = 0; i0 < nc; ++i0) {
+            const int64_t i = i0 + i1*nc;
+            const float state = (s0[i] * dA) + (B[i0] * x_dt);
+            sumf += state * C[i0];
+            s[i] = state;
+        }
+
+        y[0] = sumf + x[0] * D[0];
+
+        // recurse
+        s0 = s;
     }
 }
 
