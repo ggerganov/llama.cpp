@@ -34,8 +34,8 @@ static bool match_string(const std::string & input, llama_grammar * grammar) {
 
     const llama_grammar_rules  & rules      = llama_grammar_get_rules (grammar);
           llama_grammar_stacks & stacks_cur = llama_grammar_get_stacks(grammar);
+          llama_grammar_stacks_cache & stacks_cache = llama_grammar_get_stacks_cache(grammar);
 
-    llama_grammar_stacks_cache stacks_cache;
     for (const auto & cpt : cpts) {
         const llama_grammar_stacks stacks_prev = llama_grammar_get_stacks(grammar); // copy
 

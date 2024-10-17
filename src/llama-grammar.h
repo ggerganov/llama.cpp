@@ -59,9 +59,6 @@ using llama_grammar_rules      = std::vector<llama_grammar_rule>;
 using llama_grammar_stacks     = std::vector<llama_grammar_stack>;
 using llama_grammar_candidates = std::vector<llama_grammar_candidate>;
 
-const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar * grammar);
-      llama_grammar_stacks & llama_grammar_get_stacks(      struct llama_grammar * grammar);
-
 struct VectorPointerHash {
     size_t operator()(const llama_grammar_stack & v) const {
         size_t seed = v.size();
@@ -73,6 +70,10 @@ struct VectorPointerHash {
 };
 
 using llama_grammar_stacks_cache = std::unordered_map<llama_grammar_stack, llama_grammar_stacks, VectorPointerHash>;
+
+const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar * grammar);
+      llama_grammar_stacks & llama_grammar_get_stacks(      struct llama_grammar * grammar);
+      llama_grammar_stacks_cache & llama_grammar_get_stacks_cache(      struct llama_grammar * grammar);
 
 // takes a set of possible pushdown stacks on a grammar, which are required to
 // be positioned at a character range (see `llama_grammar_advance_stack`), and
@@ -129,6 +130,8 @@ struct llama_grammar {
 
     // buffer for partially generated UTF-8 sequence from accepted tokens
     llama_partial_utf8 partial_utf8;
+    // cache N possible stacks from a stack
+    llama_grammar_stacks_cache stacks_cache;
 };
 
 //
