@@ -21466,13 +21466,6 @@ int32_t llama_token_to_piece(
     return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
 }
 
-bool llama_token_is_prefix(
-    const struct llama_model * model,
-                 llama_token   token0,
-                 llama_token   token1) {
-    return llama_token_is_prefix_impl(model->vocab, token0, token1);
-}
-
 int32_t llama_detokenize(
     const struct llama_model * model,
            const llama_token * tokens,
