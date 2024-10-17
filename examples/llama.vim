@@ -33,7 +33,7 @@
 "
 "   :call llama#init()
 "
-" more info: https://github.com/ggerganov/llama.cpp/pull/9787/files
+" more info: https://github.com/ggerganov/llama.cpp/pull/9787
 "
 
 " colors (adjust to your liking)
@@ -46,7 +46,7 @@ highlight llama_hl_info guifg=#77ff2f
 "   n_prefix:         number of lines before the cursor location to include in the prefix
 "   n_suffix:         number of lines after  the cursor location to include in the suffix
 "   n_predict:        max number of tokens to predict
-"   t_max_prompt_ms:  max alloted time for the prompt generation (TODO: not yet supported)
+"   t_max_prompt_ms:  max alloted time for the prompt processing (TODO: not yet supported)
 "   t_max_predict_ms: max alloted time for the prediction
 "   show_info:        show extra info about the inference (0 - disabled, 1 - statusline, 2 - inline)
 "   auto_fim:         trigger FIM completion automatically on cursor movement
@@ -99,8 +99,8 @@ function! llama#init()
         return
     endif
 
-    let s:pos_x  = 0 " cursor position upon start of completion
-    let s:pos_y  = 0
+    let s:pos_x = 0 " cursor position upon start of completion
+    let s:pos_y = 0
 
     let s:line_cur = ''
 
@@ -329,8 +329,7 @@ function! llama#fim_inline(is_auto, on_hold) abort
 endfunction
 
 " the main FIM call
-" takes local context around the cursor and sends it together with the extra context
-" to the llama.cpp server for completion
+" takes local context around the cursor and sends it together with the extra context to the server for completion
 function! llama#fim(is_auto, on_hold) abort
     " we already have a suggestion for the current cursor position
     if a:on_hold && (s:hint_shown || (s:pos_x == col('.') - 1 && s:pos_y == line('.')))
@@ -569,12 +568,49 @@ function! s:fim_on_stdout(job_id, data, event) dict
     endif
 
     let s:pos_dx = len(s:content[-1])
-    let s:content[-1] .= s:line_cur_suffix
 
-    " truncate the suggestion if it repeats the following lines
-    if len(s:content) > 1 && s:content[1] == getline(s:pos_y + 1)
-        let s:content = [s:content[0]]
+    " NOTE: the following is logic for discarding predictions that repeat existing text
+    "       the code is quite ugly and there is very likely a simpler and more canonical way to implement this
+    "
+    "       still, I wonder if there is some better way that avoids having to do these special hacks?
+    "       on one hand, the LLM 'sees' the contents of the file before we start editing, so it is normal that it would
+    "       start generating whatever we have given it via the extra context. but on the other hand, it's not very
+    "       helpful to re-generate the same code that is already there
+
+    " truncate the suggestion if the first line is empty
+    if s:content[0] == ""
+        let s:content = [""]
     endif
+
+    " truncate the suggestion if it repeats the suffix
+    if len(s:content) == 1 && s:content[0] == s:line_cur_suffix
+        let s:content = [""]
+    endif
+
+    " find the first non-empty line (strip whitespace)
+    let l:cmp_y = s:pos_y + 1
+    while l:cmp_y < line('$') && getline(l:cmp_y) =~? '^\s*$'
+        let l:cmp_y += 1
+    endwhile
+
+    if (s:line_cur_prefix . s:content[0]) == getline(l:cmp_y)
+        " truncate the suggestion if it repeats the next line
+        if len(s:content) == 1
+            let s:content = [""]
+        endif
+
+        " ... or if the second line of the suggestion is the prefix of line l:cmp_y + 1
+        if len(s:content) == 2 && s:content[-1] == getline(l:cmp_y + 1)[:len(s:content[-1]) - 1]
+            let s:content = [""]
+        endif
+
+        " ... or if the middle chunk of lines of the suggestion is the same as [l:cmp_y + 1, l:cmp_y + len(s:content) - 1)
+        if len(s:content) > 2 && join(s:content[1:-1], "\n") == join(getline(l:cmp_y + 1, l:cmp_y + len(s:content) - 1), "\n")
+            let s:content = [""]
+        endif
+    endif
+
+    let s:content[-1] .= s:line_cur_suffix
 
     call llama#fim_cancel()
 
@@ -595,9 +631,9 @@ function! s:fim_on_stdout(job_id, data, event) dict
                 \ l:n_cached, l:n_ctx
                 \ )
         else
-            let l:info = printf("%s | context: %d / %d / r=%d / q=%d / e=%d | prompt: %d (%.2f ms, %.2f t/s) | predict: %d (%.2f ms, %.2f t/s) | total: %.2f ms",
+            let l:info = printf("%s | c: %d / %d, r: %d, e: %d, q: %d | p: %d (%.2f ms, %.2f t/s) | g: %d (%.2f ms, %.2f t/s) | t: %.2f ms",
                 \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
-                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), len(s:ring_queued), s:ring_n_evict,
+                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), s:ring_n_evict, len(s:ring_queued),
                 \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
                 \ l:n_predict, l:t_predict_ms, l:s_predict,
                 \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
@@ -627,7 +663,7 @@ function! s:fim_on_stdout(job_id, data, event) dict
         \ 'virt_text_win_col': virtcol('.')
         \ })
 
-    " setup accept/cancel events
+    " setup accept shortcuts
     inoremap <buffer> <Tab>   <C-O>:call llama#fim_accept(v:false)<CR>
     inoremap <buffer> <S-Tab> <C-O>:call llama#fim_accept(v:true)<CR>
 
