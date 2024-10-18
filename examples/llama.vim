@@ -17,7 +17,7 @@
 "
 " start the llama.cpp server with a FIM-compatible model. for example:
 "
-"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 64
+"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 256
 "
 "   --batch-size [512, model max context]
 "
@@ -28,6 +28,12 @@
 "
 "     chunks the batch into smaller chunks for faster processing
 "     depends on the specific hardware. use llama-bench to profile and determine the best size
+"
+"   --cache-reuse (ge:llama_config.n_predict, 1024]
+"
+"     this should be either 0 (disabled) or strictly larger than g:llama_config.n_predict
+"     using non-zero value enables context reuse on the server side which dramatically improves the performance at
+"     large contexts. a value of 256 should be good for all cases
 "
 " run this once to initialise llama.vim:
 "
@@ -43,8 +49,8 @@ highlight llama_hl_info guifg=#77ff2f
 " general parameters:
 "
 "   endpoint:         llama.cpp server endpoint
-"   n_prefix:         number of lines before the cursor location to include in the prefix
-"   n_suffix:         number of lines after  the cursor location to include in the suffix
+"   n_prefix:         number of lines before the cursor location to include in the local prefix
+"   n_suffix:         number of lines after  the cursor location to include in the local suffix
 "   n_predict:        max number of tokens to predict
 "   t_max_prompt_ms:  max alloted time for the prompt processing (TODO: not yet supported)
 "   t_max_predict_ms: max alloted time for the prediction
@@ -72,7 +78,7 @@ highlight llama_hl_info guifg=#77ff2f
 let s:default_config = {
     \ 'endpoint':         'http://127.0.0.1:8012/infill',
     \ 'n_prefix':         256,
-    \ 'n_suffix':         8,
+    \ 'n_suffix':         64,
     \ 'n_predict':        128,
     \ 't_max_prompt_ms':  500,
     \ 't_max_predict_ms': 1000,
@@ -463,7 +469,7 @@ function! llama#fim_accept(first_line)
 
         " move the cursor to the end of the accepted text
         if !a:first_line && len(s:content) > 1
-            call cursor(s:pos_y + len(s:content) - 1, s:pos_x + s:pos_dx)
+            call cursor(s:pos_y + len(s:content) - 1, s:pos_x + s:pos_dx + 1)
         else
             call cursor(s:pos_y, s:pos_x + len(s:content[0]))
         endif
