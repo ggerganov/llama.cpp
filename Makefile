@@ -93,11 +93,6 @@ GGML_METAL := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_OPENMP
-GGML_OPENMP := 1
-DEPRECATE_WARNING := 1
-endif
-
 ifdef LLAMA_RPC
 GGML_RPC := 1
 DEPRECATE_WARNING := 1
@@ -582,6 +577,11 @@ endif # GGML_NVPL
 ifndef GGML_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
 	OBJ_GGML    += ggml/src/llamafile/sgemm.o
+endif
+
+ifndef GGML_NO_AMX
+	MK_CPPFLAGS += -DGGML_USE_AMX
+	OBJ_GGML    += ggml/src/ggml-amx.o ggml/src/ggml-amx/mmq.o
 endif
 
 ifdef GGML_RPC
@@ -1087,6 +1087,19 @@ ggml/src/llamafile/sgemm.o: \
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif # GGML_NO_LLAMAFILE
 
+ifndef GGML_NO_AMX
+ggml/src/ggml-amx.o: \
+	ggml/src/ggml-amx.cpp \
+	ggml/include/ggml-amx.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+ggml/src/ggml-amx/mmq.o: \
+	ggml/src/ggml-amx/mmq.cpp \
+	ggml/src/ggml-amx/mmq.h \
+	ggml/include/ggml.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+endif
+
 ifdef GGML_RPC
 ggml/src/ggml-rpc.o: \
 	ggml/src/ggml-rpc.cpp \
@@ -1238,6 +1251,7 @@ clean:
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
+	rm -vrf ggml/src/ggml-amx/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
 	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
