@@ -863,8 +863,8 @@ struct server_context {
         slot.sparams.top_k              = json_value(data, "top_k",              default_sparams.top_k);
         slot.sparams.top_p              = json_value(data, "top_p",              default_sparams.top_p);
         slot.sparams.min_p              = json_value(data, "min_p",              default_sparams.min_p);
-        slot.sparams.xtc_probability    = json_value(data, "xtc_probability",   default_sparams.xtc_probability);
-        slot.sparams.xtc_threshold      = json_value(data, "xtc_threshold",     default_sparams.xtc_threshold);
+        slot.sparams.xtc_probability    = json_value(data, "xtc_probability",    default_sparams.xtc_probability);
+        slot.sparams.xtc_threshold      = json_value(data, "xtc_threshold",      default_sparams.xtc_threshold);
         slot.sparams.tfs_z              = json_value(data, "tfs_z",              default_sparams.tfs_z);
         slot.sparams.typ_p              = json_value(data, "typical_p",          default_sparams.typ_p);
         slot.sparams.temp               = json_value(data, "temperature",        default_sparams.temp);
@@ -887,8 +887,8 @@ struct server_context {
         slot.sparams.seed               = json_value(data, "seed",               default_sparams.seed);
         slot.sparams.n_probs            = json_value(data, "n_probs",            default_sparams.n_probs);
         slot.sparams.min_keep           = json_value(data, "min_keep",           default_sparams.min_keep);
-      //slot.params.t_max_prompt_ms    = json_value(data, "t_max_prompt_ms",   default_params.t_max_prompt_ms); // TODO: implement
-        slot.params.t_max_predict_ms   = json_value(data, "t_max_predict_ms",  default_params.t_max_predict_ms);
+      //slot.params.t_max_prompt_ms     = json_value(data, "t_max_prompt_ms",    default_params.t_max_prompt_ms); // TODO: implement
+        slot.params.t_max_predict_ms    = json_value(data, "t_max_predict_ms",   default_params.t_max_predict_ms);
 
         // sequence breakers for DRY
         {
@@ -2170,7 +2170,7 @@ struct server_context {
                             }
 
                             // Should this be (re-)moved?
-                            common_sampler_reset(slot.smpl);
+                            //common_sampler_reset(slot.smpl);
 
                             if (slot.params.cache_prompt) {
                                 // reuse any previously computed tokens that are common with the new prompt
@@ -2269,7 +2269,7 @@ struct server_context {
                         // there is no common part left
                         slot.n_past = 0;
 
-                        common_sampler_reset(slot.smpl);
+                        //common_sampler_reset(slot.smpl);
                     }
 
                     SLT_INF(slot, "kv cache rm [%d, end)\n", slot.n_past);
@@ -2296,6 +2296,8 @@ struct server_context {
                         slot.state = SLOT_STATE_DONE_PROMPT;
 
                         GGML_ASSERT(batch.n_tokens > 0);
+
+                        common_sampler_reset(slot.smpl);
 
                         // Process all prompt tokens through sampler system
                         for (int i = 0; i < slot.n_prompt_tokens; ++i) {

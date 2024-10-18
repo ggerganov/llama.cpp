@@ -1158,6 +1158,11 @@ extern "C" {
                              int32_t   dry_allowed_length,
                              int32_t   dry_penalty_last_n);
 
+    LLAMA_API void llama_sampler_dry_set_seq_breakers_c(
+                struct llama_sampler *  smpl,
+                          const char ** seq_breakers,
+                                 int    num_breakers);
+
     LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(
                              int32_t   n_vocab,
                              int32_t   n_logit_bias,
@@ -1261,16 +1266,5 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-
-// Need to find a cleaner way to implement the sequence breakers as a vector of strings
-#ifdef __cplusplus
-
-#include <vector>
-#include <string>
-
-LLAMA_API void llama_sampler_dry_set_seq_breakers(struct llama_sampler * sampler, const std::vector<std::string>& seq_breakers);
-LLAMA_API void llama_sampler_dry_set_seq_breakers_as_tokens(struct llama_sampler * smpl, const std::vector<std::vector<llama_token>>& seq_breakers);
-
-#endif // __cplusplus
 
 #endif // LLAMA_H

@@ -2,8 +2,12 @@
 
 #include "common.h"
 
+#include "log.h"
+
 #include <cmath>
 #include <unordered_map>
+
+extern void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::vector<std::string>& seq_breakers);
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 // TODO: deduplicate with llama-impl.h
@@ -98,6 +102,8 @@ struct ring_buffer {
     std::vector<T> data;
 };
 
+
+
 struct common_sampler {
     common_sampler_params params;
 
@@ -173,17 +179,19 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalize_nl,
                 params.ignore_eos));
 
-    if (params.dry_multiplier != 0.0f && params.dry_base != 0.0f) {
-        auto * dry_sampler = llama_sampler_init_dry(model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n);
-
-        llama_sampler_dry_set_seq_breakers(dry_sampler, params.dry_sequence_breakers);
-        llama_sampler_chain_add(result->chain, dry_sampler);
-    }
+    struct llama_sampler * dry_sampler = nullptr;
 
     if (params.temp > 0.0f) {
         if (params.mirostat == 0) {
             for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
+                    case COMMON_SAMPLER_TYPE_DRY:
+                        dry_sampler = llama_sampler_init_dry(model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n);
+                        if (dry_sampler != nullptr) {
+                            llama_sampler_dry_set_seq_breakers(dry_sampler, params.dry_sequence_breakers);
+                            llama_sampler_chain_add(result->chain, dry_sampler);
+                        }
+                        break;
                     case COMMON_SAMPLER_TYPE_TOP_K:
                         llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
                         break;
@@ -235,6 +243,11 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         }
         llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
     }
+
+    // // If DRY sampler wasn't added to the chain, free it
+    // if (dry_sampler) {
+    //     llama_sampler_free(dry_sampler);
+    // }
 
     return result;
 }
@@ -381,6 +394,7 @@ std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx_
 
 char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
     switch (cnstr) {
+        case COMMON_SAMPLER_TYPE_DRY:         return 'd';
         case COMMON_SAMPLER_TYPE_TOP_K:       return 'k';
         case COMMON_SAMPLER_TYPE_TFS_Z:       return 'f';
         case COMMON_SAMPLER_TYPE_TYPICAL_P:   return 'y';
@@ -395,6 +409,7 @@ char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
 
 std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
     switch (cnstr) {
+        case COMMON_SAMPLER_TYPE_DRY:         return "dry";
         case COMMON_SAMPLER_TYPE_TOP_K:       return "top_k";
         case COMMON_SAMPLER_TYPE_TFS_Z:       return "tfs_z";
         case COMMON_SAMPLER_TYPE_TYPICAL_P:   return "typ_p";
@@ -409,6 +424,7 @@ std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
 
 std::vector<common_sampler_type> common_sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
     std::unordered_map<std::string, common_sampler_type> sampler_canonical_name_map {
+        { "dry",         COMMON_SAMPLER_TYPE_DRY },
         { "top_k",       COMMON_SAMPLER_TYPE_TOP_K },
         { "top_p",       COMMON_SAMPLER_TYPE_TOP_P },
         { "typ_p",       COMMON_SAMPLER_TYPE_TYPICAL_P },
@@ -457,6 +473,7 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
 
 std::vector<common_sampler_type> common_sampler_types_from_chars(const std::string & chars) {
     std::unordered_map<char, common_sampler_type> sampler_name_map = {
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_DRY),         COMMON_SAMPLER_TYPE_DRY },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TOP_K),       COMMON_SAMPLER_TYPE_TOP_K },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TFS_Z),       COMMON_SAMPLER_TYPE_TFS_Z },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TYPICAL_P),   COMMON_SAMPLER_TYPE_TYPICAL_P },

@@ -2004,31 +2004,99 @@ struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, 
 }
 
 void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::vector<std::string>& seq_breakers) {
+    if (smpl == nullptr || smpl->ctx == nullptr) {
+        LLAMA_LOG_ERROR("invalid sampler or context in llama_sampler_dry_set_seq_breakers");
+        return;
+    }
+
     auto * ctx = (llama_sampler_dry *) smpl->ctx;
     ctx->dry_processed_breakers.clear();
+
+    if (seq_breakers.empty()) {
+        LLAMA_LOG_WARN("empty sequence breakers list in llama_sampler_dry_set_seq_breakers");
+        return;
+    }
 
     const int MAX_CHAR_LEN = 40;
     const int MAX_SEQ_LEN = 20;
 
-    for (auto sequence_break : seq_breakers) {
-        if (sequence_break.size() > MAX_CHAR_LEN) {
-            sequence_break.resize(MAX_CHAR_LEN);
+    for (const auto& sequence_break : seq_breakers) {
+        if (sequence_break.empty()) {
+            LLAMA_LOG_WARN("skipping empty sequence breaker");
+            continue;
         }
-        GetOverlappingTokenSequences(ctx->model, sequence_break, ctx->dry_processed_breakers, MAX_SEQ_LEN);
+
+        std::string trimmed_break = sequence_break;
+        if (trimmed_break.size() > MAX_CHAR_LEN) {
+            LLAMA_LOG_WARN("truncating sequence breaker to %d characters", MAX_CHAR_LEN);
+            trimmed_break.resize(MAX_CHAR_LEN);
+        }
+
+        GetOverlappingTokenSequences(ctx->model, trimmed_break, ctx->dry_processed_breakers, MAX_SEQ_LEN);
     }
 }
 
-//For use in test-sampling.cpp
+// For C-interface
+void llama_sampler_dry_set_seq_breakers_c(struct llama_sampler * smpl, const char **seq_breakers, int num_breakers) {
+    if (smpl == nullptr || smpl->ctx == nullptr) {
+        LLAMA_LOG_ERROR("invalid sampler or context in llama_sampler_dry_set_seq_breakers_c");
+        return;
+    }
+
+    if (seq_breakers == nullptr || num_breakers <= 0) {
+        LLAMA_LOG_ERROR("invalid sequence breakers array or count in llama_sampler_dry_set_seq_breakers_c");
+        return;
+    }
+
+    std::vector<std::string> cpp_seq_breakers;
+    for (int i = 0; i < num_breakers; ++i) {
+        if (seq_breakers[i] == nullptr) {
+            LLAMA_LOG_WARN("skipping null sequence breaker at index %d", i);
+            continue;
+        }
+        if (std::strlen(seq_breakers[i]) == 0) {
+            LLAMA_LOG_WARN("skipping empty sequence breaker at index %d", i);
+            continue;
+        }
+        cpp_seq_breakers.push_back(std::string(seq_breakers[i]));
+    }
+
+    if (cpp_seq_breakers.empty()) {
+        LLAMA_LOG_WARN("no valid sequence breakers found in llama_sampler_dry_set_seq_breakers_c");
+        return;
+    }
+
+    llama_sampler_dry_set_seq_breakers(smpl, cpp_seq_breakers);
+}
+
+// For use in test-sampling.cpp
 void llama_sampler_dry_set_seq_breakers_as_tokens(struct llama_sampler * smpl, const std::vector<std::vector<llama_token>>& seq_breakers) {
+    if (smpl == nullptr || smpl->ctx == nullptr) {
+        LLAMA_LOG_ERROR("invalid sampler or context in llama_sampler_dry_set_seq_breakers_as_tokens");
+        return;
+    }
+
     auto * ctx = (llama_sampler_dry *) smpl->ctx;
     ctx->dry_processed_breakers.clear();
 
+    if (seq_breakers.empty()) {
+        LLAMA_LOG_WARN("empty sequence breakers list in llama_sampler_dry_set_seq_breakers_as_tokens");
+        return;
+    }
+
     for (const auto& breaker : seq_breakers) {
-        if (breaker.size() >= 1) {
-            llama_token head_token = breaker[0];
-            std::vector<llama_token> tail_tokens(breaker.begin() + 1, breaker.end());
-            ctx->dry_processed_breakers.emplace(head_token, tail_tokens);
+        if (breaker.empty()) {
+            LLAMA_LOG_WARN("skipping empty token sequence");
+            continue;
         }
+
+        llama_token head_token = breaker[0];
+        std::vector<llama_token> tail_tokens(breaker.begin() + 1, breaker.end());
+        ctx->dry_processed_breakers.emplace(head_token, tail_tokens);
+    }
+
+    if (ctx->dry_processed_breakers.empty()) {
+        LLAMA_LOG_WARN("no valid sequence breakers processed in llama_sampler_dry_set_seq_breakers_as_tokens");
     }
 }
 
