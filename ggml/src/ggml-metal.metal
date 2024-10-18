@@ -1985,6 +1985,10 @@ kernel void kernel_im2col_ext(
     const int32_t HW = tgpig[0] % KHW;
     
     const int32_t tpitg_0 = (d * ntg[0]) + tpitg[0];
+    if (tpitg_0 >= N) {
+        return;
+    }
+
     const int32_t tpitg_1 = HW / KW;
     const int32_t tpitg_2 = HW % KW;
 
