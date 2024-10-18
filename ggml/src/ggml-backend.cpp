@@ -537,6 +537,10 @@ void * ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * na
 #include "ggml-metal.h"
 #endif
 
+#ifdef GGML_USE_SYCL
+#include "ggml-sycl.h"
+#endif
+
 #ifdef GGML_USE_VULKAN
 #include "ggml-vulkan.h"
 #endif
@@ -568,6 +572,9 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_METAL
         register_backend(ggml_backend_metal_reg());
 #endif
+#ifdef GGML_USE_SYCL
+        register_backend(ggml_backend_sycl_reg());
+#endif
 #ifdef GGML_USE_VULKAN
         register_backend(ggml_backend_vk_reg());
 #endif
@@ -581,7 +588,7 @@ struct ggml_backend_registry {
         register_backend(ggml_backend_amx_reg());
 #endif
 
-        // TODO: sycl, kompute, cann
+        // TODO: kompute, cann
 
         register_backend(ggml_backend_cpu_reg());
     }
@@ -2254,6 +2261,7 @@ ggml_backend_sched_t ggml_backend_sched_new(
         sched->backends[b] = backends[b];
         sched->bufts[b] = bufts ? bufts[b] : ggml_backend_get_default_buffer_type(backends[b]);
         GGML_ASSERT(ggml_backend_supports_buft(backends[b], sched->bufts[b]));
+
         if (sched->n_copies > 1) {
             for (int c = 0; c < sched->n_copies; c++) {
                 sched->events[b][c] = ggml_backend_event_new(backends[b]->device);
