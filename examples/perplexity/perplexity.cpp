@@ -408,14 +408,21 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
         // clear the KV cache
         llama_kv_cache_clear(ctx);
 
+        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
 
+            common_batch_clear(batch);
+            for (int i = 0; i < batch_size; i++) {
+                common_batch_add(batch, tokens[batch_start + i], j*n_batch + i, {0}, true);
+            }
+
             //LOG_DBG("    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
-            // TODO: use llama_batch.logits instead of relying on logits_all == true
-            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+            if (llama_decode(ctx, batch)) {
                 //LOG_ERR("%s : failed to eval\n", __func__);
+                llama_batch_free(batch);
                 return {tokens, -1, logit_history, prob_history};
             }
 
@@ -434,6 +441,8 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
                 tokens[batch_start] = token_org;
             }
         }
+
+        llama_batch_free(batch);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
@@ -704,7 +713,6 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
             batch.n_seq_id + i,
             batch.seq_id   + i,
             batch.logits   + i,
-            0, 0, 0, // unused
         };
 
         const int ret = llama_decode(ctx, batch_view);
@@ -1791,6 +1799,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
         // clear the KV cache
         llama_kv_cache_clear(ctx);
 
+        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
@@ -1803,9 +1813,14 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
                 tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
-            // TODO: use llama_batch.logits instead of relying on logits_all == true
-            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+            common_batch_clear(batch);
+            for (int i = 0; i < batch_size; i++) {
+                common_batch_add(batch, tokens[batch_start + i], j*n_batch + i, {0}, true);
+            }
+
+            if (llama_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
+                llama_batch_free(batch);
                 return;
             }
 
@@ -1817,6 +1832,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
                 logits.insert(logits.end(), batch_logits, batch_logits + size_t(batch_size) * n_vocab);
             }
         }
+
+        llama_batch_free(batch);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
