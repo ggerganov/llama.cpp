@@ -17,7 +17,62 @@
 #include <fstream>
 
 
-static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
+static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, 
+                                     int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
+    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
+    const int patch_size = 14 * 2;
+    const int ph = image_size->height / patch_size + (image_size->height % patch_size > 0);
+    const int pw = image_size->width / patch_size + (image_size->width % patch_size > 0);
+    auto img_tokens = image_embed->n_image_pos;
+    llama_pos mrope_pos[img_tokens * 3];
+    for (size_t y = 0; y < ph; y++)
+    {
+        for (size_t x = 0; x < pw; x++)
+        {
+            int i = y * pw + x;
+            mrope_pos[i] = *st_pos_id;
+            mrope_pos[i + img_tokens] = *st_pos_id + y;
+            mrope_pos[i + img_tokens * 2] = *st_pos_id + x;
+        }   
+    }
+    *st_pos_id += std::max(pw, ph);
+
+    int processed = 0;
+    for (int i = 0; i < img_tokens; i += n_batch) {
+        int n_eval = img_tokens - i;
+        if (n_eval > n_batch) {
+            n_eval = n_batch;
+        }
+
+        llama_pos batch_mrope_pos[n_eval * 3];
+        memcpy(batch_mrope_pos, &mrope_pos[processed], n_eval * sizeof(llama_pos));
+        memcpy(&batch_mrope_pos[n_eval], &mrope_pos[img_tokens + processed], n_eval * sizeof(llama_pos));
+        memcpy(&batch_mrope_pos[n_eval * 2], &mrope_pos[img_tokens * 2 + processed], n_eval * sizeof(llama_pos));
+        
+        llama_batch batch = {
+            int32_t(n_eval),                // n_tokens
+            nullptr,                        // token
+            (image_embed->embed+i*n_embd),  // embed
+            batch_mrope_pos,                        // pos
+            nullptr,  // n_seq_id
+            nullptr,  // seq_id
+            nullptr,  // logits
+            *n_past, // all_pos_0
+            1, 0,
+        };
+        
+        if (llama_decode(ctx_llama, batch)) {
+            LOG_ERR("%s : failed to eval\n", __func__);
+            return false;
+        }
+        *n_past += n_eval;
+        processed += n_eval;
+    }
+    return true;
+}
+
+
+static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past, int * st_pos_id) {
     int N = (int) tokens.size();
     std::vector<llama_pos> pos;
     for (int i = 0; i < N; i += n_batch) {
@@ -29,7 +84,7 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
         // TODO: add mrope pos ids somewhere else
         pos.resize(batch.n_tokens * 3);
         for (int j = 0; j < batch.n_tokens * 3; j ++) {
-            pos[j] = j % batch.n_tokens;
+            pos[j] = *st_pos_id + (j % batch.n_tokens);
         }
         batch.pos = pos.data();
         
@@ -38,26 +93,27 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
             return false;
         }
         *n_past += n_eval;
+        *st_pos_id += n_eval;
     }
     return true;
 }
 
-static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
+static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past, int * st_pos_id) {
     std::vector<llama_token> tokens;
     tokens.push_back(id);
-    return eval_tokens(ctx_llama, tokens, 1, n_past);
+    return eval_tokens(ctx_llama, tokens, 1, n_past, st_pos_id);
 }
 
-static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
+static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, int * st_pos_id, bool add_bos){
     std::string              str2     = str;
     std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
-    eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
+    eval_tokens(ctx_llama, embd_inp, n_batch, n_past, st_pos_id);
     return true;
 }
 
 static const char * sample(struct gpt_sampler * smpl,
                            struct llama_context * ctx_llama,
-                           int * n_past) {
+                           int * n_past, int * st_pos_id) {
     const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
     gpt_sampler_accept(smpl, id, true);
     static std::string ret;
@@ -66,7 +122,7 @@ static const char * sample(struct gpt_sampler * smpl,
     } else {
         ret = llama_token_to_piece(ctx_llama, id);
     }
-    eval_id(ctx_llama, id, n_past);
+    eval_id(ctx_llama, id, n_past, st_pos_id);
     return ret.c_str();
 }
 
@@ -161,15 +217,16 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
 
 static void process_prompt(struct llava_context * ctx_llava, struct llava_image_embed * image_embed, gpt_params * params, const std::string & prompt) {
     int n_past = 0;
+    int cur_pos_id = 0;
 
     const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
 
     std::string system_prompt, user_prompt;
-    size_t image_pos = prompt.find("<image>");
+    size_t image_pos = prompt.find("<|vision_start|>");
     if (image_pos != std::string::npos) {
-        // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
+        // new templating mode: Provide the full prompt including system message and use <|vision_start|> as a placeholder for the image
         system_prompt = prompt.substr(0, image_pos);
-        user_prompt = prompt.substr(image_pos + std::string("<image>").length());
+        user_prompt = prompt.substr(image_pos + std::string("<|vision_start|>").length());
         LOG_INF("system_prompt: %s\n", system_prompt.c_str());
         if (params->verbose_prompt) {
             auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
@@ -186,8 +243,8 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         }
     } else {
         // llava-1.5 native mode
-        system_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
-        user_prompt = prompt + "\nASSISTANT:";
+        system_prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|>";
+        user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
         if (params->verbose_prompt) {
             auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
@@ -196,10 +253,12 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         }
     }
 
-    eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, true);
-    if (image_embed != nullptr)
-        llava_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past);
-    eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
+    eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, &cur_pos_id, true);
+    if (image_embed != nullptr) {
+        auto image_size = clip_get_load_image_size(ctx_llava->ctx_clip);
+        qwen2vl_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past, &cur_pos_id, image_size);
+    }
+    eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, &cur_pos_id, false);
 
     // generate the response
 
@@ -213,7 +272,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     std::string response = "";
     for (int i = 0; i < max_tgt_len; i++) {
-        const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past);
+        const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past, &cur_pos_id);
         response += tmp;
         if (strcmp(tmp, "</s>") == 0) break;
         if (strstr(tmp, "###")) break; // Yi-VL behavior
@@ -658,14 +717,98 @@ static void tmp_dump_img_embed(struct llava_context * ctx_llava, gpt_params * pa
     int ne = n_embd * 4;
     float vals[56 * 56 * 3];
     float embd[ne];
-    for (int i = 0; i < 56*56*3; i++)
+    for (int i = 0; i < 3*56*56; i++)
     {
-        vals[i] = (float)(i % (56 * 56)) / (56*56);
+        vals[i] = 0.1;
     }
+    // for (int i = 0; i < 56*56; i++)
+    // {
+    //     for (int c = 0; c < 3; c++)
+    //         vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    // }
     // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
     tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
 
     std::ofstream outFile("img_embed.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
+
+        outFile.close();
+        std::cout << "Data successfully written to mrope.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+}
+
+static void tmp_dump_img_embed_from_file(struct llava_context * ctx_llava, gpt_params * params) {
+    int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
+    auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
+    int ne = n_embd * image_embed->n_image_pos;
+    // int ne = 1280 * image_embed->n_image_pos * 4;
+
+    std::ofstream outFile("img_embed_f.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(image_embed->embed), ne * sizeof(float));
+
+        outFile.close();
+        std::cout << "Data successfully written to img_embed_f.bin, tokens: " << image_embed->n_image_pos << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+    
+    llava_image_embed_free(image_embed);
+}
+
+static void tmp_dump_img_mid_embed(struct llava_context * ctx_llava, gpt_params * params) {
+    // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
+    int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
+    // int ne = n_embd * image_embed->n_image_pos;
+    int ne = 1280 * 4 * 4;
+    float vals[56 * 56 * 3];
+    float embd[ne];
+    for (int i = 0; i < 3*56*56; i++)
+    {
+        vals[i] = 0.1;
+    }
+    // for (int i = 0; i < 56*56; i++)
+    // {
+    //     for (int c = 0; c < 3; c++)
+    //         vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    // }
+    // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
+    tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
+
+    std::ofstream outFile("img_layer_1_embed.bin", std::ios::binary);
+    if (outFile.is_open()) {
+        outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
+
+        outFile.close();
+        std::cout << "Data successfully written to mrope.bin" << std::endl;
+    } else {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+}
+
+static void tmp_dump_patch_embed(struct llava_context * ctx_llava, gpt_params * params) {
+    // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
+    // int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
+    // int ne = n_embd * image_embed->n_image_pos;
+    int ne = 1280 * 4 *4;
+    float vals[56 * 56 * 3];
+    float embd[ne];
+    for (int i = 0; i < 3*56*56; i++)
+    {
+        vals[i] = 0.1;
+    }
+    // for (int i = 0; i < 56*56; i++)
+    // {
+    //     for (int c = 0; c < 3; c++)
+    //         vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    // }
+    // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
+    tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
+
+    std::ofstream outFile("patch_embed.bin", std::ios::binary);
     if (outFile.is_open()) {
         outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
 
@@ -714,16 +857,21 @@ int main(int argc, char ** argv) {
         llava_image_embed_free(image_embed);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
-    } else if (params.image.empty() | true) {
+    } else if (params.image[0].empty()) {
         // This section is for testing LLM parts of the model during development phase!
         auto ctx_llava = llava_init_context(&params, model);
 
         // process the prompt
         tmp_dump_img_embed(ctx_llava, &params);
+        // tmp_dump_img_embed_from_file(ctx_llava, &params);
+        
+        // tmp_dump_img_mid_embed(ctx_llava, &params);
+        // tmp_dump_patch_embed(ctx_llava, &params);
         // tmp_test_4d_reshape(ctx_llava, &params);
         // tmp_test_rope(ctx_llava, &params);
         // tmp_test_mrope(ctx_llava, &params);
         // tmp_test_mrope_2d(ctx_llava, &params);
+        
         // process_prompt(ctx_llava, nullptr, &params, params.prompt);
 
         llama_perf_context_print(ctx_llava->ctx_llama);

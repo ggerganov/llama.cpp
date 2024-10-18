@@ -43,6 +43,7 @@ def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
                 c3, _ = ten.shape
             else:             # bias
                 c3 = ten.shape[0]
+            assert c3 % 3 == 0
             c = c3//3
             wq = ten[:c]
             wk = ten[c: c * 2]
@@ -103,12 +104,13 @@ def main(data_type='fp32'):
     fout.add_bool("clip.has_qwen2vl_merger", True)
     fout.add_string("clip.projector_type", "qwen2vl_merger")
 
+    print(cfg.vision_config)
     if 'silu' in cfg.vision_config.hidden_act.lower():
         fout.add_bool("clip.use_silu", True)
         fout.add_bool("clip.use_gelu", False)
     elif 'gelu' in cfg.vision_config.hidden_act.lower():
         fout.add_bool("clip.use_silu", False)
-        fout.add_bool("clip.use_gelu", True)
+        fout.add_bool("clip.use_gelu", 'quick' not in cfg.vision_config.hidden_act.lower())
     else:
         raise ValueError()
 
