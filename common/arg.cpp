@@ -998,6 +998,34 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
+        {"--dry-multiplier"}, "N",
+        string_format("Set DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)params.sparams.dry_multiplier),
+        [](common_params & params, const std::string & value) {
+            params.sparams.dry_multiplier = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-base"}, "N",
+        string_format("Set DRY sampling base value (default: %.2f)", (double)params.sparams.dry_base),
+        [](common_params & params, const std::string & value) {
+            params.sparams.dry_base = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-allowed-length"}, "N",
+        string_format("Set allowed length for DRY sampling (default: %d)", params.sparams.dry_allowed_length),
+        [](common_params & params, int value) {
+            params.sparams.dry_allowed_length = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-penalty-last-n"}, "N",
+        string_format("Set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sparams.dry_penalty_last_n),
+        [](common_params & params, int value) {
+            params.sparams.dry_penalty_last_n = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
         {"--dynatemp-range"}, "N",
         string_format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sparams.dynatemp_range),
         [](common_params & params, const std::string & value) {

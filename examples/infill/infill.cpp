@@ -298,7 +298,7 @@ int main(int argc, char ** argv) {
             LOG_INF("Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
-    smpl = common_sampler_init(model, sparams);
+    smpl = common_sampler_init(model, sparams, n_ctx);
 
     LOG_INF("sampler seed: %u\n",     common_sampler_get_seed(smpl));
     LOG_INF("sampler params: \n%s\n", sparams.print().c_str());

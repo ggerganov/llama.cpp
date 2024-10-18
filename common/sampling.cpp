@@ -130,16 +130,18 @@ std::string common_sampler_params::print() const {
 
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
+            "\tdry_multiplier = %.3f, dry_base = %.3f, dry_allowed_length = %d, dry_penalty_last_n = %d\n"
             "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, temp = %.3f\n"
             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
             penalty_last_n, penalty_repeat, penalty_freq, penalty_present,
+            dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n,
             top_k, tfs_z, top_p, min_p, xtc_probability, xtc_threshold, typ_p, temp,
             mirostat, mirostat_eta, mirostat_tau);
 
     return std::string(result);
 }
 
-struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_sampler_params & params) {
+struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_sampler_params & params, int32_t context_size) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
     lparams.no_perf = params.no_perf;
@@ -170,6 +172,13 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalty_present,
                 params.penalize_nl,
                 params.ignore_eos));
+
+    if (params.dry_multiplier != 0.0f && params.dry_base != 0.0f) {
+        auto * dry_sampler = llama_sampler_init_dry(model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n);
+
+        llama_sampler_dry_set_seq_breakers(dry_sampler, params.dry_sequence_breakers);
+        llama_sampler_chain_add(result->chain, dry_sampler);
+    }
 
     if (params.temp > 0.0f) {
         if (params.mirostat == 0) {

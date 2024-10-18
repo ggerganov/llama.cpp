@@ -187,6 +187,27 @@ Use the `--no-penalize-nl` option to disable newline penalization when applying 
 
 Example usage: `--repeat-penalty 1.15 --repeat-last-n 128 --no-penalize-nl`
 
+### DRY Repetition Penalty
+
+DRY (Don't Repeat Yourself) sampling is an effective technique for reducing repetition in generated text even across long contexts by penalizing tokens based on their recent usage patterns.
+
+- `--dry-multiplier N`: Set the DRY sampling multiplier (default: 0.0, 0.0 = disabled).
+- `--dry-base N`: Set the DRY sampling base value (default: 1.75).
+- `--dry-allowed-length N`: Set the allowed length for DRY sampling (default: 2).
+- `--dry-penalty-last-n N`: Set DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size).
+
+The `dry-multiplier` option controls the strength of the DRY sampling effect. A value of 0.0 disables DRY sampling, while higher values increase its influence. A typical recommended value is 0.8.
+
+The `dry-base` option sets the base value for the exponential penalty calculation in DRY sampling. Higher values lead to more aggressive penalization of repetitions.
+
+The `dry-allowed-length` option determines the minimum length of repeated sequences that will be penalized. Repetitions shorter than or equal to this length are not penalized, allowing for natural repetitions of short phrases or common words.
+
+The `dry-penalty-last-n` option controls how many recent tokens to consider when applying the DRY penalty. A value of -1 considers the entire context, while 0 disables this aspect of the penalty. Use a positive value to limit the consideration to a specific number of recent tokens.
+
+DRY sampling works alongside traditional repetition penalties to provide more nuanced control over text generation, particularly for reducing long-range repetitions and maintaining global coherence.
+
+Example usage: `--dry-multiplier 0.8 --dry-base 1.75 --dry-allowed-length 2 --dry-penalty-last-n -1`
+
 ### Top-K Sampling
 
 -   `--top-k N`: Limit the next token selection to the K most probable tokens (default: 40).

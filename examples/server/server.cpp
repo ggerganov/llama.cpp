@@ -163,7 +163,7 @@ struct server_slot {
     int32_t n_prompt_tokens           = 0;
     int32_t n_prompt_tokens_processed = 0;
 
-    json prompt; // can be either a string, array of strings or array of token ids
+    json prompt; // can be either a string, array of strings, array of token ids, or mixed array of strings and token ids
 
     json input_prefix;
     json input_suffix;
@@ -857,34 +857,64 @@ struct server_context {
             slot.oaicompat_model = "";
         }
 
-        slot.params.stream             = json_value(data, "stream",            false);
-        slot.params.cache_prompt       = json_value(data, "cache_prompt",      false);
-        slot.params.n_predict          = json_value(data, "n_predict",         json_value(data, "max_tokens", default_params.n_predict));
-        slot.sparams.top_k             = json_value(data, "top_k",             default_sparams.top_k);
-        slot.sparams.top_p             = json_value(data, "top_p",             default_sparams.top_p);
-        slot.sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
-        slot.sparams.xtc_probability   = json_value(data, "xtc_probability",   default_sparams.xtc_probability);
-        slot.sparams.xtc_threshold     = json_value(data, "xtc_threshold",     default_sparams.xtc_threshold);
-        slot.sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
-        slot.sparams.typ_p             = json_value(data, "typical_p",         default_sparams.typ_p);
-        slot.sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
-        slot.sparams.dynatemp_range    = json_value(data, "dynatemp_range",    default_sparams.dynatemp_range);
-        slot.sparams.dynatemp_exponent = json_value(data, "dynatemp_exponent", default_sparams.dynatemp_exponent);
-        slot.sparams.penalty_last_n    = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
-        slot.sparams.penalty_repeat    = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
-        slot.sparams.penalty_freq      = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
-        slot.sparams.penalty_present   = json_value(data, "presence_penalty",  default_sparams.penalty_present);
-        slot.sparams.mirostat          = json_value(data, "mirostat",          default_sparams.mirostat);
-        slot.sparams.mirostat_tau      = json_value(data, "mirostat_tau",      default_sparams.mirostat_tau);
-        slot.sparams.mirostat_eta      = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
-        slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
-        slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
-        slot.params.n_discard          = json_value(data, "n_discard",         default_params.n_discard);
-        slot.sparams.seed              = json_value(data, "seed",              default_sparams.seed);
-        slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
-        slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
+        slot.params.stream              = json_value(data, "stream",             false);
+        slot.params.cache_prompt        = json_value(data, "cache_prompt",       false);
+        slot.params.n_predict           = json_value(data, "n_predict",          json_value(data, "max_tokens", default_params.n_predict));
+        slot.sparams.top_k              = json_value(data, "top_k",              default_sparams.top_k);
+        slot.sparams.top_p              = json_value(data, "top_p",              default_sparams.top_p);
+        slot.sparams.min_p              = json_value(data, "min_p",              default_sparams.min_p);
+        slot.sparams.xtc_probability    = json_value(data, "xtc_probability",   default_sparams.xtc_probability);
+        slot.sparams.xtc_threshold      = json_value(data, "xtc_threshold",     default_sparams.xtc_threshold);
+        slot.sparams.tfs_z              = json_value(data, "tfs_z",              default_sparams.tfs_z);
+        slot.sparams.typ_p              = json_value(data, "typical_p",          default_sparams.typ_p);
+        slot.sparams.temp               = json_value(data, "temperature",        default_sparams.temp);
+        slot.sparams.dynatemp_range     = json_value(data, "dynatemp_range",     default_sparams.dynatemp_range);
+        slot.sparams.dynatemp_exponent  = json_value(data, "dynatemp_exponent",  default_sparams.dynatemp_exponent);
+        slot.sparams.penalty_last_n     = json_value(data, "repeat_last_n",      default_sparams.penalty_last_n);
+        slot.sparams.penalty_repeat     = json_value(data, "repeat_penalty",     default_sparams.penalty_repeat);
+        slot.sparams.penalty_freq       = json_value(data, "frequency_penalty",  default_sparams.penalty_freq);
+        slot.sparams.penalty_present    = json_value(data, "presence_penalty",   default_sparams.penalty_present);
+        slot.sparams.dry_multiplier     = json_value(data, "dry_multiplier",     default_sparams.dry_multiplier);
+        slot.sparams.dry_base           = json_value(data, "dry_base",           default_sparams.dry_base);
+        slot.sparams.dry_allowed_length = json_value(data, "dry_allowed_length", default_sparams.dry_allowed_length);
+        slot.sparams.dry_penalty_last_n = json_value(data, "dry_penalty_last_n", default_sparams.dry_penalty_last_n);
+        slot.sparams.mirostat           = json_value(data, "mirostat",           default_sparams.mirostat);
+        slot.sparams.mirostat_tau       = json_value(data, "mirostat_tau",       default_sparams.mirostat_tau);
+        slot.sparams.mirostat_eta       = json_value(data, "mirostat_eta",       default_sparams.mirostat_eta);
+        slot.sparams.penalize_nl        = json_value(data, "penalize_nl",        default_sparams.penalize_nl);
+        slot.params.n_keep              = json_value(data, "n_keep",             slot.params.n_keep);
+        slot.params.n_discard           = json_value(data, "n_discard",          default_params.n_discard);
+        slot.sparams.seed               = json_value(data, "seed",               default_sparams.seed);
+        slot.sparams.n_probs            = json_value(data, "n_probs",            default_sparams.n_probs);
+        slot.sparams.min_keep           = json_value(data, "min_keep",           default_sparams.min_keep);
       //slot.params.t_max_prompt_ms    = json_value(data, "t_max_prompt_ms",   default_params.t_max_prompt_ms); // TODO: implement
         slot.params.t_max_predict_ms   = json_value(data, "t_max_predict_ms",  default_params.t_max_predict_ms);
+
+        // sequence breakers for DRY
+        {
+            auto dry_sequence_breakers = data.find("dry_sequence_breakers");
+            if (dry_sequence_breakers != data.end()) {
+                try {
+                    if (dry_sequence_breakers->is_array()) {
+                        slot.sparams.dry_sequence_breakers = dry_sequence_breakers->get<std::vector<std::string>>();
+                    } else if (dry_sequence_breakers->is_string()) {
+                std::string dry_sequence_breakers_str = dry_sequence_breakers->get<std::string>();
+
+                if (dry_sequence_breakers_str.empty() || dry_sequence_breakers_str[0] != '[') {
+                    dry_sequence_breakers_str = "[" + dry_sequence_breakers_str + "]";
+                }
+
+                slot.sparams.dry_sequence_breakers = json::parse(dry_sequence_breakers_str).get<std::vector<std::string>>();
+                    } else {
+                        send_error(task, "\"dry_sequence_breakers\": Expected an array of strings or a JSON-encoded array of strings.", ERROR_TYPE_INVALID_REQUEST);
+                        return false;
+                    }
+                } catch (const std::exception & e) {
+                    send_error(task, std::string("\"dry_sequence_breakers\": ") + e.what(), ERROR_TYPE_INVALID_REQUEST);
+                    return false;
+                }
+            }
+        }
 
         // process "json_schema" and "grammar"
         if (data.contains("json_schema") && !data.at("json_schema").is_null() && data.contains("grammar") && !data.at("grammar").is_null()) {
@@ -940,8 +970,7 @@ struct server_context {
             }
 
             if ((prompt->is_string()) ||
-                (prompt->is_array() &&  prompt->size() == 1 && prompt->at(0).is_string()) ||
-                (prompt->is_array() && !prompt->empty()     && prompt->at(0).is_number_integer())) {
+                (prompt->is_array() && !prompt->empty() && (prompt->at(0).is_string() || prompt->at(0).is_number_integer()))) {
                 slot.prompt = *prompt;
             } else if (prompt->is_array() && prompt->size() == 1 && prompt->at(0).is_array()) {
                 slot.prompt = prompt->at(0);
@@ -949,13 +978,13 @@ struct server_context {
                 // array of strings
                 for (const auto & el : *prompt) {
                     if (!el.is_string()) {
-                        send_error(task, "\"prompt\" must be a string, an array of strings or an array of integers", ERROR_TYPE_INVALID_REQUEST);
+                        send_error(task, "\"prompt\" must be a string, an array of strings, an array of integers, or a mixed array of strings and integers", ERROR_TYPE_INVALID_REQUEST);
                         return false;
                     }
                 }
                 slot.prompt = *prompt;
             } else {
-                send_error(task, "\"prompt\" must be a string, an array of strings or an array of integers", ERROR_TYPE_INVALID_REQUEST);
+                send_error(task, "\"prompt\" must be a string, an array of strings, an array of integers, or a mixed array of strings and integers", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
         }
@@ -1031,7 +1060,7 @@ struct server_context {
                 common_sampler_free(slot.smpl);
             }
 
-            slot.smpl = common_sampler_init(model, slot.sparams);
+            slot.smpl = common_sampler_init(model, slot.sparams, slot.n_ctx);
             if (slot.smpl == nullptr) {
                 // for now, the only error that may happen here is invalid grammar
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
@@ -1205,6 +1234,11 @@ struct server_context {
             {"repeat_penalty",            slot.sparams.penalty_repeat},
             {"presence_penalty",          slot.sparams.penalty_present},
             {"frequency_penalty",         slot.sparams.penalty_freq},
+            {"dry_multiplier",            slot.sparams.dry_multiplier},
+            {"dry_base",                  slot.sparams.dry_base},
+            {"dry_allowed_length",        slot.sparams.dry_allowed_length},
+            {"dry_penalty_last_n",        slot.sparams.dry_penalty_last_n},
+            {"dry_sequence_breakers",     slot.sparams.dry_sequence_breakers},
             {"mirostat",                  slot.sparams.mirostat},
             {"mirostat_tau",              slot.sparams.mirostat_tau},
             {"mirostat_eta",              slot.sparams.mirostat_eta},
@@ -1433,15 +1467,27 @@ struct server_context {
             tasks.push_back(std::move(task));
         };
 
-        static constexpr const char * error_msg = "\"prompt\" must be a string, an array of token ids or an array of prompts";
+        static constexpr const char * error_msg = "\"prompt\" must be a string, an array of token ids, a mixed array of strings and token ids, or an array of prompts";
         if (!data.contains("prompt")) {
             throw std::runtime_error(error_msg);
         }
 
         json prompt = data.at("prompt");
 
-        // if the prompt is a singleton (i.e. a string or a list of tokens), we only need to create single task
-        if (prompt.is_string() || json_is_array_of_numbers(prompt)) {
+        auto is_valid_singleton_array = [](const json& arr) {
+            bool has_number = false;
+            for (const auto& elem : arr) {
+                if (elem.is_number()) {
+                    has_number = true;
+                } else if (!elem.is_string()) {
+                    return false;
+                }
+            }
+            return has_number;
+        };
+
+        // if the prompt is a singleton (i.e. a string, a list of tokens, or a mixed array of strings and tokens), we only need to create a single task
+        if (prompt.is_string() || (prompt.is_array() && is_valid_singleton_array(prompt))) {
             data["index"] = 0;
             create_task(data, false, nullptr);
         } else if (prompt.is_array()) {
@@ -2123,16 +2169,19 @@ struct server_context {
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
 
+                            // Should this be (re-)moved?
                             common_sampler_reset(slot.smpl);
 
                             if (slot.params.cache_prompt) {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = longest_common_prefix(slot.cache_tokens, prompt_tokens);
+                                // Not sure if the for loop below should happen in multiple places but for now I moved it
+                                // until after the entire prompt is processed so that sampling would happen consistently.
 
                                 // push the prompt into the sampling context (do not apply grammar)
-                                for (int i = 0; i < slot.n_past; ++i) {
-                                    common_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
-                                }
+                                // for (int i = 0; i < slot.n_past; ++i) {
+                                //     common_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
+                                // }
 
                                 // reuse chunks from the cached prompt by shifting their KV cache in the new position
                                 if (params.n_cache_reuse > 0) {
@@ -2166,7 +2215,7 @@ struct server_context {
                                             for (size_t i = 0; i < n_match; i++) {
                                                 slot.cache_tokens[head_p + i] = slot.cache_tokens[head_c + i];
 
-                                                common_sampler_accept(slot.smpl, slot.cache_tokens[head_p + i], false);
+                                                //common_sampler_accept(slot.smpl, slot.cache_tokens[head_p + i], false);
 
                                                 slot.n_past++;
                                             }
@@ -2247,6 +2296,11 @@ struct server_context {
                         slot.state = SLOT_STATE_DONE_PROMPT;
 
                         GGML_ASSERT(batch.n_tokens > 0);
+
+                        // Process all prompt tokens through sampler system
+                        for (int i = 0; i < slot.n_prompt_tokens; ++i) {
+                            common_sampler_accept(slot.smpl, prompt_tokens[i], false);
+                        }
 
                         // extract the logits only for the last token
                         batch.logits[batch.n_tokens - 1] = true;
