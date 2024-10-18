@@ -898,7 +898,13 @@ struct server_context {
                     if (dry_sequence_breakers->is_array()) {
                         slot.sparams.dry_sequence_breakers = dry_sequence_breakers->get<std::vector<std::string>>();
                     } else if (dry_sequence_breakers->is_string()) {
-                        slot.sparams.dry_sequence_breakers = json::parse(dry_sequence_breakers->get<std::string>()).get<std::vector<std::string>>();
+                std::string dry_sequence_breakers_str = dry_sequence_breakers->get<std::string>();
+
+                if (dry_sequence_breakers_str.empty() || dry_sequence_breakers_str[0] != '[') {
+                    dry_sequence_breakers_str = "[" + dry_sequence_breakers_str + "]";
+                }
+
+                slot.sparams.dry_sequence_breakers = json::parse(dry_sequence_breakers_str).get<std::vector<std::string>>();
                     } else {
                         send_error(task, "\"dry_sequence_breakers\": Expected an array of strings or a JSON-encoded array of strings.", ERROR_TYPE_INVALID_REQUEST);
                         return false;

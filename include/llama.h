@@ -1149,7 +1149,7 @@ extern "C" {
                                 bool   penalize_nl,     // consider newlines as a repeatable token
                                 bool   ignore_eos);     // ignore the end-of-sequence token
 
-    ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
+    ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
     LLAMA_API struct llama_sampler * llama_sampler_init_dry(
             const struct llama_model * model,
                              int32_t   context_size,
