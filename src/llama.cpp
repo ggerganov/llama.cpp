@@ -21141,7 +21141,7 @@ struct llama_batch_allocr {
         batch = in_batch;
         if (!batch.pos) {
             // determine the last position in KV cache
-            llama_pos last_pos = 0;
+            llama_pos last_pos = -1;
             for (const auto & cell : ctx->kv_self.cells) {
                 if (cell.has_seq_id(batch_default_seq_id)) {
                     last_pos = std::max(last_pos, cell.pos);
