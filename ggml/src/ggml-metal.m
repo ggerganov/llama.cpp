@@ -241,6 +241,8 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_ROPE_NEOX_F16,
     GGML_METAL_KERNEL_TYPE_IM2COL_F16,
     GGML_METAL_KERNEL_TYPE_IM2COL_F32,
+    GGML_METAL_KERNEL_TYPE_IM2COL_EXT_F16,
+    GGML_METAL_KERNEL_TYPE_IM2COL_EXT_F32,
     GGML_METAL_KERNEL_TYPE_UPSCALE_F32,
     GGML_METAL_KERNEL_TYPE_PAD_F32,
     GGML_METAL_KERNEL_TYPE_ARANGE_F32,
@@ -687,6 +689,8 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_ROPE_NEOX_F16,                 rope_neox_f16,                  true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_IM2COL_F16,                    im2col_f16,                     true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_IM2COL_F32,                    im2col_f32,                     true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_IM2COL_EXT_F16,                im2col_ext_f16,                 true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_IM2COL_EXT_F32,                im2col_ext_f32,                 true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_UPSCALE_F32,                   upscale_f32,                    true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_PAD_F32,                       pad_f32,                        true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_TIMESTEP_EMBEDDING_F32,        timestep_embedding_f32,         true);
@@ -2579,11 +2583,24 @@ static void ggml_metal_encode_node(
                 const int32_t ofs0 = src1->nb[is_2D ? 3 : 2] / 4;
                 const int32_t ofs1 = src1->nb[is_2D ? 2 : 1] / 4;
 
-                id<MTLComputePipelineState> pipeline = nil;
+                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_F32].pipeline;
+                const uint64_t M = pipeline.maxTotalThreadsPerThreadgroup;
+
+                const bool is_gt_mttpt = ((size_t)(N * KH * KW)) > pipeline.maxTotalThreadsPerThreadgroup;
 
                 switch (dst->type) {
-                    case GGML_TYPE_F32: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_F32].pipeline; break;
-                    case GGML_TYPE_F16: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_F16].pipeline; break;
+                    case GGML_TYPE_F32: {
+                        pipeline = (is_gt_mttpt ?
+                                    ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_EXT_F32].pipeline
+                                    :
+                                    ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_F32].pipeline);
+                    } break;
+                    case GGML_TYPE_F16: {
+                        pipeline = (is_gt_mttpt ?
+                                    ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_EXT_F16].pipeline
+                                    :
+                                    ctx->kernels[GGML_METAL_KERNEL_TYPE_IM2COL_F16].pipeline);
+                    } break;
                     default: GGML_ABORT("fatal error");
                 };
 
@@ -2602,7 +2619,16 @@ static void ggml_metal_encode_node(
                 [encoder setBytes:&d0      length:sizeof( int32_t) atIndex:11];
                 [encoder setBytes:&d1      length:sizeof( int32_t) atIndex:12];
 
-                [encoder dispatchThreadgroups:MTLSizeMake(IC, OH, OW) threadsPerThreadgroup:MTLSizeMake(N, KH, KW)];
+                if (is_gt_mttpt) {
+                    [encoder setBytes:&N       length:sizeof(int32_t) atIndex:13];
+                    [encoder setBytes:&KH       length:sizeof(int32_t) atIndex:14];
+                    [encoder setBytes:&KW       length:sizeof(int32_t) atIndex:15];
+
+                    const int64_t D = N / M + (N % M > 0 ? 1 : 0);
+                    [encoder dispatchThreadgroups:MTLSizeMake(D * CHW, OH, OW) threadsPerThreadgroup:MTLSizeMake(M, 1, 1)];
+                } else {
+                    [encoder dispatchThreadgroups:MTLSizeMake(IC, OH, OW) threadsPerThreadgroup:MTLSizeMake(N, KH, KW)];
+                }
             } break;
         case GGML_OP_UPSCALE:
             {
