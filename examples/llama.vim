@@ -649,9 +649,9 @@ function! s:fim_on_stdout(job_id, data, event) dict
                 \ l:n_cached, l:n_ctx
                 \ )
         else
-            let l:info = printf("%s | c: %d / %d, r: %d, e: %d, q: %d | p: %d (%.2f ms, %.2f t/s) | g: %d (%.2f ms, %.2f t/s) | t: %.2f ms",
+            let l:info = printf("%s | c: %d / %d, r: %d / %d, e: %d, q: %d / 16 | p: %d (%.2f ms, %.2f t/s) | g: %d (%.2f ms, %.2f t/s) | t: %.2f ms",
                 \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
-                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), s:ring_n_evict, len(s:ring_queued),
+                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), g:llama_config.ring_n_chunks, s:ring_n_evict, len(s:ring_queued),
                 \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
                 \ l:n_predict, l:t_predict_ms, l:s_predict,
                 \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
