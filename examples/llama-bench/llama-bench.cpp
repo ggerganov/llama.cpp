@@ -244,6 +244,7 @@ struct cmd_params {
     std::vector<std::vector<float>> tensor_split;
     std::vector<bool> use_mmap;
     std::vector<bool> embeddings;
+    std::vector<bool> runtime_repack;
     ggml_numa_strategy numa;
     int reps;
     ggml_sched_priority prio;
@@ -276,6 +277,7 @@ static const cmd_params cmd_params_defaults = {
     /* tensor_split         */ {std::vector<float>(llama_max_devices(), 0.0f)},
     /* use_mmap             */ {true},
     /* embeddings           */ {false},
+    /* runtime_repack       */ {false},
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
     /* reps                 */ 5,
     /* prio                 */ GGML_SCHED_PRIO_NORMAL,
@@ -314,6 +316,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -mmp, --mmap <0|1>                        (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
     printf("  --numa <distribute|isolate|numactl>       (default: disabled)\n");
     printf("  -embd, --embeddings <0|1>                 (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
+    printf("  -rtrp, --runtime_repack <0|1>             (default: %s)\n", join(cmd_params_defaults.runtime_repack, ",").c_str());
     printf("  -ts, --tensor-split <ts0/ts1/..>          (default: 0)\n");
     printf("  -r, --repetitions <n>                     (default: %d)\n", cmd_params_defaults.reps);
     printf("  --prio <0|1|2|3>                          (default: %d)\n", cmd_params_defaults.prio);
@@ -573,6 +576,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<bool>(argv[i], split_delim);
             params.embeddings.insert(params.embeddings.end(), p.begin(), p.end());
+        } else if (arg == "-rtrp" || arg == "--runtime_repack") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = string_split<bool>(argv[i], split_delim);
+            params.runtime_repack.insert(params.runtime_repack.end(), p.begin(), p.end());
         } else if (arg == "-ts" || arg == "--tensor-split") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -641,27 +651,28 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     }
 
     // set defaults
-    if (params.model.empty())        { params.model = cmd_params_defaults.model; }
-    if (params.n_prompt.empty())     { params.n_prompt = cmd_params_defaults.n_prompt; }
-    if (params.n_gen.empty())        { params.n_gen = cmd_params_defaults.n_gen; }
-    if (params.n_pg.empty())         { params.n_pg = cmd_params_defaults.n_pg; }
-    if (params.n_batch.empty())      { params.n_batch = cmd_params_defaults.n_batch; }
-    if (params.n_ubatch.empty())     { params.n_ubatch = cmd_params_defaults.n_ubatch; }
-    if (params.type_k.empty())       { params.type_k = cmd_params_defaults.type_k; }
-    if (params.type_v.empty())       { params.type_v = cmd_params_defaults.type_v; }
-    if (params.n_gpu_layers.empty()) { params.n_gpu_layers = cmd_params_defaults.n_gpu_layers; }
-    if (params.rpc_servers.empty())  { params.rpc_servers = cmd_params_defaults.rpc_servers; }
-    if (params.split_mode.empty())   { params.split_mode = cmd_params_defaults.split_mode; }
-    if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
-    if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
-    if (params.flash_attn.empty())   { params.flash_attn = cmd_params_defaults.flash_attn; }
-    if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
-    if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
-    if (params.embeddings.empty())   { params.embeddings = cmd_params_defaults.embeddings; }
-    if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
-    if (params.cpu_mask.empty())     { params.cpu_mask  = cmd_params_defaults.cpu_mask;  }
-    if (params.cpu_strict.empty())   { params.cpu_strict = cmd_params_defaults.cpu_strict; }
-    if (params.poll.empty())         { params.poll = cmd_params_defaults.poll; }
+    if (params.model.empty())         { params.model = cmd_params_defaults.model; }
+    if (params.n_prompt.empty())      { params.n_prompt = cmd_params_defaults.n_prompt; }
+    if (params.n_gen.empty())         { params.n_gen = cmd_params_defaults.n_gen; }
+    if (params.n_pg.empty())          { params.n_pg = cmd_params_defaults.n_pg; }
+    if (params.n_batch.empty())       { params.n_batch = cmd_params_defaults.n_batch; }
+    if (params.n_ubatch.empty())      { params.n_ubatch = cmd_params_defaults.n_ubatch; }
+    if (params.type_k.empty())        { params.type_k = cmd_params_defaults.type_k; }
+    if (params.type_v.empty())        { params.type_v = cmd_params_defaults.type_v; }
+    if (params.n_gpu_layers.empty())  { params.n_gpu_layers = cmd_params_defaults.n_gpu_layers; }
+    if (params.rpc_servers.empty())   { params.rpc_servers = cmd_params_defaults.rpc_servers; }
+    if (params.split_mode.empty())    { params.split_mode = cmd_params_defaults.split_mode; }
+    if (params.main_gpu.empty())      { params.main_gpu = cmd_params_defaults.main_gpu; }
+    if (params.no_kv_offload.empty()) { params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
+    if (params.flash_attn.empty())    { params.flash_attn = cmd_params_defaults.flash_attn; }
+    if (params.tensor_split.empty())  { params.tensor_split = cmd_params_defaults.tensor_split; }
+    if (params.use_mmap.empty())      { params.use_mmap = cmd_params_defaults.use_mmap; }
+    if (params.embeddings.empty())    { params.embeddings = cmd_params_defaults.embeddings; }
+    if (params.runtime_repack.empty()){ params.runtime_repack = cmd_params_defaults.runtime_repack; }
+    if (params.n_threads.empty())     { params.n_threads = cmd_params_defaults.n_threads; }
+    if (params.cpu_mask.empty())      { params.cpu_mask  = cmd_params_defaults.cpu_mask;  }
+    if (params.cpu_strict.empty())    { params.cpu_strict = cmd_params_defaults.cpu_strict; }
+    if (params.poll.empty())          { params.poll = cmd_params_defaults.poll; }
 
     return params;
 }
@@ -687,6 +698,7 @@ struct cmd_params_instance {
     std::vector<float> tensor_split;
     bool use_mmap;
     bool embeddings;
+    bool runtime_repack;
 
     llama_model_params to_llama_mparams() const {
         llama_model_params mparams = llama_model_default_params();
@@ -724,6 +736,7 @@ struct cmd_params_instance {
         cparams.offload_kqv = !no_kv_offload;
         cparams.flash_attn = flash_attn;
         cparams.embeddings = embeddings;
+        cparams.runtime_repack = runtime_repack;
 
         return cparams;
     }
@@ -741,6 +754,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & ts : params.tensor_split)
     for (const auto & mmp : params.use_mmap)
     for (const auto & embd : params.embeddings)
+    for (const auto & rtrp : params.runtime_repack)
     for (const auto & nb : params.n_batch)
     for (const auto & nub : params.n_ubatch)
     for (const auto & tk : params.type_k)
@@ -756,26 +770,27 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 continue;
             }
             cmd_params_instance instance = {
-                /* .model        = */ m,
-                /* .n_prompt     = */ n_prompt,
-                /* .n_gen        = */ 0,
-                /* .n_batch      = */ nb,
-                /* .n_ubatch     = */ nub,
-                /* .type_k       = */ tk,
-                /* .type_v       = */ tv,
-                /* .n_threads    = */ nt,
-                /* .cpu_mask     = */ cm,
-                /* .cpu_strict   = */ cs,
-                /* .poll         = */ pl,
-                /* .n_gpu_layers = */ nl,
-                /* .rpc_servers  = */ rpc,
-                /* .split_mode   = */ sm,
-                /* .main_gpu     = */ mg,
-                /* .no_kv_offload= */ nkvo,
-                /* .flash_attn   = */ fa,
-                /* .tensor_split = */ ts,
-                /* .use_mmap     = */ mmp,
-                /* .embeddings   = */ embd,
+                /* .model         = */ m,
+                /* .n_prompt      = */ n_prompt,
+                /* .n_gen         = */ 0,
+                /* .n_batch       = */ nb,
+                /* .n_ubatch      = */ nub,
+                /* .type_k        = */ tk,
+                /* .type_v        = */ tv,
+                /* .n_threads     = */ nt,
+                /* .cpu_mask      = */ cm,
+                /* .cpu_strict    = */ cs,
+                /* .poll          = */ pl,
+                /* .n_gpu_layers  = */ nl,
+                /* .rpc_servers   = */ rpc,
+                /* .split_mode    = */ sm,
+                /* .main_gpu      = */ mg,
+                /* .no_kv_offload = */ nkvo,
+                /* .flash_attn    = */ fa,
+                /* .tensor_split  = */ ts,
+                /* .use_mmap      = */ static_cast<bool>(mmp) && !static_cast<bool>(rtrp),
+                /* .embeddings    = */ embd,
+                /* .runtime_repack= */ rtrp,
             };
             instances.push_back(instance);
         }
@@ -785,26 +800,27 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 continue;
             }
             cmd_params_instance instance = {
-                /* .model        = */ m,
-                /* .n_prompt     = */ 0,
-                /* .n_gen        = */ n_gen,
-                /* .n_batch      = */ nb,
-                /* .n_ubatch     = */ nub,
-                /* .type_k       = */ tk,
-                /* .type_v       = */ tv,
-                /* .n_threads    = */ nt,
-                /* .cpu_mask     = */ cm,
-                /* .cpu_strict   = */ cs,
-                /* .poll         = */ pl,
-                /* .n_gpu_layers = */ nl,
-                /* .rpc_servers  = */ rpc,
-                /* .split_mode   = */ sm,
-                /* .main_gpu     = */ mg,
-                /* .no_kv_offload= */ nkvo,
-                /* .flash_attn   = */ fa,
-                /* .tensor_split = */ ts,
-                /* .use_mmap     = */ mmp,
-                /* .embeddings   = */ embd,
+                /* .model         = */ m,
+                /* .n_prompt      = */ 0,
+                /* .n_gen         = */ n_gen,
+                /* .n_batch       = */ nb,
+                /* .n_ubatch      = */ nub,
+                /* .type_k        = */ tk,
+                /* .type_v        = */ tv,
+                /* .n_threads     = */ nt,
+                /* .cpu_mask      = */ cm,
+                /* .cpu_strict    = */ cs,
+                /* .poll          = */ pl,
+                /* .n_gpu_layers  = */ nl,
+                /* .rpc_servers   = */ rpc,
+                /* .split_mode    = */ sm,
+                /* .main_gpu      = */ mg,
+                /* .no_kv_offload = */ nkvo,
+                /* .flash_attn    = */ fa,
+                /* .tensor_split  = */ ts,
+                /* .use_mmap      = */ static_cast<bool>(mmp) && !static_cast<bool>(rtrp),
+                /* .embeddings    = */ embd,
+                /* .runtime_repack= */ rtrp,
             };
             instances.push_back(instance);
         }
@@ -814,26 +830,27 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 continue;
             }
             cmd_params_instance instance = {
-                /* .model        = */ m,
-                /* .n_prompt     = */ n_pg.first,
-                /* .n_gen        = */ n_pg.second,
-                /* .n_batch      = */ nb,
-                /* .n_ubatch     = */ nub,
-                /* .type_k       = */ tk,
-                /* .type_v       = */ tv,
-                /* .n_threads    = */ nt,
-                /* .cpu_mask     = */ cm,
-                /* .cpu_strict   = */ cs,
-                /* .poll         = */ pl,
-                /* .n_gpu_layers = */ nl,
-                /* .rpc_servers  = */ rpc,
-                /* .split_mode   = */ sm,
-                /* .main_gpu     = */ mg,
-                /* .no_kv_offload= */ nkvo,
-                /* .flash_attn   = */ fa,
-                /* .tensor_split = */ ts,
-                /* .use_mmap     = */ mmp,
-                /* .embeddings   = */ embd,
+                /* .model         = */ m,
+                /* .n_prompt      = */ n_pg.first,
+                /* .n_gen         = */ n_pg.second,
+                /* .n_batch       = */ nb,
+                /* .n_ubatch      = */ nub,
+                /* .type_k        = */ tk,
+                /* .type_v        = */ tv,
+                /* .n_threads     = */ nt,
+                /* .cpu_mask      = */ cm,
+                /* .cpu_strict    = */ cs,
+                /* .poll          = */ pl,
+                /* .n_gpu_layers  = */ nl,
+                /* .rpc_servers   = */ rpc,
+                /* .split_mode    = */ sm,
+                /* .main_gpu      = */ mg,
+                /* .no_kv_offload = */ nkvo,
+                /* .flash_attn    = */ fa,
+                /* .tensor_split  = */ ts,
+                /* .use_mmap      = */ static_cast<bool>(mmp) && !static_cast<bool>(rtrp),
+                /* .embeddings    = */ embd,
+                /* .runtime_repack= */ rtrp,
             };
             instances.push_back(instance);
         }
@@ -875,6 +892,7 @@ struct test {
     std::vector<float> tensor_split;
     bool use_mmap;
     bool embeddings;
+    bool runtime_repack;
     int n_prompt;
     int n_gen;
     std::string test_time;
@@ -904,6 +922,7 @@ struct test {
         tensor_split = inst.tensor_split;
         use_mmap = inst.use_mmap;
         embeddings = inst.embeddings;
+        runtime_repack = inst.runtime_repack;
         n_prompt = inst.n_prompt;
         n_gen = inst.n_gen;
         // RFC 3339 date-time format
@@ -974,7 +993,7 @@ struct test {
             "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload", "flash_attn",
-            "tensor_split", "use_mmap", "embeddings",
+            "tensor_split", "use_mmap", "embeddings", "runtime_repack",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts",
@@ -996,7 +1015,7 @@ struct test {
         if (field == "cuda" || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
             field == "cpu_strict" ||
-            field == "flash_attn" || field == "use_mmap" || field == "embeddings") {
+            field == "flash_attn" || field == "use_mmap" || field == "embeddings" || field == "runtime_repack") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -1032,7 +1051,7 @@ struct test {
             ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload), std::to_string(flash_attn),
-            tensor_split_str, std::to_string(use_mmap), std::to_string(embeddings),
+            tensor_split_str, std::to_string(use_mmap), std::to_string(embeddings), std::to_string(runtime_repack),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -1220,6 +1239,9 @@ struct markdown_printer : public printer {
         if (field == "test") {
             return 13;
         }
+        if (field == "runtime_repack") {
+            return 6;
+        }
 
         int width = std::max((int)field.length(), 10);
 
@@ -1253,6 +1275,9 @@ struct markdown_printer : public printer {
         }
         if (field == "tensor_split") {
             return "ts";
+        }
+        if (field == "runtime_repack") {
+            return "repack";
         }
         return field;
     }
@@ -1311,6 +1336,9 @@ struct markdown_printer : public printer {
         }
         if (params.embeddings.size() > 1 || params.embeddings != cmd_params_defaults.embeddings) {
             fields.emplace_back("embeddings");
+        }
+        if (params.runtime_repack.size() > 1 || params.runtime_repack != cmd_params_defaults.runtime_repack) {
+            fields.emplace_back("runtime_repack");
         }
         fields.emplace_back("test");
         fields.emplace_back("t/s");

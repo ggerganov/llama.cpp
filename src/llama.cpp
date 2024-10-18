@@ -2574,6 +2574,7 @@ struct llama_cparams {
     bool offload_kqv;
     bool flash_attn;
     bool no_perf;
+    bool runtime_repack;
 
     enum llama_pooling_type pooling_type;
 
@@ -17107,6 +17108,7 @@ static void llama_graph_compute(
         ggml_threadpool * threadpool) {
     if (lctx.backend_cpu != nullptr) {
         ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
+        ggml_backend_cpu_set_runtime_repack(lctx.backend_cpu, lctx.cparams.runtime_repack);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
 
@@ -19034,6 +19036,7 @@ struct llama_context_params llama_context_default_params() {
         /*.offload_kqv                 =*/ true,
         /*.flash_attn                  =*/ false,
         /*.no_perf                     =*/ true,
+        /*.runtime_repack              =*/ false,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
     };
@@ -19292,6 +19295,7 @@ struct llama_context * llama_new_context_with_model(
     cparams.flash_attn       = params.flash_attn;
     cparams.no_perf          = params.no_perf;
     cparams.pooling_type     = params.pooling_type;
+    cparams.runtime_repack   = params.runtime_repack;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;

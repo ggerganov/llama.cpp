@@ -11,6 +11,7 @@
 #include "ggml-backend-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-impl.h"
+#include "ggml-aarch64.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -882,6 +883,10 @@ struct ggml_backend_cpu_context {
     uint8_t *           work_data;
     size_t              work_size;
 
+    bool                runtime_repack;
+    uint8_t *           scratch_memory;
+    size_t              scratch_size;
+
     ggml_abort_callback abort_callback;
     void *              abort_callback_data;
 };
@@ -895,6 +900,7 @@ static const char * ggml_backend_cpu_get_name(ggml_backend_t backend) {
 static void ggml_backend_cpu_free(ggml_backend_t backend) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
     delete[] cpu_ctx->work_data;
+    free(cpu_ctx->scratch_memory); // free the scratch memory allocated by C module
     delete cpu_ctx;
     delete backend;
 }
@@ -952,6 +958,16 @@ static enum ggml_status ggml_backend_cpu_graph_plan_compute(ggml_backend_t backe
 static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
+    if (cpu_ctx->runtime_repack) {
+        for (int i = 0; i < cgraph->n_nodes; i++) {
+            struct ggml_tensor * node = cgraph->nodes[i];
+            if (node->op == GGML_OP_MUL_MAT && node->src[0]->type == GGML_TYPE_Q4_0) {
+                // Prepare for optimized kernels if applicable.
+                ggml_prepare_optimal_kernel(node->src[0], &cpu_ctx->scratch_memory, &cpu_ctx->scratch_size);
+            }
+        }
+    }
+
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads, cpu_ctx->threadpool);
 
     if (cpu_ctx->work_size < cplan.work_size) {
@@ -1008,6 +1024,9 @@ ggml_backend_t ggml_backend_cpu_init(void) {
     ctx->work_size           = 0;
     ctx->abort_callback      = NULL;
     ctx->abort_callback_data = NULL;
+    ctx->runtime_repack      = false;
+    ctx->scratch_memory      = NULL;
+    ctx->scratch_size        = 0;
 
     ggml_backend_t cpu_backend = new ggml_backend {
         /* .guid      = */ ggml_backend_cpu_guid(),
@@ -1053,6 +1072,13 @@ void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_
     struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
     ctx->abort_callback = abort_callback;
     ctx->abort_callback_data = abort_callback_data;
+}
+
+void ggml_backend_cpu_set_runtime_repack(ggml_backend_t backend_cpu, bool runtime_repack) {
+    GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));
+
+    struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
+    ctx->runtime_repack = runtime_repack;
 }
 
 ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) {
