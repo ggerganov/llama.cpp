@@ -1927,6 +1927,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
                 images[images.size()-1].push_back(patch);
             }
         }
+        delete refine_image;
     }
     return images;
 }
@@ -1963,6 +1964,13 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
                 normalize_image_u8_to_f32(imgs[i][j], res, ctx->image_mean, ctx->image_std);
                 res_imgs->data[idx++] = *res;
                 clip_image_f32_free(res);
+            }
+        }
+        for (size_t i = 0; i < imgs.size(); ++i) {
+            for (size_t j = 0; j < imgs[i].size(); ++j) {
+                if (imgs[i][j] != nullptr) {
+                    delete imgs[i][j];
+                }
             }
         }
         return true;
