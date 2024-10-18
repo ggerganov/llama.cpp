@@ -3332,6 +3332,10 @@ struct llama_context {
 
     // whether we are computing encoder output or decoder output
     bool is_encoding = false;
+    
+    // number of position id each token get, 1 for each token in most cases.
+    // when using m-rope, it will be 3 position ids per token to representing 3 dimension coordinate.
+    int n_pos_per_token = 1;
 
     // output of the encoder part of the encoder-decoder models
     std::vector<float> embd_enc;
@@ -16874,6 +16878,7 @@ static struct ggml_cgraph * llama_build_graph(
             } break;
         case LLM_ARCH_QWEN2VL:
             {
+                lctx.n_pos_per_token = 3;
                 result = llm.build_qwen2vl();
             } break;
         case LLM_ARCH_QWEN2MOE:
@@ -17098,8 +17103,8 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
 
     if (ubatch.pos && lctx.inp_pos) {
         const int64_t n_tokens = ubatch.n_tokens;
-
-        ggml_backend_tensor_set(lctx.inp_pos, ubatch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
+        auto n_pos = lctx.n_pos_per_token;
+        ggml_backend_tensor_set(lctx.inp_pos, ubatch.pos, 0, n_tokens*n_pos*ggml_element_size(lctx.inp_pos));
     }
 
     if (hparams.causal_attn || cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {

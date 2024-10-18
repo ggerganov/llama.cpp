@@ -673,6 +673,10 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             ctx0, inp, 
             hidden_size, patches_w * patches_h, batch_size);
 
+        // ggml_build_forward_expand(gf, inp);
+        // ggml_free(ctx0);
+
+        // return gf;
     }
     else {
         inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
@@ -756,7 +760,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             if (ctx->has_qwen2vl_merger) {
                 Q = ggml_mrope_ext(
                     ctx0, Q, positions, nullptr, 
-                    d_head/2, mrope_sections, 2 /*LLAMA_ROPE_TYPE_NEOX8*/, 32768, 1000000, 1, 0, 1, 32, 1);
+                    d_head/2, mrope_sections, 2 /*LLAMA_ROPE_TYPE_NEOX8*/, 32768, 10000, 1, 0, 1, 32, 1);
             }
             Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
             Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3));
@@ -769,7 +773,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             if (ctx->has_qwen2vl_merger) {
                 K = ggml_mrope_ext(
                     ctx0, K, positions, nullptr, 
-                    d_head/2, mrope_sections, 2 /*LLAMA_ROPE_TYPE_NEOX8*/, 32768, 1000000, 1, 0, 1, 32, 1);
+                    d_head/2, mrope_sections, 2 /*LLAMA_ROPE_TYPE_NEOX8*/, 32768, 10000, 1, 0, 1, 32, 1);
             }
             K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3));
             K = ggml_reshape_3d(ctx0, K, d_head, num_positions, n_head * batch_size);
@@ -823,7 +827,12 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         cur = ggml_add(ctx0, embeddings, cur);
 
         embeddings = cur;
+
     }
+    // ggml_build_forward_expand(gf, embeddings);
+    // ggml_free(ctx0);
+
+    // return gf;
 
     // post-layernorm
     if (ctx->has_post_norm) {
@@ -1623,6 +1632,10 @@ void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size
     ctx_clip->load_image_size = load_image_size;
 }
 
+struct clip_image_size * clip_get_load_image_size(struct clip_ctx * ctx_clip) {
+    return ctx_clip->load_image_size;
+}
+
 struct clip_image_size * clip_image_size_init() {
     struct clip_image_size * load_image_size = new struct clip_image_size();
     load_image_size->width = 448;
@@ -2086,6 +2099,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         // clip_image_f32 * res = clip_image_f32_init();
         normalize_image_u8_to_f32(resized, res_imgs->data, ctx->image_mean, ctx->image_std);
         // res_imgs->data[0] = *res;
+        res_imgs->size = 1;
 
         // clip_image_f32_free(res);
         clip_image_u8_free(resized);
@@ -2278,6 +2292,13 @@ void clip_free(clip_ctx * ctx) {
 
 size_t clip_embd_nbytes(const struct clip_ctx * ctx) {
     return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx) * sizeof(float);
+}
+
+size_t clip_embd_nbytes_by_img(const struct clip_ctx * ctx, int img_h, int img_w) {
+    clip_image_f32 img;
+    img.nx = img_w;
+    img.ny = img_h;
+    return clip_n_patches_by_img(ctx, &img) * clip_n_mmproj_embd(ctx) * sizeof(float);
 }
 
 int32_t clip_image_size(const struct clip_ctx * ctx) {
@@ -2561,26 +2582,17 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             const int pw = image_size_width / patch_size;
             const int ph = image_size_height / patch_size;
             int* positions_data = (int*)malloc(ggml_nbytes(positions));
-            // for (size_t y = 0; y < ph; y++)
-            // {
-            //     for (size_t x = 0; x < pw; x++)
-            //     {
-            //         positions_data[y * pw + x]                     = y;
-            //         positions_data[num_patches + (y * pw + x)]     = x;
-            //         positions_data[num_patches * 2 + (y * pw + x)] = 0;
-            //     }
-            // }
             
             int ptr = -1;
             for (size_t y = 0; y < ph; y+=2)
             {
                 for (size_t x = 0; x < pw; x+=2)
                 {
-                    for (size_t dy = 0; y < 2; y++) {
-                        for (size_t dx = 0; x < 2; x++) {
-                            positions_data[ptr++] = y + dy;
-                            positions_data[ptr++] = x + dx;
-                            positions_data[ptr++] = 0;
+                    for (size_t dy = 0; dy < 2; dy++) {
+                        for (size_t dx = 0; dx < 2; dx++) {
+                            positions_data[ptr++]                 = y + dy;
+                            positions_data[num_patches + ptr]     = x + dx;
+                            positions_data[num_patches * 2 + ptr] = 0;
                         }
                     }
                 }
@@ -2780,6 +2792,9 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
             return 3584;
         }
     }
+    if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
+        return ctx->vision_model.mm_1_b->ne[0];
+    }
 
     std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
     throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
@@ -2790,6 +2805,10 @@ int clip_is_minicpmv(const struct clip_ctx * ctx) {
         return ctx->minicpmv_version;
     }
     return 0;
+}
+
+bool clip_is_qwen2vl(const struct clip_ctx * ctx) {
+    return ctx->has_qwen2vl_merger;
 }
 
 

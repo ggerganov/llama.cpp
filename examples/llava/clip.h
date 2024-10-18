@@ -45,6 +45,7 @@ CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity
 CLIP_API void clip_free(struct clip_ctx * ctx);
 
 CLIP_API size_t clip_embd_nbytes(const struct clip_ctx * ctx);
+CLIP_API size_t clip_embd_nbytes_by_img(const struct clip_ctx * ctx, int img_h, int img_w);
 
 CLIP_API int32_t clip_image_size (const struct clip_ctx * ctx);
 CLIP_API int32_t clip_patch_size (const struct clip_ctx * ctx);
@@ -61,6 +62,7 @@ CLIP_API int clip_n_mmproj_embd    (const struct clip_ctx * ctx);
 
 CLIP_API int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip);
 CLIP_API void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size * load_image_size);
+CLIP_API struct clip_image_size * clip_get_load_image_size(struct clip_ctx * ctx_clip);
 
 CLIP_API struct clip_image_size * clip_image_size_init();
 CLIP_API struct clip_image_u8  * clip_image_u8_init ();
@@ -87,6 +89,7 @@ CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, cons
 CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype);
 
 CLIP_API int clip_is_minicpmv(const struct clip_ctx * ctx);
+CLIP_API bool clip_is_qwen2vl(const struct clip_ctx * ctx);
 
 CLIP_API bool tmp_clip_image_encode      (struct clip_ctx * ctx, int n_threads, float * img, int h, int w, float * vec);
 #ifdef __cplusplus
