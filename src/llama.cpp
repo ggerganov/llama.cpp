@@ -4338,6 +4338,7 @@ struct llama_model_loader {
         }
     };
     std::vector<llama_tensor_weight> weights;
+    std::unordered_map<std::string, size_t> weight_name_idx_map;
 
     std::unordered_map<std::string, struct llama_model_kv_override> kv_overrides;
 
@@ -4445,7 +4446,8 @@ struct llama_model_loader {
         fver = (enum llama_fver) gguf_get_version(meta);
 
         std::set<std::string> tensor_names;
-        for (auto & w : weights) {
+        for (size_t i = 0; i < weights.size(); i++) {
+            const auto & w = weights.at(i);
             n_elements += ggml_nelements(w.tensor);
             n_bytes    += ggml_nbytes(w.tensor);
             // make sure there is no duplicated tensor names
@@ -4455,6 +4457,7 @@ struct llama_model_loader {
                 throw std::runtime_error(format("invalid model: tensor '%s' is duplicated", w.tensor->name));
             }
             tensor_names.insert(name);
+            weight_name_idx_map[name] = i;
         }
 
         LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
@@ -4750,11 +4753,12 @@ struct llama_model_loader {
     }
 
     const llama_tensor_weight * get_weight(const char * name) const {
-        for (const auto & weight : weights) {
-            if (strcmp(name, weight.tensor->name) == 0) {
-                return &weight;
-            }
+        std::string tensor_name(name);
+        auto pos = weight_name_idx_map.find(tensor_name);
+        if (pos != weight_name_idx_map.end()) {
+            return &weights.at(pos->second);
         }
+
         return nullptr;
     }
 
