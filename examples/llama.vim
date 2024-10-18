@@ -144,6 +144,7 @@ function! llama#init()
            "autocmd CursorHoldI  * call llama#fim(v:true, v:true)
         endif
 
+        " gather chunks upon yanking
         autocmd TextYankPost    * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false, v:true) | endif
 
         " gather chunks upon entering/leaving a buffer
@@ -310,7 +311,6 @@ function! s:ring_update()
         \ 'input_extra':      l:extra_context,
         \ 'prompt':           "",
         \ 'n_predict':        1,
-        \ 'penalty_last_n':   0,
         \ 'temperature':      0.0,
         \ 'stream':           v:false,
         \ 'samplers':         ["temperature"],
@@ -410,7 +410,6 @@ function! llama#fim(is_auto, on_hold) abort
         \ 'prompt':           l:prompt,
         \ 'n_predict':        g:llama_config.n_predict,
         \ 'n_indent':         l:indent,
-        \ 'penalty_last_n':   0,
         \ 'top_k':            40,
         \ 'top_p':            0.99,
         \ 'stream':           v:false,
