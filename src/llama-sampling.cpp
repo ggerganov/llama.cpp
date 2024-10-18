@@ -1781,7 +1781,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
             break;
         }
     }
-    if (rep_limit <= ctx->dry_allowed_length) {
+    if (rep_limit < ctx->dry_allowed_length) {
         return;
     }
 
@@ -1845,12 +1845,26 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
     for (size_t i = 0; i < cur_p->size; ++i) {
         const auto& af_kvp = ctx->dry_max_token_repeat.find(cur_p->data[i].id);
         if (af_kvp != ctx->dry_max_token_repeat.end()) {
-            int repeat_exp = af_kvp->second - ctx->dry_allowed_length;
-            if (max_exponent > 0 && repeat_exp > max_exponent) {
-                repeat_exp = max_exponent;
+            // Check all sequence breakers starting with this token
+            auto range = ctx->dry_processed_breakers.equal_range(cur_p->data[i].id);
+            bool is_single_token_breaker = false;
+
+            for (auto it = range.first; it != range.second; ++it) {
+                if (it->second.empty()) {
+                    is_single_token_breaker = true;
+                    break;
+                }
             }
-            float penalty = ctx->dry_multiplier * std::pow(ctx->dry_base, repeat_exp);
-            cur_p->data[i].logit -= penalty;
+
+            // Apply penalty only if it's not a single-token sequence breaker
+            if (!is_single_token_breaker) {
+                int repeat_exp = af_kvp->second - ctx->dry_allowed_length;
+                if (max_exponent > 0 && repeat_exp > max_exponent) {
+                    repeat_exp = max_exponent;
+                }
+                float penalty = ctx->dry_multiplier * std::pow(ctx->dry_base, repeat_exp);
+                cur_p->data[i].logit -= penalty;
+            }
         }
     }
 
