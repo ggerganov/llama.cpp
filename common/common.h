@@ -90,6 +90,8 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_TFS_Z       = 4,
     COMMON_SAMPLER_TYPE_TYPICAL_P   = 5,
     COMMON_SAMPLER_TYPE_TEMPERATURE = 6,
+    COMMON_SAMPLER_TYPE_XTC         = 7,
+    COMMON_SAMPLER_TYPE_INFILL      = 8,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -108,6 +110,8 @@ struct common_sampler_params {
     int32_t top_k             = 40;    // <= 0 to use vocab size
     float   top_p             = 0.95f; // 1.0 = disabled
     float   min_p             = 0.05f; // 0.0 = disabled
+    float   xtc_probability   = 0.00f; // 0.0 = disabled
+    float   xtc_threshold     = 0.10f; // > 0.5 disables XTC
     float   tfs_z             = 1.00f; // 1.0 = disabled
     float   typ_p             = 1.00f; // typical_p, 1.0 = disabled
     float   temp              = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
@@ -124,13 +128,15 @@ struct common_sampler_params {
     bool    ignore_eos        = false;
     bool    no_perf           = false; // disable performance metrics
 
+
     std::vector<enum common_sampler_type> samplers = {
         COMMON_SAMPLER_TYPE_TOP_K,
         COMMON_SAMPLER_TYPE_TFS_Z,
         COMMON_SAMPLER_TYPE_TYPICAL_P,
         COMMON_SAMPLER_TYPE_TOP_P,
         COMMON_SAMPLER_TYPE_MIN_P,
-        COMMON_SAMPLER_TYPE_TEMPERATURE
+        COMMON_SAMPLER_TYPE_XTC,
+        COMMON_SAMPLER_TYPE_TEMPERATURE,
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
@@ -277,7 +283,8 @@ struct common_params {
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
-    int     n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
+    int32_t n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
+    int32_t n_cache_reuse  = 0;            // min chunk size to reuse from the cache via KV shifting
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT

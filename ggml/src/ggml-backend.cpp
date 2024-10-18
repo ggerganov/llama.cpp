@@ -329,7 +329,6 @@ bool ggml_backend_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type
     if (backend->device) {
         return ggml_backend_dev_supports_buft(backend->device, buft);
     }
-
     return backend->iface.supports_buft(backend, buft);
 }
 
@@ -538,12 +537,28 @@ void * ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * na
 #include "ggml-metal.h"
 #endif
 
+#ifdef GGML_USE_SYCL
+#include "ggml-sycl.h"
+#endif
+
+#ifdef GGML_USE_VULKAN
+#include "ggml-vulkan.h"
+#endif
+
 #ifdef GGML_USE_BLAS
 #include "ggml-blas.h"
 #endif
 
 #ifdef GGML_USE_RPC
 #include "ggml-rpc.h"
+#endif
+
+#ifndef __AMX_INT8__
+#undef GGML_USE_AMX
+#endif
+
+#ifdef GGML_USE_AMX
+#  include "ggml-amx.h"
 #endif
 
 struct ggml_backend_registry {
@@ -557,14 +572,23 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_METAL
         register_backend(ggml_backend_metal_reg());
 #endif
+#ifdef GGML_USE_SYCL
+        register_backend(ggml_backend_sycl_reg());
+#endif
+#ifdef GGML_USE_VULKAN
+        register_backend(ggml_backend_vk_reg());
+#endif
 #ifdef GGML_USE_BLAS
         register_backend(ggml_backend_blas_reg());
 #endif
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
 #endif
+#ifdef GGML_USE_AMX
+        register_backend(ggml_backend_amx_reg());
+#endif
 
-        // TODO: sycl, vulkan, kompute, cann
+        // TODO: kompute, cann
 
         register_backend(ggml_backend_cpu_reg());
     }
@@ -682,8 +706,6 @@ ggml_backend_t ggml_backend_init_best(void) {
 
 // backend CPU
 
-static const size_t TENSOR_ALIGNMENT = 32; // required for mmap as gguf only guarantees 32-byte alignment
-
 static const char * ggml_backend_cpu_buffer_get_name(ggml_backend_buffer_t buffer) {
     return "CPU";
 
@@ -702,7 +724,7 @@ static void * ggml_backend_cpu_buffer_get_base(ggml_backend_buffer_t buffer) {
 }
 
 static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    free(buffer->context);
+    ggml_aligned_free(buffer->context, buffer->size);
 }
 
 static void ggml_backend_cpu_buffer_memset_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
@@ -770,14 +792,19 @@ static const char * ggml_backend_cpu_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    size += TENSOR_ALIGNMENT;   // malloc may return an address that is not aligned
-    void * data = malloc(size); // TODO: use GGML_ALIGNED_MALLOC (move to ggml-impl.h)
+    auto alloc_size = size;
+    if (alloc_size == 0) {
+        alloc_size = 1;
+    }
+
+    void * data = ggml_aligned_malloc(alloc_size);
+
     if (data == NULL) {
-        GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, size);
+        GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, alloc_size);
         return NULL;
     }
 
-    return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, size);
+    return ggml_backend_buffer_init(buft, ggml_backend_cpu_buffer_i, data, alloc_size);
 }
 
 static size_t ggml_backend_cpu_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
@@ -2234,6 +2261,7 @@ ggml_backend_sched_t ggml_backend_sched_new(
         sched->backends[b] = backends[b];
         sched->bufts[b] = bufts ? bufts[b] : ggml_backend_get_default_buffer_type(backends[b]);
         GGML_ASSERT(ggml_backend_supports_buft(backends[b], sched->bufts[b]));
+
         if (sched->n_copies > 1) {
             for (int c = 0; c < sched->n_copies; c++) {
                 sched->events[b][c] = ggml_backend_event_new(backends[b]->device);

@@ -195,14 +195,14 @@ static std::string gen_chatcmplid() {
 // other common utils
 //
 
-static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
+static size_t longest_common_prefix(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
     return i;
 }
 
-static size_t common_part(const std::string & a, const std::string & b) {
+static size_t longest_common_prefix(const std::string & a, const std::string & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
@@ -360,9 +360,9 @@ static json oaicompat_completion_params_parse(
 
     // Handle "logprobs" field
     // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
-    if (body.contains("logprobs")) {
+    if (json_value(body, "logprobs", false)) {
         llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
-    } else if (body.contains("top_logprobs")) {
+    } else if (body.contains("top_logprobs") && !body.at("top_logprobs").is_null()) {
         throw std::runtime_error("top_logprobs requires logprobs to be set to true");
     }
 

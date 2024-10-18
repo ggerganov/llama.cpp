@@ -8,14 +8,18 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#if defined(GGML_USE_VULKAN)
-#  include "ggml-vulkan.h"
-#elif defined(GGML_USE_SYCL)
-#  include "ggml-sycl.h"
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
 #elif defined(GGML_USE_CANN)
 #   include "ggml-cann.h"
+#endif
+
+#ifndef __AMX_INT8__
+#undef GGML_USE_AMX
+#endif
+
+#ifdef GGML_USE_AMX
+#  include "ggml-amx.h"
 #endif
 
 // TODO: replace with ggml API call
@@ -3391,11 +3395,11 @@ struct llama_lora_adapter {
 static int llama_get_device_count(const llama_model & model) {
     int count = (int) model.devices.size();
 
-#if defined(GGML_USE_SYCL)
-    count += ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    count += ggml_backend_vk_get_device_count();
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_RPC)
+    count += (int) model.rpc_servers.size();
+#endif
+
+#if defined(GGML_USE_CANN)
     count += ggml_backend_cann_get_device_count();
 #endif
 
@@ -3416,20 +3420,12 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
         }
     }
 
-#if defined(GGML_USE_SYCL)
-    if (host_buffer) {
-        buft = ggml_backend_sycl_host_buffer_type();
-    }
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_CANN)
     if (host_buffer) {
         buft = ggml_backend_cann_host_buffer_type();
     }
 #elif defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
-#elif defined(GGML_USE_VULKAN)
-    if (host_buffer) {
-        buft = ggml_backend_vk_host_buffer_type();
-    }
 #endif
 
     if (buft == nullptr) {
@@ -3448,11 +3444,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     }
     device -= (int)model.devices.size();
 
-#if defined(GGML_USE_VULKAN)
-    buft = ggml_backend_vk_buffer_type(device);
-#elif defined(GGML_USE_SYCL)
-    buft = ggml_backend_sycl_buffer_type(device);
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
 #elif defined(GGML_USE_CANN)
     buft = ggml_backend_cann_buffer_type(device);
@@ -3482,12 +3474,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
         }
     }
 
-#ifdef GGML_USE_SYCL
-    if (ggml_backend_sycl_get_device_count() > 1) {
-        buft = ggml_backend_sycl_split_buffer_type(tensor_split);
-    }
-#endif
-
     if (buft == nullptr) {
         buft = llama_default_buffer_type_offload(model, fallback_gpu);
     }
@@ -3505,17 +3491,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         return free;
     }
 
-#if defined(GGML_USE_SYCL)
-    size_t total;
-    size_t free;
-    ggml_backend_sycl_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_VULKAN)
-    size_t total;
-    size_t free;
-    ggml_backend_vk_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_CANN)
     size_t total;
     size_t free;
     ggml_backend_cann_get_device_memory(device, &free, &total);
@@ -3523,6 +3499,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 #else
     return 1;
 #endif
+
     GGML_UNUSED(model);
     GGML_UNUSED(device);
 }
@@ -6571,8 +6548,8 @@ static void llm_load_vocab(
                    ) {
                     vocab.special_eot_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6585,8 +6562,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_eom_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6602,8 +6579,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_fim_pre_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6619,8 +6596,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_fim_suf_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6636,8 +6613,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_fim_mid_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6652,8 +6629,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_fim_pad_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6669,8 +6646,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_fim_rep_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6683,8 +6660,8 @@ static void llm_load_vocab(
                         ) {
                     vocab.special_fim_sep_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
                 }
@@ -6695,6 +6672,19 @@ static void llm_load_vocab(
         // this is currently determined based on the token text, which is obviously not ideal
         // ref: https://github.com/ggerganov/llama.cpp/issues/9606
         vocab.special_eog_ids.clear();
+
+        if (vocab.special_fim_pad_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_pad_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_pad_id);
+        }
+
+        if (vocab.special_fim_rep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_rep_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_rep_id);
+        }
+
+        if (vocab.special_fim_sep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_sep_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_sep_id);
+        }
+
         for (const auto & t : vocab.token_to_id) {
             if (false
                     || t.first == "<|eot_id|>"
@@ -6707,13 +6697,20 @@ static void llm_load_vocab(
                ) {
                 vocab.special_eog_ids.insert(t.second);
                 if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                    LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                            __func__, t.first.c_str());
+                    LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                            __func__, t.second, t.first.c_str());
                     vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                }
+            } else {
+                // token is control, but not marked as EOG -> print a debug log
+                if (vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL && vocab.special_eog_ids.count(t.second) == 0) {
+                    LLAMA_LOG_DEBUG("%s: control token: %6d '%s' is not marked as EOG\n",
+                            __func__, t.second, t.first.c_str());
                 }
             }
         }
 
+        // sanity checks
         if (vocab.special_eos_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eos_id);
             LLAMA_LOG_WARN("%s: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
@@ -7001,7 +6998,14 @@ static bool llm_load_tensors(
 
     // assign cpu layers
     for (int i = 0; i < i_gpu_start; ++i) {
+#ifdef GGML_USE_AMX
+        model.buft_layer[i] = {
+            ggml_backend_amx_buffer_type(),
+            llama_default_buffer_type_cpu(model, true)
+        };
+#else
         model.buft_layer[i] = llama_default_buffer_type_cpu(model, true);
+#endif
     }
 
     if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
@@ -16050,9 +16054,11 @@ struct llm_build_context {
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
         cur = llm_build_norm(ctx0, cur, hparams, model.output_norm, model.output_norm_b, LLM_NORM, cb, -1);
-        cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
+        cb(cur, "result_norm", -1);
 
+        cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
         cb(cur, "result_output", -1);
+
         ggml_build_forward_expand(gf, cur);
 
         return gf;
@@ -17102,10 +17108,10 @@ static void llama_graph_compute(
 //
 static int llama_decode_internal(
          llama_context & lctx,
-           llama_batch   batch_all) { // TODO: rename back to batch
+           llama_batch   batch) {
 
     lctx.is_encoding = false;
-    const uint32_t n_tokens_all = batch_all.n_tokens;
+    const uint32_t n_tokens_all = batch.n_tokens;
 
     if (n_tokens_all == 0) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
@@ -17116,12 +17122,12 @@ static int llama_decode_internal(
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
-    GGML_ASSERT((!batch_all.token && batch_all.embd) || (batch_all.token && !batch_all.embd)); // NOLINT
+    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
-    if (batch_all.token) {
+    if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch_all.token[i]);
+            if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
         }
@@ -17152,9 +17158,9 @@ static int llama_decode_internal(
     lctx.embd_seq.clear();
 
     // count outputs
-    if (batch_all.logits && !embd_pooled) {
+    if (batch.logits && !embd_pooled) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            n_outputs += batch_all.logits[i] != 0;
+            n_outputs += batch.logits[i] != 0;
         }
     } else if (lctx.logits_all || embd_pooled) {
         n_outputs = n_tokens_all;
@@ -17163,7 +17169,7 @@ static int llama_decode_internal(
         n_outputs = 1;
     }
 
-    lctx.sbatch.from_batch(batch_all, n_embd,
+    lctx.sbatch.from_batch(batch, n_embd,
         /* simple_split */ !kv_self.recurrent,
         /* logits_all   */ n_outputs == n_tokens_all);
 
@@ -19048,8 +19054,7 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
@@ -19180,8 +19185,13 @@ struct llama_model * llama_load_model_from_file(
 
             case GGML_BACKEND_DEVICE_TYPE_GPU:
             case GGML_BACKEND_DEVICE_TYPE_GPU_FULL:
+            {
+                size_t free, total; // NOLINT
+                ggml_backend_dev_memory(dev, &free, &total);
+                LLAMA_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
                 model->devices.push_back(dev);
                 break;
+            }
         }
     }
 
@@ -19376,54 +19386,7 @@ struct llama_context * llama_new_context_with_model(
             main_gpu -= (int)model->devices.size();
         }
 
-#if defined(GGML_USE_VULKAN)
-        if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
-            llama_free(ctx);
-            return nullptr;
-        }
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            for (int device = 0; device < ggml_backend_vk_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_vk_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize Vulkan%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_SYCL)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_LAYER requires a backend for each GPU
-            for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
-                ggml_backend_t backend = ggml_backend_sycl_init(i);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d for No.%d backend\n", __func__, i, i);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
             auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
@@ -21829,6 +21792,10 @@ struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * mod
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
 
+struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
+    return llama_sampler_init_infill_impl(model->vocab);
+}
+
 //
 // model split
 //
@@ -21868,6 +21835,7 @@ const char * llama_print_system_info(void) {
     s += "AVX512_VBMI = " + std::to_string(ggml_cpu_has_avx512_vbmi()) + " | ";
     s += "AVX512_VNNI = " + std::to_string(ggml_cpu_has_avx512_vnni()) + " | ";
     s += "AVX512_BF16 = " + std::to_string(ggml_cpu_has_avx512_bf16()) + " | ";
+    s += "AMX_INT8 = "    + std::to_string(ggml_cpu_has_amx_int8())    + " | ";
     s += "FMA = "         + std::to_string(ggml_cpu_has_fma())         + " | ";
     s += "NEON = "        + std::to_string(ggml_cpu_has_neon())        + " | ";
     s += "SVE = "         + std::to_string(ggml_cpu_has_sve())         + " | ";
