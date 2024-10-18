@@ -178,7 +178,7 @@ int main(int argc, char ** argv) {
     bool has_eos = false;
 
     // target model sampling context (reuse the llama_context's sampling instance)
-    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams, max_context_size);
 
     struct llama_sampler * softmax = llama_sampler_init_softmax();
 
@@ -186,8 +186,8 @@ int main(int argc, char ** argv) {
     std::vector<seq_draft> drafts(n_seq_dft);
 
     for (int s = 0; s < n_seq_dft; ++s) {
-        // allocate llama_sampler for each draft sequence
-        drafts[s].smpl = common_sampler_init(model_dft, params.sparams);
+        // allocate gpt_sampler for each draft sequence
+        drafts[s].smpl = common_sampler_init(model_dft, params.sparams, max_context_size);
     }
 
     llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
