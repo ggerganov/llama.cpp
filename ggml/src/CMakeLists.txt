@@ -9,6 +9,10 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     add_compile_definitions($<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>)
 endif()
 
+if (GGML_GRAPH_PROFILER)
+    add_compile_definitions(GGML_GRAPH_PROFILER)
+endif()
+
 if (NOT MSVC)
     if (GGML_SANITIZE_THREAD)
         add_compile_options(-fsanitize=thread)
@@ -1371,6 +1375,7 @@ add_library(ggml
             ggml-backend.cpp
             ggml-quants.c
             ggml-quants.h
+            ggml-profile.cpp
             ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_RPC}       ${GGML_HEADERS_RPC}
