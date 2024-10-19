@@ -155,9 +155,9 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt with both models
-    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1, 0,           0));
-    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0));
-    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input,     0,           0));
+    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1));
+    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1));
+    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input));
 
     const auto t_enc_end = ggml_time_us();
 

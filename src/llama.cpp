@@ -8,12 +8,18 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#if defined(GGML_USE_SYCL)
-#  include "ggml-sycl.h"
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
 #elif defined(GGML_USE_CANN)
 #   include "ggml-cann.h"
+#endif
+
+#ifndef __AMX_INT8__
+#undef GGML_USE_AMX
+#endif
+
+#ifdef GGML_USE_AMX
+#  include "ggml-amx.h"
 #endif
 
 // TODO: replace with ggml API call
@@ -2943,9 +2949,6 @@ struct llama_sbatch_seq {
     llama_seq_id * seq_id;
     size_t offset;
     size_t length;
-
-    // helper for smoother batch API transition -- can be deprecated in the future
-    llama_seq_id all_seq_id; // used if seq_id == NULL
 };
 
 // sequence-length-aware batch splitting
@@ -3040,30 +3043,18 @@ struct llama_sbatch {
         } else {
             ubatch.embd = nullptr;
         }
-        // from here on, the else branches are deprecated;
-        // they are helpers for smoother batch API transition
-        if (batch->pos) {
-            if (ubatch.equal_seqs) {
-                for (size_t i = 0; i < length; ++i) {
-                    ubatch.pos[ubatch.n_tokens + i] = batch->pos[ids[seq.offset + i]];
-                }
-            } else {
-                // simple split
-                ubatch.pos = batch->pos + seq.offset;
+        if (ubatch.equal_seqs) {
+            for (size_t i = 0; i < length; ++i) {
+                ubatch.pos[ubatch.n_tokens + i] = batch->pos[ids[seq.offset + i]];
             }
         } else {
-            for (size_t i = 0; i < length; ++i) {
-                llama_pos bi = ids[seq.offset + i];
-                ubatch.pos[ubatch.n_tokens + i] = batch->all_pos_0 + (bi * batch->all_pos_1);
-            }
+            // simple split
+            ubatch.pos = batch->pos + seq.offset;
         }
         if (ubatch.equal_seqs) {
             ubatch.n_seq_id[ubatch.n_seqs] = seq.n_seq_id;
             if (seq.seq_id) {
                 ubatch.seq_id[ubatch.n_seqs] = seq.seq_id;
-            } else {
-                GGML_ASSERT(seq.n_seq_id == 1);
-                ubatch.seq_id[ubatch.n_seqs] = &seq.all_seq_id;
             }
         } else {
             // simple split
@@ -3076,10 +3067,6 @@ struct llama_sbatch {
             }
             if (batch->seq_id) {
                 ubatch.seq_id = batch->seq_id + seq.offset;
-            } else {
-                for (size_t i = 0; i < length; ++i) {
-                    ubatch.seq_id[ubatch.n_seqs + i] = &seq.all_seq_id;
-                }
             }
         }
         if (logits_all) {
@@ -3198,7 +3185,6 @@ struct llama_sbatch {
             s.seq_id = nullptr;
             s.offset = 0;
             s.length = n_tokens;
-            s.all_seq_id = batch.all_seq_id;
             return;
         }
         std::sort(ids.begin(), ids.end(),
@@ -3221,7 +3207,7 @@ struct llama_sbatch {
                     if (batch.pos) {
                         return batch.pos[a] < batch.pos[b];
                     }
-                    // no pos, sort by id (assuming batch.all_pos_1 is positive)
+                    // no pos, sort by id
                     return a < b;
                 }
                 // shared prompts go first
@@ -3231,30 +3217,25 @@ struct llama_sbatch {
         // init seq
         llama_sbatch_seq * last_seq = nullptr;
 
-        if (batch.n_seq_id != nullptr && batch.seq_id != nullptr) {
-            for (size_t i = 0; i < n_tokens; ++i) {
-                const size_t bi = ids[i];
-                const int32_t n_seqs = batch.n_seq_id[bi];
-                llama_seq_id * seq_ids = batch.seq_id[bi];
-                if (last_seq != nullptr) {
-                    bool same = n_seqs == last_seq->n_seq_id;
-                    for (int32_t j = 0; same && j < n_seqs; ++j) {
-                        if (seq_ids[j] != last_seq->seq_id[j]) {
-                            same = false;
-                        }
-                    }
-                    if (same) {
-                        last_seq->length += 1;
-                        continue;
+        for (size_t i = 0; i < n_tokens; ++i) {
+            const size_t bi = ids[i];
+            const int32_t n_seqs = batch.n_seq_id[bi];
+            llama_seq_id * seq_ids = batch.seq_id[bi];
+            if (last_seq != nullptr) {
+                bool same = n_seqs == last_seq->n_seq_id;
+                for (int32_t j = 0; same && j < n_seqs; ++j) {
+                    if (seq_ids[j] != last_seq->seq_id[j]) {
+                        same = false;
                     }
                 }
-                llama_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1, batch.all_seq_id};
-                seq.push_back(new_seq);
-                last_seq = &seq.back();
+                if (same) {
+                    last_seq->length += 1;
+                    continue;
+                }
             }
-        } else {
-            llama_sbatch_seq new_seq = {1, nullptr, 0, n_tokens, batch.all_seq_id};
+            llama_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1};
             seq.push_back(new_seq);
+            last_seq = &seq.back();
         }
         // keep shared prompts first at the end, then sort by length descending.
         std::sort(seq.begin(), seq.end(),
@@ -3414,9 +3395,11 @@ struct llama_lora_adapter {
 static int llama_get_device_count(const llama_model & model) {
     int count = (int) model.devices.size();
 
-#if defined(GGML_USE_SYCL)
-    count += ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_RPC)
+    count += (int) model.rpc_servers.size();
+#endif
+
+#if defined(GGML_USE_CANN)
     count += ggml_backend_cann_get_device_count();
 #endif
 
@@ -3437,11 +3420,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
         }
     }
 
-#if defined(GGML_USE_SYCL)
-    if (host_buffer) {
-        buft = ggml_backend_sycl_host_buffer_type();
-    }
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_CANN)
     if (host_buffer) {
         buft = ggml_backend_cann_host_buffer_type();
     }
@@ -3465,9 +3444,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     }
     device -= (int)model.devices.size();
 
-#if defined(GGML_USE_SYCL)
-    buft = ggml_backend_sycl_buffer_type(device);
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
 #elif defined(GGML_USE_CANN)
     buft = ggml_backend_cann_buffer_type(device);
@@ -3497,12 +3474,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
         }
     }
 
-#ifdef GGML_USE_SYCL
-    if (ggml_backend_sycl_get_device_count() > 1) {
-        buft = ggml_backend_sycl_split_buffer_type(tensor_split);
-    }
-#endif
-
     if (buft == nullptr) {
         buft = llama_default_buffer_type_offload(model, fallback_gpu);
     }
@@ -3520,12 +3491,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         return free;
     }
 
-#if defined(GGML_USE_SYCL)
-    size_t total;
-    size_t free;
-    ggml_backend_sycl_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_CANN)
+#if defined(GGML_USE_CANN)
     size_t total;
     size_t free;
     ggml_backend_cann_get_device_memory(device, &free, &total);
@@ -3533,6 +3499,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 #else
     return 1;
 #endif
+
     GGML_UNUSED(model);
     GGML_UNUSED(device);
 }
@@ -6735,9 +6702,9 @@ static void llm_load_vocab(
                     vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                 }
             } else {
-                // token is control, but not marked as EOG -> print a warning
+                // token is control, but not marked as EOG -> print a debug log
                 if (vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL && vocab.special_eog_ids.count(t.second) == 0) {
-                    LLAMA_LOG_WARN("%s: control token: %6d '%s' is not marked as EOG\n",
+                    LLAMA_LOG_DEBUG("%s: control token: %6d '%s' is not marked as EOG\n",
                             __func__, t.second, t.first.c_str());
                 }
             }
@@ -7031,7 +6998,14 @@ static bool llm_load_tensors(
 
     // assign cpu layers
     for (int i = 0; i < i_gpu_start; ++i) {
+#ifdef GGML_USE_AMX
+        model.buft_layer[i] = {
+            ggml_backend_amx_buffer_type(),
+            llama_default_buffer_type_cpu(model, true)
+        };
+#else
         model.buft_layer[i] = llama_default_buffer_type_cpu(model, true);
+#endif
     }
 
     if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
@@ -17134,10 +17108,10 @@ static void llama_graph_compute(
 //
 static int llama_decode_internal(
          llama_context & lctx,
-           llama_batch   batch_all) { // TODO: rename back to batch
+           llama_batch   batch) {
 
     lctx.is_encoding = false;
-    const uint32_t n_tokens_all = batch_all.n_tokens;
+    const uint32_t n_tokens_all = batch.n_tokens;
 
     if (n_tokens_all == 0) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
@@ -17148,12 +17122,12 @@ static int llama_decode_internal(
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
-    GGML_ASSERT((!batch_all.token && batch_all.embd) || (batch_all.token && !batch_all.embd)); // NOLINT
+    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
-    if (batch_all.token) {
+    if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch_all.token[i]);
+            if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
         }
@@ -17184,9 +17158,9 @@ static int llama_decode_internal(
     lctx.embd_seq.clear();
 
     // count outputs
-    if (batch_all.logits && !embd_pooled) {
+    if (batch.logits && !embd_pooled) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            n_outputs += batch_all.logits[i] != 0;
+            n_outputs += batch.logits[i] != 0;
         }
     } else if (lctx.logits_all || embd_pooled) {
         n_outputs = n_tokens_all;
@@ -17195,7 +17169,7 @@ static int llama_decode_internal(
         n_outputs = 1;
     }
 
-    lctx.sbatch.from_batch(batch_all, n_embd,
+    lctx.sbatch.from_batch(batch, n_embd,
         /* simple_split */ !kv_self.recurrent,
         /* logits_all   */ n_outputs == n_tokens_all);
 
@@ -19080,7 +19054,7 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
@@ -19412,29 +19386,7 @@ struct llama_context * llama_new_context_with_model(
             main_gpu -= (int)model->devices.size();
         }
 
-#if defined(GGML_USE_SYCL)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_LAYER requires a backend for each GPU
-            for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
-                ggml_backend_t backend = ggml_backend_sycl_init(i);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d for No.%d backend\n", __func__, i, i);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
             auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
@@ -21119,9 +21071,7 @@ void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
 
 struct llama_batch llama_batch_get_one(
              llama_token * tokens,
-                 int32_t   n_tokens,
-               llama_pos   pos_0,
-            llama_seq_id   seq_id) {
+                 int32_t   n_tokens) {
     return {
         /*n_tokens       =*/ n_tokens,
         /*tokens         =*/ tokens,
@@ -21130,9 +21080,6 @@ struct llama_batch llama_batch_get_one(
         /*n_seq_id       =*/ nullptr,
         /*seq_id         =*/ nullptr,
         /*logits         =*/ nullptr,
-        /*all_pos_0      =*/ pos_0,
-        /*all_pos_1      =*/ 1,
-        /*all_seq_id     =*/ seq_id,
     };
 }
 
@@ -21145,9 +21092,6 @@ struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_
         /*n_seq_id       =*/ nullptr,
         /*seq_id         =*/ nullptr,
         /*logits         =*/ nullptr,
-        /*all_pos_0      =*/ 0,
-        /*all_pos_1      =*/ 0,
-        /*all_seq_id     =*/ 0,
     };
 
     if (embd) {
@@ -21183,11 +21127,62 @@ void llama_batch_free(struct llama_batch batch) {
     if (batch.logits)   free(batch.logits);
 }
 
+// temporary allocate memory for the input batch if needed
+static const llama_seq_id batch_default_seq_id = 0;
+struct llama_batch_allocr {
+    std::array<llama_seq_id, 1> seq_id_0 = {batch_default_seq_id};
+    std::vector<llama_pos>      pos;
+    std::vector<int32_t>        n_seq_id;
+    std::vector<llama_seq_id *> seq_id;
+    std::vector<int8_t>         logits;
+    struct llama_batch          batch;
+    // optionally fulfill the batch returned by llama_batch_get_one
+    llama_batch_allocr(struct llama_context * ctx, struct llama_batch in_batch) {
+        batch = in_batch;
+        if (!batch.pos) {
+            // determine the last position in KV cache
+            llama_pos last_pos = -1;
+            for (const auto & cell : ctx->kv_self.cells) {
+                if (cell.has_seq_id(batch_default_seq_id)) {
+                    last_pos = std::max(last_pos, cell.pos);
+                }
+            }
+            last_pos++; // next position
+            pos.resize(batch.n_tokens);
+            for (int32_t i = 0; i < batch.n_tokens; i++) {
+                pos[i] = i+last_pos;
+            }
+            batch.pos = pos.data();
+        }
+        if (!batch.n_seq_id) {
+            n_seq_id.resize(batch.n_tokens);
+            for (int32_t i = 0; i < batch.n_tokens; i++) {
+                n_seq_id[i] = seq_id_0.size();
+            }
+            batch.n_seq_id = n_seq_id.data();
+        }
+        if (!batch.seq_id) {
+            seq_id.resize(batch.n_tokens + 1);
+            seq_id[batch.n_tokens] = NULL;
+            for (int32_t i = 0; i < batch.n_tokens; i++) {
+                seq_id[i] = seq_id_0.data();
+            }
+            batch.seq_id = seq_id.data();
+        }
+        if (!batch.logits) {
+            logits.resize(batch.n_tokens);
+            logits[logits.size() - 1] = true;
+            batch.logits = logits.data();
+        }
+    }
+};
+
 int32_t llama_encode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
-    const int ret = llama_encode_internal(*ctx, batch);
-    if (ret < 0) {
+    llama_batch_allocr batch_allocr(ctx, batch);
+    const int ret = llama_encode_internal(*ctx, batch_allocr.batch);
+    if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
     }
 
@@ -21197,8 +21192,9 @@ int32_t llama_encode(
 int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
-    const int ret = llama_decode_internal(*ctx, batch);
-    if (ret < 0) {
+    llama_batch_allocr batch_allocr(ctx, batch);
+    const int ret = llama_decode_internal(*ctx, batch_allocr.batch);
+    if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
@@ -21464,13 +21460,6 @@ int32_t llama_token_to_piece(
                      int32_t   lstrip,
                         bool   special) {
     return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
-}
-
-bool llama_token_is_prefix(
-    const struct llama_model * model,
-                 llama_token   token0,
-                 llama_token   token1) {
-    return llama_token_is_prefix_impl(model->vocab, token0, token1);
 }
 
 int32_t llama_detokenize(
@@ -21846,6 +21835,7 @@ const char * llama_print_system_info(void) {
     s += "AVX512_VBMI = " + std::to_string(ggml_cpu_has_avx512_vbmi()) + " | ";
     s += "AVX512_VNNI = " + std::to_string(ggml_cpu_has_avx512_vnni()) + " | ";
     s += "AVX512_BF16 = " + std::to_string(ggml_cpu_has_avx512_bf16()) + " | ";
+    s += "AMX_INT8 = "    + std::to_string(ggml_cpu_has_amx_int8())    + " | ";
     s += "FMA = "         + std::to_string(ggml_cpu_has_fma())         + " | ";
     s += "NEON = "        + std::to_string(ggml_cpu_has_neon())        + " | ";
     s += "SVE = "         + std::to_string(ggml_cpu_has_sve())         + " | ";

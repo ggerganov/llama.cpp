@@ -1858,23 +1858,6 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
     return 0;
 }
 
-bool llama_token_is_prefix_impl(
-        const struct llama_vocab & vocab,
-                     llama_token   token0,
-                     llama_token   token1) {
-    char text_buf_0[128];
-    char text_buf_1[128];
-
-    const int32_t len0 = llama_token_to_piece_impl(vocab, token0, text_buf_0, sizeof(text_buf_0) - 1, 0, false);
-    const int32_t len1 = llama_token_to_piece_impl(vocab, token1, text_buf_1, sizeof(text_buf_1) - 1, 0, false);
-
-    if (len0 <= 0 || len1 <= 0) {
-        return false;
-    }
-
-    return len0 <= len1 && memcmp(text_buf_0, text_buf_1, len0) == 0;
-}
-
 int32_t llama_detokenize_impl(
         const struct llama_vocab & vocab,
                const llama_token * tokens,
