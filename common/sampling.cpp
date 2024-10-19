@@ -180,8 +180,6 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalize_nl,
                 params.ignore_eos));
 
-    struct llama_sampler * dry_sampler = nullptr;
-
     if (params.temp > 0.0f) {
         if (params.mirostat == 0) {
             for (const auto & cnstr : params.samplers) {
