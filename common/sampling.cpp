@@ -7,7 +7,8 @@
 #include <cmath>
 #include <unordered_map>
 
-extern void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::vector<std::string>& seq_breakers);
+extern struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base,
+    int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::string>& seq_breakers);
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 // TODO: deduplicate with llama-impl.h
@@ -186,11 +187,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
             for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
                     case COMMON_SAMPLER_TYPE_DRY:
-                        dry_sampler = llama_sampler_init_dry(model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n);
-                        if (dry_sampler != nullptr) {
-                            llama_sampler_dry_set_seq_breakers(dry_sampler, params.dry_sequence_breakers);
-                            llama_sampler_chain_add(result->chain, dry_sampler);
-                        }
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, params.dry_sequence_breakers));
                         break;
                     case COMMON_SAMPLER_TYPE_TOP_K:
                         llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
@@ -243,11 +240,6 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         }
         llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
     }
-
-    // // If DRY sampler wasn't added to the chain, free it
-    // if (dry_sampler) {
-    //     llama_sampler_free(dry_sampler);
-    // }
 
     return result;
 }

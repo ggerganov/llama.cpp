@@ -1679,7 +1679,7 @@ struct llama_sampler_dry {
 };
 
 // Ported from Koboldcpp, original PR: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
-static void GetOverlappingTokenSequences(const struct llama_model * model, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
+static void get_overlapping_token_sequences(const struct llama_model * model, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
     const int n_vocab = llama_n_vocab(model);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         std::string word = llama_detokenize(model, {token_id}, true);
@@ -1720,8 +1720,6 @@ static void GetOverlappingTokenSequences(const struct llama_model * model, const
         }
     }
 }
-
-
 
 static const char * llama_sampler_dry_name(const struct llama_sampler * /*smpl*/) {
     return "dry";
@@ -1952,9 +1950,10 @@ static void llama_sampler_dry_reset(struct llama_sampler * smpl) {
 
 static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (llama_sampler_dry *) smpl->ctx;
-    auto * result = llama_sampler_init_dry(ctx->model, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n);
 
-    // copy the state
+    auto * result = llama_sampler_init_dry(ctx->model, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
+
+    // Copy the state, including the processed breakers
     {
         auto * result_ctx = (llama_sampler_dry *) result->ctx;
         result_ctx->dry_processed_breakers = ctx->dry_processed_breakers;
@@ -1979,44 +1978,16 @@ static struct llama_sampler_i llama_sampler_dry_i = {
     /* .free   = */ llama_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n) {
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::string>& seq_breakers) {
     if (dry_multiplier < 0 || dry_base <= 0 || dry_allowed_length < 0) {
         return nullptr;
     }
 
     int32_t effective_dry_penalty_last_n = (dry_penalty_last_n == -1) ? context_size : std::max(dry_penalty_last_n, 0);
 
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_dry_i,
-        /* .ctx   = */ new llama_sampler_dry {
-            /* .model                  = */ model,
-            /* .total_context_size     = */ context_size,
-            /* .dry_multiplier         = */ dry_multiplier,
-            /* .dry_base               = */ dry_base,
-            /* .dry_allowed_length     = */ dry_allowed_length,
-            /* .dry_penalty_last_n     = */ dry_penalty_last_n,
-            /* .dry_processed_breakers = */ {},
-            /* .dry_repeat_count       = */ std::vector<int>(effective_dry_penalty_last_n, 0),
-            /* .dry_max_token_repeat   = */ {},
-            /* .last_tokens            = */ ring_buffer<llama_token>(effective_dry_penalty_last_n),
-        },
-    };
-}
+    std::unordered_multimap<llama_token, std::vector<llama_token>> processed_breakers;
 
-void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::vector<std::string>& seq_breakers) {
-    if (smpl == nullptr || smpl->ctx == nullptr) {
-        LLAMA_LOG_ERROR("invalid sampler or context in llama_sampler_dry_set_seq_breakers");
-        return;
-    }
-
-    auto * ctx = (llama_sampler_dry *) smpl->ctx;
-    ctx->dry_processed_breakers.clear();
-
-    if (seq_breakers.empty()) {
-        LLAMA_LOG_WARN("empty sequence breakers list in llama_sampler_dry_set_seq_breakers");
-        return;
-    }
-
+    // Process sequence breakers
     const int MAX_CHAR_LEN = 40;
     const int MAX_SEQ_LEN = 20;
 
@@ -2032,72 +2003,74 @@ void llama_sampler_dry_set_seq_breakers(struct llama_sampler * smpl, const std::
             trimmed_break.resize(MAX_CHAR_LEN);
         }
 
-        GetOverlappingTokenSequences(ctx->model, trimmed_break, ctx->dry_processed_breakers, MAX_SEQ_LEN);
+        get_overlapping_token_sequences(model, trimmed_break, processed_breakers, MAX_SEQ_LEN);
     }
+
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_dry_i,
+        /* .ctx   = */ new llama_sampler_dry {
+            /* .model                  = */ model,
+            /* .total_context_size     = */ context_size,
+            /* .dry_multiplier         = */ dry_multiplier,
+            /* .dry_base               = */ dry_base,
+            /* .dry_allowed_length     = */ dry_allowed_length,
+            /* .dry_penalty_last_n     = */ dry_penalty_last_n,
+            /* .dry_processed_breakers = */ std::move(processed_breakers),
+            /* .dry_repeat_count       = */ std::vector<int>(effective_dry_penalty_last_n, 0),
+            /* .dry_max_token_repeat   = */ {},
+            /* .last_tokens            = */ ring_buffer<llama_token>(effective_dry_penalty_last_n),
+        },
+    };
 }
 
-// For C-interface
-void llama_sampler_dry_set_seq_breakers_c(struct llama_sampler * smpl, const char **seq_breakers, int num_breakers) {
-    if (smpl == nullptr || smpl->ctx == nullptr) {
-        LLAMA_LOG_ERROR("invalid sampler or context in llama_sampler_dry_set_seq_breakers_c");
-        return;
-    }
-
-    if (seq_breakers == nullptr || num_breakers <= 0) {
-        LLAMA_LOG_ERROR("invalid sequence breakers array or count in llama_sampler_dry_set_seq_breakers_c");
-        return;
-    }
-
+// overloaded wrapper meant for C-interface
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, int num_breakers) {
     std::vector<std::string> cpp_seq_breakers;
-    for (int i = 0; i < num_breakers; ++i) {
-        if (seq_breakers[i] == nullptr) {
-            LLAMA_LOG_WARN("skipping null sequence breaker at index %d", i);
-            continue;
+
+    if (seq_breakers != nullptr && num_breakers > 0) {
+        for (int i = 0; i < num_breakers; ++i) {
+            if (seq_breakers[i] != nullptr && std::strlen(seq_breakers[i]) > 0) {
+                cpp_seq_breakers.push_back(std::string(seq_breakers[i]));
+            } else {
+                LLAMA_LOG_WARN("skipping null or empty sequence breaker at index %d", i);
+            }
         }
-        if (std::strlen(seq_breakers[i]) == 0) {
-            LLAMA_LOG_WARN("skipping empty sequence breaker at index %d", i);
-            continue;
-        }
-        cpp_seq_breakers.push_back(std::string(seq_breakers[i]));
     }
 
-    if (cpp_seq_breakers.empty()) {
-        LLAMA_LOG_WARN("no valid sequence breakers found in llama_sampler_dry_set_seq_breakers_c");
-        return;
-    }
-
-    llama_sampler_dry_set_seq_breakers(smpl, cpp_seq_breakers);
+    return llama_sampler_init_dry(model, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, cpp_seq_breakers);
 }
 
-// For use in test-sampling.cpp
-void llama_sampler_dry_set_seq_breakers_as_tokens(struct llama_sampler * smpl, const std::vector<std::vector<llama_token>>& seq_breakers) {
-    if (smpl == nullptr || smpl->ctx == nullptr) {
-        LLAMA_LOG_ERROR("invalid sampler or context in llama_sampler_dry_set_seq_breakers_as_tokens");
-        return;
+// overloaded wrapper meant for test-sampling.cpp
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<llama_token>>& seq_breakers) {
+    auto * result = llama_sampler_init_dry(model, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
+
+    if (result == nullptr) {
+        return nullptr;
     }
 
-    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+    auto * ctx = (llama_sampler_dry *) result->ctx;
+
+    // Process the token-based sequence breakers
     ctx->dry_processed_breakers.clear();
-
     if (seq_breakers.empty()) {
-        LLAMA_LOG_WARN("empty sequence breakers list in llama_sampler_dry_set_seq_breakers_as_tokens");
-        return;
-    }
-
-    for (const auto& breaker : seq_breakers) {
-        if (breaker.empty()) {
-            LLAMA_LOG_WARN("skipping empty token sequence");
-            continue;
+        LLAMA_LOG_WARN("empty sequence breakers list in llama_sampler_init_dry");
+    } else {
+        for (const auto& breaker : seq_breakers) {
+            if (breaker.empty()) {
+                LLAMA_LOG_WARN("skipping empty token sequence");
+                continue;
+            }
+            llama_token head_token = breaker[0];
+            std::vector<llama_token> tail_tokens(breaker.begin() + 1, breaker.end());
+            ctx->dry_processed_breakers.emplace(head_token, std::move(tail_tokens));
         }
 
-        llama_token head_token = breaker[0];
-        std::vector<llama_token> tail_tokens(breaker.begin() + 1, breaker.end());
-        ctx->dry_processed_breakers.emplace(head_token, tail_tokens);
+        if (ctx->dry_processed_breakers.empty()) {
+            LLAMA_LOG_WARN("no valid sequence breakers processed in llama_sampler_init_dry");
+        }
     }
 
-    if (ctx->dry_processed_breakers.empty()) {
-        LLAMA_LOG_WARN("no valid sequence breakers processed in llama_sampler_dry_set_seq_breakers_as_tokens");
-    }
+    return result;
 }
 
 // logit-bias

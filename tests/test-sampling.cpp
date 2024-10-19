@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-extern void llama_sampler_dry_set_seq_breakers_as_tokens(struct llama_sampler * smpl, const std::vector<std::vector<llama_token>>& seq_breakers);
+extern struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<llama_token>>& seq_breakers);
 
 static void dump(const llama_token_data_array * cur_p) {
     for (size_t i = 0; i < cur_p->size; i++) {
@@ -211,18 +211,7 @@ static void test_dry(
     const int32_t context_size = 1024;
     struct llama_model * model = nullptr;
 
-    struct llama_sampler * sampler = llama_sampler_init_dry(
-        model,
-        context_size,
-        dry_multiplier,
-        dry_base,
-        dry_allowed_length,
-        dry_penalty_last_n
-    );
-
-    if (!seq_breakers.empty()) {
-        llama_sampler_dry_set_seq_breakers_as_tokens(sampler, seq_breakers);
-    }
+    struct llama_sampler * sampler = llama_sampler_init_dry(model, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers);
 
     for (size_t i = 0; i < last_tokens.size(); i++) {
         llama_sampler_accept(sampler, last_tokens[i]);
