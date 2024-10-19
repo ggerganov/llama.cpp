@@ -168,6 +168,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalty_repeat,
                 params.penalty_freq,
                 params.penalty_present,
+                params.penalty_repeat_sigmoid_growth,
                 params.penalize_nl,
                 params.ignore_eos));
 
