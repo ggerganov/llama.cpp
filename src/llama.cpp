@@ -21139,6 +21139,10 @@ struct llama_batch_allocr {
     // optionally fulfill the batch returned by llama_batch_get_one
     llama_batch_allocr(struct llama_context * ctx, struct llama_batch in_batch) {
         batch = in_batch;
+        if (batch.n_tokens == 0) {
+            // llama_(de|en)code_internal will return an error in this case
+            return;
+        }
         if (!batch.pos) {
             // determine the last position in KV cache
             llama_pos last_pos = -1;
