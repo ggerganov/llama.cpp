@@ -112,7 +112,6 @@ const ggml_sycl_device_info & ggml_sycl_info() {
     return info;
 }
 
-
 void print_device_detail(int id, sycl::device &device, std::string device_type) {
 
     dpct::device_info prop;
