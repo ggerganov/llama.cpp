@@ -70,24 +70,12 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
     struct llama_context * ctx
 );
 
-static std::vector<llama_token> llama_tokenize(
-    const struct llama_model * model,
-           const std::string & text,
-                        bool   add_special,
-                        bool   parse_special) {
-    // upper limit for the number of tokens
-    int n_tokens = text.length() + 2 * add_special;
-    std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
-    if (n_tokens < 0) {
-        result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
-        GGML_ASSERT(check == -n_tokens);
-    } else {
-        result.resize(n_tokens);
-    }
-    return result;
-}
+// exposing wrapper function that takes "model" instead of "vocab", to be used internally
+std::vector<llama_token> llama_tokenize_internal(
+        const struct llama_model * model,
+        const std::string & raw_text,
+        bool add_special = false,
+        bool parse_special = true);
 
 static std::string llama_detokenize(const struct llama_model * model, const std::vector<llama_token> & tokens, bool special) {
     if (model == nullptr) {     // model is passed as nullptr in test-sampling.cpp

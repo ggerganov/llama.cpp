@@ -21452,6 +21452,15 @@ int32_t llama_tokenize(
     return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
+// wrapper function that takes "model" instead of "vocab", to be used internally
+std::vector<llama_token> llama_tokenize_internal(
+        const struct llama_model * model,
+        const std::string & raw_text,
+        bool add_special,
+        bool parse_special) {
+    return llama_tokenize_internal(model->vocab, raw_text, add_special, parse_special);
+}
+
 int32_t llama_token_to_piece(
     const struct llama_model * model,
                  llama_token   token,

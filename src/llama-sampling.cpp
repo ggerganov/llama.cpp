@@ -1698,7 +1698,7 @@ static void get_overlapping_token_sequences(const struct llama_model * model, co
                     }
                 }
                 if (match) {
-                    std::vector<llama_token> tokenization = llama_tokenize(model, str.substr(i), false, false);
+                    std::vector<llama_token> tokenization = llama_tokenize_internal(model, str.substr(i), false, false);
                     if (max_tail_len >= 0 && tokenization.size() > (size_t)max_tail_len) {
                         tokenization.resize(max_tail_len);
                     }
