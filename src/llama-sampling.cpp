@@ -1978,32 +1978,38 @@ static struct llama_sampler_i llama_sampler_dry_i = {
     /* .free   = */ llama_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::string>& seq_breakers) {
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
     if (dry_multiplier < 0 || dry_base <= 0 || dry_allowed_length < 0) {
         return nullptr;
     }
 
     int32_t effective_dry_penalty_last_n = (dry_penalty_last_n == -1) ? context_size : std::max(dry_penalty_last_n, 0);
 
-    std::unordered_multimap<llama_token, std::vector<llama_token>> processed_breakers;
-
     // Process sequence breakers
+    std::unordered_multimap<llama_token, std::vector<llama_token>> processed_breakers;
     const int MAX_CHAR_LEN = 40;
     const int MAX_SEQ_LEN = 20;
 
-    for (const auto& sequence_break : seq_breakers) {
-        if (sequence_break.empty()) {
-            LLAMA_LOG_WARN("skipping empty sequence breaker");
-            continue;
-        }
+    if (seq_breakers != nullptr && num_breakers > 0) {
+        for (size_t i = 0; i < num_breakers; ++i) {
+            if (seq_breakers[i] == nullptr || std::strlen(seq_breakers[i]) == 0) {
+                LLAMA_LOG_WARN("skipping null or empty sequence breaker at index %zu", i);
+                continue;
+            }
 
-        std::string trimmed_break = sequence_break;
-        if (trimmed_break.size() > MAX_CHAR_LEN) {
-            LLAMA_LOG_WARN("truncating sequence breaker to %d characters", MAX_CHAR_LEN);
-            trimmed_break.resize(MAX_CHAR_LEN);
-        }
+            std::string sequence_break(seq_breakers[i]);
+            if (sequence_break.empty()) {
+                LLAMA_LOG_WARN("skipping empty sequence breaker");
+                continue;
+            }
 
-        get_overlapping_token_sequences(model, trimmed_break, processed_breakers, MAX_SEQ_LEN);
+            if (sequence_break.size() > MAX_CHAR_LEN) {
+                LLAMA_LOG_WARN("truncating sequence breaker to %d characters", MAX_CHAR_LEN);
+                sequence_break.resize(MAX_CHAR_LEN);
+            }
+
+            get_overlapping_token_sequences(model, sequence_break, processed_breakers, MAX_SEQ_LEN);
+        }
     }
 
     return new llama_sampler {
@@ -2021,23 +2027,6 @@ struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, 
             /* .last_tokens            = */ ring_buffer<llama_token>(effective_dry_penalty_last_n),
         },
     };
-}
-
-// overloaded wrapper meant for C-interface
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, int num_breakers) {
-    std::vector<std::string> cpp_seq_breakers;
-
-    if (seq_breakers != nullptr && num_breakers > 0) {
-        for (int i = 0; i < num_breakers; ++i) {
-            if (seq_breakers[i] != nullptr && std::strlen(seq_breakers[i]) > 0) {
-                cpp_seq_breakers.push_back(std::string(seq_breakers[i]));
-            } else {
-                LLAMA_LOG_WARN("skipping null or empty sequence breaker at index %d", i);
-            }
-        }
-    }
-
-    return llama_sampler_init_dry(model, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, cpp_seq_breakers);
 }
 
 // overloaded wrapper meant for test-sampling.cpp

@@ -7,9 +7,6 @@
 #include <cmath>
 #include <unordered_map>
 
-extern struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base,
-    int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::string>& seq_breakers);
-
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 // TODO: deduplicate with llama-impl.h
 template<typename T>
@@ -185,7 +182,15 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
             for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
                     case COMMON_SAMPLER_TYPE_DRY:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, params.dry_sequence_breakers));
+                    {
+                        std::vector<const char*> c_breakers;
+                        c_breakers.reserve(params.dry_sequence_breakers.size());
+                        for (const auto& str : params.dry_sequence_breakers) {
+                            c_breakers.push_back(str.c_str());
+                        }
+
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (model, context_size, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                    }
                         break;
                     case COMMON_SAMPLER_TYPE_TOP_K:
                         llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
