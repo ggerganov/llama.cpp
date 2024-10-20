@@ -12525,14 +12525,14 @@ struct llm_build_context {
 
         // inp_pos - contains the positions
         // struct ggml_tensor * inp_pos = build_inp_pos();
-        lctx.inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens * 3);
+        lctx.inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens * 4);
         cb(lctx.inp_pos, "inp_pos", -1);
         ggml_set_input(lctx.inp_pos);
         struct ggml_tensor * inp_pos = lctx.inp_pos;
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
-        int sections[3] = {16, 24, 24};  // TODO: move this into gguf model file.
+        int sections[4] = {16, 24, 24, 0};  // TODO: move this into gguf model file.
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -16878,7 +16878,7 @@ static struct ggml_cgraph * llama_build_graph(
             } break;
         case LLM_ARCH_QWEN2VL:
             {
-                lctx.n_pos_per_token = 3;
+                lctx.n_pos_per_token = 4;
                 result = llm.build_qwen2vl();
             } break;
         case LLM_ARCH_QWEN2MOE:

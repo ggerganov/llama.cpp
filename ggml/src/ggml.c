@@ -3559,7 +3559,7 @@ struct ggml_tensor * ggml_mrope_ext(
         struct ggml_tensor  * b,
         struct ggml_tensor  * c,
         int                   n_dims,
-        int                   sections[3],
+        int                   sections[4],
         int                   mode,
         int                   n_ctx_orig,
         float                 freq_base,
@@ -3573,7 +3573,7 @@ struct ggml_tensor * ggml_mrope_ext(
 
     GGML_ASSERT(ggml_is_vector(b));
     GGML_ASSERT(b->type == GGML_TYPE_I32);
-    GGML_ASSERT(a->ne[2] * 3 == b->ne[0]);
+    GGML_ASSERT(a->ne[2] * 4 == b->ne[0]); // mrope expecting 4 position ids per token
 
     if (c) {
         GGML_ASSERT(c->type == GGML_TYPE_F32);
@@ -3588,14 +3588,14 @@ struct ggml_tensor * ggml_mrope_ext(
 
     struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
 
-    int32_t params[11 + 3] = { /*n_past*/ 0, n_dims, mode, /*n_ctx*/ 0, n_ctx_orig };
+    int32_t params[11 + 4] = { /*n_past*/ 0, n_dims, mode, /*n_ctx*/ 0, n_ctx_orig };
     memcpy(params +  5, &freq_base,    sizeof(float));
     memcpy(params +  6, &freq_scale,   sizeof(float));
     memcpy(params +  7, &ext_factor,   sizeof(float));
     memcpy(params +  8, &attn_factor,  sizeof(float));
     memcpy(params +  9, &beta_fast,    sizeof(float));
     memcpy(params + 10, &beta_slow,    sizeof(float));
-    memcpy(&params[11], sections,      sizeof(int)*3);
+    memcpy(&params[11], sections,      sizeof(int)*4);
     // memcpy(params + 11, sections,      sizeof(int)*3);
     ggml_set_op_params(result, params, sizeof(params));
 
@@ -11238,15 +11238,17 @@ static void ggml_rope_cache_init(
 }
 
 static void ggml_mrope_cache_init(
-     float theta_base_t, float theta_base_h, float theta_base_w, int sections[3], bool indep_sects,
+     float theta_base_t, float theta_base_h, float theta_base_w, float theta_base_e, int sections[3], bool indep_sects,
      float freq_scale, const float * freq_factors, float corr_dims[2], int64_t ne0, float ext_factor, float mscale,
      float * cache, float sin_sign, float theta_scale) {
     // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/LlamaYaRNScaledRotaryEmbedding.py
     float theta_t = theta_base_t;
     float theta_h = theta_base_h;
     float theta_w = theta_base_w;
-    int sect_dims = sections[0] + sections[1] + sections[2];
-    int prev_sector = -1;
+    float theta_e = theta_base_e;  // extra position id for vision encoder
+    int sect_dims = sections[0] + sections[1] + sections[2] + sections[3];
+    int sec_w = sections[1] + sections[0];
+    GGML_ASSERT(sect_dims <= ne0);
     
     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
         const float ff = freq_factors ? freq_factors[i0/2] : 1.0f;
@@ -11262,14 +11264,20 @@ static void ggml_mrope_cache_init(
             else if (sector == sections[1]) {
                 theta_w = theta_base_w;
             }
+            else if (sector == sections[2]) {
+                theta_e = theta_base_e;
+            }
         }
 
         float theta = theta_t;
-        if (sector < sections[1] + sections[0] && sector >= sections[0]) {
+        if (sector >= sections[0] && sector < sec_w) {
             theta = theta_h;
         } 
-        else if (sector >= sections[1] + sections[0]) {
+        else if (sector >= sec_w && sector < sec_w + sections[2]) {
             theta = theta_w;
+        }
+        else if (sector >= sec_w + sections[2]) {
+            theta = theta_e;
         }
         
         rope_yarn(
@@ -11280,7 +11288,7 @@ static void ggml_mrope_cache_init(
         theta_t *= theta_scale;
         theta_w *= theta_scale;
         theta_h *= theta_scale;
-        prev_sector = sector;
+        theta_e *= theta_scale;
     }
 }
 
@@ -11304,7 +11312,7 @@ static void ggml_compute_forward_rope_f32(
     const struct ggml_tensor * src2 = dst->src[2];
 
     float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
-    int sections[3];
+    int sections[4];
 
     //const int n_past     = ((int32_t *) dst->op_params)[0];
     const int n_dims     = ((int32_t *) dst->op_params)[1];
@@ -11318,7 +11326,7 @@ static void ggml_compute_forward_rope_f32(
     memcpy(&attn_factor, (int32_t *) dst->op_params +  8, sizeof(float));
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
-    memcpy(&sections,   (int32_t *) dst->op_params + 11, sizeof(int) * 3);
+    memcpy(&sections,   (int32_t *) dst->op_params + 11, sizeof(int) * 4);
 
     GGML_TENSOR_UNARY_OP_LOCALS
 
@@ -11352,6 +11360,11 @@ static void ggml_compute_forward_rope_f32(
 
     const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
     const bool is_mrope = sections[0] > 0 || sections[1] > 0 || sections[2] > 0;
+    const bool is_vision = is_mrope && sections[3] > 0;
+
+    if (is_vision) {
+        GGML_ASSERT(n_dims == ne0/2);
+    }
 
     const float * freq_factors = NULL;
     if (src2 != NULL) {
@@ -11379,8 +11392,9 @@ static void ggml_compute_forward_rope_f32(
                 const int64_t p_t = pos[i2];
                 const int64_t p_h = pos[i2 + ne2];
                 const int64_t p_w = pos[i2 + ne2 * 2];
+                const int64_t p_e = pos[i2 + ne2 * 3];
                 ggml_mrope_cache_init(
-                    p_t, p_h, p_w, sections, sections[2] == 0,
+                    p_t, p_h, p_w, p_e, sections, sections[3] != 0,
                     freq_scale, freq_factors, corr_dims, ne0, ext_factor, attn_factor, cache, sin_sign, theta_scale);
             }
 
@@ -11402,6 +11416,22 @@ static void ggml_compute_forward_rope_f32(
                         dst_data[0] = x0*cos_theta - x1*sin_theta;
                         dst_data[1] = x0*sin_theta + x1*cos_theta;
                     }
+                } else if (is_vision){
+                    for (int64_t i0 = 0; i0 < n_dims; i0 += 2) {
+                        const int64_t ic = i0/2;
+
+                        const float cos_theta = cache[i0 + 0];
+                        const float sin_theta = cache[i0 + 1];
+
+                        const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + ic*nb00);
+                        float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + ic*nb0);
+
+                        const float x0 = src[0];
+                        const float x1 = src[n_dims];
+
+                        dst_data[0]      = x0*cos_theta - x1*sin_theta;
+                        dst_data[n_dims] = x0*sin_theta + x1*cos_theta;
+                    }
                 } else {
                     for (int64_t i0 = 0; i0 < n_dims; i0 += 2) {
                         const int64_t ic = i0/2;
@@ -11420,12 +11450,21 @@ static void ggml_compute_forward_rope_f32(
                     }
                 }
 
-                if (is_mrope) {
-                    // fill the remain channels by repeating 0~n_dims channel
-                    for (int64_t i0 = n_dims; i0 < ne0; i0 ++) {
-                        float * dst_data_0  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1);
-                        float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-                        dst_data[0] = dst_data_0[i0 % n_dims];
+                if (is_vision) {
+                    for (int64_t i0 = n_dims; i0 < ne0; i0 += 2) {
+                        const int64_t ic = i0/2;
+
+                        const float cos_theta = cache[i0 + 0];
+                        const float sin_theta = cache[i0 + 1];
+
+                        const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + ic*nb00);
+                        float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + ic*nb0);
+
+                        const float x0 = src[0];
+                        const float x1 = src[n_dims];
+
+                        dst_data[0]        = x0*cos_theta - x1*sin_theta;
+                        dst_data[n_dims] = x0*sin_theta + x1*cos_theta;
                     }
                 }
                 else {

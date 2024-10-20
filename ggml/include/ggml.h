@@ -1451,7 +1451,7 @@ extern "C" {
             struct ggml_tensor  * b,
             struct ggml_tensor  * c,
             int                   n_dims,
-            int                   sections[3],
+            int                   sections[4],
             int                   mode,
             int                   n_ctx_orig,
             float                 freq_base,

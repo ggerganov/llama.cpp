@@ -623,13 +623,13 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     const int patches_w            = image_size_width / patch_size;
     const int patches_h            = image_size_height / patch_size;
     const int num_positions        = num_patches + (ctx->has_class_embedding ? 1 : 0);
-    const int num_position_ids     = ctx->has_qwen2vl_merger ? num_positions * 3 : num_positions;
+    const int num_position_ids     = ctx->has_qwen2vl_merger ? num_positions * 4 : num_positions;
     const int hidden_size          = hparams.hidden_size;
     const int n_head               = hparams.n_head;
     const int d_head               = hidden_size / n_head;
     int n_layer                    = hparams.n_layer;
     const float eps                = hparams.eps;
-    int mrope_sections[3] = {d_head/4, d_head/4, 0};
+    int mrope_sections[4] = {d_head/4, d_head/4, d_head/4, d_head/4};
 
     const int batch_size = imgs->size;
 
@@ -734,7 +734,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // loop over layers
-    if (ctx->has_minicpmv_projector) {
+    if (ctx->has_minicpmv_projector || ctx->has_qwen2vl_merger) {
+        // TODO: figure out why we doing thing in this way ???
         n_layer += 1;
     }
     for (int il = 0; il < n_layer - 1; il++) {
@@ -829,6 +830,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         embeddings = cur;
 
     }
+    
     // ggml_build_forward_expand(gf, embeddings);
     // ggml_free(ctx0);
 
@@ -2583,16 +2585,18 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             const int ph = image_size_height / patch_size;
             int* positions_data = (int*)malloc(ggml_nbytes(positions));
             
-            int ptr = -1;
+            int ptr = 0;
             for (size_t y = 0; y < ph; y+=2)
             {
                 for (size_t x = 0; x < pw; x+=2)
                 {
                     for (size_t dy = 0; dy < 2; dy++) {
                         for (size_t dx = 0; dx < 2; dx++) {
-                            positions_data[ptr++]                 = y + dy;
+                            positions_data[ptr]                 = y + dy;
                             positions_data[num_patches + ptr]     = x + dx;
-                            positions_data[num_patches * 2 + ptr] = 0;
+                            positions_data[num_patches * 2 + ptr] = y + dy;
+                            positions_data[num_patches * 3 + ptr] = x + dx;
+                            ptr++;
                         }
                     }
                 }
@@ -2824,4 +2828,8 @@ bool tmp_clip_image_encode (struct clip_ctx * ctx, int n_threads, float * img, i
     // ctx->vision_model.hparams.image_size = h;
     clip_image_encode(ctx, n_threads, &clip_img, vec);
     return true;
+}
+
+void tmp_clip_set_layers (struct clip_ctx * ctx, int layers) {
+    ctx->vision_model.hparams.n_layer = layers;
 }

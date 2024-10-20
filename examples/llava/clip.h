@@ -92,6 +92,8 @@ CLIP_API int clip_is_minicpmv(const struct clip_ctx * ctx);
 CLIP_API bool clip_is_qwen2vl(const struct clip_ctx * ctx);
 
 CLIP_API bool tmp_clip_image_encode      (struct clip_ctx * ctx, int n_threads, float * img, int h, int w, float * vec);
+CLIP_API void tmp_clip_set_layers (struct clip_ctx * ctx, int layers);
+
 #ifdef __cplusplus
 }
 #endif

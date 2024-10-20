@@ -24,7 +24,8 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     const int ph = image_size->height / patch_size + (image_size->height % patch_size > 0);
     const int pw = image_size->width / patch_size + (image_size->width % patch_size > 0);
     auto img_tokens = image_embed->n_image_pos;
-    llama_pos mrope_pos[img_tokens * 3];
+    llama_pos mrope_pos[img_tokens * 4];
+    
     for (size_t y = 0; y < ph; y++)
     {
         for (size_t x = 0; x < pw; x++)
@@ -33,6 +34,7 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
             mrope_pos[i] = *st_pos_id;
             mrope_pos[i + img_tokens] = *st_pos_id + y;
             mrope_pos[i + img_tokens * 2] = *st_pos_id + x;
+            mrope_pos[i + img_tokens * 3] = 0;
         }   
     }
     *st_pos_id += std::max(pw, ph);
@@ -44,10 +46,11 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
             n_eval = n_batch;
         }
 
-        llama_pos batch_mrope_pos[n_eval * 3];
+        llama_pos batch_mrope_pos[n_eval * 4];
         memcpy(batch_mrope_pos, &mrope_pos[processed], n_eval * sizeof(llama_pos));
-        memcpy(&batch_mrope_pos[n_eval], &mrope_pos[img_tokens + processed], n_eval * sizeof(llama_pos));
+        memcpy(&batch_mrope_pos[n_eval * 1], &mrope_pos[img_tokens * 1 + processed], n_eval * sizeof(llama_pos));
         memcpy(&batch_mrope_pos[n_eval * 2], &mrope_pos[img_tokens * 2 + processed], n_eval * sizeof(llama_pos));
+        memcpy(&batch_mrope_pos[n_eval * 3], &mrope_pos[img_tokens * 3 + processed], n_eval * sizeof(llama_pos));
         
         llama_batch batch = {
             int32_t(n_eval),                // n_tokens
@@ -82,7 +85,8 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
         }
         auto batch = llama_batch_get_one(&tokens[i], n_eval, *n_past, 0);
         // TODO: add mrope pos ids somewhere else
-        pos.resize(batch.n_tokens * 3);
+        pos.resize(batch.n_tokens * 4);
+        std::fill(pos.begin(), pos.end(), 0);
         for (int j = 0; j < batch.n_tokens * 3; j ++) {
             pos[j] = *st_pos_id + (j % batch.n_tokens);
         }
@@ -670,18 +674,22 @@ static void tmp_test_mrope_2d(struct llava_context * ctx_llava, gpt_params * par
     std::fill(dummy_q.begin(), dummy_q.end(), 0.1);
     memcpy(inp_raw->data, dummy_q.data(), 128 * 12 * 30 * ggml_element_size(inp_raw));
 
-    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 30 * 3);
+    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 30 * 4);
     ggml_set_name(pos, "pos");
     ggml_set_input(pos);
 
     std::vector<int> pos_id;
-    pos_id.resize(90);
-    for (int i = 0; i < 30; i ++) pos_id[i] = i;
-    for (int i = 30; i < 60; i ++) pos_id[i] = i - 30;
-    for (int i = 60; i < 90; i ++) pos_id[i] = i - 0;
-    memcpy(pos->data, pos_id.data(), 90 * ggml_element_size(pos));
+    pos_id.resize(30 * 4);
+    for (int i = 0; i < 30; i ++) {
+        pos_id[i] = i;
+        pos_id[i + 30] = i + 10;
+        pos_id[i + 60] = i + 10;
+        pos_id[i + 90] = i + 10;
+    }
+    
+    memcpy(pos->data, pos_id.data(), 30 * 4 * ggml_element_size(pos));
 
-    int sections[3] = {32, 32, 0};
+    int sections[4] = {32, 32, 32, 32};
     auto encode = ggml_mrope_ext(
         ctx0, inp_raw, pos, nullptr,
         128/2, sections, LLAMA_ROPE_TYPE_NEOX, 32768, 1000000, 1,
@@ -717,15 +725,16 @@ static void tmp_dump_img_embed(struct llava_context * ctx_llava, gpt_params * pa
     int ne = n_embd * 4;
     float vals[56 * 56 * 3];
     float embd[ne];
-    for (int i = 0; i < 3*56*56; i++)
-    {
-        vals[i] = 0.1;
-    }
-    // for (int i = 0; i < 56*56; i++)
+    // for (int i = 0; i < 3*56*56; i++)
     // {
-    //     for (int c = 0; c < 3; c++)
-    //         vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    //     vals[i] = 0.1;
     // }
+    for (int i = 0; i < 56*56; i++)
+    {
+        for (int c = 0; c < 3; c++)
+            vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    }
+    
     // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
     tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
 
@@ -760,25 +769,30 @@ static void tmp_dump_img_embed_from_file(struct llava_context * ctx_llava, gpt_p
 }
 
 static void tmp_dump_img_mid_embed(struct llava_context * ctx_llava, gpt_params * params) {
+    int layers = 2;
     // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
     int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
     // int ne = n_embd * image_embed->n_image_pos;
     int ne = 1280 * 4 * 4;
     float vals[56 * 56 * 3];
     float embd[ne];
-    for (int i = 0; i < 3*56*56; i++)
-    {
-        vals[i] = 0.1;
-    }
-    // for (int i = 0; i < 56*56; i++)
+    
+    // for (int i = 0; i < 3*56*56; i++)
     // {
-    //     for (int c = 0; c < 3; c++)
-    //         vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    //     vals[i] = 0.5;
     // }
+    for (int i = 0; i < 56*56; i++)
+    {
+        for (int c = 0; c < 3; c++)
+            vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+    }
     // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
+
+
+    // tmp_clip_set_layers(ctx_llava->ctx_clip, layers);
     tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
 
-    std::ofstream outFile("img_layer_1_embed.bin", std::ios::binary);
+    std::ofstream outFile("img_layer_" + std::to_string(layers) + "_embed.bin", std::ios::binary);
     if (outFile.is_open()) {
         outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
 
@@ -818,6 +832,33 @@ static void tmp_dump_patch_embed(struct llava_context * ctx_llava, gpt_params * 
         std::cerr << "Error opening file!" << std::endl;
     }
 }
+
+
+static llava_image_embed * tmp_load_img_embed() {
+    std::ifstream inputFile("/home/ron/Projects/llm2vec/hf_img_embed_f.bin", std::ios::binary);
+
+    if (!inputFile) {
+        std::cerr << "Could not open the file!" << std::endl;
+        return NULL;
+    }
+
+    // Determine the size of the file
+    inputFile.seekg(0, std::ios::end);
+    std::streamsize fileSize = inputFile.tellg();
+    inputFile.seekg(0, std::ios::beg);
+    
+    static llava_image_embed * result = (llava_image_embed*)malloc(sizeof(llava_image_embed));
+    result->embed = (float*)malloc(fileSize);
+    result->n_image_pos = 24 * 36 /4;
+
+    // Assuming the binary file contains floating-point numbers (float)
+    std::size_t numElements = fileSize / sizeof(float);
+    inputFile.read(reinterpret_cast<char*>(result->embed), fileSize);
+    inputFile.close();
+    
+    return result;
+}
+
 
 /*
     -----------------------------------------------------------------------------------------------------------------
@@ -860,6 +901,16 @@ int main(int argc, char ** argv) {
     } else if (params.image[0].empty()) {
         // This section is for testing LLM parts of the model during development phase!
         auto ctx_llava = llava_init_context(&params, model);
+
+        // {
+        //     auto img_embed = tmp_load_img_embed();
+        //     struct clip_image_size * load_image_size = clip_image_size_init();
+        //     load_image_size->height = 336;
+        //     load_image_size->width = 504;
+        //     clip_add_load_image_size(ctx_llava->ctx_clip, load_image_size);
+        //     process_prompt(ctx_llava, img_embed, &params, params.prompt);
+        //     llava_image_embed_free(img_embed);
+        // }
 
         // process the prompt
         tmp_dump_img_embed(ctx_llava, &params);
