@@ -34,6 +34,8 @@ GGML_API void ggml_sycl_get_device_description(int device, char *description, si
 GGML_API int  ggml_backend_sycl_get_device_count();
 GGML_API void ggml_backend_sycl_get_device_memory(int device, size_t *free, size_t *total);
 
+GGML_API ggml_backend_reg_t ggml_backend_sycl_reg(void);
+
 // SYCL doesn't support registering host memory, keep here for reference
 // GGML_API bool ggml_backend_sycl_register_host_buffer(void * buffer, size_t size);
 // GGML_API void ggml_backend_sycl_unregister_host_buffer(void * buffer);

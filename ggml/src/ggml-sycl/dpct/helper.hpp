@@ -1400,6 +1400,47 @@ namespace dpct
             GGML_UNUSED(direction);
         }
 
+        // RAII for host pointer
+        class host_buffer {
+            void *_buf;
+            size_t _size;
+            sycl::queue &_q;
+            const std::vector<sycl::event> &_deps; // free operation depends
+
+            public:
+            host_buffer(size_t size, sycl::queue &q, const std::vector<sycl::event> &deps)
+                : _buf(std::malloc(size)), _size(size), _q(q), _deps(deps) {}
+            void *get_ptr() const { return _buf; }
+            size_t get_size() const { return _size; }
+            ~host_buffer() {
+                if (_buf) {
+                _q.submit([&](sycl::handler &cgh) {
+                    cgh.depends_on(_deps);
+                    cgh.host_task([buf = _buf] { std::free(buf); });
+                });
+                }
+            }
+        };
+
+        static sycl::event dpct_memcpy(sycl::queue &q, void *to_ptr, int to_dev_id,
+                                    const void *from_ptr, int from_dev_id,
+                                    size_t size) {
+            if (to_dev_id == from_dev_id)
+                return dpct_memcpy(q, to_ptr, from_ptr, size,
+                                memcpy_direction::device_to_device);
+            // Now, different device have different context, and memcpy API cannot copy
+            // data between different context. So we need use host buffer to copy the data
+            // between devices.
+            std::vector<sycl::event> event_list;
+            host_buffer buf(size, q, event_list);
+            auto copy_events = dpct_memcpy(q, buf.get_ptr(), from_ptr, size,
+                                            memcpy_direction::device_to_host);
+            event_list.push_back(dpct::detail::dpct_memcpy(
+                q, to_ptr, buf.get_ptr(), size, memcpy_direction::host_to_device,
+                {copy_events}));
+            return event_list[0];
+        }
+
         // Get actual copy range and make sure it will not exceed range.
         static inline size_t get_copy_range(sycl::range<3> size, size_t slice,
                                             size_t pitch)
@@ -1808,6 +1849,12 @@ namespace dpct
                                   sycl::queue &q = dpct::get_default_queue())
     {
         detail::dpct_memcpy(q, to_ptr, from_ptr, size, direction);
+    }
+
+    static void async_dpct_memcpy(void *to_ptr, int to_dev_id, const void *from_ptr,
+                                int from_dev_id, size_t size,
+                                sycl::queue &q = get_default_queue()) {
+    detail::dpct_memcpy(q, to_ptr, to_dev_id, from_ptr, from_dev_id, size);
     }
 
     static inline unsigned int select_device(unsigned int id)

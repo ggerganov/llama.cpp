@@ -3416,9 +3416,7 @@ struct llama_lora_adapter {
 static int llama_get_device_count(const llama_model & model) {
     int count = (int) model.devices.size();
 
-#if defined(GGML_USE_SYCL)
-    count += ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
     count += ggml_backend_vk_get_device_count();
 #elif defined(GGML_USE_CANN)
     count += ggml_backend_cann_get_device_count();

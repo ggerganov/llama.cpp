@@ -546,6 +546,10 @@ void * ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * na
 #include "ggml-rpc.h"
 #endif
 
+#ifdef GGML_USE_SYCL
+#include "ggml-sycl.h"
+#endif
+
 struct ggml_backend_registry {
     std::vector<ggml_backend_reg_t> backends;
     std::vector<ggml_backend_dev_t> devices;
@@ -563,10 +567,14 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
 #endif
-
+#ifdef GGML_USE_SYCL
+        register_backend(ggml_backend_sycl_reg());
+        // printf("zjy sycl ggml_backend_reg_count()=%d\n", ggml_backend_reg_count());
+#endif
         // TODO: sycl, vulkan, kompute, cann
 
         register_backend(ggml_backend_cpu_reg());
+        // printf("zjy cpu ggml_backend_reg_count()=%d\n", ggml_backend_reg_count());
     }
 
     void register_backend(ggml_backend_reg_t reg) {
