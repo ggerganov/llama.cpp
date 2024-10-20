@@ -190,8 +190,8 @@ int main(int argc, char ** argv) {
         drafts[s].smpl = common_sampler_init(model_dft, params.sparams);
     }
 
-    llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
-    llama_batch batch_tgt = llama_batch_init(params.n_ctx, 0, n_seq_dft);
+    llama_batch batch_dft = llama_batch_init(llama_n_ctx(ctx_dft), 0, 1);
+    llama_batch batch_tgt = llama_batch_init(llama_n_ctx(ctx_tgt), 0, n_seq_dft);
 
     const auto t_dec_start = ggml_time_us();
 
