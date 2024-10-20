@@ -897,21 +897,20 @@ struct server_context {
 
         // sequence breakers for DRY
         {
+            // Currently, this is not compatible with TextGen WebUI, Koboldcpp and SillyTavern format
+            // Ref: https://github.com/oobabooga/text-generation-webui/blob/d1af7a41ade7bd3c3a463bfa640725edb818ebaf/extensions/openai/typing.py#L39
+
             auto dry_sequence_breakers = data.find("dry_sequence_breakers");
             if (dry_sequence_breakers != data.end()) {
                 try {
                     if (dry_sequence_breakers->is_array()) {
                         slot.sparams.dry_sequence_breakers = dry_sequence_breakers->get<std::vector<std::string>>();
-                    } else if (dry_sequence_breakers->is_string()) {
-                std::string dry_sequence_breakers_str = dry_sequence_breakers->get<std::string>();
-
-                if (dry_sequence_breakers_str.empty() || dry_sequence_breakers_str[0] != '[') {
-                    dry_sequence_breakers_str = "[" + dry_sequence_breakers_str + "]";
-                }
-
-                slot.sparams.dry_sequence_breakers = json::parse(dry_sequence_breakers_str).get<std::vector<std::string>>();
+                        if (slot.sparams.dry_sequence_breakers.empty()) {
+                            send_error(task, "Error: dry_sequence_breakers must be a non-empty array of strings", ERROR_TYPE_INVALID_REQUEST);
+                            return false;
+                        }
                     } else {
-                        send_error(task, "\"dry_sequence_breakers\": Expected an array of strings or a JSON-encoded array of strings.", ERROR_TYPE_INVALID_REQUEST);
+                        send_error(task, "Error: dry_sequence_breakers must be a non-empty array of strings", ERROR_TYPE_INVALID_REQUEST);
                         return false;
                     }
                 } catch (const std::exception & e) {
