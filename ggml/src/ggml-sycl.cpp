@@ -42,8 +42,28 @@
 
 static bool g_sycl_loaded = false;
 
+void print_cpu_detail() {
+    sycl::device device;
+    device = sycl::device(sycl::cpu_selector_v);
+
+    dpct::device_info prop;
+    SYCL_CHECK(CHECK_TRY_ERROR(
+        dpct::get_device_info(prop, device)));
+
+    std::string name = std::string(prop.get_name());
+    name = std::regex_replace(name, std::regex("\\(R\\)"), "");
+    name = std::regex_replace(name, std::regex("\\(TM\\)"), "");
+
+    auto global_mem_size = prop.get_global_mem_size()/1000000;
+    std::string res= "[SYCL] CPU: ["+name+"] Memory: ["+std::to_string(global_mem_size)+"M]\n";
+
+    fprintf(stderr, "%s", res.c_str());
+}
+
 static ggml_sycl_device_info ggml_sycl_init() {
     ggml_sycl_device_info info = {};
+
+    print_cpu_detail();
 
     info.device_count = dpct::dev_mgr::instance().device_count();
     if (info.device_count == 0) {
@@ -64,7 +84,7 @@ static ggml_sycl_device_info ggml_sycl_init() {
 #else
     fprintf(stderr, "%s: SYCL_USE_XMX: no\n", __func__);
 #endif
-    fprintf(stderr, "%s: found %d " GGML_SYCL_NAME " devices:\n", __func__, info.device_count);
+    fprintf(stderr, "%s: found %d " GGML_SYCL_NAME " devices\n", __func__, info.device_count);
 
     for (int i = 0; i < info.device_count; ++i) {
         info.devices[i].vmm = 0;
@@ -91,6 +111,7 @@ const ggml_sycl_device_info & ggml_sycl_info() {
     static ggml_sycl_device_info info = ggml_sycl_init();
     return info;
 }
+
 
 void print_device_detail(int id, sycl::device &device, std::string device_type) {
 
