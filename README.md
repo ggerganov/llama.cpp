@@ -187,6 +187,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 
 - [Paddler](https://github.com/distantmagic/paddler) - Stateful load balancer custom-tailored for llama.cpp
 - [GPUStack](https://github.com/gpustack/gpustack) - Manage GPU clusters for running LLMs
+- [llama_cpp_canister](https://github.com/onicai/llama_cpp_canister) - llama.cpp as a smart contract on the Internet Computer, using WebAssembly
 
 **Games:**
 - [Lucy's Labyrinth](https://github.com/MorganRO8/Lucys_Labyrinth) - A simple maze game where agents controlled by an AI model will try to trick you.
