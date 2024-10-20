@@ -39,6 +39,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (params.n_predict < -1) {
+        LOG_ERR("%s: --n-predict must be >= -1\n", __func__);
+        return 1;
+    }
+
     common_init();
 
     if (params.model_draft.empty()) {
@@ -441,7 +446,7 @@ int main(int argc, char ** argv) {
             ++n_past_dft;
         }
 
-        if (n_predict > params.n_predict || has_eos) {
+        if ((params.n_predict >= 0 && n_predict > params.n_predict) || has_eos) {
             break;
         }
 
