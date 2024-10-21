@@ -21734,6 +21734,21 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "[|assistant|]";
         }
+    } else if (tmpl == "nemotron" || (tmpl_contains("<extra_id_0>System") && tmpl_contains("<extra_id_1>User"))) {
+        // nvidia/Mistral-NeMo-Minitron-8B-Instruct
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << "<extra_id_0>System\n" << trim(message->content) << "\n\n";
+            } else if (role == "user") {
+                ss << "<extra_id_1>User\n" << trim(message->content) << "\n\n";
+            } else if (role == "assistant") {
+                ss << "<extra_id_1>Assistant\n" << trim(message->content) << "\n\n";
+            }
+        }
+        if (add_ass) {
+            ss << "<extra_id_1>Assistant\n";
+        }
     } else {
         // template not supported
         return -1;

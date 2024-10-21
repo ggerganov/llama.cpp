@@ -65,6 +65,8 @@ int main(void) {
         u8"{% for message in messages %}{% if message['role'] == 'user' %}{{'<用户>' + message['content'].strip() + '<AI>'}}{% else %}{{message['content'].strip()}}{% endif %}{% endfor %}",
         // DeepSeek-V2
         "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ 'User: ' + message['content'] + '\n\n' }}{% elif message['role'] == 'assistant' %}{{ 'Assistant: ' + message['content'] + eos_token }}{% elif message['role'] == 'system' %}{{ message['content'] + '\n\n' }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'Assistant:' }}{% endif %}",
+        // nvidia/Mistral-NeMo-Minitron-8B-Instruct
+        "{{'<extra_id_0>System'}}{% for message in messages %}{% if message['role'] == 'system' %}{{'\n' + message['content'].strip()}}{% endif %}{% endfor %}{{'\n'}}{% for message in messages %}{% if message['role'] == 'user' %}{{ '\n<extra_id_1>User\n' + message['content'].strip() + '\n<extra_id_1>Assistant\n' }}{% elif message['role'] == 'assistant' %}{{ message['content'].strip() }}{% endif %}{% endfor %}",    
     };
     std::vector<std::string> expected_output = {
         // teknium/OpenHermes-2.5-Mistral-7B
@@ -109,6 +111,8 @@ int main(void) {
         u8"You are a helpful assistant<用户>Hello<AI>Hi there<用户>Who are you<AI>I am an assistant<用户>Another question<AI>",
         // DeepSeek-V2
         u8"You are a helpful assistant\n\nUser: Hello\n\nAssistant: Hi there<｜end▁of▁sentence｜>User: Who are you\n\nAssistant:    I am an assistant   <｜end▁of▁sentence｜>User: Another question\n\nAssistant:",
+        // nvidia/Mistral-NeMo-Minitron-8B-Instruct
+        "<extra_id_0>System\nYou are a helpful assistant\n\n<extra_id_1>User\nHello\n\n<extra_id_1>Assistant\nHi there\n\n<extra_id_1>User\nWho are you\n\n<extra_id_1>Assistant\nI am an assistant\n\n<extra_id_1>User\nAnother question\n\n<extra_id_1>Assistant\n",
     };
     std::vector<char> formatted_chat(1024);
     int32_t res;
