@@ -1,4 +1,4 @@
-#ifdef NDEBUG
+﻿#ifdef NDEBUG
 #undef NDEBUG
 #endif
 
