@@ -1400,7 +1400,7 @@ list(APPEND GGML_EXTRA_LIBS_PRIVATE Threads::Threads)
 
 find_library(MATH_LIBRARY m)
 if (MATH_LIBRARY)
-    if (NOT WIN32 OR NOT GGML_SYCL)
+    if ((NOT WIN32 OR NOT GGML_SYCL) AND NOT CMAKE_GENERATOR MATCHES "Visual Studio*")
         list(APPEND GGML_EXTRA_LIBS_PRIVATE m)
     endif()
 endif()
