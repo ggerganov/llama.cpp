@@ -18,6 +18,7 @@
 
 #include "dpct/helper.hpp"
 #include "ggml-sycl.h"
+#include "../src/ggml-impl.h"
 #include "presets.hpp"
 #if GGML_SYCL_DNNL
 #include "dnnl.hpp"
@@ -31,11 +32,13 @@
 void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
 
+#define GGML_SYCL_ERROR(string) GGML_LOG_ERROR("%s\nException caught at file:%s, line:%d, func:%s\n", string, __FILE__, __LINE__ ,__func__)
+
 static int g_ggml_sycl_debug = 0;
 #define GGML_SYCL_DEBUG(...)        \
   do {                              \
     if (g_ggml_sycl_debug)          \
-      fprintf(stderr, __VA_ARGS__); \
+      GGML_LOG_DEBUG(__VA_ARGS__); \
   } while (0)
 
 #define CHECK_TRY_ERROR(expr)                                            \
@@ -44,9 +47,7 @@ static int g_ggml_sycl_debug = 0;
       expr;                                                              \
       return dpct::success;                                              \
     } catch (std::exception const& e) {                                  \
-      std::cerr << e.what() << "\nException caught at file:" << __FILE__ \
-                << ", line:" << __LINE__ << ", func:" << __func__        \
-                << std::endl;                                            \
+      GGML_SYCL_ERROR(e.what());                                 \
       return dpct::default_error;                                        \
     }                                                                    \
   }()
@@ -102,8 +103,8 @@ static void crash() {
     const char* file,
     const int line,
     const char* msg) {
-  fprintf(stderr, "SYCL error: %s: %s\n", stmt, msg);
-  fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
+  GGML_LOG_ERROR("SYCL error: %s: %s\n", stmt, msg);
+  GGML_LOG_ERROR("  in function %s at %s:%d\n", func, file, line);
   GGML_ABORT("SYCL error");
 }
 
