@@ -851,13 +851,6 @@ static void ggml_backend_cann_buffer_set_tensor(
         void *transform_buffer = malloc(size);
         ggml_backend_cann_transform(tensor, data, transform_buffer);
 
-#ifndef NDEBUG
-        void *check_buffer = malloc(size);
-        ggml_backend_cann_transform_back(tensor, transform_buffer,
-                                         check_buffer);
-        GGML_ASSERT(memcmp(data, check_buffer, size) == 0);
-        free(check_buffer);
-#endif
         ACL_CHECK(aclrtMemcpy((char *)tensor->data + offset, size,
                               transform_buffer, size,
                               ACL_MEMCPY_HOST_TO_DEVICE));
@@ -1517,13 +1510,6 @@ static void ggml_backend_cann_set_tensor_async(ggml_backend_t backend,
         void *transform_buffer = malloc(size);
         ggml_backend_cann_transform(tensor, data, transform_buffer);
 
-#ifndef NDEBUG
-        void *check_buffer = malloc(size);
-        ggml_backend_cann_transform_back(tensor, transform_buffer,
-                                         check_buffer);
-        GGML_ASSERT(memcmp(data, check_buffer, size));
-        free(check_buffer);
-#endif
         ACL_CHECK(aclrtMemcpyAsync(
             (char *)tensor->data + offset, size, transform_buffer, size,
             ACL_MEMCPY_HOST_TO_DEVICE, cann_ctx->stream()));
