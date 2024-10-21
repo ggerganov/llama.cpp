@@ -3399,10 +3399,6 @@ static int llama_get_device_count(const llama_model & model) {
     count += (int) model.rpc_servers.size();
 #endif
 
-#if defined(GGML_USE_CANN)
-    count += ggml_backend_cann_get_device_count();
-#endif
-
     return count;
 
     GGML_UNUSED(model);
@@ -19395,30 +19391,6 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(backend);
-        }
-#elif defined(GGML_USE_CANN)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_cann_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-            // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
-            for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_cann_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
         }
 #endif
 
