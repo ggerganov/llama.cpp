@@ -43,12 +43,6 @@
 
 #define MAX_VK_BUFFERS 256
 
-#ifndef K_QUANTS_PER_ITERATION
-#define K_QUANTS_PER_ITERATION 1
-#else
-static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUANTS_PER_ITERATION must be 1 or 2");
-#endif
-
 #define VK_CHECK(err, msg)                                          \
     do {                                                            \
         vk::Result err_ = (err);                                    \

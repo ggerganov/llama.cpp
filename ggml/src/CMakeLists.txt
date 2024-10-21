@@ -348,7 +348,6 @@ if (GGML_CUDA)
 
         add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
         add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-        add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
         if (GGML_CUDA_GRAPHS)
@@ -496,7 +495,6 @@ if (GGML_HIPBLAS)
     add_compile_definitions(GGML_USE_HIPBLAS)
     add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
     add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-    add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
 
     if (GGML_HIP_UMA)
         add_compile_definitions(GGML_HIP_UMA)
