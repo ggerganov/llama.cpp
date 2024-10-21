@@ -963,6 +963,19 @@ extern "C" {
                             bool   remove_special,
                             bool   unparse_special);
 
+
+    // @details Get the input embeddings for a sequence of tokens
+    // @param tokens The tokens to embed
+    // @param n_tokens The number of tokens
+    // @param embeddings The embeddings pointer must be large enough to hold the resulting embeddings.
+    // @param n_embd The number of embeddings per token
+    // @return Returns a negative number on failure
+    LLAMA_API int32_t llama_token_inp_embd(
+              struct llama_context * ctx,
+                       llama_token * tokens,
+                           int32_t   n_tokens,
+                             float * embeddings);
+
     //
     // Chat templates
     //
