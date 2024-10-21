@@ -482,11 +482,9 @@ function! llama#fim_cancel()
     " clear the virtual text
     let l:bufnr = bufnr('%')
 
-    let l:id_vt_fim  = nvim_create_namespace('vt_fim')
-    let l:id_vt_info = nvim_create_namespace('vt_info')
+    let l:id_vt_fim = nvim_create_namespace('vt_fim')
 
     call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
-    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_info, 0, -1)
 
     " remove the mappings
     silent! iunmap <buffer> <Tab>
@@ -644,13 +642,11 @@ function! s:fim_on_stdout(job_id, data, event) dict
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
 
-    let l:id_vt_fim  = nvim_create_namespace('vt_fim')
-    let l:id_vt_info = nvim_create_namespace('vt_info')
+    let l:id_vt_fim = nvim_create_namespace('vt_fim')
 
     " construct the info message
     if g:llama_config.show_info > 0 && l:has_info
-        " prefix the info string with whitespace in order to offset it to the right of the fim overlay
-        let l:prefix = repeat(' ', len(s:content[0]) - len(s:line_cur_suffix) + 3)
+        let l:prefix = '   '
 
         if l:truncated
             let l:info = printf("%s | WARNING: the context is full: %d / %d, increase the server context size or reduce g:llama_config.ring_n_chunks",
@@ -668,21 +664,15 @@ function! s:fim_on_stdout(job_id, data, event) dict
         endif
 
         if g:llama_config.show_info == 1
-            " display it in the statusline
+            " display the info in the statusline
             let &statusline = l:info
-        elseif g:llama_config.show_info == 2
-            " display it to the right of the current line
-            call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, s:pos_y - 1, s:pos_x - 1, {
-                \ 'virt_text': [[l:info, 'llama_hl_info']],
-               "\ 'virt_text_pos': 'eol',
-                \ 'virt_text_pos': 'right_align',
-                \ })
+            let l:info = ''
         endif
     endif
 
-    " display the suggestion
+    " display the suggestion and append the info to the end of the first line
     call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, s:pos_x - 1, {
-        \ 'virt_text': [[s:content[0], 'llama_hl_hint']],
+        \ 'virt_text': [[s:content[0], 'llama_hl_hint'], [l:info, 'llama_hl_info']],
         \ 'virt_text_win_col': virtcol('.') - 1
         \ })
 
