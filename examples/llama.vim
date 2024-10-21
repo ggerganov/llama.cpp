@@ -668,13 +668,14 @@ function! s:fim_on_stdout(job_id, data, event) dict
         endif
 
         if g:llama_config.show_info == 1
-            "" display it in the statusline
+            " display it in the statusline
             let &statusline = l:info
         elseif g:llama_config.show_info == 2
             " display it to the right of the current line
             call nvim_buf_set_extmark(l:bufnr, l:id_vt_info, s:pos_y - 1, s:pos_x - 1, {
                 \ 'virt_text': [[l:info, 'llama_hl_info']],
-                \ 'virt_text_pos': 'eol',
+               "\ 'virt_text_pos': 'eol',
+                \ 'virt_text_pos': 'right_align',
                 \ })
         endif
     endif
