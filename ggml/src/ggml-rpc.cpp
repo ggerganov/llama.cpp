@@ -57,8 +57,9 @@ struct socket_t {
     }
 };
 
+// all RPC structures must be packed
+#pragma pack(push, 1)
 // ggml_tensor is serialized into rpc_tensor
-#pragma pack(1)
 struct rpc_tensor {
     uint64_t id;
     uint32_t type;
@@ -95,76 +96,64 @@ enum rpc_cmd {
     RPC_CMD_COUNT,
 };
 
-#pragma pack(1)
 struct rpc_msg_alloc_buffer_req {
     uint64_t size;
 };
 
-#pragma pack(1)
 struct rpc_msg_alloc_buffer_rsp {
     uint64_t remote_ptr;
     uint64_t remote_size;
 };
 
-#pragma pack(1)
 struct rpc_msg_get_alignment_rsp {
     uint64_t alignment;
 };
 
-#pragma pack(1)
 struct rpc_msg_get_max_size_rsp {
     uint64_t max_size;
 };
 
-#pragma pack(1)
 struct rpc_msg_buffer_get_base_req {
     uint64_t remote_ptr;
 };
 
-#pragma pack(1)
 struct rpc_msg_buffer_get_base_rsp {
     uint64_t base_ptr;
 };
 
-#pragma pack(1)
 struct rpc_msg_free_buffer_req {
     uint64_t remote_ptr;
 };
 
-#pragma pack(1)
 struct rpc_msg_buffer_clear_req {
     uint64_t remote_ptr;
     uint8_t value;
 };
 
-#pragma pack(1)
 struct rpc_msg_get_tensor_req {
     rpc_tensor tensor;
     uint64_t offset;
     uint64_t size;
 };
 
-#pragma pack(1)
 struct rpc_msg_copy_tensor_req {
     rpc_tensor src;
     rpc_tensor dst;
 };
 
-#pragma pack(1)
 struct rpc_msg_copy_tensor_rsp {
     uint8_t result;
 };
 
-#pragma pack(1)
 struct rpc_msg_graph_compute_rsp {
     uint8_t result;
 };
 
-#pragma pack(1)
 struct rpc_msg_get_device_memory_rsp {
     uint64_t free_mem;
     uint64_t total_mem;
 };
+#pragma pack(pop)
 
 // RPC data structures
 
