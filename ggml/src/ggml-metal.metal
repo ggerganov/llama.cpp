@@ -1983,7 +1983,7 @@ kernel void kernel_im2col_ext(
     const int32_t chw = tgpig[0] % CHW;
     const int32_t tgpig_0 = chw / KHW;  // 0 ~ (IC - 1)
     const int32_t HW = tgpig[0] % KHW;
-    
+
     const int32_t tpitg_0 = (d * ntg[0]) + tpitg[0];
     if (tpitg_0 >= N) {
         return;
