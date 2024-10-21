@@ -11,7 +11,7 @@
 "
 "   - Tab       - accept the current suggestion
 "   - Shift+Tab - accept just the first line of the segguestion
-"   - Ctrl+F    - trigger FIM completion manually
+"   - Ctrl+F    - toggle FIM completion manually
 "
 " make symlink or copy this file to ~/.config/nvim/autoload/llama.vim
 "
