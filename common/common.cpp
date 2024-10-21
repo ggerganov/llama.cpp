@@ -996,7 +996,7 @@ struct llama_model_params common_model_params_to_llama(const common_params & par
     mparams.main_gpu        = params.main_gpu;
     mparams.split_mode      = params.split_mode;
     mparams.tensor_split    = params.tensor_split;
-    mparams.use_mmap        = params.use_mmap;
+    mparams.use_mmap        = params.use_mmap && !params.runtime_repack;
     mparams.use_mlock       = params.use_mlock;
     mparams.check_tensors   = params.check_tensors;
     if (params.kv_overrides.empty()) {
@@ -1066,6 +1066,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.offload_kqv       = !params.no_kv_offload;
     cparams.flash_attn        = params.flash_attn;
     cparams.no_perf           = params.no_perf;
+    cparams.runtime_repack   = params.runtime_repack;
 
     if (params.reranking) {
         cparams.embeddings    = true;

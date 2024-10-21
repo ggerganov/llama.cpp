@@ -1993,6 +1993,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             common_log_set_timestamps(common_log_main(), true);
         }
     ).set_env("LLAMA_LOG_TIMESTAMPS"));
+    add_opt(common_arg(
+        {"-rtrp", "--runtime-repack"},
+        string_format("Allow runtime requantization and repacking of Q4_0 to enable optimized GEMM and GEMV kernels (default: %d)", params.runtime_repack),
+        [](common_params & params) {
+            params.runtime_repack = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN}));
 
     return ctx_arg;
 }
