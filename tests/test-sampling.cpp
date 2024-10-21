@@ -208,10 +208,8 @@ static void test_dry(
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-    const int32_t context_size = 1024;
-    struct llama_model * model = nullptr;
 
-    struct llama_sampler * sampler = llama_sampler_init_dry(model, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers);
+    struct llama_sampler * sampler = llama_sampler_init_dry(nullptr, 1024, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers);
 
     for (size_t i = 0; i < last_tokens.size(); i++) {
         llama_sampler_accept(sampler, last_tokens[i]);

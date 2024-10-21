@@ -70,32 +70,6 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
     struct llama_context * ctx
 );
 
-// exposing wrapper function that takes "model" instead of "vocab", to be used internally
-std::vector<llama_token> llama_tokenize_internal(
-        const struct llama_model * model,
-        const std::string & raw_text,
-        bool add_special = false,
-        bool parse_special = true);
-
-static std::string llama_detokenize(const struct llama_model * model, const std::vector<llama_token> & tokens, bool special) {
-    if (model == nullptr) {     // model is passed as nullptr in test-sampling.cpp
-        return "";
-    }
-    std::string text;
-    text.resize(std::max(text.capacity(), tokens.size()));
-    int32_t n_chars = llama_detokenize(model, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
-    if (n_chars < 0) {
-        text.resize(-n_chars);
-        n_chars = llama_detokenize(model, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
-        GGML_ASSERT(n_chars <= (int32_t)text.size());  // whitespace trimming is performed after per-token detokenization
-    }
-
-    text.resize(n_chars);
-
-    // NOTE: the original tokenizer decodes bytes after collecting the pieces.
-    return text;
-}
-
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 template<typename T>
 struct ring_buffer {

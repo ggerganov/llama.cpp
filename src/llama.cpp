@@ -21452,15 +21452,6 @@ int32_t llama_tokenize(
     return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
-// wrapper function that takes "model" instead of "vocab", to be used internally
-std::vector<llama_token> llama_tokenize_internal(
-        const struct llama_model * model,
-        const std::string & raw_text,
-        bool add_special,
-        bool parse_special) {
-    return llama_tokenize_internal(model->vocab, raw_text, add_special, parse_special);
-}
-
 int32_t llama_token_to_piece(
     const struct llama_model * model,
                  llama_token   token,
@@ -21803,6 +21794,10 @@ struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * mod
 
 struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
     return llama_sampler_init_infill_impl(model->vocab);
+}
+
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+    return llama_sampler_init_dry_impl(model->vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers, num_breakers);
 }
 
 //

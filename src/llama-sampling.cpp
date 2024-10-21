@@ -1663,8 +1663,6 @@ struct llama_sampler * llama_sampler_init_penalties(
 // DRY
 
 struct llama_sampler_dry {
-    const   llama_model * model;
-
     int32_t total_context_size;
 
     const float   dry_multiplier;
@@ -1679,10 +1677,9 @@ struct llama_sampler_dry {
 };
 
 // Ported from Koboldcpp, original PR: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
-static void get_overlapping_token_sequences(const struct llama_model * model, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
-    const int n_vocab = llama_n_vocab(model);
-    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        std::string word = llama_detokenize(model, {token_id}, true);
+static void get_overlapping_token_sequences(const llama_vocab & vocab, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
+    for (llama_token token_id = 0; token_id < (int)vocab.n_vocab; token_id++) {
+        std::string word = llama_detokenize(vocab, {token_id}, true);
         if (word.find(str) != std::string::npos) {
             token_sequences.emplace(token_id, std::vector<llama_token>());
         } else {
@@ -1698,7 +1695,7 @@ static void get_overlapping_token_sequences(const struct llama_model * model, co
                     }
                 }
                 if (match) {
-                    std::vector<llama_token> tokenization = llama_tokenize_internal(model, str.substr(i), false, false);
+                    std::vector<llama_token> tokenization = llama_tokenize_internal(vocab, str.substr(i), false, false);
                     if (max_tail_len >= 0 && tokenization.size() > (size_t)max_tail_len) {
                         tokenization.resize(max_tail_len);
                     }
@@ -1951,8 +1948,7 @@ static void llama_sampler_dry_reset(struct llama_sampler * smpl) {
 static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (llama_sampler_dry *) smpl->ctx;
 
-    auto * result = llama_sampler_init_dry(ctx->model, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
-
+    auto * result = llama_sampler_init_dry(nullptr, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
     // Copy the state, including the processed breakers
     {
         auto * result_ctx = (llama_sampler_dry *) result->ctx;
@@ -1978,7 +1974,7 @@ static struct llama_sampler_i llama_sampler_dry_i = {
     /* .free   = */ llama_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
     if (dry_multiplier < 0 || dry_base <= 0 || dry_allowed_length < 0) {
         return nullptr;
     }
@@ -2008,14 +2004,13 @@ struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, 
                 sequence_break.resize(MAX_CHAR_LEN);
             }
 
-            get_overlapping_token_sequences(model, sequence_break, processed_breakers, MAX_SEQ_LEN);
+            get_overlapping_token_sequences(vocab, sequence_break, processed_breakers, MAX_SEQ_LEN);
         }
     }
 
     return new llama_sampler {
         /* .iface = */ &llama_sampler_dry_i,
         /* .ctx   = */ new llama_sampler_dry {
-            /* .model                  = */ model,
             /* .total_context_size     = */ context_size,
             /* .dry_multiplier         = */ dry_multiplier,
             /* .dry_base               = */ dry_base,
