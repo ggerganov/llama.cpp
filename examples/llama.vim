@@ -131,7 +131,7 @@ function! llama#init()
 
     augroup llama
         autocmd!
-        autocmd InsertEnter     * inoremap <expr> <silent> <C-F> llama#fim_inline(v:false, v:false)
+        autocmd InsertEnter     * inoremap <expr> <silent> <C-F> llama#fim_inline(v:false)
         autocmd InsertLeavePre  * call llama#fim_cancel()
 
         autocmd CursorMoved     * call s:on_move()
@@ -139,9 +139,7 @@ function! llama#init()
         autocmd CompleteChanged * call llama#fim_cancel()
 
         if g:llama_config.auto_fim
-            autocmd InsertEnter  * call llama#fim(v:true, v:false)
-            autocmd CursorMovedI * call llama#fim(v:true, v:false)
-           "autocmd CursorHoldI  * call llama#fim(v:true, v:true)
+            autocmd CursorMovedI * call llama#fim(v:true)
         endif
 
         " gather chunks upon yanking
@@ -329,16 +327,17 @@ function! s:ring_update()
 endfunction
 
 " necessary for 'inoremap <expr>'
-function! llama#fim_inline(is_auto, on_hold) abort
-    call llama#fim(a:is_auto, a:on_hold)
+function! llama#fim_inline(is_auto) abort
+    call llama#fim(a:is_auto)
     return ''
 endfunction
 
 " the main FIM call
 " takes local context around the cursor and sends it together with the extra context to the server for completion
-function! llama#fim(is_auto, on_hold) abort
+function! llama#fim(is_auto) abort
     " we already have a suggestion for the current cursor position
-    if a:on_hold && (s:hint_shown || (s:pos_x == col('.') - 1 && s:pos_y == line('.')))
+    if s:hint_shown && !a:is_auto
+        call llama#fim_cancel()
         return
     endif
 
@@ -352,7 +351,7 @@ function! llama#fim(is_auto, on_hold) abort
         endif
 
         let s:t_fim_start = reltime()
-        let s:timer_fim = timer_start(600, {-> llama#fim(v:true, v:true)})
+        let s:timer_fim = timer_start(600, {-> llama#fim(v:true)})
         return
     endif
 
@@ -509,6 +508,11 @@ function! s:fim_on_stdout(job_id, data, event) dict
     endif
 
     if self.pos_x != col('.') - 1 || self.pos_y != line('.')
+        return
+    endif
+
+    " show the suggestion only in insert mode
+    if mode() !=# 'i'
         return
     endif
 
