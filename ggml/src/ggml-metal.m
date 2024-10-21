@@ -145,6 +145,7 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_NORM,
     GGML_METAL_KERNEL_TYPE_SSM_CONV_F32,
     GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32,
+    GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32_GROUP,
     GGML_METAL_KERNEL_TYPE_MUL_MV_F32_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F16,
     GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32,
@@ -589,6 +590,7 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_NORM,                          norm,                           true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SSM_CONV_F32,                  ssm_conv_f32,                   true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32,                  ssm_scan_f32,                   true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32_GROUP,            ssm_scan_f32_group,             true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_F32_F32,                mul_mv_f32_f32,                 support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F16,                mul_mv_f16_f16,                 support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32,                mul_mv_f16_f32,                 support_simdgroup_reduction);
@@ -1636,47 +1638,76 @@ static void ggml_metal_encode_node(
                 struct ggml_tensor * src3 = node->src[3];
                 struct ggml_tensor * src4 = node->src[4];
                 struct ggml_tensor * src5 = node->src[5];
+                struct ggml_tensor * src6 = node->src[6];
+                struct ggml_tensor * src7 = node->src[7];
 
                 GGML_ASSERT(src3);
                 GGML_ASSERT(src4);
                 GGML_ASSERT(src5);
+                GGML_ASSERT(src6);
+                GGML_ASSERT(src7);
 
                 size_t offs_src3 = 0;
                 size_t offs_src4 = 0;
                 size_t offs_src5 = 0;
+                size_t offs_src6 = 0;
+                size_t offs_src7 = 0;
 
                 id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(src3, &offs_src3) : nil;
                 id<MTLBuffer> id_src4 = src4 ? ggml_metal_get_buffer(src4, &offs_src4) : nil;
                 id<MTLBuffer> id_src5 = src5 ? ggml_metal_get_buffer(src5, &offs_src5) : nil;
+                id<MTLBuffer> id_src6 = src6 ? ggml_metal_get_buffer(src6, &offs_src6) : nil;
+                id<MTLBuffer> id_src7 = src7 ? ggml_metal_get_buffer(src7, &offs_src7) : nil;
 
-                const int64_t  ne30 = src3->ne[0]; GGML_UNUSED(ne30);
+                const int64_t  ne30 = src3->ne[0];
                 const int64_t  ne31 = src3->ne[1]; GGML_UNUSED(ne31);
 
-                const uint64_t nb30 = src3->nb[0];
+                const uint64_t nb30 = src3->nb[0]; GGML_UNUSED(nb30);
                 const uint64_t nb31 = src3->nb[1];
 
                 const int64_t  ne40 = src4->ne[0]; GGML_UNUSED(ne40);
-                const int64_t  ne41 = src4->ne[1]; GGML_UNUSED(ne41);
+                const int64_t  ne41 = src4->ne[1];
                 const int64_t  ne42 = src4->ne[2]; GGML_UNUSED(ne42);
+                const int64_t  ne43 = src4->ne[3]; GGML_UNUSED(ne43);
 
-                const uint64_t nb40 = src4->nb[0];
+                const uint64_t nb40 = src4->nb[0]; GGML_UNUSED(nb40);
                 const uint64_t nb41 = src4->nb[1];
                 const uint64_t nb42 = src4->nb[2];
+                const uint64_t nb43 = src4->nb[3];
 
                 const int64_t  ne50 = src5->ne[0]; GGML_UNUSED(ne50);
                 const int64_t  ne51 = src5->ne[1]; GGML_UNUSED(ne51);
                 const int64_t  ne52 = src5->ne[2]; GGML_UNUSED(ne52);
+                const int64_t  ne53 = src5->ne[3]; GGML_UNUSED(ne53);
 
-                const uint64_t nb50 = src5->nb[0];
+                const uint64_t nb50 = src5->nb[0]; GGML_UNUSED(nb50);
                 const uint64_t nb51 = src5->nb[1];
                 const uint64_t nb52 = src5->nb[2];
+                const uint64_t nb53 = src5->nb[3];
+
+                const int64_t  ne60 = src6->ne[0]; GGML_UNUSED(ne60);
+
+                const uint64_t nb60 = src6->nb[0]; GGML_UNUSED(nb60);
+
+                const int64_t  ne70 = src7->ne[0]; GGML_UNUSED(ne70);
+
+                const uint64_t nb70 = src7->nb[0]; GGML_UNUSED(nb70);
 
                 const int64_t d_state      = ne00;
                 const int64_t d_inner      = ne01;
-                const int64_t n_seq_tokens = ne11;
-                const int64_t n_seqs       = ne02;
+                const int64_t n_head       = ne02;
+                const int64_t n_group      = ne41;
+                const int64_t n_seq_tokens = ne12;
+                const int64_t n_seqs       = ne13;
 
-                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32].pipeline;
+                id<MTLComputePipelineState> pipeline = nil;
+
+                if (ne30 == 1) {
+                    // Mamba-2
+                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32_GROUP].pipeline;
+                } else {
+                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_SCAN_F32].pipeline;
+                }
 
                 [encoder setComputePipelineState:pipeline];
                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
@@ -1685,33 +1716,41 @@ static void ggml_metal_encode_node(
                 [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
                 [encoder setBuffer:id_src4 offset:offs_src4 atIndex:4];
                 [encoder setBuffer:id_src5 offset:offs_src5 atIndex:5];
-                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:6];
+                [encoder setBuffer:id_src6 offset:offs_src6 atIndex:6];
+                [encoder setBuffer:id_src7 offset:offs_src7 atIndex:7];
+                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:8];
 
-                [encoder setBytes:&d_state      length:sizeof(d_state)      atIndex:7];
-                [encoder setBytes:&d_inner      length:sizeof(d_inner)      atIndex:8];
-                [encoder setBytes:&n_seq_tokens length:sizeof(n_seq_tokens) atIndex:9];
-                [encoder setBytes:&n_seqs       length:sizeof(n_seqs)       atIndex:10];
+                [encoder setBytes:&d_state      length:sizeof(d_state)      atIndex:9];
+                [encoder setBytes:&d_inner      length:sizeof(d_inner)      atIndex:10];
+                [encoder setBytes:&n_head       length:sizeof(n_head)       atIndex:11];
+                [encoder setBytes:&n_group      length:sizeof(n_group)      atIndex:12];
+                [encoder setBytes:&n_seq_tokens length:sizeof(n_seq_tokens) atIndex:13];
+                [encoder setBytes:&n_seqs       length:sizeof(n_seqs)       atIndex:14];
 
-                [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:11];
-                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:12];
-                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:13];
-                [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:14];
-                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:15];
-                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:16];
-                [encoder setBytes:&nb13 length:sizeof(nb13) atIndex:17];
-                [encoder setBytes:&nb20 length:sizeof(nb20) atIndex:18];
-                [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:19];
-                [encoder setBytes:&nb22 length:sizeof(nb22) atIndex:20];
-                [encoder setBytes:&nb30 length:sizeof(nb30) atIndex:21];
-                [encoder setBytes:&nb31 length:sizeof(nb31) atIndex:22];
-                [encoder setBytes:&nb40 length:sizeof(nb40) atIndex:23];
+                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:15];
+                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:16];
+                [encoder setBytes:&nb03 length:sizeof(nb03) atIndex:17];
+                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:18];
+                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:19];
+                [encoder setBytes:&nb13 length:sizeof(nb13) atIndex:20];
+                [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:21];
+                [encoder setBytes:&nb22 length:sizeof(nb22) atIndex:22];
+                [encoder setBytes:&nb31 length:sizeof(nb31) atIndex:23];
                 [encoder setBytes:&nb41 length:sizeof(nb41) atIndex:24];
                 [encoder setBytes:&nb42 length:sizeof(nb42) atIndex:25];
-                [encoder setBytes:&nb50 length:sizeof(nb50) atIndex:26];
+                [encoder setBytes:&nb43 length:sizeof(nb43) atIndex:26];
                 [encoder setBytes:&nb51 length:sizeof(nb51) atIndex:27];
                 [encoder setBytes:&nb52 length:sizeof(nb52) atIndex:28];
+                [encoder setBytes:&nb53 length:sizeof(nb53) atIndex:29];
+                // NOTE: max index is 31
 
-                [encoder dispatchThreadgroups:MTLSizeMake(d_inner, n_seqs, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                if (ne30 == 1) {
+                    // Mamba-2
+                    [encoder dispatchThreadgroups:MTLSizeMake(d_inner, n_head, n_seqs) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                } else {
+                    GGML_ASSERT(d_inner == 1);
+                    [encoder dispatchThreadgroups:MTLSizeMake(n_head, n_seqs, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                }
             } break;
         case GGML_OP_MUL_MAT:
             {
