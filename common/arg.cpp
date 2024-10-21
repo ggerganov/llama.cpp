@@ -1097,7 +1097,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_RETRIEVAL, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_POOLING"));
     add_opt(common_arg(
-        {"--attention"}, "{causal,non,causal}",
+        {"--attention"}, "{causal,non-causal}",
         "attention type for embeddings, use model default if unspecified",
         [](common_params & params, const std::string & value) {
             /**/ if (value == "causal") { params.attention_type = LLAMA_ATTENTION_TYPE_CAUSAL; }
