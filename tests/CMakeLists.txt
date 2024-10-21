@@ -1,3 +1,8 @@
+if(WIN32)
+    add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
+    add_compile_options("$<$<C_COMPILER_ID:MSVC>:/source-charset:utf-8>")
+endif()
+
 function(llama_test target)
     include(CMakeParseArguments)
     set(options)
