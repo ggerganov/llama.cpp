@@ -1035,7 +1035,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
         return GGML_TYPE_Q5_1;
     }
 
-    throw std::runtime_error("Invalid cache type: " + s);
+    throw std::runtime_error("Unsupported cache type: " + s);
 }
 
 struct llama_context_params common_context_params_to_llama(const common_params & params) {
@@ -1047,7 +1047,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.n_ubatch          = params.n_ubatch;
     cparams.n_threads         = params.cpuparams.n_threads;
     cparams.n_threads_batch   = params.cpuparams_batch.n_threads == -1 ?
-                                    params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
+                                params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
     cparams.rope_scaling_type = params.rope_scaling_type;
