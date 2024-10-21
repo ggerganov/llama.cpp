@@ -40,14 +40,18 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     *st_pos_id += std::max(pw, ph);
 
     int processed = 0;
+    std::vector<llama_pos> batch_mrope_pos;
+    batch_mrope_pos.resize(img_tokens * 4);
+    
     for (int i = 0; i < img_tokens; i += n_batch) {
         int n_eval = img_tokens - i;
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
 
-        llama_pos batch_mrope_pos[n_eval * 4];
-        memcpy(batch_mrope_pos, &mrope_pos[processed], n_eval * sizeof(llama_pos));
+        // llama_pos batch_mrope_pos[n_eval * 4];
+        std::fill(batch_mrope_pos.begin(), batch_mrope_pos.end(), 0);
+        memcpy(batch_mrope_pos.data(), &mrope_pos[processed], n_eval * sizeof(llama_pos));
         memcpy(&batch_mrope_pos[n_eval * 1], &mrope_pos[img_tokens * 1 + processed], n_eval * sizeof(llama_pos));
         memcpy(&batch_mrope_pos[n_eval * 2], &mrope_pos[img_tokens * 2 + processed], n_eval * sizeof(llama_pos));
         memcpy(&batch_mrope_pos[n_eval * 3], &mrope_pos[img_tokens * 3 + processed], n_eval * sizeof(llama_pos));
@@ -56,7 +60,7 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
             int32_t(n_eval),                // n_tokens
             nullptr,                        // token
             (image_embed->embed+i*n_embd),  // embed
-            batch_mrope_pos,                        // pos
+            batch_mrope_pos.data(),         // pos
             nullptr,  // n_seq_id
             nullptr,  // seq_id
             nullptr,  // logits
@@ -345,6 +349,8 @@ static void llava_free(struct llava_context * ctx_llava) {
     llama_free_model(ctx_llava->model);
     llama_backend_free();
 }
+
+#ifndef NDEBUG
 
 static void tmp_test_conv2d_reshape(struct llava_context * ctx_llava, gpt_params * params) {
     int image_size_width = 256;
@@ -859,6 +865,7 @@ static llava_image_embed * tmp_load_img_embed() {
     return result;
 }
 
+#endif
 
 /*
     -----------------------------------------------------------------------------------------------------------------
@@ -902,6 +909,7 @@ int main(int argc, char ** argv) {
         // This section is for testing LLM parts of the model during development phase!
         auto ctx_llava = llava_init_context(&params, model);
 
+#ifndef NDEBUG
         // {
         //     auto img_embed = tmp_load_img_embed();
         //     struct clip_image_size * load_image_size = clip_image_size_init();
@@ -922,7 +930,8 @@ int main(int argc, char ** argv) {
         // tmp_test_rope(ctx_llava, &params);
         // tmp_test_mrope(ctx_llava, &params);
         // tmp_test_mrope_2d(ctx_llava, &params);
-        
+#endif
+
         // process_prompt(ctx_llava, nullptr, &params, params.prompt);
 
         llama_perf_context_print(ctx_llava->ctx_llama);
