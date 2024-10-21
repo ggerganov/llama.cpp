@@ -348,6 +348,9 @@ if __name__ == '__main__':
                         if ".base_layer.weight" in name:
                             continue
                         logger.error(f"Unexpected name '{name}': Not a lora_A or lora_B tensor")
+                        if ".embed_tokens.weight" in name or ".lm_head.weight" in name:
+                            logger.error("Embeddings is present in the adapter. This can be due to new tokens added during fine tuning")
+                            logger.error("Hint: if you are using TRL, make sure not to call setup_chat_format()")
                         sys.exit(1)
 
                     if base_name in tensor_map:
