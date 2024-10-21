@@ -173,6 +173,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS) (AGPL)
 - [LLMUnity](https://github.com/undreamai/LLMUnity) (MIT)
 - [Llama Assistant](https://github.com/vietanhdev/llama-assistant) (GPL)
+- [PocketPal AI - An iOS and Android App](https://github.com/a-ghorbani/pocketpal-ai) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
