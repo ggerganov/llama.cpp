@@ -111,7 +111,7 @@ option(GGML_LSX         "ggml: enable lsx"              ON)
 option(GGML_SVE         "ggml: enable SVE"              OFF)
 
 if (WIN32)
-    set(GGML_WIN_VER "0x602" CACHE STRING "ggml: Windows Version")
+    set(GGML_WIN_VER "_WIN32_WINNT_WIN7" CACHE STRING "ggml: Windows Version")
 endif()
 
 # ggml core
