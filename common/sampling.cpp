@@ -171,60 +171,46 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalize_nl,
                 params.ignore_eos));
 
-    if (params.temp > 0.0f) {
-        if (params.mirostat == 0) {
-            for (const auto & cnstr : params.samplers) {
-                switch (cnstr) {
-                    case COMMON_SAMPLER_TYPE_TOP_K:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TOP_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_MIN_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_XTC:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TFS_Z:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TYPICAL_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
-                        break;
-                    case COMMON_SAMPLER_TYPE_INFILL:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
-                        break;
-                    default:
-                        GGML_ASSERT(false && "unknown sampler type");
-                }
+    if (params.mirostat == 0) {
+        for (const auto & cnstr : params.samplers) {
+            switch (cnstr) {
+                case COMMON_SAMPLER_TYPE_TOP_K:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
+                    break;
+                case COMMON_SAMPLER_TYPE_TOP_P:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_MIN_P:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_XTC:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                    break;
+                case COMMON_SAMPLER_TYPE_TFS_Z:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_TYPICAL_P:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_TEMPERATURE:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    break;
+                case COMMON_SAMPLER_TYPE_INFILL:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                    break;
+                default:
+                    GGML_ASSERT(false && "unknown sampler type");
             }
-            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
-            llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
-        } else if (params.mirostat == 1) {
-            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
-        } else if (params.mirostat == 2) {
-            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
-        } else {
-            GGML_ASSERT(false && "unknown mirostat version");
         }
+        llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
+    } else if (params.mirostat == 1) {
+        llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
+        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+    } else if (params.mirostat == 2) {
+        llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
+        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
     } else {
-        if (params.n_probs > 0) {
-            // some use cases require to sample greedily, but still obtain the probabilities of the top tokens
-            // ref: https://github.com/ggerganov/llama.cpp/pull/9605
-            //
-            // the following will not produce exactly the same probs as applyging softmax to the full vocabulary, but
-            // it is much faster, since we avoid sorting all tokens and should give a good approximation
-            llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.n_probs));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
-        }
-        llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
+        GGML_ASSERT(false && "unknown mirostat version");
     }
 
     return result;
