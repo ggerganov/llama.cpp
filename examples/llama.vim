@@ -744,13 +744,13 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     elseif s:vim_ghost_text
         let l:new_suffix = s:content[0]
         if !empty(l:new_suffix)
-            call prop_add(line('.'), col('.'), {
+            call prop_add(s:pos_y, s:pos_x + 1, {
                         \ 'type': s:hint_hlgroup,
                         \ 'text': l:new_suffix
                         \ })
         endif
         for line in s:content[1:]
-            call prop_add(line('.'), 0, {
+            call prop_add(s:pos_y, 0, {
                         \ 'type': s:hint_hlgroup,
                         \ 'text': line,
                         \ 'text_padding_left': s:get_indent(line),
@@ -758,7 +758,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
                         \ })
         endfor
         if !empty(l:info)
-            call prop_add(line('.'), 0, {
+            call prop_add(s:pos_y, 0, {
                         \ 'type': s:info_hlgroup,
                         \ 'text': ' ' . l:info,
                         \ 'text_padding_left': col('$'),
