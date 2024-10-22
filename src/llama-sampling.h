@@ -4,8 +4,6 @@
 
 #include "llama-grammar.h"
 
-#include <unordered_map>
-
 struct llama_vocab;
 struct llama_grammar;
 
@@ -29,3 +27,6 @@ struct llama_sampler * llama_sampler_init_grammar_impl(
                       const char * grammar_root);
 
 bool llama_sampler_is_grammar_empty_impl(struct llama_sampler * gsmpl);
+
+struct llama_sampler * llama_sampler_init_infill_impl(
+        const struct llama_vocab & vocab);

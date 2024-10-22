@@ -87,6 +87,9 @@ class TensorNameMap:
             "rope.freqs",  # llama-pth
             "rotary_pos_emb.inv_freq",  # chatglm
         ),
+
+        MODEL_TENSOR.ROPE_FACTORS_LONG: (),
+        MODEL_TENSOR.ROPE_FACTORS_SHORT: (),
     }
 
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
@@ -380,7 +383,7 @@ class TensorNameMap:
         MODEL_TENSOR.ATTN_Q_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.q_layernorm",
             "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
-            "model.layers.{bid}.self_attn.q_norm",                            # cohere olmoe
+            "model.layers.{bid}.self_attn.q_norm",                            # cohere olmoe chameleon
             "transformer.blocks.{bid}.attn.q_ln",                             # sea-lion
             "encoder.layer.{bid}.attention.self.layer_norm_q",                # jina-bert-v2
             "transformer.layers.{bid}.attn.q_norm",                           # openelm
@@ -389,7 +392,7 @@ class TensorNameMap:
         MODEL_TENSOR.ATTN_K_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.k_layernorm",
             "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
-            "model.layers.{bid}.self_attn.k_norm",                            # cohere olmoe
+            "model.layers.{bid}.self_attn.k_norm",                            # cohere olmoe chameleon
             "transformer.blocks.{bid}.attn.k_ln",                             # sea-lion
             "encoder.layer.{bid}.attention.self.layer_norm_k",                # jina-bert-v2
             "transformer.layers.{bid}.attn.k_norm",                           # openelm
@@ -678,6 +681,15 @@ class TensorNameMap:
 
         MODEL_TENSOR.ENC_OUTPUT_NORM: (
             "encoder.final_layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.CLS: (
+            "classifier",       # jina
+            "classifier.dense", # roberta
+        ),
+
+        MODEL_TENSOR.CLS_OUT: (
+            "classifier.out_proj", # roberta
         ),
     }
 

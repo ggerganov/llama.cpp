@@ -13,6 +13,10 @@ Feature: llama.cpp server
     And   32 as batch size
     And   2 slots
 
+    # the prompt is 301 tokens
+    # the slot context is 256/2 = 128 tokens
+    # the prompt is truncated to keep the last 109 tokens
+    # 64 tokens are generated thanks to shifting the context when it gets full
   Scenario: Inference with context shift
     And   64 server max tokens to predict
     Then  the server is starting

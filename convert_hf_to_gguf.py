@@ -15,6 +15,7 @@ from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Literal, Sequence, TypeVar, cast
+from itertools import chain
 
 import math
 import numpy as np
@@ -64,7 +65,6 @@ class Model:
     model_name: str | None
     metadata_override: Path | None
     dir_model_card: Path
-    is_lora: bool
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -72,7 +72,7 @@ class Model:
     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool = False,
                  use_temp_file: bool = False, eager: bool = False,
                  metadata_override: Path | None = None, model_name: str | None = None,
-                 split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False, is_lora: bool = False):
+                 split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
 
@@ -94,7 +94,6 @@ class Model:
         self.metadata_override = metadata_override
         self.model_name = model_name
         self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
-        self.is_lora = is_lora  # true if model is used inside convert_lora_to_gguf.py
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -270,10 +269,14 @@ class Model:
 
         return False
 
+    # some models need extra generated tensors (like rope_freqs)
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
+        return ()
+
     def prepare_tensors(self):
         max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
 
-        for name, data_torch in self.get_tensors():
+        for name, data_torch in chain(self.generate_extra_tensors(), self.get_tensors()):
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
@@ -291,8 +294,13 @@ class Model:
                     bid = int(part)
                     break
 
-            for new_name, data in ((n, d.squeeze().numpy()) for n, d in self.modify_tensors(data_torch, name, bid)):
-                data: np.ndarray  # type hint
+            for new_name, data_torch in (self.modify_tensors(data_torch, name, bid)):
+                data = data_torch.squeeze().numpy()
+
+                # if data ends up empty, it means data_torch was a scalar tensor -> restore
+                if len(data.shape) == 0:
+                    data = data_torch.numpy()
+
                 n_dims = len(data.shape)
                 data_qtype: gguf.GGMLQuantizationType | bool = self.tensor_force_quant(name, new_name, bid, n_dims)
 
@@ -592,6 +600,9 @@ class Model:
         if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
             # ref: https://huggingface.co/databricks/dbrx-base
             res = "dbrx"
+        if chkhsh == "c7699093ba4255a91e702aa38a596aa81669f3525dae06c2953267dde580f448":
+            # ref: https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
+            res = "jina-v1-en"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
             res = "jina-v2-en"
@@ -640,6 +651,9 @@ class Model:
         if chkhsh == "fcace8b9cac38ce847670c970cd5892031a753a1ef381abd1d9af00f713da085":
             # ref: https://huggingface.co/microsoft/phi-2
             res = "phi-2"
+        if chkhsh == "60824e3c0d9401f89943cbb2fff727f0e2d4c545ba4df2d6e4f09a6db0f5b450":
+            # ref: https://huggingface.co/facebook/chameleon-7b
+            res = "chameleon"
 
         if res is None:
             logger.warning("\n")
@@ -1606,7 +1620,7 @@ class LlamaModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def prepare_tensors(self):
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
             if rope_scaling.get("rope_type", '').lower() == "llama3":
                 base = self.hparams.get("rope_theta", 10000.0)
@@ -1633,9 +1647,9 @@ class LlamaModel(Model):
                         smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
-                if not self.is_lora:
-                    self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
+                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype=torch.float32))
 
+    def prepare_tensors(self):
         super().prepare_tensors()
 
         if self._experts is not None:
@@ -1859,8 +1873,6 @@ class MiniCPM3Model(Model):
     def set_gguf_parameters(self):
         hparams = self.hparams
 
-        rope_dims = hparams["qk_rope_head_dim"]
-
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
@@ -1876,24 +1888,25 @@ class MiniCPM3Model(Model):
         self.gguf_writer.add_key_length(hparams["qk_nope_head_dim"] + hparams["qk_rope_head_dim"])
         self.gguf_writer.add_rope_dimension_count(hparams["qk_rope_head_dim"])
 
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         rope_scaling = self.find_hparam(['rope_scaling'], True)
-        if rope_scaling is None:
-            return
+        if rope_scaling is not None:
+            rope_dims = self.hparams["qk_rope_head_dim"]
 
-        long_factors = rope_scaling.get('long_factor', None)
-        short_factors = rope_scaling.get('short_factor', None)
+            long_factors = rope_scaling.get('long_factor', None)
+            short_factors = rope_scaling.get('short_factor', None)
 
-        if long_factors is None or short_factors is None:
-            raise KeyError('Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
+            if long_factors is None or short_factors is None:
+                raise KeyError('Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
 
-        if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
-            raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
+            if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
+                raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
 
-        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_LONG]  + ".weight", np.array(long_factors, dtype=np.float32))
-        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT] + ".weight", np.array(short_factors, dtype=np.float32))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype=torch.float32))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype=torch.float32))
 
     def set_vocab(self):
-        self._set_vocab_llama_hf()
+        self._set_vocab_sentencepiece()
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
@@ -2205,6 +2218,13 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_sliding_window(self.find_hparam(["sliding_window"]))
 
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
+        n_embd = self.find_hparam(["hidden_size", "n_embd"])
+        n_head = self.find_hparam(["num_attention_heads", "n_head"])
+        max_pos_embds = self.find_hparam(["n_positions", "max_position_embeddings"])
+        orig_max_pos_embds = self.find_hparam(["original_max_position_embeddings"])
+        rope_dims = n_embd // n_head
+
         # write rope scaling for long context (128k) model
         rope_scaling = self.find_hparam(['rope_scaling'], True)
         if rope_scaling is None:
@@ -2234,9 +2254,8 @@ class Phi3MiniModel(Model):
         if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
             raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
 
-        if not self.is_lora:
-            self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_LONG]  + ".weight", np.array(long_factors, dtype=np.float32))
-            self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT] + ".weight", np.array(short_factors, dtype=np.float32))
+        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype=torch.float32))
+        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype=torch.float32))
 
 
 @Model.register("PlamoForCausalLM")
@@ -2598,7 +2617,7 @@ class NomicBertModel(BertModel):
         self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
 
 
-@Model.register("XLMRobertaModel")
+@Model.register("XLMRobertaModel", "XLMRobertaForSequenceClassification")
 class XLMRobertaModel(BertModel):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -2696,6 +2715,11 @@ class XLMRobertaModel(BertModel):
         self.gguf_writer.add_add_eos_token(True)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # if name starts with "roberta.", remove the prefix
+        # e.g. https://huggingface.co/BAAI/bge-reranker-v2-m3/tree/main
+        if name.startswith("roberta."):
+            name = name[8:]
+
         # position embeddings start at pad_token_id + 1, so just chop down the weight tensor
         if name == "embeddings.position_embeddings.weight":
             if self._position_offset is not None:
@@ -2840,6 +2864,8 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False)
+        special_vocab.chat_template = "rwkv-world"
+        special_vocab._set_special_token("eot", 261)
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -3106,6 +3132,14 @@ class JinaBertV2Model(BertModel):
             raise NotImplementedError(f'Tokenizer {tokenizer_class} is not supported for JinaBertModel')
         self.gguf_writer.add_add_bos_token(True)
         self.gguf_writer.add_add_eos_token(True)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # if name starts with "bert.", remove the prefix
+        # e.g. https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
+        if name.startswith("bert."):
+            name = name[5:]
+
+        return super().modify_tensors(data_torch, name, bid)
 
 
 @Model.register("OpenELMForCausalLM")
@@ -4047,7 +4081,7 @@ class ExaoneModel(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(hparams["rope_scaling"]["factor"])
 
-    def prepare_tensors(self):
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
             if rope_scaling.get("rope_type", '').lower() == "llama3":
                 base = self.hparams.get("rope_theta", 10000.0)
@@ -4074,10 +4108,7 @@ class ExaoneModel(Model):
                         smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
-                if not self.is_lora:
-                    self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
-
-        super().prepare_tensors()
+                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype=torch.float32))
 
 
 @Model.register("GraniteForCausalLM")
@@ -4136,6 +4167,48 @@ class GraniteMoeModel(GraniteModel):
             ]
 
         return super().modify_tensors(data_torch, name, bid)
+
+
+@Model.register("ChameleonForConditionalGeneration")
+@Model.register("ChameleonForCausalLM")  # obsolete
+class ChameleonModel(Model):
+    model_arch = gguf.MODEL_ARCH.CHAMELEON
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_swin_norm(self.hparams.get("swin_norm", False))
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # ignore image tokenizer for now
+        # TODO: remove this once image support is implemented for Chameleon
+        if name.startswith("model.vqmodel"):
+            return []
+
+        n_head = self.hparams["num_attention_heads"]
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        hidden_dim = self.hparams.get("hidden_size")
+
+        if name.endswith(("q_proj.weight", "q_proj.bias")):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+        if name.endswith(("k_proj.weight", "k_proj.bias")):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+        if name.endswith(("q_norm.weight", "q_norm.bias")):
+            data_torch = ChameleonModel._reverse_hf_permute(data_torch, n_head, hidden_dim)
+        if name.endswith(("k_norm.weight", "k_norm.bias")):
+            data_torch = ChameleonModel._reverse_hf_permute(data_torch, n_kv_head, hidden_dim)
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    # see: https://github.com/huggingface/transformers/blob/72fb02c47dbbe1999ae105319f24631cad6e2e00/src/transformers/models/chameleon/convert_chameleon_weights_to_hf.py#L176-L203
+    @staticmethod
+    def _reverse_hf_permute(data_torch, n_heads, hidden_dim):
+        head_dim = hidden_dim // n_heads
+        data_torch = data_torch[0].view(2, head_dim // 2).t().reshape(1, -1)
+        data_torch = data_torch.repeat_interleave(n_heads, 0)
+        return data_torch
 
 
 ###### CONVERSION LOGIC ######

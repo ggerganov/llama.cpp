@@ -540,7 +540,7 @@ class SchemaConverter:
         return self._add_rule(
             name,
             to_rule(transform()) if self._raw_pattern \
-                else "\"\\\"\" " + to_rule(transform()) + " \"\\\"\" space")
+                else "\"\\\"\" (" + to_rule(transform()) + ") \"\\\"\" space")
 
 
     def _resolve_ref(self, ref):

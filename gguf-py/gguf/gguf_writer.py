@@ -670,6 +670,9 @@ class GGUFWriter:
     def add_expert_weights_scale(self, value: float) -> None:
         self.add_float32(Keys.LLM.EXPERT_WEIGHTS_SCALE.format(arch=self.arch), value)
 
+    def add_swin_norm(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.SWIN_NORM.format(arch=self.arch), value)
+
     def add_rescale_every_n_layers(self, count: int) -> None:
         self.add_uint32(Keys.LLM.RESCALE_EVERY_N_LAYERS.format(arch=self.arch), count)
 
@@ -839,15 +842,6 @@ class GGUFWriter:
             value = template_default
 
         self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
-
-    def add_prefix_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.PREFIX_ID, id)
-
-    def add_suffix_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.SUFFIX_ID, id)
-
-    def add_middle_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.MIDDLE_ID, id)
 
     def add_eot_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.EOT_ID, id)

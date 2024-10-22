@@ -592,7 +592,7 @@ private:
             }
             return join_seq();
         };
-        return add_rule(name, "\"\\\"\" " + to_rule(transform()) + " \"\\\"\" space");
+        return add_rule(name, "\"\\\"\" (" + to_rule(transform()) + ") \"\\\"\" space");
     }
 
     /*

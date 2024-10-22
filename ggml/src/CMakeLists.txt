@@ -163,8 +163,8 @@ if (GGML_OPENMP)
         list(APPEND GGML_EXTRA_LIBS_PRIVATE OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
 
         if (GGML_MUSA)
-            list(APPEND GGML_EXTRA_INCLUDES     "/usr/lib/llvm-10/include/openmp")
-            list(APPEND GGML_EXTRA_LIBS_PRIVATE "/usr/lib/llvm-10/lib/libomp.so")
+            list(APPEND GGML_EXTRA_INCLUDES     "/usr/lib/llvm-14/lib/clang/14.0.0/include")
+            list(APPEND GGML_EXTRA_LIBS_PRIVATE "/usr/lib/llvm-14/lib/libomp.so")
         endif()
     else()
         message(WARNING "OpenMP not found")
@@ -190,22 +190,24 @@ if (GGML_BLAS)
             # see https://gitlab.kitware.com/cmake/cmake/-/issues/20268
             find_package(PkgConfig REQUIRED)
             if (${GGML_BLAS_VENDOR} MATCHES "Generic")
-                pkg_check_modules(DepBLAS REQUIRED blas)
+                pkg_check_modules(DepBLAS blas)
             elseif (${GGML_BLAS_VENDOR} MATCHES "OpenBLAS")
                 # As of openblas v0.3.22, the 64-bit is named openblas64.pc
                 pkg_check_modules(DepBLAS openblas64)
                 if (NOT DepBLAS_FOUND)
-                    pkg_check_modules(DepBLAS REQUIRED openblas)
+                    pkg_check_modules(DepBLAS openblas)
                 endif()
             elseif (${GGML_BLAS_VENDOR} MATCHES "FLAME")
-                pkg_check_modules(DepBLAS REQUIRED blis)
+                add_compile_definitions(GGML_BLAS_USE_BLIS)
+                pkg_check_modules(DepBLAS blis)
             elseif (${GGML_BLAS_VENDOR} MATCHES "ATLAS")
-                pkg_check_modules(DepBLAS REQUIRED blas-atlas)
+                pkg_check_modules(DepBLAS blas-atlas)
             elseif (${GGML_BLAS_VENDOR} MATCHES "FlexiBLAS")
-                pkg_check_modules(DepBLAS REQUIRED flexiblas_api)
+                pkg_check_modules(DepBLAS flexiblas_api)
             elseif (${GGML_BLAS_VENDOR} MATCHES "Intel")
+                add_compile_definitions(GGML_BLAS_USE_MKL)
                 # all Intel* libraries share the same include path
-                pkg_check_modules(DepBLAS REQUIRED mkl-sdl)
+                pkg_check_modules(DepBLAS mkl-sdl)
             elseif (${GGML_BLAS_VENDOR} MATCHES "NVHPC")
                 # this doesn't provide pkg-config
                 # suggest to assign BLAS_INCLUDE_DIRS on your own
@@ -263,6 +265,26 @@ if (GGML_LLAMAFILE)
 
     set(GGML_HEADERS_LLAMAFILE llamafile/sgemm.h)
     set(GGML_SOURCES_LLAMAFILE llamafile/sgemm.cpp)
+endif()
+
+if (GGML_AMX)
+    if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11.0)
+    else()
+        set(GGML_AMX OFF)
+        message(WARNING "AMX requires gcc version > 11.0. Turning off GGML_AMX.")
+    endif()
+
+    if (GGML_AMX)
+        message(STATUS "Using AMX")
+
+        list(APPEND GGML_CDEF_PUBLIC GGML_USE_AMX)
+
+        file(GLOB   GGML_HEADERS_AMX "ggml-amx/*.h")
+        list(APPEND GGML_HEADERS_AMX "../include/ggml-amx.h")
+
+        file(GLOB   GGML_SOURCES_AMX "ggml-amx/*.cpp")
+        list(APPEND GGML_SOURCES_AMX "ggml-amx.cpp")
+    endif()
 endif()
 
 if (GGML_CUDA)
@@ -511,8 +533,8 @@ if (GGML_HIPBLAS)
 endif()
 
 if (GGML_SYCL)
-    if (NOT GGML_SYCL_TARGET MATCHES "^(INTEL|NVIDIA)$")
-        message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL or NVIDIA")
+    if (NOT GGML_SYCL_TARGET MATCHES "^(INTEL|NVIDIA|AMD)$")
+        message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL, NVIDIA, or AMD")
     endif()
 
     check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
@@ -532,6 +554,9 @@ if (GGML_SYCL)
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
 
     if (GGML_SYCL_F16)
+        if (GGML_SYCL_TARGET STREQUAL "AMD")
+            message(WARNING "AMD target does not entirely support FP16 in the SYCL backend.")
+        endif()
         add_compile_definitions(GGML_SYCL_F16)
     endif()
 
@@ -542,6 +567,12 @@ if (GGML_SYCL)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -fsycl")
 
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
+        add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
+    elseif (GGML_SYCL_TARGET STREQUAL "AMD")
+        # INFO: Allowed Sub_group_sizes are not consistent through all
+        # hip targets. For example, 64 is used for certain models, but the backend
+        # does not support it.
+        # Target archs tested working: gfx1030, gfx1031, (Only tested sub_group_size = 32)
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
     else()
         add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
@@ -575,6 +606,12 @@ if (GGML_SYCL)
             list(APPEND GGML_EXTRA_LIBS_PRIVATE sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (GGML_SYCL_TARGET STREQUAL "NVIDIA")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
+            list(APPEND GGML_EXTRA_LIBS_PRIVATE sycl pthread m dl onemkl)
+        elseif (GGML_SYCL_TARGET STREQUAL "AMD")
+            if (GGML_SYCL_HIP_TARGET STREQUAL "")
+                message(ERROR "Can't enable SYCL hip backend, GGML_SYCL_HIP_TARGET has not been set.")
+            endif()
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=${GGML_SYCL_HIP_TARGET}")
             list(APPEND GGML_EXTRA_LIBS_PRIVATE sycl pthread m dl onemkl)
         endif()
     endif()
@@ -1163,6 +1200,18 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
                 add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AVX512BF16__>)
                 add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512BF16__>)
             endif()
+            if (GGML_AMX_TILE)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AMX_TILE__>)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AMX_TILE__>)
+            endif()
+            if (GGML_AMX_INT8)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AMX_INT8__>)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AMX_INT8__>)
+            endif()
+            if (GGML_AMX_BF16)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AMX_BF16__>)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AMX_BF16__>)
+            endif()
         elseif (GGML_AVX2)
             list(APPEND ARCH_FLAGS /arch:AVX2)
         elseif (GGML_AVX)
@@ -1197,6 +1246,15 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
         endif()
         if (GGML_AVX512_BF16)
             list(APPEND ARCH_FLAGS -mavx512bf16)
+        endif()
+        if (GGML_AMX_TILE)
+            list(APPEND ARCH_FLAGS -mamx-tile)
+        endif()
+        if (GGML_AMX_INT8)
+            list(APPEND ARCH_FLAGS -mamx-int8)
+        endif()
+        if (GGML_AMX_BF16)
+            list(APPEND ARCH_FLAGS -mamx-bf16)
         endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
@@ -1310,7 +1368,7 @@ add_library(ggml
             ../include/ggml-backend.h
             ggml.c
             ggml-alloc.c
-            ggml-backend.c
+            ggml-backend.cpp
             ggml-quants.c
             ggml-quants.h
             ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
@@ -1323,6 +1381,7 @@ add_library(ggml
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ${GGML_SOURCES_AMX}       ${GGML_HEADERS_AMX}
             ${GGML_SOURCES_CANN}      ${GGML_HEADERS_CANN}
             ggml-aarch64.c            ggml-aarch64.h
             )
@@ -1344,6 +1403,10 @@ if (MATH_LIBRARY)
     if (NOT WIN32 OR NOT GGML_SYCL)
         list(APPEND GGML_EXTRA_LIBS_PRIVATE m)
     endif()
+endif()
+
+if (CMAKE_SYSTEM_NAME MATCHES "Android")
+    list(APPEND GGML_EXTRA_LIBS_PRIVATE dl) # Must be linked explicitly
 endif()
 
 list(REMOVE_DUPLICATES GGML_EXTRA_LIBS_PRIVATE)
