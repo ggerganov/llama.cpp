@@ -5202,6 +5202,7 @@ struct llama_batch_allocr {
     // optionally fulfill the batch returned by llama_batch_get_one
     llama_batch_allocr(llama_context & ctx, struct llama_batch in_batch) {
         batch = in_batch;
+        GGML_ASSERT(batch.n_tokens > 0);
         if (!batch.pos) {
             // determine the last position in KV cache
             llama_pos last_pos = -1;
