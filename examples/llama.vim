@@ -476,13 +476,13 @@ function! llama#fim(is_auto) abort
     if s:nvim_ghost_text
         let s:current_job = jobstart(l:curl_command, {
             \ 'on_stdout': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
-            \ 'on_exit':   function('s:nvim_fim_on_exit'),
+            \ 'on_exit':   function('s:fim_on_exit'),
             \ 'stdout_buffered': v:true
             \ })
     elseif s:vim_ghost_text
         let s:current_job = job_start(l:curl_command, {
             \ 'out_cb': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
-            \ 'close_cb':   function('s:vim_fim_on_exit')
+            \ 'exit_cb':   function('s:fim_on_exit')
             \ })
     endif
 
@@ -774,14 +774,10 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
     let s:hint_shown = v:true
 endfunction
 
-function! s:nvim_fim_on_exit(job_id, exit_code, event) dict
+function! s:fim_on_exit(job_id, exit_code, event = v:null)
     if a:exit_code != 0
         echom "Job failed with exit code: " . a:exit_code
     endif
 
-    let s:current_job = v:null
-endfunction
-
-function! s:vim_fim_on_exit(job_id)
     let s:current_job = v:null
 endfunction
