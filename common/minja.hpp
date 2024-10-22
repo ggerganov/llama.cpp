@@ -236,7 +236,7 @@ public:
       if (it == object_->end()) return Value();
       return it->second;
     }
-    throw std::runtime_error("Value is not an array or object: " + dump());
+    return Value();
   }
   void set(const Value& key, const Value& value) {
     if (!object_) throw std::runtime_error("Value is not an object: " + dump());
@@ -1092,15 +1092,24 @@ public:
         if (!index) throw std::runtime_error("SubscriptExpr.index is null");
         auto target_value = base->evaluate(context);
         if (auto slice = dynamic_cast<SliceExpr*>(index.get())) {
-          if (!target_value.is_array()) throw std::runtime_error("Subscripting non-array");
-
-          auto start = slice->start ? slice->start->evaluate(context).get<size_t>() : 0;
-          auto end = slice->end ? slice->end->evaluate(context).get<size_t>() : target_value.size();
-          auto result = Value::array();
-          for (auto i = start; i < end; ++i) {
-            result.push_back(target_value.at(i));
+          auto start = slice->start ? slice->start->evaluate(context).get<int64_t>() : 0;
+          auto end = slice->end ? slice->end->evaluate(context).get<int64_t>() : (int64_t) target_value.size();
+          if (target_value.is_string()) {
+            std::string s = target_value.get<std::string>();
+            if (start < 0) start = s.size() + start;
+            if (end < 0) end = s.size() + end;
+            return s.substr(start, end - start);
+          } else if (target_value.is_array()) {
+            if (start < 0) start = target_value.size() + start;
+            if (end < 0) end = target_value.size() + end;
+            auto result = Value::array();
+            for (auto i = start; i < end; ++i) {
+              result.push_back(target_value.at(i));
+            }
+            return result;
+          } else {
+            throw std::runtime_error(target_value.is_null() ? "Cannot subscript null" : "Subscripting only supported on arrays and strings");
           }
-          return result;
         } else {
           auto index_value = index->evaluate(context);
           if (target_value.is_null()) {
@@ -1247,6 +1256,9 @@ public:
         if (!object) throw std::runtime_error("MethodCallExpr.object is null");
         if (!method) throw std::runtime_error("MethodCallExpr.method is null");
         auto obj = object->evaluate(context);
+        if (obj.is_null()) {
+          throw std::runtime_error("Trying to call method '" + method->get_name() + "' on null");
+        }
         if (obj.is_array()) {
           if (method->get_name() == "append") {
               args.expectArgs("append method", {1, 1}, {0, 0});
@@ -2402,6 +2414,10 @@ inline std::shared_ptr<Context> Context::builtins() {
   }));
   globals.set("safe", simple_function("safe", { "value" }, [](const std::shared_ptr<Context> &, Value & args) -> Value {
       return args.at("value");
+  }));
+  globals.set("string", simple_function("string", { "value" }, [](const std::shared_ptr<Context> &, Value & args) -> Value {
+      auto & items = args.at("value");
+      return items.to_str();
   }));
   globals.set("list", simple_function("list", { "items" }, [](const std::shared_ptr<Context> &, Value & args) -> Value {
       auto & items = args.at("items");

@@ -141,6 +141,9 @@ int main() {
         lstrip_trim_blocks,
         "        1"
     );
+    test_render(R"({{ "abcd"[1:-1] }})", {}, {}, "bc");
+    test_render(R"({{ [0, 1, 2, 3][1:-1] }})", {}, {}, "[1, 2]");
+    test_render(R"({{ "123456789" | length }})", {}, {}, "9");
     test_render(R"(  {{- 'a' -}}{{ '  ' }}{{- 'b' -}}  )", {}, {}, "a  b");
     test_render(R"(    {%- if True %}{%- endif %}{{ '        ' }}{%- for x in [] %}foo{% endfor %}end)", {}, {}, "        end");
     test_render(R"({% set ns = namespace(is_first=false, nottool=false, and_or=true, delme='') %}{{ ns.is_first }})", {}, {}, "False");

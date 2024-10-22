@@ -60,6 +60,7 @@ model_ids = [
     # Gated models:
     "meta-llama/Llama-3.2-3B-Instruct",
     "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "mistralai/Mistral-Nemo-Instruct-2407",
     "google/gemma-7b-it",
     "google/gemma-2-2b-it",
     "mistralai/Mistral-7B-Instruct-v0.2",
