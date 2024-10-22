@@ -10,8 +10,6 @@
 
 #if defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
-#elif defined(GGML_USE_CANN)
-#   include "ggml-cann.h"
 #endif
 
 #ifndef __AMX_INT8__
@@ -3416,11 +3414,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
         }
     }
 
-#if defined(GGML_USE_CANN)
-    if (host_buffer) {
-        buft = ggml_backend_cann_host_buffer_type();
-    }
-#elif defined(GGML_USE_CPU_HBM)
+#if defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
 #endif
 
@@ -3442,8 +3436,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
 
 #if defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
-#elif defined(GGML_USE_CANN)
-    buft = ggml_backend_cann_buffer_type(device);
 #endif
 
     if (buft == nullptr) {
@@ -3487,14 +3479,13 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         return free;
     }
 
-#if defined(GGML_USE_CANN)
-    size_t total;
-    size_t free;
-    ggml_backend_cann_get_device_memory(device, &free, &total);
-    return free;
-#else
+    if (model.devices.size() > 0) {
+        ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(model.devices[0]);
+        LLAMA_LOG_WARN("%s: failed to get free memmory of device:%d of backend:%s, for device id is out of range.\n", __func__, device, ggml_backend_reg_name(reg));
+    } else {
+        LLAMA_LOG_WARN("%s: failed to get free memmory of device, no devices in inputted model.\n", __func__);
+    }
     return 1;
-#endif
 
     GGML_UNUSED(model);
     GGML_UNUSED(device);

@@ -588,14 +588,13 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
 #endif
-
 #ifdef GGML_USE_AMX
         register_backend(ggml_backend_amx_reg());
 #endif
-
 #ifdef GGML_USE_CANN
         register_backend(ggml_backend_cann_reg());
 #endif
+
         // TODO: kompute
 
         register_backend(ggml_backend_cpu_reg());

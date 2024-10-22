@@ -33,7 +33,6 @@ extern "C" {
  * @brief Maximum number of CANN devices supported.
  */
 #define GGML_CANN_MAX_DEVICES 16
-#define GGML_CANN_NAME "CANN"
 
 GGML_API ggml_backend_reg_t ggml_backend_cann_reg(void);
 

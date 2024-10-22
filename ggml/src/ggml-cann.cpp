@@ -39,6 +39,8 @@
 
 #include "ggml-common.h"
 
+#define GGML_CANN_NAME "CANN"
+
 /**
  * @brief Handles CANN errors by printing an error message and aborting.
  *
