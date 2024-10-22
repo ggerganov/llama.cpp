@@ -17170,7 +17170,7 @@ static int llama_decode_internal(
 
     // temporary allocate memory for the input batch if needed
     llama_batch_allocr batch_allocr(lctx, inp_batch);
-    llama_batch batch = batch_allocr.batch;
+    const llama_batch & batch = batch_allocr.batch;
     const uint32_t n_tokens_all = batch.n_tokens;
 
     const auto & model   = lctx.model;
@@ -17488,7 +17488,7 @@ static int llama_encode_internal(
 
     // temporary allocate memory for the input batch if needed
     llama_batch_allocr batch_allocr(lctx, inp_batch);
-    llama_batch batch = batch_allocr.batch;
+    const llama_batch & batch = batch_allocr.batch;
     const uint32_t n_tokens = batch.n_tokens;
 
     const auto & model   = lctx.model;
