@@ -134,18 +134,29 @@ static void test_parsing() {
       {"tools", tools}
     };
 
+    const auto fooBarCall = json {
+      {"type", "function"},
+      {"function", {
+        {"name", "foo"},
+        {"arguments", dump({
+          {"bar", 1}
+        })}
+      }}
+    };
+
+    test_parse_tool_call(llama_tool_call_style::Generic, tools,
+      "{\"tool_call\": {\"name\": \"foo\", \"arguments\": {\"bar\": 1}}}",
+      "",
+      json::array({fooBarCall}));
+    test_parse_tool_call(llama_tool_call_style::Generic, tools,
+      "{\"tool_calls\": [{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}]}",
+      "",
+      json::array({fooBarCall}));
+
     test_parse_tool_call(llama_tool_call_style::Hermes2Pro, tools,
       "<tool_call>{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}</tool_call>",
       "",
-      json {{
-        {"type", "function"},
-        {"function", {
-          {"name", "foo"},
-          {"arguments", dump({
-            {"bar", 1}
-          })}
-        }}
-      }});
+      json::array({fooBarCall}));
 
     test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
       ">>>ipython\n{\"code\": \"print('Hello, world!')\"}",
