@@ -93,21 +93,6 @@ let s:default_config = {
 
 let g:llama_config = get(g:, 'llama_config', s:default_config)
 
-let s:nvim_ghost_text = exists('*nvim_buf_get_mark')
-let s:vim_ghost_text = has('textprop')
-
-if s:vim_ghost_text
-    let s:hlgroup_hint = 'llama_hl_hint'
-    let s:hlgroup_info = 'llama_hl_info'
-
-    if empty(prop_type_get(s:hlgroup_hint))
-        call prop_type_add(s:hlgroup_hint, {'highlight': s:hlgroup_hint})
-    endif
-    if empty(prop_type_get(s:hlgroup_info))
-        call prop_type_add(s:hlgroup_info, {'highlight': s:hlgroup_info})
-    endif
-endif
-
 function! s:get_indent(str)
     let l:count = 0
     for i in range(len(a:str))
@@ -155,6 +140,21 @@ function! llama#init()
     let s:t_last_move = reltime() " last time the cursor moved
 
     let s:current_job = v:null
+
+    let s:ghost_text_nvim = exists('*nvim_buf_get_mark')
+    let s:ghost_text_vim = has('textprop')
+
+    if s:ghost_text_vim
+        let s:hlgroup_hint = 'llama_hl_hint'
+        let s:hlgroup_info = 'llama_hl_info'
+
+        if empty(prop_type_get(s:hlgroup_hint))
+            call prop_type_add(s:hlgroup_hint, {'highlight': s:hlgroup_hint})
+        endif
+        if empty(prop_type_get(s:hlgroup_info))
+            call prop_type_add(s:hlgroup_info, {'highlight': s:hlgroup_info})
+        endif
+    endif
 
     augroup llama
         autocmd!
@@ -355,9 +355,9 @@ function! s:ring_update()
         \ ]
 
     " no callbacks because we don't need to process the response
-    if s:nvim_ghost_text
+    if s:ghost_text_nvim
         call jobstart(l:curl_command, {})
-    elseif s:vim_ghost_text
+    elseif s:ghost_text_vim
         call job_start(l:curl_command, {})
     endif
 endfunction
@@ -465,21 +465,21 @@ function! llama#fim(is_auto) abort
         \ ]
 
     if s:current_job != v:null
-        if s:nvim_ghost_text
+        if s:ghost_text_nvim
             call jobstop(s:current_job)
-        elseif s:vim_ghost_text
+        elseif s:ghost_text_vim
             call job_stop(s:current_job)
         endif
     endif
 
     " send the request asynchronously
-    if s:nvim_ghost_text
+    if s:ghost_text_nvim
         let s:current_job = jobstart(l:curl_command, {
             \ 'on_stdout': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
             \ 'on_exit':   function('s:fim_on_exit'),
             \ 'stdout_buffered': v:true
             \ })
-    elseif s:vim_ghost_text
+    elseif s:ghost_text_vim
         let s:current_job = job_start(l:curl_command, {
             \ 'out_cb': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
             \ 'exit_cb':   function('s:fim_on_exit')
@@ -531,10 +531,10 @@ function! llama#fim_cancel()
     " clear the virtual text
     let l:bufnr = bufnr('%')
 
-    if s:nvim_ghost_text
+    if s:ghost_text_nvim
         let l:id_vt_fim = nvim_create_namespace('vt_fim')
         call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
-    elseif s:vim_ghost_text
+    elseif s:ghost_text_vim
         call prop_remove({'type': s:hlgroup_hint, 'all': v:true})
         call prop_remove({'type': s:hlgroup_info, 'all': v:true})
     endif
@@ -553,9 +553,9 @@ endfunction
 
 " callback that processes the FIM result from the server and displays the suggestion
 function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
-    if s:nvim_ghost_text
+    if s:ghost_text_nvim
         let l:raw = join(a:data, "\n")
-    elseif s:vim_ghost_text
+    elseif s:ghost_text_vim
         let l:raw = a:data
     endif
 
@@ -700,7 +700,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
 
-    if s:nvim_ghost_text
+    if s:ghost_text_nvim
         let l:id_vt_fim = nvim_create_namespace('vt_fim')
     endif
 
@@ -731,7 +731,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     endif
 
     " display the suggestion and append the info to the end of the first line
-    if s:nvim_ghost_text
+    if s:ghost_text_nvim
         call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, s:pos_x - 1, {
             \ 'virt_text': [[s:content[0], 'llama_hl_hint'], [l:info, 'llama_hl_info']],
             \ 'virt_text_win_col': virtcol('.') - 1
@@ -741,7 +741,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
             \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hl_hint']]}),
             \ 'virt_text_win_col': virtcol('.')
             \ })
-    elseif s:vim_ghost_text
+    elseif s:ghost_text_vim
         let l:new_suffix = s:content[0]
         if !empty(l:new_suffix)
             call prop_add(s:pos_y, s:pos_x + 1, {
