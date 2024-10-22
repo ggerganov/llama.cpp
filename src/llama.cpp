@@ -21697,6 +21697,15 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "[|assistant|]";
         }
+    } else if (tmpl == "rwkv-world" || tmpl_contains("rwkv-world") || tmpl_contains("'User: ' + message['content'] + '\n\nAssistant:'")) {
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user") {
+                ss << "User: " << message->content << "\n\nAssistant:";
+            } else {
+                ss << message->content << "\n\n";
+            }
+        }
     } else {
         // template not supported
         return -1;
