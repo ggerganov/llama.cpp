@@ -353,7 +353,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     }
                 }
                 auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
-                builder.add_rule("root", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
+                builder.add_rule("", parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
                     handler.grammar_trigger_words.push_back("<function=");
                 }
