@@ -81,7 +81,7 @@ struct llama_batch_allocr {
     std::vector<llama_pos>      pos;
     std::vector<int32_t>        n_seq_id;
     std::vector<llama_seq_id *> seq_id;
-    std::vector<int8_t>         logits;
+    std::vector<int8_t>         outputs;
 
     // optionally fulfill the batch returned by llama_batch_get_one
     llama_batch_allocr(struct llama_batch in_batch, llama_pos p0);

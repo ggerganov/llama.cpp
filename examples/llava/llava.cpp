@@ -441,13 +441,13 @@ struct llava_embd_batch {
     std::vector<int32_t>        n_seq_id;
     std::vector<llama_seq_id>   seq_id_0;
     std::vector<llama_seq_id *> seq_ids;
-    std::vector<int8_t>         logits;
+    std::vector<int8_t>         outputs;
     llama_batch batch;
     llava_embd_batch(float * embd, int32_t n_tokens, llama_pos pos_0, llama_seq_id seq_id) {
         pos     .resize(n_tokens);
         n_seq_id.resize(n_tokens);
         seq_ids .resize(n_tokens + 1);
-        logits  .resize(n_tokens);
+        outputs .resize(n_tokens);
         seq_id_0.resize(1);
         seq_id_0[0] = seq_id;
         seq_ids [n_tokens] = nullptr;
@@ -458,13 +458,13 @@ struct llava_embd_batch {
             /*pos            =*/ pos.data(),
             /*n_seq_id       =*/ n_seq_id.data(),
             /*seq_id         =*/ seq_ids.data(),
-            /*logits         =*/ logits.data(),
+            /*output         =*/ outputs.data(),
         };
         for (int i = 0; i < n_tokens; i++) {
             batch.pos     [i] = pos_0 + i;
             batch.n_seq_id[i] = 1;
             batch.seq_id  [i] = seq_id_0.data();
-            batch.logits  [i] = false;
+            batch.output  [i] = false;
         }
     }
 };

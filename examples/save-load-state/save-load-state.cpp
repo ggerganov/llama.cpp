@@ -52,7 +52,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < tokens.size(); i++) {
         common_batch_add(batch, tokens[i], i, {0}, false);
     }
-    batch.logits[batch.n_tokens - 1] = true; // generate next token
+    batch.output[batch.n_tokens - 1] = true; // generate next token
 
     // evaluate prompt
     llama_decode(ctx, batch);

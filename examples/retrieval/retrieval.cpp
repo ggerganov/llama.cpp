@@ -92,7 +92,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
     }
 
     for (int i = 0; i < batch.n_tokens; i++) {
-        if (!batch.logits[i]) {
+        if (!batch.output[i]) {
             continue;
         }
 
