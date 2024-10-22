@@ -1695,7 +1695,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
     add_opt(common_arg(
         {"--embd-normalize"}, "N",
-        string_format("normalisation for embendings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
+        string_format("normalisation for embeddings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
         [](common_params & params, int value) {
             params.embd_normalize = value;
         }
@@ -1709,7 +1709,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(common_arg(
         {"--embd-separator"}, "STRING",
-        "separator of embendings (default \\n) for example \"<#sep#>\"",
+        "separator of embeddings (default \\n) for example \"<#sep#>\"",
         [](common_params & params, const std::string & value) {
             params.embd_sep = value;
         }
