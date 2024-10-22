@@ -747,7 +747,6 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
     elseif s:vim_ghost_text
         " adapted from:
         " https://github.com/github/copilot.vim/blob/release/autoload/copilot.vim
-        let l:text = s:content
         let l:new_suffix = s:content[0]
         let l:current_suffix = getline('.')[col('.') - 1 :]
         let l:inset = ''
@@ -773,7 +772,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
                         \ 'text': l:new_suffix . l:inset
                         \ })
         endif
-        for line in l:text[1:]
+        for line in s:content[1:]
             call prop_add(line('.'), 0, {
                         \ 'type': s:hint_hlgroup,
                         \ 'text': l:new_suffix . line,
