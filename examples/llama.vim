@@ -484,8 +484,7 @@ function! llama#fim(is_auto) abort
     elseif s:vim_ghost_text
         let s:current_job = job_start(l:curl_command, {
             \ 'out_cb': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
-            \ 'close_cb':   function('s:vim_fim_on_exit'),
-            \ 'out_io': 'buffer'
+            \ 'close_cb':   function('s:vim_fim_on_exit')
             \ })
     endif
 
