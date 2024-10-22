@@ -482,11 +482,11 @@ function! llama#fim(is_auto) abort
             \ 'stdout_buffered': v:true
             \ })
     elseif s:vim_ghost_text
-	    let s:current_job = job_start(l:curl_command, {
-		\ 'out_cb': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
-		\ 'close_cb':   function('s:vim_fim_on_exit'),
-		\ 'out_io': 'buffer'
-		\ })
+        let s:current_job = job_start(l:curl_command, {
+            \ 'out_cb': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
+            \ 'close_cb':   function('s:vim_fim_on_exit'),
+            \ 'out_io': 'buffer'
+            \ })
     endif
 
     " TODO: per-file location
