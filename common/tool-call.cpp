@@ -12,6 +12,27 @@
 
 using json = nlohmann::ordered_json;
 
+std::string llama_tool_call_style_name(llama_tool_call_style style) {
+    switch (style) {
+        case llama_tool_call_style::Generic:
+            return "Generic";
+        case llama_tool_call_style::Llama31:
+            return "Llama-3.1";
+        case llama_tool_call_style::Llama32:
+            return "Llama-3.2";
+        case llama_tool_call_style::FunctionaryV3Llama3:
+            return "FunctionaryV3Llama3";
+        case llama_tool_call_style::FunctionaryV3Llama31:
+            return "FunctionaryV3Llama3.1";
+        case llama_tool_call_style::Hermes2Pro:
+            return "Hermes2Pro";
+        case llama_tool_call_style::CommandRPlus:
+            return "CommandRPlus";
+        default:
+            return "Unknown";
+    }
+}
+
 llama_tool_call_style llama_tool_call_style_detect(const minja::chat_template & chat_template) {
     const auto & src = chat_template.source();
 

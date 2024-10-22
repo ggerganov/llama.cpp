@@ -35,6 +35,8 @@ struct llama_tool_call_handler {
     std::vector<std::string> additional_stop_words;
 };
 
+std::string llama_tool_call_style_name(llama_tool_call_style style);
+
 llama_tool_call_style llama_tool_call_style_detect(const minja::chat_template & chat_template);
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);

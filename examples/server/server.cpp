@@ -3031,6 +3031,7 @@ int main(int argc, char ** argv) {
 
         static auto chat_template = llama_chat_template_from_model(ctx_server.model, params.chat_template.empty() ? nullptr : params.chat_template.c_str());
         static auto tool_call_style = llama_tool_call_style_detect(chat_template);
+        LOG_INF("Tool call style: %s\n", llama_tool_call_style_name(tool_call_style).c_str());
 
         json data;
         try {

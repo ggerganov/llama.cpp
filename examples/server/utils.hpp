@@ -468,9 +468,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
         parsed_tool_calls = parse_tool_calls(tool_call_style, tools, content);
         if (!parsed_tool_calls.tool_calls.empty()) {
             finish_reason = "tool_calls";
-            if (!parsed_tool_calls.content.empty()) {
-                message_content = parsed_tool_calls.content;
-            }
+            message_content = parsed_tool_calls.content;
             tool_calls = json::array();
             for (const auto & tc : parsed_tool_calls.tool_calls) {
                 tool_calls.push_back({
