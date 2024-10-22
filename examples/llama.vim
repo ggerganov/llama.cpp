@@ -347,10 +347,15 @@ function! s:ring_update()
         \ 't_max_predict_ms': 1
         \ })
 
-    let l:curl_command = printf(
-        \ "curl --silent --no-buffer --request POST --url %s --header \"Content-Type: application/json\" --data %s",
-        \ g:llama_config.endpoint, shellescape(l:request)
-        \ )
+    let l:curl_command = [
+        \ "curl",
+        \ "--silent",
+        \ "--no-buffer",
+        \ "--request", "POST",
+        \ "--url", g:llama_config.endpoint,
+        \ "--header", "Content-Type: application/json",
+        \ "--data", l:request
+        \ ]
 
     " no callbacks because we don't need to process the response
     if s:nvim_ghost_text
@@ -461,7 +466,6 @@ function! llama#fim(is_auto) abort
         \ "--header", "Content-Type: application/json",
         \ "--data", l:request
         \ ]
-
 
     if s:current_job != v:null
         if s:nvim_ghost_text
