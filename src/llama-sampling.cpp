@@ -1173,6 +1173,7 @@ static void llama_sampler_xtc_reset(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_xtc_i = {
     /* .name   = */ llama_sampler_xtc_name,
     /* .accept = */ nullptr,
+    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sample_xtc_apply,
     /* .reset  = */ llama_sampler_xtc_reset,
     /* .clone  = */ llama_sampler_xtc_clone,
@@ -2001,6 +2002,7 @@ static void llama_sampler_infill_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_infill_i = {
     /* .name   = */ llama_sampler_infill_name,
     /* .accept = */ nullptr,
+    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_infill_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_infill_clone,
