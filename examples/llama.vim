@@ -112,9 +112,7 @@ function! s:get_indent(str)
     let l:count = 0
     for i in range(len(a:str))
         if a:str[i] == "\t"
-            let l:count += &shiftwidth - 1
-        elseif a:str[i] == " "
-            let l:count += 1
+            let l:count += &tabstop - 1
         else
             break
         endif
