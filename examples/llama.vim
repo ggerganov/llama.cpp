@@ -742,37 +742,17 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
             \ 'virt_text_win_col': virtcol('.')
             \ })
     elseif s:vim_ghost_text
-        " adapted from:
-        " https://github.com/github/copilot.vim/blob/release/autoload/copilot.vim
         let l:new_suffix = s:content[0]
-        let l:current_suffix = getline('.')[col('.') - 1 :]
-        let l:inset = ''
-        while !empty(l:new_suffix)
-            let last_char = matchstr(l:new_suffix, '.$')
-            let l:new_suffix = matchstr(l:new_suffix, '^.\{-\}\ze.$')
-            if last_char ==# matchstr(l:current_suffix, '.$')
-                if !empty(l:inset)
-                    call prop_add(line('.'), col('.') + len(l:current_suffix), {
-                                \ 'type': s:hlgroup,
-                                \ 'text': l:inset
-                                \ })
-                    let l:inset = ''
-                endif
-                let l:current_suffix = matchstr(l:current_suffix, '^.\{-\}\ze.$')
-            else
-                let l:inset = last_char . l:inset
-            endif
-        endwhile
-        if !empty(l:new_suffix . l:inset)
+        if !empty(l:new_suffix)
             call prop_add(line('.'), col('.'), {
                         \ 'type': s:hint_hlgroup,
-                        \ 'text': l:new_suffix . l:inset
+                        \ 'text': l:new_suffix
                         \ })
         endif
         for line in s:content[1:]
             call prop_add(line('.'), 0, {
                         \ 'type': s:hint_hlgroup,
-                        \ 'text': l:new_suffix . line,
+                        \ 'text': line,
                         \ 'text_padding_left': s:get_indent(line),
                         \ 'text_align': 'below'
                         \ })
