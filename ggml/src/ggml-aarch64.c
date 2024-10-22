@@ -1005,21 +1005,21 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[8], 0, vl / 4));
                 const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[16], 0, vl / 4));
                 const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[24], 0, vl / 4));
-                const vint8m4_t lhs_vec_lo = __riscv_vcreate_v_i8m2_i8m4(lhs_0_8, lhs_1_8);
-                const vint8m4_t lhs_vec_hi = __riscv_vcreate_v_i8m2_i8m4(lhs_2_8, lhs_3_8);
 
                 const vint8m4_t rhs_raw_vec = __riscv_vle8_v_i8m4((const int8_t *)b_ptr[l].qs, vl * 4);
                 const vint8m4_t rhs_vec_lo = __riscv_vsra_vx_i8m4(__riscv_vsll_vx_i8m4(rhs_raw_vec, 4, vl * 4), 4, vl * 4);
                 const vint8m4_t rhs_vec_hi = __riscv_vsra_vx_i8m4(rhs_raw_vec, 4, vl * 4);
+                const vint8m2_t rhs_vec_lo_0 = __riscv_vget_v_i8m4_i8m2(rhs_vec_lo, 0);
+                const vint8m2_t rhs_vec_lo_1 = __riscv_vget_v_i8m4_i8m2(rhs_vec_lo, 1);
+                const vint8m2_t rhs_vec_hi_0 = __riscv_vget_v_i8m4_i8m2(rhs_vec_hi, 0);
+                const vint8m2_t rhs_vec_hi_1 = __riscv_vget_v_i8m4_i8m2(rhs_vec_hi, 1);
 
-                const vint16m8_t sumi_lo = __riscv_vwmul_vv_i16m8(rhs_vec_lo, lhs_vec_lo, vl * 4);
-                const vint16m8_t sumi_hi = __riscv_vwmul_vv_i16m8(rhs_vec_hi, lhs_vec_hi, vl * 4);
-                const vint16m8_t sumi2 = __riscv_vadd_vv_i16m8(sumi_lo, sumi_hi, vl * 4);
-                const vint16m4_t sumi2_lo = __riscv_vget_v_i16m8_i16m4(sumi2, 0);
-                const vint16m4_t sumi2_hi = __riscv_vget_v_i16m8_i16m4(sumi2, 1);
-                const vint16m4_t sumi = __riscv_vadd_vv_i16m4(sumi2_lo, sumi2_hi, vl * 2);
+                const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
+                const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
+                const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
+                const vint16m4_t sumi_hi_m = __riscv_vwmacc_vv_i16m4(sumi_hi_0, rhs_vec_hi_1, lhs_3_8, vl * 2);
 
-                const vuint32m4_t sumi_i32 = __riscv_vreinterpret_v_i32m4_u32m4(__riscv_vreinterpret_v_i16m4_i32m4(sumi));
+                const vuint32m4_t sumi_i32 = __riscv_vreinterpret_v_i32m4_u32m4(__riscv_vreinterpret_v_i16m4_i32m4(sumi_hi_m));
                 const vuint16m2_t sumi_h2_0 = __riscv_vnsrl_wx_u16m2(sumi_i32, 0, vl);
                 const vuint16m2_t sumi_h2_1 = __riscv_vnsrl_wx_u16m2(sumi_i32, 16, vl);
                 const vuint16m2_t sumi_h2 = __riscv_vadd_vv_u16m2(sumi_h2_0, sumi_h2_1, vl);
@@ -1047,8 +1047,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 };
                 const vfloat32m1_t b_scales_vec = __riscv_vle32_v_f32m1(b_scales, vl / 4);
                 const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scale, vl / 4);
-                const vfloat32m1_t tmp2 = __riscv_vfmul_vv_f32m1(tmp1, b_scales_vec, vl / 4);
-                sumf = __riscv_vfadd_vv_f32m1(sumf, tmp2, vl / 4);
+                sumf = __riscv_vfmacc_vv_f32m1(sumf, tmp1, b_scales_vec, vl / 4);
             }
             __riscv_vse32_v_f32m1(s + x * ncols_interleaved, sumf, vl / 4);
         }
@@ -3252,6 +3251,10 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                     const vint8m4_t rhs_raw_vec = __riscv_vle8_v_i8m4((const int8_t *)b_ptr[l].qs, vl * 4);
                     const vint8m4_t rhs_vec_lo = __riscv_vsra_vx_i8m4(__riscv_vsll_vx_i8m4(rhs_raw_vec, 4, vl * 4), 4, vl * 4);
                     const vint8m4_t rhs_vec_hi = __riscv_vsra_vx_i8m4(rhs_raw_vec, 4, vl * 4);
+                    const vint8m2_t rhs_vec_lo_0 = __riscv_vget_v_i8m4_i8m2(rhs_vec_lo, 0);
+                    const vint8m2_t rhs_vec_lo_1 = __riscv_vget_v_i8m4_i8m2(rhs_vec_lo, 1);
+                    const vint8m2_t rhs_vec_hi_0 = __riscv_vget_v_i8m4_i8m2(rhs_vec_hi, 0);
+                    const vint8m2_t rhs_vec_hi_1 = __riscv_vget_v_i8m4_i8m2(rhs_vec_hi, 1);
 
                     // vector version needs Zvfhmin extension
                     const float a_scales[4] = {
@@ -3278,17 +3281,33 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[32], 0, vl / 4));
                         const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[64], 0, vl / 4));
                         const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[96], 0, vl / 4));
-                        const vint8m4_t lhs_vec_lo = __riscv_vcreate_v_i8m2_i8m4(lhs_0_8, lhs_1_8);
-                        const vint8m4_t lhs_vec_hi = __riscv_vcreate_v_i8m2_i8m4(lhs_2_8, lhs_3_8);
-                        const vint16m8_t sumi_lo = __riscv_vwmul_vv_i16m8(rhs_vec_lo, lhs_vec_lo, vl * 4);
-                        const vint16m8_t sumi_hi = __riscv_vwmul_vv_i16m8(rhs_vec_hi, lhs_vec_hi, vl * 4);
-                        const vint16m8_t sumi2 = __riscv_vadd_vv_i16m8(sumi_lo, sumi_hi, vl * 4);
-                        const vint16m4_t sumi2_lo = __riscv_vget_v_i16m8_i16m4(sumi2, 0);
-                        const vint16m4_t sumi2_hi = __riscv_vget_v_i16m8_i16m4(sumi2, 1);
-                        const vint16m4_t sumi = __riscv_vadd_vv_i16m4(sumi2_lo, sumi2_hi, vl * 2);
-                        sumi_l0 = sumi;
+                        const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
+                        const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
+                        const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
+                        const vint16m4_t sumi_hi_m = __riscv_vwmacc_vv_i16m4(sumi_hi_0, rhs_vec_hi_1, lhs_3_8, vl * 2);
+
+                        sumi_l0 = sumi_hi_m;
                     }
-                    __asm__ __volatile__("" ::: "memory");
+
+                    {
+                        const vuint32m4_t sumi_i32 = __riscv_vreinterpret_v_i32m4_u32m4(__riscv_vreinterpret_v_i16m4_i32m4(sumi_l0));
+                        const vuint16m2_t sumi_h2_0 = __riscv_vnsrl_wx_u16m2(sumi_i32, 0, vl);
+                        const vuint16m2_t sumi_h2_1 = __riscv_vnsrl_wx_u16m2(sumi_i32, 16, vl);
+                        const vuint16m2_t sumi_h2 = __riscv_vadd_vv_u16m2(sumi_h2_0, sumi_h2_1, vl);
+                        const vuint32m2_t sumi_h2_i32 = __riscv_vreinterpret_v_u16m2_u32m2(sumi_h2);
+                        const vuint16m1_t sumi_h4_0 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 0, vl / 2);
+                        const vuint16m1_t sumi_h4_1 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 16, vl / 2);
+                        const vuint16m1_t sumi_h4 = __riscv_vadd_vv_u16m1(sumi_h4_0, sumi_h4_1, vl / 2);
+                        const vuint32m1_t sumi_h4_i32 = __riscv_vreinterpret_v_u16m1_u32m1(sumi_h4);
+                        const vint16mf2_t sumi_h8_0 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 0, vl / 4));
+                        const vint16mf2_t sumi_h8_1 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 16, vl / 4));
+                        const vint32m1_t sumi_h8 = __riscv_vwadd_vv_i32m1(sumi_h8_0, sumi_h8_1, vl / 4);
+                        const vfloat32m1_t facc = __riscv_vfcvt_f_x_v_f32m1(sumi_h8, vl / 4);
+
+                        const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[0], vl / 4);
+                        sumf0 = __riscv_vfmacc_vv_f32m1(sumf0, tmp1, b_scales_vec, vl / 4);
+                    }
+                    // __asm__ __volatile__("" ::: "memory");
 
                     vint16m4_t sumi_l1;
                     {
@@ -3296,44 +3315,33 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[40], 0, vl / 4));
                         const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[72], 0, vl / 4));
                         const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[104], 0, vl / 4));
-                        const vint8m4_t lhs_vec_lo = __riscv_vcreate_v_i8m2_i8m4(lhs_0_8, lhs_1_8);
-                        const vint8m4_t lhs_vec_hi = __riscv_vcreate_v_i8m2_i8m4(lhs_2_8, lhs_3_8);
-                        const vint16m8_t sumi_lo = __riscv_vwmul_vv_i16m8(rhs_vec_lo, lhs_vec_lo, vl * 4);
-                        const vint16m8_t sumi_hi = __riscv_vwmul_vv_i16m8(rhs_vec_hi, lhs_vec_hi, vl * 4);
-                        const vint16m8_t sumi2 = __riscv_vadd_vv_i16m8(sumi_lo, sumi_hi, vl * 4);
-                        const vint16m4_t sumi2_lo = __riscv_vget_v_i16m8_i16m4(sumi2, 0);
-                        const vint16m4_t sumi2_hi = __riscv_vget_v_i16m8_i16m4(sumi2, 1);
-                        const vint16m4_t sumi = __riscv_vadd_vv_i16m4(sumi2_lo, sumi2_hi, vl * 2);
-                        sumi_l1 = sumi;
+                        const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
+                        const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
+                        const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
+                        const vint16m4_t sumi_hi_m = __riscv_vwmacc_vv_i16m4(sumi_hi_0, rhs_vec_hi_1, lhs_3_8, vl * 2);
+
+                        sumi_l1 = sumi_hi_m;
                     }
-                    __asm__ __volatile__("" ::: "memory");
 
                     {
-                        const vint16m8_t sumi = __riscv_vcreate_v_i16m4_i16m8(sumi_l0, sumi_l1);
-                        const vuint32m8_t sumi_i32 = __riscv_vreinterpret_v_i32m8_u32m8(__riscv_vreinterpret_v_i16m8_i32m8(sumi));
-                        const vuint16m4_t sumi_h2_0 = __riscv_vnsrl_wx_u16m4(sumi_i32, 0, vl * 2);
-                        const vuint16m4_t sumi_h2_1 = __riscv_vnsrl_wx_u16m4(sumi_i32, 16, vl * 2);
-                        const vuint16m4_t sumi_h2 = __riscv_vadd_vv_u16m4(sumi_h2_0, sumi_h2_1, vl * 2);
-                        const vuint32m4_t sumi_h2_i32 = __riscv_vreinterpret_v_u16m4_u32m4(sumi_h2);
-                        const vuint16m2_t sumi_h4_0 = __riscv_vnsrl_wx_u16m2(sumi_h2_i32, 0, vl);
-                        const vuint16m2_t sumi_h4_1 = __riscv_vnsrl_wx_u16m2(sumi_h2_i32, 16, vl);
-                        const vuint16m2_t sumi_h4 = __riscv_vadd_vv_u16m2(sumi_h4_0, sumi_h4_1, vl);
-                        const vuint32m2_t sumi_h4_i32 = __riscv_vreinterpret_v_u16m2_u32m2(sumi_h4);
-                        const vint16m1_t sumi_h8_0 = __riscv_vreinterpret_v_u16m1_i16m1(__riscv_vnsrl_wx_u16m1(sumi_h4_i32, 0, vl / 2));
-                        const vint16m1_t sumi_h8_1 = __riscv_vreinterpret_v_u16m1_i16m1(__riscv_vnsrl_wx_u16m1(sumi_h4_i32, 16, vl / 2));
-                        const vint32m2_t sumi_h8 = __riscv_vwadd_vv_i32m2(sumi_h8_0, sumi_h8_1, vl / 2);
-                        const vfloat32m2_t facc = __riscv_vfcvt_f_x_v_f32m2(sumi_h8, vl / 2);
+                        const vuint32m4_t sumi_i32 = __riscv_vreinterpret_v_i32m4_u32m4(__riscv_vreinterpret_v_i16m4_i32m4(sumi_l1));
+                        const vuint16m2_t sumi_h2_0 = __riscv_vnsrl_wx_u16m2(sumi_i32, 0, vl);
+                        const vuint16m2_t sumi_h2_1 = __riscv_vnsrl_wx_u16m2(sumi_i32, 16, vl);
+                        const vuint16m2_t sumi_h2 = __riscv_vadd_vv_u16m2(sumi_h2_0, sumi_h2_1, vl);
+                        const vuint32m2_t sumi_h2_i32 = __riscv_vreinterpret_v_u16m2_u32m2(sumi_h2);
+                        const vuint16m1_t sumi_h4_0 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 0, vl / 2);
+                        const vuint16m1_t sumi_h4_1 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 16, vl / 2);
+                        const vuint16m1_t sumi_h4 = __riscv_vadd_vv_u16m1(sumi_h4_0, sumi_h4_1, vl / 2);
+                        const vuint32m1_t sumi_h4_i32 = __riscv_vreinterpret_v_u16m1_u32m1(sumi_h4);
+                        const vint16mf2_t sumi_h8_0 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 0, vl / 4));
+                        const vint16mf2_t sumi_h8_1 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 16, vl / 4));
+                        const vint32m1_t sumi_h8 = __riscv_vwadd_vv_i32m1(sumi_h8_0, sumi_h8_1, vl / 4);
+                        const vfloat32m1_t facc = __riscv_vfcvt_f_x_v_f32m1(sumi_h8, vl / 4);
 
-                        const vfloat32m1_t facc0 = __riscv_vget_v_f32m2_f32m1(facc, 0);
-                        const vfloat32m1_t tmp01 = __riscv_vfmul_vf_f32m1(facc0, a_scales[0], vl / 4);
-                        const vfloat32m1_t tmp02 = __riscv_vfmul_vv_f32m1(tmp01, b_scales_vec, vl / 4);
-                        sumf0 = __riscv_vfadd_vv_f32m1(sumf0, tmp02, vl / 4);
-                        const vfloat32m1_t facc1 = __riscv_vget_v_f32m2_f32m1(facc, 1);
-                        const vfloat32m1_t tmp11 = __riscv_vfmul_vf_f32m1(facc1, a_scales[1], vl / 4);
-                        const vfloat32m1_t tmp12 = __riscv_vfmul_vv_f32m1(tmp11, b_scales_vec, vl / 4);
-                        sumf1 = __riscv_vfadd_vv_f32m1(sumf1, tmp12, vl / 4);
+                        const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[0], vl / 4);
+                        sumf1 = __riscv_vfmacc_vv_f32m1(sumf1, tmp1, b_scales_vec, vl / 4);
                     }
-                    __asm__ __volatile__("" ::: "memory");
+                    // __asm__ __volatile__("" ::: "memory");
 
                     vint16m4_t sumi_l2;
                     {
@@ -3341,17 +3349,33 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[48], 0, vl / 4));
                         const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[80], 0, vl / 4));
                         const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[112], 0, vl / 4));
-                        const vint8m4_t lhs_vec_lo = __riscv_vcreate_v_i8m2_i8m4(lhs_0_8, lhs_1_8);
-                        const vint8m4_t lhs_vec_hi = __riscv_vcreate_v_i8m2_i8m4(lhs_2_8, lhs_3_8);
-                        const vint16m8_t sumi_lo = __riscv_vwmul_vv_i16m8(rhs_vec_lo, lhs_vec_lo, vl * 4);
-                        const vint16m8_t sumi_hi = __riscv_vwmul_vv_i16m8(rhs_vec_hi, lhs_vec_hi, vl * 4);
-                        const vint16m8_t sumi2 = __riscv_vadd_vv_i16m8(sumi_lo, sumi_hi, vl * 4);
-                        const vint16m4_t sumi2_lo = __riscv_vget_v_i16m8_i16m4(sumi2, 0);
-                        const vint16m4_t sumi2_hi = __riscv_vget_v_i16m8_i16m4(sumi2, 1);
-                        const vint16m4_t sumi = __riscv_vadd_vv_i16m4(sumi2_lo, sumi2_hi, vl * 2);
-                        sumi_l2 = sumi;
+                        const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
+                        const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
+                        const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
+                        const vint16m4_t sumi_hi_m = __riscv_vwmacc_vv_i16m4(sumi_hi_0, rhs_vec_hi_1, lhs_3_8, vl * 2);
+                        
+                        sumi_l2 = sumi_hi_m;
                     }
-                    __asm__ __volatile__("" ::: "memory");
+                    
+                    {
+                        const vuint32m4_t sumi_i32 = __riscv_vreinterpret_v_i32m4_u32m4(__riscv_vreinterpret_v_i16m4_i32m4(sumi_l2));
+                        const vuint16m2_t sumi_h2_0 = __riscv_vnsrl_wx_u16m2(sumi_i32, 0, vl);
+                        const vuint16m2_t sumi_h2_1 = __riscv_vnsrl_wx_u16m2(sumi_i32, 16, vl);
+                        const vuint16m2_t sumi_h2 = __riscv_vadd_vv_u16m2(sumi_h2_0, sumi_h2_1, vl);
+                        const vuint32m2_t sumi_h2_i32 = __riscv_vreinterpret_v_u16m2_u32m2(sumi_h2);
+                        const vuint16m1_t sumi_h4_0 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 0, vl / 2);
+                        const vuint16m1_t sumi_h4_1 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 16, vl / 2);
+                        const vuint16m1_t sumi_h4 = __riscv_vadd_vv_u16m1(sumi_h4_0, sumi_h4_1, vl / 2);
+                        const vuint32m1_t sumi_h4_i32 = __riscv_vreinterpret_v_u16m1_u32m1(sumi_h4);
+                        const vint16mf2_t sumi_h8_0 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 0, vl / 4));
+                        const vint16mf2_t sumi_h8_1 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 16, vl / 4));
+                        const vint32m1_t sumi_h8 = __riscv_vwadd_vv_i32m1(sumi_h8_0, sumi_h8_1, vl / 4);
+                        const vfloat32m1_t facc = __riscv_vfcvt_f_x_v_f32m1(sumi_h8, vl / 4);
+
+                        const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[2], vl / 4);
+                        sumf2 = __riscv_vfmacc_vv_f32m1(sumf2, tmp1, b_scales_vec, vl / 4);
+                    }
+                    // __asm__ __volatile__("" ::: "memory");
 
                     vint16m4_t sumi_l3;
                     {
@@ -3359,42 +3383,31 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[56], 0, vl / 4));
                         const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[88], 0, vl / 4));
                         const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[120], 0, vl / 4));
-                        const vint8m4_t lhs_vec_lo = __riscv_vcreate_v_i8m2_i8m4(lhs_0_8, lhs_1_8);
-                        const vint8m4_t lhs_vec_hi = __riscv_vcreate_v_i8m2_i8m4(lhs_2_8, lhs_3_8);
-                        const vint16m8_t sumi_lo = __riscv_vwmul_vv_i16m8(rhs_vec_lo, lhs_vec_lo, vl * 4);
-                        const vint16m8_t sumi_hi = __riscv_vwmul_vv_i16m8(rhs_vec_hi, lhs_vec_hi, vl * 4);
-                        const vint16m8_t sumi2 = __riscv_vadd_vv_i16m8(sumi_lo, sumi_hi, vl * 4);
-                        const vint16m4_t sumi2_lo = __riscv_vget_v_i16m8_i16m4(sumi2, 0);
-                        const vint16m4_t sumi2_hi = __riscv_vget_v_i16m8_i16m4(sumi2, 1);
-                        const vint16m4_t sumi = __riscv_vadd_vv_i16m4(sumi2_lo, sumi2_hi, vl * 2);
-                        sumi_l3 = sumi;
+                        const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
+                        const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
+                        const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
+                        const vint16m4_t sumi_hi_m = __riscv_vwmacc_vv_i16m4(sumi_hi_0, rhs_vec_hi_1, lhs_3_8, vl * 2);
+                        
+                        sumi_l3 = sumi_hi_m;
                     }
-                    __asm__ __volatile__("" ::: "memory");
 
                     {
-                        const vint16m8_t sumi = __riscv_vcreate_v_i16m4_i16m8(sumi_l2, sumi_l3);
-                        const vuint32m8_t sumi_i32 = __riscv_vreinterpret_v_i32m8_u32m8(__riscv_vreinterpret_v_i16m8_i32m8(sumi));
-                        const vuint16m4_t sumi_h2_0 = __riscv_vnsrl_wx_u16m4(sumi_i32, 0, vl * 2);
-                        const vuint16m4_t sumi_h2_1 = __riscv_vnsrl_wx_u16m4(sumi_i32, 16, vl * 2);
-                        const vuint16m4_t sumi_h2 = __riscv_vadd_vv_u16m4(sumi_h2_0, sumi_h2_1, vl * 2);
-                        const vuint32m4_t sumi_h2_i32 = __riscv_vreinterpret_v_u16m4_u32m4(sumi_h2);
-                        const vuint16m2_t sumi_h4_0 = __riscv_vnsrl_wx_u16m2(sumi_h2_i32, 0, vl);
-                        const vuint16m2_t sumi_h4_1 = __riscv_vnsrl_wx_u16m2(sumi_h2_i32, 16, vl);
-                        const vuint16m2_t sumi_h4 = __riscv_vadd_vv_u16m2(sumi_h4_0, sumi_h4_1, vl);
-                        const vuint32m2_t sumi_h4_i32 = __riscv_vreinterpret_v_u16m2_u32m2(sumi_h4);
-                        const vint16m1_t sumi_h8_0 = __riscv_vreinterpret_v_u16m1_i16m1(__riscv_vnsrl_wx_u16m1(sumi_h4_i32, 0, vl / 2));
-                        const vint16m1_t sumi_h8_1 = __riscv_vreinterpret_v_u16m1_i16m1(__riscv_vnsrl_wx_u16m1(sumi_h4_i32, 16, vl / 2));
-                        const vint32m2_t sumi_h8 = __riscv_vwadd_vv_i32m2(sumi_h8_0, sumi_h8_1, vl / 2);
-                        const vfloat32m2_t facc = __riscv_vfcvt_f_x_v_f32m2(sumi_h8, vl / 2);
+                        const vuint32m4_t sumi_i32 = __riscv_vreinterpret_v_i32m4_u32m4(__riscv_vreinterpret_v_i16m4_i32m4(sumi_l3));
+                        const vuint16m2_t sumi_h2_0 = __riscv_vnsrl_wx_u16m2(sumi_i32, 0, vl);
+                        const vuint16m2_t sumi_h2_1 = __riscv_vnsrl_wx_u16m2(sumi_i32, 16, vl);
+                        const vuint16m2_t sumi_h2 = __riscv_vadd_vv_u16m2(sumi_h2_0, sumi_h2_1, vl);
+                        const vuint32m2_t sumi_h2_i32 = __riscv_vreinterpret_v_u16m2_u32m2(sumi_h2);
+                        const vuint16m1_t sumi_h4_0 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 0, vl / 2);
+                        const vuint16m1_t sumi_h4_1 = __riscv_vnsrl_wx_u16m1(sumi_h2_i32, 16, vl / 2);
+                        const vuint16m1_t sumi_h4 = __riscv_vadd_vv_u16m1(sumi_h4_0, sumi_h4_1, vl / 2);
+                        const vuint32m1_t sumi_h4_i32 = __riscv_vreinterpret_v_u16m1_u32m1(sumi_h4);
+                        const vint16mf2_t sumi_h8_0 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 0, vl / 4));
+                        const vint16mf2_t sumi_h8_1 = __riscv_vreinterpret_v_u16mf2_i16mf2(__riscv_vnsrl_wx_u16mf2(sumi_h4_i32, 16, vl / 4));
+                        const vint32m1_t sumi_h8 = __riscv_vwadd_vv_i32m1(sumi_h8_0, sumi_h8_1, vl / 4);
+                        const vfloat32m1_t facc = __riscv_vfcvt_f_x_v_f32m1(sumi_h8, vl / 4);
 
-                        const vfloat32m1_t facc0 = __riscv_vget_v_f32m2_f32m1(facc, 0);
-                        const vfloat32m1_t tmp01 = __riscv_vfmul_vf_f32m1(facc0, a_scales[2], vl / 4);
-                        const vfloat32m1_t tmp02 = __riscv_vfmul_vv_f32m1(tmp01, b_scales_vec, vl / 4);
-                        sumf2 = __riscv_vfadd_vv_f32m1(sumf2, tmp02, vl / 4);
-                        const vfloat32m1_t facc1 = __riscv_vget_v_f32m2_f32m1(facc, 1);
-                        const vfloat32m1_t tmp11 = __riscv_vfmul_vf_f32m1(facc1, a_scales[3], vl / 4);
-                        const vfloat32m1_t tmp12 = __riscv_vfmul_vv_f32m1(tmp11, b_scales_vec, vl / 4);
-                        sumf3 = __riscv_vfadd_vv_f32m1(sumf3, tmp12, vl / 4);
+                        const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[3], vl / 4);
+                        sumf3 = __riscv_vfmacc_vv_f32m1(sumf3, tmp1, b_scales_vec, vl / 4);
                     }
                 }
                 __riscv_vse32_v_f32m1(&s[(y * 4 + 0) * bs + x * ncols_interleaved], sumf0, vl / 4);
