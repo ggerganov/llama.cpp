@@ -552,7 +552,7 @@ function! s:on_move()
 endfunction
 
 " callback that processes the FIM result from the server and displays the suggestion
-function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
+function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     if s:nvim_ghost_text
         let l:raw = join(a:data, "\n")
     elseif s:vim_ghost_text
