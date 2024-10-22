@@ -21698,6 +21698,7 @@ static int32_t llama_chat_apply_template_internal(
             ss << "[|assistant|]";
         }
     } else if (tmpl == "rwkv-world" || tmpl_contains("rwkv-world")) {
+        // this template requires the model to have "\n\n" as EOT token
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "user") {
