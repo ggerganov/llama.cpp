@@ -9,6 +9,7 @@
 
 enum llama_tool_call_style {
     UnknownToolCallStyle,
+    Generic,
     Llama31,
     Llama32,
     FunctionaryV3Llama3,
@@ -44,4 +45,5 @@ llama_tool_call_handler llama_tool_call_handler_init(
     bool allow_content,
     bool parallel_tool_calls,
     const nlohmann::ordered_json & messages,
-    const nlohmann::ordered_json & tools);
+    const nlohmann::ordered_json & tools,
+    const nlohmann::ordered_json & json_schema = {});

@@ -323,7 +323,7 @@ static json oaicompat_completion_params_parse(
     llama_params["chat_template"] = tmpl.source();
 
     if (use_jinja) {
-        if (has_tools && !tmpl.supports_tools()) {
+        if (has_tools && tool_call_style == llama_tool_call_style::UnknownToolCallStyle) {
             throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");
         }
     } else if (has_tools) {
@@ -372,7 +372,7 @@ static json oaicompat_completion_params_parse(
             llama_params["parse_tool_calls"] = true;
             llama_params["parallel_tool_calls"] = parallel_tool_calls;
 
-            auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools);
+            auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools, llama_params["json_schema"]);
             llama_params["prompt"] = handler.prompt;
 
             for (const auto & stop : handler.additional_stop_words) {
@@ -451,21 +451,25 @@ static json format_final_response_oaicompat(const json & request, const json & r
     auto tools = json_value(request, "tools", json::array());
     json tool_calls;
     json message_content;
-    if (json_value(request, "parse_tool_calls", false)
-            && !(parsed_tool_calls = parse_tool_calls(tool_call_style, tools, content)).tool_calls.empty()) {
-        finish_reason = "tool_calls";
-        if (!parsed_tool_calls.content.empty()) {
+    if (json_value(request, "parse_tool_calls", false)) {
+        parsed_tool_calls = parse_tool_calls(tool_call_style, tools, content);
+        if (!parsed_tool_calls.tool_calls.empty()) {
+            finish_reason = "tool_calls";
+            if (!parsed_tool_calls.content.empty()) {
+                message_content = parsed_tool_calls.content;
+            }
+            tool_calls = json::array();
+            for (const auto & tc : parsed_tool_calls.tool_calls) {
+                tool_calls.push_back({
+                    {"type", "function"},
+                    {"function", {
+                        {"name", tc.name},
+                        {"arguments", tc.arguments},
+                    }}
+                });
+            }
+        } else {
             message_content = parsed_tool_calls.content;
-        }
-        tool_calls = json::array();
-        for (const auto & tc : parsed_tool_calls.tool_calls) {
-            tool_calls.push_back({
-                {"type", "function"},
-                {"function", {
-                    {"name", tc.name},
-                    {"arguments", tc.arguments},
-                }}
-            });
         }
     } else {
         message_content = content;
