@@ -39,6 +39,8 @@
 
 #include "ggml-common.h"
 
+#define GGML_CANN_NAME "CANN"
+
 /**
  * @brief Handles CANN errors by printing an error message and aborting.
  *
@@ -851,13 +853,6 @@ static void ggml_backend_cann_buffer_set_tensor(
         void *transform_buffer = malloc(size);
         ggml_backend_cann_transform(tensor, data, transform_buffer);
 
-#ifndef NDEBUG
-        void *check_buffer = malloc(size);
-        ggml_backend_cann_transform_back(tensor, transform_buffer,
-                                         check_buffer);
-        GGML_ASSERT(memcmp(data, check_buffer, size) == 0);
-        free(check_buffer);
-#endif
         ACL_CHECK(aclrtMemcpy((char *)tensor->data + offset, size,
                               transform_buffer, size,
                               ACL_MEMCPY_HOST_TO_DEVICE));
@@ -969,7 +964,7 @@ static void ggml_backend_cann_buffer_clear(
  * This structure defines function pointers to operations that can be performed
  * on a CANN buffer within the backend.
  */
-static ggml_backend_buffer_i ggml_backend_cann_buffer_interface = {
+static const ggml_backend_buffer_i ggml_backend_cann_buffer_interface = {
     /* .get_name        = */ ggml_backend_cann_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cann_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cann_buffer_get_base,
@@ -1105,19 +1100,25 @@ static size_t ggml_backend_cann_buffer_type_get_alloc_size(
     GGML_UNUSED(buft);
 }
 
+static bool ggml_backend_cann_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+    return false;
+
+    GGML_UNUSED(buft);
+}
+
 /**
  * @brief Interface for managing CANN buffer types in the GGML backend.
  *
  * Provides function pointers for allocating, querying properties, and managing
  * memory for CANN buffer types in the GGML backend.
  */
-static ggml_backend_buffer_type_i ggml_backend_cann_buffer_type_interface = {
+static const ggml_backend_buffer_type_i ggml_backend_cann_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_cann_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_cann_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cann_buffer_type_get_alignment,
     /* .get_max_size     = */ NULL,  // defaults to SIZE_MAX
     /* .get_alloc_size   = */ ggml_backend_cann_buffer_type_get_alloc_size,
-    /* .is_host          = */ NULL,
+    /* .is_host          = */ ggml_backend_cann_buffer_type_is_host,
 };
 
 /**
@@ -1148,7 +1149,7 @@ ggml_backend_cann_buffer_type(int32_t device) {
         for (int32_t i = 0; i < GGML_CANN_MAX_DEVICES; i++) {
             ggml_backend_cann_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_cann_buffer_type_interface,
-                /* .device    = */ nullptr,
+                /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), device),
                 /* .context  = */
                  new ggml_backend_cann_buffer_type_context{
                     i, "CANN" + std::to_string(i)},
@@ -1264,7 +1265,7 @@ ggml_backend_buffer_type_t ggml_backend_cann_host_buffer_type() {
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
         },
-        /* .device   = */ nullptr,
+        /* .device   = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), 0),
         /* .context  = */ nullptr,
     };
 
@@ -1511,13 +1512,6 @@ static void ggml_backend_cann_set_tensor_async(ggml_backend_t backend,
         void *transform_buffer = malloc(size);
         ggml_backend_cann_transform(tensor, data, transform_buffer);
 
-#ifndef NDEBUG
-        void *check_buffer = malloc(size);
-        ggml_backend_cann_transform_back(tensor, transform_buffer,
-                                         check_buffer);
-        GGML_ASSERT(memcmp(data, check_buffer, size));
-        free(check_buffer);
-#endif
         ACL_CHECK(aclrtMemcpyAsync(
             (char *)tensor->data + offset, size, transform_buffer, size,
             ACL_MEMCPY_HOST_TO_DEVICE, cann_ctx->stream()));
@@ -1692,7 +1686,7 @@ static enum ggml_status ggml_backend_cann_graph_compute(
  * @return bool Returns true if the operation is supported by the backend,
  *              otherwise false.
  */
-static bool ggml_backend_cann_supports_op(ggml_backend_t backend,
+static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
                                                     const ggml_tensor* op) {
     switch (op->op) {
         case GGML_OP_UNARY:
@@ -1783,7 +1777,7 @@ static bool ggml_backend_cann_supports_op(ggml_backend_t backend,
             return false;
     }
 
-    GGML_UNUSED(backend);
+    GGML_UNUSED(dev);
 }
 
 /**
@@ -1802,31 +1796,6 @@ static bool ggml_backend_buft_is_cann(ggml_backend_buffer_type_t buft) {
 }
 
 /**
- * @brief Checks if the CANN backend supports a specific backend buffer type.
- *
- * This function determines whether the CANN backend supports the given backend
- * buffer type by comparing the device context of the backend and buffer type.
- * It returns true if the devices are same between the backend context and
- * buffer type context.
- *
- * @param backend Pointer to the CANN backend.
- * @param buft Pointer to the backend buffer type to check.
- * @return bool Returns true if the CANN backend supports the buffer type,
- *              otherwise false.
- */
-static bool ggml_backend_cann_supports_buft(
-    ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
-    if (ggml_backend_buft_is_cann(buft)) {
-        ggml_backend_cann_context * cann_ctx =
-                        (ggml_backend_cann_context *)backend->context;
-        ggml_backend_cann_buffer_type_context * buft_ctx =
-                        (ggml_backend_cann_buffer_type_context *)buft->context;
-        return buft_ctx->device == cann_ctx->device;
-    }
-    return false;
-}
-
-/**
  * @brief Determines if a tensor operation should be offloaded to the CANN
  * backend.
  *
@@ -1840,52 +1809,12 @@ static bool ggml_backend_cann_supports_buft(
  * @return bool Returns true if the operation should be offloaded, otherwise
  * false.
  */
-static bool ggml_backend_cann_offload_op(ggml_backend_t backend,
+static bool ggml_backend_cann_offload_op(ggml_backend_dev_t dev,
                                                    const ggml_tensor* op) {
     const int min_batch_size = 32;
-    GGML_UNUSED(backend);
+    GGML_UNUSED(dev);
 
     return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS;
-}
-
-/**
- * @brief Creates a new event for the CANN backend.
- *
- * This function initializes a new event for the CANN backend by setting the
- * device and creating an ACL runtime event. The created event is then wrapped
- * in a ggml_backend_event structure and returned.
- *
- * @param backend Pointer to the CANN backend.
- * @return ggml_backend_event_t Returns a pointer to the new event structure.
- */
-static ggml_backend_event_t ggml_backend_cann_event_new(
-    ggml_backend_t backend) {
-    ggml_backend_cann_context* cann_ctx =
-        (ggml_backend_cann_context*)backend->context;
-
-    ggml_cann_set_device(cann_ctx->device);
-
-    aclrtEvent event;
-    ACL_CHECK(aclrtCreateEvent(&event));
-
-    return new ggml_backend_event{
-        /* .device = */ nullptr,
-        /* .context = */ event,
-    };
-}
-
-/**
- * @brief Frees a CANN backend event.
- *
- * This function destroys the ACL runtime event associated with the given CANN
- * backend event and then deletes the event structure itself.
- *
- * @param event Pointer to the event structure to be freed.
- */
-static void ggml_backend_cann_event_free(ggml_backend_event_t event) {
-    ACL_CHECK(aclrtDestroyEvent((aclrtEvent)event->context));
-
-    delete event;
 }
 
 /**
@@ -1925,24 +1854,13 @@ static void ggml_backend_cann_event_wait(ggml_backend_t backend,
 }
 
 /**
- * @brief Synchronizes the given event on the CANN backend.
- *
- * This function waits for the specified event to complete on the ACL runtime.
- *
- * @param event Pointer to the event structure to be synchronized.
- */
-static void ggml_backend_cann_event_synchronize(ggml_backend_event_t event) {
-    ACL_CHECK(aclrtSynchronizeEvent((aclrtEvent)event->context));
-}
-
-/**
  * @brief Structure defining the interface for the CANN backend.
  *
  * This structure contains function pointers for various operations
  * supported by the CANN backend, including name retrieval, memory
  * management, tensor operations, synchronization, and event handling.
  */
-static ggml_backend_i ggml_backend_cann_interface = {
+static const ggml_backend_i ggml_backend_cann_interface = {
     /* .get_name                = */ ggml_backend_cann_name,
     /* .free                    = */ ggml_backend_cann_free,
     /* .get_default_buffer_type = */ ggml_backend_cann_get_default_buffer_type,
@@ -1955,9 +1873,9 @@ static ggml_backend_i ggml_backend_cann_interface = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_cann_graph_compute,
-    /* .supports_op             = */ ggml_backend_cann_supports_op,
-    /* .supports_buft           = */ ggml_backend_cann_supports_buft,
-    /* .offload_op              = */ ggml_backend_cann_offload_op,
+    /* .supports_op             = */ NULL, // moved to device
+    /* .supports_buft           = */ NULL, // moved to device
+    /* .offload_op              = */ NULL, // moved to device
     /* .event_record            = */ ggml_backend_cann_event_record,
     /* .event_wait              = */ ggml_backend_cann_event_wait,
 };
@@ -1976,6 +1894,234 @@ static ggml_guid_t ggml_backend_cann_guid() {
     return &guid;
 }
 
+// backend device
+struct ggml_backend_cann_device_context {
+    int device;
+    std::string name;
+    std::string description;
+};
+
+static const char * ggml_backend_cann_device_get_name(ggml_backend_dev_t dev) {
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
+    return ctx->name.c_str();
+}
+
+static const char* ggml_backend_cann_device_get_description(ggml_backend_dev_t dev) {
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
+    return ctx->description.c_str();
+}
+
+static void ggml_backend_cann_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
+    ggml_backend_cann_get_device_memory(ctx->device, free, total);
+}
+
+static enum ggml_backend_dev_type ggml_backend_cann_device_get_type(ggml_backend_dev_t dev) {
+    GGML_UNUSED(dev);
+    return GGML_BACKEND_DEVICE_TYPE_GPU_FULL;
+}
+
+static void ggml_backend_cann_device_get_props(ggml_backend_dev_t dev, ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_cann_device_get_name(dev);
+    props->description = ggml_backend_cann_device_get_description(dev);
+    props->type        = ggml_backend_cann_device_get_type(dev);
+    ggml_backend_cann_device_get_memory(dev, &props->memory_free, &props->memory_total);
+
+    bool host_buffer = getenv("GGML_CANN_NO_PINNED") == nullptr;
+
+    props->caps = {
+        /* .async                 = */ false,
+        /* .host_buffer           = */ host_buffer,
+        /* .buffer_from_host_ptr  = */ false,
+        /* .events                = */ true,
+    };
+}
+
+static ggml_backend_t ggml_backend_cann_device_init(ggml_backend_dev_t dev, const char * params) {
+    GGML_UNUSED(params);
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
+    return ggml_backend_cann_init(ctx->device);
+}
+
+/**
+ * @brief Checks if the CANN backend supports a specific backend buffer type.
+ *
+ * This function determines whether the CANN backend supports the given backend
+ * buffer type by comparing the device context of the backend and buffer type.
+ * It returns true if the devices are same between the backend context and
+ * buffer type context.
+ *
+ * @param backend Pointer to the CANN backend.
+ * @param buft Pointer to the backend buffer type to check.
+ * @return bool Returns true if the CANN backend supports the buffer type,
+ *              otherwise false.
+ */
+static bool ggml_backend_cann_supports_buft(
+    ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
+    if (ggml_backend_buft_is_cann(buft)) {
+        ggml_backend_cann_device_context * dev_ctx = (ggml_backend_cann_device_context *)dev->context;
+        ggml_backend_cann_buffer_type_context * buft_ctx =
+                        (ggml_backend_cann_buffer_type_context *)buft->context;
+        return buft_ctx->device == dev_ctx->device;
+    }
+    return false;
+}
+
+static ggml_backend_buffer_type_t ggml_backend_cann_device_get_buffer_type(ggml_backend_dev_t dev) {
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
+    return ggml_backend_cann_buffer_type(ctx->device);
+}
+
+static ggml_backend_buffer_type_t ggml_backend_cann_device_get_host_buffer_type(ggml_backend_dev_t dev) {
+    GGML_UNUSED(dev);
+    return ggml_backend_cann_host_buffer_type();
+}
+
+/**
+ * @brief Creates a new event for the CANN backend device.
+ *
+ * This function initializes a new event for the CANN backend by setting the
+ * device and creating an ACL runtime event. The created event is then wrapped
+ * in a ggml_backend_event structure and returned.
+ *
+ * @param backend Pointer to the CANN backend.
+ * @return ggml_backend_event_t Returns a pointer to the new event structure.
+ */
+static ggml_backend_event_t ggml_backend_cann_device_event_new(
+    ggml_backend_dev_t dev) {
+    ggml_backend_cann_device_context * dev_ctx = (ggml_backend_cann_device_context *)dev->context;
+
+    ggml_cann_set_device(dev_ctx->device);
+
+    aclrtEvent event;
+    ACL_CHECK(aclrtCreateEvent(&event));
+
+    return new ggml_backend_event{
+        /* .device = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), dev_ctx->device),
+        /* .context = */ event,
+    };
+}
+
+/**
+ * @brief Frees a CANN backend event.
+ *
+ * This function destroys the ACL runtime event associated with the given CANN
+ * backend event and then deletes the event structure itself.
+ *
+ * @param event Pointer to the event structure to be freed.
+ */
+static void ggml_backend_cann_device_event_free(ggml_backend_dev_t dev, ggml_backend_event_t event) {
+    ACL_CHECK(aclrtDestroyEvent((aclrtEvent)event->context));
+
+    delete event;
+    GGML_UNUSED(dev);
+}
+
+/**
+ * @brief Synchronizes the given event on the CANN backend.
+ *
+ * This function waits for the specified event to complete on the ACL runtime.
+ *
+ * @param event Pointer to the event structure to be synchronized.
+ */
+static void ggml_backend_cann_device_event_synchronize(ggml_backend_dev_t dev, ggml_backend_event_t event) {
+    ACL_CHECK(aclrtSynchronizeEvent((aclrtEvent)event->context));
+
+    GGML_UNUSED(dev);
+}
+
+static const ggml_backend_device_i ggml_backend_cann_device_interface = {
+    /* .get_name                = */ ggml_backend_cann_device_get_name,
+    /* .get_description         = */ ggml_backend_cann_device_get_description,
+    /* .get_memory              = */ ggml_backend_cann_device_get_memory,
+    /* .get_type                = */ ggml_backend_cann_device_get_type,
+    /* .get_props               = */ ggml_backend_cann_device_get_props,
+    /* .init_backend            = */ ggml_backend_cann_device_init,    // called for every card
+    /* .get_buffer_type         = */ ggml_backend_cann_device_get_buffer_type,
+    /* .get_host_buffer_type    = */ ggml_backend_cann_device_get_host_buffer_type,
+    /* .buffer_from_host_ptr    = */ NULL, // not supported for CANN
+    /* .supports_op             = */ ggml_backend_cann_supports_op,
+    /* .supports_buft           = */ ggml_backend_cann_supports_buft,
+    /* .offload_op              = */ ggml_backend_cann_offload_op,
+    /* .event_new               = */ ggml_backend_cann_device_event_new,
+    /* .event_free              = */ ggml_backend_cann_device_event_free,
+    /* .event_synchronize       = */ ggml_backend_cann_device_event_synchronize,
+};
+
+
+// backend reg
+struct ggml_backend_cann_reg_context {
+    std::vector<ggml_backend_dev_t> devices;
+};
+
+static const char * ggml_backend_cann_reg_get_name(ggml_backend_reg_t reg) {
+    GGML_UNUSED(reg);
+    return GGML_CANN_NAME;
+}
+
+static size_t ggml_backend_cann_reg_get_device_count(ggml_backend_reg_t reg) {
+    ggml_backend_cann_reg_context * ctx = (ggml_backend_cann_reg_context *)reg->context;
+    return ctx->devices.size();
+}
+
+static ggml_backend_dev_t ggml_backend_cann_reg_get_device(ggml_backend_reg_t reg, size_t index) {
+    ggml_backend_cann_reg_context * ctx = (ggml_backend_cann_reg_context *)reg->context;
+    GGML_ASSERT(index < ctx->devices.size());
+    return ctx->devices[index];
+}
+
+static void * ggml_backend_cann_reg_get_proc_address(ggml_backend_reg_t reg, const char * name) {
+    GGML_UNUSED(reg);
+    GGML_UNUSED(name);
+    // reserved for future use
+    return nullptr;
+}
+
+static const ggml_backend_reg_i ggml_backend_cann_reg_interface = {
+    /* .get_name          = */ ggml_backend_cann_reg_get_name,
+    /* .get_device_count  = */ ggml_backend_cann_reg_get_device_count,
+    /* .get_device_get    = */ ggml_backend_cann_reg_get_device,
+    /* .get_proc_address  = */ ggml_backend_cann_reg_get_proc_address,
+};
+
+// backend registry, called only once for cann backend
+ggml_backend_reg_t ggml_backend_cann_reg() {
+    static ggml_backend_reg reg;
+    static bool initialized = false;
+
+    {
+        static std::mutex mutex;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!initialized) {
+            aclInit(nullptr);
+            ggml_backend_cann_reg_context * ctx = new ggml_backend_cann_reg_context;
+
+            for (int i = 0; i < ggml_cann_info().device_count; i++) {
+                ggml_backend_cann_device_context* dev_ctx = new ggml_backend_cann_device_context();
+                dev_ctx->description = aclrtGetSocName();
+                dev_ctx->device = i;
+                dev_ctx->name = GGML_CANN_NAME + std::to_string(i);
+                ggml_cann_set_device(i);
+                ggml_backend_dev_t dev = new ggml_backend_device {
+                    /* .interface = */ ggml_backend_cann_device_interface,
+                    /* .reg       = */ &reg,
+                    /* .context   = */ dev_ctx
+                };
+                ctx->devices.push_back(dev);
+            }
+
+            reg = ggml_backend_reg {
+                /* .interface = */ ggml_backend_cann_reg_interface,
+                /* .context   = */ ctx
+            };
+        }
+
+        initialized = true;
+    }
+
+    return &reg;
+}
+
 ggml_backend_t ggml_backend_cann_init(int32_t device) {
     aclInit(nullptr);
     if (device < 0 || device >= ggml_backend_cann_get_device_count()) {
@@ -1992,7 +2138,7 @@ ggml_backend_t ggml_backend_cann_init(int32_t device) {
     ggml_backend_t cann_backend =
         new ggml_backend{/* .guid      = */ ggml_backend_cann_guid(),
                          /* .interface = */ ggml_backend_cann_interface,
-                         /* .device    = */ nullptr,
+                         /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), device),
                          /* .context   = */ ctx};
 
     return cann_backend;

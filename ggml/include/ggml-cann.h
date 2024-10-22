@@ -34,6 +34,8 @@ extern "C" {
  */
 #define GGML_CANN_MAX_DEVICES 16
 
+GGML_API ggml_backend_reg_t ggml_backend_cann_reg(void);
+
 /**
  * @brief Initializes the CANN backend for a specified device.
  *

@@ -10,8 +10,6 @@
 
 #if defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
-#elif defined(GGML_USE_CANN)
-#   include "ggml-cann.h"
 #endif
 
 #ifndef __AMX_INT8__
@@ -3399,10 +3397,6 @@ static int llama_get_device_count(const llama_model & model) {
     count += (int) model.rpc_servers.size();
 #endif
 
-#if defined(GGML_USE_CANN)
-    count += ggml_backend_cann_get_device_count();
-#endif
-
     return count;
 
     GGML_UNUSED(model);
@@ -3420,11 +3414,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
         }
     }
 
-#if defined(GGML_USE_CANN)
-    if (host_buffer) {
-        buft = ggml_backend_cann_host_buffer_type();
-    }
-#elif defined(GGML_USE_CPU_HBM)
+#if defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
 #endif
 
@@ -3446,8 +3436,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
 
 #if defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
-#elif defined(GGML_USE_CANN)
-    buft = ggml_backend_cann_buffer_type(device);
 #endif
 
     if (buft == nullptr) {
@@ -3491,14 +3479,13 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         return free;
     }
 
-#if defined(GGML_USE_CANN)
-    size_t total;
-    size_t free;
-    ggml_backend_cann_get_device_memory(device, &free, &total);
-    return free;
-#else
+    if (model.devices.size() > 0) {
+        ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(model.devices[0]);
+        LLAMA_LOG_WARN("%s: failed to get free memmory of device:%d of backend:%s, for device id is out of range.\n", __func__, device, ggml_backend_reg_name(reg));
+    } else {
+        LLAMA_LOG_WARN("%s: failed to get free memmory of device, no devices in inputted model.\n", __func__);
+    }
     return 1;
-#endif
 
     GGML_UNUSED(model);
     GGML_UNUSED(device);
@@ -19395,30 +19382,6 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(backend);
-        }
-#elif defined(GGML_USE_CANN)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_cann_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-            // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
-            for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_cann_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
         }
 #endif
 
