@@ -91,6 +91,8 @@ let s:default_config = {
     \ 'ring_update_ms':   1000,
     \ }
 
+let g:llama_config = get(g:, 'llama_config', s:default_config)
+
 let s:nvim_ghost_text = exists('*nvim_buf_get_mark')
 let s:vim_ghost_text = has('textprop')
 
@@ -105,8 +107,6 @@ if s:vim_ghost_text
         call prop_type_add(s:info_hlgroup, {'highlight': s:info_hlgroup})
     endif
 endif
-
-let g:llama_config = get(g:, 'llama_config', s:default_config)
 
 function! s:get_indent(str)
     let l:count = 0
