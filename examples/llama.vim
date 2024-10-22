@@ -122,7 +122,6 @@ function! s:get_indent(str)
     return l:count
 endfunction
 
-
 function! s:rand(i0, i1) abort
     return a:i0 + rand() % (a:i1 - a:i0 + 1)
 endfunction
