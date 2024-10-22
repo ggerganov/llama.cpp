@@ -2,7 +2,7 @@
 "
 " requires:
 "
-"   - neovim
+"   - neovim or vim
 "   - curl
 "   - llama.cpp server instance
 "   - FIM-compatible model
@@ -10,7 +10,7 @@
 " sample config:
 "
 "   - Tab       - accept the current suggestion
-"   - Shift+Tab - accept just the first line of the segguestion
+"   - Shift+Tab - accept just the first line of the suggestion
 "   - Ctrl+F    - toggle FIM completion manually
 "
 " make symlink or copy this file to ~/.config/nvim/autoload/llama.vim
