@@ -745,8 +745,8 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
             \ 'virt_text_win_col': virtcol('.')
             \ })
     elseif s:vim_ghost_text
-	" adapted from:
-	" https://github.com/github/copilot.vim/blob/release/autoload/copilot.vim
+        " adapted from:
+        " https://github.com/github/copilot.vim/blob/release/autoload/copilot.vim
         let l:text = s:content
         let l:new_suffix = s:content[0]
         let l:current_suffix = getline('.')[col('.') - 1 :]
@@ -756,7 +756,10 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
             let l:new_suffix = matchstr(l:new_suffix, '^.\{-\}\ze.$')
             if last_char ==# matchstr(l:current_suffix, '.$')
                 if !empty(l:inset)
-                    call prop_add(line('.'), col('.') + len(l:current_suffix), {'type': s:hlgroup, 'text': l:inset})
+                    call prop_add(line('.'), col('.') + len(l:current_suffix), {
+                                \ 'type': s:hlgroup,
+                                \ 'text': l:inset
+                                \ })
                     let l:inset = ''
                 endif
                 let l:current_suffix = matchstr(l:current_suffix, '^.\{-\}\ze.$')
@@ -765,13 +768,26 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
             endif
         endwhile
         if !empty(l:new_suffix . l:inset)
-            call prop_add(line('.'), col('.'), {'type': s:hint_hlgroup, 'text': l:new_suffix . l:inset})
+            call prop_add(line('.'), col('.'), {
+                        \ 'type': s:hint_hlgroup,
+                        \ 'text': l:new_suffix . l:inset
+                        \ })
         endif
         for line in l:text[1:]
-            call prop_add(line('.'), 0, {'type': s:hint_hlgroup, 'text_align': 'below', 'text_padding_left': s:get_indent(line), 'text': l:new_suffix . line})
+            call prop_add(line('.'), 0, {
+                        \ 'type': s:hint_hlgroup,
+                        \ 'text': l:new_suffix . line,
+                        \ 'text_padding_left': s:get_indent(line),
+                        \ 'text_align': 'below'
+                        \ })
         endfor
         if !empty(l:info)
-            call prop_add(line('.'), 0, {'type': s:info_hlgroup, 'text': ' ' . l:info, 'text_wrap': 'truncate', 'text_padding_left': col('$')})
+            call prop_add(line('.'), 0, {
+                        \ 'type': s:info_hlgroup,
+                        \ 'text': ' ' . l:info,
+                        \ 'text_padding_left': col('$'),
+                        \ 'text_wrap': 'truncate'
+                        \ })
         endif
     endif
 
