@@ -43,8 +43,8 @@
 "
 
 " colors (adjust to your liking)
-highlight llama_hl_hint guifg=#ff772f
-highlight llama_hl_info guifg=#77ff2f
+highlight llama_hl_hint guifg=#ff772f ctermfg=202
+highlight llama_hl_info guifg=#77ff2f ctermfg=119
 
 " general parameters:
 "
@@ -91,7 +91,37 @@ let s:default_config = {
     \ 'ring_update_ms':   1000,
     \ }
 
+let s:nvim_ghost_text = exists('*nvim_buf_get_mark')
+let s:vim_ghost_text = has('textprop')
+
+if s:vim_ghost_text
+    let s:hint_hlgroup = 'llama_hl_hint'
+    let s:info_hlgroup = 'llama_hl_info'
+
+    if empty(prop_type_get(s:hint_hlgroup))
+        call prop_type_add(s:hint_hlgroup, {'highlight': s:hint_hlgroup})
+    endif
+    if empty(prop_type_get(s:info_hlgroup))
+        call prop_type_add(s:info_hlgroup, {'highlight': s:info_hlgroup})
+    endif
+endif
+
 let g:llama_config = get(g:, 'llama_config', s:default_config)
+
+function! s:get_indent(str)
+    let l:count = 0
+    for i in range(len(a:str))
+        if a:str[i] == "\t"
+            let l:count += &shiftwidth - 1
+        elseif a:str[i] == " "
+            let l:count += 1
+        else
+            break
+        endif
+    endfor
+    return l:count
+endfunction
+
 
 function! s:rand(i0, i1) abort
     return a:i0 + rand() % (a:i1 - a:i0 + 1)
@@ -323,7 +353,11 @@ function! s:ring_update()
         \ )
 
     " no callbacks because we don't need to process the response
-    call jobstart(l:curl_command, {})
+    if s:nvim_ghost_text
+        call jobstart(l:curl_command, {})
+    elseif s:vim_ghost_text
+        call job_start(l:curl_command, {})
+    endif
 endfunction
 
 " necessary for 'inoremap <expr>'
@@ -418,24 +452,39 @@ function! llama#fim(is_auto) abort
         \ 't_max_predict_ms': g:llama_config.t_max_predict_ms
         \ })
 
-    let l:curl_command = printf(
-        \ "curl --silent --no-buffer --request POST --url %s --header \"Content-Type: application/json\" --data %s",
-        \ g:llama_config.endpoint, shellescape(l:request)
-        \ )
+    let l:curl_command = [
+        \ "curl",
+        \ "--silent",
+        \ "--no-buffer",
+        \ "--request", "POST",
+        \ "--url", g:llama_config.endpoint,
+        \ "--header", "Content-Type: application/json",
+        \ "--data", l:request
+        \ ]
+
 
     if s:current_job != v:null
-        call jobstop(s:current_job)
+        if s:nvim_ghost_text
+            call jobstop(s:current_job)
+        elseif s:vim_ghost_text
+            call job_stop(s:current_job)
+        endif
     endif
 
     " send the request asynchronously
-    let s:current_job = jobstart(l:curl_command, {
-        \ 'on_stdout': function('s:fim_on_stdout'),
-        \ 'on_exit':   function('s:fim_on_exit'),
-        \ 'stdout_buffered': v:true,
-        \ 'pos_x': s:pos_x,
-        \ 'pos_y': s:pos_y,
-        \ 'is_auto': a:is_auto
+    if s:nvim_ghost_text
+        let s:current_job = jobstart(l:curl_command, {
+            \ 'on_stdout': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
+            \ 'on_exit':   function('s:nvim_fim_on_exit'),
+            \ 'stdout_buffered': v:true
+            \ })
+    elseif s:vim_ghost_text
+    let s:current_job = job_start(l:curl_command, {
+        \ 'out_cb': function('s:fim_on_stdout', [s:pos_x, s:pos_y, a:is_auto]),
+        \ 'close_cb':   function('s:vim_fim_on_exit'),
+        \ 'out_io': 'buffer'
         \ })
+    endif
 
     " TODO: per-file location
     let l:delta_y = abs(s:pos_y - s:pos_y_pick)
@@ -482,9 +531,13 @@ function! llama#fim_cancel()
     " clear the virtual text
     let l:bufnr = bufnr('%')
 
-    let l:id_vt_fim = nvim_create_namespace('vt_fim')
-
-    call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
+    if s:nvim_ghost_text
+        let l:id_vt_fim = nvim_create_namespace('vt_fim')
+        call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
+    elseif s:vim_ghost_text
+        call prop_remove({'type': s:hint_hlgroup, 'all': v:true})
+        call prop_remove({'type': s:info_hlgroup, 'all': v:true})
+    endif
 
     " remove the mappings
     silent! iunmap <buffer> <Tab>
@@ -499,13 +552,18 @@ function! s:on_move()
 endfunction
 
 " callback that processes the FIM result from the server and displays the suggestion
-function! s:fim_on_stdout(job_id, data, event) dict
-    let l:raw = join(a:data, "\n")
+function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = 0)
+    if s:nvim_ghost_text
+        let l:raw = join(a:data, "\n")
+    elseif s:vim_ghost_text
+        let l:raw = a:data
+    endif
+
     if len(l:raw) == 0
         return
     endif
 
-    if self.pos_x != col('.') - 1 || self.pos_y != line('.')
+    if a:pos_x != col('.') - 1 || a:pos_y != line('.')
         return
     endif
 
@@ -514,14 +572,14 @@ function! s:fim_on_stdout(job_id, data, event) dict
         return
     endif
 
-    let s:pos_x = self.pos_x
-    let s:pos_y = self.pos_y
+    let s:pos_x = a:pos_x
+    let s:pos_y = a:pos_y
 
     let s:can_accept = v:true
     let l:has_info   = v:false
 
     if s:can_accept && v:shell_error
-        if !self.is_auto
+        if !a:is_auto
             call add(s:content, "<| curl error: is the server on? |>")
         endif
         let s:can_accept = v:false
@@ -642,7 +700,9 @@ function! s:fim_on_stdout(job_id, data, event) dict
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
 
-    let l:id_vt_fim = nvim_create_namespace('vt_fim')
+    if s:nvim_ghost_text
+        let l:id_vt_fim = nvim_create_namespace('vt_fim')
+    endif
 
     " construct the info message
     if g:llama_config.show_info > 0 && l:has_info
@@ -671,15 +731,46 @@ function! s:fim_on_stdout(job_id, data, event) dict
     endif
 
     " display the suggestion and append the info to the end of the first line
-    call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, s:pos_x - 1, {
-        \ 'virt_text': [[s:content[0], 'llama_hl_hint'], [l:info, 'llama_hl_info']],
-        \ 'virt_text_win_col': virtcol('.') - 1
-        \ })
+    if s:nvim_ghost_text
+        call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, s:pos_x - 1, {
+            \ 'virt_text': [[s:content[0], 'llama_hl_hint'], [l:info, 'llama_hl_info']],
+            \ 'virt_text_win_col': virtcol('.') - 1
+            \ })
 
-    call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, 0, {
-        \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hl_hint']]}),
-        \ 'virt_text_win_col': virtcol('.')
-        \ })
+        call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, 0, {
+            \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hl_hint']]}),
+            \ 'virt_text_win_col': virtcol('.')
+            \ })
+    elseif s:vim_ghost_text
+	" adapted from:
+	" https://github.com/github/copilot.vim/blob/release/autoload/copilot.vim
+        let l:text = s:content
+        let l:new_suffix = s:content[0]
+        let l:current_suffix = getline('.')[col('.') - 1 :]
+        let l:inset = ''
+        while !empty(l:new_suffix)
+            let last_char = matchstr(l:new_suffix, '.$')
+            let l:new_suffix = matchstr(l:new_suffix, '^.\{-\}\ze.$')
+            if last_char ==# matchstr(l:current_suffix, '.$')
+                if !empty(l:inset)
+                    call prop_add(line('.'), col('.') + len(l:current_suffix), {'type': s:hlgroup, 'text': l:inset})
+                    let l:inset = ''
+                endif
+                let l:current_suffix = matchstr(l:current_suffix, '^.\{-\}\ze.$')
+            else
+                let l:inset = last_char . l:inset
+            endif
+        endwhile
+        if !empty(l:new_suffix . l:inset)
+            call prop_add(line('.'), col('.'), {'type': s:hint_hlgroup, 'text': l:new_suffix . l:inset})
+        endif
+        for line in l:text[1:]
+            call prop_add(line('.'), 0, {'type': s:hint_hlgroup, 'text_align': 'below', 'text_padding_left': s:get_indent(line), 'text': l:new_suffix . line})
+        endfor
+        if !empty(l:info)
+            call prop_add(line('.'), 0, {'type': s:info_hlgroup, 'text': ' ' . l:info, 'text_wrap': 'truncate', 'text_padding_left': col('$')})
+        endif
+    endif
 
     " setup accept shortcuts
     inoremap <buffer> <Tab>   <C-O>:call llama#fim_accept(v:false)<CR>
@@ -688,10 +779,14 @@ function! s:fim_on_stdout(job_id, data, event) dict
     let s:hint_shown = v:true
 endfunction
 
-function! s:fim_on_exit(job_id, exit_code, event) dict
+function! s:nvim_fim_on_exit(job_id, exit_code, event) dict
     if a:exit_code != 0
         echom "Job failed with exit code: " . a:exit_code
     endif
 
+    let s:current_job = v:null
+endfunction
+
+function! s:vim_fim_on_exit(job_id)
     let s:current_job = v:null
 endfunction
