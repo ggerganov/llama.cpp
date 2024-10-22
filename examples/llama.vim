@@ -97,14 +97,14 @@ let s:nvim_ghost_text = exists('*nvim_buf_get_mark')
 let s:vim_ghost_text = has('textprop')
 
 if s:vim_ghost_text
-    let s:hint_hlgroup = 'llama_hl_hint'
-    let s:info_hlgroup = 'llama_hl_info'
+    let s:hlgroup_hint = 'llama_hl_hint'
+    let s:hlgroup_info = 'llama_hl_info'
 
-    if empty(prop_type_get(s:hint_hlgroup))
-        call prop_type_add(s:hint_hlgroup, {'highlight': s:hint_hlgroup})
+    if empty(prop_type_get(s:hlgroup_hint))
+        call prop_type_add(s:hlgroup_hint, {'highlight': s:hlgroup_hint})
     endif
-    if empty(prop_type_get(s:info_hlgroup))
-        call prop_type_add(s:info_hlgroup, {'highlight': s:info_hlgroup})
+    if empty(prop_type_get(s:hlgroup_info))
+        call prop_type_add(s:hlgroup_info, {'highlight': s:hlgroup_info})
     endif
 endif
 
@@ -535,8 +535,8 @@ function! llama#fim_cancel()
         let l:id_vt_fim = nvim_create_namespace('vt_fim')
         call nvim_buf_clear_namespace(l:bufnr, l:id_vt_fim,  0, -1)
     elseif s:vim_ghost_text
-        call prop_remove({'type': s:hint_hlgroup, 'all': v:true})
-        call prop_remove({'type': s:info_hlgroup, 'all': v:true})
+        call prop_remove({'type': s:hlgroup_hint, 'all': v:true})
+        call prop_remove({'type': s:hlgroup_info, 'all': v:true})
     endif
 
     " remove the mappings
@@ -745,13 +745,13 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
         let l:new_suffix = s:content[0]
         if !empty(l:new_suffix)
             call prop_add(s:pos_y, s:pos_x + 1, {
-                        \ 'type': s:hint_hlgroup,
+                        \ 'type': s:hlgroup_hint,
                         \ 'text': l:new_suffix
                         \ })
         endif
         for line in s:content[1:]
             call prop_add(s:pos_y, 0, {
-                        \ 'type': s:hint_hlgroup,
+                        \ 'type': s:hlgroup_hint,
                         \ 'text': line,
                         \ 'text_padding_left': s:get_indent(line),
                         \ 'text_align': 'below'
@@ -759,7 +759,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
         endfor
         if !empty(l:info)
             call prop_add(s:pos_y, 0, {
-                        \ 'type': s:info_hlgroup,
+                        \ 'type': s:hlgroup_info,
                         \ 'text': ' ' . l:info,
                         \ 'text_padding_left': col('$'),
                         \ 'text_wrap': 'truncate'
