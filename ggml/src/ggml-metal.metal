@@ -6453,19 +6453,19 @@ template [[host_name("kernel_mul_mv_id_iq4_nl_f32")]]  kernel kernel_mul_mv_id_t
 template [[host_name("kernel_mul_mv_id_iq4_xs_f32")]]  kernel kernel_mul_mv_id_t kernel_mul_mv_id<mmv_fn<kernel_mul_mv_iq4_xs_f32_impl>>;
 
 kernel void kernel_max_pool_2d_f32(
-        device const float* src0,
-        device       float* dst,
-        constant    int32_t& k0,
-        constant    int32_t& k1,
-        constant    int32_t& s0,
-        constant    int32_t& s1,
-        constant    int32_t& p0,
-        constant    int32_t& p1,
-        constant    int64_t& IH,
-        constant    int64_t& IW,
-        constant    int64_t& OH,
-        constant    int64_t& OW,
-        constant    int64_t& parallel_elements,
+        device  const float * src0,
+        device        float * dst,
+        constant    int32_t & k0,
+        constant    int32_t & k1,
+        constant    int32_t & s0,
+        constant    int32_t & s1,
+        constant    int32_t & p0,
+        constant    int32_t & p1,
+        constant    int64_t & IH,
+        constant    int64_t & IW,
+        constant    int64_t & OH,
+        constant    int64_t & OW,
+        constant    int64_t & parallel_elements,
         uint        gid[[thread_position_in_grid]]) {
 
     if (gid >= parallel_elements) {
