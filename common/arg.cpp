@@ -128,13 +128,13 @@ static void common_params_handle_model_default(common_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = fs_get_cache_file(string_split(params.hf_file, '/').back());
+            params.model = fs_get_cache_file(string_split<std::string>(params.hf_file, '/').back());
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
-            auto f = string_split(params.model_url, '#').front();
-            f = string_split(f, '?').front();
-            params.model = fs_get_cache_file(string_split(f, '/').back());
+            auto f = string_split<std::string>(params.model_url, '#').front();
+            f = string_split<std::string>(f, '?').front();
+            params.model = fs_get_cache_file(string_split<std::string>(f, '/').back());
         }
     } else if (params.model.empty()) {
         params.model = DEFAULT_MODEL_PATH;
@@ -879,7 +879,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--samplers"}, "SAMPLERS",
         string_format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
         [](common_params & params, const std::string & value) {
-            const auto sampler_names = string_split(value, ';');
+            const auto sampler_names = string_split<std::string>(value, ';');
             params.sparams.samplers = common_sampler_types_from_names(sampler_names, true);
         }
     ).set_sparam());

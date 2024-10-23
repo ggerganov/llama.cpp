@@ -380,8 +380,6 @@ bool set_process_priority(enum ggml_sched_priority prio);
 LLAMA_COMMON_ATTRIBUTE_FORMAT(1, 2)
 std::string string_format(const char * fmt, ...);
 
-std::vector<std::string> string_split(std::string input, char separator);
-
 std::string string_strip(const std::string & str);
 std::string string_get_sortable_timestamp();
 
@@ -399,6 +397,22 @@ static std::vector<T> string_split(const std::string & str, char delim) {
         values.push_back(value);
     }
     return values;
+}
+
+template<>
+std::vector<std::string> string_split<std::string>(const std::string & input, char separator)
+{
+    std::vector<std::string> parts;
+    size_t begin_pos = 0;
+    size_t separator_pos = input.find(separator);
+    while (separator_pos != std::string::npos) {
+        std::string part = input.substr(begin_pos, separator_pos - begin_pos);
+        parts.emplace_back(part);
+        begin_pos = separator_pos + 1;
+        separator_pos = input.find(separator, begin_pos);
+    }
+    parts.emplace_back(input.substr(begin_pos, separator_pos - begin_pos));
+    return parts;
 }
 
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
