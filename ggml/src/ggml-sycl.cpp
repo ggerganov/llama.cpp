@@ -499,7 +499,7 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
                                     size, *stream)));
     if (!dev_ptr) {
-        GGML_LOG_ERROR("%s: can't malloc %lu Bytes memory on device", __func__, size);
+        GGML_LOG_ERROR("%s: can't malloc %lu Bytes memory on device\n", __func__, size);
         return nullptr;
     }
     ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream);
