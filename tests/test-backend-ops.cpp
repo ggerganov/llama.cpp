@@ -1676,33 +1676,37 @@ struct test_mul_mat : public test_case {
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         // C^T = A * B^T: (k, m) * (k, n) => (m, n)
-        ggml_tensor * a = ggml_new_tensor_4d(ctx, type_a, k, m, bs[0]      , bs[1]);
-        ggml_tensor * b = ggml_new_tensor_4d(ctx, type_b, k, n, bs[0]*nr[0], bs[1]*nr[1]);
-        ggml_set_param(ctx, a);
-        ggml_set_param(ctx, b);
-        ggml_set_name(a, "a");
-        ggml_set_name(b, "b");
+        ggml_tensor * a;
+        ggml_tensor * b;
 
-        // If the permutation is not {0, 1, 2, 3}, replace a and b with views that have the same data in a different order.
-        // This test only works correctly if exactly 2 indices != 0 are swapped.
-        if (per[0] != 0 || per[1] != 1 || per[2] != 2 || per[3] != 3) {
-            GGML_ASSERT(per[0] == 0);
-            const size_t rsa = ggml_row_size(a->type, a->ne[0]);
-            const size_t rsb = ggml_row_size(b->type, b->ne[0]);
-            size_t nba[GGML_MAX_DIMS] = {ggml_type_size(a->type), rsa, rsa, rsa};
-            size_t nbb[GGML_MAX_DIMS] = {ggml_type_size(b->type), rsb, rsb, rsb};
-            for (int64_t i = 1; i < GGML_MAX_DIMS; ++i) {
-                for (int64_t j = 1; j < per[i]; ++j) {
-                    nba[i] *= a->ne[per[j]];
-                    nbb[i] *= b->ne[per[j]];
-                }
-            }
-            a = ggml_view_4d(ctx, a, a->ne[0], a->ne[1], a->ne[2], a->ne[3], nba[1], nba[2], nba[3], /*offset =*/ 0);
-            b = ggml_view_4d(ctx, b, b->ne[0], b->ne[1], b->ne[2], b->ne[3], nbb[1], nbb[2], nbb[3], /*offset =*/ 0);
-            GGML_ASSERT(ggml_nbytes(a) == ggml_nbytes(a->src[0]));
-            GGML_ASSERT(ggml_nbytes(b) == ggml_nbytes(b->src[0]));
+        const int npermuted = (per[0] != 0) + (per[1] != 1) + (per[2] != 2) + (per[3] != 3);
+        if (npermuted > 0) {
+            GGML_ASSERT(npermuted == 2);
+            GGML_ASSERT(!ggml_is_quantized(type_a) || per[0] == 0);
+            GGML_ASSERT(!ggml_is_quantized(type_b) || per[0] == 0);
+
+            // Create tensors with the permuted dimensions, then permute them back to the dimensions given by m,n,k.
+            const int64_t ne_a[4] = {k, m, bs[0],       bs[1]};
+            const int64_t ne_b[4] = {k, n, bs[0]*nr[0], bs[1]*nr[1]};
+
+            a = ggml_new_tensor_4d(ctx, type_a, ne_a[per[0]], ne_a[per[1]], ne_a[per[2]], ne_a[per[3]]);
+            b = ggml_new_tensor_4d(ctx, type_b, ne_b[per[0]], ne_b[per[1]], ne_b[per[2]], ne_b[per[3]]);
+            ggml_set_param(ctx, a);
+            ggml_set_param(ctx, b);
+            ggml_set_name(a, "a");
+            ggml_set_name(b, "b");
+
+            a = ggml_permute(ctx, a, per[0], per[1], per[2], per[3]);
+            b = ggml_permute(ctx, b, per[0], per[1], per[2], per[3]);
             ggml_set_name(a, "a_permuted");
             ggml_set_name(b, "b_permuted");
+        } else {
+            a = ggml_new_tensor_4d(ctx, type_a, k, m, bs[0],       bs[1]);
+            b = ggml_new_tensor_4d(ctx, type_b, k, n, bs[0]*nr[0], bs[1]*nr[1]);
+            ggml_set_param(ctx, a);
+            ggml_set_param(ctx, b);
+            ggml_set_name(a, "a");
+            ggml_set_name(b, "b");
         }
 
         ggml_tensor * out = ggml_mul_mat(ctx, a, b);
