@@ -6452,7 +6452,7 @@ template [[host_name("kernel_mul_mv_id_iq2_s_f32")]]   kernel kernel_mul_mv_id_t
 template [[host_name("kernel_mul_mv_id_iq4_nl_f32")]]  kernel kernel_mul_mv_id_t kernel_mul_mv_id<mmv_fn<kernel_mul_mv_iq4_nl_f32_impl>>;
 template [[host_name("kernel_mul_mv_id_iq4_xs_f32")]]  kernel kernel_mul_mv_id_t kernel_mul_mv_id<mmv_fn<kernel_mul_mv_iq4_xs_f32_impl>>;
 
-kernel void kernel_max_pool_2d_f32(
+kernel void kernel_pool_2d_max_f32(
         device  const float * src0,
         device        float * dst,
         constant    int32_t & k0,
@@ -6498,7 +6498,7 @@ kernel void kernel_max_pool_2d_f32(
     o_ptr[cur_oh * OW + cur_ow] = res;
 }
 
-kernel void kernel_avg_pool_2d_f32(
+kernel void kernel_pool_2d_avg_f32(
         device const float* src0,
         device       float* dst,
         constant    int32_t& k0,
