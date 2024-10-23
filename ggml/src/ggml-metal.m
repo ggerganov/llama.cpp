@@ -2625,7 +2625,7 @@ static void ggml_metal_encode_node(
                     [encoder setBytes:&KW       length:sizeof(int32_t) atIndex:15];
 
                     const int64_t D = N / M + (N % M > 0 ? 1 : 0);
-                    [encoder dispatchThreadgroups:MTLSizeMake(D * CHW, OH, OW) threadsPerThreadgroup:MTLSizeMake(M, 1, 1)];
+                    [encoder dispatchThreadgroups:MTLSizeMake(D * CHW, OH, OW) threadsPerThreadgroup:MTLSizeMake(MIN((uint64_t)N, M), 1, 1)];
                 } else {
                     [encoder dispatchThreadgroups:MTLSizeMake(IC, OH, OW) threadsPerThreadgroup:MTLSizeMake(N, KH, KW)];
                 }
