@@ -8,18 +8,16 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef GGML_USE_RPC
-#  include "ggml-rpc.h"
+#if defined(GGML_USE_KOMPUTE)
+#   include "ggml-kompute.h"
 #endif
 
-#if defined(GGML_USE_VULKAN)
-#  include "ggml-vulkan.h"
-#elif defined(GGML_USE_SYCL)
-#  include "ggml-sycl.h"
-#elif defined(GGML_USE_KOMPUTE)
-#   include "ggml-kompute.h"
-#elif defined(GGML_USE_CANN)
-#   include "ggml-cann.h"
+#ifndef __AMX_INT8__
+#undef GGML_USE_AMX
+#endif
+
+#ifdef GGML_USE_AMX
+#  include "ggml-amx.h"
 #endif
 
 // TODO: replace with ggml API call
@@ -349,6 +347,8 @@ enum llm_kv {
     LLM_KV_TOKENIZER_MERGES,
     LLM_KV_TOKENIZER_BOS_ID,
     LLM_KV_TOKENIZER_EOS_ID,
+    LLM_KV_TOKENIZER_EOT_ID,
+    LLM_KV_TOKENIZER_EOM_ID,
     LLM_KV_TOKENIZER_UNK_ID,
     LLM_KV_TOKENIZER_SEP_ID,
     LLM_KV_TOKENIZER_PAD_ID,
@@ -361,14 +361,20 @@ enum llm_kv {
     LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP,
     LLM_KV_TOKENIZER_HF_JSON,
     LLM_KV_TOKENIZER_RWKV,
-    LLM_KV_TOKENIZER_PREFIX_ID,
-    LLM_KV_TOKENIZER_SUFFIX_ID,
-    LLM_KV_TOKENIZER_MIDDLE_ID,
-    LLM_KV_TOKENIZER_EOT_ID,
-    LLM_KV_TOKENIZER_EOM_ID,
+    LLM_KV_TOKENIZER_FIM_PRE_ID,
+    LLM_KV_TOKENIZER_FIM_SUF_ID,
+    LLM_KV_TOKENIZER_FIM_MID_ID,
+    LLM_KV_TOKENIZER_FIM_PAD_ID,
+    LLM_KV_TOKENIZER_FIM_REP_ID,
+    LLM_KV_TOKENIZER_FIM_SEP_ID,
 
     LLM_KV_ADAPTER_TYPE,
     LLM_KV_ADAPTER_LORA_ALPHA,
+
+    // deprecated:
+    LLM_KV_TOKENIZER_PREFIX_ID,
+    LLM_KV_TOKENIZER_SUFFIX_ID,
+    LLM_KV_TOKENIZER_MIDDLE_ID,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -426,57 +432,65 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_SLIDING_WINDOW,         "%s.attention.sliding_window"         },
     { LLM_KV_ATTENTION_SCALE,                  "%s.attention.scale"                  },
 
-    { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
-    { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
-    { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"                    },
-    { LLM_KV_ROPE_SCALING_TYPE,             "%s.rope.scaling.type"                    },
-    { LLM_KV_ROPE_SCALING_FACTOR,           "%s.rope.scaling.factor"                  },
-    { LLM_KV_ROPE_SCALING_ATTN_FACTOR,      "%s.rope.scaling.attn_factor"             },
-    { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
-    { LLM_KV_ROPE_SCALING_FINETUNED,        "%s.rope.scaling.finetuned"               },
-    { LLM_KV_ROPE_SCALING_YARN_LOG_MUL,     "%s.rope.scaling.yarn_log_multiplier"     },
+    { LLM_KV_ROPE_DIMENSION_COUNT,             "%s.rope.dimension_count"                 },
+    { LLM_KV_ROPE_FREQ_BASE,                   "%s.rope.freq_base"                       },
+    { LLM_KV_ROPE_SCALE_LINEAR,                "%s.rope.scale_linear"                    },
+    { LLM_KV_ROPE_SCALING_TYPE,                "%s.rope.scaling.type"                    },
+    { LLM_KV_ROPE_SCALING_FACTOR,              "%s.rope.scaling.factor"                  },
+    { LLM_KV_ROPE_SCALING_ATTN_FACTOR,         "%s.rope.scaling.attn_factor"             },
+    { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,        "%s.rope.scaling.original_context_length" },
+    { LLM_KV_ROPE_SCALING_FINETUNED,           "%s.rope.scaling.finetuned"               },
+    { LLM_KV_ROPE_SCALING_YARN_LOG_MUL,        "%s.rope.scaling.yarn_log_multiplier"     },
 
-    { LLM_KV_SPLIT_NO,                      "split.no"            },
-    { LLM_KV_SPLIT_COUNT,                   "split.count"         },
-    { LLM_KV_SPLIT_TENSORS_COUNT,           "split.tensors.count" },
+    { LLM_KV_SPLIT_NO,                         "split.no"            },
+    { LLM_KV_SPLIT_COUNT,                      "split.count"         },
+    { LLM_KV_SPLIT_TENSORS_COUNT,              "split.tensors.count" },
 
-    { LLM_KV_SSM_CONV_KERNEL,               "%s.ssm.conv_kernel"    },
-    { LLM_KV_SSM_INNER_SIZE,                "%s.ssm.inner_size"     },
-    { LLM_KV_SSM_STATE_SIZE,                "%s.ssm.state_size"     },
-    { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
-    { LLM_KV_SSM_DT_B_C_RMS,                "%s.ssm.dt_b_c_rms" },
+    { LLM_KV_SSM_CONV_KERNEL,                  "%s.ssm.conv_kernel"    },
+    { LLM_KV_SSM_INNER_SIZE,                   "%s.ssm.inner_size"     },
+    { LLM_KV_SSM_STATE_SIZE,                   "%s.ssm.state_size"     },
+    { LLM_KV_SSM_TIME_STEP_RANK,               "%s.ssm.time_step_rank" },
+    { LLM_KV_SSM_DT_B_C_RMS,                   "%s.ssm.dt_b_c_rms"     },
 
-    { LLM_KV_WKV_HEAD_SIZE,                 "%s.wkv.head_size" },
+    { LLM_KV_WKV_HEAD_SIZE,                    "%s.wkv.head_size" },
 
-    { LLM_KV_TOKENIZER_MODEL,                "tokenizer.ggml.model"                    },
-    { LLM_KV_TOKENIZER_PRE,                  "tokenizer.ggml.pre"                      },
-    { LLM_KV_TOKENIZER_LIST,                 "tokenizer.ggml.tokens"                   },
-    { LLM_KV_TOKENIZER_TOKEN_TYPE,           "tokenizer.ggml.token_type"               },
-    { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,     "tokenizer.ggml.token_type_count"         },
-    { LLM_KV_TOKENIZER_SCORES,               "tokenizer.ggml.scores"                   },
-    { LLM_KV_TOKENIZER_MERGES,               "tokenizer.ggml.merges"                   },
-    { LLM_KV_TOKENIZER_BOS_ID,               "tokenizer.ggml.bos_token_id"             },
-    { LLM_KV_TOKENIZER_EOS_ID,               "tokenizer.ggml.eos_token_id"             },
-    { LLM_KV_TOKENIZER_UNK_ID,               "tokenizer.ggml.unknown_token_id"         },
-    { LLM_KV_TOKENIZER_SEP_ID,               "tokenizer.ggml.seperator_token_id"       },
-    { LLM_KV_TOKENIZER_PAD_ID,               "tokenizer.ggml.padding_token_id"         },
-    { LLM_KV_TOKENIZER_CLS_ID,               "tokenizer.ggml.cls_token_id"             },
-    { LLM_KV_TOKENIZER_MASK_ID,              "tokenizer.ggml.mask_token_id"            },
-    { LLM_KV_TOKENIZER_ADD_BOS,              "tokenizer.ggml.add_bos_token"            },
-    { LLM_KV_TOKENIZER_ADD_EOS,              "tokenizer.ggml.add_eos_token"            },
-    { LLM_KV_TOKENIZER_ADD_PREFIX,           "tokenizer.ggml.add_space_prefix"         },
-    { LLM_KV_TOKENIZER_REMOVE_EXTRA_WS,      "tokenizer.ggml.remove_extra_whitespaces" },
-    { LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP, "tokenizer.ggml.precompiled_charsmap"     },
-    { LLM_KV_TOKENIZER_HF_JSON,              "tokenizer.huggingface.json"              },
-    { LLM_KV_TOKENIZER_RWKV,                 "tokenizer.rwkv.world"                    },
-    { LLM_KV_TOKENIZER_PREFIX_ID,            "tokenizer.ggml.prefix_token_id"          },
-    { LLM_KV_TOKENIZER_SUFFIX_ID,            "tokenizer.ggml.suffix_token_id"          },
-    { LLM_KV_TOKENIZER_MIDDLE_ID,            "tokenizer.ggml.middle_token_id"          },
-    { LLM_KV_TOKENIZER_EOT_ID,               "tokenizer.ggml.eot_token_id"             },
-    { LLM_KV_TOKENIZER_EOM_ID,               "tokenizer.ggml.eom_token_id"             },
+    { LLM_KV_TOKENIZER_MODEL,                  "tokenizer.ggml.model"                    },
+    { LLM_KV_TOKENIZER_PRE,                    "tokenizer.ggml.pre"                      },
+    { LLM_KV_TOKENIZER_LIST,                   "tokenizer.ggml.tokens"                   },
+    { LLM_KV_TOKENIZER_TOKEN_TYPE,             "tokenizer.ggml.token_type"               },
+    { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,       "tokenizer.ggml.token_type_count"         },
+    { LLM_KV_TOKENIZER_SCORES,                 "tokenizer.ggml.scores"                   },
+    { LLM_KV_TOKENIZER_MERGES,                 "tokenizer.ggml.merges"                   },
+    { LLM_KV_TOKENIZER_BOS_ID,                 "tokenizer.ggml.bos_token_id"             },
+    { LLM_KV_TOKENIZER_EOS_ID,                 "tokenizer.ggml.eos_token_id"             },
+    { LLM_KV_TOKENIZER_EOT_ID,                 "tokenizer.ggml.eot_token_id"             },
+    { LLM_KV_TOKENIZER_EOM_ID,                 "tokenizer.ggml.eom_token_id"             },
+    { LLM_KV_TOKENIZER_UNK_ID,                 "tokenizer.ggml.unknown_token_id"         },
+    { LLM_KV_TOKENIZER_SEP_ID,                 "tokenizer.ggml.seperator_token_id"       },
+    { LLM_KV_TOKENIZER_PAD_ID,                 "tokenizer.ggml.padding_token_id"         },
+    { LLM_KV_TOKENIZER_CLS_ID,                 "tokenizer.ggml.cls_token_id"             },
+    { LLM_KV_TOKENIZER_MASK_ID,                "tokenizer.ggml.mask_token_id"            },
+    { LLM_KV_TOKENIZER_ADD_BOS,                "tokenizer.ggml.add_bos_token"            },
+    { LLM_KV_TOKENIZER_ADD_EOS,                "tokenizer.ggml.add_eos_token"            },
+    { LLM_KV_TOKENIZER_ADD_PREFIX,             "tokenizer.ggml.add_space_prefix"         },
+    { LLM_KV_TOKENIZER_REMOVE_EXTRA_WS,        "tokenizer.ggml.remove_extra_whitespaces" },
+    { LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP,   "tokenizer.ggml.precompiled_charsmap"     },
+    { LLM_KV_TOKENIZER_HF_JSON,                "tokenizer.huggingface.json"              },
+    { LLM_KV_TOKENIZER_RWKV,                   "tokenizer.rwkv.world"                    },
+    { LLM_KV_TOKENIZER_FIM_PRE_ID,             "tokenizer.ggml.fim_pre_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_SUF_ID,             "tokenizer.ggml.fim_suf_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_MID_ID,             "tokenizer.ggml.fim_mid_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_PAD_ID,             "tokenizer.ggml.fim_pad_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_REP_ID,             "tokenizer.ggml.fim_rep_token_id"         },
+    { LLM_KV_TOKENIZER_FIM_SEP_ID,             "tokenizer.ggml.fim_sep_token_id"         },
 
-    { LLM_KV_ADAPTER_TYPE,                  "adapter.type"       },
-    { LLM_KV_ADAPTER_LORA_ALPHA,            "adapter.lora.alpha" },
+    { LLM_KV_ADAPTER_TYPE,                     "adapter.type"       },
+    { LLM_KV_ADAPTER_LORA_ALPHA,               "adapter.lora.alpha" },
+
+    // deprecated
+    { LLM_KV_TOKENIZER_PREFIX_ID,              "tokenizer.ggml.prefix_token_id" },
+    { LLM_KV_TOKENIZER_SUFFIX_ID,              "tokenizer.ggml.suffix_token_id" },
+    { LLM_KV_TOKENIZER_MIDDLE_ID,              "tokenizer.ggml.middle_token_id" },
 };
 
 struct LLM_KV {
@@ -2933,9 +2947,6 @@ struct llama_sbatch_seq {
     llama_seq_id * seq_id;
     size_t offset;
     size_t length;
-
-    // helper for smoother batch API transition -- can be deprecated in the future
-    llama_seq_id all_seq_id; // used if seq_id == NULL
 };
 
 // sequence-length-aware batch splitting
@@ -3030,30 +3041,18 @@ struct llama_sbatch {
         } else {
             ubatch.embd = nullptr;
         }
-        // from here on, the else branches are deprecated;
-        // they are helpers for smoother batch API transition
-        if (batch->pos) {
-            if (ubatch.equal_seqs) {
-                for (size_t i = 0; i < length; ++i) {
-                    ubatch.pos[ubatch.n_tokens + i] = batch->pos[ids[seq.offset + i]];
-                }
-            } else {
-                // simple split
-                ubatch.pos = batch->pos + seq.offset;
+        if (ubatch.equal_seqs) {
+            for (size_t i = 0; i < length; ++i) {
+                ubatch.pos[ubatch.n_tokens + i] = batch->pos[ids[seq.offset + i]];
             }
         } else {
-            for (size_t i = 0; i < length; ++i) {
-                llama_pos bi = ids[seq.offset + i];
-                ubatch.pos[ubatch.n_tokens + i] = batch->all_pos_0 + (bi * batch->all_pos_1);
-            }
+            // simple split
+            ubatch.pos = batch->pos + seq.offset;
         }
         if (ubatch.equal_seqs) {
             ubatch.n_seq_id[ubatch.n_seqs] = seq.n_seq_id;
             if (seq.seq_id) {
                 ubatch.seq_id[ubatch.n_seqs] = seq.seq_id;
-            } else {
-                GGML_ASSERT(seq.n_seq_id == 1);
-                ubatch.seq_id[ubatch.n_seqs] = &seq.all_seq_id;
             }
         } else {
             // simple split
@@ -3066,10 +3065,6 @@ struct llama_sbatch {
             }
             if (batch->seq_id) {
                 ubatch.seq_id = batch->seq_id + seq.offset;
-            } else {
-                for (size_t i = 0; i < length; ++i) {
-                    ubatch.seq_id[ubatch.n_seqs + i] = &seq.all_seq_id;
-                }
             }
         }
         if (logits_all) {
@@ -3188,7 +3183,6 @@ struct llama_sbatch {
             s.seq_id = nullptr;
             s.offset = 0;
             s.length = n_tokens;
-            s.all_seq_id = batch.all_seq_id;
             return;
         }
         std::sort(ids.begin(), ids.end(),
@@ -3211,7 +3205,7 @@ struct llama_sbatch {
                     if (batch.pos) {
                         return batch.pos[a] < batch.pos[b];
                     }
-                    // no pos, sort by id (assuming batch.all_pos_1 is positive)
+                    // no pos, sort by id
                     return a < b;
                 }
                 // shared prompts go first
@@ -3221,30 +3215,25 @@ struct llama_sbatch {
         // init seq
         llama_sbatch_seq * last_seq = nullptr;
 
-        if (batch.n_seq_id != nullptr && batch.seq_id != nullptr) {
-            for (size_t i = 0; i < n_tokens; ++i) {
-                const size_t bi = ids[i];
-                const int32_t n_seqs = batch.n_seq_id[bi];
-                llama_seq_id * seq_ids = batch.seq_id[bi];
-                if (last_seq != nullptr) {
-                    bool same = n_seqs == last_seq->n_seq_id;
-                    for (int32_t j = 0; same && j < n_seqs; ++j) {
-                        if (seq_ids[j] != last_seq->seq_id[j]) {
-                            same = false;
-                        }
-                    }
-                    if (same) {
-                        last_seq->length += 1;
-                        continue;
+        for (size_t i = 0; i < n_tokens; ++i) {
+            const size_t bi = ids[i];
+            const int32_t n_seqs = batch.n_seq_id[bi];
+            llama_seq_id * seq_ids = batch.seq_id[bi];
+            if (last_seq != nullptr) {
+                bool same = n_seqs == last_seq->n_seq_id;
+                for (int32_t j = 0; same && j < n_seqs; ++j) {
+                    if (seq_ids[j] != last_seq->seq_id[j]) {
+                        same = false;
                     }
                 }
-                llama_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1, batch.all_seq_id};
-                seq.push_back(new_seq);
-                last_seq = &seq.back();
+                if (same) {
+                    last_seq->length += 1;
+                    continue;
+                }
             }
-        } else {
-            llama_sbatch_seq new_seq = {1, nullptr, 0, n_tokens, batch.all_seq_id};
+            llama_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1};
             seq.push_back(new_seq);
+            last_seq = &seq.back();
         }
         // keep shared prompts first at the end, then sort by length descending.
         std::sort(seq.begin(), seq.end(),
@@ -3408,14 +3397,6 @@ static int llama_get_device_count(const llama_model & model) {
     count += (int) model.rpc_servers.size();
 #endif
 
-#if defined(GGML_USE_SYCL)
-    count += ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    count += ggml_backend_vk_get_device_count();
-#elif defined(GGML_USE_CANN)
-    count += ggml_backend_cann_get_device_count();
-#endif
-
     return count;
 
     GGML_UNUSED(model);
@@ -3433,20 +3414,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
         }
     }
 
-#if defined(GGML_USE_SYCL)
-    if (host_buffer) {
-        buft = ggml_backend_sycl_host_buffer_type();
-    }
-#elif defined(GGML_USE_CANN)
-    if (host_buffer) {
-        buft = ggml_backend_cann_host_buffer_type();
-    }
-#elif defined(GGML_USE_CPU_HBM)
+#if defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
-#elif defined(GGML_USE_VULKAN)
-    if (host_buffer) {
-        buft = ggml_backend_vk_host_buffer_type();
-    }
 #endif
 
     if (buft == nullptr) {
@@ -3460,28 +3429,13 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int device) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#if defined(GGML_USE_RPC)
-    int rpc_count = (int)model.rpc_servers.size();
-    if (device < rpc_count) {
-        const char * endpoint = model.rpc_servers[device].c_str();
-        return ggml_backend_rpc_buffer_type(endpoint);
-    }
-    device -= rpc_count;
-#endif
-
     if (device < (int)model.devices.size()) {
         return ggml_backend_dev_buffer_type(model.devices[device]);
     }
     device -= (int)model.devices.size();
 
-#if defined(GGML_USE_VULKAN)
-    buft = ggml_backend_vk_buffer_type(device);
-#elif defined(GGML_USE_SYCL)
-    buft = ggml_backend_sycl_buffer_type(device);
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(device);
-#elif defined(GGML_USE_CANN)
-    buft = ggml_backend_cann_buffer_type(device);
 #endif
 
     if (buft == nullptr) {
@@ -3508,12 +3462,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
         }
     }
 
-#ifdef GGML_USE_SYCL
-    if (ggml_backend_sycl_get_device_count() > 1) {
-        buft = ggml_backend_sycl_split_buffer_type(tensor_split);
-    }
-#endif
-
     if (buft == nullptr) {
         buft = llama_default_buffer_type_offload(model, fallback_gpu);
     }
@@ -3523,18 +3471,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
 }
 
 static size_t llama_get_device_memory(const llama_model & model, int device) {
-#if defined(GGML_USE_RPC)
-    int rpc_count = (int)model.rpc_servers.size();
-    if (device < rpc_count) {
-        size_t total;
-        size_t free;
-        const char * endpoint = model.rpc_servers[device].c_str();
-        ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
-        return free;
-    }
-    device = device - rpc_count;
-#endif
-
     if (device < (int)model.devices.size()) {
         ggml_backend_dev_t dev = model.devices[device];
         size_t total;
@@ -3543,24 +3479,14 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
         return free;
     }
 
-#if defined(GGML_USE_SYCL)
-    size_t total;
-    size_t free;
-    ggml_backend_sycl_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_VULKAN)
-    size_t total;
-    size_t free;
-    ggml_backend_vk_get_device_memory(device, &free, &total);
-    return free;
-#elif defined(GGML_USE_CANN)
-    size_t total;
-    size_t free;
-    ggml_backend_cann_get_device_memory(device, &free, &total);
-    return free;
-#else
+    if (model.devices.size() > 0) {
+        ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(model.devices[0]);
+        LLAMA_LOG_WARN("%s: failed to get free memmory of device:%d of backend:%s, for device id is out of range.\n", __func__, device, ggml_backend_reg_name(reg));
+    } else {
+        LLAMA_LOG_WARN("%s: failed to get free memmory of device, no devices in inputted model.\n", __func__);
+    }
     return 1;
-#endif
+
     GGML_UNUSED(model);
     GGML_UNUSED(device);
 }
@@ -5251,6 +5177,57 @@ struct llama_model_loader {
     }
 };
 
+// temporary allocate memory for the input batch if needed
+static const llama_seq_id batch_default_seq_id = 0;
+struct llama_batch_allocr {
+    std::array<llama_seq_id, 1> seq_id_0 = {batch_default_seq_id};
+    std::vector<llama_pos>      pos;
+    std::vector<int32_t>        n_seq_id;
+    std::vector<llama_seq_id *> seq_id;
+    std::vector<int8_t>         logits;
+    struct llama_batch          batch;
+    // optionally fulfill the batch returned by llama_batch_get_one
+    llama_batch_allocr(llama_context & ctx, struct llama_batch in_batch) {
+        batch = in_batch;
+        GGML_ASSERT(batch.n_tokens > 0);
+        if (!batch.pos) {
+            // determine the last position in KV cache
+            llama_pos last_pos = -1;
+            for (const auto & cell : ctx.kv_self.cells) {
+                if (cell.has_seq_id(batch_default_seq_id)) {
+                    last_pos = std::max(last_pos, cell.pos);
+                }
+            }
+            last_pos++; // next position
+            pos.resize(batch.n_tokens);
+            for (int32_t i = 0; i < batch.n_tokens; i++) {
+                pos[i] = i+last_pos;
+            }
+            batch.pos = pos.data();
+        }
+        if (!batch.n_seq_id) {
+            n_seq_id.resize(batch.n_tokens);
+            for (int32_t i = 0; i < batch.n_tokens; i++) {
+                n_seq_id[i] = seq_id_0.size();
+            }
+            batch.n_seq_id = n_seq_id.data();
+        }
+        if (!batch.seq_id) {
+            seq_id.resize(batch.n_tokens + 1);
+            seq_id[batch.n_tokens] = NULL;
+            for (int32_t i = 0; i < batch.n_tokens; i++) {
+                seq_id[i] = seq_id_0.data();
+            }
+            batch.seq_id = seq_id.data();
+        }
+        if (!batch.logits) {
+            logits.resize(batch.n_tokens);
+            logits[logits.size() - 1] = true;
+            batch.logits = logits.data();
+        }
+    }
+};
+
 template<>
 bool llama_model_loader::get_key(const enum llm_kv kid, enum llama_pooling_type & result, const bool required) {
     uint32_t tmp;
@@ -6193,14 +6170,14 @@ static void llm_load_vocab(
             vocab.type = LLAMA_VOCAB_TYPE_NONE;
 
             // default special tokens
-            vocab.special_bos_id  = -1;
-            vocab.special_eos_id  = -1;
-            vocab.special_unk_id  = -1;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
-            vocab.linefeed_id     = -1;
+            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_eos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_unk_id  = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
+            vocab.linefeed_id     = LLAMA_TOKEN_NULL;
 
             // read vocab size from metadata
             if (!ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab, false)) {
@@ -6217,16 +6194,16 @@ static void llm_load_vocab(
             vocab.special_bos_id  = 1;
             vocab.special_eos_id  = 2;
             vocab.special_unk_id  = 0;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
         } else if (tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
             // default special tokens
-            vocab.special_bos_id  = -1;
-            vocab.special_eos_id  = -1;
+            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_eos_id  = LLAMA_TOKEN_NULL;
             vocab.special_unk_id  = 100;
             vocab.special_sep_id  = 102;
             vocab.special_pad_id  = 0;
@@ -6262,22 +6239,22 @@ static void llm_load_vocab(
             // default special tokens
             vocab.special_bos_id  = 11;
             vocab.special_eos_id  = 11;
-            vocab.special_unk_id  = -1;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
+            vocab.special_unk_id  = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
         } else if (tokenizer_model == "t5") {
             vocab.type = LLAMA_VOCAB_TYPE_UGM;
 
             // default special tokens
-            vocab.special_bos_id  = -1;
+            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
             vocab.special_eos_id  = 1;
             vocab.special_unk_id  = 2;
-            vocab.special_sep_id  = -1;
+            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
             vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
+            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
+            vocab.special_mask_id = LLAMA_TOKEN_NULL;
 
             const int precompiled_charsmap_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP).c_str());
             if (precompiled_charsmap_keyidx != -1) {
@@ -6300,11 +6277,11 @@ static void llm_load_vocab(
             vocab.type = LLAMA_VOCAB_TYPE_RWKV;
 
             // default special tokens
-            vocab.special_bos_id = -1;
-            vocab.special_eos_id = -1;
-            vocab.special_unk_id = -1;
-            vocab.special_sep_id = -1;
-            vocab.special_pad_id = -1;
+            vocab.special_bos_id = LLAMA_TOKEN_NULL;
+            vocab.special_eos_id = LLAMA_TOKEN_NULL;
+            vocab.special_unk_id = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id = LLAMA_TOKEN_NULL;
+            vocab.special_pad_id = LLAMA_TOKEN_NULL;
         } else {
             throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
         }
@@ -6388,7 +6365,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "chatglm-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM4;
-                vocab.special_bos_id  = -1;
+                vocab.special_bos_id = LLAMA_TOKEN_NULL;
             } else if (
                 tokenizer_pre == "viking") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
@@ -6514,44 +6491,6 @@ static void llm_load_vocab(
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
-        // For Fill-In-the-Middle (FIM)/infill models which where converted
-        // prior to support of FIM special tokens in GGUF, the following
-        // will allow those models to continue to work. The general names
-        // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
-        // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
-        // new versions of these models have been published.
-        std::string gen_name;
-        ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
-
-        std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
-            [](unsigned char c){ return std::tolower(c); });
-
-        if (gen_name.find("code") != std::string::npos) {
-            if (model.arch == LLM_ARCH_LLAMA
-              && 32010 < vocab.id_to_token.size()
-              && vocab.id_to_token[32007].text.find("<PRE>") != std::string::npos
-              && vocab.id_to_token[32008].text.find("<SUF>") != std::string::npos
-              && vocab.id_to_token[32009].text.find("<MID>") != std::string::npos
-              && vocab.id_to_token[32010].text.find("<EOT>") != std::string::npos) {
-                vocab.special_prefix_id = 32007;
-                vocab.special_suffix_id = 32008;
-                vocab.special_middle_id = 32009;
-                vocab.special_eot_id    = 32010;
-            } else if (model.arch == LLM_ARCH_GEMMA
-              && 107 < vocab.id_to_token.size()
-              && vocab.id_to_token[67].text == "<|fim_prefix|>"
-              && vocab.id_to_token[69].text == "<|fim_suffix|>"
-              && vocab.id_to_token[68].text == "<|fim_middle|>"
-              && vocab.id_to_token[107].text == "<end_of_turn>") {
-                vocab.special_prefix_id = 67;
-                vocab.special_suffix_id = 69;
-                vocab.special_middle_id = 68;
-                // TODO: this is not EOT, it is "file separator" token, needs fix
-                //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
-                //vocab.special_eot_id    = 70;
-                vocab.special_eot_id    = 107;
-            }
-        }
         try {
             vocab.linefeed_id = llama_byte_to_token_impl(vocab, '\n');
         } catch (const std::exception & e) {
@@ -6579,18 +6518,26 @@ static void llm_load_vocab(
     // special tokens
     {
         const std::vector<std::pair<enum llm_kv, int32_t &>> special_token_types = {
-            { LLM_KV_TOKENIZER_BOS_ID,    vocab.special_bos_id    },
-            { LLM_KV_TOKENIZER_EOS_ID,    vocab.special_eos_id    },
-            { LLM_KV_TOKENIZER_UNK_ID,    vocab.special_unk_id    },
-            { LLM_KV_TOKENIZER_SEP_ID,    vocab.special_sep_id    },
-            { LLM_KV_TOKENIZER_PAD_ID,    vocab.special_pad_id    },
-            { LLM_KV_TOKENIZER_CLS_ID,    vocab.special_cls_id    },
-            { LLM_KV_TOKENIZER_MASK_ID,   vocab.special_mask_id   },
-            { LLM_KV_TOKENIZER_PREFIX_ID, vocab.special_prefix_id },
-            { LLM_KV_TOKENIZER_SUFFIX_ID, vocab.special_suffix_id },
-            { LLM_KV_TOKENIZER_MIDDLE_ID, vocab.special_middle_id },
-            { LLM_KV_TOKENIZER_EOT_ID,    vocab.special_eot_id    },
-            { LLM_KV_TOKENIZER_EOM_ID,    vocab.special_eom_id    },
+            { LLM_KV_TOKENIZER_BOS_ID,     vocab.special_bos_id     },
+            { LLM_KV_TOKENIZER_EOS_ID,     vocab.special_eos_id     },
+            { LLM_KV_TOKENIZER_EOT_ID,     vocab.special_eot_id     },
+            { LLM_KV_TOKENIZER_EOM_ID,     vocab.special_eom_id     },
+            { LLM_KV_TOKENIZER_UNK_ID,     vocab.special_unk_id     },
+            { LLM_KV_TOKENIZER_SEP_ID,     vocab.special_sep_id     },
+            { LLM_KV_TOKENIZER_PAD_ID,     vocab.special_pad_id     },
+            { LLM_KV_TOKENIZER_CLS_ID,     vocab.special_cls_id     },
+            { LLM_KV_TOKENIZER_MASK_ID,    vocab.special_mask_id    },
+            { LLM_KV_TOKENIZER_FIM_PRE_ID, vocab.special_fim_pre_id },
+            { LLM_KV_TOKENIZER_FIM_SUF_ID, vocab.special_fim_suf_id },
+            { LLM_KV_TOKENIZER_FIM_MID_ID, vocab.special_fim_mid_id },
+            { LLM_KV_TOKENIZER_FIM_PAD_ID, vocab.special_fim_pad_id },
+            { LLM_KV_TOKENIZER_FIM_REP_ID, vocab.special_fim_rep_id },
+            { LLM_KV_TOKENIZER_FIM_SEP_ID, vocab.special_fim_sep_id },
+
+            // deprecated
+            { LLM_KV_TOKENIZER_PREFIX_ID, vocab.special_fim_pre_id },
+            { LLM_KV_TOKENIZER_SUFFIX_ID, vocab.special_fim_suf_id },
+            { LLM_KV_TOKENIZER_MIDDLE_ID, vocab.special_fim_mid_id },
         };
 
         for (const auto & it : special_token_types) {
@@ -6621,46 +6568,140 @@ static void llm_load_vocab(
             }
         }
 
-        // find EOT token: "<|eot_id|>", "<|im_end|>", "<end_of_turn>", etc.
-        //
-        // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOT_ID
-        //       for now, we apply this workaround to find the EOT token based on its text
-        if (vocab.special_eot_id == -1) {
-            for (const auto & t : vocab.token_to_id) {
+        // auto-detect special tokens by text
+        // TODO: convert scripts should provide these tokens through the KV metadata LLM_KV_TOKENIZER_...
+        //       for now, we apply this workaround to find the tokens based on their text
+
+        for (const auto & t : vocab.token_to_id) {
+            // find EOT token: "<|eot_id|>", "<|im_end|>", "<end_of_turn>", etc.
+            if (vocab.special_eot_id == LLAMA_TOKEN_NULL) {
                 if (false
-                        // TODO: gemma "<end_of_turn>" is exported as a normal token, so the following check does not work
-                        //       need to fix convert script
-                        //vocab.id_to_token[t.second].type == LLAMA_TOKEN_TYPE_CONTROL &&
                         || t.first == "<|eot_id|>"
                         || t.first == "<|im_end|>"
                         || t.first == "<|end|>"
                         || t.first == "<end_of_turn>"
                         || t.first == "<|endoftext|>"
                         || t.first == "<EOT>"
+                        || t.first == "<｜end▁of▁sentence｜>" // DeepSeek
                    ) {
                     vocab.special_eot_id = t.second;
                     if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                                __func__, t.first.c_str());
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
                         vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
                     }
-                    break;
                 }
             }
-        }
 
-        // find EOM token: "<|eom_id|>"
-        //
-        // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOM_ID
-        //       for now, we apply this workaround to find the EOM token based on its text
-        if (vocab.special_eom_id == -1) {
-            const auto & t = vocab.token_to_id.find("<|eom_id|>");
-            if (t != vocab.token_to_id.end()) {
-                vocab.special_eom_id = t->second;
-                if ((vocab.id_to_token[t->second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                    LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                        __func__, t->first.c_str());
-                    vocab.id_to_token[t->second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+            // find EOM token: "<|eom_id|>"
+            if (vocab.special_eom_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|eom_id|>"
+                        ) {
+                    vocab.special_eom_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_PRE token: "<|fim_prefix|>", "<fim-prefix>", "<PRE>", etc.
+            if (vocab.special_fim_pre_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_prefix|>"  // Qwen
+                        || t.first == "<fim-prefix>"
+                        || t.first == "<｜fim▁begin｜>" // DeepSeek
+                        || t.first == "<PRE>"
+                        ) {
+                    vocab.special_fim_pre_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_SUF token: "<|fim_suffix|>", "<fim-suffix>", "<SUF>", etc.
+            if (vocab.special_fim_suf_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_suffix|>" // Qwen
+                        || t.first == "<fim-suffix>"
+                        || t.first == "<｜fim▁hole｜>" // DeepSeek
+                        || t.first == "<SUF>"
+                        ) {
+                    vocab.special_fim_suf_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_MID token: "<|fim_middle|>", "<fim-middle>", "<MID>", etc.
+            if (vocab.special_fim_mid_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_middle|>" // Qwen
+                        || t.first == "<fim-middle>"
+                        || t.first == "<｜fim▁end｜>"  // DeepSeek
+                        || t.first == "<MID>"
+                        ) {
+                    vocab.special_fim_mid_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_PAD token: "<|fim_pad|>", "<fim-pad>", "<PAD>", etc.
+            if (vocab.special_fim_pad_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_pad|>" // Qwen
+                        || t.first == "<fim-pad>"
+                        || t.first == "<PAD>"
+                        ) {
+                    vocab.special_fim_pad_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_REP token: "<|fim_repo|>", "<fim-repo>", "<REP>", etc.
+            if (vocab.special_fim_rep_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|fim_repo|>"  // Qwen
+                        || t.first == "<|repo_name|>"
+                        || t.first == "<fim-repo>"
+                        || t.first == "<REPO>"
+                        ) {
+                    vocab.special_fim_rep_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
+                }
+            }
+
+            // find FIM_SEP token: "<|file_sep|>"
+            if (vocab.special_fim_sep_id == LLAMA_TOKEN_NULL) {
+                if (false
+                        || t.first == "<|file_sep|>" // Qwen
+                        ) {
+                    vocab.special_fim_sep_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                                __func__, t.second, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
                 }
             }
         }
@@ -6669,6 +6710,19 @@ static void llm_load_vocab(
         // this is currently determined based on the token text, which is obviously not ideal
         // ref: https://github.com/ggerganov/llama.cpp/issues/9606
         vocab.special_eog_ids.clear();
+
+        if (vocab.special_fim_pad_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_pad_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_pad_id);
+        }
+
+        if (vocab.special_fim_rep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_rep_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_rep_id);
+        }
+
+        if (vocab.special_fim_sep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_sep_id) == 0) {
+            vocab.special_eog_ids.insert(vocab.special_fim_sep_id);
+        }
+
         for (const auto & t : vocab.token_to_id) {
             if (false
                     || t.first == "<|eot_id|>"
@@ -6681,24 +6735,31 @@ static void llm_load_vocab(
                ) {
                 vocab.special_eog_ids.insert(t.second);
                 if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                    LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
-                            __func__, t.first.c_str());
+                    LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                            __func__, t.second, t.first.c_str());
                     vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                }
+            } else {
+                // token is control, but not marked as EOG -> print a debug log
+                if (vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL && vocab.special_eog_ids.count(t.second) == 0) {
+                    LLAMA_LOG_DEBUG("%s: control token: %6d '%s' is not marked as EOG\n",
+                            __func__, t.second, t.first.c_str());
                 }
             }
         }
 
-        if (vocab.special_eos_id != -1 && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
+        // sanity checks
+        if (vocab.special_eos_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eos_id);
             LLAMA_LOG_WARN("%s: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
 
-        if (vocab.special_eot_id != -1 && vocab.special_eog_ids.count(vocab.special_eot_id) == 0) {
+        if (vocab.special_eot_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eot_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eot_id);
             LLAMA_LOG_WARN("%s: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
 
-        if (vocab.special_eom_id != -1 && vocab.special_eog_ids.count(vocab.special_eom_id) == 0) {
+        if (vocab.special_eom_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eom_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eom_id);
             LLAMA_LOG_WARN("%s: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
@@ -6892,20 +6953,24 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: general.name     = %s\n",    __func__, model.name.c_str());
 
     // special tokens
-    if (vocab.special_bos_id    != -1) { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,  vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
-    if (vocab.special_eos_id    != -1) { LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,  vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
-    if (vocab.special_unk_id    != -1) { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,  vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
-    if (vocab.special_sep_id    != -1) { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,  vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
-    if (vocab.special_pad_id    != -1) { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,  vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
-    if (vocab.special_cls_id    != -1) { LLAMA_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,  vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
-    if (vocab.special_mask_id   != -1) { LLAMA_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id, vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
+    if (vocab.special_bos_id  != -1)    { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,     vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
+    if (vocab.special_eos_id  != -1)    { LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,     vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
+    if (vocab.special_eot_id  != -1)    { LLAMA_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,     vocab.id_to_token[vocab.special_eot_id].text.c_str() );  }
+    if (vocab.special_eom_id  != -1)    { LLAMA_LOG_INFO( "%s: EOM token        = %d '%s'\n", __func__, vocab.special_eom_id,     vocab.id_to_token[vocab.special_eom_id].text.c_str() );  }
+    if (vocab.special_unk_id  != -1)    { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,     vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
+    if (vocab.special_sep_id  != -1)    { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,     vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
+    if (vocab.special_pad_id  != -1)    { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,     vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
+    if (vocab.special_cls_id  != -1)    { LLAMA_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,     vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
+    if (vocab.special_mask_id != -1)    { LLAMA_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id,    vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
 
-    if (vocab.linefeed_id       != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,       vocab.id_to_token[vocab.linefeed_id].text.c_str() );       }
-    if (vocab.special_prefix_id != -1) { LLAMA_LOG_INFO( "%s: PRE token        = %d '%s'\n", __func__, vocab.special_prefix_id, vocab.id_to_token[vocab.special_prefix_id].text.c_str() ); }
-    if (vocab.special_suffix_id != -1) { LLAMA_LOG_INFO( "%s: SUF token        = %d '%s'\n", __func__, vocab.special_suffix_id, vocab.id_to_token[vocab.special_suffix_id].text.c_str() ); }
-    if (vocab.special_middle_id != -1) { LLAMA_LOG_INFO( "%s: MID token        = %d '%s'\n", __func__, vocab.special_middle_id, vocab.id_to_token[vocab.special_middle_id].text.c_str() ); }
-    if (vocab.special_eot_id    != -1) { LLAMA_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,    vocab.id_to_token[vocab.special_eot_id].text.c_str() );    }
-    if (vocab.special_eom_id    != -1) { LLAMA_LOG_INFO( "%s: EOM token        = %d '%s'\n", __func__, vocab.special_eom_id,    vocab.id_to_token[vocab.special_eom_id].text.c_str() );    }
+    if (vocab.linefeed_id != -1)        { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,        vocab.id_to_token[vocab.linefeed_id].text.c_str() ); }
+
+    if (vocab.special_fim_pre_id != -1) { LLAMA_LOG_INFO( "%s: FIM PRE token    = %d '%s'\n", __func__, vocab.special_fim_pre_id, vocab.id_to_token[vocab.special_fim_pre_id].text.c_str() ); }
+    if (vocab.special_fim_suf_id != -1) { LLAMA_LOG_INFO( "%s: FIM SUF token    = %d '%s'\n", __func__, vocab.special_fim_suf_id, vocab.id_to_token[vocab.special_fim_suf_id].text.c_str() ); }
+    if (vocab.special_fim_mid_id != -1) { LLAMA_LOG_INFO( "%s: FIM MID token    = %d '%s'\n", __func__, vocab.special_fim_mid_id, vocab.id_to_token[vocab.special_fim_mid_id].text.c_str() ); }
+    if (vocab.special_fim_pad_id != -1) { LLAMA_LOG_INFO( "%s: FIM PAD token    = %d '%s'\n", __func__, vocab.special_fim_pad_id, vocab.id_to_token[vocab.special_fim_pad_id].text.c_str() ); }
+    if (vocab.special_fim_rep_id != -1) { LLAMA_LOG_INFO( "%s: FIM REP token    = %d '%s'\n", __func__, vocab.special_fim_rep_id, vocab.id_to_token[vocab.special_fim_rep_id].text.c_str() ); }
+    if (vocab.special_fim_sep_id != -1) { LLAMA_LOG_INFO( "%s: FIM SEP token    = %d '%s'\n", __func__, vocab.special_fim_sep_id, vocab.id_to_token[vocab.special_fim_sep_id].text.c_str() ); }
 
     for (const auto & id : vocab.special_eog_ids) {
         LLAMA_LOG_INFO( "%s: EOG token        = %d '%s'\n", __func__, id, vocab.id_to_token[id].text.c_str() );
@@ -6971,7 +7036,14 @@ static bool llm_load_tensors(
 
     // assign cpu layers
     for (int i = 0; i < i_gpu_start; ++i) {
+#ifdef GGML_USE_AMX
+        model.buft_layer[i] = {
+            ggml_backend_amx_buffer_type(),
+            llama_default_buffer_type_cpu(model, true)
+        };
+#else
         model.buft_layer[i] = llama_default_buffer_type_cpu(model, true);
+#endif
     }
 
     if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
@@ -9996,7 +10068,7 @@ struct llm_build_context {
           llama_context  & lctx;
     const llama_hparams  & hparams;
     const llama_cparams  & cparams;
-    const llama_ubatch   & batch;
+    const llama_ubatch   & ubatch;
     const llama_kv_cache & kv_self;
 
     const int64_t n_embd;
@@ -10042,14 +10114,14 @@ struct llm_build_context {
     // TODO: consider making the entire interface noexcept
     llm_build_context(
         llama_context  & lctx,
-    const llama_ubatch & batch,
+    const llama_ubatch & ubatch,
     const llm_build_cb & cb,
                   bool   worst_case) :
         model            (lctx.model),
         lctx             (lctx),
         hparams          (model.hparams),
         cparams          (lctx.cparams),
-        batch            (batch),
+        ubatch           (ubatch),
         kv_self          (lctx.kv_self),
         n_embd           (hparams.n_embd),
         n_layer          (hparams.n_layer),
@@ -10071,7 +10143,7 @@ struct llm_build_context {
         beta_slow        (cparams.yarn_beta_slow),
         norm_eps         (hparams.f_norm_eps),
         norm_rms_eps     (hparams.f_norm_rms_eps),
-        n_tokens         (batch.n_tokens),
+        n_tokens         (ubatch.n_tokens),
         n_kv             (worst_case ? kv_self.size : kv_self.n),
         n_outputs        (worst_case ? n_tokens : lctx.n_outputs),
         n_outputs_enc    (worst_case ? n_tokens : lctx.embd_enc.size() / hparams.n_embd),
@@ -10440,7 +10512,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -10600,7 +10672,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = model.type == MODEL_7B ? build_inp_pos() : nullptr;
@@ -10715,7 +10787,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -10819,7 +10891,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -10941,7 +11013,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // multiply by embedding_multiplier_scale of 78.38367176906169
         inpL = ggml_scale(ctx0, inpL, 78.38367176906169f);
@@ -11099,7 +11171,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -11221,7 +11293,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -11324,7 +11396,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
@@ -11426,7 +11498,7 @@ struct llm_build_context {
         }
 
         // construct input embeddings (token, type, position)
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // token types are hardcoded to zero ("Sentence A")
         struct ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
@@ -11613,7 +11685,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
@@ -11715,7 +11787,7 @@ struct llm_build_context {
         struct ggml_tensor * pos;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
@@ -11853,7 +11925,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12003,7 +12075,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12116,7 +12188,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12231,7 +12303,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12376,7 +12448,7 @@ struct llm_build_context {
         struct ggml_tensor * ffn_output;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12495,7 +12567,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12623,7 +12695,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12728,7 +12800,7 @@ struct llm_build_context {
         struct ggml_tensor * pos;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12833,7 +12905,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -12943,7 +13015,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -13061,7 +13133,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -13188,7 +13260,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // scale the input embeddings
         inpL = ggml_scale(ctx0, inpL, scale_embd);
@@ -13332,7 +13404,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // scale the input embeddings
         inpL = ggml_scale(ctx0, inpL, scale_embd);
@@ -13533,7 +13605,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         inpL = ggml_scale(ctx0, inpL, sqrtf(n_embd));
         cb(inpL, "inp_scaled", -1);
@@ -13641,7 +13713,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         inpL = ggml_scale(ctx0, inpL, sqrtf(n_embd));
         cb(inpL, "inp_scaled", -1);
@@ -13779,7 +13851,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -13895,7 +13967,7 @@ struct llm_build_context {
         struct ggml_tensor * inpL;
 
         // {n_embd, n_tokens}
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         struct ggml_tensor * state_copy = build_inp_s_copy();
         struct ggml_tensor * state_mask = build_inp_s_mask();
@@ -13907,7 +13979,7 @@ struct llm_build_context {
                     LLM_NORM_RMS, cb, il);
             cb(cur, "attn_norm", il);
 
-            cur = llm_build_mamba(ctx0, lctx, batch, gf, cur,
+            cur = llm_build_mamba(ctx0, lctx, ubatch, gf, cur,
                     state_copy, state_mask,
                     kv_head, n_kv, cb, il);
 
@@ -13953,7 +14025,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14110,7 +14182,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14238,7 +14310,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14357,7 +14429,7 @@ struct llm_build_context {
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14484,7 +14556,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14629,7 +14701,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14770,7 +14842,7 @@ struct llm_build_context {
         struct ggml_tensor * inpL;
 
         // {n_embd, n_tokens}
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -14985,7 +15057,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -15139,7 +15211,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         GGML_ASSERT(lctx.is_encoding);
         struct ggml_tensor * pos_bucket_enc = llm_build_pos_bucket(false);
@@ -15271,7 +15343,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         GGML_ASSERT(!lctx.is_encoding);
         GGML_ASSERT(n_outputs_enc > 0 && "call llama_encode() first");
@@ -15473,7 +15545,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
@@ -15565,7 +15637,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -15679,7 +15751,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -15803,7 +15875,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -15923,11 +15995,11 @@ struct llm_build_context {
         // Token shift state dimensions should be 2 * n_emb
         GGML_ASSERT(n_embd == hparams.n_embd_k_s() / 2);
 
-        const int64_t n_seqs = batch.n_seqs;
-        const int64_t n_seq_tokens = batch.n_seq_tokens;
-        const int64_t n_tokens = batch.n_tokens;
+        const int64_t n_seqs = ubatch.n_seqs;
+        const int64_t n_seq_tokens = ubatch.n_seq_tokens;
+        const int64_t n_tokens = ubatch.n_tokens;
         GGML_ASSERT(n_seqs != 0);
-        GGML_ASSERT(batch.equal_seqs);
+        GGML_ASSERT(ubatch.equal_seqs);
         GGML_ASSERT(n_tokens == n_seq_tokens * n_seqs);
 
         struct ggml_tensor * cur;
@@ -15935,7 +16007,7 @@ struct llm_build_context {
         struct ggml_tensor * state_copy = build_inp_s_copy();
         struct ggml_tensor * state_mask = build_inp_s_mask();
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
         inpL = llm_build_norm(ctx0, inpL, hparams, model.tok_norm, model.tok_norm_b, LLM_NORM, cb, -1);
 
         for (int il = 0; il < n_layer; ++il) {
@@ -16020,9 +16092,11 @@ struct llm_build_context {
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
         cur = llm_build_norm(ctx0, cur, hparams, model.output_norm, model.output_norm_b, LLM_NORM, cb, -1);
-        cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
+        cb(cur, "result_norm", -1);
 
+        cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
         cb(cur, "result_output", -1);
+
         ggml_build_forward_expand(gf, cur);
 
         return gf;
@@ -16047,7 +16121,7 @@ struct llm_build_context {
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
-        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
@@ -16243,7 +16317,7 @@ static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
 
 static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
-    const llama_ubatch & batch,
+    const llama_ubatch & ubatch,
                   bool   worst_case) {
     const auto & model = lctx.model;
 
@@ -16265,7 +16339,7 @@ static struct ggml_cgraph * llama_build_graph(
         // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
         // FIXME: fix in ggml_backend_sched
         const bool full_offload = lctx.model.n_gpu_layers > (int)lctx.model.hparams.n_layer;
-        if (batch.n_tokens < 32 || full_offload) {
+        if (ubatch.n_tokens < 32 || full_offload) {
             if (il != -1 && strcmp(name, "norm") == 0) {
                 for (auto * backend : lctx.backends) {
                     if (ggml_backend_supports_buft(backend, lctx.model.buft_layer[il].buft) &&
@@ -16280,7 +16354,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_cgraph * result = NULL;
 
-    struct llm_build_context llm(lctx, batch, cb, worst_case);
+    struct llm_build_context llm(lctx, ubatch, cb, worst_case);
 
     llm.init();
 
@@ -16531,7 +16605,7 @@ static int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t
     return relative_bucket;
 }
 
-static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
+static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) {
     //
     // set input data
     //
@@ -16540,28 +16614,28 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
     const auto & cparams = lctx.cparams;
     const auto & kv_self = lctx.kv_self;
 
-    if (batch.token) {
-        const int64_t n_tokens = batch.n_tokens;
+    if (ubatch.token) {
+        const int64_t n_tokens = ubatch.n_tokens;
 
-        ggml_backend_tensor_set(lctx.inp_tokens, batch.token, 0, n_tokens*ggml_element_size(lctx.inp_tokens));
+        ggml_backend_tensor_set(lctx.inp_tokens, ubatch.token, 0, n_tokens*ggml_element_size(lctx.inp_tokens));
     }
 
-    if (batch.embd) {
+    if (ubatch.embd) {
         const int64_t n_embd   = hparams.n_embd;
-        const int64_t n_tokens = batch.n_tokens;
+        const int64_t n_tokens = ubatch.n_tokens;
 
-        ggml_backend_tensor_set(lctx.inp_embd, batch.embd, 0, n_tokens*n_embd*ggml_element_size(lctx.inp_embd));
+        ggml_backend_tensor_set(lctx.inp_embd, ubatch.embd, 0, n_tokens*n_embd*ggml_element_size(lctx.inp_embd));
     }
 
-    if (batch.pos && lctx.inp_pos) {
-        const int64_t n_tokens = batch.n_tokens;
+    if (ubatch.pos && lctx.inp_pos) {
+        const int64_t n_tokens = ubatch.n_tokens;
 
-        ggml_backend_tensor_set(lctx.inp_pos, batch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
+        ggml_backend_tensor_set(lctx.inp_pos, ubatch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
     }
 
     if (hparams.causal_attn || cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
         GGML_ASSERT(lctx.inp_out_ids && "every model that can must skip unused outputs");
-        const int64_t n_tokens = batch.n_tokens;
+        const int64_t n_tokens = ubatch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_out_ids->buffer));
         int32_t * data = (int32_t *) lctx.inp_out_ids->data;
@@ -16570,10 +16644,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
             for (int i = 0; i < n_tokens; ++i) {
                 data[i] = i;
             }
-        } else if (batch.output) {
+        } else if (ubatch.output) {
             int32_t n_outputs = 0;
             for (int i = 0; i < n_tokens; ++i) {
-                if (batch.output[i]) {
+                if (ubatch.output[i]) {
                     data[n_outputs++] = i;
                 }
             }
@@ -16598,9 +16672,9 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
         // NOTE: hparams.causal_attn indicates the model is capable of generation and uses the kv cache.
         if (cparams.causal_attn && !lctx.is_encoding) {
             const int64_t n_kv         = kv_self.n;
-            const int64_t n_tokens     = batch.n_tokens;
-            const int64_t n_seq_tokens = batch.n_seq_tokens;
-            const int64_t n_seqs       = batch.n_seqs;
+            const int64_t n_tokens     = ubatch.n_tokens;
+            const int64_t n_seq_tokens = ubatch.n_seq_tokens;
+            const int64_t n_seqs       = ubatch.n_seqs;
 
 
             float * data     = nullptr;
@@ -16617,14 +16691,14 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
             }
 
             // For causal attention, use only the previous KV cells
-            // of the correct sequence for each token of the batch.
+            // of the correct sequence for each token of the ubatch.
             // It's assumed that if a token in the batch has multiple sequences, they are equivalent.
             for (int h = 0; h < 1; ++h) {
                 for (int s = 0; s < n_seqs; ++s) {
-                    const llama_seq_id seq_id = batch.seq_id[s][0];
+                    const llama_seq_id seq_id = ubatch.seq_id[s][0];
 
                     for (int j = 0; j < n_seq_tokens; ++j) {
-                        const llama_pos pos = batch.pos[s*n_seq_tokens + j];
+                        const llama_pos pos = ubatch.pos[s*n_seq_tokens + j];
 
                         for (int i = 0; i < n_kv; ++i) {
                             float f;
@@ -16670,9 +16744,9 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
                 }
             }
         } else {
-            const int64_t n_tokens     = batch.n_tokens;
-            const int64_t n_seq_tokens = batch.n_seq_tokens;
-            const int64_t n_seqs       = batch.n_seqs;
+            const int64_t n_tokens     = ubatch.n_tokens;
+            const int64_t n_seq_tokens = ubatch.n_seq_tokens;
+            const int64_t n_seqs       = ubatch.n_seqs;
             // when using kv cache, the mask needs to match the kv cache size
             const int64_t n_stride = hparams.causal_attn && !lctx.is_encoding ? kv_self.n : n_tokens;
 
@@ -16682,7 +16756,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
 
             for (int h = 0; h < 1; ++h) {
                 for (int s1 = 0; s1 < n_seqs; ++s1) {
-                    const llama_seq_id seq_id = batch.seq_id[s1][0];
+                    const llama_seq_id seq_id = ubatch.seq_id[s1][0];
 
                     for (int j = 0; j < n_seq_tokens; ++j) {
                         const int32_t tj = s1*n_seq_tokens + j;
@@ -16692,10 +16766,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
                                 const int32_t ti = s0*n_seq_tokens + i;
                                 float f = -INFINITY;
 
-                                for (int s = 0; s < batch.n_seq_id[s0]; ++s) {
-                                    if (batch.seq_id[s0][s] == seq_id) {
+                                for (int s = 0; s < ubatch.n_seq_id[s0]; ++s) {
+                                    if (ubatch.seq_id[s0][s] == seq_id) {
                                         if (hparams.use_alibi) {
-                                            f = -std::abs(batch.pos[ti] - batch.pos[tj]);
+                                            f = -std::abs(ubatch.pos[ti] - ubatch.pos[tj]);
                                         } else {
                                             f = 0.0f;
                                         }
@@ -16717,9 +16791,9 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
     }
 
     if (cparams.embeddings && cparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
-        const int64_t n_tokens     = batch.n_tokens;
-        const int64_t n_seq_tokens = batch.n_seq_tokens;
-        const int64_t n_seqs       = batch.n_seqs;
+        const int64_t n_tokens     = ubatch.n_tokens;
+        const int64_t n_seq_tokens = ubatch.n_seq_tokens;
+        const int64_t n_seqs       = ubatch.n_seqs;
 
         GGML_ASSERT(lctx.inp_mean);
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_mean->buffer));
@@ -16730,12 +16804,12 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
         std::vector<uint64_t> sum(n_tokens, 0);
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = batch.seq_id[s][0];
+            const llama_seq_id seq_id = ubatch.seq_id[s][0];
 
-            // TODO: adapt limits to n_seqs when batch.equal_seqs is true
+            // TODO: adapt limits to n_seqs when ubatch.equal_seqs is true
             GGML_ASSERT(seq_id < n_tokens && "seq_id cannot be larger than n_tokens with pooling_type == MEAN");
 
-            sum[seq_id] += batch.n_seq_tokens;
+            sum[seq_id] += ubatch.n_seq_tokens;
         }
 
         std::vector<float> div(n_tokens, 0.0f);
@@ -16747,7 +16821,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
         }
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = batch.seq_id[s][0];
+            const llama_seq_id seq_id = ubatch.seq_id[s][0];
 
             for (int i = 0; i < n_seq_tokens; ++i) {
                 data[seq_id*n_tokens + s*n_seq_tokens + i] = div[seq_id];
@@ -16758,9 +16832,9 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
     if (cparams.embeddings && (
                 cparams.pooling_type == LLAMA_POOLING_TYPE_CLS ||
                 cparams.pooling_type == LLAMA_POOLING_TYPE_RANK)) {
-        const int64_t n_tokens     = batch.n_tokens;
-        const int64_t n_seq_tokens = batch.n_seq_tokens;
-        const int64_t n_seqs       = batch.n_seqs;
+        const int64_t n_tokens     = ubatch.n_tokens;
+        const int64_t n_seq_tokens = ubatch.n_seq_tokens;
+        const int64_t n_seqs       = ubatch.n_seqs;
 
         GGML_ASSERT(lctx.inp_cls);
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
@@ -16769,13 +16843,13 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
         memset(lctx.inp_cls->data, 0, n_tokens * ggml_element_size(lctx.inp_cls));
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = batch.seq_id[s][0];
+            const llama_seq_id seq_id = ubatch.seq_id[s][0];
 
-            // TODO: adapt limits to n_seqs when batch.equal_seqs is true
+            // TODO: adapt limits to n_seqs when ubatch.equal_seqs is true
             GGML_ASSERT(seq_id < n_tokens && "seq_id cannot be larger than n_tokens with pooling_type == CLS or RANK");
 
             for (int i = 0; i < n_seq_tokens; ++i) {
-                const llama_pos pos = batch.pos[s*n_seq_tokens + i];
+                const llama_pos pos = ubatch.pos[s*n_seq_tokens + i];
 
                 if (pos == 0) {
                     data[seq_id] = s*n_seq_tokens + i;
@@ -16785,9 +16859,9 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
     }
 
     if (cparams.embeddings && cparams.pooling_type == LLAMA_POOLING_TYPE_LAST) {
-        const int64_t n_tokens     = batch.n_tokens;
-        const int64_t n_seq_tokens = batch.n_seq_tokens;
-        const int64_t n_seqs       = batch.n_seqs;
+        const int64_t n_tokens     = ubatch.n_tokens;
+        const int64_t n_seq_tokens = ubatch.n_seq_tokens;
+        const int64_t n_seqs       = ubatch.n_seqs;
 
         GGML_ASSERT(lctx.inp_cls);
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
@@ -16799,13 +16873,13 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
         std::vector<int> last_row(n_tokens, -1);
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = batch.seq_id[s][0];
+            const llama_seq_id seq_id = ubatch.seq_id[s][0];
 
-            // TODO: adapt limits to n_seqs when batch.equal_seqs is true
+            // TODO: adapt limits to n_seqs when ubatch.equal_seqs is true
             GGML_ASSERT(seq_id < n_tokens && "seq_id cannot be larger than n_tokens with pooling_type == LAST");
 
             for (int i = 0; i < n_seq_tokens; ++i) {
-                const llama_pos pos = batch.pos[s*n_seq_tokens + i];
+                const llama_pos pos = ubatch.pos[s*n_seq_tokens + i];
 
                 if (pos >= last_pos[seq_id]) {
                     last_pos[seq_id] = pos;
@@ -16867,10 +16941,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
     }
 
     if (lctx.inp_pos_bucket) {
-        const int64_t n_tokens = batch.n_tokens;
+        const int64_t n_tokens = ubatch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_pos_bucket->buffer));
-        GGML_ASSERT(!batch.equal_seqs); // TODO: use batch.n_seqs instead of failing
+        GGML_ASSERT(!ubatch.equal_seqs); // TODO: use ubatch.n_seqs instead of failing
 
         int32_t * data = (int32_t *) lctx.inp_pos_bucket->data;
 
@@ -16879,7 +16953,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
             for (int h = 0; h < 1; ++h) {
                 for (int j = 0; j < n_tokens; ++j) {
                     for (int i = 0; i < n_kv; ++i) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = llama_relative_position_bucket(lctx.kv_self.cells[i].pos, batch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
+                        data[h*(n_kv*n_tokens) + j*n_kv + i] = llama_relative_position_bucket(lctx.kv_self.cells[i].pos, ubatch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
                     }
                 }
             }
@@ -16887,7 +16961,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
             for (int h = 0; h < 1; ++h) {
                 for (int j = 0; j < n_tokens; ++j) {
                     for (int i = 0; i < n_tokens; ++i) {
-                        data[h*(n_tokens*n_tokens) + j*n_tokens + i] = llama_relative_position_bucket(batch.pos[i], batch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
+                        data[h*(n_tokens*n_tokens) + j*n_tokens + i] = llama_relative_position_bucket(ubatch.pos[i], ubatch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
                     }
                 }
             }
@@ -16903,10 +16977,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
 
     if (!lctx.is_encoding && lctx.inp_KQ_mask_cross) {
         const int64_t n_output_enc = lctx.embd_enc.size() / hparams.n_embd;
-        const int64_t n_tokens = batch.n_tokens;
+        const int64_t n_tokens = ubatch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_KQ_mask_cross->buffer));
-        GGML_ASSERT(!batch.equal_seqs); // TODO: use batch.n_seqs instead of failing
+        GGML_ASSERT(!ubatch.equal_seqs); // TODO: use ubatch.n_seqs instead of failing
 
         float * data = (float *) lctx.inp_KQ_mask_cross->data;
 
@@ -16914,8 +16988,8 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
             for (int j = 0; j < n_tokens; ++j) {
                 for (int i = 0; i < n_output_enc; ++i) {
                     float f = -INFINITY;
-                    for (int s = 0; s < batch.n_seq_id[j]; ++s) {
-                        const llama_seq_id seq_id = batch.seq_id[j][s];
+                    for (int s = 0; s < ubatch.n_seq_id[j]; ++s) {
+                        const llama_seq_id seq_id = ubatch.seq_id[j][s];
                         if (lctx.seq_ids_enc[i].find(seq_id) != lctx.seq_ids_enc[i].end()) {
                             f = 0.0f;
                         }
@@ -17072,26 +17146,30 @@ static void llama_graph_compute(
 //
 static int llama_decode_internal(
          llama_context & lctx,
-           llama_batch   batch_all) { // TODO: rename back to batch
+           llama_batch   inp_batch) {
 
     lctx.is_encoding = false;
-    const uint32_t n_tokens_all = batch_all.n_tokens;
 
-    if (n_tokens_all == 0) {
+    if (inp_batch.n_tokens == 0) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
     }
+
+    // temporary allocate memory for the input batch if needed
+    llama_batch_allocr batch_allocr(lctx, inp_batch);
+    const llama_batch & batch = batch_allocr.batch;
+    const uint32_t n_tokens_all = batch.n_tokens;
 
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
-    GGML_ASSERT((!batch_all.token && batch_all.embd) || (batch_all.token && !batch_all.embd)); // NOLINT
+    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
-    if (batch_all.token) {
+    if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch_all.token[i]);
+            if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
         }
@@ -17122,9 +17200,9 @@ static int llama_decode_internal(
     lctx.embd_seq.clear();
 
     // count outputs
-    if (batch_all.logits && !embd_pooled) {
+    if (batch.logits && !embd_pooled) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            n_outputs += batch_all.logits[i] != 0;
+            n_outputs += batch.logits[i] != 0;
         }
     } else if (lctx.logits_all || embd_pooled) {
         n_outputs = n_tokens_all;
@@ -17133,7 +17211,7 @@ static int llama_decode_internal(
         n_outputs = 1;
     }
 
-    lctx.sbatch.from_batch(batch_all, n_embd,
+    lctx.sbatch.from_batch(batch, n_embd,
         /* simple_split */ !kv_self.recurrent,
         /* logits_all   */ n_outputs == n_tokens_all);
 
@@ -17386,16 +17464,19 @@ static int llama_decode_internal(
 //
 static int llama_encode_internal(
          llama_context & lctx,
-           llama_batch   batch) {
+           llama_batch   inp_batch) {
 
     lctx.is_encoding = true;
 
-    const uint32_t n_tokens = batch.n_tokens;
-
-    if (n_tokens == 0) {
+    if (inp_batch.n_tokens == 0) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
     }
+
+    // temporary allocate memory for the input batch if needed
+    llama_batch_allocr batch_allocr(lctx, inp_batch);
+    const llama_batch & batch = batch_allocr.batch;
+    const uint32_t n_tokens = batch.n_tokens;
 
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -19018,14 +19099,18 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
+#if defined(GGML_USE_KOMPUTE)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
     return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr;
+           ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr ||
+           llama_supports_rpc();
 #endif
+}
+
+bool llama_supports_rpc(void) {
+    return ggml_backend_reg_by_name("RPC") != nullptr;
 }
 
 void llama_backend_init(void) {
@@ -19102,6 +19187,36 @@ struct llama_model * llama_load_model_from_file(
         model->rpc_servers.push_back(servers);
     }
 
+    // add RPC devices
+    if (!model->rpc_servers.empty()) {
+        ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
+        if (!rpc_reg) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        // ggml_backend_dev_t ggml_backend_rpc_add_device(const char * endpoint);
+        using ggml_backend_rpc_add_device_t = ggml_backend_dev_t (*)(const char *);
+        ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
+        if (!ggml_backend_rpc_add_device_fn) {
+            LLAMA_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
+            llama_free_model(model);
+            return nullptr;
+        }
+
+        for (const std::string & server : model->rpc_servers) {
+            ggml_backend_dev_t dev = ggml_backend_rpc_add_device_fn(server.c_str());
+            if (dev) {
+                model->devices.push_back(dev);
+            } else {
+                LLAMA_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
+                llama_free_model(model);
+                return nullptr;
+            }
+        }
+    }
+
     // create list of devices to use with this model
     // currently, we use all available devices
     // TODO: rework API to give user more control over device selection
@@ -19115,8 +19230,13 @@ struct llama_model * llama_load_model_from_file(
 
             case GGML_BACKEND_DEVICE_TYPE_GPU:
             case GGML_BACKEND_DEVICE_TYPE_GPU_FULL:
+            {
+                size_t free, total; // NOLINT
+                ggml_backend_dev_memory(dev, &free, &total);
+                LLAMA_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
                 model->devices.push_back(dev);
                 break;
+            }
         }
     }
 
@@ -19128,7 +19248,7 @@ struct llama_model * llama_load_model_from_file(
         } else if (status == -2) {
             LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
-        delete model;
+        llama_free_model(model);
         return nullptr;
     }
 
@@ -19168,7 +19288,7 @@ struct llama_context * llama_new_context_with_model(
         params.flash_attn = false;
     }
 
-    if (params.type_v != GGML_TYPE_F16 && !params.flash_attn) {
+    if (ggml_is_quantized(params.type_v) && !params.flash_attn) {
         LLAMA_LOG_ERROR("%s: V cache quantization requires flash_attn\n", __func__);
         return nullptr;
     }
@@ -19311,71 +19431,7 @@ struct llama_context * llama_new_context_with_model(
             main_gpu -= (int)model->devices.size();
         }
 
-#if defined(GGML_USE_RPC)
-        if (model->n_gpu_layers > 0) {
-            for (const auto & endpoint : model->rpc_servers) {
-                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-        if (main_gpu >= (int)model->rpc_servers.size()) {
-            main_gpu -= (int)model->rpc_servers.size();
-        }
-#endif
-
-#if defined(GGML_USE_VULKAN)
-        if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
-            llama_free(ctx);
-            return nullptr;
-        }
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            for (int device = 0; device < ggml_backend_vk_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_vk_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize Vulkan%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_SYCL)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_LAYER requires a backend for each GPU
-            for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
-                ggml_backend_t backend = ggml_backend_sycl_init(i);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d for No.%d backend\n", __func__, i, i);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
-        }
-#elif defined(GGML_USE_KOMPUTE)
+#if defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
             auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
@@ -19384,30 +19440,6 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(backend);
-        }
-#elif defined(GGML_USE_CANN)
-        // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-        // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-            ggml_backend_t backend = ggml_backend_cann_init(main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, main_gpu);
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        } else {
-            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
-            // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
-            for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
-                ggml_backend_t backend = ggml_backend_cann_init(device);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
-            }
         }
 #endif
 
@@ -19464,7 +19496,7 @@ struct llama_context * llama_new_context_with_model(
             }
 
             LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
-                (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
+                      (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
                 ggml_type_name(type_k), (float)memory_size_k / (1024.0f * 1024.0f),
                 ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
         }
@@ -21060,9 +21092,7 @@ void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
 
 struct llama_batch llama_batch_get_one(
              llama_token * tokens,
-                 int32_t   n_tokens,
-               llama_pos   pos_0,
-            llama_seq_id   seq_id) {
+                 int32_t   n_tokens) {
     return {
         /*n_tokens       =*/ n_tokens,
         /*tokens         =*/ tokens,
@@ -21071,9 +21101,6 @@ struct llama_batch llama_batch_get_one(
         /*n_seq_id       =*/ nullptr,
         /*seq_id         =*/ nullptr,
         /*logits         =*/ nullptr,
-        /*all_pos_0      =*/ pos_0,
-        /*all_pos_1      =*/ 1,
-        /*all_seq_id     =*/ seq_id,
     };
 }
 
@@ -21086,9 +21113,6 @@ struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_
         /*n_seq_id       =*/ nullptr,
         /*seq_id         =*/ nullptr,
         /*logits         =*/ nullptr,
-        /*all_pos_0      =*/ 0,
-        /*all_pos_1      =*/ 0,
-        /*all_seq_id     =*/ 0,
     };
 
     if (embd) {
@@ -21128,7 +21152,7 @@ int32_t llama_encode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
     const int ret = llama_encode_internal(*ctx, batch);
-    if (ret < 0) {
+    if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
     }
 
@@ -21139,7 +21163,7 @@ int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
     const int ret = llama_decode_internal(*ctx, batch);
-    if (ret < 0) {
+    if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
@@ -21318,6 +21342,10 @@ llama_token llama_token_eos(const struct llama_model * model) {
     return llama_token_eos_impl(model->vocab);
 }
 
+llama_token llama_token_eot(const struct llama_model * model) {
+    return llama_token_eot_impl(model->vocab);
+}
+
 llama_token llama_token_cls(const struct llama_model * model) {
     return llama_token_cls_impl(model->vocab);
 }
@@ -21354,8 +21382,28 @@ llama_token llama_token_suffix(const struct llama_model * model) {
     return llama_token_suffix_impl(model->vocab);
 }
 
-llama_token llama_token_eot(const struct llama_model * model) {
-    return llama_token_eot_impl(model->vocab);
+llama_token llama_token_fim_pre(const struct llama_model * model) {
+    return llama_token_fim_pre_impl(model->vocab);
+}
+
+llama_token llama_token_fim_suf(const struct llama_model * model) {
+    return llama_token_fim_suf_impl(model->vocab);
+}
+
+llama_token llama_token_fim_mid(const struct llama_model * model) {
+    return llama_token_fim_mid_impl(model->vocab);
+}
+
+llama_token llama_token_fim_pad(const struct llama_model * model) {
+    return llama_token_fim_pad_impl(model->vocab);
+}
+
+llama_token llama_token_fim_rep(const struct llama_model * model) {
+    return llama_token_fim_rep_impl(model->vocab);
+}
+
+llama_token llama_token_fim_sep(const struct llama_model * model) {
+    return llama_token_fim_sep_impl(model->vocab);
 }
 
 //
@@ -21655,6 +21703,16 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "[|assistant|]";
         }
+    } else if (tmpl == "rwkv-world" || tmpl_contains("rwkv-world")) {
+        // this template requires the model to have "\n\n" as EOT token
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user") {
+                ss << "User: " << message->content << "\n\nAssistant:";
+            } else {
+                ss << message->content << "\n\n";
+            }
+        }
     } else {
         // template not supported
         return -1;
@@ -21713,6 +21771,10 @@ struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * mod
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
 
+struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
+    return llama_sampler_init_infill_impl(model->vocab);
+}
+
 //
 // model split
 //
@@ -21752,6 +21814,7 @@ const char * llama_print_system_info(void) {
     s += "AVX512_VBMI = " + std::to_string(ggml_cpu_has_avx512_vbmi()) + " | ";
     s += "AVX512_VNNI = " + std::to_string(ggml_cpu_has_avx512_vnni()) + " | ";
     s += "AVX512_BF16 = " + std::to_string(ggml_cpu_has_avx512_bf16()) + " | ";
+    s += "AMX_INT8 = "    + std::to_string(ggml_cpu_has_amx_int8())    + " | ";
     s += "FMA = "         + std::to_string(ggml_cpu_has_fma())         + " | ";
     s += "NEON = "        + std::to_string(ggml_cpu_has_neon())        + " | ";
     s += "SVE = "         + std::to_string(ggml_cpu_has_sve())         + " | ";

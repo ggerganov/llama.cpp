@@ -60,8 +60,6 @@ The project is under active development, and we are [looking for feedback and co
 | `--yarn-attn-factor N` | YaRN: scale sqrt(t) or attention magnitude (default: 1.0)<br/>(env: LLAMA_ARG_YARN_ATTN_FACTOR) |
 | `--yarn-beta-slow N` | YaRN: high correction dim or alpha (default: 1.0)<br/>(env: LLAMA_ARG_YARN_BETA_SLOW) |
 | `--yarn-beta-fast N` | YaRN: low correction dim or beta (default: 32.0)<br/>(env: LLAMA_ARG_YARN_BETA_FAST) |
-| `-gan, --grp-attn-n N` | group-attention factor (default: 1)<br/>(env: LLAMA_ARG_GRP_ATTN_N) |
-| `-gaw, --grp-attn-w N` | group-attention width (default: 512.0)<br/>(env: LLAMA_ARG_GRP_ATTN_W) |
 | `-dkvc, --dump-kv-cache` | verbose print of the KV cache |
 | `-nkvo, --no-kv-offload` | disable KV offload<br/>(env: LLAMA_ARG_NO_KV_OFFLOAD) |
 | `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_K) |
@@ -149,7 +147,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--ssl-cert-file FNAME` | path to file a PEM-encoded SSL certificate<br/>(env: LLAMA_ARG_SSL_CERT_FILE) |
 | `-to, --timeout N` | server read/write timeout in seconds (default: 600)<br/>(env: LLAMA_ARG_TIMEOUT) |
 | `--threads-http N` | number of threads used to process HTTP requests (default: -1)<br/>(env: LLAMA_ARG_THREADS_HTTP) |
-| `-spf, --system-prompt-file FNAME` | set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications |
+| `--cache-reuse N` | min chunk size to attempt reusing from the cache via KV shifting (default: 0)<br/>(env: LLAMA_ARG_CACHE_REUSE) |
 | `--metrics` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
 | `--slots` | enable slots monitoring endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_SLOTS) |
 | `--props` | enable changing global properties via POST /props (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_PROPS) |
@@ -320,7 +318,6 @@ node index.js
 
       - The prompt is a string or an array with the first element given as a string
       - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
-      - The system prompt is empty
 
     `temperature`: Adjust the randomness of the generated text. Default: `0.8`
 
@@ -335,6 +332,8 @@ node index.js
     `min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token. Default: `0.05`
 
     `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. Default: `-1`, where `-1` is infinity.
+
+    `n_indent`: Specify the minimum line indentation for the generated text in number of whitespace characters. Useful for code completion tasks. Default: `0`
 
     `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.
     By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
@@ -377,6 +376,8 @@ node index.js
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. Note that for temperature < 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Default: `0`
 
     `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum. Default: `0`
+
+    `t_max_predict_ms`: Set a time limit in milliseconds for the prediction (a.k.a. text-generation) phase. The timeout will trigger if the generation takes more than the specified time (measured since the first token was generated) and if a new-line character has already been generated. Useful for FIM applications. Default: `0`, which is disabled.
 
     `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
@@ -525,8 +526,31 @@ Takes a prefix and a suffix and returns the predicted completion as stream.
 
 - `input_prefix`: Set the prefix of the code to infill.
 - `input_suffix`: Set the suffix of the code to infill.
+- `input_extra`:  Additional context inserted before the FIM prefix.
+- `prompt`:       Added after the `FIM_MID` token
 
-It also accepts all the options of `/completion` except `stream` and `prompt`.
+`input_extra` is array of `{"filename": string, "text": string}` objects.
+
+The endpoint also accepts all the options of `/completion`.
+
+If the model has `FIM_REPO` and `FIM_FILE_SEP` tokens, the [repo-level pattern](https://arxiv.org/pdf/2409.12186) is used:
+
+```txt
+<FIM_REP>myproject
+<FIM_SEP>{chunk 0 filename}
+{chunk 0 text}
+<FIM_SEP>{chunk 1 filename}
+{chunk 1 text}
+...
+<FIM_SEP>filename
+<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
+
+If the tokens are missing, then the extra context is simply prefixed at the start:
+
+```txt
+[input_extra]<FIM_PRE>[input_prefix]<FIM_SUF>[input_suffix]<FIM_MID>[prompt]
+```
 
 ### **GET** `/props`: Get server global properties.
 
@@ -536,14 +560,12 @@ This endpoint is public (no API key check). By default, it is read-only. To make
 
 ```json
 {
-  "system_prompt": "",
   "default_generation_settings": { ... },
   "total_slots": 1,
   "chat_template": ""
 }
 ```
 
-- `system_prompt` - the system prompt (initial prompt of all slots). Please note that this does not take into account the chat template. It will append the prompt at the beginning of formatted prompt.
 - `default_generation_settings` - the default generation settings for the `/completion` endpoint, which has the same fields as the `generation_settings` response object from the `/completion` endpoint.
 - `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 - `chat_template` - the model's original Jinja2 prompt template
@@ -554,7 +576,7 @@ To use this endpoint with POST method, you need to start server with `--props`
 
 *Options:*
 
-- `system_prompt`: Change the system prompt (initial prompt of all slots). Please note that this does not take into account the chat template. It will append the prompt at the beginning of formatted prompt.
+- None yet
 
 ### POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
 

@@ -221,7 +221,7 @@ struct llm_tokenizer_spm_session {
         }
 
         // seed the work queue with all possible 2-character tokens.
-        for (size_t i = 1; i < symbols.size(); ++i) {
+        for (int i = 1; i < (int) symbols.size(); ++i) {
             try_add_bigram(i - 1, i);
         }
 
@@ -563,7 +563,7 @@ struct llm_tokenizer_bpe_session {
                 index++;
                 symbols.emplace_back(sym);
             }
-            for (size_t i = 1; i < symbols.size(); ++i) {
+            for (int i = 1; i < (int) symbols.size(); ++i) {
                 add_new_bigram(i - 1, i);
             }
 
@@ -1663,6 +1663,14 @@ llama_token llama_token_eos_impl(const struct llama_vocab & vocab) {
     return vocab.special_eos_id;
 }
 
+llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
+    return vocab.special_eot_id;
+}
+
+llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
+    return vocab.special_eom_id;
+}
+
 llama_token llama_token_cls_impl(const struct llama_vocab & vocab) {
     return vocab.special_cls_id;
 }
@@ -1688,23 +1696,39 @@ bool llama_add_eos_token_impl(const struct llama_vocab & vocab) {
 }
 
 llama_token llama_token_prefix_impl(const struct llama_vocab & vocab) {
-    return vocab.special_prefix_id;
+    return vocab.special_fim_pre_id;
 }
 
 llama_token llama_token_middle_impl(const struct llama_vocab & vocab) {
-    return vocab.special_middle_id;
+    return vocab.special_fim_mid_id;
 }
 
 llama_token llama_token_suffix_impl(const struct llama_vocab & vocab) {
-    return vocab.special_suffix_id;
+    return vocab.special_fim_suf_id;
 }
 
-llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
-    return vocab.special_eot_id;
+llama_token llama_token_fim_pre_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_pre_id;
 }
 
-llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
-    return vocab.special_eom_id;
+llama_token llama_token_fim_suf_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_suf_id;
+}
+
+llama_token llama_token_fim_mid_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_mid_id;
+}
+
+llama_token llama_token_fim_pad_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_pad_id;
+}
+
+llama_token llama_token_fim_rep_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_rep_id;
+}
+
+llama_token llama_token_fim_sep_impl(const struct llama_vocab & vocab) {
+    return vocab.special_fim_sep_id;
 }
 
 int32_t llama_tokenize_impl(
