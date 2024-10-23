@@ -15,6 +15,52 @@
 #include <string>
 #include <vector>
 
+#if defined(__gnu_linux__)
+#include <endian.h>
+#else
+#define le64toh(x) (x)
+#define le32toh(x) (x)
+#define le16toh(x) (x)
+#endif
+
+// endianness conversion
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define convert_from_le(x)
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#include <type_traits>
+
+template <typename T, std::enable_if_t<sizeof(T) == 1, int> = 0>
+static inline void convert_from_le(T * /*value*/)
+{
+}
+
+template <typename T, std::enable_if_t<sizeof(T) == 2, int> = 0>
+static inline void convert_from_le(T * value) {
+    uint16_t temp;
+    memcpy(&temp, value, sizeof(uint16_t));
+    temp = le16toh(temp);
+    memcpy(value, &temp, sizeof(uint16_t));
+}
+
+template <typename T, std::enable_if_t<sizeof(T) == 4, int> = 0>
+static inline void convert_from_le(T * value) {
+    uint32_t temp;
+    memcpy(&temp, value, sizeof(uint32_t));
+    temp = le32toh(temp);
+    memcpy(value, &temp, sizeof(uint32_t));
+}
+
+template <typename T, std::enable_if_t<sizeof(T) == 8, int> = 0>
+static inline void convert_from_le(T * value) {
+    uint64_t temp;
+    memcpy(&temp, value, sizeof(uint64_t));
+    temp = le64toh(temp);
+    memcpy(value, &temp, sizeof(uint64_t));
+}
+#else
+#error Unexpected or undefined __BYTE_ORDER__
+#endif
+
 template <typename T>
 struct type_to_gguf_type;
 
@@ -223,7 +269,9 @@ struct gguf_reader {
 
     template <typename T>
     bool read(T & dst) const {
-        return fread(&dst, 1, sizeof(dst), file) == sizeof(dst);
+        auto res = fread(&dst, 1, sizeof(dst), file);
+        convert_from_le(&dst);
+        return res == sizeof(dst);
     }
 
     template <typename T>
