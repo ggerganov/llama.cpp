@@ -6479,15 +6479,16 @@ kernel void kernel_pool_2d_max_f32(
     const int cur_oh = idx % O_HW / OW;
     const int cur_ow = idx % O_HW % OW;
 
-    device const float* i_ptr = src0 + nc * I_HW;
-    device float* o_ptr = dst + nc * O_HW;
+    device const float * i_ptr = src0 + nc * I_HW;
+    device       float * o_ptr = dst  + nc * O_HW;
 
     const int start_h = cur_oh * s1 - p1;
-    const int bh = MAX(0, start_h);
+    const int bh = MAX(0,  start_h);
     const int eh = MIN(IH, start_h + k1);
     const int start_w = cur_ow * s0 - p0;
-    const int bw = MAX(0, start_w);
+    const int bw = MAX(0,  start_w);
     const int ew = MIN(IW, start_w + k0);
+
     float res = -INFINITY;
 
     for (int i = bh; i < eh; i += 1) {
@@ -6495,23 +6496,24 @@ kernel void kernel_pool_2d_max_f32(
             res = MAX(res, i_ptr[i * IW + j]);
         }
     }
+
     o_ptr[cur_oh * OW + cur_ow] = res;
 }
 
 kernel void kernel_pool_2d_avg_f32(
-        device const float* src0,
-        device       float* dst,
-        constant    int32_t& k0,
-        constant    int32_t& k1,
-        constant    int32_t& s0,
-        constant    int32_t& s1,
-        constant    int32_t& p0,
-        constant    int32_t& p1,
-        constant    int64_t& IH,
-        constant    int64_t& IW,
-        constant    int64_t& OH,
-        constant    int64_t& OW,
-        constant    int64_t& parallel_elements,
+        device  const float * src0,
+        device        float * dst,
+        constant    int32_t & k0,
+        constant    int32_t & k1,
+        constant    int32_t & s0,
+        constant    int32_t & s1,
+        constant    int32_t & p0,
+        constant    int32_t & p1,
+        constant    int64_t & IH,
+        constant    int64_t & IW,
+        constant    int64_t & OH,
+        constant    int64_t & OW,
+        constant    int64_t & parallel_elements,
         uint        gid[[thread_position_in_grid]]) {
 
     if (gid >= parallel_elements) {
@@ -6525,17 +6527,18 @@ kernel void kernel_pool_2d_avg_f32(
     const int cur_oh = idx % O_HW / OW;
     const int cur_ow = idx % O_HW % OW;
 
-    device const float* i_ptr = src0 + nc * I_HW;
-    device float* o_ptr = dst + nc * O_HW;
+    device const float * i_ptr = src0 + nc * I_HW;
+    device       float * o_ptr = dst  + nc * O_HW;
 
     const int start_h = cur_oh * s1 - p1;
-    const int bh = MAX(0, start_h);
+    const int bh = MAX(0,  start_h);
     const int eh = MIN(IH, start_h + k1);
     const int start_w = cur_ow * s0 - p0;
-    const int bw = MAX(0, start_w);
+    const int bw = MAX(0,  start_w);
     const int ew = MIN(IW, start_w + k0);
     // const float scale = 1. / ((eh - bh) * (ew - bw));
     const float scale = 1. / (k0 * k1);
+
     float res = 0;
 
     for (int i = bh; i < eh; i += 1) {
@@ -6544,5 +6547,6 @@ kernel void kernel_pool_2d_avg_f32(
             res += cur * scale;
         }
     }
+
     o_ptr[cur_oh * OW + cur_ow] = res;
 }

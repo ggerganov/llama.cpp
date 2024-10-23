@@ -854,7 +854,6 @@ static bool ggml_metal_supports_op(const struct ggml_backend_metal_device_contex
         case GGML_OP_POOL_1D:
             return false;
         case GGML_OP_POOL_2D:
-            return true;
         case GGML_OP_UPSCALE:
         case GGML_OP_PAD:
         case GGML_OP_ARANGE:
@@ -2554,6 +2553,8 @@ static void ggml_metal_encode_node(
             } break;
         case GGML_OP_IM2COL:
             {
+                GGML_ASSERT(ggml_is_contiguous(src0));
+                GGML_ASSERT(ggml_is_contiguous(src1));
                 GGML_ASSERT(src0->type == GGML_TYPE_F16);
                 GGML_ASSERT(src1->type == GGML_TYPE_F32);
                 GGML_ASSERT( dst->type == GGML_TYPE_F16 || dst->type == GGML_TYPE_F32);
@@ -2620,7 +2621,7 @@ static void ggml_metal_encode_node(
                 [encoder setBytes:&d1      length:sizeof( int32_t) atIndex:12];
 
                 if (is_gt_mttpt) {
-                    [encoder setBytes:&N       length:sizeof(int32_t) atIndex:13];
+                    [encoder setBytes:&N        length:sizeof(int32_t) atIndex:13];
                     [encoder setBytes:&KH       length:sizeof(int32_t) atIndex:14];
                     [encoder setBytes:&KW       length:sizeof(int32_t) atIndex:15];
 
@@ -3034,9 +3035,10 @@ static void ggml_metal_encode_node(
             } break;
         case GGML_OP_POOL_2D:
             {
+                GGML_ASSERT(ggml_is_contiguous(src0));
                 GGML_ASSERT(src0t == GGML_TYPE_F32 && src0t == dstt);
 
-                const int32_t* opts = dst->op_params;
+                const int32_t * opts = dst->op_params;
                 enum ggml_op_pool op = opts[0];
 
                 id<MTLComputePipelineState> pipeline = nil;
@@ -3063,7 +3065,7 @@ static void ggml_metal_encode_node(
                 const int64_t IH = src0->ne[1];
                 const int64_t IW = src0->ne[0];
 
-                const int64_t N = dst->ne[3];
+                const int64_t N  = dst->ne[3];
                 const int64_t OC = dst->ne[2];
                 const int64_t OH = dst->ne[1];
                 const int64_t OW = dst->ne[0];
