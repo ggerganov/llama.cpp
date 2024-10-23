@@ -2227,7 +2227,6 @@ struct server_context {
 
                                             for (size_t i = 0; i < n_match; i++) {
                                                 slot.cache_tokens[head_p + i] = slot.cache_tokens[head_c + i];
-
                                                 slot.n_past++;
                                             }
 
