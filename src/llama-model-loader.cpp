@@ -1024,6 +1024,14 @@ bool llama_model_loader::load_all_data(
             if (ggml_backend_buffer_is_host(cur->buffer)) {
                 file->seek(weight->offs, SEEK_SET);
                 file->read_raw(cur->data, n_size);
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
+                if (byteswap != nullptr) {
+                    byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
+                }
+#endif
+
                 if (check_tensors) {
                     validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
                         return std::make_pair(cur, ggml_validate_row_data(cur->type, cur->data, n_size));
@@ -1052,6 +1060,14 @@ bool llama_model_loader::load_all_data(
                     read_buf.resize(n_size);
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(read_buf.data(), n_size);
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                    auto byteswap = ggml_get_type_traits(cur->type)->byteswap;
+                    if (byteswap != nullptr) {
+                        byteswap(read_buf.data(), read_buf.size() / ggml_blck_size(cur->type));
+                    }
+#endif
+
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                     if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
                         throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
