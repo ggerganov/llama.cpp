@@ -1180,7 +1180,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
             CHECK_TRY_ERROR(ptr = (void *)sycl::malloc_device(
                                 look_ahead_size, *qptr)));
         if (!ptr) {
-            GGML_LOG_ERROR("%s: can't malloc %lu Bytes memory on device", __func__, look_ahead_size);
+            GGML_LOG_ERROR("%s: can't malloc %lu Bytes memory on device\n", __func__, look_ahead_size);
             return nullptr;
         }
 
