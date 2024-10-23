@@ -292,7 +292,7 @@ static llama_tool_calls parse_mistral_nemo_tool_calls(const std::string& input) 
 }
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tools, const std::string& input) {
-    fprintf(stderr, "# parse_tool_calls:\n\n%s\n\n", input.c_str());
+    // fprintf(stderr, "# parse_tool_calls:\n\n%s\n\n", input.c_str());
     switch (style) {
         case llama_tool_call_style::None:
             return {input, {}};
