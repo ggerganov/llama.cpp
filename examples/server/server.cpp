@@ -1866,18 +1866,24 @@ struct server_context {
         // next, batch any pending prompts without exceeding n_batch
         if (params.cont_batching || batch.n_tokens == 0) {
             for (auto & slot : slots) {
-                if (!slot.is_processing()) {
-                    continue;
-                }
-
                 // this slot still has a prompt to be processed
-                if (!slot.prompt_tokens.empty() && slot.state == SLOT_STATE_PROCESSING_PROMPT) {
+                if (slot.state == SLOT_STATE_PROCESSING_PROMPT) {
                     auto & prompt_tokens = slot.prompt_tokens;
 
                     slot.t_start_process_prompt = ggml_time_us();
                     slot.t_start_generation = 0;
                     slot.n_past = 0;
                     slot.n_prompt_tokens = prompt_tokens.size();
+
+                    // empty prompt passed -> release the slot and send empty response
+                    if (prompt_tokens.empty()) {
+                        SLT_WRN(slot, "%s", "empty prompt - releasing slot\n");
+
+                        slot.release();
+                        slot.print_timings();
+                        send_final_response(slot);
+                        continue;
+                    }
 
                     SLT_INF(slot, "new prompt, n_ctx_slot = %d, n_keep = %d, n_prompt_tokens = %d\n", slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
 
@@ -1892,16 +1898,6 @@ struct server_context {
                         for (int i = 0; i < (int) prompt_tokens.size(); i++) {
                             SLT_DBG(slot, "prompt token %3d: %6d '%s'\n", i, prompt_tokens[i], common_token_to_piece(ctx, prompt_tokens[i]).c_str());
                         }
-                    }
-
-                    // empty prompt passed -> release the slot and send empty response
-                    if (prompt_tokens.empty()) {
-                        SLT_WRN(slot, "%s", "empty prompt - releasing slot\n");
-
-                        slot.release();
-                        slot.print_timings();
-                        send_final_response(slot);
-                        continue;
                     }
 
                     if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_EMBEDDING || slot.cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
