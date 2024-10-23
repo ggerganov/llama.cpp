@@ -9,7 +9,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1",
+          "id": "call_1___",
           "type": "function",
           "function": {
             "arguments": "{\"code\": \"print('Hello, World!')\"}",
@@ -20,6 +20,7 @@
     },
     {
       "role": "tool",
+      "tool_call_id": "call_1___",
       "name": "ipython",
       "content": "{\"stdout\": \"Hello, World!\"}"
     },
@@ -36,7 +37,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2",
+          "id": "call_2___",
           "type": "function",
           "function": {
             "arguments": "{\"condition\":true}",
@@ -47,6 +48,7 @@
     },
     {
       "role": "tool",
+      "tool_call_id": "call_2___",
       "name": "test",
       "content": "true"
     },
@@ -63,7 +65,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_3",
+          "id": "call_3___",
           "type": "function",
           "function": {
             "arguments": "{\"query\": \"what is truth anyway am I right?\"}",
@@ -74,6 +76,7 @@
     },
     {
       "role": "tool",
+      "tool_call_id": "call_3___",
       "name": "brave_search",
       "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}"
     },

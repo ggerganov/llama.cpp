@@ -26,6 +26,7 @@ class chat_template {
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
     bool _requires_object_arguments = false;
     bool _supports_system_role = true;
+    bool _supports_parallel_tool_calls = false;
     std::string _source;
     std::string _bos_token;
     std::string _eos_token;
@@ -40,6 +41,7 @@ class chat_template {
             source.find("tool_call.arguments | items") != std::string::npos
             || source.find("tool_call.arguments | tojson") != std::string::npos;
         _supports_system_role = source.find("System role not supported") == std::string::npos;
+        _supports_parallel_tool_calls = source.find("tool_call_id") != std::string::npos;
 
         _template_root = minja::Parser::parse(_source, {
             /* .trim_blocks = */ true,
@@ -50,6 +52,7 @@ class chat_template {
 
     const std::string & source() const { return _source; }
     bool supports_tools() const { return _supports_tools; }
+    bool supports_parallel_tool_calls() const { return _supports_parallel_tool_calls; }
 
     std::string apply(
         const nlohmann::ordered_json & messages,

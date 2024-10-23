@@ -9,6 +9,7 @@
 
 enum llama_tool_call_style {
     UnknownToolCallStyle,
+    None,
     Generic,
     Llama31,
     Llama32,
@@ -16,11 +17,13 @@ enum llama_tool_call_style {
     FunctionaryV3Llama31,
     Hermes2Pro,
     CommandRPlus,
+    MistralNemo,
 };
 
 struct llama_tool_call {
     std::string name;
     std::string arguments;
+    std::string id;
 };
 
 struct llama_tool_calls {
@@ -45,7 +48,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
     llama_tool_call_style style,
     const minja::chat_template & tmpl,
     bool allow_content,
-    bool parallel_tool_calls,
+    const nlohmann::ordered_json & parallel_tool_calls,
     const nlohmann::ordered_json & messages,
     const nlohmann::ordered_json & tools,
     const nlohmann::ordered_json & json_schema = {});

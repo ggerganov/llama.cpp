@@ -7,6 +7,11 @@
   ```bash
   make -j LLAMA_CURL=1 llama-server
 
+  # Mistral NeMo
+  ./llama-server --jinja -fa --verbose \
+    -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
+    --chat-template "$( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )"
+
   # Nous Hermes 2 Pro Llama 3 8B
   ./llama-server --jinja -fa --verbose \
     -hfr NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF -hff Hermes-2-Pro-Llama-3-8B-Q8_0.gguf \
@@ -27,7 +32,7 @@
 
   # Llama 3.2 3B (poor adherence)
   ./llama-server --jinja -fa --verbose \
-    -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K_L.gguf \
+    -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
     --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
 
   # Llama 3.2 1B (very poor adherence)
@@ -39,12 +44,8 @@
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container (check http://localhost:8088/docs once running):
 
   ```bash
-  export BRAVE_SEARCH_API_KEY=... # https://api.search.brave.com/
-  # Shorthand: ./examples/agent/serve_tools_inside_docker.sh
-  docker run -p 8088:8088 -w /src -v $PWD/examples/agent:/src \
-    --env BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY \
-    --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
-    uv run serve_tools.py --port 8088
+  export BRAVE_SEARCH_API_KEY=... # Get one at https://api.search.brave.com/
+  ./examples/agent/serve_tools_inside_docker.sh
   ```
 
   > [!WARNING]

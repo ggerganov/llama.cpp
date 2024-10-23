@@ -79,16 +79,21 @@ static void test_parse_tool_call(llama_tool_call_style style, const json & tools
     assert_equals(expected_content, result.content);
     auto tool_calls = json::array();
     for (const auto & tc : result.tool_calls) {
-        tool_calls.push_back({
-          {"type", "function"},
-          {"function", {
-            {"name", tc.name},
-            {"arguments", dump(json::parse(tc.arguments))},
-          }}
-        });
+      auto tool_call = json {
+        {"type", "function"},
+        {"function", {
+          {"arguments", dump(json::parse(tc.arguments))},
+          {"name", tc.name},
+        }},
+      };
+      if (!tc.id.empty()) {
+        tool_call["id"] = tc.id;
+      }
+      tool_calls.push_back(tool_call);
     }
-    auto expected = expected_tool_calls.dump();
-    auto actual = tool_calls.dump();
+    // Reparse / dump w/ non-ordered JSON variant.
+    auto expected = nlohmann::json::parse(expected_tool_calls.dump()).dump();
+    auto actual = nlohmann::json::parse(tool_calls.dump()).dump();
     assert_equals(expected, actual);
 }
 
@@ -140,7 +145,7 @@ static void test_parsing() {
         {"name", "foo"},
         {"arguments", dump({
           {"bar", 1}
-        })}
+        })},
       }}
     };
 
@@ -239,35 +244,38 @@ static void test_parsing() {
           {"arguments", dump({{"code", ""}})}
         }}
       }});
-    auto just_special_function_call = json {{
+    auto special_function_call = json {
         {"type", "function"},
         {"function", {
+          {"arguments", dump({{"arg1", 1}})},
           {"name", "special_function"},
-          {"arguments", dump({{"arg1", 1}})}
-        }}
-    }};
+        }},
+    };
+    auto special_function_call_with_id = json::parse(special_function_call.dump());
+    special_function_call_with_id["id"] = "123456789";
+    
     auto no_function_call = json::array();
 
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
-      just_special_function_call);
+      json::array({special_function_call}));
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\n  \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
-      just_special_function_call);
+      json::array({special_function_call}));
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\n\t\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
-      just_special_function_call);
+      json::array({special_function_call}));
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\n    \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
-      just_special_function_call);
+      json::array({special_function_call}));
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"type\": \"function\", \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
-      just_special_function_call);
+      json::array({special_function_call}));
 
     // No match: function unknown
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
@@ -283,6 +291,15 @@ static void test_parsing() {
       "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
+
+    test_parse_tool_call(llama_tool_call_style::MistralNemo, tools,
+      "Bleh[TOOL_CALLS][{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\", \"id\": \"123456789\"}]",
+      "Bleh",
+      json::array({special_function_call_with_id}));
+    test_parse_tool_call(llama_tool_call_style::MistralNemo, tools,
+      "[{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\", \"id\": \"123456789\"}]",
+      "",
+      json::array({special_function_call_with_id}));
 }
 
 static void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
@@ -298,6 +315,8 @@ static void test_tool_call_style_detection() {
     test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", Llama31);
     test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", Llama32);
     test_tool_call_style("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja", CommandRPlus);
+    test_tool_call_style("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja", MistralNemo);
+    test_tool_call_style("tests/chat/templates/google-gemma-7b-it.jinja", Generic);
 }
 
 static std::string get_message_prompt_delta(const minja::chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
@@ -323,7 +342,7 @@ static std::string get_message_prompt_delta(const minja::chat_template & tmpl, c
   return delta;
 }
 
-static void test_template(const std::string & template_file, const char * bos_token, const char * eos_token, const std::vector<std::string> & end_tokens, const json & tool_calling_message, const json & tools) {
+static void test_template(const std::string & template_file, const char * bos_token, const char * eos_token, const std::vector<std::string> & end_tokens, const json & tool_calling_message, const json & tools, bool skip_grammar_test = false) {
   std::cout << "# Testing template: " << template_file << std::endl << std::flush;
   const minja::chat_template tmpl(read_file(template_file), bos_token, eos_token);
   auto tool_call_style = llama_tool_call_style_detect(tmpl);
@@ -342,17 +361,19 @@ static void test_template(const std::string & template_file, const char * bos_to
     throw std::runtime_error("Failed to build grammar");
   }
 
-  auto full_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, tool_calling_message, tools);
-  std::cout << "Full delta:\n```\n" << full_delta << "\n```" << std::endl;
-  test_parse_tool_call(tool_call_style, tools, full_delta, "", tool_calls);
+  if (!skip_grammar_test) {
+    auto full_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, tool_calling_message, tools);
+    std::cout << "Full delta:\n```\n" << full_delta << "\n```" << std::endl;
+    test_parse_tool_call(tool_call_style, tools, full_delta, "", tool_calls);
 
-  auto content_less_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, {
-    {"role", "assistant"},
-    {"content", ""},
-    {"tool_calls", tool_calls}
-  }, tools);
-  if (!match_string(content_less_delta, grammar.get())) {
-    throw std::runtime_error("Failed to match content-less delta against grammar:\n\nContent-less delta: " + content_less_delta + "\n\nGrammar: " + handler.grammar);
+    auto content_less_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, {
+      {"role", "assistant"},
+      {"content", ""},
+      {"tool_calls", tool_calls}
+    }, tools);
+    if (!match_string(content_less_delta, grammar.get())) {
+      throw std::runtime_error("Failed to match content-less delta against grammar:\n\nContent-less delta: " + content_less_delta + "\n\nGrammar: " + handler.grammar);
+    }
   }
 }
 
@@ -365,9 +386,14 @@ static void test_grammars() {
       {"function", {
         {"name", "special_function"},
         {"arguments", "{\"arg1\": 1}"}
-      }}
+      }},
     }}}
   };
+  auto tool_call_message_with_id = json::parse(tool_call_message.dump());
+  tool_call_message_with_id["tool_calls"][0]["id"] = "123456789";
+
+  test_template("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja", "<s>", "</s>", { "</s>" }, tool_call_message_with_id, tools,
+    /* skip_grammar_test= */ true);
   test_template("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja", "<s>", "</s>", { "<|im_end|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
