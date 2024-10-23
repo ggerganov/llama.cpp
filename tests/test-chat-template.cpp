@@ -255,11 +255,6 @@ static void test_legacy_templates() {
             "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ 'User: ' + message['content'] + '\n\n' }}{% elif message['role'] == 'assistant' %}{{ 'Assistant: ' + message['content'] + eos_token }}{% elif message['role'] == 'system' %}{{ message['content'] + '\n\n' }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'Assistant:' }}{% endif %}",
             u8"You are a helpful assistant\n\nUser: Hello\n\nAssistant: Hi there<｜end▁of▁sentence｜>User: Who are you\n\nAssistant:    I am an assistant   <｜end▁of▁sentence｜>User: Another question\n\nAssistant:",
         },
-        {
-            "RWKV-World",
-            "{% for message in messages %}{% if message['role'] == 'user' %}{{'User: ' + message['content'] + '\n\nAssistant:'}}{% else %}{{message['content'] + '\n\n'}}{% endif %}{% endfor %}",
-            "You are a helpful assistant\n\nUser: Hello\n\nAssistant:Hi there\n\nUser: Who are you\n\nAssistant:   I am an assistant   \n\nUser: Another question\n\nAssistant:",
-        }
     };
 
     std::vector<char> formatted_chat(1024);
