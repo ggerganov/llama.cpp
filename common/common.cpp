@@ -2019,6 +2019,10 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
     fprintf(stream, "chunks: %d # default: -1 (unlimited)\n", params.n_chunks);
     fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
     fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
+    fprintf(stream, "dry_allowed_length: %d # default: 2\n", sparams.dry_allowed_length);
+    fprintf(stream, "dry_base: %.2f # default: 1.75\n", sparams.dry_base);
+    fprintf(stream, "dry_multiplier: %.1f # default: 0.0\n", sparams.dry_multiplier);
+    fprintf(stream, "dry_penalty_last_n: %d # default: -1 (0 = disable, -1 = context size)\n", sparams.dry_penalty_last_n);
     fprintf(stream, "escape: %s # default: false\n", params.escape ? "true" : "false");
     fprintf(stream, "file: # never logged, see prompt instead. Can still be specified for input.\n");
     fprintf(stream, "frequency_penalty: %f # default: 0.0 \n", sparams.penalty_freq);

@@ -163,3 +163,8 @@ int32_t llama_detokenize_impl(
                          int32_t   text_len_max,
                             bool   remove_special,
                             bool   unparse_special);
+
+std::string llama_detokenize(
+        const struct llama_vocab & vocab,
+  const std::vector<llama_token> & tokens,
+                            bool   special);
