@@ -381,7 +381,7 @@ static json oaicompat_completion_params_parse(
     if (use_jinja) {
         bool allow_content = tool_choice != "required";
         if (tool_choice != "none" && has_tools) {
-            bool parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
+            auto parallel_tool_calls = body.contains("parallel_tool_calls") ? body.at("parallel_tool_calls") : json();
             llama_params["parse_tool_calls"] = true;
             llama_params["parallel_tool_calls"] = parallel_tool_calls;
 
