@@ -2163,16 +2163,9 @@ struct server_context {
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
 
-                            common_sampler_reset(slot.smpl);
-
                             if (slot.params.cache_prompt) {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = longest_common_prefix(slot.cache_tokens, prompt_tokens);
-
-                                // push the prompt into the sampling context (do not apply grammar)
-                                for (int i = 0; i < slot.n_past; ++i) {
-                                    common_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
-                                }
 
                                 // reuse chunks from the cached prompt by shifting their KV cache in the new position
                                 if (params.n_cache_reuse > 0) {
@@ -2205,8 +2198,6 @@ struct server_context {
 
                                             for (size_t i = 0; i < n_match; i++) {
                                                 slot.cache_tokens[head_p + i] = slot.cache_tokens[head_c + i];
-
-                                                common_sampler_accept(slot.smpl, slot.cache_tokens[head_p + i], false);
 
                                                 slot.n_past++;
                                             }
@@ -2259,8 +2250,6 @@ struct server_context {
 
                         // there is no common part left
                         slot.n_past = 0;
-
-                        common_sampler_reset(slot.smpl);
                     }
 
                     SLT_INF(slot, "kv cache rm [%d, end)\n", slot.n_past);
@@ -2287,6 +2276,13 @@ struct server_context {
                         slot.state = SLOT_STATE_DONE_PROMPT;
 
                         GGML_ASSERT(batch.n_tokens > 0);
+
+                        common_sampler_reset(slot.smpl);
+
+                        // Process all prompt tokens through sampler system
+                        for (int i = 0; i < slot.n_prompt_tokens; ++i) {
+                            common_sampler_accept(slot.smpl, prompt_tokens[i], false);
+                        }
 
                         // extract the logits only for the last token
                         batch.logits[batch.n_tokens - 1] = true;
