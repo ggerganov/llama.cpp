@@ -1293,9 +1293,8 @@ if (GGML_CUDA)
     add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 endif()
 
-if (MINGW)
-    # Target Windows 8 for PrefetchVirtualMemory
-    add_compile_definitions(_WIN32_WINNT=${GGML_WIN_VER})
+if (WIN32)
+    add_compile_definitions(_WIN32_WINNT=${GGML_WIN_VER} WINVER=${GGML_WIN_VER})
 endif()
 
 #
