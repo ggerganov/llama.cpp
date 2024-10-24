@@ -41,7 +41,7 @@
     --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
   ```
 
-- Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container (check http://localhost:8088/docs once running):
+- Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container for *some* level of isolation (+ sneaky logging of outgoing http and https traffic: you wanna watch over those agents' shoulders for the time being 🧐). Check http://localhost:8088/docs to see the tools exposed.
 
   ```bash
   export BRAVE_SEARCH_API_KEY=... # Get one at https://api.search.brave.com/
@@ -49,7 +49,7 @@
   ```
 
   > [!WARNING]
-  > The command above gives tools (and your agent) access to the web (and read-only access to `examples/agent/**`. If you're concerned about unleashing a rogue agent on the web, please explore setting up proxies for your docker (and contribute back!)
+  > The command above gives tools (and your agent) access to the web (and read-only access to `examples/agent/**`. You can loosen / restrict web access in [examples/agent/squid/conf/squid.conf](./squid/conf/squid.conf).
 
 - Run the agent with some goal
 
