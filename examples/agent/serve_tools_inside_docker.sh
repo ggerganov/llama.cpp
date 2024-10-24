@@ -1,37 +1,30 @@
 #!/bin/bash
 #
-# Serves tools inside a docker container
+# Serves tools inside a docker container.
+#
+# All outgoing HTTP *and* HTTPS traffic will be logged to `examples/agent/squid/logs/access.log`.
+# Direct traffic to the host machine will be ~blocked, but clever AIs may find a way around it:
+# make sure to have proper firewall rules in place.
+#
+# Take a look at `examples/agent/squid/conf/squid.conf` if you want tools to access your local llama-server(s).
 #
 # Usage:
-#   examples/agent/serve_tools_inside_docker.sh [--verbose] [--include="tool1|tool2|..."] [--exclude="tool1|tool2|..."]
+#   examples/agent/serve_tools_inside_docker.sh
 #
 set -euo pipefail
 
-PORT=${PORT:-8088}
-BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
-DATA_DIR=${DATA_DIR:-$HOME/.llama.cpp/agent/tools/data}
-UV_CACHE_DIR=${UV_CACHE_DIR:-$HOME/.llama.cpp/agent/tools/uv_cache}
+cd examples/agent
 
-mkdir -p "$DATA_DIR"
-mkdir -p "$UV_CACHE_DIR"
+mkdir -p squid/{cache,logs,ssl_cert,ssl_db}
+rm -f squid/logs/{access,cache}.log
 
-args=( --port $PORT "$@" )
-echo "# Warming up the uv cache"
-docker run \
-    -w /src \
-    -v $PWD/examples/agent:/src \
-    -v "$UV_CACHE_DIR":/root/.cache/uv:rw \
-    --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
-    uv run serve_tools.py --help
+# Generate a self-signed certificate for the outgoing proxy.
+# Tools can only reach out to HTTPS endpoints through that proxy, which they are told to trust blindly.
+openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
+    -keyout squid/ssl_cert/squidCA.pem \
+    -out squid/ssl_cert/squidCA.pem \
+    -subj "/C=US/ST=State/L=City/O=Organization/OU=Org Unit/CN=outgoing_proxy"
 
-echo "# Running inside docker: serve_tools.py ${args[*]}"
-docker run \
-    -p $PORT:$PORT \
-    -w /src \
-    -v $PWD/examples/agent:/src \
-    -v "$UV_CACHE_DIR":/root/.cache/uv \
-    -v "$DATA_DIR":/data:rw \
-    --env "MEMORY_SQLITE_DB=/data/memory.db" \
-    --env "BRAVE_SEARCH_API_KEY=$BRAVE_SEARCH_API_KEY" \
-    --rm -it ghcr.io/astral-sh/uv:python3.12-alpine \
-    uv run serve_tools.py "${args[@]}"
+openssl x509 -outform PEM -in squid/ssl_cert/squidCA.pem -out squid/ssl_cert/squidCA.crt
+
+docker compose up --detach --build

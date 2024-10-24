@@ -1,17 +1,3 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "aiohttp",
-#     "beautifulsoup4",
-#     "fastapi",
-#     "html2text",
-#     "ipython",
-#     "pyppeteer",
-#     "requests",
-#     "typer",
-#     "uvicorn",
-# ]
-# ///
 '''
     Runs simple tools as a FastAPI server.
 
@@ -28,12 +14,9 @@
 '''
 import logging
 import re
-from typing import Optional
 import fastapi
 import os
 import sys
-import typer
-import uvicorn
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -41,6 +24,12 @@ from tools.fetch import fetch_page
 from tools.search import brave_search
 from tools.python import python, python_tools
 
+
+verbose = os.environ.get('VERBOSE', '0') == '1'
+include = os.environ.get('INCLUDE_TOOLS')
+exclude = os.environ.get('EXCLUDE_TOOLS')
+
+logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
 
 ALL_TOOLS = {
     fn.__name__: fn
@@ -51,26 +40,12 @@ ALL_TOOLS = {
     ]
 }
 
-
-def main(host: str = '0.0.0.0', port: int = 8000, verbose: bool = False, include: Optional[str] = None, exclude: Optional[str] = None):
-    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
-
-    def accept_tool(name):
-        if include and not re.match(include, name):
-            return False
-        if exclude and re.match(exclude, name):
-            return False
-        return True
-
-    app = fastapi.FastAPI()
-    for name, fn in ALL_TOOLS.items():
-        if accept_tool(name):
-            app.post(f'/{name}')(fn)
-            if name != 'python':
-                python_tools[name] = fn
-
-    uvicorn.run(app, host=host, port=port)
-
-
-if __name__ == '__main__':
-    typer.run(main)
+app = fastapi.FastAPI()
+for name, fn in ALL_TOOLS.items():
+    if include and not re.match(include, fn.__name__):
+        continue
+    if exclude and re.match(exclude, fn.__name__):
+        continue
+    app.post(f'/{name}')(fn)
+    if name != 'python':
+        python_tools[name] = fn

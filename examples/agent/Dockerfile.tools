@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+
+RUN python -m pip install --upgrade pip && \
+    apt clean cache
+
+COPY requirements.txt /root/
+WORKDIR /root
+RUN pip install -r requirements.txt
+
+COPY ./*.py /root/
+COPY ./tools/*.py /root/tools/
+
+COPY ./squid/ssl_cert/squidCA.crt /usr/local/share/ca-certificates/squidCA.crt
+RUN chmod 644 /usr/local/share/ca-certificates/squidCA.crt && update-ca-certificates
+
+# ENTRYPOINT [ "python" ]
+# CMD ["serve_tools.py"]

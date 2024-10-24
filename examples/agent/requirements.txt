@@ -1,6 +1,5 @@
 aiohttp
 fastapi
 ipython
-pydantic
-typer
+pyppeteer
 uvicorn
