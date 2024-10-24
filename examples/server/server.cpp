@@ -715,10 +715,6 @@ struct server_context {
         metrics.init();
     }
 
-    std::vector<llama_token> tokenize(const json & json_prompt, bool add_special, bool parse_special) const {
-        return tokenize_mixed(ctx, json_prompt, add_special, parse_special);
-    }
-
     server_slot * get_slot_by_id(int id) {
         for (server_slot & slot : slots) {
             if (slot.id == id) {
@@ -1352,10 +1348,6 @@ struct server_context {
     std::vector<server_task> create_tasks_cmpl(json data, server_task_cmpl_type cmpl_type) {
         std::vector<server_task> tasks;
         auto create_task = [&](json & task_data, llama_tokens & prompt_tokens) {
-            if (prompt_tokens.empty()) {
-                // TODO @ngxson : should not throw an error
-                throw std::runtime_error("prompt must not be empty");
-            }
             SRV_DBG("create task, n_tokens = %d\n", (int) prompt_tokens.size());
             server_task task;
             task.id            = queue_tasks.get_new_id();
@@ -2877,7 +2869,7 @@ int main(int argc, char ** argv) {
             const bool add_special = json_value(body, "add_special", false);
             const bool with_pieces = json_value(body, "with_pieces", false);
 
-            std::vector<llama_token> tokens = ctx_server.tokenize(body.at("content"), add_special, true);
+            std::vector<llama_token> tokens = tokenize_mixed(ctx_server.ctx, body.at("content"), add_special, true);
 
             if (with_pieces) {
                 for (const auto& token : tokens) {
