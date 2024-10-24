@@ -9127,7 +9127,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
             )
         )) {
             // TODO(cebtenzzre): propagate this error outside of llama_load_model_from_file
-            LLAMA_LOG_WARN("%s: disabling Kompute due to unsupported model arch or quantization\n", __func__);
+            LLAMA_LOG_WARN("%s: disabling Kompute due to unsupported model arch (%s) or quantization (%s)\n", __func__, LLM_ARCH_NAMES.at(model.arch), llama_model_ftype_name(model.ftype).c_str());
             params.n_gpu_layers = 0;
         }
 #endif
