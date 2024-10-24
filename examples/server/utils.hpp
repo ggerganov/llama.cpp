@@ -476,7 +476,8 @@ static json format_final_response_oaicompat(const json & request, const json & r
                     {"function", {
                         {"name", tc.name},
                         {"arguments", tc.arguments},
-                    }}
+                    }},
+                    {"id", tc.id.empty() ? json() : json(tc.id)},
                 });
             }
         } else {
