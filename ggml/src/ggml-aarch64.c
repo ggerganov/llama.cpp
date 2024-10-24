@@ -1001,10 +1001,15 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
 
             vfloat32m1_t sumf = __riscv_vfmv_v_f_f32m1(0.0, vl / 4);
             for (int l = 0; l < nb; l++) {
-                const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[0], 0, vl / 4));
-                const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[8], 0, vl / 4));
-                const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[16], 0, vl / 4));
-                const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[24], 0, vl / 4));
+                const int64_t a0 = *(const int64_t *)&a_ptr[l].qs[0];
+                const int64_t a1 = *(const int64_t *)&a_ptr[l].qs[8];
+                const int64_t a2 = *(const int64_t *)&a_ptr[l].qs[16];
+                const int64_t a3 = *(const int64_t *)&a_ptr[l].qs[24];
+                __asm__ __volatile__("" ::: "memory"); // prevent gcc from emitting fused vlse64, violating alignment
+                const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(a0, vl / 4));
+                const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(a1, vl / 4));
+                const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(a2, vl / 4));
+                const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(a3, vl / 4));
 
                 const vint8m4_t rhs_raw_vec = __riscv_vle8_v_i8m4((const int8_t *)b_ptr[l].qs, vl * 4);
                 const vint8m4_t rhs_vec_lo = __riscv_vsra_vx_i8m4(__riscv_vsll_vx_i8m4(rhs_raw_vec, 4, vl * 4), 4, vl * 4);
@@ -3275,12 +3280,17 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                     };
                     const vfloat32m1_t b_scales_vec = __riscv_vle32_v_f32m1(b_scales, vl / 4);
 
+                    const int64_t A0 = *(const int64_t *)&a_ptr[l].qs[0];
+                    const int64_t A4 = *(const int64_t *)&a_ptr[l].qs[32];
+                    const int64_t A8 = *(const int64_t *)&a_ptr[l].qs[64];
+                    const int64_t Ac = *(const int64_t *)&a_ptr[l].qs[96];
+                    __asm__ __volatile__("" ::: "memory"); // prevent gcc from emitting fused vlse64, violating alignment
                     vint16m4_t sumi_l0;
                     {
-                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[0], 0, vl / 4));
-                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[32], 0, vl / 4));
-                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[64], 0, vl / 4));
-                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[96], 0, vl / 4));
+                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A0, vl / 4));
+                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A4, vl / 4));
+                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A8, vl / 4));
+                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(Ac, vl / 4));
                         const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
                         const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
                         const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
@@ -3307,14 +3317,18 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[0], vl / 4);
                         sumf0 = __riscv_vfmacc_vv_f32m1(sumf0, tmp1, b_scales_vec, vl / 4);
                     }
-                    // __asm__ __volatile__("" ::: "memory");
 
+                    const int64_t A1 = *(const int64_t *)&a_ptr[l].qs[8];
+                    const int64_t A5 = *(const int64_t *)&a_ptr[l].qs[40];
+                    const int64_t A9 = *(const int64_t *)&a_ptr[l].qs[72];
+                    const int64_t Ad = *(const int64_t *)&a_ptr[l].qs[104];
+                    __asm__ __volatile__("" ::: "memory"); // prevent gcc from emitting fused vlse64, violating alignment
                     vint16m4_t sumi_l1;
                     {
-                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[8], 0, vl / 4));
-                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[40], 0, vl / 4));
-                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[72], 0, vl / 4));
-                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[104], 0, vl / 4));
+                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A1, vl / 4));
+                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A5, vl / 4));
+                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A9, vl / 4));
+                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(Ad, vl / 4));
                         const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
                         const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
                         const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
@@ -3341,14 +3355,18 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[0], vl / 4);
                         sumf1 = __riscv_vfmacc_vv_f32m1(sumf1, tmp1, b_scales_vec, vl / 4);
                     }
-                    // __asm__ __volatile__("" ::: "memory");
 
+                    const int64_t A2 = *(const int64_t *)&a_ptr[l].qs[16];
+                    const int64_t A6 = *(const int64_t *)&a_ptr[l].qs[48];
+                    const int64_t Aa = *(const int64_t *)&a_ptr[l].qs[80];
+                    const int64_t Ae = *(const int64_t *)&a_ptr[l].qs[112];
+                    __asm__ __volatile__("" ::: "memory"); // prevent gcc from emitting fused vlse64, violating alignment
                     vint16m4_t sumi_l2;
                     {
-                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[16], 0, vl / 4));
-                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[48], 0, vl / 4));
-                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[80], 0, vl / 4));
-                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[112], 0, vl / 4));
+                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A2, vl / 4));
+                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A6, vl / 4));
+                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(Aa, vl / 4));
+                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(Ae, vl / 4));
                         const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
                         const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
                         const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
@@ -3375,14 +3393,18 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                         const vfloat32m1_t tmp1 = __riscv_vfmul_vf_f32m1(facc, a_scales[2], vl / 4);
                         sumf2 = __riscv_vfmacc_vv_f32m1(sumf2, tmp1, b_scales_vec, vl / 4);
                     }
-                    // __asm__ __volatile__("" ::: "memory");
 
+                    const int64_t A3 = *(const int64_t *)&a_ptr[l].qs[24];
+                    const int64_t A7 = *(const int64_t *)&a_ptr[l].qs[56];
+                    const int64_t Ab = *(const int64_t *)&a_ptr[l].qs[88];
+                    const int64_t Af = *(const int64_t *)&a_ptr[l].qs[120];
+                    __asm__ __volatile__("" ::: "memory"); // prevent gcc from emitting fused vlse64, violating alignment
                     vint16m4_t sumi_l3;
                     {
-                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[24], 0, vl / 4));
-                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[56], 0, vl / 4));
-                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[88], 0, vl / 4));
-                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vlse64_v_i64m2((const int64_t *)&a_ptr[l].qs[120], 0, vl / 4));
+                        const vint8m2_t lhs_0_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A3, vl / 4));
+                        const vint8m2_t lhs_1_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(A7, vl / 4));
+                        const vint8m2_t lhs_2_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(Ab, vl / 4));
+                        const vint8m2_t lhs_3_8 =__riscv_vreinterpret_v_i64m2_i8m2(__riscv_vmv_v_x_i64m2(Af, vl / 4));
                         const vint16m4_t sumi_lo_0 = __riscv_vwmul_vv_i16m4(rhs_vec_lo_0, lhs_0_8, vl * 2);
                         const vint16m4_t sumi_lo_1 = __riscv_vwmacc_vv_i16m4(sumi_lo_0, rhs_vec_lo_1, lhs_1_8, vl * 2);
                         const vint16m4_t sumi_hi_0 = __riscv_vwmacc_vv_i16m4(sumi_lo_1, rhs_vec_hi_0, lhs_2_8, vl * 2);
