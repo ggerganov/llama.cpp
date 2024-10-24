@@ -619,7 +619,6 @@ static void ggml_byteswap_iq3_xxs (void * restrict buffer, size_t elements);
 static void ggml_byteswap_iq3_s   (void * restrict buffer, size_t elements);
 static void ggml_byteswap_iq2_s   (void * restrict buffer, size_t elements);
 static void ggml_byteswap_iq1_s   (void * restrict buffer, size_t elements);
-static void ggml_byteswap_iq1_m   (void * restrict buffer, size_t elements);
 static void ggml_byteswap_iq4_nl  (void * restrict buffer, size_t elements);
 static void ggml_byteswap_iq4_xs  (void * restrict buffer, size_t elements);
 static void ggml_byteswap_q8_k    (void * restrict buffer, size_t elements);
@@ -849,7 +848,6 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_iq1_m,
         .from_float_ref           = NULL,
-        .byteswap                 = ggml_byteswap_iq1_m,
     },
     [GGML_TYPE_IQ4_NL] = {
         .type_name                = "iq4_nl",
@@ -6619,51 +6617,63 @@ static void ggml_byteswap_i64(void * restrict buffer, size_t elements) {
 }
 
 static void ggml_byteswap_q4_0(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q4_0 *data_ptr = (block_q4_0*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_q4_1(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q4_1 *data_ptr = (block_q4_1*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        convert_from_le16(&(data_ptr[i].m));
+    }
 }
 
 static void ggml_byteswap_q5_0(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q5_0 *data_ptr = (block_q5_0*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_q5_1(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q5_1 *data_ptr = (block_q5_1*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        convert_from_le16(&(data_ptr[i].m));
+    }
 }
 
 static void ggml_byteswap_q8_0(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q8_0 *data_ptr = (block_q8_0*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_q8_1(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q8_1 *data_ptr = (block_q8_1*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        convert_from_le16(&(data_ptr[i].s));
+    }
 }
 
 static void ggml_byteswap_q2_k(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q2_K *data_ptr = (block_q2_K*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        convert_from_le16(&(data_ptr[i].dmin));
+    }
 }
 
 static void ggml_byteswap_q3_k(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q3_K *data_ptr = (block_q3_K*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_q4_k(void * restrict buffer, size_t elements) {
@@ -6675,9 +6685,11 @@ static void ggml_byteswap_q4_k(void * restrict buffer, size_t elements) {
 }
 
 static void ggml_byteswap_q5_k(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q5_K *data_ptr = (block_q5_K*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        convert_from_le16(&(data_ptr[i].dmin));
+    }
 }
 
 static void ggml_byteswap_q6_k(void * restrict buffer, size_t elements) {
@@ -6688,63 +6700,79 @@ static void ggml_byteswap_q6_k(void * restrict buffer, size_t elements) {
 }
 
 static void ggml_byteswap_iq2_xxs(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq2_xxs *data_ptr = (block_iq2_xxs*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        for (size_t j = 0; j < QK_K/8; ++j) {
+            convert_from_le16(&(data_ptr[i].qs[j]));
+        }
+    }
 }
 
 static void ggml_byteswap_iq2_xs(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq2_xs *data_ptr = (block_iq2_xs*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        for (size_t j = 0; j < QK_K/8; ++j) {
+            convert_from_le16(&(data_ptr[i].qs[j]));
+        }
+    }
 }
 
 static void ggml_byteswap_iq3_xxs(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq3_xxs *data_ptr = (block_iq3_xxs*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_iq3_s(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq3_s *data_ptr = (block_iq3_s*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_iq2_s(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq2_s *data_ptr = (block_iq2_s*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_iq1_s(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
-}
-
-static void ggml_byteswap_iq1_m(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq1_s *data_ptr = (block_iq1_s*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        for (size_t j = 0; j < QK_K/32; ++j) {
+            convert_from_le16(&(data_ptr[i].qh[j]));
+        }
+    }
 }
 
 static void ggml_byteswap_iq4_nl(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq4_nl *data_ptr = (block_iq4_nl*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
 
 static void ggml_byteswap_iq4_xs(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_iq4_xs *data_ptr = (block_iq4_xs*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+        convert_from_le16(&(data_ptr[i].scales_h));
+    }
 }
 
 static void ggml_byteswap_q8_k(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
-    UNUSED(buffer);
-    UNUSED(elements);
+    block_q8_K *data_ptr = (block_q8_K*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le32(&(data_ptr[i].d));
+        for (size_t j = 0; j < QK_K/16; ++j) {
+            convert_from_le16(&(data_ptr[i].bsums[j]));
+        }
+    }
 }
 
 static void ggml_byteswap_q4_0_4x4(void * restrict buffer, size_t elements) {
