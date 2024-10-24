@@ -2115,10 +2115,15 @@ struct server_context {
                         }
 
                         if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_EMBEDDING || slot.cmpl_type == SERVER_TASK_CMPL_TYPE_RERANK) {
-                            // this prompt is too large to process - discard it
                             if (slot.n_prompt_tokens > n_ubatch) {
                                 slot.release();
                                 send_error(slot, "input is too large to process. increase the physical batch size", ERROR_TYPE_SERVER);
+                                continue;
+                            }
+
+                            if (slot.n_prompt_tokens > slot.n_ctx) {
+                                slot.release();
+                                send_error(slot, "input is larger than the max context size. skipping", ERROR_TYPE_SERVER);
                                 continue;
                             }
                         } else {
