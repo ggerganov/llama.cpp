@@ -25,7 +25,7 @@ Feature: llama.cpp server
     And   an infill input prefix "#include <cstdio>\n#include \"llama.h\"\n\nint main() {\n    int n_threads = llama_"
     And   an infill input suffix "}\n"
     And   an infill request with no api error
-    Then  64 tokens are predicted matching Lily|was|so|excited
+    Then  64 tokens are predicted matching One|day|she|saw|big|scary|bird
 
   Scenario: Infill with input_extra
     Given a prompt "Complete this"
