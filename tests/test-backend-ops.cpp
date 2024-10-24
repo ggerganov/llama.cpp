@@ -1650,11 +1650,12 @@ struct test_mul_mat : public test_case {
     const int64_t m;
     const int64_t n;
     const int64_t k;
-    const std::array<int64_t, 2> bs; // dims 3 and 4
-    const std::array<int64_t, 2> nr; // repeat in dims 3 and 4
+    const std::array<int64_t, 2> bs;  // dims 3 and 4
+    const std::array<int64_t, 2> nr;  // repeat in dims 3 and 4
+    const std::array<int64_t, 4> per; // permutation of dimensions
 
     std::string vars() override {
-        return VARS_TO_STR7(type_a, type_b, m, n, k, bs, nr);
+        return VARS_TO_STR8(type_a, type_b, m, n, k, bs, nr, per);
     }
 
     double max_nmse_err() override {
@@ -1669,17 +1670,44 @@ struct test_mul_mat : public test_case {
     test_mul_mat(ggml_type type_a = GGML_TYPE_F32, ggml_type type_b = GGML_TYPE_F32,
             int64_t m = 32, int64_t n = 32, int64_t k = 32,
             std::array<int64_t, 2> bs = {10, 10},
-            std::array<int64_t, 2> nr = {2, 2})
-        : type_a(type_a), type_b(type_b), m(m), n(n), k(k), bs(bs), nr(nr) {}
+            std::array<int64_t, 2> nr = {2, 2},
+            std::array<int64_t, 4> per = {0, 1, 2, 3})
+        : type_a(type_a), type_b(type_b), m(m), n(n), k(k), bs(bs), nr(nr), per(per) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         // C^T = A * B^T: (k, m) * (k, n) => (m, n)
-        ggml_tensor * a = ggml_new_tensor_4d(ctx, type_a, k, m, bs[0]      , bs[1]);
-        ggml_tensor * b = ggml_new_tensor_4d(ctx, type_b, k, n, bs[0]*nr[0], bs[1]*nr[1]);
-        ggml_set_param(ctx, a);
-        ggml_set_param(ctx, b);
-        ggml_set_name(a, "a");
-        ggml_set_name(b, "b");
+        ggml_tensor * a;
+        ggml_tensor * b;
+
+        const int npermuted = (per[0] != 0) + (per[1] != 1) + (per[2] != 2) + (per[3] != 3);
+        if (npermuted > 0) {
+            GGML_ASSERT(npermuted == 2);
+            GGML_ASSERT(!ggml_is_quantized(type_a) || per[0] == 0);
+            GGML_ASSERT(!ggml_is_quantized(type_b) || per[0] == 0);
+
+            // Create tensors with the permuted dimensions, then permute them back to the dimensions given by m,n,k.
+            const int64_t ne_a[4] = {k, m, bs[0],       bs[1]};
+            const int64_t ne_b[4] = {k, n, bs[0]*nr[0], bs[1]*nr[1]};
+
+            a = ggml_new_tensor_4d(ctx, type_a, ne_a[per[0]], ne_a[per[1]], ne_a[per[2]], ne_a[per[3]]);
+            b = ggml_new_tensor_4d(ctx, type_b, ne_b[per[0]], ne_b[per[1]], ne_b[per[2]], ne_b[per[3]]);
+            ggml_set_param(ctx, a);
+            ggml_set_param(ctx, b);
+            ggml_set_name(a, "a");
+            ggml_set_name(b, "b");
+
+            a = ggml_permute(ctx, a, per[0], per[1], per[2], per[3]);
+            b = ggml_permute(ctx, b, per[0], per[1], per[2], per[3]);
+            ggml_set_name(a, "a_permuted");
+            ggml_set_name(b, "b_permuted");
+        } else {
+            a = ggml_new_tensor_4d(ctx, type_a, k, m, bs[0],       bs[1]);
+            b = ggml_new_tensor_4d(ctx, type_b, k, n, bs[0]*nr[0], bs[1]*nr[1]);
+            ggml_set_param(ctx, a);
+            ggml_set_param(ctx, b);
+            ggml_set_name(a, "a");
+            ggml_set_name(b, "b");
+        }
 
         ggml_tensor * out = ggml_mul_mat(ctx, a, b);
         ggml_set_name(out, "out");
@@ -3478,13 +3506,14 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
 #if 1
     for (ggml_type type_a : base_types) {
         for (ggml_type type_b : {GGML_TYPE_F32, GGML_TYPE_F16}) {
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, { 1,  1}, {1, 1}));
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {1, 1}));
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {2, 1}));
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10, 10}, {1, 1}));
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10, 10}, {2, 1}));
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10, 10}, {1, 2}));
-            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10, 10}, {2, 2}));
+            // test cases without permutation
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {10,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {10,  1}, {2, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {10, 10}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {10, 10}, {2, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {10, 10}, {1, 2}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {10, 10}, {2, 2}));
 
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, { 1,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {10,  1}, {1, 1}));
@@ -3493,6 +3522,19 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {10, 10}, {2, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {10, 10}, {1, 2}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {10, 10}, {2, 2}));
+
+            // test cases with permutation
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {2, 3}, {1, 1}, {0, 2, 1, 3}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {2, 3}, {1, 1}, {0, 1, 3, 2}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  1, 256, {2, 3}, {1, 1}, {0, 3, 2, 1}));
+
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  8, 256, {2, 3}, {1, 1}, {0, 2, 1, 3}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  8, 256, {2, 3}, {1, 1}, {0, 1, 3, 2}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16,  8, 256, {2, 3}, {1, 1}, {0, 3, 2, 1}));
+
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {2, 3}, {1, 1}, {0, 2, 1, 3}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {2, 3}, {1, 1}, {0, 1, 3, 2}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {2, 3}, {1, 1}, {0, 3, 2, 1}));
         }
     }
     for (ggml_type type_a : other_types) {
