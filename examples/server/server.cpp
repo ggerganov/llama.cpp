@@ -86,7 +86,7 @@ struct server_task {
     int id        = -1; // to be filled by server_queue
     int id_target = -1; // used by SERVER_TASK_TYPE_CANCEL
 
-    std::vector<llama_token> prompt_tokens;
+    llama_tokens prompt_tokens;
     server_task_type type;
     json data;
 
@@ -153,12 +153,12 @@ struct server_slot {
     int32_t n_prompt_tokens_processed = 0;
 
     // input prompt tokens
-    std::vector<llama_token> prompt_tokens;
+    llama_tokens prompt_tokens;
 
     size_t last_nl_pos = 0;
 
     std::string generated_text;
-    std::vector<llama_token> cache_tokens;
+    llama_tokens cache_tokens;
     std::vector<completion_token_output> generated_token_probs;
 
     server_task_inf_type inf_type = SERVER_TASK_INF_TYPE_COMPLETION;
@@ -1184,7 +1184,7 @@ struct server_context {
         };
 
         if (slot.sparams.n_probs > 0) {
-            const std::vector<llama_token> to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
+            const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
             const size_t probs_pos      = std::min(slot.n_sent_token_probs,                       slot.generated_token_probs.size());
             const size_t probs_stop_pos = std::min(slot.n_sent_token_probs + to_send_toks.size(), slot.generated_token_probs.size());
 
@@ -1235,7 +1235,7 @@ struct server_context {
         if (slot.sparams.n_probs > 0) {
             std::vector<completion_token_output> probs;
             if (!slot.params.stream && slot.stopped_word) {
-                const std::vector<llama_token> stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
+                const llama_tokens stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
 
                 size_t safe_offset = std::min(slot.generated_token_probs.size(), stop_word_toks.size());
                 probs = std::vector<completion_token_output>(
@@ -1911,7 +1911,7 @@ struct server_context {
                                 const int n_block_size = n_left / 2;
                                 const int erased_blocks = (slot.n_prompt_tokens - slot.params.n_keep - n_block_size) / n_block_size;
 
-                                std::vector<llama_token> new_tokens(
+                                llama_tokens new_tokens(
                                         prompt_tokens.begin(),
                                         prompt_tokens.begin() + slot.params.n_keep);
 
@@ -2869,7 +2869,7 @@ int main(int argc, char ** argv) {
             const bool add_special = json_value(body, "add_special", false);
             const bool with_pieces = json_value(body, "with_pieces", false);
 
-            std::vector<llama_token> tokens = tokenize_mixed(ctx_server.ctx, body.at("content"), add_special, true);
+            llama_tokens tokens = tokenize_mixed(ctx_server.ctx, body.at("content"), add_special, true);
 
             if (with_pieces) {
                 for (const auto& token : tokens) {
@@ -2906,7 +2906,7 @@ int main(int argc, char ** argv) {
 
         std::string content;
         if (body.count("tokens") != 0) {
-            const std::vector<llama_token> tokens = body.at("tokens");
+            const llama_tokens tokens = body.at("tokens");
             content = tokens_to_str(ctx_server.ctx, tokens.cbegin(), tokens.cend());
         }
 
