@@ -4,6 +4,7 @@ RUN python -m pip install --upgrade pip && \
     apt clean cache
 
 COPY requirements.txt /root/
+# COPY . /root/
 WORKDIR /root
 RUN pip install -r requirements.txt
 
@@ -13,5 +14,5 @@ COPY ./tools/*.py /root/tools/
 COPY ./squid/ssl_cert/squidCA.crt /usr/local/share/ca-certificates/squidCA.crt
 RUN chmod 644 /usr/local/share/ca-certificates/squidCA.crt && update-ca-certificates
 
-# ENTRYPOINT [ "python" ]
-# CMD ["serve_tools.py"]
+ENTRYPOINT [ "uvicorn" ]
+CMD ["serve_tools:app", "--host", "0.0.0.0", "--port", "8088"]

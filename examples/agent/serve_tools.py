@@ -12,6 +12,7 @@
 
         uv run examples/agent/serve_tools.py --port 8088
 '''
+import asyncio
 import logging
 import re
 import fastapi
@@ -24,6 +25,11 @@ from tools.fetch import fetch_page
 from tools.search import brave_search
 from tools.python import python, python_tools
 
+# try:
+#     # https://github.com/aio-libs/aiohttp/discussions/6044
+#     setattr(asyncio.sslproto._SSLProtocolTransport, "_start_tls_compatible", True) # type: ignore
+# except Exception as e:
+#     print(f'Failed to patch asyncio: {e}', file=sys.stderr)
 
 verbose = os.environ.get('VERBOSE', '0') == '1'
 include = os.environ.get('INCLUDE_TOOLS')

@@ -1,12 +1,12 @@
-import sys
-from pydantic import Field
-import aiohttp
+# import aiohttp
 import itertools
 import json
 import logging
 import os
-from typing import Annotated, Dict, List
+from typing import Dict, List
 import urllib.parse
+
+import requests
 
 
 def _extract_values(keys, obj):
@@ -66,13 +66,19 @@ async def brave_search(*, query: str) -> List[Dict]:
                 for r in results_of_type:
                     yield _extract_values(keys, r)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as res:
-            if not res.ok:
-                raise Exception(await res.text())
-            res.raise_for_status()
-            response = await res.json()
+    res = requests.get(url, headers=headers)
+    if not res.ok:
+        raise Exception(res.text)
+    reponse = res.json()
+    res.raise_for_status()
+    response = res.text
+    # async with aiohttp.ClientSession(trust_env=True) as session:
+    #     async with session.get(url, headers=headers) as res:
+    #         if not res.ok:
+    #             raise Exception(await res.text())
+    #         res.raise_for_status()
+    #         response = await res.json()
 
-            results = list(itertools.islice(extract_results(response), max_results))
-            print(json.dumps(dict(query=query, response=response, results=results), indent=2))
-            return results
+    results = list(itertools.islice(extract_results(response), max_results))
+    print(json.dumps(dict(query=query, response=response, results=results), indent=2))
+    return results

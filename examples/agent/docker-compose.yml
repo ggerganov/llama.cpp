@@ -32,12 +32,11 @@ services:
     networks:
       - private_net
     environment:
-      - PORT=8088
+      - VERBOSE=1
       - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
+      - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/squidCA.crt
       - http_proxy=http://outgoing_proxy:3128
       - https_proxy=http://outgoing_proxy:3128
-    entrypoint: python
-    command: serve_tools.py
 
     # entrypoint: /usr/bin/bash
     # command: ["-c", "pip install --upgrade gguf && apt update && apt install -y curl && curl https://ochafik.com && pip install gguf"]
