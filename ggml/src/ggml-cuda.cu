@@ -1479,11 +1479,12 @@ static void ggml_cuda_op_mul_mat(
         if (src0_is_contiguous) {
             dev[id].src0_dd = split ? (char *) src0_extra->data_device[id] : (char *) src0->data;
         } else {
-            // If src0 is not contiguous it will be copied to a temporary buffer, it may then be necessary to clear padding.
+            // If src0 is not contiguous it will be copied to a temporary buffer.
+            // This buffer needs to be cleared entirely because multiple regions will function as padding.
             const size_t nbytes_data    = ggml_nbytes(src0);
             const size_t nbytes_padding = ggml_row_size(src0->type, MATRIX_ROW_PADDING - ne00 % MATRIX_ROW_PADDING);
             dev[id].src0_dd = dev[id].src0_dd_alloc.alloc(ctx.pool(id), nbytes_data + nbytes_padding);
-            CUDA_CHECK(cudaMemsetAsync(dev[id].src0_dd + nbytes_data , 0, nbytes_padding, stream));
+            CUDA_CHECK(cudaMemsetAsync(dev[id].src0_dd, 0, nbytes_data + nbytes_padding, stream));
         }
 
         // If src0 is on a temporary compute buffer (partial offloading) there may be some padding that needs to be cleared:
