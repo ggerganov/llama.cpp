@@ -1,5 +1,7 @@
 aiohttp
 fastapi
 ipython
+html2text
+requests
 pyppeteer
 uvicorn
