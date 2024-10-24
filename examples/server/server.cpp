@@ -905,7 +905,6 @@ struct server_context {
             // Currently, this is not compatible with TextGen WebUI, Koboldcpp and SillyTavern format
             // Ref: https://github.com/oobabooga/text-generation-webui/blob/d1af7a41ade7bd3c3a463bfa640725edb818ebaf/extensions/openai/typing.py#L39
 
-            auto dry_sequence_breakers = data.find("dry_sequence_breakers");
             if (data.contains("dry_sequence_breakers")) {
                 slot.sparams.dry_sequence_breakers = json_value(data, "dry_sequence_breakers", std::vector<std::string>());
                 if (slot.sparams.dry_sequence_breakers.empty()) {
