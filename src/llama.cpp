@@ -21775,6 +21775,10 @@ struct llama_sampler * llama_sampler_init_infill(const struct llama_model * mode
     return llama_sampler_init_infill_impl(model->vocab);
 }
 
+struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+    return llama_sampler_init_dry_impl(model->vocab, llama_n_ctx_train(model), dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers, num_breakers);
+}
+
 //
 // model split
 //

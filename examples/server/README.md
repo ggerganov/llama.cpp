@@ -114,6 +114,11 @@ The project is under active development, and we are [looking for feedback and co
 | `--repeat-penalty N` | penalize repeat sequence of tokens (default: 1.0, 1.0 = disabled) |
 | `--presence-penalty N` | repeat alpha presence penalty (default: 0.0, 0.0 = disabled) |
 | `--frequency-penalty N` | repeat alpha frequency penalty (default: 0.0, 0.0 = disabled) |
+| `--dry-multiplier N` | DRY sampling multiplier (default: 0.0, 0.0 = disabled) |
+| `--dry-base N` | DRY sampling base value (default: 1.75) |
+| `--dry-allowed-length N` | allowed length for DRY sampling (default: 2) |
+| `--dry-penalty-last-n N` | DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size) |
+| `--dry-sequence-breaker STRING` | add sequence breaker for DRY sampling, clearing out default breakers (`['\n', ':', '"', '*']`) in the process; use `"none"` to not use any sequence breakers
 | `--dynatemp-range N` | dynamic temperature range (default: 0.0, 0.0 = disabled) |
 | `--dynatemp-exp N` | dynamic temperature exponent (default: 1.0) |
 | `--mirostat N` | use Mirostat sampling.<br/>Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.<br/>(default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0) |
@@ -368,6 +373,16 @@ node index.js
     `presence_penalty`: Repeat alpha presence penalty. Default: `0.0`, which is disabled.
 
     `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
+
+    `dry_multiplier`: Set the DRY (Don't Repeat Yourself) repetition penalty multiplier. Default: `0.0`, which is disabled.
+
+    `dry_base`: Set the DRY repetition penalty base value. Default: `1.75`
+
+    `dry_allowed_length`: Tokens that extend repetition beyond this receive exponentially increasing penalty: multiplier * base ^ (length of repeating sequence before token - allowed length). Default: `2`
+
+    `dry_penalty_last_n`: How many tokens to scan for repetitions. Default: `-1`, where `0` is disabled and `-1` is context size.
+
+    `dry_sequence_breakers`: Specify an array of sequence breakers for DRY sampling. Only a JSON array of strings is accepted. Default: `['\n', ':', '"', '*']`
 
     `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
 

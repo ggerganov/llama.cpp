@@ -251,6 +251,9 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         for (auto & antiprompt : params.antiprompt) {
             string_process_escapes(antiprompt);
         }
+        for (auto & seq_breaker : params.sparams.dry_sequence_breakers) {
+            string_process_escapes(seq_breaker);
+        }
     }
 
     if (!params.kv_overrides.empty()) {
@@ -995,6 +998,64 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_freq),
         [](common_params & params, const std::string & value) {
             params.sparams.penalty_freq = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-multiplier"}, "N",
+        string_format("set DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)params.sparams.dry_multiplier),
+        [](common_params & params, const std::string & value) {
+            params.sparams.dry_multiplier = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-base"}, "N",
+        string_format("set DRY sampling base value (default: %.2f)", (double)params.sparams.dry_base),
+        [](common_params & params, const std::string & value) {
+            float potential_base = std::stof(value);
+            if (potential_base >= 1.0f)
+            {
+                params.sparams.dry_base = potential_base;
+            }
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-allowed-length"}, "N",
+        string_format("set allowed length for DRY sampling (default: %d)", params.sparams.dry_allowed_length),
+        [](common_params & params, int value) {
+            params.sparams.dry_allowed_length = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-penalty-last-n"}, "N",
+        string_format("set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sparams.dry_penalty_last_n),
+        [](common_params & params, int value) {
+            params.sparams.dry_penalty_last_n = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-sequence-breaker"}, "STRING",
+        string_format("add sequence breaker for DRY sampling, clearing out default breakers (%s) in the process; use \"none\" to not use any sequence breakers\n",
+            params.sparams.dry_sequence_breakers.empty() ? "none" :
+            std::accumulate(std::next(params.sparams.dry_sequence_breakers.begin()),
+                params.sparams.dry_sequence_breakers.end(),
+                std::string("'") + (params.sparams.dry_sequence_breakers[0] == "\n" ? "\\n" : params.sparams.dry_sequence_breakers[0]) + "'",
+                [](const std::string& a, const std::string& b) {
+                    std::string formatted_b = (b == "\n") ? "\\n" : b;
+                    return a + ", '" + formatted_b + "'";
+                }).c_str()),
+        [](common_params & params, const std::string & value) {
+            static bool defaults_cleared = false;
+
+            if (!defaults_cleared) {
+                params.sparams.dry_sequence_breakers.clear();
+                defaults_cleared = true;
+            }
+
+            if (value == "none") {
+                params.sparams.dry_sequence_breakers.clear();
+            } else {
+                params.sparams.dry_sequence_breakers.emplace_back(value);
+            }
         }
     ).set_sparam());
     add_opt(common_arg(
