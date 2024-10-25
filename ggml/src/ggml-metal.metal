@@ -1189,9 +1189,11 @@ void mul_vec_q_n_f32_impl(
   //device const block_q_type * x = (device const block_q_type *) ((device char *) src0 + offset0);
     device const float        * y = (device const float        *) ((device char *) src1 + offset1);
 
+    // pointers to src0 rows
     device const block_q_type * ax[nr];
     for (int row = 0; row < nr; ++row) {
         const uint offset0 = (first_row + row)*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+
         ax[row] = (device const block_q_type *) ((device char *) src0 + offset0);
     }
 
@@ -1389,9 +1391,11 @@ void kernel_mul_mv_q8_0_f32_impl(
   //device const block_q8_0 * x = (device const block_q8_0 *) ((device char *) src0 + offset0);
     device const float      * y = (device const float      *) ((device char *) src1 + offset1);
 
+    // pointers to src0 rows
     device const block_q8_0 * ax[nr];
     for (int row = 0; row < nr; ++row) {
         const uint offset0 = (first_row + row)*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+
         ax[row] = (device const block_q8_0 *) ((device char *) src0 + offset0);
     }
 
