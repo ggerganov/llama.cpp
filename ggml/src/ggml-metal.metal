@@ -1211,20 +1211,22 @@ void mul_vec_q_n_f32_impl(
 
     // each thread in a SIMD group deals with half a block.
     for (int ib = ix; ib < nb; ib += nw/2) {
-        float sumy = 0;
+        float sumy[2] = { 0.f, 0.f };
 
+#pragma unroll
         for (int i = 0; i < 8; i += 2) {
-            sumy += yb[i +  0] + yb[i +  1];
+            sumy[0]  += yb[i +  0] + yb[i +  1];
             yl[i + 0] = yb[i +  0];
             yl[i + 1] = yb[i +  1]/256.f;
 
-            sumy += yb[i + 16] + yb[i + 17];
+            sumy[1]  += yb[i + 16] + yb[i + 17];
             yl[i + 8] = yb[i + 16]/16.f;
             yl[i + 9] = yb[i + 17]/4096.f;
         }
 
+#pragma unroll
         for (int row = 0; row < nr; row++) {
-            sumf[row] += block_q_n_dot_y(ax[row] + ib, sumy, yl, il);
+            sumf[row] += block_q_n_dot_y(ax[row] + ib, sumy[0] + sumy[1], yl, il);
         }
 
         yb += QK4_0 * 16;
