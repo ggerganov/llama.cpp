@@ -20,7 +20,7 @@ logger = logging.getLogger("compare-llama-bench")
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
     "cpu_info", "gpu_info", "n_gpu_layers", "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas",
-    "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_ubatch", "embeddings", "n_threads",
+    "blas", "model_filename", "model_type", "n_batch", "n_ubatch", "embeddings", "n_threads",
     "type_k", "type_v", "use_mmap", "no_kv_offload", "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
 ]
 

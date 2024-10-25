@@ -178,7 +178,6 @@ struct ggml_backend_rpc_buffer_context {
     std::shared_ptr<socket_t> sock;
     std::unordered_map<ggml_backend_buffer_t, void *> base_cache;
     uint64_t remote_ptr;
-    std::string name;
 };
 
 // RPC helper functions
@@ -409,11 +408,6 @@ static std::shared_ptr<socket_t> get_socket(const std::string & endpoint) {
     return sock;
 }
 
-static const char * ggml_backend_rpc_buffer_get_name(ggml_backend_buffer_t buffer) {
-    ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
-    return ctx->name.c_str();
-}
-
 static void ggml_backend_rpc_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     rpc_msg_free_buffer_req request = {ctx->remote_ptr};
@@ -524,7 +518,6 @@ static void ggml_backend_rpc_buffer_clear(ggml_backend_buffer_t buffer, uint8_t 
 }
 
 static ggml_backend_buffer_i ggml_backend_rpc_buffer_interface = {
-    /* .get_name        = */ ggml_backend_rpc_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_rpc_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_rpc_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_rpc_buffer_init_tensor,
@@ -551,7 +544,7 @@ static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer(ggml_back
     if (response.remote_ptr != 0) {
         ggml_backend_buffer_t buffer = ggml_backend_buffer_init(buft,
             ggml_backend_rpc_buffer_interface,
-            new ggml_backend_rpc_buffer_context{sock, {}, response.remote_ptr, "RPC[" + std::string(buft_ctx->endpoint) + "]"},
+            new ggml_backend_rpc_buffer_context{sock, {}, response.remote_ptr},
             response.remote_size);
         return buffer;
     } else {
@@ -607,11 +600,6 @@ static void ggml_backend_rpc_free(ggml_backend_t backend) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
     delete rpc_ctx;
     delete backend;
-}
-
-static ggml_backend_buffer_type_t ggml_backend_rpc_get_default_buffer_type(ggml_backend_t backend) {
-    ggml_backend_rpc_context * ctx = (ggml_backend_rpc_context *)backend->context;
-    return ggml_backend_rpc_buffer_type(ctx->endpoint.c_str());
 }
 
 static void ggml_backend_rpc_synchronize(ggml_backend_t backend) {
@@ -670,7 +658,6 @@ static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t backend, g
 static ggml_backend_i ggml_backend_rpc_interface = {
     /* .get_name                = */ ggml_backend_rpc_name,
     /* .free                    = */ ggml_backend_rpc_free,
-    /* .get_default_buffer_type = */ ggml_backend_rpc_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -680,9 +667,6 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_rpc_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };

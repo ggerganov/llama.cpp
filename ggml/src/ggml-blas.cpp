@@ -224,12 +224,6 @@ static void ggml_backend_blas_free(ggml_backend_t backend) {
     delete backend;
 }
 
-static ggml_backend_buffer_type_t ggml_backend_blas_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_cpu_buffer_type();
-
-    GGML_UNUSED(backend);
-}
-
 static enum ggml_status ggml_backend_blas_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     ggml_backend_blas_context * ctx = (ggml_backend_blas_context *)backend->context;
 
@@ -265,7 +259,6 @@ static enum ggml_status ggml_backend_blas_graph_compute(ggml_backend_t backend, 
 static struct ggml_backend_i blas_backend_i = {
     /* .get_name                = */ ggml_backend_blas_get_name,
     /* .free                    = */ ggml_backend_blas_free,
-    /* .get_default_buffer_type = */ ggml_backend_blas_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -275,9 +268,6 @@ static struct ggml_backend_i blas_backend_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_blas_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };

@@ -249,13 +249,10 @@ struct ggml_backend_sycl_buffer_context {
     }
 };
 
-static const char * ggml_backend_sycl_buffer_get_name(ggml_backend_buffer_t buffer) {
-    ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *)buffer->context;
-    return ctx->name.c_str();
-}
+static const char * ggml_backend_sycl_buffer_type_get_name(ggml_backend_buffer_type_t buft);
 
 static bool ggml_backend_buffer_is_sycl(ggml_backend_buffer_t buffer) {
-    return buffer->iface.get_name == ggml_backend_sycl_buffer_get_name;
+    return buffer->buft->iface.get_name == ggml_backend_sycl_buffer_type_get_name;
 }
 
 static void
@@ -440,7 +437,6 @@ catch (sycl::exception const &exc) {
 }
 
 static const ggml_backend_buffer_i ggml_backend_sycl_buffer_interface = {
-    /* .get_name        = */ ggml_backend_sycl_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_sycl_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_sycl_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_sycl_buffer_init_tensor,
@@ -698,16 +694,6 @@ struct ggml_backend_sycl_split_buffer_context {
     std::vector<queue_ptr> streams;
 };
 
-static const char * ggml_backend_sycl_split_buffer_get_name(ggml_backend_buffer_t buffer) {
-    return GGML_SYCL_NAME "_Split";
-
-    GGML_UNUSED(buffer);
-}
-
-static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
-   return buffer->iface.get_name == ggml_backend_sycl_split_buffer_get_name;
-}
-
 static void ggml_backend_sycl_split_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_sycl_split_buffer_context * ctx = (ggml_backend_sycl_split_buffer_context *)buffer->context;
     delete ctx;
@@ -915,7 +901,6 @@ static void ggml_backend_sycl_split_buffer_clear(ggml_backend_buffer_t buffer, u
 }
 
 static struct ggml_backend_buffer_i ggml_backend_sycl_split_buffer_interface = {
-    /* .get_name        = */ ggml_backend_sycl_split_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_sycl_split_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_sycl_split_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_sycl_split_buffer_init_tensor,
@@ -933,6 +918,10 @@ static const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_bu
     return GGML_SYCL_NAME "_Split";
 
     GGML_UNUSED(buft);
+}
+
+static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
+   return buffer->buft->iface.get_name == ggml_backend_sycl_split_buffer_type_get_name;
 }
 
 static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
@@ -1040,12 +1029,6 @@ static const char * ggml_backend_sycl_host_buffer_type_name(ggml_backend_buffer_
     GGML_UNUSED(buft);
 }
 
-static const char * ggml_backend_sycl_host_buffer_name(ggml_backend_buffer_t buffer) {
-    return GGML_SYCL_NAME "_Host";
-
-    GGML_UNUSED(buffer);
-}
-
 static void ggml_backend_sycl_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_sycl_host_free(buffer->context);
 }
@@ -1061,7 +1044,6 @@ static ggml_backend_buffer_t ggml_backend_sycl_host_buffer_type_alloc_buffer(ggm
     // FIXME: this is a hack to avoid having to implement a new buffer type
     ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
     buffer->buft = buft;
-    buffer->iface.get_name = ggml_backend_sycl_host_buffer_name;
     buffer->iface.free_buffer = ggml_backend_sycl_host_buffer_free_buffer;
 
     return buffer;
@@ -4889,12 +4871,6 @@ static void ggml_backend_sycl_free(ggml_backend_t backend) {
     delete backend;
 }
 
-
-static ggml_backend_buffer_type_t ggml_backend_sycl_get_default_buffer_type(ggml_backend_t backend) {
-    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
-    return ggml_backend_sycl_buffer_type(sycl_ctx->device);
-}
-
 static void ggml_backend_sycl_set_tensor_async(ggml_backend_t backend,
                                                ggml_tensor *tensor,
                                                const void *data, size_t offset,
@@ -5031,7 +5007,6 @@ static void ggml_backend_sycl_event_wait(ggml_backend_t backend, ggml_backend_ev
 static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_name                = */ ggml_backend_sycl_get_name,
     /* .free                    = */ ggml_backend_sycl_free,
-    /* .get_default_buffer_type = */ ggml_backend_sycl_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_sycl_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_sycl_get_tensor_async,
     /* .cpy_tensor_async        = */ NULL, // ggml_backend_sycl_cpy_tensor_async,
@@ -5043,9 +5018,6 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_sycl_graph_compute,
-    /* .supports_op             = */ NULL, // moved to device
-    /* .supports_buft           = */ NULL, // moved to device
-    /* .offload_op              = */ NULL, // moved to device
     /* .event_record            = */ ggml_backend_sycl_event_record,
     /* .event_wait              = */ ggml_backend_sycl_event_wait,
 };
@@ -5388,12 +5360,14 @@ static ggml_backend_dev_t ggml_backend_sycl_reg_get_device(ggml_backend_reg_t re
     return ctx->devices[index];
 }
 
-static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, const char *name)
-{
+static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, const char *name) {
     GGML_UNUSED(reg);
-    if (strcmp(name, "ggml_backend_split_buffer_type") == 0) {
-        return (void *)ggml_backend_sycl_split_buffer_type;
-    }
+
+    // TODO: update to the current function signature
+    //if (strcmp(name, "ggml_backend_split_buffer_type") == 0) {
+    //    return (void *)ggml_backend_sycl_split_buffer_type;
+    //}
+
     // SYCL doesn't support registering host memory, left here for reference
     // "ggml_backend_register_host_buffer"
     // "ggml_backend_unregister_host_buffer"

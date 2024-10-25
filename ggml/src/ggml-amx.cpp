@@ -16,12 +16,6 @@
 #if defined(__AMX_INT8__)
 
 // AMX buffer interface
-static const char * ggml_backend_amx_buffer_get_name(ggml_backend_buffer_t buffer) {
-    return "AMX";
-
-    GGML_UNUSED(buffer);
-}
-
 static void ggml_backend_amx_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     free(buffer->context);
 }
@@ -72,7 +66,6 @@ static void ggml_backend_amx_buffer_clear(ggml_backend_buffer_t buffer, uint8_t 
 }
 
 static ggml_backend_buffer_i ggml_backend_amx_buffer_interface = {
-    /* .get_name        = */ ggml_backend_amx_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_amx_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_amx_buffer_get_base,
     /* .init_tensor     = */ NULL, // no initialization required
@@ -149,12 +142,6 @@ static void ggml_backend_amx_free(ggml_backend_t backend) {
     delete backend;
 }
 
-static ggml_backend_buffer_type_t ggml_backend_amx_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_amx_buffer_type();
-
-    GGML_UNUSED(backend);
-}
-
 static enum ggml_status ggml_backend_amx_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     ggml_backend_amx_context * ctx = (ggml_backend_amx_context *)backend->context;
 
@@ -187,7 +174,6 @@ static enum ggml_status ggml_backend_amx_graph_compute(ggml_backend_t backend, s
 static struct ggml_backend_i ggml_backend_amx_i = {
     /* .get_name                = */ ggml_backend_amx_name,
     /* .free                    = */ ggml_backend_amx_free,
-    /* .get_default_buffer_type = */ ggml_backend_amx_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -197,9 +183,6 @@ static struct ggml_backend_i ggml_backend_amx_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_amx_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };

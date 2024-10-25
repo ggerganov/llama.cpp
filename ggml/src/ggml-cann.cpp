@@ -490,23 +490,6 @@ struct ggml_backend_cann_buffer_context {
 };
 
 /**
- * @brief Retrieve the name associated with a CANN buffer.
- *
- * This function returns the name of a CANN buffer, which is stored in the
- * context of the buffer.
- *
- * @param buffer The CANN buffer whose name is to be retrieved.
- * @return A pointer to a C-string containing the name of the buffer.
- */
-
-static const char* ggml_backend_cann_buffer_get_name(
-    ggml_backend_buffer_t buffer) {
-    return "CANN";
-
-    GGML_UNUSED(buffer);
-}
-
-/**
  * @brief Check if a buffer is a CANN buffer.
  *
  * This function checks if a given buffer is a CANN buffer by comparing its
@@ -515,9 +498,10 @@ static const char* ggml_backend_cann_buffer_get_name(
  * @param buffer The buffer to check.
  * @return true if the buffer is a CANN buffer, false otherwise.
  */
+static bool ggml_backend_buft_is_cann(ggml_backend_buffer_type_t buft);
 static bool ggml_backend_buffer_is_cann(
     ggml_backend_buffer_t buffer) {
-    return buffer->iface.get_name == ggml_backend_cann_buffer_get_name;
+    return ggml_backend_buft_is_cann(buffer->buft);
 }
 
 /**
@@ -965,7 +949,6 @@ static void ggml_backend_cann_buffer_clear(
  * on a CANN buffer within the backend.
  */
 static const ggml_backend_buffer_i ggml_backend_cann_buffer_interface = {
-    /* .get_name        = */ ggml_backend_cann_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cann_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cann_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_cann_buffer_init_tensor,
@@ -999,9 +982,10 @@ struct ggml_backend_cann_buffer_type_context {
  */
 static const char* ggml_backend_cann_buffer_type_name(
     ggml_backend_buffer_type_t buft) {
-    return "CANN";
+    ggml_backend_cann_buffer_type_context* buft_ctx =
+        (ggml_backend_cann_buffer_type_context*)buft->context;
 
-    GGML_UNUSED(buft);
+    return buft_ctx->name.c_str();
 }
 
 /**
@@ -1466,24 +1450,6 @@ static void ggml_backend_cann_free(ggml_backend_t backend) {
 }
 
 /**
- * @brief Retrieves the default buffer type associated with the CANN backend.
- *
- * This function returns the buffer type specific to the device associated
- * with the CANN backend. It is used to allocate buffers for computations
- * performed by the backend.
- *
- * @param backend Pointer to the CANN backend structure.
- * @return Pointer to the buffer type structure for the CANN backend.
- */
-static ggml_backend_buffer_type_t
-ggml_backend_cann_get_default_buffer_type(ggml_backend_t backend) {
-    ggml_backend_cann_context* cann_ctx =
-        (ggml_backend_cann_context*)backend->context;
-
-    return ggml_backend_cann_buffer_type(cann_ctx->device);
-}
-
-/**
  * @brief Sets tensor data asynchronously in the CANN backend.
  *
  * This function asynchronously sets tensor data in the CANN backend. Depending
@@ -1863,7 +1829,6 @@ static void ggml_backend_cann_event_wait(ggml_backend_t backend,
 static const ggml_backend_i ggml_backend_cann_interface = {
     /* .get_name                = */ ggml_backend_cann_name,
     /* .free                    = */ ggml_backend_cann_free,
-    /* .get_default_buffer_type = */ ggml_backend_cann_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_cann_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_cann_get_tensor_async,
     /* .cpy_tensor_async        = */ ggml_backend_cann_cpy_tensor_async,
@@ -1873,9 +1838,6 @@ static const ggml_backend_i ggml_backend_cann_interface = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_cann_graph_compute,
-    /* .supports_op             = */ NULL, // moved to device
-    /* .supports_buft           = */ NULL, // moved to device
-    /* .offload_op              = */ NULL, // moved to device
     /* .event_record            = */ ggml_backend_cann_event_record,
     /* .event_wait              = */ ggml_backend_cann_event_wait,
 };

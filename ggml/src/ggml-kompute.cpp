@@ -1820,11 +1820,6 @@ static void ggml_backend_kompute_device_unref(ggml_backend_buffer_type_t buft) {
     }
 }
 
-static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t buffer) {
-    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buffer->buft->context);
-    return ctx->name.c_str();
-}
-
 static void ggml_backend_kompute_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     auto * memory = (ggml_vk_memory *)buffer->context;
     if (ggml_vk_has_device()) {
@@ -1868,7 +1863,6 @@ static void ggml_backend_kompute_buffer_clear(ggml_backend_buffer_t buffer, uint
 }
 
 static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
-    /* .get_name        = */ ggml_backend_kompute_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_kompute_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_kompute_buffer_get_base,
     /* .init_tensor     = */ NULL,
@@ -1953,11 +1947,6 @@ static void ggml_backend_kompute_free(ggml_backend_t backend) {
     delete backend;
 }
 
-static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
-    return ggml_backend_kompute_buffer_type(ctx->device);
-}
-
 static ggml_status ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
     ggml_vk_graph_compute(ctx, cgraph);
@@ -1977,7 +1966,6 @@ static bool ggml_backend_kompute_supports_buft(ggml_backend_t backend, ggml_back
 static struct ggml_backend_i kompute_backend_i = {
     /* .get_name                = */ ggml_backend_kompute_name,
     /* .free                    = */ ggml_backend_kompute_free,
-    /* .get_default_buffer_type = */ ggml_backend_kompute_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -1987,9 +1975,6 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
-    /* .supports_op             = */ ggml_backend_kompute_supports_op,
-    /* .supports_buft           = */ ggml_backend_kompute_supports_buft,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };

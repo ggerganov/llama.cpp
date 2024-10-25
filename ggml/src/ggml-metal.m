@@ -3238,12 +3238,6 @@ static enum ggml_status ggml_metal_graph_compute(
 
 // backend interface
 
-static const char * ggml_backend_metal_buffer_get_name(ggml_backend_buffer_t buffer) {
-    return "Metal";
-
-    UNUSED(buffer);
-}
-
 static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
 
@@ -3298,7 +3292,6 @@ static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_
 }
 
 static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
-    /* .get_name        = */ ggml_backend_metal_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_metal_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_metal_buffer_get_base,
     /* .init_tensor     = */ NULL,
@@ -3520,12 +3513,6 @@ static void ggml_backend_metal_free(ggml_backend_t backend) {
     free(backend);
 }
 
-static ggml_backend_buffer_type_t ggml_backend_metal_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_metal_buffer_type();
-
-    UNUSED(backend);
-}
-
 static enum ggml_status ggml_backend_metal_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     return ggml_metal_graph_compute(backend, cgraph);
 }
@@ -3592,7 +3579,6 @@ static void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
 static struct ggml_backend_i ggml_backend_metal_i = {
     /* .get_name                = */ ggml_backend_metal_name,
     /* .free                    = */ ggml_backend_metal_free,
-    /* .get_default_buffer_type = */ ggml_backend_metal_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -3602,9 +3588,6 @@ static struct ggml_backend_i ggml_backend_metal_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_metal_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };
