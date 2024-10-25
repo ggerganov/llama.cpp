@@ -387,6 +387,7 @@ void string_replace_all(std::string & s, const std::string & search, const std::
 
 template<class T>
 static std::vector<T> string_split(const std::string & str, char delim) {
+    static_assert(!std::is_same<T, std::string>::value, "Please use the specialized version for std::string");
     std::vector<T> values;
     std::istringstream str_stream(str);
     std::string token;
