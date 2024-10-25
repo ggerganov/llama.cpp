@@ -416,19 +416,6 @@ std::string string_format(const char * fmt, ...) {
     return std::string(buf.data(), size);
 }
 
-std::vector<std::string> string_split(std::string input, char separator) {
-    std::vector<std::string> parts;
-    size_t separator_pos = input.find(separator);
-    while (separator_pos != std::string::npos) {
-        std::string part = input.substr(0, separator_pos);
-        parts.emplace_back(part);
-        input = input.substr(separator_pos + 1);
-        separator_pos = input.find(separator);
-    }
-    parts.emplace_back(input);
-    return parts;
-}
-
 std::string string_strip(const std::string & str) {
     size_t start = 0;
     size_t end = str.size();
