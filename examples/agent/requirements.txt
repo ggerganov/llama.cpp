@@ -1,5 +1,5 @@
 aiohttp
-fastapi
+fastapi[standard]
 ipython
 html2text
 requests

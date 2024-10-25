@@ -1,4 +1,3 @@
-# import aiohttp
 import html2text
 import logging
 import requests
@@ -14,12 +13,6 @@ async def fetch_page(url: str):
         response = requests.get(url)
         response.raise_for_status()
         content = response.text
-        # async with aiohttp.ClientSession(trust_env=True) as session:
-        #     async with session.get(url) as res:
-        #         res.raise_for_status()
-        #         content = await res.text()
-    # except aiohttp.ClientError as e:
-    #     raise Exception(f'Failed to fetch {url}: {e}')
     except requests.exceptions.RequestException as e:
         raise Exception(f'Failed to fetch {url}: {e}')
 

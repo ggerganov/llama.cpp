@@ -5,7 +5,7 @@ import logging
 import sys
 
 
-python_tools = {}
+python_tools_registry = {}
 
 
 def _strip_ansi_codes(text):
@@ -27,7 +27,7 @@ def python(code: str) -> str:
     shell = InteractiveShell(
         colors='neutral',
     )
-    shell.user_global_ns.update(python_tools)
+    shell.user_global_ns.update(python_tools_registry)
 
     old_stdout = sys.stdout
     sys.stdout = out = StringIO()

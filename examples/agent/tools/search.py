@@ -1,4 +1,3 @@
-# import aiohttp
 import itertools
 import json
 import logging
@@ -52,6 +51,7 @@ async def brave_search(*, query: str) -> List[Dict]:
     }
 
     def extract_results(search_response):
+        # print("SEARCH RESPONSE: " + json.dumps(search_response, indent=2))
         for m in search_response['mixed']['main']:
             result_type = m['type']
             keys = _result_keys_by_type.get(result_type)
@@ -66,19 +66,10 @@ async def brave_search(*, query: str) -> List[Dict]:
                 for r in results_of_type:
                     yield _extract_values(keys, r)
 
-    res = requests.get(url, headers=headers)
-    if not res.ok:
-        raise Exception(res.text)
-    reponse = res.json()
-    res.raise_for_status()
-    response = res.text
-    # async with aiohttp.ClientSession(trust_env=True) as session:
-    #     async with session.get(url, headers=headers) as res:
-    #         if not res.ok:
-    #             raise Exception(await res.text())
-    #         res.raise_for_status()
-    #         response = await res.json()
-
-    results = list(itertools.islice(extract_results(response), max_results))
+    response = requests.get(url, headers=headers)
+    if not response.ok:
+        raise Exception(response.text)
+    response.raise_for_status()
+    results = list(itertools.islice(extract_results(response.json()), max_results))
     print(json.dumps(dict(query=query, response=response, results=results), indent=2))
     return results
