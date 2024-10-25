@@ -761,8 +761,16 @@ Example:
 ```
 
 Possible values for `slot[i].state` are:
-- `0`: SLOT_STATE_IDLE
-- `1`: SLOT_STATE_PROCESSING
+- `0`: SLOT_STATE_IDLE  
+  The slot is idle and ready to use.
+- `1`: SLOT_STATE_PROCESSING_PROMPT  
+  The slot is processing the input prompt tokens.
+- `2`: SLOT_STATE_DONE_PROMPT  
+  The slot has finished processing the input prompt. For embedding and rerank tasks the slot will be released soon, otherwise the slot will be used for generation.
+- `3`: SLOT_STATE_GENERATING  
+  The slot is generating output tokens.
+
+[State diagram](https://github.com/ggerganov/llama.cpp/pull/9283)
 
 ### GET `/metrics`: Prometheus compatible metrics exporter
 
