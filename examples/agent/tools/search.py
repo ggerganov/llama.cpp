@@ -70,6 +70,7 @@ async def brave_search(*, query: str) -> List[Dict]:
     if not response.ok:
         raise Exception(response.text)
     response.raise_for_status()
-    results = list(itertools.islice(extract_results(response.json()), max_results))
-    print(json.dumps(dict(query=query, response=response, results=results), indent=2))
+    response_json = response.json()
+    results = list(itertools.islice(extract_results(response_json), max_results))
+    print(json.dumps(dict(query=query, response=response_json, results=results), indent=2))
     return results
