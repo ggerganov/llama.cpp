@@ -319,6 +319,18 @@ node index.js
       - The prompt is a string or an array with the first element given as a string
       - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
 
+    These input shapes and data type are allowed for `prompt`:
+
+      - Single string: `"string"`
+      - Single sequence of tokens: `[12, 34, 56]`
+      - Mixed tokens and strings: `[12, 34, "string", 56, 78]`
+
+    Multiple prompts are also supported. In this case, the completion result will be an array.
+
+      - Only strings: `["string1", "string2"]`
+      - Strings and sequences of tokens: `["string1", [12, 34, 56]]`
+      - Mixed types: `[[12, 34, "string", 56, 78], [12, 34, 56], "string"]`
+
     `temperature`: Adjust the randomness of the generated text. Default: `0.8`
 
     `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` Default: `0.0`, which is disabled.

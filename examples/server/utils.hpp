@@ -24,6 +24,22 @@
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
 using json = nlohmann::ordered_json;
+using llama_tokens = std::vector<llama_token>;
+
+#define SLT_INF(slot, fmt, ...) LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+#define SLT_WRN(slot, fmt, ...) LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+#define SLT_ERR(slot, fmt, ...) LOG_ERR("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+#define SLT_DBG(slot, fmt, ...) LOG_DBG("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+
+#define SRV_INF(fmt, ...) LOG_INF("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+#define SRV_WRN(fmt, ...) LOG_WRN("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+#define SRV_ERR(fmt, ...) LOG_ERR("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+#define SRV_DBG(fmt, ...) LOG_DBG("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+
+#define QUE_INF(fmt, ...) LOG_INF("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+#define QUE_WRN(fmt, ...) LOG_WRN("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+#define QUE_ERR(fmt, ...) LOG_ERR("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
+#define QUE_DBG(fmt, ...) LOG_DBG("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 
 // https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
 enum error_type {
@@ -52,8 +68,234 @@ static T json_value(const json & body, const std::string & key, const T & defaul
 }
 
 //
-// chat template utils
+// tokenizer and input processing utils
 //
+
+static bool json_is_array_of_numbers(const json & data) {
+    if (data.is_array()) {
+        for (const auto & e : data) {
+            if (!e.is_number_integer()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+// is array having BOTH numbers & strings?
+static bool json_is_array_of_mixed_numbers_strings(const json & data) {
+    bool seen_string = false;
+    bool seen_number = false;
+    if (data.is_array()) {
+        for (const auto & e : data) {
+            seen_string |= e.is_string();
+            seen_number |= e.is_number_integer();
+            if (seen_number && seen_string) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * this handles 2 cases:
+ * - only string, example: "string"
+ * - mixed string and tokens, example: [12, 34, "string", 56, 78]
+ */
+static llama_tokens tokenize_mixed(const llama_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
+    // If `add_bos` is true, we only add BOS, when json_prompt is a string,
+    // or the first element of the json_prompt array is a string.
+    llama_tokens prompt_tokens;
+
+    if (json_prompt.is_array()) {
+        bool first = true;
+        for (const auto & p : json_prompt) {
+            if (p.is_string()) {
+                auto s = p.template get<std::string>();
+
+                llama_tokens p;
+                if (first) {
+                    p = common_tokenize(ctx, s, add_special, parse_special);
+                    first = false;
+                } else {
+                    p = common_tokenize(ctx, s, false, parse_special);
+                }
+
+                prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
+            } else {
+                if (first) {
+                    first = false;
+                }
+
+                prompt_tokens.push_back(p.template get<llama_token>());
+            }
+        }
+    } else {
+        auto s = json_prompt.template get<std::string>();
+        prompt_tokens = common_tokenize(ctx, s, add_special, parse_special);
+    }
+
+    return prompt_tokens;
+}
+
+/**
+ * break the input "prompt" object into multiple prompt if needed, then tokenize them
+ * this supports these cases:
+ * - "prompt": "string"
+ * - "prompt": [12, 34, 56]
+ * - "prompt": [12, 34, "string", 56, 78]
+ * and multiple prompts (multi-tasks):
+ * - "prompt": ["string1", "string2"]
+ * - "prompt": ["string1", [12, 34, 56]]
+ * - "prompt": [[12, 34, "string", 56, 78], [12, 34, 56]]
+ */
+static std::vector<llama_tokens> tokenize_input_prompts(llama_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
+    std::vector<llama_tokens> result;
+    if (json_prompt.is_string() || json_is_array_of_mixed_numbers_strings(json_prompt)) {
+        // string or mixed
+        result.push_back(tokenize_mixed(ctx, json_prompt, add_special, parse_special));
+    } else if (json_is_array_of_numbers(json_prompt)) {
+        // array of tokens
+        result.push_back(json_prompt.get<llama_tokens>());
+    } else if (json_prompt.is_array()) {
+        // array of prompts
+        result.reserve(json_prompt.size());
+        for (const auto & p : json_prompt) {
+            if (p.is_string() || json_is_array_of_mixed_numbers_strings(p)) {
+                result.push_back(tokenize_mixed(ctx, p, add_special, parse_special));
+            } else if (json_is_array_of_numbers(p)) {
+                // array of tokens
+                result.push_back(p.get<llama_tokens>());
+            } else {
+                throw std::runtime_error("element of \"prompt\" must be a string, an list of tokens, or a list of mixed strings & tokens");
+            }
+        }
+    } else {
+        throw std::runtime_error("\"prompt\" must be a string, an list of tokens, a list of mixed strings & tokens, or a list of prompts");
+    }
+    return result;
+}
+
+//
+// template utils
+//
+
+// format rerank task: [BOS]query[EOS][SEP]doc[EOS]
+static llama_tokens format_rerank(const struct llama_model * model, const llama_tokens & query, const llama_tokens & doc) {
+    llama_tokens result;
+    result.reserve(doc.size() + query.size() + 4);
+    result.push_back(llama_token_bos(model));
+    result.insert(result.end(), query.begin(), query.end());
+    result.push_back(llama_token_eos(model));
+    result.push_back(llama_token_sep(model));
+    result.insert(result.end(), doc.begin(), doc.end());
+    result.push_back(llama_token_eos(model));
+    return result;
+}
+
+// format infill task
+static llama_tokens format_infill(
+        const llama_context * ctx,
+        const json & input_prefix,
+        const json & input_suffix,
+        const json & input_extra,
+        const int n_batch,
+        const int n_predict,
+        const int n_ctx,
+        const bool spm_infill,
+        const llama_tokens & tokens_prompt
+    ) {
+    // TODO: optimize this block by reducing memory allocations and movement
+
+    // use FIM repo-level pattern:
+    // ref: https://arxiv.org/pdf/2409.12186
+    //
+    // [FIM_REP]myproject
+    // [FIM_SEP]filename0
+    // extra chunk 0
+    // [FIM_SEP]filename1
+    // extra chunk 1
+    // ...
+    // [FIM_SEP]filename
+    // [FIM_PRE]prefix[FIM_SUF]suffix[FIM_MID]prompt
+    //
+    llama_tokens extra_tokens;
+    extra_tokens.reserve(n_ctx);
+
+    auto model = llama_get_model(ctx);
+    auto tokens_prefix = tokenize_mixed(ctx, input_prefix, false, false);
+    auto tokens_suffix = tokenize_mixed(ctx, input_suffix, false, false);
+
+    if (llama_token_fim_rep(model) != LLAMA_TOKEN_NULL) {
+        // TODO: make project name an input
+        static const auto k_fim_repo = common_tokenize(ctx, "myproject\n", false, false);
+
+        extra_tokens.push_back(llama_token_fim_rep(model));
+        extra_tokens.insert(extra_tokens.end(), k_fim_repo.begin(), k_fim_repo.end());
+    }
+    for (const auto & chunk : input_extra) {
+        // { "text": string, "filename": string }
+        const std::string text     = json_value(chunk, "text",     std::string());
+        const std::string filename = json_value(chunk, "filename", std::string("tmp"));
+
+        if (llama_token_fim_sep(model) != LLAMA_TOKEN_NULL) {
+            const auto k_fim_file = common_tokenize(ctx, filename + "\n", false, false);
+
+            extra_tokens.insert(extra_tokens.end(), llama_token_fim_sep(model));
+            extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
+        } else {
+            // chunk separator in binary form to avoid confusing the AI
+            static const char k_chunk_prefix_str[] = {0x0a, 0x0a, 0x2d, 0x2d, 0x2d, 0x20, 0x73, 0x6e, 0x69, 0x70, 0x70, 0x65, 0x74, 0x20, 0x2d, 0x2d, 0x2d, 0x0a, 0x0a, 0x00};
+            static const auto k_chunk_prefix_tokens = common_tokenize(ctx, k_chunk_prefix_str, false, false);
+
+            extra_tokens.insert(extra_tokens.end(), k_chunk_prefix_tokens.begin(), k_chunk_prefix_tokens.end());
+        }
+
+        const auto chunk_tokens = common_tokenize(ctx, text, false, false);
+        extra_tokens.insert(extra_tokens.end(), chunk_tokens.begin(), chunk_tokens.end());
+    }
+
+    if (llama_token_fim_sep(model) != LLAMA_TOKEN_NULL) {
+        // TODO: current filename
+        static const auto k_fim_file = common_tokenize(ctx, "filename\n", false, false);
+
+        extra_tokens.insert(extra_tokens.end(), llama_token_fim_sep(model));
+        extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
+    }
+
+    // for now pick FIM context to fit in a batch (ratio prefix:suffix = 3:1, TODO: configurable?)
+    const int n_suffix_take = std::min<int>(tokens_suffix.size(),   (n_batch/4));
+    const int n_prefix_take = std::min<int>(tokens_prefix.size(), 3*(n_batch/4) - 3);
+
+    // fill the rest of the context with extra chunks
+    const int n_extra_take = std::min<int>(std::max<int>(0, n_ctx - (n_batch) - 2*n_predict), extra_tokens.size());
+
+    tokens_prefix.erase(tokens_prefix.begin(), tokens_prefix.begin() + tokens_prefix.size() - n_prefix_take);
+    tokens_suffix.resize(n_suffix_take);
+
+    tokens_prefix.insert(tokens_prefix.begin(), llama_token_fim_pre(model));
+    tokens_prefix.insert(tokens_prefix.end(),   tokens_prompt.begin(), tokens_prompt.end());
+    tokens_suffix.insert(tokens_suffix.begin(), llama_token_fim_suf(model));
+
+    auto embd_inp = spm_infill ? tokens_suffix : tokens_prefix;
+    auto embd_end = spm_infill ? tokens_prefix : tokens_suffix;
+
+    if (llama_add_bos_token(model)) {
+        embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+    }
+
+    SRV_DBG("extra: n_ctx = %d, n_extra_take = %d, n_extra = %d\n", n_ctx, n_extra_take, (int) extra_tokens.size());
+
+    // put the extra context before the FIM prefix
+    embd_inp.insert(embd_inp.begin(), extra_tokens.end() - n_extra_take, extra_tokens.end());
+
+    embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
+    embd_inp.push_back(llama_token_fim_mid(model));
+
+    return embd_inp;
+}
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
@@ -227,18 +469,6 @@ static size_t find_partial_stop_string(const std::string &stop, const std::strin
     }
 
     return std::string::npos;
-}
-
-static bool json_is_array_of_numbers(const json & data) {
-    if (data.is_array()) {
-        for (const auto & e : data) {
-            if (!e.is_number()) {
-                return false;
-            }
-        }
-        return true;
-    }
-    return false;
 }
 
 // TODO: reuse llama_detokenize

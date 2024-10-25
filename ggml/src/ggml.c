@@ -3464,7 +3464,7 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
 
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     size_t nbytes;
-    size_t blck_size = ggml_blck_size(tensor->type);
+    const size_t blck_size = ggml_blck_size(tensor->type);
     if (blck_size == 1) {
         nbytes = ggml_type_size(tensor->type);
         for (int i = 0; i < GGML_MAX_DIMS; ++i) {
@@ -3851,10 +3851,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
                     .total_cpus = 0,
                 },
             };
-
-            for (int i = 0; i < GGML_MAX_CONTEXTS; ++i) {
-                g_state.contexts[i].used = false;
-            }
 
             const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
 
