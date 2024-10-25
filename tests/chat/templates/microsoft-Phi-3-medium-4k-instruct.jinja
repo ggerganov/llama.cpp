@@ -1,0 +1,5 @@
+{% for message in messages %}{% if (message['role'] == 'user') %}{{'<|user|>' + '
+' + message['content'] + '<|end|>' + '
+' + '<|assistant|>' + '
+'}}{% elif (message['role'] == 'assistant') %}{{message['content'] + '<|end|>' + '
+'}}{% endif %}{% endfor %}

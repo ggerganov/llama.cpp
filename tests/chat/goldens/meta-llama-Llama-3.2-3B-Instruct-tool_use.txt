@@ -1,0 +1,116 @@
+<|startoftext|><|start_header_id|>system<|end_header_id|>
+
+Environment: ipython
+Cutting Knowledge Date: December 2023
+Today Date: 26 Jul 2024
+
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Given the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.
+
+Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.Do not use variables.
+
+{
+    "type": "function",
+    "function": {
+        "name": "ipython",
+        "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "The code to run in the ipython interpreter."
+                }
+            },
+            "required": [
+                "code"
+            ]
+        }
+    }
+}
+
+{
+    "type": "function",
+    "function": {
+        "name": "brave_search",
+        "description": "Executes a web search with Brave.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The query to search for."
+                }
+            },
+            "required": [
+                "query"
+            ]
+        }
+    }
+}
+
+{
+    "type": "function",
+    "function": {
+        "name": "wolfram_alpha",
+        "description": "Executes a query with Wolfram Alpha.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The query to execute."
+                }
+            },
+            "required": [
+                "query"
+            ]
+        }
+    }
+}
+
+{
+    "type": "function",
+    "function": {
+        "name": "test",
+        "description": "Runs a test.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "condition": {
+                    "type": "boolean",
+                    "description": "The condition to test."
+                }
+            },
+            "required": [
+                "condition"
+            ]
+        }
+    }
+}
+
+Print a hello world message with python.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+{"name": "ipython", "parameters": {"code": "print('Hello, World!')"}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
+
+"{\"stdout\": \"Hello, World!\"}"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+Anything else?<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Test a tautology.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+{"name": "test", "parameters": {"condition": true}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
+
+"true"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+Truth is definitely true.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Check it on the web.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+{"name": "brave_search", "parameters": {"query": "what is truth anyway am I right?"}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>
+
+"{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}"<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+I don't need the web to answer you but I did check, as you asked. What now?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+

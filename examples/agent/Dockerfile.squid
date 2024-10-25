@@ -1,0 +1,8 @@
+FROM debian:latest
+
+ENV SQUID_CACHE_DIR=/var/spool/squid \
+    SQUID_LOG_DIR=/var/log/squid
+
+RUN apt update && \
+    apt install -y squid-openssl && \
+    apt clean cache

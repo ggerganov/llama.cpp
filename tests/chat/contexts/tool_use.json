@@ -1,0 +1,167 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Print a hello world message with python."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1___",
+          "type": "function",
+          "function": {
+            "arguments": "{\"code\": \"print('Hello, World!')\"}",
+            "name": "ipython"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1___",
+      "name": "ipython",
+      "content": "{\"stdout\": \"Hello, World!\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "Anything else?"
+    },
+    {
+      "role": "user",
+      "content": "Test a tautology."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2___",
+          "type": "function",
+          "function": {
+            "arguments": "{\"condition\":true}",
+            "name": "test"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2___",
+      "name": "test",
+      "content": "true"
+    },
+    {
+      "role": "assistant",
+      "content": "Truth is definitely true."
+    },
+    {
+      "role": "user",
+      "content": "Check it on the web."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_3___",
+          "type": "function",
+          "function": {
+            "arguments": "{\"query\": \"what is truth anyway am I right?\"}",
+            "name": "brave_search"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_3___",
+      "name": "brave_search",
+      "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "I don't need the web to answer you but I did check, as you asked. What now?"
+    }
+  ],
+  "add_generation_prompt": true,
+  "bos_token": "<|startoftext|>",
+  "eos_token": "<|endoftext|>",
+  "builtin_tools": [
+    "wolfram_alpha",
+    "brave_search"
+  ],
+  "cutting_knowledge_date": "2023-04-01",
+  "todays_date": "2024-09-03",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "ipython",
+        "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "The code to run in the ipython interpreter."
+            }
+          },
+          "required": ["code"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "brave_search",
+        "description": "Executes a web search with Brave.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The query to search for."
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "wolfram_alpha",
+        "description": "Executes a query with Wolfram Alpha.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The query to execute."
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "test",
+        "description": "Runs a test.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "condition": {
+              "type": "boolean",
+              "description": "The condition to test."
+            }
+          },
+          "required": ["condition"]
+        }
+      }
+    }
+  ]
+}

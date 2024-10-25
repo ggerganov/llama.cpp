@@ -76,9 +76,13 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.server_seed = None
     context.user_api_key = None
     context.response_format = None
+    context.tools = None
+    context.tool_choice = None
     context.temperature = None
     context.lora_file = None
     context.disable_ctx_shift = False
+    context.use_jinja = False
+    context.chat_template_file = None
 
     # infill
     context.infill_input_extra = None
@@ -165,6 +169,16 @@ def step_server_n_predict(context, n_predict: int):
 @step('{slot_save_path} as slot save path')
 def step_slot_save_path(context, slot_save_path: str):
     context.slot_save_path = slot_save_path
+
+
+@step('jinja templates are enabled')
+def step_use_jinja(context):
+    context.use_jinja = True
+
+
+@step('a chat template file {file}')
+def step_use_jinja(context, file):
+    context.chat_template_file = file
 
 
 @step('using slot id {id_slot:d}')
@@ -398,6 +412,13 @@ def step_max_tokens(context, max_tokens):
 def step_response_format(context, response_format):
     context.response_format = json.loads(response_format)
 
+@step('tools {tools}')
+def step_tools(context, tools):
+    context.tools = json.loads(tools)
+
+@step('a tool choice {tool_choice}')
+def step_tool_choice(context, tool_choice):
+    context.tool_choice = tool_choice
 
 @step('{temperature:f} temperature')
 def step_temperature(context, temperature):
@@ -522,10 +543,13 @@ async def step_oai_chat_completions(context, api_error):
     if context.debug:
         print(f"Submitting OAI compatible completions request...")
     expect_api_error = api_error == 'raised'
-    seeds = await completions_seed(context, num_seeds=1),
+    seeds = await completions_seed(context, num_seeds=1)
     completion = await oai_chat_completions(context.prompts.pop(),
-                                            seeds[0] if seeds is not None else seeds,
-                                            context.system_prompt,
+                                            seeds[0] if seeds else None,
+
+                                            context.system_prompt
+                                            if hasattr(context, 'system_prompt') else None,
+
                                             context.base_url,
                                             '/v1/chat',
                                             False,
@@ -539,6 +563,11 @@ async def step_oai_chat_completions(context, api_error):
 
                                             response_format=context.response_format
                                             if hasattr(context, 'response_format') else None,
+
+                                            tools=context.tools
+                                            if hasattr(context, 'tools') else None,
+
+                                            tool_choice=context.tool_choice,
 
                                             user_api_key=context.user_api_key
                                             if hasattr(context, 'user_api_key') else None,
@@ -629,6 +658,9 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'enable_streaming') else None,
                               response_format=context.response_format
                               if hasattr(context, 'response_format') else None,
+                              tools=context.tools
+                              if hasattr(context, 'tools') else None,
+                              tool_choice=context.tool_choice,
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
 
@@ -642,16 +674,18 @@ async def step_oai_chat_completions(context):
                               context.base_url,
                               '/chat/completions',
                               True,  # async_client
-                              model=context.model
-                              if hasattr(context, 'model') else None,
-                              n_predict=context.n_predict
-                              if hasattr(context, 'n_predict') else None,
+                              model=context.model,
+                            #   if hasattr(context, 'model') else None,
+                              n_predict=context.n_predict,
+                            #   if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
-                              response_format=context.response_format
-                              if hasattr(context, 'response_format') else None,
-                              user_api_key=context.user_api_key
-                              if hasattr(context, 'user_api_key') else None)
+                              response_format=context.response_format,
+                            #   if hasattr(context, 'response_format') else None,
+                              tools=context.tools,# if hasattr(context, 'tools') else None,
+                              tool_choice=context.tool_choice, # if hasattr(context, 'tool_choice') else None,
+                              user_api_key=context.user_api_key)
+                            #   if hasattr(context, 'user_api_key') else None)
 
 
 @step('all prompts are predicted')
@@ -673,6 +707,45 @@ async def all_prompts_are_predicted(context, expected_predicted_n=None):
         assert_n_tokens_predicted(context.tasks_result.pop(), expected_predicted_n=expected_predicted_n)
     assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
 
+
+@step('tool {expected_name} is called with arguments {expected_arguments}')
+@async_run_until_complete
+async def step_tool_called(context, expected_name, expected_arguments):
+    n_completions = await gather_tasks_results(context)
+    assert n_completions > 0
+
+    expected_name = expected_name if expected_name else None
+    expected_arguments = json.loads(expected_arguments) if expected_arguments else None
+
+    for i in range(n_completions):
+        result = context.tasks_result.pop()
+
+        def check(tool_calls):
+            if tool_calls is None:
+                assert expected_name is None and expected_arguments is None, f'expected_name = {expected_name}, expected_arguments = {expected_arguments}, result = {result}'
+            else:
+                assert len(tool_calls) == 1, f"tool calls: {tool_calls}"
+                tool_call = tool_calls[0]
+                actual_name = tool_call.function.name
+                actual_arguments = json.loads(tool_call.function.arguments)
+                assert expected_name == actual_name, f"tool name: {actual_name}, expected: {expected_name}, result = {result}"
+                assert json.dumps(expected_arguments) == json.dumps(actual_arguments), f"tool arguments: {json.dumps(actual_arguments)}, expected: {json.dumps(expected_arguments)}"
+
+        assert_n_tokens_predicted(result, tool_calls_check=check)
+    assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
+
+@step('no tool is called')
+@async_run_until_complete
+async def step_tool_called(context):
+    n_completions = await gather_tasks_results(context)
+    assert n_completions > 0
+
+    def check(tool_calls):
+        assert tool_calls is None, f"tool calls: {tool_calls}"
+
+    for i in range(n_completions):
+        assert_n_tokens_predicted(context.tasks_result.pop(), tool_calls_check=check)
+    assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
 
 @step('embeddings are computed for')
 @async_run_until_complete
@@ -1070,6 +1143,8 @@ async def oai_chat_completions(user_prompt,
                                n_predict=None,
                                enable_streaming=None,
                                response_format=None,
+                               tools=None,
+                               tool_choice=None,
                                user_api_key=None,
                                expect_api_error=None) -> int | dict[str, Any]:
     if debug:
@@ -1077,18 +1152,21 @@ async def oai_chat_completions(user_prompt,
     # openai client always expects an api key
     user_api_key = user_api_key if user_api_key is not None else 'nope'
     seed = seed if seed is not None else 42
+
     enable_streaming = enable_streaming if enable_streaming is not None else False
+    messages = []
+    if system_prompt:
+        messages.append({
+            "role": "system",
+            "content": system_prompt,
+        })
+    if user_prompt:
+        messages.append({
+            "role": "user",
+            "content": user_prompt,
+        })
     payload = {
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            }
-        ],
+        "messages": messages,
         "model": model,
         "max_tokens": n_predict,
         "stream": enable_streaming,
@@ -1097,6 +1175,10 @@ async def oai_chat_completions(user_prompt,
     }
     if response_format is not None:
         payload['response_format'] = response_format
+    if tools is not None:
+        payload['tools'] = tools
+    if tool_choice is not None:
+        payload['tool_choice'] = tool_choice
     completion_response = {
         'content': '',
         'timings': {
@@ -1161,6 +1243,8 @@ async def oai_chat_completions(user_prompt,
                 max_tokens=n_predict,
                 stream=enable_streaming,
                 response_format=payload.get('response_format') or openai.NOT_GIVEN,
+                tools=payload.get('tools') or openai.NOT_GIVEN,
+                tool_choice=payload.get('tool_choice') or openai.NOT_GIVEN,
                 seed=seed,
                 temperature=payload['temperature']
             )
@@ -1184,6 +1268,7 @@ async def oai_chat_completions(user_prompt,
             assert chat_completion.usage is not None
             completion_response = {
                 'content': chat_completion.choices[0].message.content,
+                'tool_calls': chat_completion.choices[0].message.tool_calls,
                 'timings': {
                     'predicted_n': chat_completion.usage.completion_tokens,
                     'prompt_n': chat_completion.usage.prompt_tokens
@@ -1250,11 +1335,13 @@ async def request_oai_embeddings(input, seed,
         return [e.embedding for e in oai_embeddings.data]
 
 
-def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re_content=None):
+def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re_content=None, tool_calls_check=None):
     content = completion_response['content']
+    tool_calls = completion_response.get('tool_calls')
     n_predicted = completion_response['timings']['predicted_n']
-    assert len(content) > 0, "no token predicted"
+    assert (content and len(content) > 0) or (tool_calls and len(tool_calls) > 0), "no token predicted"
     if re_content is not None:
+        assert content
         p = re.compile(re_content, flags=RegexFlag.IGNORECASE | RegexFlag.MULTILINE | RegexFlag.DOTALL)
         matches = p.finditer(content)
         last_match = 0
@@ -1270,6 +1357,8 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
         if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
           print(f"Checking completion response: {highlighted}")
         assert last_match > 0, f'/{re_content}/ must match ```{highlighted}```'
+    if tool_calls_check:
+        tool_calls_check(tool_calls)
     if expected_predicted_n and expected_predicted_n > 0:
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
                                                      f' {n_predicted} <> {expected_predicted_n}')
@@ -1482,6 +1571,10 @@ def start_server_background(context):
         server_args.extend(['--grp-attn-w', context.n_ga_w])
     if context.debug:
         server_args.append('--verbose')
+    if context.use_jinja:
+        server_args.append('--jinja')
+    if context.chat_template_file:
+        server_args.extend(['--chat-template-file', context.chat_template_file])
     if context.lora_file:
         server_args.extend(['--lora', context.lora_file])
     if context.disable_ctx_shift:

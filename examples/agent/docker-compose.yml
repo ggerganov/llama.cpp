@@ -1,0 +1,73 @@
+services:
+
+  # Forwards tool calls to the `siloed_tools` container.
+  tools_endpoint:
+    container_name: tools_endpoint
+    depends_on:
+      - siloed_tools
+    image: alpine/socat:latest
+    networks:
+      - private_net
+      - external_net
+    ports:
+      - 8088:8088
+    command: TCP-LISTEN:8088,fork,bind=tools_endpoint TCP-CONNECT:siloed_tools:8088
+
+  # Runs tools w/o direct internet access.
+  #
+  # All outgoing tool traffic must go through outgoing_proxy, which will log even HTTPS requests
+  # (the proxy's self-signed cert is added to this container's root CAs).
+  #
+  # Even if you trust your agents (which you shouldn't), please verify the kind of traffic they emit.
+  siloed_tools:
+    container_name: siloed_tools
+    depends_on:
+      - outgoing_proxy
+    image: local/llama.cpp:isolated-tools
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    ports:
+      - 8088:8088
+    networks:
+      - private_net
+    environment:
+      - VERBOSE=1
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
+      - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/squidCA.crt
+      - http_proxy=http://outgoing_proxy:3128
+      - https_proxy=http://outgoing_proxy:3128
+
+    # entrypoint: /usr/bin/bash
+    # command: ["-c", "pip install --upgrade gguf && apt update && apt install -y curl && curl https://ochafik.com && pip install gguf"]
+
+  # Logs all outgoing traffic, and caches pip & apt packages.
+  outgoing_proxy:
+    container_name: outgoing_proxy
+    image: local/llama.cpp:squid
+    build:
+      context: .
+      dockerfile: Dockerfile.squid
+    volumes:
+      - ./squid/conf/squid.conf:/etc/squid/squid.conf:ro
+      - ./squid/cache:/var/spool/squid
+      - ./squid/logs:/var/log/squid
+      - ./squid/ssl_cert:/etc/squid/ssl_cert:ro
+      - ./squid/ssl_db:/var/spool/squid/ssl_db
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - private_net
+      - external_net
+    ports:
+      - "3128:3128"
+    restart: unless-stopped
+    entrypoint: /usr/bin/bash
+    command: -c "squid -N -z && ( test -d /var/spool/squid/ssl_db/db || /usr/lib/squid/security_file_certgen -c -s /var/spool/squid/ssl_db/db -M 20MB ) && /usr/sbin/squid -N -d 1 -s"
+
+networks:
+  private_net:
+    driver: bridge
+    internal: true
+  external_net:
+    driver: bridge

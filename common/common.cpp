@@ -9,6 +9,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "chat-template.hpp"
 
 #include <algorithm>
 #include <cinttypes>
@@ -44,6 +45,7 @@
 #include <fcntl.h>
 #include <io.h>
 #else
+#include <dirent.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -792,6 +794,43 @@ bool fs_create_directory_with_parents(const std::string & path) {
 #endif // _WIN32
 }
 
+
+std::vector<std::string> fs_list_files(const std::string & folder, const std::string & ext) {
+    std::vector<std::string> files;
+    // Note: once we can use C++17 this becomes:
+    //   for (const auto & entry : std::filesystem::directory_iterator(folder))
+    //     if (entry.path().extension() == ext) files.push_back(entry.path().string());
+#ifdef _WIN32
+    std::string search_path = folder + "\\*" + ext;
+    WIN32_FIND_DATA fd;
+    HANDLE hFind = ::FindFirstFile(search_path.c_str(), &fd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                files.push_back(folder + "\\" + fd.cFileName);
+            }
+        } while (::FindNextFile(hFind, &fd));
+        ::FindClose(hFind);
+    }
+#else
+    DIR* dir = opendir(folder.c_str());
+    if (dir != nullptr) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            if (entry->d_type == DT_REG) {  // If it's a regular file
+                std::string filename = entry->d_name;
+                if (filename.length() >= ext.length() &&
+                    filename.compare(filename.length() - ext.length(), ext.length(), ext) == 0) {
+                    files.push_back(folder + "/" + filename);
+                }
+            }
+        }
+        closedir(dir);
+    }
+#endif
+    return files;
+}
+
 std::string fs_get_cache_directory() {
     std::string cache_directory = "";
     auto ensure_trailing_slash = [](std::string p) {
@@ -1525,13 +1564,13 @@ std::vector<llama_token> common_tokenize(
     return result;
 }
 
-std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+static std::string _common_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+    const int n_chars = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+        int check = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -1539,6 +1578,10 @@ std::string common_token_to_piece(const struct llama_context * ctx, llama_token 
     }
 
     return piece;
+}
+
+std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+    return _common_token_to_piece(llama_get_model(ctx), token, special);
 }
 
 std::string common_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
@@ -1561,9 +1604,30 @@ std::string common_detokenize(llama_context * ctx, const std::vector<llama_token
 // Chat template utils
 //
 
-bool common_chat_verify_template(const std::string & tmpl) {
+bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
+    if (use_jinja) {
+        try {
+            auto chat_template = minja::chat_template(tmpl, "<s>", "</s>");
+            chat_template.apply({{
+                {"role", "user"},
+                {"content", "test"},
+            }}, json(), true);
+            return true;
+        } catch (const std::exception & e) {
+            LOG_ERR("%s: failed to apply template: %s\n", __func__, e.what());
+            return false;
+        }
+    }
+
     llama_chat_message chat[] = {{"user", "test"}};
-    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
+    int res = llama_chat_apply_template(
+        nullptr,
+        tmpl.c_str(),
+        chat,
+        1,
+        /* add_ass= */ true,
+        /* buffer= */ nullptr,
+        /* length= */ 0);
     return res >= 0;
 }
 
@@ -1640,6 +1704,30 @@ std::string common_chat_format_example(const struct llama_model * model,
         {"user",      "How are you?"},
     };
     return common_chat_apply_template(model, tmpl, msgs, true);
+}
+
+static std::string _llama_model_meta_val_str(const struct llama_model * model, const char * key) {
+    int32_t tlen = llama_model_meta_val_str(model, key, nullptr, 0);
+    if (tlen > 0) {
+        std::vector<char> curr_tmpl_buf(tlen + 1, 0);
+        if (llama_model_meta_val_str(model, key, curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
+            return std::string(curr_tmpl_buf.data(), tlen);
+        }
+    }
+    return "";
+}
+
+minja::chat_template llama_chat_template_from_model(
+    const struct llama_model * model,
+    const char * chat_template_override)
+{
+    // TODO: handle "chatml"?
+    std::string chat_template = chat_template_override
+        ? chat_template_override
+        : _llama_model_meta_val_str(model, "tokenizer.chat_template");
+    auto bos_token = _common_token_to_piece(model, llama_token_bos(model), true);
+    auto eos_token = _common_token_to_piece(model, llama_token_eos(model), true);
+    return {std::move(chat_template), bos_token, eos_token};
 }
 
 //

@@ -1,0 +1,7 @@
+aiohttp
+fastapi[standard]
+ipython
+html2text
+requests
+pyppeteer
+uvicorn

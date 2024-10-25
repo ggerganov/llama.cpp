@@ -1,0 +1,7 @@
+<|im_start|>system
+Please reason step by step, and put your final answer within \boxed{}.<|im_end|>
+<|im_start|>user
+What's your favourite LLM framework?<|im_end|>
+<|im_start|>assistant
+llama.cpp!<|im_end|>
+<|im_start|>assistant

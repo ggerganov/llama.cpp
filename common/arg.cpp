@@ -1849,21 +1849,56 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
+        {"--jinja"},
+        "use jinja template for chat (default: disabled)",
+        [](common_params & params) {
+            params.use_jinja = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
         {"--chat-template"}, "JINJA_TEMPLATE",
         "set custom jinja chat template (default: template taken from model's metadata)\n"
         "if suffix/prefix are specified, template will be disabled\n"
-        "only commonly used templates are accepted:\nhttps://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
+        "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
+        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
         [](common_params & params, const std::string & value) {
-            if (!common_chat_verify_template(value)) {
+            if (!common_chat_verify_template(value, params.use_jinja)) {
                 throw std::runtime_error(string_format(
-                    "error: the supplied chat template is not supported: %s\n"
-                    "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",
-                    value.c_str()
+                    "error: the supplied chat template is not supported: %s%s\n",
+                    value.c_str(),
+                    params.use_jinja ? "" : "\nnote: llama.cpp does not use jinja parser, we only support commonly used templates"
                 ));
             }
             params.chat_template = value;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
+    add_opt(common_arg(
+        {"--chat-template-file"}, "JINJA_TEMPLATE_FILE",
+        "set custom jinja chat template file (default: template taken from model's metadata)\n"
+        "if suffix/prefix are specified, template will be disabled\n"
+        "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
+        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
+        [](common_params & params, const std::string & value) {
+            std::ifstream file(value);
+            if (!file) {
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
+            }
+            std::string chat_template;
+            std::copy(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>(),
+                std::back_inserter(chat_template)
+            );
+            if (!common_chat_verify_template(chat_template, params.use_jinja)) {
+                throw std::runtime_error(string_format(
+                    "error: the supplied chat template is not supported: %s%s\n",
+                    value.c_str(),
+                    params.use_jinja ? "" : "\nnote: llama.cpp does not use jinja parser, we only support commonly used templates"
+                ));
+            }
+            params.chat_template = chat_template;
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE_FILE"));
     add_opt(common_arg(
         {"-sps", "--slot-prompt-similarity"}, "SIMILARITY",
         string_format("how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity),

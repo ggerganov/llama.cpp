@@ -139,6 +139,15 @@ std::string common_sampler_params::print() const {
     return std::string(result);
 }
 
+bool common_sampler_trigger_grammar(const struct llama_model * model, common_sampler * gsmpl, const std::string & trigger) {
+    if (!llama_sampler_is_grammar_empty(gsmpl->grmr)) {
+        return false;
+    }
+    gsmpl->grmr   = llama_sampler_init_grammar(model, gsmpl->params.grammar.c_str(), "root");
+    llama_sampler_accept_str(gsmpl->grmr, trigger.c_str());
+    return true;
+}
+
 struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_sampler_params & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
@@ -146,7 +155,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
     auto * result = new common_sampler {
         /* .params = */ params,
-        /* .grmr   = */ llama_sampler_init_grammar(model, params.grammar.c_str(), "root"),
+        /* .grmr   = */ llama_sampler_init_grammar(model, params.grammar_trigger_words.empty() ? params.grammar.c_str() : "", "root"),
         /* .chain  = */ llama_sampler_chain_init(lparams),
         /* .prev   = */ ring_buffer<llama_token>(std::max(32, params.n_prev)),
         /* .cur    = */ {},
@@ -218,7 +227,9 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
 void common_sampler_free(struct common_sampler * gsmpl) {
     if (gsmpl) {
-        llama_sampler_free(gsmpl->grmr);
+        if (gsmpl->grmr) {
+            llama_sampler_free(gsmpl->grmr);
+        }
 
         llama_sampler_free(gsmpl->chain);
 
@@ -237,7 +248,9 @@ void common_sampler_accept(struct common_sampler * gsmpl, llama_token token, boo
 }
 
 void common_sampler_reset(struct common_sampler * gsmpl) {
-    llama_sampler_reset(gsmpl->grmr);
+    if (gsmpl->grmr) {
+        llama_sampler_reset(gsmpl->grmr);
+    }
 
     llama_sampler_reset(gsmpl->chain);
 }

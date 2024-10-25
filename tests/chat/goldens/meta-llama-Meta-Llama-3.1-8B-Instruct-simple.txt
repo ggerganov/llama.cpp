@@ -1,0 +1,11 @@
+<|startoftext|><|start_header_id|>system<|end_header_id|>
+
+Cutting Knowledge Date: December 2023
+Today Date: 26 Jul 2024
+
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+What's your favourite LLM framework?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+llama.cpp!<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+

@@ -1,0 +1,3 @@
+<|startoftext|> [INST] You only tell the truth.
+
+What's your favourite LLM framework? [/INST] llama.cpp!<|endoftext|>
