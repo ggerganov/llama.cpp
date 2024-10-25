@@ -203,7 +203,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         response += tmp;
         if (strcmp(tmp, "</s>") == 0) break;
         if (strstr(tmp, "###")) break; // Yi-VL behavior
-        LOG("%s", tmp);
+        printf("%s", tmp);
         if (strstr(response.c_str(), "<|im_end|>")) break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
         if (strstr(response.c_str(), "<|im_start|>")) break; // Yi-34B llava-1.6
         if (strstr(response.c_str(), "USER:")) break; // mistral llava-1.6
@@ -212,7 +212,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     }
 
     common_sampler_free(smpl);
-    LOG("\n");
+    printf("\n");
 }
 
 static struct llama_model * llava_init(common_params * params) {
