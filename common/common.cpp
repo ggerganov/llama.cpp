@@ -2092,6 +2092,7 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
 
     fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
     fprintf(stream, "threads: %d # default: %u\n", params.cpuparams.n_threads, std::thread::hardware_concurrency());
+    fprintf(stream, "k_shift: %d # default: 0\n", sparams.k_shift);
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);

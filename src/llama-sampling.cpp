@@ -188,6 +188,17 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
     cur_p->size = k;
 }
 
+static void llama_sampler_top_shift_impl(llama_token_data_array * cur_p, int k) {
+    // sort before shifting
+    std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
+        return a.logit > b.logit;
+    });
+
+    // shift to a token #[k]
+    cur_p->data += k;
+    cur_p->size -= k;
+}
+
 static uint32_t get_rng_seed(uint32_t seed) {
     if (seed == LLAMA_DEFAULT_SEED) {
         // use system clock if std::random_device is not a true RNG
@@ -1173,6 +1184,62 @@ struct llama_sampler * llama_sampler_init_xtc(float p, float t, size_t min_keep,
             /* .seed          = */ seed,
             /* .seed_cur      = */ seed_cur,
             /* .rng           = */ std::mt19937(seed_cur),
+        },
+    };
+}
+
+// k-shift
+
+struct llama_sampler_k_shift {
+    const int32_t k;
+    bool k_set;
+};
+
+static const char * llama_sampler_k_shift_name(const struct llama_sampler * /*smpl*/) {
+    return "k-shift";
+}
+
+static void llama_sampler_k_shift_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    auto * ctx = (llama_sampler_k_shift *) smpl->ctx;
+
+    if (ctx->k <= 0 || ctx->k_set == true) {
+        return;
+    }
+
+    llama_sampler_top_shift_impl(cur_p, ctx->k);
+    ctx->k_set = true;
+}
+
+static struct llama_sampler * llama_sampler_k_shift_clone(const struct llama_sampler * smpl) {
+    auto * ctx = (const llama_sampler_k_shift *) smpl->ctx;
+
+    return llama_sampler_init_k_shift(ctx->k);
+}
+
+static void llama_sampler_k_shift_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_k_shift *) smpl->ctx;
+}
+
+static void llama_sampler_k_shift_reset(struct llama_sampler * smpl) {
+    auto * ctx = (llama_sampler_k_shift *) smpl->ctx;
+    ctx->k_set = false;
+}
+
+static struct llama_sampler_i llama_sampler_k_shift_i = {
+    /* .name   = */ llama_sampler_k_shift_name,
+    /* .accept = */ nullptr,
+    /* .apply  = */ llama_sampler_k_shift_apply,
+    /* .reset  = */ llama_sampler_k_shift_reset,
+    /* .clone  = */ llama_sampler_k_shift_clone,
+    /* .free   = */ llama_sampler_k_shift_free,
+};
+
+struct llama_sampler * llama_sampler_init_k_shift(int32_t k) {
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_k_shift_i,
+        /* .ctx   = */ new llama_sampler_k_shift {
+            /* .k = */ k,
+        /* .k_set = */ false,
         },
     };
 }

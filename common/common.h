@@ -85,14 +85,15 @@ enum llama_example {
 enum common_sampler_type {
     COMMON_SAMPLER_TYPE_NONE        = 0,
     COMMON_SAMPLER_TYPE_DRY         = 1,
-    COMMON_SAMPLER_TYPE_TOP_K       = 2,
-    COMMON_SAMPLER_TYPE_TOP_P       = 3,
-    COMMON_SAMPLER_TYPE_MIN_P       = 4,
-    COMMON_SAMPLER_TYPE_TFS_Z       = 5,
-    COMMON_SAMPLER_TYPE_TYPICAL_P   = 6,
-    COMMON_SAMPLER_TYPE_TEMPERATURE = 7,
-    COMMON_SAMPLER_TYPE_XTC         = 8,
-    COMMON_SAMPLER_TYPE_INFILL      = 9,
+    COMMON_SAMPLER_TYPE_K_SHIFT     = 2,
+    COMMON_SAMPLER_TYPE_TOP_K       = 3,
+    COMMON_SAMPLER_TYPE_TOP_P       = 4,
+    COMMON_SAMPLER_TYPE_MIN_P       = 5,
+    COMMON_SAMPLER_TYPE_TFS_Z       = 6,
+    COMMON_SAMPLER_TYPE_TYPICAL_P   = 7,
+    COMMON_SAMPLER_TYPE_TEMPERATURE = 8,
+    COMMON_SAMPLER_TYPE_XTC         = 9,
+    COMMON_SAMPLER_TYPE_INFILL      = 10,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -108,6 +109,7 @@ struct common_sampler_params {
     int32_t n_prev             = 64;    // number of previous tokens to remember
     int32_t n_probs            = 0;     // if greater than 0, output the probabilities of top n_probs tokens.
     int32_t min_keep           = 0;     // 0 = disabled, otherwise samplers should return at least min_keep tokens
+    int32_t k_shift           = 0;     // 0 = disabled
     int32_t top_k              = 40;    // <= 0 to use vocab size
     float   top_p              = 0.95f; // 1.0 = disabled
     float   min_p              = 0.05f; // 0.0 = disabled
@@ -138,6 +140,7 @@ struct common_sampler_params {
 
     std::vector<enum common_sampler_type> samplers = {
         COMMON_SAMPLER_TYPE_DRY,
+        COMMON_SAMPLER_TYPE_K_SHIFT,
         COMMON_SAMPLER_TYPE_TOP_K,
         COMMON_SAMPLER_TYPE_TFS_Z,
         COMMON_SAMPLER_TYPE_TYPICAL_P,
