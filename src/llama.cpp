@@ -4434,6 +4434,7 @@ struct llama_model_loader {
                 case GGML_TYPE_Q4_0_4_4: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_4; break;
                 case GGML_TYPE_Q4_0_4_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_8; break;
                 case GGML_TYPE_Q4_0_8_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_8_8; break;
+                case GGML_TYPE_IQ4_NL_4_4: ftype = LLAMA_FTYPE_MOSTLY_IQ4_NL_4_4; break;
                 default:
                     {
                         LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
@@ -5198,6 +5199,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q4_0_4_4: return "Q4_0_4_4";
         case LLAMA_FTYPE_MOSTLY_Q4_0_4_8: return "Q4_0_4_8";
         case LLAMA_FTYPE_MOSTLY_Q4_0_8_8: return "Q4_0_8_8";
+        case LLAMA_FTYPE_MOSTLY_IQ4_NL_4_4: return "IQ4_NL_4_4 - 4.5 bpw";
 
         default: return "unknown, may not work";
     }
@@ -18146,6 +18148,9 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                      new_type == GGML_TYPE_Q4_0_8_8) {
                 new_type = GGML_TYPE_Q4_0;
             }
+            else if (new_type == GGML_TYPE_IQ4_NL_4_4) {
+                new_type = GGML_TYPE_IQ4_NL;
+            }
             else if (ftype == LLAMA_FTYPE_MOSTLY_TQ1_0 || ftype == LLAMA_FTYPE_MOSTLY_TQ2_0) {
                 new_type = GGML_TYPE_Q4_K;
             }
@@ -18471,6 +18476,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q4_0_4_4: default_type = GGML_TYPE_Q4_0_4_4; break;
         case LLAMA_FTYPE_MOSTLY_Q4_0_4_8: default_type = GGML_TYPE_Q4_0_4_8; break;
         case LLAMA_FTYPE_MOSTLY_Q4_0_8_8: default_type = GGML_TYPE_Q4_0_8_8; break;
+        case LLAMA_FTYPE_MOSTLY_IQ4_NL_4_4: default_type = GGML_TYPE_IQ4_NL_4_4; break;
 
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
@@ -18814,6 +18820,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if (tensor->ne[1] % 4 != 0) new_type = GGML_TYPE_Q4_0;
                 if (new_type == GGML_TYPE_Q4_0_8_8) chunk_size_multiplier = 8;
                 else if (new_type == GGML_TYPE_Q4_0_4_4 || new_type == GGML_TYPE_Q4_0_4_8) chunk_size_multiplier = 4;
+            }
+
+            if (new_type == GGML_TYPE_IQ4_NL_4_4) {
+                if (tensor->ne[1] % 4 != 0) new_type = GGML_TYPE_Q4_0;
+                else chunk_size_multiplier = 4;
             }
 
             LLAMA_LOG_INFO("converting to %s .. ", ggml_type_name(new_type));
