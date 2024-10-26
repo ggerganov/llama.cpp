@@ -37,11 +37,11 @@ void main() {
     const uint cur_oh = (idx % O_HW) / p.OW;
     const uint cur_ow = (idx % O_HW) % p.OW;
 
-    const uint start_h = cur_oh * p.s0 - p.p0;
+    const int start_h = int(cur_oh) * p.s0 - p.p0;
     const uint bh = max(start_h, 0);
     const uint eh = min(start_h + p.k0, p.IH);
 
-    const uint start_w = cur_ow * p.s1 - p.p1;
+    const int start_w = int(cur_ow) * p.s1 - p.p1;
     const uint bw = max(start_w, 0);
     const uint ew = min(start_w + p.k1, p.IW);
 

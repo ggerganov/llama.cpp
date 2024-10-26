@@ -4943,12 +4943,12 @@ static void ggml_vk_timestep_embedding(ggml_backend_vk_context * ctx, vk_context
 
 static void ggml_vk_pool_2d(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, ggml_tensor * dst, bool dryrun = false) {
     uint32_t op = static_cast<uint32_t>(dst->op_params[0]);
-    const int32_t k0 = dst->op_params[1];
-    const int32_t k1 = dst->op_params[2];
-    const int32_t s0 = dst->op_params[3];
-    const int32_t s1 = dst->op_params[4];
-    const int32_t p0 = dst->op_params[5];
-    const int32_t p1 = dst->op_params[6];
+    const int32_t k1 = dst->op_params[1];
+    const int32_t k0 = dst->op_params[2];
+    const int32_t s1 = dst->op_params[3];
+    const int32_t s0 = dst->op_params[4];
+    const int32_t p1 = dst->op_params[5];
+    const int32_t p0 = dst->op_params[6];
 
     const uint32_t IH = src0->ne[1];
     const uint32_t IW = src0->ne[0];
