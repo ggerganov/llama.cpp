@@ -1293,6 +1293,46 @@ static void test_json_schema() {
             // R"""({"productId": 1, "productName": "A green door", "price": 12.50, "tags": ["home", "green", "home"]})""",
         }
     );
+
+    test_schema(
+        "nested refs + mix of properties and allOf",
+        // Schema
+        R"""({
+            "properties": {
+                "common": {"$ref": "#/$defs/SomeVal"}
+            },
+            "allOf": [
+                {"$ref": "#/$defs/foo"},
+                {"$ref": "#/$defs/bar"},
+                {
+                    "anyOf": [
+                        {"$ref": "#/$defs/baz"},
+                        {"$ref": "#/$defs/bam"}
+                    ]
+                }
+            ],
+            "required": ["common"],
+            "$defs": {
+                "SomeVal": {"type": "number"},
+                "foo": {"properties": {"a": {"$ref": "#/$defs/SomeVal"}}},
+                "bar": {"properties": {"b": {"$ref": "#/$defs/SomeVal"}}},
+                "bam": {"properties": {"c": {"$ref": "#/$defs/SomeVal"}}},
+                "baz": {"properties": {"d": {"$ref": "#/$defs/SomeVal"}}}
+            }
+        })""",
+        // Passing strings
+        {
+            R"""({"common": 0, "a": 0, "b": 0})""",
+            R"""({"common": 0, "a": 0, "b": 0, "d": 0, "c": 0})""",
+        },
+        // Failing strings
+        {
+            R"""({})""",
+            R"""({"common": "", "a": "", "b": ""})""",
+            R"""({"a": 0, "b": 0})""",
+            R"""({"common": 0, "a": "0", "b": 0, "c": 0, "d": 0})""",
+        }
+    );
 }
 
 int main() {

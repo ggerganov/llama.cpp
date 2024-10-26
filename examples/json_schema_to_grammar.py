@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+'''
+  JSON Schema to Grammar conversion
+
+  There are C++ and JavaScript converters w/ the same features.
+
+  Usage:
+    python examples/json_schema_to_grammar.py schema.json
+    python examples/json_schema_to_grammar.py https://json.schemastore.org/tsconfig.json
+    echo '{"type": "object"}' | python examples/json_schema_to_grammar.py -
+
+  Also see https://github.com/ggerganov/llama.cpp/tree/master/grammars
+'''
 from __future__ import annotations
 
 import argparse
@@ -237,16 +249,15 @@ ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('^$.[]()|{}*+?')
 
 
 class SchemaConverter:
-    def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
+    def __init__(self, *, prop_order, dotall, raw_pattern):
         self._prop_order = prop_order
-        self._allow_fetch = allow_fetch
         self._dotall = dotall
         self._raw_pattern = raw_pattern
         self._rules = {
             'space': SPACE_RULE,
         }
-        self._refs = {}
-        self._refs_being_resolved = set()
+        self._external_refs = {}
+        self._ref_context = []
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
@@ -333,51 +344,6 @@ class SchemaConverter:
             key = f'{esc_name}{i}'
         self._rules[key] = rule
         return key
-
-    def resolve_refs(self, schema: dict, url: str):
-        '''
-            Resolves all $ref fields in the given schema, fetching any remote schemas,
-            replacing $ref with absolute reference URL and populating self._refs with the
-            respective referenced (sub)schema dictionaries.
-        '''
-        def visit(n: dict):
-            if isinstance(n, list):
-                return [visit(x) for x in n]
-            elif isinstance(n, dict):
-                ref = n.get('$ref')
-                if ref is not None and ref not in self._refs:
-                    if ref.startswith('https://'):
-                        assert self._allow_fetch, 'Fetching remote schemas is not allowed (use --allow-fetch for force)'
-                        import requests
-
-                        frag_split = ref.split('#')
-                        base_url = frag_split[0]
-
-                        target = self._refs.get(base_url)
-                        if target is None:
-                            target = self.resolve_refs(requests.get(ref).json(), base_url)
-                            self._refs[base_url] = target
-
-                        if len(frag_split) == 1 or frag_split[-1] == '':
-                            return target
-                    elif ref.startswith('#/'):
-                        target = schema
-                        ref = f'{url}{ref}'
-                        n['$ref'] = ref
-                    else:
-                        raise ValueError(f'Unsupported ref {ref}')
-
-                    for sel in ref.split('#')[-1].split('/')[1:]:
-                        assert target is not None and sel in target, f'Error resolving ref {ref}: {sel} not in {target}'
-                        target = target[sel]
-
-                    self._refs[ref] = target
-                else:
-                    for v in n.values():
-                        visit(v)
-
-            return n
-        return visit(schema)
 
     def _generate_union_rule(self, name, alt_schemas):
         return ' | '.join((
@@ -543,25 +509,64 @@ class SchemaConverter:
                 else "\"\\\"\" (" + to_rule(transform()) + ") \"\\\"\" space")
 
 
-    def _resolve_ref(self, ref):
-        ref_name = ref.split('/')[-1]
-        if ref_name not in self._rules and ref not in self._refs_being_resolved:
-            self._refs_being_resolved.add(ref)
-            resolved = self._refs[ref]
-            ref_name = self.visit(resolved, ref_name)
-            self._refs_being_resolved.remove(ref)
-        return ref_name
-
     def _generate_constant_rule(self, value):
         return self._format_literal(json.dumps(value))
+
+    class ResolvedRef:
+        def __init__(self, target: Any, name: str, is_local: bool):
+            self.target = target
+            self.name = name
+            self.is_local = is_local
+
+    def _resolve_ref(self, ref: str):
+        parts = ref.split('#')
+        assert len(parts) <= 2, f'Unsupported ref: {ref}'
+        url = parts[0]
+        target = None
+        is_local = not url
+        if is_local:
+            assert self._ref_context, f'Error resolving ref {ref}: no context'
+            target = self._ref_context[-1]
+        else:
+            target = self._external_refs.get(url)
+            if target is None:
+                # Fetch the referenced schema and resolve its refs
+                assert url.startswith("https://"), f"Error resolving ref {ref}: unsupported url scheme"
+                import requests
+                target = requests.get(url).json()
+                self._external_refs[url] = target
+
+        if len(parts) == 1:
+            return self.ResolvedRef(target, '', is_local)
+        else:
+            tokens = parts[1].split('/')
+            for sel in tokens[1:]:
+                assert target is not None and sel in target, f'Error resolving ref {ref}: {sel} not in {target}'
+                target = target[sel]
+
+        return self.ResolvedRef(target, tokens[-1] if tokens else '', is_local)
 
     def visit(self, schema, name):
         schema_type = schema.get('type')
         schema_format = schema.get('format')
         rule_name = name + '-' if name in RESERVED_NAMES else name or 'root'
 
+        if not self._ref_context:
+            self._ref_context.append(schema)
+            try:
+                return self.visit(schema, name)
+            finally:
+                self._ref_context.pop()
+
         if (ref := schema.get('$ref')) is not None:
-            return self._add_rule(rule_name, self._resolve_ref(ref))
+            resolved = self._resolve_ref(ref)
+            if not resolved.is_local:
+                self._ref_context.append(resolved.target)
+            try:
+                return self.visit(resolved.target, name if name == '' or resolved.name == '' else resolved.name)
+            finally:
+                if not resolved.is_local:
+                    self._ref_context.pop()
 
         elif 'oneOf' in schema or 'anyOf' in schema:
             return self._add_rule(rule_name, self._generate_union_rule(name, schema.get('oneOf') or schema['anyOf']))
@@ -575,36 +580,6 @@ class SchemaConverter:
         elif 'enum' in schema:
             rule = '(' + ' | '.join((self._generate_constant_rule(v) for v in schema['enum'])) + ') space'
             return self._add_rule(rule_name, rule)
-
-        elif schema_type in (None, 'object') and \
-             ('properties' in schema or \
-              ('additionalProperties' in schema and schema['additionalProperties'] is not True)):
-            required = set(schema.get('required', []))
-            properties = list(schema.get('properties', {}).items())
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, name, schema.get('additionalProperties')))
-
-        elif schema_type in (None, 'object') and 'allOf' in schema:
-            required = set()
-            properties = []
-            hybrid_name = name
-            def add_component(comp_schema, is_required):
-                if (ref := comp_schema.get('$ref')) is not None:
-                    comp_schema = self._refs[ref]
-
-                if 'properties' in comp_schema:
-                    for prop_name, prop_schema in comp_schema['properties'].items():
-                        properties.append((prop_name, prop_schema))
-                        if is_required:
-                            required.add(prop_name)
-
-            for t in schema['allOf']:
-                if 'anyOf' in t:
-                    for tt in t['anyOf']:
-                        add_component(tt, is_required=False)
-                else:
-                    add_component(t, is_required=True)
-
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, hybrid_name, additional_properties=None))
 
         elif schema_type in (None, 'array') and ('items' in schema or 'prefixItems' in schema):
             items = schema.get('items') or schema['prefixItems']
@@ -660,8 +635,44 @@ class SchemaConverter:
             out.append(") space")
             return self._add_rule(rule_name, ''.join(out))
 
-        elif (schema_type == 'object') or (len(schema) == 0):
-            return self._add_rule(rule_name, self._add_primitive('object', PRIMITIVE_RULES['object']))
+        elif (schema_type == 'object') or (schema_type is None):
+            required = set(schema.get('required', []))
+            properties = list(schema.get('properties', {}).items())
+            is_explicit_object = schema_type == 'object' or 'properties' in schema or 'additionalProperties' in schema
+            additional_properties = schema.get('additionalProperties')
+
+            def add_component(comp_schema, is_required):
+                if (ref := comp_schema.get('$ref')) is not None:
+                    resolved = self._resolve_ref(ref)
+                    comp_schema = resolved.target
+
+                if 'properties' in comp_schema:
+                    for prop_name, prop_schema in comp_schema['properties'].items():
+                        properties.append((prop_name, prop_schema))
+                        if is_required:
+                            required.add(prop_name)
+                if 'additionalProperties' in comp_schema:
+                    if additional_properties is None:
+                        additional_properties = comp_schema['additionalProperties']
+                    elif additional_properties != comp_schema['additionalProperties']:
+                        raise ValueError('Inconsistent additionalProperties in allOf')
+
+            for t in schema.get('allOf', []):
+                if 'anyOf' in t:
+                    for tt in t['anyOf']:
+                        add_component(tt, is_required=False)
+                else:
+                    add_component(t, is_required=True)
+
+            if not properties and (additional_properties == True or additional_properties is None):
+                return self._add_rule(rule_name, self._add_primitive('object', PRIMITIVE_RULES['object']))
+
+            default_additional_properties = None if is_explicit_object else False
+            return self._add_rule(
+                rule_name,
+                self._build_object_rule(
+                    properties, required, name,
+                    additional_properties if additional_properties is not None else default_additional_properties))
 
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
@@ -768,11 +779,6 @@ def main(args_in = None):
         '''
     )
     parser.add_argument(
-        '--allow-fetch',
-        action='store_true',
-        default=False,
-        help='Whether to allow fetching referenced schemas over HTTPS')
-    parser.add_argument(
         '--dotall',
         action='store_true',
         default=False,
@@ -799,10 +805,8 @@ def main(args_in = None):
             schema = json.load(f)
     converter = SchemaConverter(
         prop_order={name: idx for idx, name in enumerate(args.prop_order)},
-        allow_fetch=args.allow_fetch,
         dotall=args.dotall,
         raw_pattern=args.raw_pattern)
-    schema = converter.resolve_refs(schema, url)
     converter.visit(schema, '')
     print(converter.format_grammar())
 

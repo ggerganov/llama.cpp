@@ -264,11 +264,11 @@ const ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = new Set('^$.[]()|{}*+?');
 export class SchemaConverter {
   constructor(options) {
     this._propOrder = options.prop_order || {};
-    this._allowFetch = options.allow_fetch || false;
     this._dotall = options.dotall || false;
     this._rules = {'space': SPACE_RULE};
     this._refs = {};
-    this._refsBeingResolved = new Set();
+    this._externalRefs = new Map();
+    this._refContext = [];
   }
 
   _formatLiteral(literal) {
@@ -304,60 +304,6 @@ export class SchemaConverter {
 
     this._rules[key] = rule;
     return key;
-  }
-
-  async resolveRefs(schema, url) {
-    const visit = async (n) => {
-      if (Array.isArray(n)) {
-        return Promise.all(n.map(visit));
-      } else if (typeof n === 'object' && n !== null) {
-        let ref = n.$ref;
-        let target;
-        if (ref !== undefined && !this._refs[ref]) {
-          if (ref.startsWith('https://')) {
-            if (!this._allowFetch) {
-              throw new Error('Fetching remote schemas is not allowed (use --allow-fetch for force)');
-            }
-            const fetch = (await import('node-fetch')).default;
-
-            const fragSplit = ref.split('#');
-            const baseUrl = fragSplit[0];
-
-            target = this._refs[baseUrl];
-            if (!target) {
-              target = await this.resolveRefs(await fetch(ref).then(res => res.json()), baseUrl);
-              this._refs[baseUrl] = target;
-            }
-
-            if (fragSplit.length === 1 || fragSplit[fragSplit.length - 1] === '') {
-              return target;
-            }
-          } else if (ref.startsWith('#/')) {
-            target = schema;
-            ref = `${url}${ref}`;
-            n.$ref = ref;
-          } else {
-            throw new Error(`Unsupported ref ${ref}`);
-          }
-
-          const selectors = ref.split('#')[1].split('/').slice(1);
-          for (const sel of selectors) {
-            if (!target || !(sel in target)) {
-              throw new Error(`Error resolving ref ${ref}: ${sel} not in ${JSON.stringify(target)}`);
-            }
-            target = target[sel];
-          }
-
-          this._refs[ref] = target;
-        } else {
-          await Promise.all(Object.values(n).map(visit));
-        }
-      }
-
-      return n;
-    };
-
-    return visit(schema);
   }
 
   _generateUnionRule(name, altSchemas) {
@@ -590,19 +536,43 @@ export class SchemaConverter {
     return out.join('');
   }
 
-  _resolveRef(ref) {
-    let refName = ref.split('/').pop();
-    if (!(refName in this._rules) && !this._refsBeingResolved.has(ref)) {
-      this._refsBeingResolved.add(ref);
-      const resolved = this._refs[ref];
-      refName = this.visit(resolved, refName);
-      this._refsBeingResolved.delete(ref);
-    }
-    return refName;
-  }
-
   _generateConstantRule(value) {
     return this._formatLiteral(JSON.stringify(value));
+  }
+
+  _resolveRef(ref) {
+    const parts = ref.split('#');
+    if (parts.length !== 2) {
+      throw new Error(`Unsupported ref: ${ref}`);
+    }
+    const url = parts[0];
+    let target = null;
+    let isLocal = !url;
+    if (isLocal) {
+      if (this._refContext.length === 0) {
+        throw new Error(`Error resolving ref ${ref}: no context`);
+      }
+      target = this._refContext[this._refContext.length - 1];
+    } else {
+      target = this._externalRefs.get(url);
+      if (target === undefined) {
+        // Fetch the referenced schema and resolve its refs
+        if (!url.startsWith('https://')) {
+          throw new Error(`Error resolving ref ${ref}: unsupported url scheme`);
+        }
+        target = this._fetchJson(url);
+        this._externalRefs.set(url, target);
+      }
+    }
+    const tokens = parts[1].split('/');
+    for (const sel of tokens.slice(1)) {
+      if (target === null || !(sel in target)) {
+        throw new Error(`Error resolving ref ${ref}: ${sel} not in ${JSON.stringify(target)}`);
+      }
+      target = target[sel];
+    }
+    const name = tokens[tokens.length - 1] || '';
+    return {target, name, isLocal};
   }
 
   visit(schema, name) {
@@ -610,9 +580,28 @@ export class SchemaConverter {
     const schemaFormat = schema.format;
     const ruleName = name in RESERVED_NAMES ? name + '-' : name == '' ? 'root' : name;
 
+    if (this._refContext.length === 0) {
+      this._refContext.push(schema);
+      try {
+        return this.visit(schema, name);
+      } finally {
+        this._refContext.pop();
+      }
+    }
+
     const ref = schema.$ref;
     if (ref !== undefined) {
-      return this._addRule(ruleName, this._resolveRef(ref));
+      const resolved = this._resolveRef(ref);
+      if (!resolved.isLocal) {
+        this._refContext.push(resolved.target);
+      }
+      try {
+        return this.visit(resolved.target, name === '' || resolved.name === '' ? name : resolved.name);
+      } finally {
+        if (!resolved.isLocal) {
+          this._refContext.pop();
+        }
+      }
     } else if (schema.oneOf || schema.anyOf) {
       return this._addRule(ruleName, this._generateUnionRule(name, schema.oneOf || schema.anyOf));
     } else if (Array.isArray(schemaType)) {
@@ -622,42 +611,6 @@ export class SchemaConverter {
     } else if ('enum' in schema) {
       const rule = '(' + schema.enum.map(v => this._generateConstantRule(v)).join(' | ') + ') space';
       return this._addRule(ruleName, rule);
-    } else if ((schemaType === undefined || schemaType === 'object') &&
-               ('properties' in schema ||
-                ('additionalProperties' in schema && schema.additionalProperties !== true))) {
-      const required = new Set(schema.required || []);
-      const properties = Object.entries(schema.properties ?? {});
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, schema.additionalProperties));
-    } else if ((schemaType === undefined || schemaType === 'object') && 'allOf' in schema) {
-      const required = new Set();
-      const properties = [];
-      const addComponent = (compSchema, isRequired) => {
-        const ref = compSchema.$ref;
-        if (ref !== undefined) {
-          compSchema = this._refs[ref];
-        }
-
-        if ('properties' in compSchema) {
-          for (const [propName, propSchema] of Object.entries(compSchema.properties)) {
-            properties.push([propName, propSchema]);
-            if (isRequired) {
-              required.add(propName);
-            }
-          }
-        }
-      };
-
-      for (const t of schema.allOf) {
-        if ('anyOf' in t) {
-          for (const tt of t.anyOf) {
-            addComponent(tt, false);
-          }
-        } else {
-          addComponent(t, true);
-        }
-      }
-
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, null));
     } else if ((schemaType === undefined || schemaType === 'array') && ('items' in schema || 'prefixItems' in schema)) {
       const items = schema.items ?? schema.prefixItems;
       if (Array.isArray(items)) {
@@ -706,8 +659,58 @@ export class SchemaConverter {
       _generateMinMaxInt(minValue, maxValue, out);
       out.push(") space");
       return this._addRule(ruleName, out.join(''));
-    } else if ((schemaType === 'object') || (Object.keys(schema).length === 0)) {
-      return this._addRule(ruleName, this._addPrimitive('object', PRIMITIVE_RULES['object']));
+    } else if (schemaType === undefined || schemaType === 'object') {
+      const required = new Set(schema.required || []);
+      const properties = Object.entries(schema.properties ?? {});
+      const isExplicitObject = schemaType === 'object' || 'properties' in schema || 'additionalProperties' in schema;
+      let additionalProperties = schema.additionalProperties;
+
+      const addComponent = (compSchema, isRequired) => {
+        const ref = compSchema.$ref;
+        if (ref !== undefined) {
+          const resolved = this._resolveRef(ref);
+          compSchema = resolved.target;
+        }
+
+        if ('properties' in compSchema) {
+          for (const [propName, propSchema] of Object.entries(compSchema.properties)) {
+            properties.push([propName, propSchema]);
+            if (isRequired) {
+              required.add(propName);
+            }
+          }
+          if ('additionalProperties' in compSchema) {
+            if (additionalProperties === null) {
+              additionalProperties = compSchema.additionalProperties;
+            } else if (additionalProperties !== compSchema.additionalProperties) {
+              throw new Error('Inconsistent additionalProperties in allOf');
+            }
+          }
+        }
+      };
+
+      if ('allOf' in schema) {
+        for (const t of schema.allOf) {
+          if ('anyOf' in t) {
+            for (const tt of t.anyOf) {
+              addComponent(tt, false);
+            }
+          } else {
+            addComponent(t, true);
+          }
+        }
+      }
+
+      if (properties.length === 0 && (additionalProperties === true || additionalProperties == null)) {
+        return this._addRule(ruleName, this._addPrimitive('object', PRIMITIVE_RULES['object']));
+      }
+
+      const defaultAdditionalProperties = isExplicitObject ? null : false;
+      return this._addRule(
+        ruleName,
+        this._buildObjectRule(properties, required, name, additionalProperties ?? defaultAdditionalProperties)
+      );
+
     } else {
       if (!(schemaType in PRIMITIVE_RULES)) {
         throw new Error(`Unrecognized schema: ${JSON.stringify(schema)}`);
