@@ -1,5 +1,5 @@
 # Usage:
-#! ./llama-server -m some-model.gguf &
+#! ./jarvis-server -m some-model.gguf &
 #! pip install pydantic
 #! python json_schema_pydantic_example.py
 
@@ -13,7 +13,7 @@ if True:
     def create_completion(*, response_model=None, endpoint="http://localhost:8080/v1/chat/completions", messages, **kwargs):
         '''
         Creates a chat completion using an OpenAI-compatible endpoint w/ JSON schema support
-        (llama.cpp server, llama-cpp-python, Anyscale / Together...)
+        (jarvis.cpp server, jarvis-cpp-python, Anyscale / Together...)
 
         The response_model param takes a type (+ supports Pydantic) and behaves just as w/ Instructor (see below)
         '''

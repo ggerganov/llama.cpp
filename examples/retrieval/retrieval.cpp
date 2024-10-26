@@ -1,7 +1,7 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <algorithm>
 #include <fstream>
@@ -21,7 +21,7 @@ struct chunk {
     // original text data
     std::string textdata;
     // tokenized text data
-    std::vector<llama_token> tokens;
+    std::vector<jarvis_token> tokens;
     // embedding
     std::vector<float> embedding;
 };
@@ -74,20 +74,20 @@ static std::vector<chunk> chunk_file(const std::string & filename, int chunk_siz
     return chunks;
 }
 
-static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, llama_seq_id seq_id) {
+static void batch_add_seq(jarvis_batch & batch, const std::vector<int32_t> & tokens, jarvis_seq_id seq_id) {
     size_t n_tokens = tokens.size();
     for (size_t i = 0; i < n_tokens; i++) {
         common_batch_add(batch, tokens[i], i, { seq_id }, true);
     }
 }
 
-static void batch_decode(llama_context * ctx, llama_batch & batch, float * output, int n_seq, int n_embd) {
+static void batch_decode(jarvis_context * ctx, jarvis_batch & batch, float * output, int n_seq, int n_embd) {
     // clear previous kv_cache values (irrelevant for embeddings)
-    llama_kv_cache_clear(ctx);
+    jarvis_kv_cache_clear(ctx);
 
     // run model
     LOG_INF("%s: n_tokens = %d, n_seq = %d\n", __func__, batch.n_tokens, n_seq);
-    if (llama_decode(ctx, batch) < 0) {
+    if (jarvis_decode(ctx, batch) < 0) {
         LOG_ERR("%s : failed to decode\n", __func__);
     }
 
@@ -97,9 +97,9 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         }
 
         // try to get sequence embeddings - supported only when pooling_type is not NONE
-        const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+        const float * embd = jarvis_get_embeddings_seq(ctx, batch.seq_id[i][0]);
         if (embd == NULL) {
-            embd = llama_get_embeddings_ith(ctx, i);
+            embd = jarvis_get_embeddings_ith(ctx, i);
             if (embd == NULL) {
                 LOG_ERR("%s: failed to get embeddings for token %d\n", __func__, i);
                 continue;
@@ -114,7 +114,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 int main(int argc, char ** argv) {
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_RETRIEVAL, print_usage)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_RETRIEVAL, print_usage)) {
         return 1;
     }
 
@@ -145,25 +145,25 @@ int main(int argc, char ** argv) {
     }
     LOG_INF("Number of chunks: %ld\n", chunks.size());
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
 
     if (model == NULL) {
         LOG_ERR("%s: unable to load model\n", __func__);
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
-    const int n_ctx = llama_n_ctx(ctx);
+    const int n_ctx_train = jarvis_n_ctx_train(model);
+    const int n_ctx = jarvis_n_ctx(ctx);
 
-    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
-    if (pooling_type == LLAMA_POOLING_TYPE_NONE) {
+    const enum jarvis_pooling_type pooling_type = jarvis_pooling_type(ctx);
+    if (pooling_type == JARVIS_POOLING_TYPE_NONE) {
         LOG_ERR("%s: pooling type NONE not supported\n", __func__);
         return 1;
     }
@@ -192,8 +192,8 @@ int main(int argc, char ** argv) {
             return 1;
         }
         // add eos if not present
-        if (llama_token_eos(model) >= 0 && (inp.empty() || inp.back() != llama_token_eos(model))) {
-            inp.push_back(llama_token_eos(model));
+        if (jarvis_token_eos(model) >= 0 && (inp.empty() || inp.back() != jarvis_token_eos(model))) {
+            inp.push_back(jarvis_token_eos(model));
         }
         chunk.tokens = inp;
     }
@@ -212,10 +212,10 @@ int main(int argc, char ** argv) {
 
     // initialize batch
     const int n_chunks = chunks.size();
-    struct llama_batch batch = llama_batch_init(n_batch, 0, 1);
+    struct jarvis_batch batch = jarvis_batch_init(n_batch, 0, 1);
 
     // allocate output
-    const int n_embd = llama_n_embd(model);
+    const int n_embd = jarvis_n_embd(model);
     std::vector<float> embeddings(n_chunks * n_embd, 0);
     float * emb = embeddings.data();
 
@@ -253,7 +253,7 @@ int main(int argc, char ** argv) {
         chunks[i].tokens.clear();
     }
 
-    struct llama_batch query_batch = llama_batch_init(n_batch, 0, 1);
+    struct jarvis_batch query_batch = jarvis_batch_init(n_batch, 0, 1);
 
     // start loop, receive query and return top k similar chunks based on cosine similarity
     std::string query;
@@ -294,11 +294,11 @@ int main(int argc, char ** argv) {
     }
 
     LOG("\n");
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
     // clean up
-    llama_batch_free(query_batch);
-    llama_free(ctx);
-    llama_free_model(model);
-    llama_backend_free();
+    jarvis_batch_free(query_batch);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
+    jarvis_backend_free();
 }

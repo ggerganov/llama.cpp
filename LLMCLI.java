@@ -7,7 +7,7 @@ import java.util.Scanner;
 public class LLMCLI {
     public static void main(String[] args) {
         // Path to the .exe file
-        String exePath = "bin/llama-cli.exe";
+        String exePath = "bin/jarvis-cli.exe";
 
         System.out.println("Enter -h for help");
         // Scanner to take user input for various commands

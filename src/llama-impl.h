@@ -1,6 +1,6 @@
 #pragma once
 
-#include "llama.h"
+#include "jarvis.h"
 
 #include <string>
 #include <vector>
@@ -8,28 +8,28 @@
 
 #ifdef __GNUC__
 #ifdef __MINGW32__
-#define LLAMA_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#define JARVIS_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
 #else
-#define LLAMA_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#define JARVIS_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
 #endif
 #else
-#define LLAMA_ATTRIBUTE_FORMAT(...)
+#define JARVIS_ATTRIBUTE_FORMAT(...)
 #endif
 
 //
 // logging
 //
 
-LLAMA_ATTRIBUTE_FORMAT(2, 3)
-void llama_log_internal        (ggml_log_level level, const char * format, ...);
-void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
+JARVIS_ATTRIBUTE_FORMAT(2, 3)
+void jarvis_log_internal        (ggml_log_level level, const char * format, ...);
+void jarvis_log_callback_default(ggml_log_level level, const char * text, void * user_data);
 
-#define LLAMA_LOG(...)       llama_log_internal(GGML_LOG_LEVEL_NONE , __VA_ARGS__)
-#define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
-#define LLAMA_LOG_WARN(...)  llama_log_internal(GGML_LOG_LEVEL_WARN , __VA_ARGS__)
-#define LLAMA_LOG_ERROR(...) llama_log_internal(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
-#define LLAMA_LOG_DEBUG(...) llama_log_internal(GGML_LOG_LEVEL_DEBUG, __VA_ARGS__)
-#define LLAMA_LOG_CONT(...)  llama_log_internal(GGML_LOG_LEVEL_CONT , __VA_ARGS__)
+#define JARVIS_LOG(...)       jarvis_log_internal(GGML_LOG_LEVEL_NONE , __VA_ARGS__)
+#define JARVIS_LOG_INFO(...)  jarvis_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
+#define JARVIS_LOG_WARN(...)  jarvis_log_internal(GGML_LOG_LEVEL_WARN , __VA_ARGS__)
+#define JARVIS_LOG_ERROR(...) jarvis_log_internal(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
+#define JARVIS_LOG_DEBUG(...) jarvis_log_internal(GGML_LOG_LEVEL_DEBUG, __VA_ARGS__)
+#define JARVIS_LOG_CONT(...)  jarvis_log_internal(GGML_LOG_LEVEL_CONT , __VA_ARGS__)
 
 //
 // helpers
@@ -66,8 +66,8 @@ static void replace_all(std::string & s, const std::string & search, const std::
     s = std::move(builder);
 }
 
-const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
-    struct llama_context * ctx
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & jarvis_internal_get_tensor_map(
+    struct jarvis_context * ctx
 );
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity

@@ -1,9 +1,9 @@
-# Add a new model architecture to `llama.cpp`
+# Add a new model architecture to `jarvis.cpp`
 
 Adding a model requires few steps:
 
 1. Convert the model to GGUF
-2. Define the model architecture in `llama.cpp`
+2. Define the model architecture in `jarvis.cpp`
 3. Build the GGML graph implementation
 
 After following these steps, you can open PR.
@@ -17,7 +17,7 @@ Also, it is important to check that the examples and main ggml backends (CUDA, M
 ### 1. Convert the model to GGUF
 
 This step is done in python with a `convert` script using the [gguf](https://pypi.org/project/gguf/) library.
-Depending on the model architecture, you can use either [convert_hf_to_gguf.py](/convert_hf_to_gguf.py) or [examples/convert_legacy_llama.py](/examples/convert_legacy_llama.py) (for `llama/llama2` models in `.pth` format).
+Depending on the model architecture, you can use either [convert_hf_to_gguf.py](/convert_hf_to_gguf.py) or [examples/convert_legacy_jarvis.py](/examples/convert_legacy_jarvis.py) (for `jarvis/jarvis2` models in `.pth` format).
 
 The convert script reads the model configuration, tokenizer, tensor names+data and converts them to GGUF metadata and tensors.
 
@@ -81,26 +81,26 @@ Depending on the model configuration, tokenizer, code and tensors layout, you wi
 
 NOTE: Tensor names must end with `.weight` suffix, that is the convention and several tools like `quantize` expect this to proceed the weights.
 
-### 2. Define the model architecture in `llama.cpp`
+### 2. Define the model architecture in `jarvis.cpp`
 
-The model params and tensors layout must be defined in `llama.cpp`:
+The model params and tensors layout must be defined in `jarvis.cpp`:
 1. Define a new `llm_arch`
 2. Define the tensors layout in `LLM_TENSOR_NAMES`
 3. Add any non standard metadata in `llm_load_hparams`
 4. Create the tensors for inference in `llm_load_tensors`
-5. If the model has a RoPE operation, add the rope type in `llama_rope_type`
+5. If the model has a RoPE operation, add the rope type in `jarvis_rope_type`
 
 NOTE: The dimensions in `ggml` are typically in the reverse order of the `pytorch` dimensions.
 
 ### 3. Build the GGML graph implementation
 
-This is the funniest part, you have to provide the inference graph implementation of the new model architecture in `llama_build_graph`.
+This is the funniest part, you have to provide the inference graph implementation of the new model architecture in `jarvis_build_graph`.
 
-Have a look at existing implementation like `build_llama`, `build_dbrx` or `build_bert`.
+Have a look at existing implementation like `build_jarvis`, `build_dbrx` or `build_bert`.
 
 When implementing a new graph, please note that the underlying `ggml` backends might not support them all, support for missing backend operations can be added in another PR.
 
-Note: to debug the inference graph: you can use [llama-eval-callback](/examples/eval-callback/).
+Note: to debug the inference graph: you can use [jarvis-eval-callback](/examples/eval-callback/).
 
 ## GGUF specification
 
@@ -108,12 +108,12 @@ https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
 
 ## Resources
 
-- YaRN RoPE scaling https://github.com/ggerganov/llama.cpp/pull/2268
-- support Baichuan serial models https://github.com/ggerganov/llama.cpp/pull/3009
-- support attention bias https://github.com/ggerganov/llama.cpp/pull/4283
-- Mixtral support https://github.com/ggerganov/llama.cpp/pull/4406
-- BERT embeddings https://github.com/ggerganov/llama.cpp/pull/5423
-- Grok-1 support https://github.com/ggerganov/llama.cpp/pull/6204
-- Command R Plus support https://github.com/ggerganov/llama.cpp/pull/6491
-- support arch DBRX https://github.com/ggerganov/llama.cpp/pull/6515
-- How to convert HuggingFace model to GGUF format https://github.com/ggerganov/llama.cpp/discussions/2948
+- YaRN RoPE scaling https://github.com/ggerganov/jarvis.cpp/pull/2268
+- support Baichuan serial models https://github.com/ggerganov/jarvis.cpp/pull/3009
+- support attention bias https://github.com/ggerganov/jarvis.cpp/pull/4283
+- Mixtral support https://github.com/ggerganov/jarvis.cpp/pull/4406
+- BERT embeddings https://github.com/ggerganov/jarvis.cpp/pull/5423
+- Grok-1 support https://github.com/ggerganov/jarvis.cpp/pull/6204
+- Command R Plus support https://github.com/ggerganov/jarvis.cpp/pull/6491
+- support arch DBRX https://github.com/ggerganov/jarvis.cpp/pull/6515
+- How to convert HuggingFace model to GGUF format https://github.com/ggerganov/jarvis.cpp/discussions/2948

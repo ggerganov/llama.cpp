@@ -271,12 +271,12 @@ if __name__ == '__main__':
     args = parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
-    ftype_map: dict[str, gguf.LlamaFileType] = {
-        "f32": gguf.LlamaFileType.ALL_F32,
-        "f16": gguf.LlamaFileType.MOSTLY_F16,
-        "bf16": gguf.LlamaFileType.MOSTLY_BF16,
-        "q8_0": gguf.LlamaFileType.MOSTLY_Q8_0,
-        "auto": gguf.LlamaFileType.GUESSED,
+    ftype_map: dict[str, gguf.JarvisFileType] = {
+        "f32": gguf.JarvisFileType.ALL_F32,
+        "f16": gguf.JarvisFileType.MOSTLY_F16,
+        "bf16": gguf.JarvisFileType.MOSTLY_BF16,
+        "q8_0": gguf.JarvisFileType.MOSTLY_Q8_0,
+        "auto": gguf.JarvisFileType.GUESSED,
     }
 
     ftype = ftype_map[args.outtype]
@@ -372,9 +372,9 @@ if __name__ == '__main__':
             def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
                 dest = list(super().modify_tensors(data_torch, name, bid))
                 # some archs may have the same tensor for lm_head and output (tie word embeddings)
-                # in this case, adapters targeting lm_head will fail when using llama-export-lora
+                # in this case, adapters targeting lm_head will fail when using jarvis-export-lora
                 # therefore, we ignore them for now
-                # see: https://github.com/ggerganov/llama.cpp/issues/9065
+                # see: https://github.com/ggerganov/jarvis.cpp/issues/9065
                 if name == "lm_head.weight" and len(dest) == 0:
                     raise ValueError("lm_head is present in adapter, but is ignored in base model")
                 for dest_name, dest_data in dest:

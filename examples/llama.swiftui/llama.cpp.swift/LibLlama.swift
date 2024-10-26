@@ -1,15 +1,15 @@
 import Foundation
-import llama
+import jarvis
 
-enum LlamaError: Error {
+enum JarvisError: Error {
     case couldNotInitializeContext
 }
 
-func llama_batch_clear(_ batch: inout llama_batch) {
+func jarvis_batch_clear(_ batch: inout jarvis_batch) {
     batch.n_tokens = 0
 }
 
-func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama_pos, _ seq_ids: [llama_seq_id], _ logits: Bool) {
+func jarvis_batch_add(_ batch: inout jarvis_batch, _ id: jarvis_token, _ pos: jarvis_pos, _ seq_ids: [jarvis_seq_id], _ logits: Bool) {
     batch.token   [Int(batch.n_tokens)] = id
     batch.pos     [Int(batch.n_tokens)] = pos
     batch.n_seq_id[Int(batch.n_tokens)] = Int32(seq_ids.count)
@@ -21,12 +21,12 @@ func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama
     batch.n_tokens += 1
 }
 
-actor LlamaContext {
+actor JarvisContext {
     private var model: OpaquePointer
     private var context: OpaquePointer
-    private var sampling: UnsafeMutablePointer<llama_sampler>
-    private var batch: llama_batch
-    private var tokens_list: [llama_token]
+    private var sampling: UnsafeMutablePointer<jarvis_sampler>
+    private var batch: jarvis_batch
+    private var tokens_list: [jarvis_token]
     var is_done: Bool = false
 
     /// This variable is used to store temporarily invalid cchars
@@ -41,51 +41,51 @@ actor LlamaContext {
         self.model = model
         self.context = context
         self.tokens_list = []
-        self.batch = llama_batch_init(512, 0, 1)
+        self.batch = jarvis_batch_init(512, 0, 1)
         self.temporary_invalid_cchars = []
-        let sparams = llama_sampler_chain_default_params()
-        self.sampling = llama_sampler_chain_init(sparams)
-        llama_sampler_chain_add(self.sampling, llama_sampler_init_temp(0.4))
-        llama_sampler_chain_add(self.sampling, llama_sampler_init_dist(1234))
+        let sparams = jarvis_sampler_chain_default_params()
+        self.sampling = jarvis_sampler_chain_init(sparams)
+        jarvis_sampler_chain_add(self.sampling, jarvis_sampler_init_temp(0.4))
+        jarvis_sampler_chain_add(self.sampling, jarvis_sampler_init_dist(1234))
     }
 
     deinit {
-        llama_sampler_free(sampling)
-        llama_batch_free(batch)
-        llama_free(context)
-        llama_free_model(model)
-        llama_backend_free()
+        jarvis_sampler_free(sampling)
+        jarvis_batch_free(batch)
+        jarvis_free(context)
+        jarvis_free_model(model)
+        jarvis_backend_free()
     }
 
-    static func create_context(path: String) throws -> LlamaContext {
-        llama_backend_init()
-        var model_params = llama_model_default_params()
+    static func create_context(path: String) throws -> JarvisContext {
+        jarvis_backend_init()
+        var model_params = jarvis_model_default_params()
 
 #if targetEnvironment(simulator)
         model_params.n_gpu_layers = 0
         print("Running on simulator, force use n_gpu_layers = 0")
 #endif
-        let model = llama_load_model_from_file(path, model_params)
+        let model = jarvis_load_model_from_file(path, model_params)
         guard let model else {
             print("Could not load model at \(path)")
-            throw LlamaError.couldNotInitializeContext
+            throw JarvisError.couldNotInitializeContext
         }
 
         let n_threads = max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
         print("Using \(n_threads) threads")
 
-        var ctx_params = llama_context_default_params()
+        var ctx_params = jarvis_context_default_params()
         ctx_params.n_ctx = 2048
         ctx_params.n_threads       = Int32(n_threads)
         ctx_params.n_threads_batch = Int32(n_threads)
 
-        let context = llama_new_context_with_model(model, ctx_params)
+        let context = jarvis_new_context_with_model(model, ctx_params)
         guard let context else {
             print("Could not load context!")
-            throw LlamaError.couldNotInitializeContext
+            throw JarvisError.couldNotInitializeContext
         }
 
-        return LlamaContext(model: model, context: context)
+        return JarvisContext(model: model, context: context)
     }
 
     func model_info() -> String {
@@ -97,7 +97,7 @@ actor LlamaContext {
 
         // TODO: this is probably very stupid way to get the string from C
 
-        let nChars = llama_model_desc(model, result, 256)
+        let nChars = jarvis_model_desc(model, result, 256)
         let bufferPointer = UnsafeBufferPointer(start: result, count: Int(nChars))
 
         var SwiftString = ""
@@ -118,7 +118,7 @@ actor LlamaContext {
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
 
-        let n_ctx = llama_n_ctx(context)
+        let n_ctx = jarvis_n_ctx(context)
         let n_kv_req = tokens_list.count + (Int(n_len) - tokens_list.count)
 
         print("\n n_len = \(n_len), n_ctx = \(n_ctx), n_kv_req = \(n_kv_req)")
@@ -131,27 +131,27 @@ actor LlamaContext {
             print(String(cString: token_to_piece(token: id) + [0]))
         }
 
-        llama_batch_clear(&batch)
+        jarvis_batch_clear(&batch)
 
         for i1 in 0..<tokens_list.count {
             let i = Int(i1)
-            llama_batch_add(&batch, tokens_list[i], Int32(i), [0], false)
+            jarvis_batch_add(&batch, tokens_list[i], Int32(i), [0], false)
         }
         batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
-        if llama_decode(context, batch) != 0 {
-            print("llama_decode() failed")
+        if jarvis_decode(context, batch) != 0 {
+            print("jarvis_decode() failed")
         }
 
         n_cur = batch.n_tokens
     }
 
     func completion_loop() -> String {
-        var new_token_id: llama_token = 0
+        var new_token_id: jarvis_token = 0
 
-        new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
+        new_token_id = jarvis_sampler_sample(sampling, context, batch.n_tokens - 1)
 
-        if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
+        if jarvis_token_is_eog(model, new_token_id) || n_cur == n_len {
             print("\n")
             is_done = true
             let new_token_str = String(cString: temporary_invalid_cchars + [0])
@@ -176,14 +176,14 @@ actor LlamaContext {
         print(new_token_str)
         // tokens_list.append(new_token_id)
 
-        llama_batch_clear(&batch)
-        llama_batch_add(&batch, new_token_id, n_cur, [0], true)
+        jarvis_batch_clear(&batch)
+        jarvis_batch_add(&batch, new_token_id, n_cur, [0], true)
 
         n_decode += 1
         n_cur    += 1
 
-        if llama_decode(context, batch) != 0 {
-            print("failed to evaluate llama!")
+        if jarvis_decode(context, batch) != 0 {
+            print("failed to evaluate jarvis!")
         }
 
         return new_token_str
@@ -199,48 +199,48 @@ actor LlamaContext {
         for _ in 0..<nr {
             // bench prompt processing
 
-            llama_batch_clear(&batch)
+            jarvis_batch_clear(&batch)
 
             let n_tokens = pp
 
             for i in 0..<n_tokens {
-                llama_batch_add(&batch, 0, Int32(i), [0], false)
+                jarvis_batch_add(&batch, 0, Int32(i), [0], false)
             }
             batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
-            llama_kv_cache_clear(context)
+            jarvis_kv_cache_clear(context)
 
             let t_pp_start = ggml_time_us()
 
-            if llama_decode(context, batch) != 0 {
-                print("llama_decode() failed during prompt")
+            if jarvis_decode(context, batch) != 0 {
+                print("jarvis_decode() failed during prompt")
             }
-            llama_synchronize(context)
+            jarvis_synchronize(context)
 
             let t_pp_end = ggml_time_us()
 
             // bench text generation
 
-            llama_kv_cache_clear(context)
+            jarvis_kv_cache_clear(context)
 
             let t_tg_start = ggml_time_us()
 
             for i in 0..<tg {
-                llama_batch_clear(&batch)
+                jarvis_batch_clear(&batch)
 
                 for j in 0..<pl {
-                    llama_batch_add(&batch, 0, Int32(i), [Int32(j)], true)
+                    jarvis_batch_add(&batch, 0, Int32(i), [Int32(j)], true)
                 }
 
-                if llama_decode(context, batch) != 0 {
-                    print("llama_decode() failed during text generation")
+                if jarvis_decode(context, batch) != 0 {
+                    print("jarvis_decode() failed during text generation")
                 }
-                llama_synchronize(context)
+                jarvis_synchronize(context)
             }
 
             let t_tg_end = ggml_time_us()
 
-            llama_kv_cache_clear(context)
+            jarvis_kv_cache_clear(context)
 
             let t_pp = Double(t_pp_end - t_pp_start) / 1000000.0
             let t_tg = Double(t_tg_end - t_tg_start) / 1000000.0
@@ -269,8 +269,8 @@ actor LlamaContext {
         }
 
         let model_desc     = model_info();
-        let model_size     = String(format: "%.2f GiB", Double(llama_model_size(model)) / 1024.0 / 1024.0 / 1024.0);
-        let model_n_params = String(format: "%.2f B", Double(llama_model_n_params(model)) / 1e9);
+        let model_size     = String(format: "%.2f GiB", Double(jarvis_model_size(model)) / 1024.0 / 1024.0 / 1024.0);
+        let model_n_params = String(format: "%.2f B", Double(jarvis_model_n_params(model)) / 1e9);
         let backend        = "Metal";
         let pp_avg_str     = String(format: "%.2f", pp_avg);
         let tg_avg_str     = String(format: "%.2f", tg_avg);
@@ -290,16 +290,16 @@ actor LlamaContext {
     func clear() {
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
-        llama_kv_cache_clear(context)
+        jarvis_kv_cache_clear(context)
     }
 
-    private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
+    private func tokenize(text: String, add_bos: Bool) -> [jarvis_token] {
         let utf8Count = text.utf8.count
         let n_tokens = utf8Count + (add_bos ? 1 : 0) + 1
-        let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-        let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, false)
+        let tokens = UnsafeMutablePointer<jarvis_token>.allocate(capacity: n_tokens)
+        let tokenCount = jarvis_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, false)
 
-        var swiftTokens: [llama_token] = []
+        var swiftTokens: [jarvis_token] = []
         for i in 0..<tokenCount {
             swiftTokens.append(tokens[Int(i)])
         }
@@ -310,13 +310,13 @@ actor LlamaContext {
     }
 
     /// - note: The result does not contain null-terminator
-    private func token_to_piece(token: llama_token) -> [CChar] {
+    private func token_to_piece(token: jarvis_token) -> [CChar] {
         let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
         result.initialize(repeating: Int8(0), count: 8)
         defer {
             result.deallocate()
         }
-        let nTokens = llama_token_to_piece(model, token, result, 8, 0, false)
+        let nTokens = jarvis_token_to_piece(model, token, result, 8, 0, false)
 
         if nTokens < 0 {
             let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
@@ -324,7 +324,7 @@ actor LlamaContext {
             defer {
                 newResult.deallocate()
             }
-            let nNewTokens = llama_token_to_piece(model, token, newResult, -nTokens, 0, false)
+            let nNewTokens = jarvis_token_to_piece(model, token, newResult, -nTokens, 0, false)
             let bufferPointer = UnsafeBufferPointer(start: newResult, count: Int(nNewTokens))
             return Array(bufferPointer)
         } else {

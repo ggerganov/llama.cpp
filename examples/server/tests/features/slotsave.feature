@@ -1,10 +1,10 @@
-@llama.cpp
+@jarvis.cpp
 @slotsave
-Feature: llama.cpp server slot management
+Feature: jarvis.cpp server slot management
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
+    And   a model file tinyjarviss/stories260K.gguf from HF repo ggml-org/models
     And   prompt caching is enabled
     And   2 slots
     And   . as slot save path

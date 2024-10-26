@@ -909,7 +909,7 @@ async def step_prometheus_metrics_exported(context):
             context.metrics = {}
             for metric in parser.text_string_to_metric_families(metrics_raw):
                 match metric.name:
-                    case "llamacpp:kv_cache_usage_ratio":
+                    case "jarviscpp:kv_cache_usage_ratio":
                         assert len(metric.samples) > 0
                         metric_exported = True
                 context.metrics[metric.name] = metric
@@ -1105,7 +1105,7 @@ async def oai_chat_completions(user_prompt,
         }
     }
     if async_client:
-        origin = 'llama.cpp'
+        origin = 'jarvis.cpp'
         headers = {'Authorization': f'Bearer {user_api_key}', 'Origin': origin}
         async with aiohttp.ClientSession(timeout=DEFAULT_TIMEOUT_SECONDS) as session:
             async with session.post(f'{base_url}{base_path}',
@@ -1191,7 +1191,7 @@ async def oai_chat_completions(user_prompt,
                 'truncated': chat_completion.choices[0].finish_reason != 'stop'
             }
     if debug:
-        print("OAI response formatted to llama.cpp:", completion_response)
+        print("OAI response formatted to jarvis.cpp:", completion_response)
     return completion_response
 
 
@@ -1214,7 +1214,7 @@ async def request_oai_embeddings(input, seed,
     # openai client always expects an api_key
     user_api_key = user_api_key if user_api_key is not None else 'nope'
     if async_client:
-        origin = 'llama.cpp'
+        origin = 'jarvis.cpp'
         headers=[]
         if user_api_key is not None:
             headers = {'Authorization': f'Bearer {user_api_key}', 'Origin': origin}
@@ -1427,11 +1427,11 @@ def context_text(context):
 
 def start_server_background(context):
     if os.name == 'nt':
-        context.server_path = '../../../build/bin/Release/llama-server.exe'
+        context.server_path = '../../../build/bin/Release/jarvis-server.exe'
     else:
-        context.server_path = '../../../build/bin/llama-server'
-    if 'LLAMA_SERVER_BIN_PATH' in os.environ:
-        context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
+        context.server_path = '../../../build/bin/jarvis-server'
+    if 'JARVIS_SERVER_BIN_PATH' in os.environ:
+        context.server_path = os.environ['JARVIS_SERVER_BIN_PATH']
     server_listen_addr = context.server_fqdn
     server_args = [
         '--slots', # requires to get slot status via /slots endpoint

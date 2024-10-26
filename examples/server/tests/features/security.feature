@@ -1,10 +1,10 @@
-@llama.cpp
+@jarvis.cpp
 @security
 Feature: Security
 
   Background: Server startup with an api key defined
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
+    And   a model file tinyjarviss/stories260K.gguf from HF repo ggml-org/models
     And   a server api key THIS_IS_THE_KEY
     Then  the server is starting
     Then  the server is healthy

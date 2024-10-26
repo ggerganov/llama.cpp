@@ -1,7 +1,7 @@
-#include "llama-grammar.h"
+#include "jarvis-grammar.h"
 
-#include "llama-vocab.h"
-#include "llama-sampling.h"
+#include "jarvis-vocab.h"
+#include "jarvis-sampling.h"
 
 #include <cmath>
 #include <algorithm>
@@ -27,9 +27,9 @@ static std::pair<uint32_t, const char *> decode_utf8(const char * src) {
     return std::make_pair(value, pos);
 }
 
-static std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
+static std::pair<std::vector<uint32_t>, jarvis_partial_utf8> decode_utf8(
         const std::string & src,
-        llama_partial_utf8 partial_start) {
+        jarvis_partial_utf8 partial_start) {
     static const int      lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 3, 4 };
     const char          * pos      = src.c_str();
     std::vector<uint32_t> code_points;
@@ -45,7 +45,7 @@ static std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         if ((next_byte >> 6) != 2) {
             // invalid sequence, abort
             code_points.push_back(0);
-            return std::make_pair(std::move(code_points), llama_partial_utf8{ 0, -1 });
+            return std::make_pair(std::move(code_points), jarvis_partial_utf8{ 0, -1 });
         }
         value = (value << 6) + (next_byte & 0x3F);
         ++pos;
@@ -66,7 +66,7 @@ static std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
             // invalid sequence, abort
             code_points.clear();
             code_points.push_back(0);
-            return std::make_pair(std::move(code_points), llama_partial_utf8{ 0, n_remain });
+            return std::make_pair(std::move(code_points), jarvis_partial_utf8{ 0, n_remain });
         }
 
         uint8_t mask  = (1 << (7 - n_remain)) - 1;
@@ -84,7 +84,7 @@ static std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
     }
     code_points.push_back(0);
 
-    return std::make_pair(std::move(code_points), llama_partial_utf8{ value, n_remain });
+    return std::make_pair(std::move(code_points), jarvis_partial_utf8{ value, n_remain });
 }
 
 static bool is_digit_char(char c) {
@@ -187,40 +187,40 @@ static void print_grammar_char(FILE * file, uint32_t c) {
     }
 }
 
-static bool is_char_element(llama_grammar_element elem) {
+static bool is_char_element(jarvis_grammar_element elem) {
     switch (elem.type) {
-        case LLAMA_GRETYPE_CHAR:           return true;
-        case LLAMA_GRETYPE_CHAR_NOT:       return true;
-        case LLAMA_GRETYPE_CHAR_ALT:       return true;
-        case LLAMA_GRETYPE_CHAR_RNG_UPPER: return true;
-        case LLAMA_GRETYPE_CHAR_ANY:       return true;
+        case JARVIS_GRETYPE_CHAR:           return true;
+        case JARVIS_GRETYPE_CHAR_NOT:       return true;
+        case JARVIS_GRETYPE_CHAR_ALT:       return true;
+        case JARVIS_GRETYPE_CHAR_RNG_UPPER: return true;
+        case JARVIS_GRETYPE_CHAR_ANY:       return true;
         default:                           return false;
     }
 }
 
-static void print_rule_binary(FILE * file, const llama_grammar_rule & rule) {
+static void print_rule_binary(FILE * file, const jarvis_grammar_rule & rule) {
     for (auto elem : rule) {
         switch (elem.type) {
-            case LLAMA_GRETYPE_END:            fprintf(file, "END");            break;
-            case LLAMA_GRETYPE_ALT:            fprintf(file, "ALT");            break;
-            case LLAMA_GRETYPE_RULE_REF:       fprintf(file, "RULE_REF");       break;
-            case LLAMA_GRETYPE_CHAR:           fprintf(file, "CHAR");           break;
-            case LLAMA_GRETYPE_CHAR_NOT:       fprintf(file, "CHAR_NOT");       break;
-            case LLAMA_GRETYPE_CHAR_RNG_UPPER: fprintf(file, "CHAR_RNG_UPPER"); break;
-            case LLAMA_GRETYPE_CHAR_ALT:       fprintf(file, "CHAR_ALT");       break;
-            case LLAMA_GRETYPE_CHAR_ANY:       fprintf(file, "CHAR_ANY");       break;
+            case JARVIS_GRETYPE_END:            fprintf(file, "END");            break;
+            case JARVIS_GRETYPE_ALT:            fprintf(file, "ALT");            break;
+            case JARVIS_GRETYPE_RULE_REF:       fprintf(file, "RULE_REF");       break;
+            case JARVIS_GRETYPE_CHAR:           fprintf(file, "CHAR");           break;
+            case JARVIS_GRETYPE_CHAR_NOT:       fprintf(file, "CHAR_NOT");       break;
+            case JARVIS_GRETYPE_CHAR_RNG_UPPER: fprintf(file, "CHAR_RNG_UPPER"); break;
+            case JARVIS_GRETYPE_CHAR_ALT:       fprintf(file, "CHAR_ALT");       break;
+            case JARVIS_GRETYPE_CHAR_ANY:       fprintf(file, "CHAR_ANY");       break;
         }
         switch (elem.type) {
-            case LLAMA_GRETYPE_END:
-            case LLAMA_GRETYPE_ALT:
-            case LLAMA_GRETYPE_RULE_REF:
+            case JARVIS_GRETYPE_END:
+            case JARVIS_GRETYPE_ALT:
+            case JARVIS_GRETYPE_RULE_REF:
                 fprintf(file, "(%u) ", elem.value);
                 break;
-            case LLAMA_GRETYPE_CHAR:
-            case LLAMA_GRETYPE_CHAR_NOT:
-            case LLAMA_GRETYPE_CHAR_RNG_UPPER:
-            case LLAMA_GRETYPE_CHAR_ALT:
-            case LLAMA_GRETYPE_CHAR_ANY:
+            case JARVIS_GRETYPE_CHAR:
+            case JARVIS_GRETYPE_CHAR_NOT:
+            case JARVIS_GRETYPE_CHAR_RNG_UPPER:
+            case JARVIS_GRETYPE_CHAR_ALT:
+            case JARVIS_GRETYPE_CHAR_ANY:
                 fprintf(file, "(\"");
                 print_grammar_char(file, elem.value);
                 fprintf(file, "\") ");
@@ -233,60 +233,60 @@ static void print_rule_binary(FILE * file, const llama_grammar_rule & rule) {
 static void print_rule(
         FILE     * file,
         uint32_t   rule_id,
-        const llama_grammar_rule & rule,
+        const jarvis_grammar_rule & rule,
         const std::map<uint32_t, std::string> & symbol_id_names) {
-    if (rule.empty() || rule.back().type != LLAMA_GRETYPE_END) {
+    if (rule.empty() || rule.back().type != JARVIS_GRETYPE_END) {
         throw std::runtime_error(
-            "malformed rule, does not end with LLAMA_GRETYPE_END: " + std::to_string(rule_id));
+            "malformed rule, does not end with JARVIS_GRETYPE_END: " + std::to_string(rule_id));
     }
     fprintf(file, "%s ::= ", symbol_id_names.at(rule_id).c_str());
     for (size_t i = 0, end = rule.size() - 1; i < end; i++) {
-        llama_grammar_element elem = rule[i];
+        jarvis_grammar_element elem = rule[i];
         switch (elem.type) {
-            case LLAMA_GRETYPE_END:
+            case JARVIS_GRETYPE_END:
                 throw std::runtime_error(
                     "unexpected end of rule: " + std::to_string(rule_id) + "," +
                     std::to_string(i));
-            case LLAMA_GRETYPE_ALT:
+            case JARVIS_GRETYPE_ALT:
                 fprintf(file, "| ");
                 break;
-            case LLAMA_GRETYPE_RULE_REF:
+            case JARVIS_GRETYPE_RULE_REF:
                 fprintf(file, "%s ", symbol_id_names.at(elem.value).c_str());
                 break;
-            case LLAMA_GRETYPE_CHAR:
+            case JARVIS_GRETYPE_CHAR:
                 fprintf(file, "[");
                 print_grammar_char(file, elem.value);
                 break;
-            case LLAMA_GRETYPE_CHAR_NOT:
+            case JARVIS_GRETYPE_CHAR_NOT:
                 fprintf(file, "[^");
                 print_grammar_char(file, elem.value);
                 break;
-            case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+            case JARVIS_GRETYPE_CHAR_RNG_UPPER:
                 if (i == 0 || !is_char_element(rule[i - 1])) {
                     throw std::runtime_error(
-                        "LLAMA_GRETYPE_CHAR_RNG_UPPER without preceding char: " +
+                        "JARVIS_GRETYPE_CHAR_RNG_UPPER without preceding char: " +
                         std::to_string(rule_id) + "," + std::to_string(i));
                 }
                 fprintf(file, "-");
                 print_grammar_char(file, elem.value);
                 break;
-            case LLAMA_GRETYPE_CHAR_ALT:
+            case JARVIS_GRETYPE_CHAR_ALT:
                 if (i == 0 || !is_char_element(rule[i - 1])) {
                     throw std::runtime_error(
-                        "LLAMA_GRETYPE_CHAR_ALT without preceding char: " +
+                        "JARVIS_GRETYPE_CHAR_ALT without preceding char: " +
                         std::to_string(rule_id) + "," + std::to_string(i));
                 }
                 print_grammar_char(file, elem.value);
                 break;
-            case LLAMA_GRETYPE_CHAR_ANY:
+            case JARVIS_GRETYPE_CHAR_ANY:
                 fprintf(file, ".");
                 break;
         }
         if (is_char_element(elem)) {
             switch (rule[i + 1].type) {
-                case LLAMA_GRETYPE_CHAR_ALT:
-                case LLAMA_GRETYPE_CHAR_RNG_UPPER:
-                case LLAMA_GRETYPE_CHAR_ANY:
+                case JARVIS_GRETYPE_CHAR_ALT:
+                case JARVIS_GRETYPE_CHAR_RNG_UPPER:
+                case JARVIS_GRETYPE_CHAR_ANY:
                     break;
                 default:
                     fprintf(file, "] ");
@@ -300,46 +300,46 @@ static void print_rule(
 // implementation
 //
 
-uint32_t llama_grammar_parser::get_symbol_id(const char * src, size_t len) {
+uint32_t jarvis_grammar_parser::get_symbol_id(const char * src, size_t len) {
     uint32_t next_id = static_cast<uint32_t>(symbol_ids.size());
     auto result = symbol_ids.emplace(std::string(src, len), next_id);
     return result.first->second;
 }
 
-uint32_t llama_grammar_parser::generate_symbol_id(const std::string & base_name) {
+uint32_t jarvis_grammar_parser::generate_symbol_id(const std::string & base_name) {
     uint32_t next_id = static_cast<uint32_t>(symbol_ids.size());
     symbol_ids[base_name + '_' + std::to_string(next_id)] = next_id;
     return next_id;
 }
 
-void llama_grammar_parser::add_rule(uint32_t rule_id, const llama_grammar_rule & rule) {
+void jarvis_grammar_parser::add_rule(uint32_t rule_id, const jarvis_grammar_rule & rule) {
     if (rules.size() <= rule_id) {
         rules.resize(rule_id + 1);
     }
     rules[rule_id] = rule;
 }
 
-const char * llama_grammar_parser::parse_alternates(
+const char * jarvis_grammar_parser::parse_alternates(
         const char        * src,
         const std::string & rule_name,
         uint32_t            rule_id,
         bool                is_nested) {
-    llama_grammar_rule rule;
+    jarvis_grammar_rule rule;
     const char * pos = parse_sequence(src, rule_name, rule, is_nested);
     while (*pos == '|') {
-        rule.push_back({LLAMA_GRETYPE_ALT, 0});
+        rule.push_back({JARVIS_GRETYPE_ALT, 0});
         pos = parse_space(pos + 1, true);
         pos = parse_sequence(pos, rule_name, rule, is_nested);
     }
-    rule.push_back({LLAMA_GRETYPE_END, 0});
+    rule.push_back({JARVIS_GRETYPE_END, 0});
     add_rule(rule_id, rule);
     return pos;
 }
 
-const char * llama_grammar_parser::parse_sequence(
+const char * jarvis_grammar_parser::parse_sequence(
         const char         * src,
         const std::string  & rule_name,
-        llama_grammar_rule & rule,
+        jarvis_grammar_rule & rule,
         bool               is_nested) {
     size_t last_sym_start = rule.size();
     const char * pos = src;
@@ -367,7 +367,7 @@ const char * llama_grammar_parser::parse_sequence(
             //        --> S'
             //            S'     ::= S |
 
-            llama_grammar_rule prev_rule(rule.begin() + last_sym_start, rule.end());
+            jarvis_grammar_rule prev_rule(rule.begin() + last_sym_start, rule.end());
             if (min_times == 0) {
                 rule.resize(last_sym_start);
             } else {
@@ -380,20 +380,20 @@ const char * llama_grammar_parser::parse_sequence(
             uint32_t last_rec_rule_id = 0;
             auto n_opt = max_times < 0 ? 1 : max_times - min_times;
 
-            llama_grammar_rule rec_rule(prev_rule);
+            jarvis_grammar_rule rec_rule(prev_rule);
             for (int i = 0; i < n_opt; i++) {
                 rec_rule.resize(prev_rule.size());
                 uint32_t rec_rule_id = generate_symbol_id( rule_name);
                 if (i > 0 || max_times < 0) {
-                    rec_rule.push_back({LLAMA_GRETYPE_RULE_REF, max_times < 0 ? rec_rule_id : last_rec_rule_id});
+                    rec_rule.push_back({JARVIS_GRETYPE_RULE_REF, max_times < 0 ? rec_rule_id : last_rec_rule_id});
                 }
-                rec_rule.push_back({LLAMA_GRETYPE_ALT, 0});
-                rec_rule.push_back({LLAMA_GRETYPE_END, 0});
+                rec_rule.push_back({JARVIS_GRETYPE_ALT, 0});
+                rec_rule.push_back({JARVIS_GRETYPE_END, 0});
                 add_rule( rec_rule_id, rec_rule);
                 last_rec_rule_id = rec_rule_id;
             }
             if (n_opt > 0) {
-                rule.push_back({LLAMA_GRETYPE_RULE_REF, last_rec_rule_id});
+                rule.push_back({JARVIS_GRETYPE_RULE_REF, last_rec_rule_id});
             }
         };
 
@@ -407,15 +407,15 @@ const char * llama_grammar_parser::parse_sequence(
                     }
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
-                    rule.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
+                    rule.push_back({JARVIS_GRETYPE_CHAR, char_pair.first});
                 }
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '[') { // char range(s)
                 pos++;
-                enum llama_gretype start_type = LLAMA_GRETYPE_CHAR;
+                enum jarvis_gretype start_type = JARVIS_GRETYPE_CHAR;
                 if (*pos == '^') {
                     pos++;
-                    start_type = LLAMA_GRETYPE_CHAR_NOT;
+                    start_type = JARVIS_GRETYPE_CHAR_NOT;
                 }
                 last_sym_start = rule.size();
                 while (*pos != ']') {
@@ -424,8 +424,8 @@ const char * llama_grammar_parser::parse_sequence(
                     }
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
-                    enum llama_gretype type = last_sym_start < rule.size()
-                        ? LLAMA_GRETYPE_CHAR_ALT
+                    enum jarvis_gretype type = last_sym_start < rule.size()
+                        ? JARVIS_GRETYPE_CHAR_ALT
                         : start_type;
 
                     rule.push_back({type, char_pair.first});
@@ -435,7 +435,7 @@ const char * llama_grammar_parser::parse_sequence(
                         }
                         auto endchar_pair = parse_char(pos + 1);
                              pos          = endchar_pair.second;
-                        rule.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
+                        rule.push_back({JARVIS_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
                     }
                 }
                 pos = parse_space(pos + 1, is_nested);
@@ -444,7 +444,7 @@ const char * llama_grammar_parser::parse_sequence(
                 uint32_t ref_rule_id = get_symbol_id(pos, name_end - pos);
                 pos = parse_space(name_end, is_nested);
                 last_sym_start = rule.size();
-                rule.push_back({LLAMA_GRETYPE_RULE_REF, ref_rule_id});
+                rule.push_back({JARVIS_GRETYPE_RULE_REF, ref_rule_id});
             } else if (*pos == '(') { // grouping
                 // parse nested alternates into synthesized rule
                 pos = parse_space(pos + 1, true);
@@ -452,14 +452,14 @@ const char * llama_grammar_parser::parse_sequence(
                 pos = parse_alternates(pos, rule_name, sub_rule_id, true);
                 last_sym_start = rule.size();
                 // output reference to synthesized rule
-                rule.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
+                rule.push_back({JARVIS_GRETYPE_RULE_REF, sub_rule_id});
                 if (*pos != ')') {
                     throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '.') { // any char
                 last_sym_start = rule.size();
-                rule.push_back({LLAMA_GRETYPE_CHAR_ANY, 0});
+                rule.push_back({JARVIS_GRETYPE_CHAR_ANY, 0});
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '*') {
                 pos = parse_space(pos + 1, is_nested);
@@ -509,7 +509,7 @@ const char * llama_grammar_parser::parse_sequence(
         return pos;
     }
 
-const char * llama_grammar_parser::parse_rule(const char * src) {
+const char * jarvis_grammar_parser::parse_rule(const char * src) {
         const char * name_end = parse_name(src);
         const char * pos      = parse_space(name_end, false);
         size_t       name_len = name_end - src;
@@ -533,7 +533,7 @@ const char * llama_grammar_parser::parse_rule(const char * src) {
         return parse_space(pos, true);
     }
 
-bool llama_grammar_parser::parse(const char * src) {
+bool jarvis_grammar_parser::parse(const char * src) {
     try {
         const char * pos = parse_space(src, true);
         while (*pos) {
@@ -545,7 +545,7 @@ bool llama_grammar_parser::parse(const char * src) {
                 throw std::runtime_error("Undefined rule");
             }
             for (const auto & elem : rule) {
-                if (elem.type == LLAMA_GRETYPE_RULE_REF) {
+                if (elem.type == JARVIS_GRETYPE_RULE_REF) {
                     // Ensure that the rule at that location exists
                     if (elem.value >= rules.size() || rules[elem.value].empty()) {
                         // Get the name of the rule that is missing
@@ -567,7 +567,7 @@ bool llama_grammar_parser::parse(const char * src) {
     return true;
 }
 
-void llama_grammar_parser::print(FILE * file) {
+void jarvis_grammar_parser::print(FILE * file) {
     try {
         std::map<uint32_t, std::string> symbol_id_names;
         for (const auto & kv : symbol_ids) {
@@ -584,8 +584,8 @@ void llama_grammar_parser::print(FILE * file) {
     }
 }
 
-llama_grammar_stack llama_grammar_parser::c_rules() const {
-    llama_grammar_stack ret;
+jarvis_grammar_stack jarvis_grammar_parser::c_rules() const {
+    jarvis_grammar_stack ret;
     ret.reserve(rules.size());
     for (const auto & rule : rules) {
         ret.push_back(rule.data());
@@ -594,30 +594,30 @@ llama_grammar_stack llama_grammar_parser::c_rules() const {
 }
 
 // returns true iff pos points to the end of one of the definitions of a rule
-static bool llama_grammar_is_end_of_sequence(const llama_grammar_element * pos) {
+static bool jarvis_grammar_is_end_of_sequence(const jarvis_grammar_element * pos) {
     switch (pos->type) {
-        case LLAMA_GRETYPE_END: return true;  // NOLINT
-        case LLAMA_GRETYPE_ALT: return true;  // NOLINT
+        case JARVIS_GRETYPE_END: return true;  // NOLINT
+        case JARVIS_GRETYPE_ALT: return true;  // NOLINT
         default:                return false;
     }
 }
 
 // returns true iff chr satisfies the char range at pos (regular or inverse range)
 // asserts that pos is pointing to a char range element
-static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
-        const llama_grammar_element * pos,
+static std::pair<bool, const jarvis_grammar_element *> jarvis_grammar_match_char(
+        const jarvis_grammar_element * pos,
         const uint32_t                chr) {
     bool found            = false;
-    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR || pos->type == LLAMA_GRETYPE_CHAR_ANY;
+    bool is_positive_char = pos->type == JARVIS_GRETYPE_CHAR || pos->type == JARVIS_GRETYPE_CHAR_ANY;
 
-    GGML_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT); // NOLINT
+    GGML_ASSERT(is_positive_char || pos->type == JARVIS_GRETYPE_CHAR_NOT); // NOLINT
 
     do {
-        if (pos[1].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
+        if (pos[1].type == JARVIS_GRETYPE_CHAR_RNG_UPPER) {
             // inclusive range, e.g. [a-z]
             found = found || (pos->value <= chr && chr <= pos[1].value);
             pos += 2;
-        } else if (pos->type == LLAMA_GRETYPE_CHAR_ANY) {
+        } else if (pos->type == JARVIS_GRETYPE_CHAR_ANY) {
             // Any character matches "."
             found = true;
             pos += 1;
@@ -626,7 +626,7 @@ static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
             found = found || pos->value == chr;
             pos += 1;
         }
-    } while (pos->type == LLAMA_GRETYPE_CHAR_ALT);
+    } while (pos->type == JARVIS_GRETYPE_CHAR_ALT);
 
     return std::make_pair(found == is_positive_char, pos);
 }
@@ -634,11 +634,11 @@ static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
 // returns true iff some continuation of the given partial UTF-8 sequence could satisfy the char
 // range at pos (regular or inverse range)
 // asserts that pos is pointing to a char range element
-static bool llama_grammar_match_partial_char(
-        const llama_grammar_element * pos,
-        const llama_partial_utf8      partial_utf8) {
-    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR || pos->type == LLAMA_GRETYPE_CHAR_ANY;
-    GGML_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT);
+static bool jarvis_grammar_match_partial_char(
+        const jarvis_grammar_element * pos,
+        const jarvis_partial_utf8      partial_utf8) {
+    bool is_positive_char = pos->type == JARVIS_GRETYPE_CHAR || pos->type == JARVIS_GRETYPE_CHAR_ANY;
+    GGML_ASSERT(is_positive_char || pos->type == JARVIS_GRETYPE_CHAR_NOT);
 
     uint32_t partial_value = partial_utf8.value;
     int      n_remain      = partial_utf8.n_remain;
@@ -661,13 +661,13 @@ static bool llama_grammar_match_partial_char(
     }
 
     do {
-        if (pos[1].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
+        if (pos[1].type == JARVIS_GRETYPE_CHAR_RNG_UPPER) {
             // inclusive range, e.g. [a-z]
             if (pos->value <= high && low <= pos[1].value) {
                 return is_positive_char;
             }
             pos += 2;
-        } else if (pos->type == LLAMA_GRETYPE_CHAR_ANY) {
+        } else if (pos->type == JARVIS_GRETYPE_CHAR_ANY) {
             // Any character matches "."
             return true;
         } else {
@@ -677,17 +677,17 @@ static bool llama_grammar_match_partial_char(
             }
             pos += 1;
         }
-    } while (pos->type == LLAMA_GRETYPE_CHAR_ALT);
+    } while (pos->type == JARVIS_GRETYPE_CHAR_ALT);
 
     return !is_positive_char;
 }
 
 // transforms a grammar pushdown stack into N possible stacks, all ending
 // at a character range (terminal element)
-static void llama_grammar_advance_stack(
-        const llama_grammar_rules  & rules,
-        const llama_grammar_stack  & stack,
-              llama_grammar_stacks & new_stacks) {
+static void jarvis_grammar_advance_stack(
+        const jarvis_grammar_rules  & rules,
+        const jarvis_grammar_stack  & stack,
+              jarvis_grammar_stacks & new_stacks) {
     if (stack.empty()) {
         if (std::find(new_stacks.begin(), new_stacks.end(), stack) == new_stacks.end()) {
             new_stacks.emplace_back(stack);
@@ -695,29 +695,29 @@ static void llama_grammar_advance_stack(
         return;
     }
 
-    const llama_grammar_element * pos = stack.back();
+    const jarvis_grammar_element * pos = stack.back();
 
     switch (pos->type) {
-        case LLAMA_GRETYPE_RULE_REF: {
+        case JARVIS_GRETYPE_RULE_REF: {
             const size_t                  rule_id = static_cast<size_t>(pos->value);
-            const llama_grammar_element * subpos  = rules[rule_id].data();
+            const jarvis_grammar_element * subpos  = rules[rule_id].data();
             do {
                 // init new stack without the top (pos)
-                llama_grammar_stack new_stack(stack.begin(), stack.end() - 1);
-                if (!llama_grammar_is_end_of_sequence(pos + 1)) {
+                jarvis_grammar_stack new_stack(stack.begin(), stack.end() - 1);
+                if (!jarvis_grammar_is_end_of_sequence(pos + 1)) {
                     // if this rule ref is followed by another element, add that to stack
                     new_stack.push_back(pos + 1);
                 }
-                if (!llama_grammar_is_end_of_sequence(subpos)) {
+                if (!jarvis_grammar_is_end_of_sequence(subpos)) {
                     // if alternate is nonempty, add to stack
                     new_stack.push_back(subpos);
                 }
-                llama_grammar_advance_stack(rules, new_stack, new_stacks);
-                while (!llama_grammar_is_end_of_sequence(subpos)) {
+                jarvis_grammar_advance_stack(rules, new_stack, new_stacks);
+                while (!jarvis_grammar_is_end_of_sequence(subpos)) {
                     // scan to end of alternate def
                     subpos++;
                 }
-                if (subpos->type == LLAMA_GRETYPE_ALT) {
+                if (subpos->type == JARVIS_GRETYPE_ALT) {
                     // there's another alternate def of this rule to process
                     subpos++;
                 } else {
@@ -726,43 +726,43 @@ static void llama_grammar_advance_stack(
             } while (true);
             break;
         }
-        case LLAMA_GRETYPE_CHAR:
-        case LLAMA_GRETYPE_CHAR_NOT:
-        case LLAMA_GRETYPE_CHAR_ANY:
+        case JARVIS_GRETYPE_CHAR:
+        case JARVIS_GRETYPE_CHAR_NOT:
+        case JARVIS_GRETYPE_CHAR_ANY:
             if (std::find(new_stacks.begin(), new_stacks.end(), stack) == new_stacks.end()) {
                 // only add the stack if it's not a duplicate of one we already have
                 new_stacks.emplace_back(stack);
             }
             break;
         default:
-            // end of alternate (LLAMA_GRETYPE_END, LLAMA_GRETYPE_ALT) or middle of char range
-            // (LLAMA_GRETYPE_CHAR_ALT, LLAMA_GRETYPE_CHAR_RNG_UPPER); stack should never be left on
+            // end of alternate (JARVIS_GRETYPE_END, JARVIS_GRETYPE_ALT) or middle of char range
+            // (JARVIS_GRETYPE_CHAR_ALT, JARVIS_GRETYPE_CHAR_RNG_UPPER); stack should never be left on
             // those
             GGML_ABORT("fatal error");
     }
 }
 
-static llama_grammar_candidates llama_grammar_reject_candidates(
-        const llama_grammar_rules      & rules,
-        const llama_grammar_stacks     & stacks,
-        const llama_grammar_candidates & candidates) {
+static jarvis_grammar_candidates jarvis_grammar_reject_candidates(
+        const jarvis_grammar_rules      & rules,
+        const jarvis_grammar_stacks     & stacks,
+        const jarvis_grammar_candidates & candidates) {
     GGML_ASSERT(!stacks.empty()); // REVIEW
 
     if (candidates.empty()) {
         return {};
     }
 
-    auto rejects = llama_grammar_reject_candidates_for_stack(rules, stacks.front(), candidates);
+    auto rejects = jarvis_grammar_reject_candidates_for_stack(rules, stacks.front(), candidates);
 
     for (size_t i = 1, size = stacks.size(); i < size; ++i) {
-        rejects = llama_grammar_reject_candidates_for_stack(rules, stacks[i], rejects);
+        rejects = jarvis_grammar_reject_candidates_for_stack(rules, stacks[i], rejects);
     }
 
     return rejects;
 }
 
-static bool llama_grammar_detect_left_recursion(
-        const llama_grammar_rules & rules,
+static bool jarvis_grammar_detect_left_recursion(
+        const jarvis_grammar_rules & rules,
         size_t rule_index,
         std::vector<bool> * rules_visited,
         std::vector<bool> * rules_in_progress,
@@ -773,13 +773,13 @@ static bool llama_grammar_detect_left_recursion(
 
     (*rules_in_progress)[rule_index] = true;
 
-    const llama_grammar_rule & rule = rules[rule_index];
+    const jarvis_grammar_rule & rule = rules[rule_index];
 
     // First check if the rule might produce the empty string. This could be done combined with the second
     // step but it's more readable as two steps.
     bool at_rule_start = true;
     for (size_t i = 0; i < rule.size(); i++) {
-        if (llama_grammar_is_end_of_sequence(&rule[i])) {
+        if (jarvis_grammar_is_end_of_sequence(&rule[i])) {
             if (at_rule_start) {
                 (*rules_may_be_empty)[rule_index] = true;
                 break;
@@ -794,14 +794,14 @@ static bool llama_grammar_detect_left_recursion(
     // be empty)
     bool recurse_into_nonterminal = true;
     for (size_t i = 0; i < rule.size(); i++) {
-        if (rule[i].type == LLAMA_GRETYPE_RULE_REF && recurse_into_nonterminal) {
-            if (llama_grammar_detect_left_recursion(rules, (size_t)rule[i].value, rules_visited, rules_in_progress, rules_may_be_empty)) {
+        if (rule[i].type == JARVIS_GRETYPE_RULE_REF && recurse_into_nonterminal) {
+            if (jarvis_grammar_detect_left_recursion(rules, (size_t)rule[i].value, rules_visited, rules_in_progress, rules_may_be_empty)) {
                 return true;
             }
             if (!((*rules_may_be_empty)[(size_t)rule[i].value])) {
                 recurse_into_nonterminal = false;
             }
-        } else if (llama_grammar_is_end_of_sequence(&rule[i])) {
+        } else if (jarvis_grammar_is_end_of_sequence(&rule[i])) {
             recurse_into_nonterminal = true;
         } else {
             recurse_into_nonterminal = false;
@@ -814,19 +814,19 @@ static bool llama_grammar_detect_left_recursion(
     return false;
 }
 
-const llama_grammar_rules & llama_grammar_get_rules(const struct llama_grammar * grammar) {
+const jarvis_grammar_rules & jarvis_grammar_get_rules(const struct jarvis_grammar * grammar) {
     return grammar->rules;
 }
 
-llama_grammar_stacks & llama_grammar_get_stacks(struct llama_grammar * grammar) {
+jarvis_grammar_stacks & jarvis_grammar_get_stacks(struct jarvis_grammar * grammar) {
     return grammar->stacks;
 }
 
-void llama_grammar_accept(
-        const llama_grammar_rules  & rules,
-        const llama_grammar_stacks & stacks,
+void jarvis_grammar_accept(
+        const jarvis_grammar_rules  & rules,
+        const jarvis_grammar_stacks & stacks,
         const uint32_t               chr,
-              llama_grammar_stacks & stacks_new) {
+              jarvis_grammar_stacks & stacks_new) {
     stacks_new.clear();
     stacks_new.reserve(stacks.size());
 
@@ -835,26 +835,26 @@ void llama_grammar_accept(
             continue;
         }
 
-        auto match = llama_grammar_match_char(stack.back(), chr);
+        auto match = jarvis_grammar_match_char(stack.back(), chr);
         if (match.first) {
-            const llama_grammar_element * pos = match.second;
+            const jarvis_grammar_element * pos = match.second;
 
             // update top of stack to next element, if any
-            llama_grammar_stack new_stack(stack.begin(), stack.end() - 1);
-            if (!llama_grammar_is_end_of_sequence(pos)) {
+            jarvis_grammar_stack new_stack(stack.begin(), stack.end() - 1);
+            if (!jarvis_grammar_is_end_of_sequence(pos)) {
                 new_stack.push_back(pos);
             }
-            llama_grammar_advance_stack(rules, new_stack, stacks_new);
+            jarvis_grammar_advance_stack(rules, new_stack, stacks_new);
         }
     }
 }
 
-llama_grammar_candidates llama_grammar_reject_candidates_for_stack(
-        const llama_grammar_rules      & rules,
-        const llama_grammar_stack      & stack,
-        const llama_grammar_candidates & candidates) {
+jarvis_grammar_candidates jarvis_grammar_reject_candidates_for_stack(
+        const jarvis_grammar_rules      & rules,
+        const jarvis_grammar_stack      & stack,
+        const jarvis_grammar_candidates & candidates) {
 
-    llama_grammar_candidates rejects;
+    jarvis_grammar_candidates rejects;
     rejects.reserve(candidates.size());
 
     if (stack.empty()) {
@@ -866,9 +866,9 @@ llama_grammar_candidates llama_grammar_reject_candidates_for_stack(
         return rejects;
     }
 
-    const llama_grammar_element * stack_pos = stack.back();
+    const jarvis_grammar_element * stack_pos = stack.back();
 
-    llama_grammar_candidates next_candidates;
+    jarvis_grammar_candidates next_candidates;
     next_candidates.reserve(candidates.size());
 
     for (const auto & tok : candidates) {
@@ -876,27 +876,27 @@ llama_grammar_candidates llama_grammar_reject_candidates_for_stack(
             // reached end of full codepoints in token, reject iff it ended in a partial sequence
             // that cannot satisfy this position in grammar
             if (tok.partial_utf8.n_remain != 0 &&
-                    !llama_grammar_match_partial_char(stack_pos, tok.partial_utf8)) {
+                    !jarvis_grammar_match_partial_char(stack_pos, tok.partial_utf8)) {
                 rejects.push_back(tok);
             }
-        } else if (llama_grammar_match_char(stack_pos, *tok.code_points).first) {
+        } else if (jarvis_grammar_match_char(stack_pos, *tok.code_points).first) {
             next_candidates.push_back({ tok.index, tok.code_points + 1, tok.partial_utf8 });
         } else {
             rejects.push_back(tok);
         }
     }
 
-    const auto * stack_pos_after = llama_grammar_match_char(stack_pos, 0).second;
+    const auto * stack_pos_after = jarvis_grammar_match_char(stack_pos, 0).second;
 
     // update top of stack to next element, if any
-    llama_grammar_stack stack_after(stack.begin(), stack.end() - 1);
-    if (!llama_grammar_is_end_of_sequence(stack_pos_after)) {
+    jarvis_grammar_stack stack_after(stack.begin(), stack.end() - 1);
+    if (!jarvis_grammar_is_end_of_sequence(stack_pos_after)) {
         stack_after.push_back(stack_pos_after);
     }
-    llama_grammar_stacks next_stacks;
-    llama_grammar_advance_stack(rules, stack_after, next_stacks);
+    jarvis_grammar_stacks next_stacks;
+    jarvis_grammar_advance_stack(rules, stack_after, next_stacks);
 
-    auto next_rejects = llama_grammar_reject_candidates(rules, next_stacks, next_candidates);
+    auto next_rejects = jarvis_grammar_reject_candidates(rules, next_stacks, next_candidates);
     for (const auto & tok : next_rejects) {
         rejects.push_back({ tok.index, tok.code_points - 1, tok.partial_utf8 });
     }
@@ -906,20 +906,20 @@ llama_grammar_candidates llama_grammar_reject_candidates_for_stack(
 
 ////////////////////
 
-struct llama_grammar * llama_grammar_init_impl(
-        const struct llama_vocab * vocab,
-        const llama_grammar_element ** rules,
+struct jarvis_grammar * jarvis_grammar_init_impl(
+        const struct jarvis_vocab * vocab,
+        const jarvis_grammar_element ** rules,
         size_t n_rules,
         size_t start_rule_index) {
-    const llama_grammar_element * pos;
+    const jarvis_grammar_element * pos;
 
     // copy rule definitions into vectors
-    llama_grammar_rules vec_rules(n_rules);
+    jarvis_grammar_rules vec_rules(n_rules);
     for (size_t i = 0; i < n_rules; i++) {
-        for (pos = rules[i]; pos->type != LLAMA_GRETYPE_END; pos++) {
+        for (pos = rules[i]; pos->type != JARVIS_GRETYPE_END; pos++) {
             vec_rules[i].push_back(*pos);
         }
-        vec_rules[i].push_back({LLAMA_GRETYPE_END, 0});
+        vec_rules[i].push_back({JARVIS_GRETYPE_END, 0});
     }
 
     // Check for left recursion
@@ -930,27 +930,27 @@ struct llama_grammar * llama_grammar_init_impl(
         if (rules_visited[i]) {
             continue;
         }
-        if (llama_grammar_detect_left_recursion(vec_rules, i, &rules_visited, &rules_in_progress, &rules_may_be_empty)) {
-            LLAMA_LOG_ERROR("unsupported grammar, left recursion detected for nonterminal at index %zu", i);
+        if (jarvis_grammar_detect_left_recursion(vec_rules, i, &rules_visited, &rules_in_progress, &rules_may_be_empty)) {
+            JARVIS_LOG_ERROR("unsupported grammar, left recursion detected for nonterminal at index %zu", i);
             return nullptr;
         }
     }
 
     // loop over alternates of start rule to build initial stacks
-    llama_grammar_stacks stacks;
+    jarvis_grammar_stacks stacks;
     pos = vec_rules[start_rule_index].data();
     do {
-        llama_grammar_stack stack;
-        if (!llama_grammar_is_end_of_sequence(pos)) {
+        jarvis_grammar_stack stack;
+        if (!jarvis_grammar_is_end_of_sequence(pos)) {
             // if alternate is nonempty, add to stack
             stack.push_back(pos);
         }
-        llama_grammar_advance_stack(vec_rules, stack, stacks);
-        while (!llama_grammar_is_end_of_sequence(pos)) {
+        jarvis_grammar_advance_stack(vec_rules, stack, stacks);
+        while (!jarvis_grammar_is_end_of_sequence(pos)) {
             // scan to end of alternate def
             pos++;
         }
-        if (pos->type == LLAMA_GRETYPE_ALT) {
+        if (pos->type == JARVIS_GRETYPE_ALT) {
             // there's another alternate def of this rule to process
             pos++;
         } else {
@@ -959,13 +959,13 @@ struct llama_grammar * llama_grammar_init_impl(
     } while (true);
 
     // Important: vec_rules has to be moved here, not copied, because stacks contains
-    // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
+    // pointers to elements of vec_rules. If vec_rules were copied into jarvis_grammar
     // then the pointers would be invalidated when the local vec_rules goes out of scope.
-    return new llama_grammar { vocab, std::move(vec_rules), std::move(stacks), {}, };
+    return new jarvis_grammar { vocab, std::move(vec_rules), std::move(stacks), {}, };
 }
 
-struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab, const char * grammar_str, const char * grammar_root) {
-    llama_grammar_parser parser;
+struct jarvis_grammar * jarvis_grammar_init_impl(const struct jarvis_vocab * vocab, const char * grammar_str, const char * grammar_root) {
+    jarvis_grammar_parser parser;
 
     // if there is a grammar, parse it
     if (!parser.parse(grammar_str)) {
@@ -984,20 +984,20 @@ struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab,
         return nullptr;
     }
 
-    std::vector<const llama_grammar_element *> grammar_rules(parser.c_rules());
+    std::vector<const jarvis_grammar_element *> grammar_rules(parser.c_rules());
 
     const size_t n_rules = grammar_rules.size();
     const size_t start_rule_index = parser.symbol_ids.at(grammar_root);
 
-    const llama_grammar_element * pos;
+    const jarvis_grammar_element * pos;
 
     // copy rule definitions into vectors
-    llama_grammar_rules vec_rules(n_rules);
+    jarvis_grammar_rules vec_rules(n_rules);
     for (size_t i = 0; i < n_rules; i++) {
-        for (pos = grammar_rules[i]; pos->type != LLAMA_GRETYPE_END; pos++) {
+        for (pos = grammar_rules[i]; pos->type != JARVIS_GRETYPE_END; pos++) {
             vec_rules[i].push_back(*pos);
         }
-        vec_rules[i].push_back({LLAMA_GRETYPE_END, 0});
+        vec_rules[i].push_back({JARVIS_GRETYPE_END, 0});
     }
 
     // Check for left recursion
@@ -1008,27 +1008,27 @@ struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab,
         if (rules_visited[i]) {
             continue;
         }
-        if (llama_grammar_detect_left_recursion(vec_rules, i, &rules_visited, &rules_in_progress, &rules_may_be_empty)) {
-            LLAMA_LOG_ERROR("unsupported grammar, left recursion detected for nonterminal at index %zu", i);
+        if (jarvis_grammar_detect_left_recursion(vec_rules, i, &rules_visited, &rules_in_progress, &rules_may_be_empty)) {
+            JARVIS_LOG_ERROR("unsupported grammar, left recursion detected for nonterminal at index %zu", i);
             return nullptr;
         }
     }
 
     // loop over alternates of start rule to build initial stacks
-    llama_grammar_stacks stacks;
+    jarvis_grammar_stacks stacks;
     pos = vec_rules[start_rule_index].data();
     do {
-        llama_grammar_stack stack;
-        if (!llama_grammar_is_end_of_sequence(pos)) {
+        jarvis_grammar_stack stack;
+        if (!jarvis_grammar_is_end_of_sequence(pos)) {
             // if alternate is nonempty, add to stack
             stack.push_back(pos);
         }
-        llama_grammar_advance_stack(vec_rules, stack, stacks);
-        while (!llama_grammar_is_end_of_sequence(pos)) {
+        jarvis_grammar_advance_stack(vec_rules, stack, stacks);
+        while (!jarvis_grammar_is_end_of_sequence(pos)) {
             // scan to end of alternate def
             pos++;
         }
-        if (pos->type == LLAMA_GRETYPE_ALT) {
+        if (pos->type == JARVIS_GRETYPE_ALT) {
             // there's another alternate def of this rule to process
             pos++;
         } else {
@@ -1037,12 +1037,12 @@ struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab,
     } while (true);
 
     // Important: vec_rules has to be moved here, not copied, because stacks contains
-    // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
+    // pointers to elements of vec_rules. If vec_rules were copied into jarvis_grammar
     // then the pointers would be invalidated when the local vec_rules goes out of scope.
-    return new llama_grammar { vocab, std::move(vec_rules), std::move(stacks), {}, };
+    return new jarvis_grammar { vocab, std::move(vec_rules), std::move(stacks), {}, };
 }
 
-void llama_grammar_free_impl(struct llama_grammar * grammar) {
+void jarvis_grammar_free_impl(struct jarvis_grammar * grammar) {
     if (grammar == nullptr) {
         return;
     }
@@ -1050,8 +1050,8 @@ void llama_grammar_free_impl(struct llama_grammar * grammar) {
     delete grammar;
 }
 
-struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & grammar) {
-    llama_grammar * result = new llama_grammar { grammar.vocab, grammar.rules, grammar.stacks, grammar.partial_utf8, };
+struct jarvis_grammar * jarvis_grammar_clone_impl(const struct jarvis_grammar & grammar) {
+    jarvis_grammar * result = new jarvis_grammar { grammar.vocab, grammar.rules, grammar.stacks, grammar.partial_utf8, };
 
     // redirect elements in stacks to point to new rules
     for (size_t is = 0; is < result->stacks.size(); is++) {
@@ -1069,7 +1069,7 @@ struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & gra
     return result;
 }
 
-void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_data_array * cur_p) {
+void jarvis_grammar_apply_impl(const struct jarvis_grammar & grammar, jarvis_token_data_array * cur_p) {
     GGML_ASSERT(grammar.vocab != nullptr);
 
     bool allow_eog = false;
@@ -1080,17 +1080,17 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
         }
     }
 
-    std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
+    std::vector<std::pair<std::vector<uint32_t>, jarvis_partial_utf8>> candidates_decoded;
     candidates_decoded.reserve(cur_p->size);
 
-    llama_grammar_candidates candidates_grammar;
+    jarvis_grammar_candidates candidates_grammar;
     candidates_grammar.reserve(cur_p->size);
 
     for (size_t i = 0; i < cur_p->size; ++i) {
-        const llama_token id      = cur_p->data[i].id;
+        const jarvis_token id      = cur_p->data[i].id;
         const std::string & piece = grammar.vocab->cache_token_to_piece.at(id);
 
-        if (llama_token_is_eog_impl(*grammar.vocab, id)) {
+        if (jarvis_token_is_eog_impl(*grammar.vocab, id)) {
             if (!allow_eog) {
                 cur_p->data[i].logit = -INFINITY;
             }
@@ -1102,16 +1102,16 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
         }
     }
 
-    const auto rejects = llama_grammar_reject_candidates(grammar.rules, grammar.stacks, candidates_grammar);
+    const auto rejects = jarvis_grammar_reject_candidates(grammar.rules, grammar.stacks, candidates_grammar);
     for (const auto & reject : rejects) {
         cur_p->data[reject.index].logit = -INFINITY;
     }
 }
 
-void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token) {
+void jarvis_grammar_accept_impl(struct jarvis_grammar & grammar, jarvis_token token) {
     GGML_ASSERT(grammar.vocab != nullptr);
 
-    if (llama_token_is_eog_impl(*grammar.vocab, token)) {
+    if (jarvis_token_is_eog_impl(*grammar.vocab, token)) {
         for (const auto & stack : grammar.stacks) {
             if (stack.empty()) {
                 return;
@@ -1126,10 +1126,10 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
     const auto   decoded     = decode_utf8(piece, grammar.partial_utf8);
     const auto & code_points = decoded.first;
 
-    llama_grammar_stacks stacks_new;
+    jarvis_grammar_stacks stacks_new;
 
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
-        llama_grammar_accept(grammar.rules, grammar.stacks, *it, stacks_new);
+        jarvis_grammar_accept(grammar.rules, grammar.stacks, *it, stacks_new);
         grammar.stacks = std::move(stacks_new);
     }
 

@@ -1,7 +1,7 @@
-#include "llama-sampling.h"
+#include "jarvis-sampling.h"
 
-#include "llama-vocab.h"
-#include "llama-grammar.h"
+#include "jarvis-vocab.h"
+#include "jarvis-grammar.h"
 
 #include <algorithm>
 #include <cassert>
@@ -15,7 +15,7 @@
 #include <random>
 #include <unordered_map>
 
-static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng) {
+static int jarvis_sample_dist(jarvis_token_data_array * cur_p, std::mt19937 & rng) {
     // iterator for the probabilities
 #ifdef __GNUC__
     #pragma GCC diagnostic push
@@ -29,7 +29,7 @@ static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng)
         typedef float & reference;
         typedef ptrdiff_t difference_type;
 
-        const llama_token_data * data;
+        const jarvis_token_data * data;
 
         bool operator==(const probs_iterator & other) const { return data == other.data; }
         bool operator!=(const probs_iterator & other) const { return data != other.data; }
@@ -48,7 +48,7 @@ static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng)
 }
 
 /*
-static void llama_log_softmax(float * array, size_t size) {
+static void jarvis_log_softmax(float * array, size_t size) {
     float max_l = *std::max_element(array, array + size);
     float sum = 0.f;
     for (size_t i = 0; i < size; ++i) {
@@ -63,7 +63,7 @@ static void llama_log_softmax(float * array, size_t size) {
 }
 */
 
-static void llama_sampler_temp_impl(llama_token_data_array * cur_p, float temp) {
+static void jarvis_sampler_temp_impl(jarvis_token_data_array * cur_p, float temp) {
     if (temp <= 0.0f) {
         // find the token with the highest logit and set the rest to -inf
         size_t max_i = 0;
@@ -87,12 +87,12 @@ static void llama_sampler_temp_impl(llama_token_data_array * cur_p, float temp) 
     }
 }
 
-static void llama_sampler_softmax_impl(llama_token_data_array * cur_p) {
+static void jarvis_sampler_softmax_impl(jarvis_token_data_array * cur_p) {
     GGML_ASSERT(cur_p->size > 0);
 
     // Sort the logits in descending order
     if (!cur_p->sorted) {
-        std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
+        std::sort(cur_p->data, cur_p->data + cur_p->size, [](const jarvis_token_data & a, const jarvis_token_data & b) {
             return a.logit > b.logit;
         });
         cur_p->sorted = true;
@@ -112,7 +112,7 @@ static void llama_sampler_softmax_impl(llama_token_data_array * cur_p) {
     }
 }
 
-static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) {
+static void jarvis_sampler_top_k_impl(jarvis_token_data_array * cur_p, int32_t k) {
     // TODO: move bucket sort to separate function so that top_p/tail_free/typical/softmax first is equally fast
     // if (k >= (int32_t)cur_p->size) {
     //     return;
@@ -126,7 +126,7 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
 
     // Sort scores in descending order
     if (!cur_p->sorted) {
-        auto comp = [](const llama_token_data & a, const llama_token_data & b) {
+        auto comp = [](const jarvis_token_data & a, const jarvis_token_data & b) {
             return a.logit > b.logit;
         };
         if (k <= 128) {
@@ -156,9 +156,9 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
                     break;
                 }
             }
-            std::vector<llama_token_data> tmp_tokens(nhave);
+            std::vector<jarvis_token_data> tmp_tokens(nhave);
             auto * ptr = tmp_tokens.data();
-            std::vector<llama_token_data*> bucket_ptrs;
+            std::vector<jarvis_token_data*> bucket_ptrs;
             bucket_ptrs.reserve(nbuckets - ib);
             for (int j = nbuckets - 1; j >= ib; --j) {
                 bucket_ptrs.push_back(ptr);
@@ -180,7 +180,7 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
             }
             std::partial_sort(ptr, ptr + k - ndone, ptr + histo[ib], comp);
 
-            std::memcpy(cur_p->data, tmp_tokens.data(), k*sizeof(llama_token_data));
+            std::memcpy(cur_p->data, tmp_tokens.data(), k*sizeof(jarvis_token_data));
 
         }
         cur_p->sorted = true;
@@ -189,7 +189,7 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
 }
 
 static uint32_t get_rng_seed(uint32_t seed) {
-    if (seed == LLAMA_DEFAULT_SEED) {
+    if (seed == JARVIS_DEFAULT_SEED) {
         // use system clock if std::random_device is not a true RNG
         static bool is_rd_prng = std::random_device().entropy() == 0;
         if (is_rd_prng) {
@@ -201,9 +201,9 @@ static uint32_t get_rng_seed(uint32_t seed) {
     return seed;
 }
 
-// llama_sampler API
+// jarvis_sampler API
 
-const char * llama_sampler_name(const struct llama_sampler * smpl) {
+const char * jarvis_sampler_name(const struct jarvis_sampler * smpl) {
     if (!smpl->iface) {
         return "(null)";
     }
@@ -211,30 +211,30 @@ const char * llama_sampler_name(const struct llama_sampler * smpl) {
     return smpl->iface->name(smpl);
 }
 
-void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
+void jarvis_sampler_accept(struct jarvis_sampler * smpl, jarvis_token token) {
     if (smpl->iface->accept) {
         smpl->iface->accept(smpl, token);
     }
 }
 
-void llama_sampler_apply(struct llama_sampler * smpl, struct llama_token_data_array * cur_p) {
+void jarvis_sampler_apply(struct jarvis_sampler * smpl, struct jarvis_token_data_array * cur_p) {
     GGML_ASSERT(smpl->iface->apply);
     smpl->iface->apply(smpl, cur_p);
 }
 
-void llama_sampler_reset(struct llama_sampler * smpl) {
+void jarvis_sampler_reset(struct jarvis_sampler * smpl) {
     if (smpl->iface->reset) {
         smpl->iface->reset(smpl);
     }
 }
 
-struct llama_sampler * llama_sampler_clone(const struct llama_sampler * smpl) {
+struct jarvis_sampler * jarvis_sampler_clone(const struct jarvis_sampler * smpl) {
     if (smpl->iface->clone) {
         return smpl->iface->clone(smpl);
     }
 
     if (smpl->ctx == nullptr) {
-        return new llama_sampler {
+        return new jarvis_sampler {
             /* .iface = */ smpl->iface,
             /* .ctx   = */ nullptr,
         };
@@ -243,7 +243,7 @@ struct llama_sampler * llama_sampler_clone(const struct llama_sampler * smpl) {
     GGML_ABORT("the sampler does not support cloning");
 }
 
-void llama_sampler_free(struct llama_sampler * smpl) {
+void jarvis_sampler_free(struct jarvis_sampler * smpl) {
     if (smpl == nullptr) {
         return;
     }
@@ -255,110 +255,110 @@ void llama_sampler_free(struct llama_sampler * smpl) {
     delete smpl;
 }
 
-llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx) {
-    const auto * logits = llama_get_logits_ith(ctx, idx);
+jarvis_token jarvis_sampler_sample(struct jarvis_sampler * smpl, struct jarvis_context * ctx, int32_t idx) {
+    const auto * logits = jarvis_get_logits_ith(ctx, idx);
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
     // TODO: do not allocate each time
-    std::vector<llama_token_data> cur;
+    std::vector<jarvis_token_data> cur;
     cur.reserve(n_vocab);
-    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+    for (jarvis_token token_id = 0; token_id < n_vocab; token_id++) {
+        cur.emplace_back(jarvis_token_data{token_id, logits[token_id], 0.0f});
     }
 
-    llama_token_data_array cur_p = {
+    jarvis_token_data_array cur_p = {
         /* .data       = */ cur.data(),
         /* .size       = */ cur.size(),
         /* .selected   = */ -1,
         /* .sorted     = */ false,
     };
 
-    llama_sampler_apply(smpl, &cur_p);
+    jarvis_sampler_apply(smpl, &cur_p);
 
     GGML_ASSERT(cur_p.selected >= 0 && cur_p.selected < (int32_t) cur_p.size);
 
     auto token = cur_p.data[cur_p.selected].id;
 
-    llama_sampler_accept(smpl, token);
+    jarvis_sampler_accept(smpl, token);
 
     return token;
 }
 
 // sampler chain
 
-static const char * llama_sampler_chain_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_chain_name(const struct jarvis_sampler * /*smpl*/) {
     return "chain";
 }
 
-static void llama_sampler_chain_accept(struct llama_sampler * smpl, llama_token token) {
-    auto * chain = (llama_sampler_chain *) smpl->ctx;
+static void jarvis_sampler_chain_accept(struct jarvis_sampler * smpl, jarvis_token token) {
+    auto * chain = (jarvis_sampler_chain *) smpl->ctx;
 
     time_meas tm(chain->t_sample_us, chain->params.no_perf);
 
     for (auto * smpl : chain->samplers) {
-        llama_sampler_accept(smpl, token);
+        jarvis_sampler_accept(smpl, token);
     }
 
     chain->n_sample++;
 }
 
-static void llama_sampler_chain_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * chain = (llama_sampler_chain *) smpl->ctx;
+static void jarvis_sampler_chain_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * chain = (jarvis_sampler_chain *) smpl->ctx;
 
     time_meas tm(chain->t_sample_us, chain->params.no_perf);
 
     for (auto * smpl : chain->samplers) {
-        llama_sampler_apply(smpl, cur_p);
+        jarvis_sampler_apply(smpl, cur_p);
     }
 }
 
-static void llama_sampler_chain_reset(struct llama_sampler * smpl) {
-    auto * chain = (llama_sampler_chain *) smpl->ctx;
+static void jarvis_sampler_chain_reset(struct jarvis_sampler * smpl) {
+    auto * chain = (jarvis_sampler_chain *) smpl->ctx;
 
     for (auto * smpl : chain->samplers) {
-        llama_sampler_reset(smpl);
+        jarvis_sampler_reset(smpl);
     }
 
     chain->t_sample_us = 0;
     chain->n_sample    = 0;
 }
 
-static struct llama_sampler * llama_sampler_chain_clone(const struct llama_sampler * smpl) {
-    const auto * chain_src = (const llama_sampler_chain *) smpl->ctx;
+static struct jarvis_sampler * jarvis_sampler_chain_clone(const struct jarvis_sampler * smpl) {
+    const auto * chain_src = (const jarvis_sampler_chain *) smpl->ctx;
 
-    auto * result = llama_sampler_chain_init(chain_src->params);
+    auto * result = jarvis_sampler_chain_init(chain_src->params);
 
     for (auto * smpl : chain_src->samplers) {
-        llama_sampler_chain_add(result, llama_sampler_clone(smpl));
+        jarvis_sampler_chain_add(result, jarvis_sampler_clone(smpl));
     }
 
     return result;
 }
 
-static void llama_sampler_chain_free(struct llama_sampler * smpl) {
-    auto * chain = (llama_sampler_chain *) smpl->ctx;
+static void jarvis_sampler_chain_free(struct jarvis_sampler * smpl) {
+    auto * chain = (jarvis_sampler_chain *) smpl->ctx;
 
     for (auto * smpl : chain->samplers) {
-        llama_sampler_free(smpl);
+        jarvis_sampler_free(smpl);
     }
 
     delete chain;
 }
 
-static struct llama_sampler_i llama_sampler_chain_i = {
-    /* .name   = */ llama_sampler_chain_name,
-    /* .accept = */ llama_sampler_chain_accept,
-    /* .apply  = */ llama_sampler_chain_apply,
-    /* .reset  = */ llama_sampler_chain_reset,
-    /* .clone  = */ llama_sampler_chain_clone,
-    /* .free   = */ llama_sampler_chain_free,
+static struct jarvis_sampler_i jarvis_sampler_chain_i = {
+    /* .name   = */ jarvis_sampler_chain_name,
+    /* .accept = */ jarvis_sampler_chain_accept,
+    /* .apply  = */ jarvis_sampler_chain_apply,
+    /* .reset  = */ jarvis_sampler_chain_reset,
+    /* .clone  = */ jarvis_sampler_chain_clone,
+    /* .free   = */ jarvis_sampler_chain_free,
 };
 
-struct llama_sampler * llama_sampler_chain_init(struct llama_sampler_chain_params params) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_chain_i,
-        /* .ctx   = */ new llama_sampler_chain {
+struct jarvis_sampler * jarvis_sampler_chain_init(struct jarvis_sampler_chain_params params) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_chain_i,
+        /* .ctx   = */ new jarvis_sampler_chain {
             /* .params      = */ params,
             /* .samplers    = */ {},
             /* .t_sample_us = */ 0,
@@ -367,13 +367,13 @@ struct llama_sampler * llama_sampler_chain_init(struct llama_sampler_chain_param
     };
 }
 
-void llama_sampler_chain_add(struct llama_sampler * chain, struct llama_sampler * smpl) {
-    auto * p = (llama_sampler_chain *) chain->ctx;
+void jarvis_sampler_chain_add(struct jarvis_sampler * chain, struct jarvis_sampler * smpl) {
+    auto * p = (jarvis_sampler_chain *) chain->ctx;
     p->samplers.push_back(smpl);
 }
 
-struct llama_sampler * llama_sampler_chain_get(const struct llama_sampler * chain, int32_t i) {
-    const auto * p = (const llama_sampler_chain *) chain->ctx;
+struct jarvis_sampler * jarvis_sampler_chain_get(const struct jarvis_sampler * chain, int32_t i) {
+    const auto * p = (const jarvis_sampler_chain *) chain->ctx;
 
     if (i < 0 || (size_t) i >= p->samplers.size()) {
         return nullptr;
@@ -382,8 +382,8 @@ struct llama_sampler * llama_sampler_chain_get(const struct llama_sampler * chai
     return p->samplers[i];
 }
 
-struct llama_sampler * llama_sampler_chain_remove(struct llama_sampler * chain, int32_t i) {
-    auto * p = (llama_sampler_chain *) chain->ctx;
+struct jarvis_sampler * jarvis_sampler_chain_remove(struct jarvis_sampler * chain, int32_t i) {
+    auto * p = (jarvis_sampler_chain *) chain->ctx;
 
     if (i < 0 || (size_t) i >= p->samplers.size()) {
         return nullptr;
@@ -395,8 +395,8 @@ struct llama_sampler * llama_sampler_chain_remove(struct llama_sampler * chain, 
     return result;
 }
 
-int llama_sampler_chain_n(const struct llama_sampler * chain) {
-    const auto * p = (const llama_sampler_chain *) chain->ctx;
+int jarvis_sampler_chain_n(const struct jarvis_sampler * chain) {
+    const auto * p = (const jarvis_sampler_chain *) chain->ctx;
 
     return p->samplers.size();
 }
@@ -407,11 +407,11 @@ int llama_sampler_chain_n(const struct llama_sampler * chain) {
 
 // greedy
 
-static const char * llama_sampler_greedy_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_greedy_name(const struct jarvis_sampler * /*smpl*/) {
     return "greedy";
 }
 
-static void llama_sampler_greedy_apply(struct llama_sampler * /*smpl*/, llama_token_data_array * cur_p) {
+static void jarvis_sampler_greedy_apply(struct jarvis_sampler * /*smpl*/, jarvis_token_data_array * cur_p) {
     cur_p->selected = 0;
     for (size_t i = 1; i < cur_p->size; ++i) {
         if (cur_p->data[i].logit > cur_p->data[cur_p->selected].logit) {
@@ -420,50 +420,50 @@ static void llama_sampler_greedy_apply(struct llama_sampler * /*smpl*/, llama_to
     }
 }
 
-static struct llama_sampler_i llama_sampler_greedy_i = {
-    /* .name   = */ llama_sampler_greedy_name,
+static struct jarvis_sampler_i jarvis_sampler_greedy_i = {
+    /* .name   = */ jarvis_sampler_greedy_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_greedy_apply,
+    /* .apply  = */ jarvis_sampler_greedy_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ nullptr,
     /* .free   = */ nullptr,
 };
 
-struct llama_sampler * llama_sampler_init_greedy() {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_greedy_i,
+struct jarvis_sampler * jarvis_sampler_init_greedy() {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_greedy_i,
         /* .ctx   = */ nullptr,
     };
 }
 
 // dist
 
-struct llama_sampler_dist {
+struct jarvis_sampler_dist {
     const uint32_t seed;
           uint32_t seed_cur;
 
     std::mt19937 rng;
 };
 
-static const char * llama_sampler_dist_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_dist_name(const struct jarvis_sampler * /*smpl*/) {
     return "dist";
 }
 
-static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_dist *) smpl->ctx;
+static void jarvis_sampler_dist_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_dist *) smpl->ctx;
 
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
-    cur_p->selected = llama_sample_dist(cur_p, ctx->rng);
+    cur_p->selected = jarvis_sample_dist(cur_p, ctx->rng);
 }
 
-static struct llama_sampler * llama_sampler_dist_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_dist *) smpl->ctx;
-    auto * result = llama_sampler_init_dist(ctx->seed);
+static struct jarvis_sampler * jarvis_sampler_dist_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_dist *) smpl->ctx;
+    auto * result = jarvis_sampler_init_dist(ctx->seed);
 
     // copy the state
     {
-        auto * result_ctx = (llama_sampler_dist *) result->ctx;
+        auto * result_ctx = (jarvis_sampler_dist *) result->ctx;
 
         result_ctx->rng = ctx->rng;
     }
@@ -471,30 +471,30 @@ static struct llama_sampler * llama_sampler_dist_clone(const struct llama_sample
     return result;
 }
 
-static void llama_sampler_dist_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_dist *) smpl->ctx;
+static void jarvis_sampler_dist_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_dist *) smpl->ctx;
     ctx->seed_cur = get_rng_seed(ctx->seed);
     ctx->rng.seed(ctx->seed_cur);
 }
 
-static void llama_sampler_dist_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_dist *) smpl->ctx;
+static void jarvis_sampler_dist_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_dist *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_dist_i = {
-    /* .name   = */ llama_sampler_dist_name,
+static struct jarvis_sampler_i jarvis_sampler_dist_i = {
+    /* .name   = */ jarvis_sampler_dist_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_dist_apply,
-    /* .reset  = */ llama_sampler_dist_reset,
-    /* .clone  = */ llama_sampler_dist_clone,
-    /* .free   = */ llama_sampler_dist_free,
+    /* .apply  = */ jarvis_sampler_dist_apply,
+    /* .reset  = */ jarvis_sampler_dist_reset,
+    /* .clone  = */ jarvis_sampler_dist_clone,
+    /* .free   = */ jarvis_sampler_dist_free,
 };
 
-struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
+struct jarvis_sampler * jarvis_sampler_init_dist(uint32_t seed) {
     auto seed_cur = get_rng_seed(seed);
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_dist_i,
-        /* .ctx   = */ new llama_sampler_dist {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_dist_i,
+        /* .ctx   = */ new jarvis_sampler_dist {
             /* .seed     = */ seed,
             /* .seed_cur = */ seed_cur,
             /* .rng      = */ std::mt19937(seed_cur),
@@ -504,67 +504,67 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
 
 // softmax
 
-static const char * llama_sampler_softmax_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_softmax_name(const struct jarvis_sampler * /*smpl*/) {
     return "softmax";
 }
 
-static void llama_sampler_softmax_apply(struct llama_sampler * /*smpl*/, llama_token_data_array * cur_p) {
-    llama_sampler_softmax_impl(cur_p);
+static void jarvis_sampler_softmax_apply(struct jarvis_sampler * /*smpl*/, jarvis_token_data_array * cur_p) {
+    jarvis_sampler_softmax_impl(cur_p);
 }
 
-static struct llama_sampler_i llama_sampler_softmax_i = {
-    /* .name   = */ llama_sampler_softmax_name,
+static struct jarvis_sampler_i jarvis_sampler_softmax_i = {
+    /* .name   = */ jarvis_sampler_softmax_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_softmax_apply,
+    /* .apply  = */ jarvis_sampler_softmax_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ nullptr,
     /* .free   = */ nullptr,
 };
 
-struct llama_sampler * llama_sampler_init_softmax() {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_softmax_i,
+struct jarvis_sampler * jarvis_sampler_init_softmax() {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_softmax_i,
         /* .ctx   = */ nullptr,
     };
 }
 
 // top-k
 
-struct llama_sampler_top_k {
+struct jarvis_sampler_top_k {
     const int32_t k;
 };
 
-static const char * llama_sampler_top_k_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_top_k_name(const struct jarvis_sampler * /*smpl*/) {
     return "top-k";
 }
 
-static void llama_sampler_top_k_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_top_k *) smpl->ctx;
-    llama_sampler_top_k_impl(cur_p, ctx->k);
+static void jarvis_sampler_top_k_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_top_k *) smpl->ctx;
+    jarvis_sampler_top_k_impl(cur_p, ctx->k);
 }
 
-static struct llama_sampler * llama_sampler_top_k_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_top_k *) smpl->ctx;
-    return llama_sampler_init_top_k(ctx->k);
+static struct jarvis_sampler * jarvis_sampler_top_k_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_top_k *) smpl->ctx;
+    return jarvis_sampler_init_top_k(ctx->k);
 }
 
-static void llama_sampler_top_k_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_top_k *) smpl->ctx;
+static void jarvis_sampler_top_k_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_top_k *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_top_k_i = {
-    /* .name   = */ llama_sampler_top_k_name,
+static struct jarvis_sampler_i jarvis_sampler_top_k_i = {
+    /* .name   = */ jarvis_sampler_top_k_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_top_k_apply,
+    /* .apply  = */ jarvis_sampler_top_k_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_top_k_clone,
-    /* .free   = */ llama_sampler_top_k_free,
+    /* .clone  = */ jarvis_sampler_top_k_clone,
+    /* .free   = */ jarvis_sampler_top_k_free,
 };
 
-struct llama_sampler * llama_sampler_init_top_k(int32_t k) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_top_k_i,
-        /* .ctx   = */ new llama_sampler_top_k {
+struct jarvis_sampler * jarvis_sampler_init_top_k(int32_t k) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_top_k_i,
+        /* .ctx   = */ new jarvis_sampler_top_k {
             /* .k = */ k,
         },
     };
@@ -572,23 +572,23 @@ struct llama_sampler * llama_sampler_init_top_k(int32_t k) {
 
 // top-p
 
-struct llama_sampler_top_p {
+struct jarvis_sampler_top_p {
     const float  p;
     const size_t min_keep;
 };
 
-static const char * llama_sampler_top_p_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_top_p_name(const struct jarvis_sampler * /*smpl*/) {
     return "top-p";
 }
 
-static void llama_sampler_top_p_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_top_p *) smpl->ctx;
+static void jarvis_sampler_top_p_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_top_p *) smpl->ctx;
 
     if (ctx->p >= 1.0f) {
         return;
     }
 
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
     // Compute the cumulative probabilities
     float cum_sum = 0.0f;
@@ -609,28 +609,28 @@ static void llama_sampler_top_p_apply(struct llama_sampler * smpl, llama_token_d
     cur_p->size = last_idx;
 }
 
-static struct llama_sampler * llama_sampler_top_p_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_top_p *) smpl->ctx;
-    return llama_sampler_init_top_p(ctx->p, ctx->min_keep);
+static struct jarvis_sampler * jarvis_sampler_top_p_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_top_p *) smpl->ctx;
+    return jarvis_sampler_init_top_p(ctx->p, ctx->min_keep);
 }
 
-static void llama_sampler_top_p_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_top_p *) smpl->ctx;
+static void jarvis_sampler_top_p_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_top_p *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_top_p_i = {
-    /* .name   = */ llama_sampler_top_p_name,
+static struct jarvis_sampler_i jarvis_sampler_top_p_i = {
+    /* .name   = */ jarvis_sampler_top_p_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_top_p_apply,
+    /* .apply  = */ jarvis_sampler_top_p_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_top_p_clone,
-    /* .free   = */ llama_sampler_top_p_free,
+    /* .clone  = */ jarvis_sampler_top_p_clone,
+    /* .free   = */ jarvis_sampler_top_p_free,
 };
 
-struct llama_sampler * llama_sampler_init_top_p(float p, size_t min_keep) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_top_p_i,
-        /* .ctx   = */ new llama_sampler_top_p {
+struct jarvis_sampler * jarvis_sampler_init_top_p(float p, size_t min_keep) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_top_p_i,
+        /* .ctx   = */ new jarvis_sampler_top_p {
             /* .p        = */ p,
             /* .min_keep = */ min_keep,
         },
@@ -639,17 +639,17 @@ struct llama_sampler * llama_sampler_init_top_p(float p, size_t min_keep) {
 
 // min-p
 
-struct llama_sampler_min_p {
+struct jarvis_sampler_min_p {
     const float  p;
     const size_t min_keep;
 };
 
-static const char * llama_sampler_min_p_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_min_p_name(const struct jarvis_sampler * /*smpl*/) {
     return "min-p";
 }
 
-static void llama_sampler_min_p_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_min_p *) smpl->ctx;
+static void jarvis_sampler_min_p_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_min_p *) smpl->ctx;
 
     if (ctx->p <= 0.0f || !cur_p->size) {
         return;
@@ -659,7 +659,7 @@ static void llama_sampler_min_p_apply(struct llama_sampler * smpl, llama_token_d
 
     // if the cur_p aren't sorted, try the unsorted implementation first
     if (!cur_p->sorted) {
-        std::vector<llama_token_data> filtered_tokens;
+        std::vector<jarvis_token_data> filtered_tokens;
 
         float max_logit = -FLT_MAX;
         for (size_t i = 0; i < cur_p->size; ++i) {
@@ -675,7 +675,7 @@ static void llama_sampler_min_p_apply(struct llama_sampler * smpl, llama_token_d
 
         // if we have enough values the operation was a success
         if (filtered_tokens.size() >= ctx->min_keep) {
-            memcpy(cur_p->data, filtered_tokens.data(), filtered_tokens.size()*sizeof(llama_token_data));
+            memcpy(cur_p->data, filtered_tokens.data(), filtered_tokens.size()*sizeof(jarvis_token_data));
             cur_p->size = filtered_tokens.size();
             min_p_applied = true;
         }
@@ -685,7 +685,7 @@ static void llama_sampler_min_p_apply(struct llama_sampler * smpl, llama_token_d
     if (!min_p_applied) {
         // Sort the logits in descending order
         if (!cur_p->sorted) {
-            std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
+            std::sort(cur_p->data, cur_p->data + cur_p->size, [](const jarvis_token_data & a, const jarvis_token_data & b) {
                 return a.logit > b.logit;
             });
             cur_p->sorted = true;
@@ -705,28 +705,28 @@ static void llama_sampler_min_p_apply(struct llama_sampler * smpl, llama_token_d
     }
 }
 
-static struct llama_sampler * llama_sampler_min_p_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_min_p *) smpl->ctx;
-    return llama_sampler_init_min_p(ctx->p, ctx->min_keep);
+static struct jarvis_sampler * jarvis_sampler_min_p_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_min_p *) smpl->ctx;
+    return jarvis_sampler_init_min_p(ctx->p, ctx->min_keep);
 }
 
-static void llama_sampler_min_p_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_min_p *) smpl->ctx;
+static void jarvis_sampler_min_p_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_min_p *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_min_p_i = {
-    /* .name   = */ llama_sampler_min_p_name,
+static struct jarvis_sampler_i jarvis_sampler_min_p_i = {
+    /* .name   = */ jarvis_sampler_min_p_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_min_p_apply,
+    /* .apply  = */ jarvis_sampler_min_p_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_min_p_clone,
-    /* .free   = */ llama_sampler_min_p_free,
+    /* .clone  = */ jarvis_sampler_min_p_clone,
+    /* .free   = */ jarvis_sampler_min_p_free,
 };
 
-struct llama_sampler * llama_sampler_init_min_p(float p, size_t min_keep) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_min_p_i,
-        /* .ctx   = */ new llama_sampler_min_p {
+struct jarvis_sampler * jarvis_sampler_init_min_p(float p, size_t min_keep) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_min_p_i,
+        /* .ctx   = */ new jarvis_sampler_min_p {
             /* .p        = */ p,
             /* .min_keep = */ min_keep,
         },
@@ -735,23 +735,23 @@ struct llama_sampler * llama_sampler_init_min_p(float p, size_t min_keep) {
 
 // tail-free
 
-struct llama_sampler_tail_free {
+struct jarvis_sampler_tail_free {
     const float  z;
     const size_t min_keep;
 };
 
-static const char * llama_sampler_tail_free_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_tail_free_name(const struct jarvis_sampler * /*smpl*/) {
     return "tail-free";
 }
 
-static void llama_sampler_tail_free_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_tail_free *) smpl->ctx;
+static void jarvis_sampler_tail_free_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_tail_free *) smpl->ctx;
 
     if (ctx->z >= 1.0f || cur_p->size <= 2) {
         return;
     }
 
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
     // Compute the first and second derivatives
     std::vector<float> first_derivatives(cur_p->size - 1);
@@ -800,28 +800,28 @@ static void llama_sampler_tail_free_apply(struct llama_sampler * smpl, llama_tok
     cur_p->size = last_idx;
 }
 
-static struct llama_sampler * llama_sampler_tail_free_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_tail_free *) smpl->ctx;
-    return llama_sampler_init_tail_free(ctx->z, ctx->min_keep);
+static struct jarvis_sampler * jarvis_sampler_tail_free_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_tail_free *) smpl->ctx;
+    return jarvis_sampler_init_tail_free(ctx->z, ctx->min_keep);
 }
 
-static void llama_sampler_tail_free_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_tail_free *) smpl->ctx;
+static void jarvis_sampler_tail_free_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_tail_free *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_tail_free_i = {
-    /* .name   = */ llama_sampler_tail_free_name,
+static struct jarvis_sampler_i jarvis_sampler_tail_free_i = {
+    /* .name   = */ jarvis_sampler_tail_free_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_tail_free_apply,
+    /* .apply  = */ jarvis_sampler_tail_free_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_tail_free_clone,
-    /* .free   = */ llama_sampler_tail_free_free,
+    /* .clone  = */ jarvis_sampler_tail_free_clone,
+    /* .free   = */ jarvis_sampler_tail_free_free,
 };
 
-struct llama_sampler * llama_sampler_init_tail_free(float z, size_t min_keep) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_tail_free_i,
-        /* .ctx   = */ new llama_sampler_tail_free {
+struct jarvis_sampler * jarvis_sampler_init_tail_free(float z, size_t min_keep) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_tail_free_i,
+        /* .ctx   = */ new jarvis_sampler_tail_free {
             /* .z        = */ z,
             /*. min_keep = */ min_keep,
         },
@@ -830,17 +830,17 @@ struct llama_sampler * llama_sampler_init_tail_free(float z, size_t min_keep) {
 
 // typical
 
-struct llama_sampler_typical {
+struct jarvis_sampler_typical {
     const float  p;
     const size_t min_keep;
 };
 
-static const char * llama_sampler_typical_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_typical_name(const struct jarvis_sampler * /*smpl*/) {
     return "typical";
 }
 
-static void llama_sampler_typical_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_typical *) smpl->ctx;
+static void jarvis_sampler_typical_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_typical *) smpl->ctx;
 
     // Reference implementation:
     // https://github.com/huggingface/transformers/compare/main...cimeister:typical-sampling:typical-pr
@@ -849,7 +849,7 @@ static void llama_sampler_typical_apply(struct llama_sampler * smpl, llama_token
     }
 
     // Compute the softmax of logits and calculate entropy
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
     float entropy = 0.0f;
     for (size_t i = 0; i < cur_p->size; ++i) {
@@ -887,7 +887,7 @@ static void llama_sampler_typical_apply(struct llama_sampler * smpl, llama_token
     }
 
     // Resize the output vector to keep only the locally typical tokens
-    std::vector<llama_token_data> cur_p_new;
+    std::vector<jarvis_token_data> cur_p_new;
     for (size_t i = 0; i < last_idx; ++i) {
         size_t idx = indices[i];
         cur_p_new.push_back(cur_p->data[idx]);
@@ -899,28 +899,28 @@ static void llama_sampler_typical_apply(struct llama_sampler * smpl, llama_token
     cur_p->sorted = false;
 }
 
-static struct llama_sampler * llama_sampler_typical_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_typical *) smpl->ctx;
-    return llama_sampler_init_typical(ctx->p, ctx->min_keep);
+static struct jarvis_sampler * jarvis_sampler_typical_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_typical *) smpl->ctx;
+    return jarvis_sampler_init_typical(ctx->p, ctx->min_keep);
 }
 
-static void llama_sampler_typical_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_typical *) smpl->ctx;
+static void jarvis_sampler_typical_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_typical *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_typical_i = {
-    /* .name   = */ llama_sampler_typical_name,
+static struct jarvis_sampler_i jarvis_sampler_typical_i = {
+    /* .name   = */ jarvis_sampler_typical_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_typical_apply,
+    /* .apply  = */ jarvis_sampler_typical_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_typical_clone,
-    /* .free   = */ llama_sampler_typical_free,
+    /* .clone  = */ jarvis_sampler_typical_clone,
+    /* .free   = */ jarvis_sampler_typical_free,
 };
 
-struct llama_sampler * llama_sampler_init_typical(float p, size_t min_keep) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_typical_i,
-        /* .ctx   = */ new llama_sampler_typical {
+struct jarvis_sampler * jarvis_sampler_init_typical(float p, size_t min_keep) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_typical_i,
+        /* .ctx   = */ new jarvis_sampler_typical {
             /* .p        = */ p,
             /* .min_keep = */ min_keep,
         },
@@ -929,42 +929,42 @@ struct llama_sampler * llama_sampler_init_typical(float p, size_t min_keep) {
 
 // temp
 
-struct llama_sampler_temp {
+struct jarvis_sampler_temp {
     const float temp;
 };
 
-static const char * llama_sampler_temp_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_temp_name(const struct jarvis_sampler * /*smpl*/) {
     return "temp";
 }
 
-static void llama_sampler_temp_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_temp *) smpl->ctx;
+static void jarvis_sampler_temp_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_temp *) smpl->ctx;
 
-    llama_sampler_temp_impl(cur_p, ctx->temp);
+    jarvis_sampler_temp_impl(cur_p, ctx->temp);
 }
 
-static struct llama_sampler * llama_sampler_temp_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_temp *) smpl->ctx;
-    return llama_sampler_init_temp(ctx->temp);
+static struct jarvis_sampler * jarvis_sampler_temp_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_temp *) smpl->ctx;
+    return jarvis_sampler_init_temp(ctx->temp);
 }
 
-static void llama_sampler_temp_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_temp *) smpl->ctx;
+static void jarvis_sampler_temp_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_temp *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_temp_i = {
-    /* .name   = */ llama_sampler_temp_name,
+static struct jarvis_sampler_i jarvis_sampler_temp_i = {
+    /* .name   = */ jarvis_sampler_temp_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_temp_apply,
+    /* .apply  = */ jarvis_sampler_temp_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_temp_clone,
-    /* .free   = */ llama_sampler_temp_free,
+    /* .clone  = */ jarvis_sampler_temp_clone,
+    /* .free   = */ jarvis_sampler_temp_free,
 };
 
-struct llama_sampler * llama_sampler_init_temp(float temp) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_temp_i,
-        /* .ctx   = */ new llama_sampler_temp {
+struct jarvis_sampler * jarvis_sampler_init_temp(float temp) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_temp_i,
+        /* .ctx   = */ new jarvis_sampler_temp {
             /*.temp = */ temp,
         },
     };
@@ -972,18 +972,18 @@ struct llama_sampler * llama_sampler_init_temp(float temp) {
 
 // temp-ext
 
-struct llama_sampler_temp_ext {
+struct jarvis_sampler_temp_ext {
     const float temp;
     const float delta;
     const float exponent;
 };
 
-static const char * llama_sampler_temp_ext_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_temp_ext_name(const struct jarvis_sampler * /*smpl*/) {
     return "temp-ext";
 }
 
-static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_temp_ext *) smpl->ctx;
+static void jarvis_sampler_temp_ext_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    const auto * ctx = (jarvis_sampler_temp_ext *) smpl->ctx;
     if (ctx->delta > 0) {
         const float min_temp = std::max(0.0f, ctx->temp - ctx->delta);
         const float max_temp = ctx->temp + ctx->delta;
@@ -998,7 +998,7 @@ static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_toke
         // Calculate maximum possible entropy
         float max_entropy = -logf(1.0f / cur_p->size);
 
-        llama_sampler_softmax_impl(cur_p);
+        jarvis_sampler_softmax_impl(cur_p);
 
         // Calculate entropy of the softmax probabilities
         float entropy = 0.0f;
@@ -1016,16 +1016,16 @@ static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_toke
         float dyn_temp = min_temp + (max_temp - min_temp) * powf(normalized_entropy, exponent_val);
 
     #ifdef DEBUG
-        LLAMA_LOG_INFO("Your text maxtemp value is: %f\n", max_temp);
-        LLAMA_LOG_INFO("Entropy: %f\n", entropy);
-        LLAMA_LOG_INFO("Max Possible Entropy: %f\n", max_entropy);
-        LLAMA_LOG_INFO("Normalized Entropy: %f\n", normalized_entropy);
-        LLAMA_LOG_INFO("Exponent: %f\n", exponent_val);
-        LLAMA_LOG_INFO("Dynamic Temperature (dyn_temp): %f\n", dyn_temp);
+        JARVIS_LOG_INFO("Your text maxtemp value is: %f\n", max_temp);
+        JARVIS_LOG_INFO("Entropy: %f\n", entropy);
+        JARVIS_LOG_INFO("Max Possible Entropy: %f\n", max_entropy);
+        JARVIS_LOG_INFO("Normalized Entropy: %f\n", normalized_entropy);
+        JARVIS_LOG_INFO("Exponent: %f\n", exponent_val);
+        JARVIS_LOG_INFO("Dynamic Temperature (dyn_temp): %f\n", dyn_temp);
     #endif
 
         // Apply the dynamically calculated temperature scaling
-        llama_sampler_temp_impl(cur_p, dyn_temp);
+        jarvis_sampler_temp_impl(cur_p, dyn_temp);
 
         // Re-compute softmax probabilities after scaling logits with dynamic temperature
         const double max_l_double = cur_p->data[0].logit;
@@ -1043,38 +1043,38 @@ static void llama_sampler_temp_ext_apply(struct llama_sampler * smpl, llama_toke
 
     #ifdef DEBUG
         // Print the updated top 25 probabilities after temperature scaling
-        LLAMA_LOG_INFO("\nUpdated Top 25 Probabilities After Dynamic Temperature Scaling (in percentages):\n");
+        JARVIS_LOG_INFO("\nUpdated Top 25 Probabilities After Dynamic Temperature Scaling (in percentages):\n");
         for (size_t i = 0; i < 25 && i < cur_p->size; ++i) {
-            LLAMA_LOG_INFO("Token %zu: %f%%\n", i + 1, cur_p->data[i].p * 100.0f);
+            JARVIS_LOG_INFO("Token %zu: %f%%\n", i + 1, cur_p->data[i].p * 100.0f);
         }
     #endif
     } else {
-        llama_sampler_temp_impl(cur_p, ctx->temp);
+        jarvis_sampler_temp_impl(cur_p, ctx->temp);
     }
 }
 
-static struct llama_sampler * llama_sampler_temp_ext_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_temp_ext *) smpl->ctx;
-    return llama_sampler_init_temp_ext(ctx->temp, ctx->delta, ctx->exponent);
+static struct jarvis_sampler * jarvis_sampler_temp_ext_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_temp_ext *) smpl->ctx;
+    return jarvis_sampler_init_temp_ext(ctx->temp, ctx->delta, ctx->exponent);
 }
 
-static void llama_sampler_temp_ext_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_temp_ext *) smpl->ctx;
+static void jarvis_sampler_temp_ext_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_temp_ext *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_temp_ext_i = {
-    /* .name   = */ llama_sampler_temp_ext_name,
+static struct jarvis_sampler_i jarvis_sampler_temp_ext_i = {
+    /* .name   = */ jarvis_sampler_temp_ext_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_temp_ext_apply,
+    /* .apply  = */ jarvis_sampler_temp_ext_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_temp_ext_clone,
-    /* .free   = */ llama_sampler_temp_ext_free,
+    /* .clone  = */ jarvis_sampler_temp_ext_clone,
+    /* .free   = */ jarvis_sampler_temp_ext_free,
 };
 
-struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, float exponent) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_temp_ext_i,
-        /* .ctx   = */ new llama_sampler_temp_ext {
+struct jarvis_sampler * jarvis_sampler_init_temp_ext(float temp, float delta, float exponent) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_temp_ext_i,
+        /* .ctx   = */ new jarvis_sampler_temp_ext {
             /* .temp     = */ temp,
             /* .delta    = */ delta,
             /* .exponent = */ exponent,
@@ -1084,7 +1084,7 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
 
 // xtc
 
-struct llama_sampler_xtc {
+struct jarvis_sampler_xtc {
     const float    probability;
     const float    threshold;
     const size_t   min_keep;
@@ -1095,12 +1095,12 @@ struct llama_sampler_xtc {
     std::mt19937   rng;
 };
 
-static const char * llama_sampler_xtc_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_xtc_name(const struct jarvis_sampler * /*smpl*/) {
     return "xtc";
 }
 
-static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_xtc *) smpl->ctx;
+static void jarvis_sample_xtc_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_xtc *) smpl->ctx;
 
     if (ctx->probability <= 0.0f
         || ctx->threshold > 0.5f
@@ -1113,7 +1113,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
     if (chance > ctx->probability) return;
 
     // in case it's not sorted/recalculated yet
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
     int pos_last = 0;
 
@@ -1129,13 +1129,13 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
     }
 }
 
-static struct llama_sampler * llama_sampler_xtc_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_xtc *) smpl->ctx;
-    auto * result = llama_sampler_init_xtc(ctx->probability, ctx->threshold, ctx->min_keep, ctx->seed);
+static struct jarvis_sampler * jarvis_sampler_xtc_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_xtc *) smpl->ctx;
+    auto * result = jarvis_sampler_init_xtc(ctx->probability, ctx->threshold, ctx->min_keep, ctx->seed);
 
     // copy the state
     {
-        auto * result_ctx = (llama_sampler_xtc *) result->ctx;
+        auto * result_ctx = (jarvis_sampler_xtc *) result->ctx;
 
         result_ctx->rng = ctx->rng;
     }
@@ -1143,30 +1143,30 @@ static struct llama_sampler * llama_sampler_xtc_clone(const struct llama_sampler
     return result;
 }
 
-static void llama_sampler_xtc_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_xtc *) smpl->ctx;
+static void jarvis_sampler_xtc_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_xtc *) smpl->ctx;
 }
 
-static void llama_sampler_xtc_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_xtc *) smpl->ctx;
+static void jarvis_sampler_xtc_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_xtc *) smpl->ctx;
     ctx->seed_cur = get_rng_seed(ctx->seed);
     ctx->rng.seed(ctx->seed_cur);
 }
 
-static struct llama_sampler_i llama_sampler_xtc_i = {
-    /* .name   = */ llama_sampler_xtc_name,
+static struct jarvis_sampler_i jarvis_sampler_xtc_i = {
+    /* .name   = */ jarvis_sampler_xtc_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sample_xtc_apply,
-    /* .reset  = */ llama_sampler_xtc_reset,
-    /* .clone  = */ llama_sampler_xtc_clone,
-    /* .free   = */ llama_sampler_xtc_free,
+    /* .apply  = */ jarvis_sample_xtc_apply,
+    /* .reset  = */ jarvis_sampler_xtc_reset,
+    /* .clone  = */ jarvis_sampler_xtc_clone,
+    /* .free   = */ jarvis_sampler_xtc_free,
 };
 
-struct llama_sampler * llama_sampler_init_xtc(float p, float t, size_t min_keep, uint32_t seed) {
+struct jarvis_sampler * jarvis_sampler_init_xtc(float p, float t, size_t min_keep, uint32_t seed) {
     auto seed_cur = get_rng_seed(seed);
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_xtc_i,
-        /* .ctx   = */ new llama_sampler_xtc {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_xtc_i,
+        /* .ctx   = */ new jarvis_sampler_xtc {
             /* .probability   = */ p,
             /* .threshold     = */ t,
             /* .min_keep      = */ min_keep,
@@ -1179,7 +1179,7 @@ struct llama_sampler * llama_sampler_init_xtc(float p, float t, size_t min_keep,
 
 // mirostat
 
-struct llama_sampler_mirostat {
+struct jarvis_sampler_mirostat {
     const int32_t n_vocab;
 
     const uint32_t seed;
@@ -1195,14 +1195,14 @@ struct llama_sampler_mirostat {
     std::mt19937 rng;
 };
 
-static const char * llama_sampler_mirostat_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_mirostat_name(const struct jarvis_sampler * /*smpl*/) {
     return "mirostat";
 }
 
-static void llama_sampler_mirostat_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_mirostat *) smpl->ctx;
+static void jarvis_sampler_mirostat_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_mirostat *) smpl->ctx;
 
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
     // Estimate s_hat using the most probable m tokens
     float s_hat = 0.0;
@@ -1220,10 +1220,10 @@ static void llama_sampler_mirostat_apply(struct llama_sampler * smpl, llama_toke
     float epsilon_hat = s_hat - 1;
     float k = powf((epsilon_hat * powf(2, ctx->mu)) / (1 - powf(ctx->n_vocab, -epsilon_hat)), 1 / s_hat);
 
-    llama_sampler_top_k_impl(cur_p, std::max(int(k), 1));
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_top_k_impl(cur_p, std::max(int(k), 1));
+    jarvis_sampler_softmax_impl(cur_p);
 
-    const int idx = llama_sample_dist(cur_p, ctx->rng);
+    const int idx = jarvis_sample_dist(cur_p, ctx->rng);
 
     cur_p->selected = idx;
 
@@ -1234,13 +1234,13 @@ static void llama_sampler_mirostat_apply(struct llama_sampler * smpl, llama_toke
     ctx->mu = ctx->mu - ctx->eta * e;
 }
 
-static struct llama_sampler * llama_sampler_mirostat_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_mirostat *) smpl->ctx;
-    auto * result = llama_sampler_init_mirostat(ctx->n_vocab, ctx->seed, ctx->tau, ctx->eta, ctx->m);
+static struct jarvis_sampler * jarvis_sampler_mirostat_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_mirostat *) smpl->ctx;
+    auto * result = jarvis_sampler_init_mirostat(ctx->n_vocab, ctx->seed, ctx->tau, ctx->eta, ctx->m);
 
     // copy the state
     {
-        auto * result_ctx = (llama_sampler_mirostat *) smpl->ctx;
+        auto * result_ctx = (jarvis_sampler_mirostat *) smpl->ctx;
 
         result_ctx->mu  = ctx->mu;
         result_ctx->rng = ctx->rng;
@@ -1249,31 +1249,31 @@ static struct llama_sampler * llama_sampler_mirostat_clone(const struct llama_sa
     return result;
 }
 
-static void llama_sampler_mirostat_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_mirostat *) smpl->ctx;
+static void jarvis_sampler_mirostat_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_mirostat *) smpl->ctx;
     ctx->mu = 2.0f*ctx->tau;
     ctx->seed_cur = get_rng_seed(ctx->seed);
     ctx->rng.seed(ctx->seed_cur);
 }
 
-static void llama_sampler_mirostat_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_mirostat *) smpl->ctx;
+static void jarvis_sampler_mirostat_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_mirostat *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_mirostat_i = {
-    /* .name   = */ llama_sampler_mirostat_name,
+static struct jarvis_sampler_i jarvis_sampler_mirostat_i = {
+    /* .name   = */ jarvis_sampler_mirostat_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_mirostat_apply,
-    /* .reset  = */ llama_sampler_mirostat_reset,
-    /* .clone  = */ llama_sampler_mirostat_clone,
-    /* .free   = */ llama_sampler_mirostat_free,
+    /* .apply  = */ jarvis_sampler_mirostat_apply,
+    /* .reset  = */ jarvis_sampler_mirostat_reset,
+    /* .clone  = */ jarvis_sampler_mirostat_clone,
+    /* .free   = */ jarvis_sampler_mirostat_free,
 };
 
-struct llama_sampler * llama_sampler_init_mirostat(int32_t n_vocab, uint32_t seed, float tau, float eta, int32_t m) {
+struct jarvis_sampler * jarvis_sampler_init_mirostat(int32_t n_vocab, uint32_t seed, float tau, float eta, int32_t m) {
     auto seed_cur = get_rng_seed(seed);
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_mirostat_i,
-        /* .ctx   = */ new llama_sampler_mirostat {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_mirostat_i,
+        /* .ctx   = */ new jarvis_sampler_mirostat {
             /* .n_vocab  = */ n_vocab,
             /* .seed     = */ seed,
             /* .seed_cur = */ seed_cur,
@@ -1288,7 +1288,7 @@ struct llama_sampler * llama_sampler_init_mirostat(int32_t n_vocab, uint32_t see
 
 // mirostat v2
 
-struct llama_sampler_mirostat_v2 {
+struct jarvis_sampler_mirostat_v2 {
     const uint32_t seed;
           uint32_t seed_cur;
 
@@ -1300,17 +1300,17 @@ struct llama_sampler_mirostat_v2 {
     std::mt19937 rng;
 };
 
-static const char * llama_sampler_mirostat_v2_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_mirostat_v2_name(const struct jarvis_sampler * /*smpl*/) {
     return "mirostat-v2";
 }
 
-static void llama_sampler_mirostat_v2_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_mirostat_v2 *) smpl->ctx;
+static void jarvis_sampler_mirostat_v2_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_mirostat_v2 *) smpl->ctx;
 
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
     // Truncate the words with surprise values greater than mu
-    cur_p->size = std::distance(cur_p->data, std::find_if(cur_p->data, cur_p->data + cur_p->size, [&](const llama_token_data & candidate) {
+    cur_p->size = std::distance(cur_p->data, std::find_if(cur_p->data, cur_p->data + cur_p->size, [&](const jarvis_token_data & candidate) {
         return -log2f(candidate.p) > ctx->mu;
     }));
 
@@ -1319,9 +1319,9 @@ static void llama_sampler_mirostat_v2_apply(struct llama_sampler * smpl, llama_t
     }
 
     // Normalize the probabilities of the remaining words
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
-    const int idx = llama_sample_dist(cur_p, ctx->rng);
+    const int idx = jarvis_sample_dist(cur_p, ctx->rng);
 
     cur_p->selected = idx;
 
@@ -1332,21 +1332,21 @@ static void llama_sampler_mirostat_v2_apply(struct llama_sampler * smpl, llama_t
     ctx->mu = ctx->mu - ctx->eta * e;
 }
 
-static void llama_sampler_mirostat_v2_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_mirostat_v2 *) smpl->ctx;
+static void jarvis_sampler_mirostat_v2_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_mirostat_v2 *) smpl->ctx;
     ctx->mu = 2.0f*ctx->tau;
     ctx->seed_cur = get_rng_seed(ctx->seed);
     ctx->rng.seed(ctx->seed_cur);
 }
 
-static struct llama_sampler * llama_sampler_mirostat_v2_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_mirostat_v2 *) smpl->ctx;
+static struct jarvis_sampler * jarvis_sampler_mirostat_v2_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_mirostat_v2 *) smpl->ctx;
 
-    auto * result = llama_sampler_init_mirostat_v2(ctx->seed, ctx->tau, ctx->eta);
+    auto * result = jarvis_sampler_init_mirostat_v2(ctx->seed, ctx->tau, ctx->eta);
 
     // copy the state
     {
-        auto * result_ctx = (llama_sampler_mirostat_v2 *) result->ctx;
+        auto * result_ctx = (jarvis_sampler_mirostat_v2 *) result->ctx;
 
         result_ctx->mu  = ctx->mu;
         result_ctx->rng = ctx->rng;
@@ -1355,24 +1355,24 @@ static struct llama_sampler * llama_sampler_mirostat_v2_clone(const struct llama
     return result;
 }
 
-static void llama_sampler_mirostat_v2_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_mirostat_v2 *) smpl->ctx;
+static void jarvis_sampler_mirostat_v2_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_mirostat_v2 *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_mirostat_v2_i = {
-    /* .name   = */ llama_sampler_mirostat_v2_name,
+static struct jarvis_sampler_i jarvis_sampler_mirostat_v2_i = {
+    /* .name   = */ jarvis_sampler_mirostat_v2_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_mirostat_v2_apply,
-    /* .reset  = */ llama_sampler_mirostat_v2_reset,
-    /* .clone  = */ llama_sampler_mirostat_v2_clone,
-    /* .free   = */ llama_sampler_mirostat_v2_free,
+    /* .apply  = */ jarvis_sampler_mirostat_v2_apply,
+    /* .reset  = */ jarvis_sampler_mirostat_v2_reset,
+    /* .clone  = */ jarvis_sampler_mirostat_v2_clone,
+    /* .free   = */ jarvis_sampler_mirostat_v2_free,
 };
 
-struct llama_sampler * llama_sampler_init_mirostat_v2(uint32_t seed, float tau, float eta) {
+struct jarvis_sampler * jarvis_sampler_init_mirostat_v2(uint32_t seed, float tau, float eta) {
     auto seed_cur = get_rng_seed(seed);
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_mirostat_v2_i,
-        /* .ctx   = */ new llama_sampler_mirostat_v2 {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_mirostat_v2_i,
+        /* .ctx   = */ new jarvis_sampler_mirostat_v2 {
             /* .seed     = */ seed,
             /* .seed_cur = */ seed_cur,
             /* .tau      = */ tau,
@@ -1385,93 +1385,93 @@ struct llama_sampler * llama_sampler_init_mirostat_v2(uint32_t seed, float tau, 
 
 // grammar
 
-struct llama_sampler_grammar {
-    const struct llama_vocab * vocab;
+struct jarvis_sampler_grammar {
+    const struct jarvis_vocab * vocab;
 
     std::string grammar_str;
     std::string grammar_root;
 
-    struct llama_grammar * grammar;
+    struct jarvis_grammar * grammar;
 };
 
-static const char * llama_sampler_grammar_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_grammar_name(const struct jarvis_sampler * /*smpl*/) {
     return "grammar";
 }
 
-static void llama_sampler_grammar_accept_impl(struct llama_sampler * smpl, llama_token token) {
-    auto * ctx = (llama_sampler_grammar *) smpl->ctx;
+static void jarvis_sampler_grammar_accept_impl(struct jarvis_sampler * smpl, jarvis_token token) {
+    auto * ctx = (jarvis_sampler_grammar *) smpl->ctx;
     if (ctx->grammar) {
-        llama_grammar_accept_impl(*ctx->grammar, token);
+        jarvis_grammar_accept_impl(*ctx->grammar, token);
     }
 }
 
-static void llama_sampler_grammar_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_grammar *) smpl->ctx;
+static void jarvis_sampler_grammar_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_grammar *) smpl->ctx;
     if (ctx->grammar) {
-        llama_grammar_apply_impl(*ctx->grammar, cur_p);
+        jarvis_grammar_apply_impl(*ctx->grammar, cur_p);
     }
 }
 
-static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_grammar *) smpl->ctx;
+static void jarvis_sampler_grammar_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_grammar *) smpl->ctx;
     if (!ctx->grammar) {
         return;
     }
 
-    auto * grammar_new = llama_grammar_init_impl(ctx->grammar->vocab, ctx->grammar_str.c_str(), ctx->grammar_root.c_str());
+    auto * grammar_new = jarvis_grammar_init_impl(ctx->grammar->vocab, ctx->grammar_str.c_str(), ctx->grammar_root.c_str());
 
-    llama_grammar_free_impl(ctx->grammar);
+    jarvis_grammar_free_impl(ctx->grammar);
     ctx->grammar = grammar_new;
 }
 
-static struct llama_sampler * llama_sampler_grammar_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_grammar *) smpl->ctx;
+static struct jarvis_sampler * jarvis_sampler_grammar_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_grammar *) smpl->ctx;
 
-    auto * result = llama_sampler_init_grammar_impl(*ctx->vocab, nullptr, nullptr);
+    auto * result = jarvis_sampler_init_grammar_impl(*ctx->vocab, nullptr, nullptr);
 
     // copy the state
     {
-        auto * result_ctx = (llama_sampler_grammar *) result->ctx;
+        auto * result_ctx = (jarvis_sampler_grammar *) result->ctx;
 
         if (ctx->grammar) {
             result_ctx->grammar_str  = ctx->grammar_str;
             result_ctx->grammar_root = ctx->grammar_root;
 
-            result_ctx->grammar = llama_grammar_clone_impl(*ctx->grammar);
+            result_ctx->grammar = jarvis_grammar_clone_impl(*ctx->grammar);
         }
     }
 
     return result;
 }
 
-static void llama_sampler_grammar_free(struct llama_sampler * smpl) {
-    const auto * ctx = (llama_sampler_grammar *) smpl->ctx;
+static void jarvis_sampler_grammar_free(struct jarvis_sampler * smpl) {
+    const auto * ctx = (jarvis_sampler_grammar *) smpl->ctx;
 
     if (ctx->grammar) {
-        llama_grammar_free_impl(ctx->grammar);
+        jarvis_grammar_free_impl(ctx->grammar);
     }
 
     delete ctx;
 }
 
-static struct llama_sampler_i llama_sampler_grammar_i = {
-    /* .name   = */ llama_sampler_grammar_name,
-    /* .accept = */ llama_sampler_grammar_accept_impl,
-    /* .apply  = */ llama_sampler_grammar_apply,
-    /* .reset  = */ llama_sampler_grammar_reset,
-    /* .clone  = */ llama_sampler_grammar_clone,
-    /* .free   = */ llama_sampler_grammar_free,
+static struct jarvis_sampler_i jarvis_sampler_grammar_i = {
+    /* .name   = */ jarvis_sampler_grammar_name,
+    /* .accept = */ jarvis_sampler_grammar_accept_impl,
+    /* .apply  = */ jarvis_sampler_grammar_apply,
+    /* .reset  = */ jarvis_sampler_grammar_reset,
+    /* .clone  = */ jarvis_sampler_grammar_clone,
+    /* .free   = */ jarvis_sampler_grammar_free,
 };
 
-struct llama_sampler * llama_sampler_init_grammar_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
-    auto * ctx = new llama_sampler_grammar;
+struct jarvis_sampler * jarvis_sampler_init_grammar_impl(const struct jarvis_vocab & vocab, const char * grammar_str, const char * grammar_root) {
+    auto * ctx = new jarvis_sampler_grammar;
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
         *ctx = {
             /* .vocab        = */ &vocab,
             /* .grammar_str  = */ grammar_str,
             /* .grammar_root = */ grammar_root,
-            /* .grammar      = */ llama_grammar_init_impl(&vocab, grammar_str, grammar_root),
+            /* .grammar      = */ jarvis_grammar_init_impl(&vocab, grammar_str, grammar_root),
         };
     } else {
         *ctx = {
@@ -1482,18 +1482,18 @@ struct llama_sampler * llama_sampler_init_grammar_impl(const struct llama_vocab 
         };
     }
 
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_grammar_i,
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_grammar_i,
         /* .ctx   = */ ctx,
     };
 }
 
 // penalties
 
-struct llama_sampler_penalties {
+struct jarvis_sampler_penalties {
     const int32_t     n_vocab;
-    const llama_token special_eos_id;
-    const llama_token linefeed_id;
+    const jarvis_token special_eos_id;
+    const jarvis_token linefeed_id;
 
     const int32_t penalty_last_n;
     const float   penalty_repeat;
@@ -1503,15 +1503,15 @@ struct llama_sampler_penalties {
     const bool    penalize_nl;
     const bool    ignore_eos;
 
-    ring_buffer<llama_token> prev;
+    ring_buffer<jarvis_token> prev;
 };
 
-static const char * llama_sampler_penalties_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_penalties_name(const struct jarvis_sampler * /*smpl*/) {
     return "penalties";
 }
 
-static void llama_sampler_penalties_accept(struct llama_sampler * smpl, llama_token token) {
-    auto * ctx = (llama_sampler_penalties *) smpl->ctx;
+static void jarvis_sampler_penalties_accept(struct jarvis_sampler * smpl, jarvis_token token) {
+    auto * ctx = (jarvis_sampler_penalties *) smpl->ctx;
     if (ctx->penalty_last_n == 0) {
         return;
     }
@@ -1519,8 +1519,8 @@ static void llama_sampler_penalties_accept(struct llama_sampler * smpl, llama_to
     ctx->prev.push_back(token);
 }
 
-static void llama_sampler_penalties_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_penalties *) smpl->ctx;
+static void jarvis_sampler_penalties_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_penalties *) smpl->ctx;
 
     if (ctx->ignore_eos) {
         assert(ctx->special_eos_id >= 0);
@@ -1570,8 +1570,8 @@ static void llama_sampler_penalties_apply(struct llama_sampler * smpl, llama_tok
 
     // Create a frequency map to count occurrences of each token in last_tokens
     // TODO: optimize this by maintaining the token count in the sampler context
-    using llama_token_cnt = std::unordered_map<llama_token, int>;
-    llama_token_cnt token_count;
+    using jarvis_token_cnt = std::unordered_map<jarvis_token, int>;
+    jarvis_token_cnt token_count;
 
     for (int i = 0; i < std::min<int>(ctx->penalty_last_n, ctx->prev.size()); ++i) {
         token_count[ctx->prev.rat(i)]++;
@@ -1605,14 +1605,14 @@ static void llama_sampler_penalties_apply(struct llama_sampler * smpl, llama_tok
     }
 }
 
-static void llama_sampler_penalties_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_penalties *) smpl->ctx;
+static void jarvis_sampler_penalties_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_penalties *) smpl->ctx;
     ctx->prev.clear();
 }
 
-static struct llama_sampler * llama_sampler_penalties_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_penalties *) smpl->ctx;
-    auto * result = llama_sampler_init_penalties(
+static struct jarvis_sampler * jarvis_sampler_penalties_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_penalties *) smpl->ctx;
+    auto * result = jarvis_sampler_init_penalties(
             ctx->n_vocab,
             ctx->special_eos_id,
             ctx->linefeed_id,
@@ -1625,7 +1625,7 @@ static struct llama_sampler * llama_sampler_penalties_clone(const struct llama_s
 
     // copy the state
     {
-        auto * result_ctx = (llama_sampler_penalties *) result->ctx;
+        auto * result_ctx = (jarvis_sampler_penalties *) result->ctx;
 
         result_ctx->prev = ctx->prev;
     }
@@ -1633,42 +1633,42 @@ static struct llama_sampler * llama_sampler_penalties_clone(const struct llama_s
     return result;
 }
 
-static void llama_sampler_penalties_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_penalties *) smpl->ctx;
+static void jarvis_sampler_penalties_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_penalties *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_penalties_i = {
-    /* .name   = */ llama_sampler_penalties_name,
-    /* .accept = */ llama_sampler_penalties_accept,
-    /* .apply  = */ llama_sampler_penalties_apply,
-    /* .reset  = */ llama_sampler_penalties_reset,
-    /* .clone  = */ llama_sampler_penalties_clone,
-    /* .free   = */ llama_sampler_penalties_free,
+static struct jarvis_sampler_i jarvis_sampler_penalties_i = {
+    /* .name   = */ jarvis_sampler_penalties_name,
+    /* .accept = */ jarvis_sampler_penalties_accept,
+    /* .apply  = */ jarvis_sampler_penalties_apply,
+    /* .reset  = */ jarvis_sampler_penalties_reset,
+    /* .clone  = */ jarvis_sampler_penalties_clone,
+    /* .free   = */ jarvis_sampler_penalties_free,
 };
 
-struct llama_sampler * llama_sampler_init_penalties(
+struct jarvis_sampler * jarvis_sampler_init_penalties(
         int32_t n_vocab,
-        llama_token special_eos_id,
-        llama_token linefeed_id,
+        jarvis_token special_eos_id,
+        jarvis_token linefeed_id,
         int32_t penalty_last_n,
         float penalty_repeat,
         float penalty_freq,
         float penalty_present,
         bool penalize_nl,
         bool ignore_eos) {
-    if (linefeed_id == LLAMA_TOKEN_NULL) {
+    if (linefeed_id == JARVIS_TOKEN_NULL) {
         penalize_nl = true;
     }
 
-    if (special_eos_id == LLAMA_TOKEN_NULL) {
+    if (special_eos_id == JARVIS_TOKEN_NULL) {
         ignore_eos = false;
     }
 
     penalty_last_n = std::max(penalty_last_n, 0);
 
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_penalties_i,
-        /* .ctx   = */ new llama_sampler_penalties {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_penalties_i,
+        /* .ctx   = */ new jarvis_sampler_penalties {
             /* .n_vocab         = */ n_vocab,
             /* .special_eos_id  = */ special_eos_id,
             /* .linefeed_id     = */ linefeed_id,
@@ -1678,14 +1678,14 @@ struct llama_sampler * llama_sampler_init_penalties(
             /* .penalty_present = */ penalty_present,
             /* .penalize_nl     = */ penalize_nl,
             /* .ignore_eos      = */ ignore_eos,
-            /* .prev            = */ ring_buffer<llama_token>(penalty_last_n),
+            /* .prev            = */ ring_buffer<jarvis_token>(penalty_last_n),
         },
     };
 }
 
 // DRY
 
-struct llama_sampler_dry {
+struct jarvis_sampler_dry {
     int32_t total_context_size;
 
     const float   dry_multiplier;
@@ -1693,18 +1693,18 @@ struct llama_sampler_dry {
     const int32_t dry_allowed_length;
     const int32_t dry_penalty_last_n;
 
-    std::unordered_multimap<llama_token, std::vector<llama_token>> dry_processed_breakers;
+    std::unordered_multimap<jarvis_token, std::vector<jarvis_token>> dry_processed_breakers;
     std::vector<int> dry_repeat_count;
-    std::unordered_map<llama_token, int> dry_max_token_repeat;
-    ring_buffer<llama_token> last_tokens;
+    std::unordered_map<jarvis_token, int> dry_max_token_repeat;
+    ring_buffer<jarvis_token> last_tokens;
 };
 
 // Ported from Koboldcpp, original PR: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
-static void get_overlapping_token_sequences(const llama_vocab & vocab, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
-    for (llama_token token_id = 0; token_id < (llama_token)vocab.n_vocab; token_id++) {
-        std::string word = llama_detokenize(vocab, {token_id}, true);
+static void get_overlapping_token_sequences(const jarvis_vocab & vocab, const std::string& str, std::unordered_multimap<jarvis_token, std::vector<jarvis_token>>& token_sequences, int max_tail_len = -1) {
+    for (jarvis_token token_id = 0; token_id < (jarvis_token)vocab.n_vocab; token_id++) {
+        std::string word = jarvis_detokenize(vocab, {token_id}, true);
         if (word.find(str) != std::string::npos) {
-            token_sequences.emplace(token_id, std::vector<llama_token>());
+            token_sequences.emplace(token_id, std::vector<jarvis_token>());
         } else {
             size_t word_len = word.size(), str_len = str.size();
             size_t pos = -1;
@@ -1718,7 +1718,7 @@ static void get_overlapping_token_sequences(const llama_vocab & vocab, const std
                     }
                 }
                 if (match) {
-                    std::vector<llama_token> tokenization = llama_tokenize_internal(vocab, str.substr(i), false, false);
+                    std::vector<jarvis_token> tokenization = jarvis_tokenize_internal(vocab, str.substr(i), false, false);
                     if (max_tail_len >= 0 && tokenization.size() > (size_t)max_tail_len) {
                         tokenization.resize(max_tail_len);
                     }
@@ -1741,12 +1741,12 @@ static void get_overlapping_token_sequences(const llama_vocab & vocab, const std
     }
 }
 
-static const char * llama_sampler_dry_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_dry_name(const struct jarvis_sampler * /*smpl*/) {
     return "dry";
 }
 
-static void llama_sampler_dry_accept(struct llama_sampler * smpl, llama_token token) {
-    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+static void jarvis_sampler_dry_accept(struct jarvis_sampler * smpl, jarvis_token token) {
+    auto * ctx = (jarvis_sampler_dry *) smpl->ctx;
     if (ctx->dry_multiplier == 0.0f || ctx->dry_base < 1.0f || ctx->dry_penalty_last_n == 0) {
         return;
     }
@@ -1755,8 +1755,8 @@ static void llama_sampler_dry_accept(struct llama_sampler * smpl, llama_token to
 }
 
 // Ported from Koboldcpp, original PR: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
-static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+static void jarvis_sampler_dry_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_dry *) smpl->ctx;
 
     if (ctx->dry_multiplier == 0.0f || ctx->dry_base < 1.0f || ctx->dry_penalty_last_n == 0) {
         return;
@@ -1796,7 +1796,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
 
     int rep_limit = last_n_repeat;
     for (int i = 0; i < last_n_repeat; ++i) {
-        llama_token token = ctx->last_tokens.rat(i);
+        jarvis_token token = ctx->last_tokens.rat(i);
         auto its = ctx->dry_processed_breakers.equal_range(token);
         if (its.first == ctx->dry_processed_breakers.end()) {
             continue;
@@ -1913,7 +1913,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
             // This token ends a repeat, so the next token would continue one.
             // By convention, the value of `repeat_len` only includes the tokens currently
             // in the context, not the new token that would be added.
-            llama_token token = ctx->last_tokens.rat(last_n_repeat - 2 - i);
+            jarvis_token token = ctx->last_tokens.rat(last_n_repeat - 2 - i);
             // Track the maximum sequence ending in this token.
             const auto& it = ctx->dry_max_token_repeat.find(token);
             if (it == ctx->dry_max_token_repeat.end() || it->second < repeat_len) {
@@ -1961,21 +1961,21 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
     cur_p->sorted = false;
 }
 
-static void llama_sampler_dry_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_dry *) smpl->ctx;
+static void jarvis_sampler_dry_reset(struct jarvis_sampler * smpl) {
+    auto * ctx = (jarvis_sampler_dry *) smpl->ctx;
     ctx->last_tokens.clear();
     ctx->dry_repeat_count.clear();
     ctx->dry_max_token_repeat.clear();
 }
 
-static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (llama_sampler_dry *) smpl->ctx;
+static struct jarvis_sampler * jarvis_sampler_dry_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (jarvis_sampler_dry *) smpl->ctx;
 
     // nullptr is passed as vocab because it is only needed for raw sequence breaker processing, which we have already done and will be copying
-    auto * result = llama_sampler_init_dry(nullptr, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
+    auto * result = jarvis_sampler_init_dry(nullptr, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
     // Copy the state, including the processed breakers
     {
-        auto * result_ctx = (llama_sampler_dry *) result->ctx;
+        auto * result_ctx = (jarvis_sampler_dry *) result->ctx;
         result_ctx->dry_processed_breakers = ctx->dry_processed_breakers;
         result_ctx->dry_repeat_count = ctx->dry_repeat_count;
         result_ctx->dry_max_token_repeat = ctx->dry_max_token_repeat;
@@ -1985,22 +1985,22 @@ static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler
     return result;
 }
 
-static void llama_sampler_dry_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_dry *) smpl->ctx;
+static void jarvis_sampler_dry_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_dry *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_dry_i = {
-    /* .name   = */ llama_sampler_dry_name,
-    /* .accept = */ llama_sampler_dry_accept,
-    /* .apply  = */ llama_sampler_dry_apply,
-    /* .reset  = */ llama_sampler_dry_reset,
-    /* .clone  = */ llama_sampler_dry_clone,
-    /* .free   = */ llama_sampler_dry_free,
+static struct jarvis_sampler_i jarvis_sampler_dry_i = {
+    /* .name   = */ jarvis_sampler_dry_name,
+    /* .accept = */ jarvis_sampler_dry_accept,
+    /* .apply  = */ jarvis_sampler_dry_apply,
+    /* .reset  = */ jarvis_sampler_dry_reset,
+    /* .clone  = */ jarvis_sampler_dry_clone,
+    /* .free   = */ jarvis_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+struct jarvis_sampler * jarvis_sampler_init_dry_impl(const struct jarvis_vocab & vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
     int32_t effective_dry_penalty_last_n = (dry_penalty_last_n == -1) ? context_size : std::max(dry_penalty_last_n, 0);
-    std::unordered_multimap<llama_token, std::vector<llama_token>> processed_breakers;
+    std::unordered_multimap<jarvis_token, std::vector<jarvis_token>> processed_breakers;
     const int MAX_CHAR_LEN = 40;
     const int MAX_SEQ_LEN = 20;
 
@@ -2010,18 +2010,18 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
         // Process sequence breakers
         for (size_t i = 0; i < num_breakers; ++i) {
             if (seq_breakers[i] == nullptr || std::strlen(seq_breakers[i]) == 0) {
-                LLAMA_LOG_WARN("skipping null or empty DRY sequence breaker at index %zu\n", i);
+                JARVIS_LOG_WARN("skipping null or empty DRY sequence breaker at index %zu\n", i);
                 continue;
             }
 
             std::string sequence_break(seq_breakers[i]);
             if (sequence_break.empty()) {
-                LLAMA_LOG_WARN("skipping empty DRY sequence breaker\n");
+                JARVIS_LOG_WARN("skipping empty DRY sequence breaker\n");
                 continue;
             }
 
             if (sequence_break.size() > MAX_CHAR_LEN) {
-                LLAMA_LOG_WARN("truncating DRY sequence breaker to %d characters\n", MAX_CHAR_LEN);
+                JARVIS_LOG_WARN("truncating DRY sequence breaker to %d characters\n", MAX_CHAR_LEN);
                 sequence_break.resize(MAX_CHAR_LEN);
             }
 
@@ -2029,9 +2029,9 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
         }
     }
 
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_dry_i,
-        /* .ctx   = */ new llama_sampler_dry {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_dry_i,
+        /* .ctx   = */ new jarvis_sampler_dry {
             /* .total_context_size     = */ context_size,
             /* .dry_multiplier         = */ dry_multiplier,
             /* .dry_base               = */ dry_base,
@@ -2040,34 +2040,34 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
             /* .dry_processed_breakers = */ std::move(processed_breakers),
             /* .dry_repeat_count       = */ dry_enabled ? std::vector<int>(effective_dry_penalty_last_n, 0) : std::vector<int>{},
             /* .dry_max_token_repeat   = */ {},
-            /* .last_tokens            = */ dry_enabled ? ring_buffer<llama_token>(effective_dry_penalty_last_n) : ring_buffer<llama_token>(0),
+            /* .last_tokens            = */ dry_enabled ? ring_buffer<jarvis_token>(effective_dry_penalty_last_n) : ring_buffer<jarvis_token>(0),
         },
     };
 }
 
 // wrapper for test-sampling.cpp
-struct llama_sampler * llama_sampler_init_dry_testing(int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<llama_token>>& seq_breakers) {
-    llama_vocab dummy_vocab;
-    auto * result = llama_sampler_init_dry_impl(dummy_vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
-    auto * ctx = (llama_sampler_dry *) result->ctx;
+struct jarvis_sampler * jarvis_sampler_init_dry_testing(int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<jarvis_token>>& seq_breakers) {
+    jarvis_vocab dummy_vocab;
+    auto * result = jarvis_sampler_init_dry_impl(dummy_vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
+    auto * ctx = (jarvis_sampler_dry *) result->ctx;
 
     // Process the token-based sequence breakers
     ctx->dry_processed_breakers.clear();
     if (seq_breakers.empty()) {
-        LLAMA_LOG_WARN("empty DRY sequence breakers list in llama_sampler_init_dry_testing\n");
+        JARVIS_LOG_WARN("empty DRY sequence breakers list in jarvis_sampler_init_dry_testing\n");
     } else {
         for (const auto& breaker : seq_breakers) {
             if (breaker.empty()) {
-                LLAMA_LOG_WARN("skipping DRY empty sequence breaker\n");
+                JARVIS_LOG_WARN("skipping DRY empty sequence breaker\n");
                 continue;
             }
-            llama_token head_token = breaker[0];
-            std::vector<llama_token> tail_tokens(breaker.begin() + 1, breaker.end());
+            jarvis_token head_token = breaker[0];
+            std::vector<jarvis_token> tail_tokens(breaker.begin() + 1, breaker.end());
             ctx->dry_processed_breakers.emplace(head_token, std::move(tail_tokens));
         }
 
         if (ctx->dry_processed_breakers.empty()) {
-            LLAMA_LOG_WARN("no valid DRY sequence breakers processed in llama_sampler_init_dry_testing\n");
+            JARVIS_LOG_WARN("no valid DRY sequence breakers processed in jarvis_sampler_init_dry_testing\n");
         }
     }
 
@@ -2076,20 +2076,20 @@ struct llama_sampler * llama_sampler_init_dry_testing(int32_t context_size, floa
 
 // logit-bias
 
-struct llama_sampler_logit_bias {
+struct jarvis_sampler_logit_bias {
     const int32_t n_vocab;
 
-    const std::vector<llama_logit_bias> logit_bias;
+    const std::vector<jarvis_logit_bias> logit_bias;
 
-    std::vector<llama_logit_bias> to_search;
+    std::vector<jarvis_logit_bias> to_search;
 };
 
-static const char * llama_sampler_logit_bias_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_logit_bias_name(const struct jarvis_sampler * /*smpl*/) {
     return "logit-bias";
 }
 
-static void llama_sampler_logit_bias_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_logit_bias *) smpl->ctx;
+static void jarvis_sampler_logit_bias_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_logit_bias *) smpl->ctx;
 
     if (ctx->logit_bias.empty()) {
         return;
@@ -2121,33 +2121,33 @@ static void llama_sampler_logit_bias_apply(struct llama_sampler * smpl, llama_to
     }
 }
 
-static struct llama_sampler * llama_sampler_logit_bias_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_logit_bias *) smpl->ctx;
-    return llama_sampler_init_logit_bias(ctx->n_vocab, ctx->logit_bias.size(), ctx->logit_bias.data());
+static struct jarvis_sampler * jarvis_sampler_logit_bias_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_logit_bias *) smpl->ctx;
+    return jarvis_sampler_init_logit_bias(ctx->n_vocab, ctx->logit_bias.size(), ctx->logit_bias.data());
 }
 
-static void llama_sampler_logit_bias_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_logit_bias *) smpl->ctx;
+static void jarvis_sampler_logit_bias_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_logit_bias *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_logit_bias_i = {
-    /* .name   = */ llama_sampler_logit_bias_name,
+static struct jarvis_sampler_i jarvis_sampler_logit_bias_i = {
+    /* .name   = */ jarvis_sampler_logit_bias_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_logit_bias_apply,
+    /* .apply  = */ jarvis_sampler_logit_bias_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_logit_bias_clone,
-    /* .free   = */ llama_sampler_logit_bias_free,
+    /* .clone  = */ jarvis_sampler_logit_bias_clone,
+    /* .free   = */ jarvis_sampler_logit_bias_free,
 };
 
-struct llama_sampler * llama_sampler_init_logit_bias(
+struct jarvis_sampler * jarvis_sampler_init_logit_bias(
                          int32_t   n_vocab,
                          int32_t   n_logit_bias,
-          const llama_logit_bias * logit_bias) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_logit_bias_i,
-        /* .ctx   = */ new llama_sampler_logit_bias {
+          const jarvis_logit_bias * logit_bias) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_logit_bias_i,
+        /* .ctx   = */ new jarvis_sampler_logit_bias {
             /* .n_vocab    = */ n_vocab,
-            /* .logit_bias = */ std::vector<llama_logit_bias>(logit_bias, logit_bias + n_logit_bias),
+            /* .logit_bias = */ std::vector<jarvis_logit_bias>(logit_bias, logit_bias + n_logit_bias),
             /* .to_search  = */ {},
         },
     };
@@ -2157,24 +2157,24 @@ struct llama_sampler * llama_sampler_init_logit_bias(
 
 //#define GGML_DEBUG_SAMPLER_INFILL
 
-struct llama_sampler_infill {
-    const struct llama_vocab * vocab;
+struct jarvis_sampler_infill {
+    const struct jarvis_vocab * vocab;
 
     std::vector<char> buf0;
     std::vector<char> buf1;
 };
 
-static const char * llama_sampler_infill_name(const struct llama_sampler * /*smpl*/) {
+static const char * jarvis_sampler_infill_name(const struct jarvis_sampler * /*smpl*/) {
     return "infill";
 }
 
-static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    auto * ctx = (llama_sampler_infill *) smpl->ctx;
+static void jarvis_sampler_infill_apply(struct jarvis_sampler * smpl, jarvis_token_data_array * cur_p) {
+    auto * ctx = (jarvis_sampler_infill *) smpl->ctx;
 
-    llama_sampler_softmax_impl(cur_p);
+    jarvis_sampler_softmax_impl(cur_p);
 
 #if defined(GGML_DEBUG_SAMPLER_INFILL)
-#define LOG_DBG_CUR LLAMA_LOG_DEBUG
+#define LOG_DBG_CUR JARVIS_LOG_DEBUG
 #else
 #define LOG_DBG_CUR(...)
 #endif
@@ -2187,7 +2187,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     float p_eog_sum = 0.0f;
 
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+        if (jarvis_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
             p_eog_sum += cur_p->data[i].p;
         } else {
             p_txt_sum += cur_p->data[i].p;
@@ -2209,7 +2209,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
         float p_sum = 0.0f;
 
         for (size_t i = 0; i < size_org; ++i) {
-            if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+            if (jarvis_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
                 p_sum += cur_p->data[i].p;
 
                 cur_p->data[cur_p->size++] = cur_p->data[i];
@@ -2237,17 +2237,17 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
                 continue;
             }
 
-            int len0 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
+            int len0 = jarvis_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
             if (len0 < 0) {
                 ctx->buf0.resize(len0);
-                len0 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
+                len0 = jarvis_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
                 assert(len0 > 0);
             }
 
-            int len1 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
+            int len1 = jarvis_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
             if (len1 < 0) {
                 ctx->buf1.resize(len1);
-                len1 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
+                len1 = jarvis_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
                 assert(len1 > 0);
             }
 
@@ -2282,7 +2282,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     LOG_DBG_CUR("%s: n_combined = %zu, applying thold = %.3f\n", __func__, n_combined, thold);
 
     for (size_t i = 0; i < size_org; ++i) {
-        const bool is_eog = llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
+        const bool is_eog = jarvis_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
@@ -2303,7 +2303,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     // if no non-EOG tokens are left -> reduce cur_p to single EOT token
     if (n_non_eog == 0) {
         cur_p->size = 1;
-        cur_p->data[0].id = llama_token_eot_impl(*ctx->vocab);
+        cur_p->data[0].id = jarvis_token_eot_impl(*ctx->vocab);
         cur_p->data[0].logit = 1.0f;
 
         return;
@@ -2325,7 +2325,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     LOG_DBG_CUR("%s: applying thold = %.3f\n", __func__, thold);
 
     for (size_t i = 0; i < size_org; ++i) {
-        const bool is_eog = llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
+        const bool is_eog = jarvis_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
@@ -2346,29 +2346,29 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
 #undef LOG_DBG_CUR
 }
 
-static struct llama_sampler * llama_sampler_infill_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_infill *) smpl->ctx;
-    return llama_sampler_init_infill_impl(*ctx->vocab);
+static struct jarvis_sampler * jarvis_sampler_infill_clone(const struct jarvis_sampler * smpl) {
+    const auto * ctx = (const jarvis_sampler_infill *) smpl->ctx;
+    return jarvis_sampler_init_infill_impl(*ctx->vocab);
 }
 
-static void llama_sampler_infill_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_infill *) smpl->ctx;
+static void jarvis_sampler_infill_free(struct jarvis_sampler * smpl) {
+    delete (jarvis_sampler_infill *) smpl->ctx;
 }
 
-static struct llama_sampler_i llama_sampler_infill_i = {
-    /* .name   = */ llama_sampler_infill_name,
+static struct jarvis_sampler_i jarvis_sampler_infill_i = {
+    /* .name   = */ jarvis_sampler_infill_name,
     /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_infill_apply,
+    /* .apply  = */ jarvis_sampler_infill_apply,
     /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_infill_clone,
-    /* .free   = */ llama_sampler_infill_free,
+    /* .clone  = */ jarvis_sampler_infill_clone,
+    /* .free   = */ jarvis_sampler_infill_free,
 };
 
-struct llama_sampler * llama_sampler_init_infill_impl(
-        const struct llama_vocab & vocab) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_infill_i,
-        /* .ctx   = */ new llama_sampler_infill {
+struct jarvis_sampler * jarvis_sampler_init_infill_impl(
+        const struct jarvis_vocab & vocab) {
+    return new jarvis_sampler {
+        /* .iface = */ &jarvis_sampler_infill_i,
+        /* .ctx   = */ new jarvis_sampler_infill {
             /* .vocab = */ &vocab,
             /* .buf0 = */ std::vector<char>(512),
             /* .buf1 = */ std::vector<char>(512),
@@ -2378,42 +2378,42 @@ struct llama_sampler * llama_sampler_init_infill_impl(
 
 // utils
 
-uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl) {
-    if (smpl->iface == &llama_sampler_dist_i) {
-        return ((const llama_sampler_dist *) smpl->ctx)->seed_cur;
+uint32_t jarvis_sampler_get_seed(const struct jarvis_sampler * smpl) {
+    if (smpl->iface == &jarvis_sampler_dist_i) {
+        return ((const jarvis_sampler_dist *) smpl->ctx)->seed_cur;
     }
 
-    if (smpl->iface == &llama_sampler_mirostat_i) {
-        return ((const llama_sampler_mirostat *) smpl->ctx)->seed_cur;
+    if (smpl->iface == &jarvis_sampler_mirostat_i) {
+        return ((const jarvis_sampler_mirostat *) smpl->ctx)->seed_cur;
     }
 
-    if (smpl->iface == &llama_sampler_mirostat_v2_i) {
-        return ((const llama_sampler_mirostat_v2 *) smpl->ctx)->seed_cur;
+    if (smpl->iface == &jarvis_sampler_mirostat_v2_i) {
+        return ((const jarvis_sampler_mirostat_v2 *) smpl->ctx)->seed_cur;
     }
 
-    if (smpl->iface == &llama_sampler_chain_i) {
-        const auto * ctx = (const llama_sampler_chain *) smpl->ctx;
+    if (smpl->iface == &jarvis_sampler_chain_i) {
+        const auto * ctx = (const jarvis_sampler_chain *) smpl->ctx;
         for (auto it = ctx->samplers.rbegin(); it != ctx->samplers.rend(); ++it) {
-            const uint32_t seed = llama_sampler_get_seed(*it);
-            if (seed != LLAMA_DEFAULT_SEED) {
+            const uint32_t seed = jarvis_sampler_get_seed(*it);
+            if (seed != JARVIS_DEFAULT_SEED) {
                 return seed;
             }
         }
     }
 
-    return LLAMA_DEFAULT_SEED;
+    return JARVIS_DEFAULT_SEED;
 }
 
 // perf
 
-struct llama_perf_sampler_data llama_perf_sampler(const struct llama_sampler * chain) {
-    struct llama_perf_sampler_data data = {};
+struct jarvis_perf_sampler_data jarvis_perf_sampler(const struct jarvis_sampler * chain) {
+    struct jarvis_perf_sampler_data data = {};
 
-    if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
-        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with llama_sampler_chain_init()\n", __func__);
+    if (chain == nullptr || chain->iface != &jarvis_sampler_chain_i) {
+        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with jarvis_sampler_chain_init()\n", __func__);
     }
 
-    const auto * ctx = (const struct llama_sampler_chain *) chain->ctx;
+    const auto * ctx = (const struct jarvis_sampler_chain *) chain->ctx;
 
     data.t_sample_ms = 1e-3 * ctx->t_sample_us;
     data.n_sample    = std::max(0, ctx->n_sample);
@@ -2421,19 +2421,19 @@ struct llama_perf_sampler_data llama_perf_sampler(const struct llama_sampler * c
     return data;
 }
 
-void llama_perf_sampler_print(const struct llama_sampler * chain) {
-    const auto data = llama_perf_sampler(chain);
+void jarvis_perf_sampler_print(const struct jarvis_sampler * chain) {
+    const auto data = jarvis_perf_sampler(chain);
 
-    LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+    JARVIS_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, data.t_sample_ms, data.n_sample, data.t_sample_ms / data.n_sample, 1e3 / data.t_sample_ms * data.n_sample);
 }
 
-void llama_perf_sampler_reset(struct llama_sampler * chain) {
-    if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
-        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with llama_sampler_chain_init()\n", __func__);
+void jarvis_perf_sampler_reset(struct jarvis_sampler * chain) {
+    if (chain == nullptr || chain->iface != &jarvis_sampler_chain_i) {
+        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with jarvis_sampler_chain_init()\n", __func__);
     }
 
-    auto * ctx = (struct llama_sampler_chain *) chain->ctx;
+    auto * ctx = (struct jarvis_sampler_chain *) chain->ctx;
 
     ctx->t_sample_us = ctx->n_sample = 0;
 }

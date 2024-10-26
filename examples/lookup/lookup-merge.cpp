@@ -1,5 +1,5 @@
 #include "ggml.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "common.h"
 #include "ngram-cache.h"
 

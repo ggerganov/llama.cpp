@@ -9,15 +9,15 @@ WORKDIR /app
 
 COPY . .
 
-RUN make -j$(nproc) llama-cli
+RUN make -j$(nproc) jarvis-cli
 
 FROM ubuntu:$UBUNTU_VERSION AS runtime
 
 RUN apt-get update && \
     apt-get install -y libgomp1
 
-COPY --from=build /app/llama-cli /llama-cli
+COPY --from=build /app/jarvis-cli /jarvis-cli
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/llama-cli" ]
+ENTRYPOINT [ "/jarvis-cli" ]

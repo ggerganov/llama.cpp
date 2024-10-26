@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-// TODO: prefix all symbols with "llama_"
+// TODO: prefix all symbols with "jarvis_"
 
 struct codepoint_flags {
     enum {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject var llamaState = LlamaState()
+    @StateObject var jarvisState = JarvisState()
     @State private var multiLineText = ""
     @State private var showingHelp = false    // To track if Help Sheet should be shown
 
@@ -9,7 +9,7 @@ struct ContentView: View {
         NavigationView {
             VStack {
                 ScrollView(.vertical, showsIndicators: true) {
-                    Text(llamaState.messageLog)
+                    Text(jarvisState.messageLog)
                         .font(.system(size: 12))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
@@ -37,13 +37,13 @@ struct ContentView: View {
                     }
 
                     Button("Copy") {
-                        UIPasteboard.general.string = llamaState.messageLog
+                        UIPasteboard.general.string = jarvisState.messageLog
                     }
                 }
                 .buttonStyle(.bordered)
                 .padding()
 
-                NavigationLink(destination: DrawerView(llamaState: llamaState)) {
+                NavigationLink(destination: DrawerView(jarvisState: jarvisState)) {
                     Text("View Models")
                 }
                 .padding()
@@ -57,29 +57,29 @@ struct ContentView: View {
 
     func sendText() {
         Task {
-            await llamaState.complete(text: multiLineText)
+            await jarvisState.complete(text: multiLineText)
             multiLineText = ""
         }
     }
 
     func bench() {
         Task {
-            await llamaState.bench()
+            await jarvisState.bench()
         }
     }
 
     func clear() {
         Task {
-            await llamaState.clear()
+            await jarvisState.clear()
         }
     }
     struct DrawerView: View {
 
-        @ObservedObject var llamaState: LlamaState
+        @ObservedObject var jarvisState: JarvisState
         @State private var showingHelp = false
         func delete(at offsets: IndexSet) {
             offsets.forEach { offset in
-                let model = llamaState.downloadedModels[offset]
+                let model = jarvisState.downloadedModels[offset]
                 let fileURL = getDocumentsDirectory().appendingPathComponent(model.filename)
                 do {
                     try FileManager.default.removeItem(at: fileURL)
@@ -89,7 +89,7 @@ struct ContentView: View {
             }
 
             // Remove models from downloadedModels array
-            llamaState.downloadedModels.remove(atOffsets: offsets)
+            jarvisState.downloadedModels.remove(atOffsets: offsets)
         }
 
         func getDocumentsDirectory() -> URL {
@@ -100,18 +100,18 @@ struct ContentView: View {
             List {
                 Section(header: Text("Download Models From Hugging Face")) {
                     HStack {
-                        InputButton(llamaState: llamaState)
+                        InputButton(jarvisState: jarvisState)
                     }
                 }
                 Section(header: Text("Downloaded Models")) {
-                    ForEach(llamaState.downloadedModels) { model in
-                        DownloadButton(llamaState: llamaState, modelName: model.name, modelUrl: model.url, filename: model.filename)
+                    ForEach(jarvisState.downloadedModels) { model in
+                        DownloadButton(jarvisState: jarvisState, modelName: model.name, modelUrl: model.url, filename: model.filename)
                     }
                     .onDelete(perform: delete)
                 }
                 Section(header: Text("Default Models")) {
-                    ForEach(llamaState.undownloadedModels) { model in
-                        DownloadButton(llamaState: llamaState, modelName: model.name, modelUrl: model.url, filename: model.filename)
+                    ForEach(jarvisState.undownloadedModels) { model in
+                        DownloadButton(jarvisState: jarvisState, modelName: model.name, modelUrl: model.url, filename: model.filename)
                     }
                 }
 

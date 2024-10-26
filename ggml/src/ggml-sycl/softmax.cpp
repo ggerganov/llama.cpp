@@ -233,7 +233,7 @@ void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, const ggml_tensor *s
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
 #pragma message("TODO: add ggml_sycl_op_soft_max() F16 src1 support")
-#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
+#pragma message("ref:  https://github.com/ggerganov/jarvis.cpp/pull/5021")
     GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32); // src1 contains mask and it is optional
 
     const int64_t ne00 = src0->ne[0];

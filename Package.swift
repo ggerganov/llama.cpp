@@ -3,10 +3,10 @@
 import PackageDescription
 
 var sources = [
-    "src/llama.cpp",
-    "src/llama-vocab.cpp",
-    "src/llama-grammar.cpp",
-    "src/llama-sampling.cpp",
+    "src/jarvis.cpp",
+    "src/jarvis-vocab.cpp",
+    "src/jarvis-grammar.cpp",
+    "src/jarvis-sampling.cpp",
     "src/unicode.cpp",
     "src/unicode-data.cpp",
     "ggml/src/ggml.c",
@@ -45,7 +45,7 @@ cSettings.append(
 #endif
 
 let package = Package(
-    name: "llama",
+    name: "jarvis",
     platforms: [
         .macOS(.v12),
         .iOS(.v14),
@@ -53,11 +53,11 @@ let package = Package(
         .tvOS(.v14)
     ],
     products: [
-        .library(name: "llama", targets: ["llama"]),
+        .library(name: "jarvis", targets: ["jarvis"]),
     ],
     targets: [
         .target(
-            name: "llama",
+            name: "jarvis",
             path: ".",
             exclude: [
                "cmake",

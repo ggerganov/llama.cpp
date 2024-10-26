@@ -3,7 +3,7 @@
 #endif
 
 #include "unicode.h"
-#include "llama-grammar.h"
+#include "jarvis-grammar.h"
 #include "json-schema-to-grammar.h"
 
 #include <cassert>
@@ -12,14 +12,14 @@
 
 using json = nlohmann::ordered_json;
 
-static llama_grammar * build_grammar(const std::string & grammar_str) {
-    return llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root");
+static jarvis_grammar * build_grammar(const std::string & grammar_str) {
+    return jarvis_grammar_init_impl(nullptr, grammar_str.c_str(), "root");
 }
 
 static bool test_build_grammar_fails(const std::string & grammar_str) {
     fprintf(stderr, "⚫ Testing failure for grammar: %s\n", grammar_str.c_str());
     bool grammar_fails = false;
-    llama_grammar * grammar = build_grammar(grammar_str);
+    jarvis_grammar * grammar = build_grammar(grammar_str);
     if (grammar != nullptr) {
         fprintf(stderr, "  ❌ Expected build failure, but succeeded\n");
     } else {
@@ -29,16 +29,16 @@ static bool test_build_grammar_fails(const std::string & grammar_str) {
     return grammar_fails;
 }
 
-static bool match_string(const std::string & input, llama_grammar * grammar) {
+static bool match_string(const std::string & input, jarvis_grammar * grammar) {
     const auto cpts = unicode_cpts_from_utf8(input);
 
-    const llama_grammar_rules  & rules      = llama_grammar_get_rules (grammar);
-          llama_grammar_stacks & stacks_cur = llama_grammar_get_stacks(grammar);
+    const jarvis_grammar_rules  & rules      = jarvis_grammar_get_rules (grammar);
+          jarvis_grammar_stacks & stacks_cur = jarvis_grammar_get_stacks(grammar);
 
     for (const auto & cpt : cpts) {
-        const llama_grammar_stacks stacks_prev = llama_grammar_get_stacks(grammar); // copy
+        const jarvis_grammar_stacks stacks_prev = jarvis_grammar_get_stacks(grammar); // copy
 
-        llama_grammar_accept(rules, stacks_prev, cpt, stacks_cur);
+        jarvis_grammar_accept(rules, stacks_prev, cpt, stacks_cur);
 
         if (stacks_cur.empty()) {
             // no stacks means that the grammar failed to match at this point
@@ -63,9 +63,9 @@ static void test(const std::string & test_desc, const std::string & grammar_str,
     auto * grammar = build_grammar(grammar_str);
 
     // Save the original grammar stacks so that we can reset after every new string we want to test
-    const llama_grammar_stacks stacks_org = llama_grammar_get_stacks(grammar);
+    const jarvis_grammar_stacks stacks_org = jarvis_grammar_get_stacks(grammar);
 
-    llama_grammar_stacks & stacks_cur = llama_grammar_get_stacks(grammar);
+    jarvis_grammar_stacks & stacks_cur = jarvis_grammar_get_stacks(grammar);
 
     fprintf(stderr, "  🔵 Valid strings:\n");
 
@@ -94,7 +94,7 @@ static void test(const std::string & test_desc, const std::string & grammar_str,
                 fclose(string_file);
             }
 
-            fprintf(stderr, "\n NOTE: Debug grammar file generated. To analyze this failure in detail, run the following command:     ./llama-gbnf-validator test-grammar-integration.grammar.gbnf test-grammar-integration.string.txt\n\n");
+            fprintf(stderr, "\n NOTE: Debug grammar file generated. To analyze this failure in detail, run the following command:     ./jarvis-gbnf-validator test-grammar-integration.grammar.gbnf test-grammar-integration.string.txt\n\n");
         } else {
             fprintf(stdout, "✅︎\n");
         }
@@ -126,7 +126,7 @@ static void test(const std::string & test_desc, const std::string & grammar_str,
     }
 
     // Clean up allocated memory
-    llama_grammar_free_impl(grammar);
+    jarvis_grammar_free_impl(grammar);
 }
 static void test_grammar(const std::string & test_desc, const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
     test(test_desc + ". Grammar: " + grammar_str, grammar_str, passing_strings, failing_strings);
@@ -666,7 +666,7 @@ static void test_failure_missing_root() {
         term ::= number
         number ::= [0-9]+)""";
 
-    llama_grammar_parser parsed_grammar;
+    jarvis_grammar_parser parsed_grammar;
     parsed_grammar.parse(grammar_str.c_str());
 
     // Ensure we parsed correctly
@@ -689,7 +689,7 @@ static void test_failure_missing_reference() {
 
     fprintf(stderr, "    Expected error:  ");
 
-    llama_grammar_parser parsed_grammar;
+    jarvis_grammar_parser parsed_grammar;
     parsed_grammar.parse(grammar_str.c_str());
 
     // Ensure we did NOT parsed correctly

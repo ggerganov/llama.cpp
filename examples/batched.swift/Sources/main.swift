@@ -1,5 +1,5 @@
 import Foundation
-import llama
+import jarvis
 
 let arguments = CommandLine.arguments
 
@@ -17,56 +17,56 @@ let n_parallel: Int = arguments.count > 3 && Int(arguments[3]) != nil ? Int(argu
 let n_len: Int = 32
 
 // init LLM
-llama_backend_init()
+jarvis_backend_init()
 defer {
-    llama_backend_free()
+    jarvis_backend_free()
 }
 
-let model_params = llama_model_default_params()
-guard let model = llama_load_model_from_file(modelPath.cString(using: .utf8), model_params) else {
+let model_params = jarvis_model_default_params()
+guard let model = jarvis_load_model_from_file(modelPath.cString(using: .utf8), model_params) else {
     print("Failed to load model")
     exit(1)
 }
 defer {
-    llama_free_model(model)
+    jarvis_free_model(model)
 }
 
 var tokens = tokenize(text: prompt, add_bos: true)
 
 let n_kv_req = UInt32(tokens.count) + UInt32((n_len - Int(tokens.count)) * n_parallel)
 
-var context_params = llama_context_default_params()
+var context_params = jarvis_context_default_params()
 context_params.n_ctx = n_kv_req
 context_params.n_batch = UInt32(max(n_len, n_parallel))
 context_params.n_threads = 8
 context_params.n_threads_batch = 8
 
-let context = llama_new_context_with_model(model, context_params)
+let context = jarvis_new_context_with_model(model, context_params)
 guard context != nil else {
     print("Failed to initialize context")
     exit(1)
 }
 defer {
-    llama_free(context)
+    jarvis_free(context)
 }
 
-var sparams = llama_sampler_chain_default_params()
+var sparams = jarvis_sampler_chain_default_params()
 
-let smpl = llama_sampler_chain_init(sparams)
+let smpl = jarvis_sampler_chain_init(sparams)
 guard smpl != nil else {
     print("Failed to initialize sampling")
     exit(1)
 }
 defer {
-    llama_sampler_free(smpl)
+    jarvis_sampler_free(smpl)
 }
 
-llama_sampler_chain_add(smpl, llama_sampler_init_top_k(40));
-llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.9, 1));
-llama_sampler_chain_add(smpl, llama_sampler_init_temp (0.4));
-llama_sampler_chain_add(smpl, llama_sampler_init_dist (1234));
+jarvis_sampler_chain_add(smpl, jarvis_sampler_init_top_k(40));
+jarvis_sampler_chain_add(smpl, jarvis_sampler_init_top_p(0.9, 1));
+jarvis_sampler_chain_add(smpl, jarvis_sampler_init_temp (0.4));
+jarvis_sampler_chain_add(smpl, jarvis_sampler_init_dist (1234));
 
-let n_ctx = llama_n_ctx(context)
+let n_ctx = jarvis_n_ctx(context)
 
 print("\nn_len = \(n_len), n_ctx = \(n_ctx), n_batch = \(context_params.n_batch), n_parallel = \(n_parallel), n_kv_req = \(n_kv_req)\n")
 
@@ -76,15 +76,15 @@ if n_kv_req > n_ctx {
 }
 
 var buffer: [CChar] = []
-for id: llama_token in tokens {
+for id: jarvis_token in tokens {
     print(token_to_piece(token: id, buffer: &buffer) ?? "", terminator: "")
 }
 
 print("\n")
 
-var batch = llama_batch_init(max(Int32(tokens.count), Int32(n_parallel)), 0, 1)
+var batch = jarvis_batch_init(max(Int32(tokens.count), Int32(n_parallel)), 0, 1)
 defer {
-    llama_batch_free(batch)
+    jarvis_batch_free(batch)
 }
 
 // evaluate the initial prompt
@@ -102,16 +102,16 @@ for (i, token) in tokens.enumerated() {
     batch.logits[i] = 0
 }
 
-// llama_decode will output logits only for the last token of the prompt
+// jarvis_decode will output logits only for the last token of the prompt
 batch.logits[Int(batch.n_tokens) - 1] = 1
 
-if llama_decode(context, batch) != 0 {
-    print("llama_decode() failed")
+if jarvis_decode(context, batch) != 0 {
+    print("jarvis_decode() failed")
     exit(1)
 }
 
 for i in 1 ..< n_parallel {
-    llama_kv_cache_seq_cp(context, 0, Int32(i), 0, batch.n_tokens)
+    jarvis_kv_cache_seq_cp(context, 0, Int32(i), 0, batch.n_tokens)
 }
 
 if n_parallel > 1 {
@@ -138,10 +138,10 @@ while n_cur <= n_len {
             continue
         }
 
-        let new_token_id = llama_sampler_sample(smpl, context, i_batch[i])
+        let new_token_id = jarvis_sampler_sample(smpl, context, i_batch[i])
 
         // is it an end of stream? -> mark the stream as finished
-        if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
+        if jarvis_token_is_eog(model, new_token_id) || n_cur == n_len {
             i_batch[i] = -1
             // print("")
             if n_parallel > 1 {
@@ -183,8 +183,8 @@ while n_cur <= n_len {
     n_cur += 1
 
     // evaluate the current batch with the transformer model
-    if llama_decode(context, batch) != 0 {
-        print("llama_decode() failed")
+    if jarvis_decode(context, batch) != 0 {
+        print("jarvis_decode() failed")
         exit(1)
     }
 }
@@ -200,15 +200,15 @@ let t_main_end = ggml_time_us()
 
 print("decoded \(n_decode) tokens in \(String(format: "%.2f", Double(t_main_end - t_main_start) / 1_000_000.0)) s, speed: \(String(format: "%.2f", Double(n_decode) / (Double(t_main_end - t_main_start) / 1_000_000.0))) t/s\n\n")
 
-llama_perf_sampler_print(smpl)
-llama_perf_context_print(context)
+jarvis_perf_sampler_print(smpl)
+jarvis_perf_context_print(context)
 
-private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
+private func tokenize(text: String, add_bos: Bool) -> [jarvis_token] {
     let utf8Count = text.utf8.count
     let n_tokens = utf8Count + (add_bos ? 1 : 0)
-    let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-    let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
-    var swiftTokens: [llama_token] = []
+    let tokens = UnsafeMutablePointer<jarvis_token>.allocate(capacity: n_tokens)
+    let tokenCount = jarvis_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
+    var swiftTokens: [jarvis_token] = []
     for i in 0 ..< tokenCount {
         swiftTokens.append(tokens[Int(i)])
     }
@@ -216,13 +216,13 @@ private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
     return swiftTokens
 }
 
-private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String? {
+private func token_to_piece(token: jarvis_token, buffer: inout [CChar]) -> String? {
     var result = [CChar](repeating: 0, count: 8)
-    let nTokens = llama_token_to_piece(model, token, &result, Int32(result.count), 0, false)
+    let nTokens = jarvis_token_to_piece(model, token, &result, Int32(result.count), 0, false)
     if nTokens < 0 {
         let actualTokensCount = -Int(nTokens)
         result = .init(repeating: 0, count: actualTokensCount)
-        let check = llama_token_to_piece(
+        let check = jarvis_token_to_piece(
             model,
             token,
             &result,

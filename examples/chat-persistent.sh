@@ -9,10 +9,10 @@ if [[ -z "${PROMPT_CACHE_FILE+x}" || -z "${CHAT_SAVE_DIR+x}" ]]; then
     exit 1
 fi
 
-MODEL="${MODEL:-./models/llama-13b/ggml-model-q4_0.gguf}"
+MODEL="${MODEL:-./models/jarvis-13b/ggml-model-q4_0.gguf}"
 PROMPT_TEMPLATE="${PROMPT_TEMPLATE:-./prompts/chat.txt}"
 USER_NAME="${USER_NAME:-User}"
-AI_NAME="${AI_NAME:-ChatLLaMa}"
+AI_NAME="${AI_NAME:-ChatJarvis}"
 DATE_TIME="$(date +%H:%M)"
 DATE_YEAR="$(date +%Y)"
 
@@ -62,7 +62,7 @@ fi
 if [[ ! -e "$PROMPT_CACHE_FILE" ]]; then
     echo 'Prompt cache does not exist, building...'
     # Default batch_size to 64 here for better user feedback during initial prompt processing
-    ./llama-cli 2>>"$LOG" \
+    ./jarvis-cli 2>>"$LOG" \
         --batch_size 64 \
         "${OPTS[@]}" \
         --prompt-cache "$PROMPT_CACHE_FILE" \
@@ -109,13 +109,13 @@ while read -e line; do
 
     printf '%s: ' "$AI_NAME" >>"$CUR_PROMPT_FILE"
 
-    ./llama-cli 2>>"$LOG" "${OPTS[@]}" \
+    ./jarvis-cli 2>>"$LOG" "${OPTS[@]}" \
             --prompt-cache "$CUR_PROMPT_CACHE" \
             --prompt-cache-all \
             --file "$CUR_PROMPT_FILE" \
             --reverse-prompt "${USER_NAME}:" \
             --n_predict "$n_predict" |
-        skip_bytes 1 |                  # skip BOS token added by ./llama-cli
+        skip_bytes 1 |                  # skip BOS token added by ./jarvis-cli
         tee "$CUR_PROMPT_FILE.tmp" |    # save prompt + generation to tmp file
         skip_bytes "$n_prompt_len_pre"  # print generation
 
@@ -133,7 +133,7 @@ while read -e line; do
     # TODO get both messages in one go
     if  ! session_size_msg="$(tail -n30 "$LOG" | grep -oE "$SESSION_SIZE_MSG_PATTERN")" ||
         ! sample_time_msg="$(tail -n10 "$LOG" | grep -oE "$SAMPLE_TIME_MSG_PATTERN")"; then
-        echo >&2 "Couldn't get number of tokens from ./llama-cli output!"
+        echo >&2 "Couldn't get number of tokens from ./jarvis-cli output!"
         exit 1
     fi
 
@@ -144,7 +144,7 @@ while read -e line; do
     fi
 
     # Update cache for next prompt in background, ideally during user input
-    ./llama-cli >>"$LOG_BG" 2>&1 "${OPTS[@]}" \
+    ./jarvis-cli >>"$LOG_BG" 2>&1 "${OPTS[@]}" \
           --prompt-cache "$NEXT_PROMPT_CACHE" \
           --file "$NEXT_PROMPT_FILE" \
           --n_predict 1 &

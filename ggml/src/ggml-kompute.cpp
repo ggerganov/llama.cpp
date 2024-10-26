@@ -1575,11 +1575,11 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                         memcpy(&max_bias, (float *)dst->op_params + 1, sizeof(float));
 
 #pragma message("TODO: add ggml_vk_soft_max() F16 src1 support")
-#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
+#pragma message("ref:  https://github.com/ggerganov/jarvis.cpp/pull/5021")
                         GGML_ASSERT(!src1 || src1t == GGML_TYPE_F32);
 
 #pragma message("TODO: add ALiBi support")
-#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/7192")
+#pragma message("ref:  https://github.com/ggerganov/jarvis.cpp/pull/7192")
                         GGML_ASSERT(max_bias == 0.0f);
 
                         ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
@@ -1689,11 +1689,11 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                 case GGML_OP_ROPE:
                     {
 #pragma message("TODO: implement phi3 frequency factors support")
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225")
+#pragma message("      https://github.com/ggerganov/jarvis.cpp/pull/7225")
                         GGML_ASSERT(dst->src[2] == nullptr && "phi3 frequency factors not implemented yet");
 
 #pragma message("TODO: update rope NORM mode to match NEOX mode")
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
+#pragma message("      https://github.com/ggerganov/jarvis.cpp/pull/7634")
 
                         GGML_ASSERT(ne10 == ne02);
                         GGML_ASSERT(src0t == dstt);

@@ -1,5 +1,5 @@
 #include "common.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cstdio>
 #include <cstring>
@@ -11,51 +11,51 @@
 
 struct quant_option {
     std::string name;
-    llama_ftype ftype;
+    jarvis_ftype ftype;
     std::string desc;
 };
 
 static const std::vector<struct quant_option> QUANT_OPTIONS = {
-    { "Q4_0",     LLAMA_FTYPE_MOSTLY_Q4_0,     " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
-    { "Q4_1",     LLAMA_FTYPE_MOSTLY_Q4_1,     " 4.78G, +0.4511 ppl @ Llama-3-8B",  },
-    { "Q5_0",     LLAMA_FTYPE_MOSTLY_Q5_0,     " 5.21G, +0.1316 ppl @ Llama-3-8B",  },
-    { "Q5_1",     LLAMA_FTYPE_MOSTLY_Q5_1,     " 5.65G, +0.1062 ppl @ Llama-3-8B",  },
-    { "IQ2_XXS",  LLAMA_FTYPE_MOSTLY_IQ2_XXS,  " 2.06 bpw quantization",            },
-    { "IQ2_XS",   LLAMA_FTYPE_MOSTLY_IQ2_XS,   " 2.31 bpw quantization",            },
-    { "IQ2_S",    LLAMA_FTYPE_MOSTLY_IQ2_S,    " 2.5  bpw quantization",            },
-    { "IQ2_M",    LLAMA_FTYPE_MOSTLY_IQ2_M,    " 2.7  bpw quantization",            },
-    { "IQ1_S",    LLAMA_FTYPE_MOSTLY_IQ1_S,    " 1.56 bpw quantization",            },
-    { "IQ1_M",    LLAMA_FTYPE_MOSTLY_IQ1_M,    " 1.75 bpw quantization",            },
-    { "TQ1_0",    LLAMA_FTYPE_MOSTLY_TQ1_0,    " 1.69 bpw ternarization",           },
-    { "TQ2_0",    LLAMA_FTYPE_MOSTLY_TQ2_0,    " 2.06 bpw ternarization",           },
-    { "Q2_K",     LLAMA_FTYPE_MOSTLY_Q2_K,     " 2.96G, +3.5199 ppl @ Llama-3-8B",  },
-    { "Q2_K_S",   LLAMA_FTYPE_MOSTLY_Q2_K_S,   " 2.96G, +3.1836 ppl @ Llama-3-8B",  },
-    { "IQ3_XXS",  LLAMA_FTYPE_MOSTLY_IQ3_XXS,  " 3.06 bpw quantization",            },
-    { "IQ3_S",    LLAMA_FTYPE_MOSTLY_IQ3_S,    " 3.44 bpw quantization",            },
-    { "IQ3_M",    LLAMA_FTYPE_MOSTLY_IQ3_M,    " 3.66 bpw quantization mix",        },
-    { "Q3_K",     LLAMA_FTYPE_MOSTLY_Q3_K_M,   "alias for Q3_K_M"                   },
-    { "IQ3_XS",   LLAMA_FTYPE_MOSTLY_IQ3_XS,   " 3.3 bpw quantization",             },
-    { "Q3_K_S",   LLAMA_FTYPE_MOSTLY_Q3_K_S,   " 3.41G, +1.6321 ppl @ Llama-3-8B",  },
-    { "Q3_K_M",   LLAMA_FTYPE_MOSTLY_Q3_K_M,   " 3.74G, +0.6569 ppl @ Llama-3-8B",  },
-    { "Q3_K_L",   LLAMA_FTYPE_MOSTLY_Q3_K_L,   " 4.03G, +0.5562 ppl @ Llama-3-8B",  },
-    { "IQ4_NL",   LLAMA_FTYPE_MOSTLY_IQ4_NL,   " 4.50 bpw non-linear quantization", },
-    { "IQ4_XS",   LLAMA_FTYPE_MOSTLY_IQ4_XS,   " 4.25 bpw non-linear quantization", },
-    { "Q4_K",     LLAMA_FTYPE_MOSTLY_Q4_K_M,   "alias for Q4_K_M",                  },
-    { "Q4_K_S",   LLAMA_FTYPE_MOSTLY_Q4_K_S,   " 4.37G, +0.2689 ppl @ Llama-3-8B",  },
-    { "Q4_K_M",   LLAMA_FTYPE_MOSTLY_Q4_K_M,   " 4.58G, +0.1754 ppl @ Llama-3-8B",  },
-    { "Q5_K",     LLAMA_FTYPE_MOSTLY_Q5_K_M,   "alias for Q5_K_M",                  },
-    { "Q5_K_S",   LLAMA_FTYPE_MOSTLY_Q5_K_S,   " 5.21G, +0.1049 ppl @ Llama-3-8B",  },
-    { "Q5_K_M",   LLAMA_FTYPE_MOSTLY_Q5_K_M,   " 5.33G, +0.0569 ppl @ Llama-3-8B",  },
-    { "Q6_K",     LLAMA_FTYPE_MOSTLY_Q6_K,     " 6.14G, +0.0217 ppl @ Llama-3-8B",  },
-    { "Q8_0",     LLAMA_FTYPE_MOSTLY_Q8_0,     " 7.96G, +0.0026 ppl @ Llama-3-8B",  },
-    { "Q4_0_4_4", LLAMA_FTYPE_MOSTLY_Q4_0_4_4, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
-    { "Q4_0_4_8", LLAMA_FTYPE_MOSTLY_Q4_0_4_8, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
-    { "Q4_0_8_8", LLAMA_FTYPE_MOSTLY_Q4_0_8_8, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
-    { "F16",      LLAMA_FTYPE_MOSTLY_F16,      "14.00G, +0.0020 ppl @ Mistral-7B",  },
-    { "BF16",     LLAMA_FTYPE_MOSTLY_BF16,     "14.00G, -0.0050 ppl @ Mistral-7B",  },
-    { "F32",      LLAMA_FTYPE_ALL_F32,         "26.00G              @ 7B",          },
+    { "Q4_0",     JARVIS_FTYPE_MOSTLY_Q4_0,     " 4.34G, +0.4685 ppl @ Jarvis-3-8B",  },
+    { "Q4_1",     JARVIS_FTYPE_MOSTLY_Q4_1,     " 4.78G, +0.4511 ppl @ Jarvis-3-8B",  },
+    { "Q5_0",     JARVIS_FTYPE_MOSTLY_Q5_0,     " 5.21G, +0.1316 ppl @ Jarvis-3-8B",  },
+    { "Q5_1",     JARVIS_FTYPE_MOSTLY_Q5_1,     " 5.65G, +0.1062 ppl @ Jarvis-3-8B",  },
+    { "IQ2_XXS",  JARVIS_FTYPE_MOSTLY_IQ2_XXS,  " 2.06 bpw quantization",            },
+    { "IQ2_XS",   JARVIS_FTYPE_MOSTLY_IQ2_XS,   " 2.31 bpw quantization",            },
+    { "IQ2_S",    JARVIS_FTYPE_MOSTLY_IQ2_S,    " 2.5  bpw quantization",            },
+    { "IQ2_M",    JARVIS_FTYPE_MOSTLY_IQ2_M,    " 2.7  bpw quantization",            },
+    { "IQ1_S",    JARVIS_FTYPE_MOSTLY_IQ1_S,    " 1.56 bpw quantization",            },
+    { "IQ1_M",    JARVIS_FTYPE_MOSTLY_IQ1_M,    " 1.75 bpw quantization",            },
+    { "TQ1_0",    JARVIS_FTYPE_MOSTLY_TQ1_0,    " 1.69 bpw ternarization",           },
+    { "TQ2_0",    JARVIS_FTYPE_MOSTLY_TQ2_0,    " 2.06 bpw ternarization",           },
+    { "Q2_K",     JARVIS_FTYPE_MOSTLY_Q2_K,     " 2.96G, +3.5199 ppl @ Jarvis-3-8B",  },
+    { "Q2_K_S",   JARVIS_FTYPE_MOSTLY_Q2_K_S,   " 2.96G, +3.1836 ppl @ Jarvis-3-8B",  },
+    { "IQ3_XXS",  JARVIS_FTYPE_MOSTLY_IQ3_XXS,  " 3.06 bpw quantization",            },
+    { "IQ3_S",    JARVIS_FTYPE_MOSTLY_IQ3_S,    " 3.44 bpw quantization",            },
+    { "IQ3_M",    JARVIS_FTYPE_MOSTLY_IQ3_M,    " 3.66 bpw quantization mix",        },
+    { "Q3_K",     JARVIS_FTYPE_MOSTLY_Q3_K_M,   "alias for Q3_K_M"                   },
+    { "IQ3_XS",   JARVIS_FTYPE_MOSTLY_IQ3_XS,   " 3.3 bpw quantization",             },
+    { "Q3_K_S",   JARVIS_FTYPE_MOSTLY_Q3_K_S,   " 3.41G, +1.6321 ppl @ Jarvis-3-8B",  },
+    { "Q3_K_M",   JARVIS_FTYPE_MOSTLY_Q3_K_M,   " 3.74G, +0.6569 ppl @ Jarvis-3-8B",  },
+    { "Q3_K_L",   JARVIS_FTYPE_MOSTLY_Q3_K_L,   " 4.03G, +0.5562 ppl @ Jarvis-3-8B",  },
+    { "IQ4_NL",   JARVIS_FTYPE_MOSTLY_IQ4_NL,   " 4.50 bpw non-linear quantization", },
+    { "IQ4_XS",   JARVIS_FTYPE_MOSTLY_IQ4_XS,   " 4.25 bpw non-linear quantization", },
+    { "Q4_K",     JARVIS_FTYPE_MOSTLY_Q4_K_M,   "alias for Q4_K_M",                  },
+    { "Q4_K_S",   JARVIS_FTYPE_MOSTLY_Q4_K_S,   " 4.37G, +0.2689 ppl @ Jarvis-3-8B",  },
+    { "Q4_K_M",   JARVIS_FTYPE_MOSTLY_Q4_K_M,   " 4.58G, +0.1754 ppl @ Jarvis-3-8B",  },
+    { "Q5_K",     JARVIS_FTYPE_MOSTLY_Q5_K_M,   "alias for Q5_K_M",                  },
+    { "Q5_K_S",   JARVIS_FTYPE_MOSTLY_Q5_K_S,   " 5.21G, +0.1049 ppl @ Jarvis-3-8B",  },
+    { "Q5_K_M",   JARVIS_FTYPE_MOSTLY_Q5_K_M,   " 5.33G, +0.0569 ppl @ Jarvis-3-8B",  },
+    { "Q6_K",     JARVIS_FTYPE_MOSTLY_Q6_K,     " 6.14G, +0.0217 ppl @ Jarvis-3-8B",  },
+    { "Q8_0",     JARVIS_FTYPE_MOSTLY_Q8_0,     " 7.96G, +0.0026 ppl @ Jarvis-3-8B",  },
+    { "Q4_0_4_4", JARVIS_FTYPE_MOSTLY_Q4_0_4_4, " 4.34G, +0.4685 ppl @ Jarvis-3-8B",  },
+    { "Q4_0_4_8", JARVIS_FTYPE_MOSTLY_Q4_0_4_8, " 4.34G, +0.4685 ppl @ Jarvis-3-8B",  },
+    { "Q4_0_8_8", JARVIS_FTYPE_MOSTLY_Q4_0_8_8, " 4.34G, +0.4685 ppl @ Jarvis-3-8B",  },
+    { "F16",      JARVIS_FTYPE_MOSTLY_F16,      "14.00G, +0.0020 ppl @ Mistral-7B",  },
+    { "BF16",     JARVIS_FTYPE_MOSTLY_BF16,     "14.00G, -0.0050 ppl @ Mistral-7B",  },
+    { "F32",      JARVIS_FTYPE_ALL_F32,         "26.00G              @ 7B",          },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
-    { "COPY",     LLAMA_FTYPE_ALL_F32,         "only copy tensors, no quantizing",  },
+    { "COPY",     JARVIS_FTYPE_ALL_F32,         "only copy tensors, no quantizing",  },
 };
 
 static const char * const LLM_KV_QUANTIZE_IMATRIX_FILE       = "quantize.imatrix.file";
@@ -73,7 +73,7 @@ static bool striequals(const char * a, const char * b) {
     return *a == *b;
 }
 
-static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
+static bool try_parse_ftype(const std::string & ftype_str_in, jarvis_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
 
     for (auto ch : ftype_str_in) {
@@ -103,7 +103,7 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
 }
 
 // usage:
-//  ./llama-quantize [--allow-requantize] [--leave-output-tensor] [--pure] models/llama/ggml-model.gguf [models/llama/ggml-model-quant.gguf] type [nthreads]
+//  ./jarvis-quantize [--allow-requantize] [--leave-output-tensor] [--pure] models/jarvis/ggml-model.gguf [models/jarvis/ggml-model-quant.gguf] type [nthreads]
 //
 [[noreturn]]
 static void usage(const char * executable) {
@@ -175,7 +175,7 @@ static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_
             for (auto& v : e) v /= ncall;
         }
 
-        if (getenv("LLAMA_TRACE")) {
+        if (getenv("JARVIS_TRACE")) {
             printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), ncall, name.c_str());
         }
     }
@@ -251,12 +251,12 @@ int main(int argc, char ** argv) {
         usage(argv[0]);
     }
 
-    llama_model_quantize_params params = llama_model_quantize_default_params();
+    jarvis_model_quantize_params params = jarvis_model_quantize_default_params();
 
     int arg_idx = 1;
     std::string imatrix_file;
     std::vector<std::string> included_weights, excluded_weights;
-    std::vector<llama_model_kv_override> kv_overrides;
+    std::vector<jarvis_model_kv_override> kv_overrides;
 
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         if (strcmp(argv[arg_idx], "--leave-output-tensor") == 0) {
@@ -326,34 +326,34 @@ int main(int argc, char ** argv) {
     if (!imatrix_data.empty()) {
         params.imatrix = &imatrix_data;
         {
-            llama_model_kv_override kvo;
+            jarvis_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_FILE);
-            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+            kvo.tag = JARVIS_KV_OVERRIDE_TYPE_STR;
             strncpy(kvo.val_str, imatrix_file.c_str(), 127);
             kvo.val_str[127] = '\0';
             kv_overrides.emplace_back(std::move(kvo));
         }
         if (!imatrix_dataset.empty()) {
-            llama_model_kv_override kvo;
+            jarvis_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_DATASET);
-            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+            kvo.tag = JARVIS_KV_OVERRIDE_TYPE_STR;
             strncpy(kvo.val_str, imatrix_dataset.c_str(), 127);
             kvo.val_str[127] = '\0';
             kv_overrides.emplace_back(std::move(kvo));
         }
 
         {
-            llama_model_kv_override kvo;
+            jarvis_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES);
-            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.tag = JARVIS_KV_OVERRIDE_TYPE_INT;
             kvo.val_i64 = imatrix_data.size();
             kv_overrides.emplace_back(std::move(kvo));
         }
 
         if (m_last_call > 0) {
-            llama_model_kv_override kvo;
+            jarvis_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS);
-            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.tag = JARVIS_KV_OVERRIDE_TYPE_INT;
             kvo.val_i64 = m_last_call;
             kv_overrides.emplace_back(std::move(kvo));
         }
@@ -364,7 +364,7 @@ int main(int argc, char ** argv) {
         params.kv_overrides = &kv_overrides;
     }
 
-    llama_backend_init();
+    jarvis_backend_init();
 
     // parse command line arguments
     const std::string fname_inp = argv[arg_idx];
@@ -421,11 +421,11 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if ((params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS ||
-         params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  ||
-         params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S ||
-         params.ftype == LLAMA_FTYPE_MOSTLY_IQ1_S  ||
-         params.ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) && imatrix_data.empty()) {
+    if ((params.ftype == JARVIS_FTYPE_MOSTLY_IQ2_XS || params.ftype == JARVIS_FTYPE_MOSTLY_IQ2_XXS ||
+         params.ftype == JARVIS_FTYPE_MOSTLY_IQ2_S  ||
+         params.ftype == JARVIS_FTYPE_MOSTLY_Q2_K_S ||
+         params.ftype == JARVIS_FTYPE_MOSTLY_IQ1_S  ||
+         params.ftype == JARVIS_FTYPE_MOSTLY_IQ1_M) && imatrix_data.empty()) {
         fprintf(stderr, "\n==========================================================================================================\n");
         fprintf(stderr, "Please do not use IQ1_S, IQ1_M, IQ2_S, IQ2_XXS, IQ2_XS or Q2_K_S quantization without an importance matrix\n");
         fprintf(stderr, "==========================================================================================================\n\n\n");
@@ -440,32 +440,32 @@ int main(int argc, char ** argv) {
     }
     fprintf(stderr, "\n");
 
-    const int64_t t_main_start_us = llama_time_us();
+    const int64_t t_main_start_us = jarvis_time_us();
 
     int64_t t_quantize_us = 0;
 
     // load the model
     {
-        const int64_t t_start_us = llama_time_us();
+        const int64_t t_start_us = jarvis_time_us();
 
-        if (llama_model_quantize(fname_inp.c_str(), fname_out.c_str(), &params)) {
+        if (jarvis_model_quantize(fname_inp.c_str(), fname_out.c_str(), &params)) {
             fprintf(stderr, "%s: failed to quantize model from '%s'\n", __func__, fname_inp.c_str());
             return 1;
         }
 
-        t_quantize_us = llama_time_us() - t_start_us;
+        t_quantize_us = jarvis_time_us() - t_start_us;
     }
 
     // report timing
     {
-        const int64_t t_main_end_us = llama_time_us();
+        const int64_t t_main_end_us = jarvis_time_us();
 
         printf("\n");
         printf("%s: quantize time = %8.2f ms\n", __func__, t_quantize_us/1000.0);
         printf("%s:    total time = %8.2f ms\n", __func__, (t_main_end_us - t_main_start_us)/1000.0);
     }
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

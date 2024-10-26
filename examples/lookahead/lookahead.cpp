@@ -2,7 +2,7 @@
 #include "common.h"
 #include "sampling.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cstdio>
 #include <string>
@@ -11,11 +11,11 @@
 struct ngram_data {
     bool active = false;
 
-    llama_seq_id seq_id = -1;
+    jarvis_seq_id seq_id = -1;
 
     std::vector<int> i_batch;
 
-    std::vector<llama_token> tokens;
+    std::vector<jarvis_token> tokens;
 };
 
 // n-gram container
@@ -33,13 +33,13 @@ struct ngram_container {
 
     // [n_vocab][G][N - 1]
     // for each token of the vocab, keep a ring-buffer of capacity G of n-grams of size N - 1
-    std::vector<llama_token> tokens;
+    std::vector<jarvis_token> tokens;
 };
 
 int main(int argc, char ** argv) {
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_COMMON)) {
         return 1;
     }
 
@@ -51,24 +51,24 @@ int main(int argc, char ** argv) {
 
     const bool dump_kv_cache = params.dump_kv_cache;
 
-    // init llama.cpp
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    // init jarvis.cpp
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the target model
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
 
     // Tokenize the prompt
-    std::vector<llama_token> inp;
-    std::vector<llama_token> all;
+    std::vector<jarvis_token> inp;
+    std::vector<jarvis_token> all;
 
     inp = common_tokenize(ctx, params.prompt, true, true);
     all = inp;
 
-    const int max_context_size     = llama_n_ctx(ctx);
+    const int max_context_size     = jarvis_n_ctx(ctx);
     const int max_tokens_list_size = max_context_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
@@ -89,11 +89,11 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt
-    llama_decode(ctx, llama_batch_get_one( inp.data(), n_input - 1));
-    llama_decode(ctx, llama_batch_get_one(&inp.back(),           1));
+    jarvis_decode(ctx, jarvis_batch_get_one( inp.data(), n_input - 1));
+    jarvis_decode(ctx, jarvis_batch_get_one(&inp.back(),           1));
 
     for (int s = 1; s < W + G + 1; ++s) {
-        llama_kv_cache_seq_cp(ctx, 0, s, -1, -1);
+        jarvis_kv_cache_seq_cp(ctx, 0, s, -1, -1);
     }
 
     const auto t_enc_end = ggml_time_us();
@@ -103,7 +103,7 @@ int main(int argc, char ** argv) {
 
     int n_past = inp.size();
 
-    llama_token id = 0;
+    jarvis_token id = 0;
 
     // used to determine end of generation
     bool has_eos = false;
@@ -112,7 +112,7 @@ int main(int argc, char ** argv) {
     // seq_id == 0           : the current input token
     // seq_id [1, W]         : tokens from the past N - 1 Jacobi iterations
     // seq_id [W + 1, W + G] : verification n-grams
-    llama_batch batch = llama_batch_init(params.n_ctx, 0, W + G + 1);
+    jarvis_batch batch = jarvis_batch_init(params.n_ctx, 0, W + G + 1);
 
     // target model sampling context
     struct common_sampler * smpl = common_sampler_init(model, params.sparams);
@@ -121,8 +121,8 @@ int main(int argc, char ** argv) {
     std::vector<ngram_data> ngrams_cur(G);
 
     // tokens for the past N - 1 Jacobi iterations
-    std::vector<llama_token> tokens_j_prev(W);
-    std::vector<std::vector<llama_token>> tokens_j(N - 1);
+    std::vector<jarvis_token> tokens_j_prev(W);
+    std::vector<std::vector<jarvis_token>> tokens_j(N - 1);
     for (int j = 0; j < N - 1; j++) {
         tokens_j[j].resize(W);
 
@@ -138,19 +138,19 @@ int main(int argc, char ** argv) {
         }
     }
 
-    std::vector<llama_seq_id> seq_id_look;
+    std::vector<jarvis_seq_id> seq_id_look;
 
     // the input token belongs both to all sequences
-    std::vector<llama_seq_id> seq_id_all(W + G + 1);
+    std::vector<jarvis_seq_id> seq_id_all(W + G + 1);
     for (int i = 0; i < W + G + 1; i++) {
         seq_id_all[i] = i;
     }
 
     // here we keep adding new n-grams as we go
-    ngram_container ngrams_observed(llama_n_vocab(model), N, G);
+    ngram_container ngrams_observed(jarvis_n_vocab(model), N, G);
 
     // debug
-    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, W + G + 1);
+    struct jarvis_kv_cache_view kvc_view = jarvis_kv_cache_view_init(ctx, W + G + 1);
 
     const auto t_dec_start = ggml_time_us();
 
@@ -171,7 +171,7 @@ int main(int argc, char ** argv) {
     while (true) {
         // debug
         if (dump_kv_cache) {
-            llama_kv_cache_view_update(ctx, &kvc_view);
+            jarvis_kv_cache_view_update(ctx, &kvc_view);
             common_kv_cache_dump_view_seqs(kvc_view, 40);
         }
 
@@ -224,7 +224,7 @@ int main(int argc, char ** argv) {
                     for (int g = 0; g < g_cur; g++) {
                         const int idx = id*(N - 1)*G + g*(N - 1);
 
-                        const llama_token t = ngrams_observed.tokens[idx + j];
+                        const jarvis_token t = ngrams_observed.tokens[idx + j];
 
                         ngrams_cur[g].tokens [j + 1] = t;
                         ngrams_cur[g].i_batch[j + 1] = batch.n_tokens;
@@ -252,8 +252,8 @@ int main(int argc, char ** argv) {
             }
         }
 
-        if (llama_decode(ctx, batch) != 0) {
-            LOG_ERR("\n\n%s: llama_decode failed - increase KV cache size\n", __func__);
+        if (jarvis_decode(ctx, batch) != 0) {
+            LOG_ERR("\n\n%s: jarvis_decode failed - increase KV cache size\n", __func__);
             return 1;
         }
 
@@ -297,7 +297,7 @@ int main(int argc, char ** argv) {
                 }
                 fflush(stdout);
 
-                if (llama_token_is_eog(model, id)) {
+                if (jarvis_token_is_eog(model, id)) {
                     has_eos = true;
                 }
 
@@ -377,7 +377,7 @@ int main(int argc, char ** argv) {
             // update observed ngrams
             if (v == 0) {
                 // the first token of the n-gram is determined by the index in the container so it is not stored
-                std::vector<llama_token> ngram(N - 1);
+                std::vector<jarvis_token> ngram(N - 1);
 
                 // n-gram generation
                 // ref: https://github.com/hao-ai-lab/LookaheadDecoding/issues/14#issuecomment-1826198518
@@ -435,17 +435,17 @@ int main(int argc, char ** argv) {
 
         // KV cache management
         // if no verification token matched, we simply remove all cells from this batch -> no fragmentation
-        llama_kv_cache_seq_rm(ctx, -1, n_past, -1);
+        jarvis_kv_cache_seq_rm(ctx, -1, n_past, -1);
 
         if (seq_id_best != 0) {
             // if a verification token matched, we keep the best sequence and remove the rest
             // this leads to some KV cache fragmentation
-            llama_kv_cache_seq_keep(ctx, seq_id_best);
-            llama_kv_cache_seq_cp  (ctx, seq_id_best, 0, -1, -1);
-            llama_kv_cache_seq_rm  (ctx, seq_id_best,    -1, -1);
+            jarvis_kv_cache_seq_keep(ctx, seq_id_best);
+            jarvis_kv_cache_seq_cp  (ctx, seq_id_best, 0, -1, -1);
+            jarvis_kv_cache_seq_rm  (ctx, seq_id_best,    -1, -1);
 
             for (int s = 1; s < W + G + 1; ++s) {
-                llama_kv_cache_seq_cp(ctx, 0, s, -1, -1);
+                jarvis_kv_cache_seq_cp(ctx, 0, s, -1, -1);
             }
         }
     }
@@ -470,14 +470,14 @@ int main(int argc, char ** argv) {
 
     common_sampler_free(smpl);
 
-    llama_kv_cache_view_free(&kvc_view);
+    jarvis_kv_cache_view_free(&kvc_view);
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     LOG("\n\n");
 

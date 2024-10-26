@@ -1,12 +1,12 @@
-@llama.cpp
+@jarvis.cpp
 @ctx_shift
-Feature: llama.cpp server
+Feature: jarvis.cpp server
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
+    And   a model file tinyjarviss/stories260K.gguf from HF repo ggml-org/models
     And   a model file test-model.gguf
-    And   a model alias tinyllama-2
+    And   a model alias tinyjarvis-2
     And   BOS token is 1
     And   42 as server seed
     And   256 KV cache size

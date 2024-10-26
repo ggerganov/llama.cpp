@@ -18,9 +18,9 @@ fi
 
 set -x
 
-SPLIT=$1/llama-gguf-split
-QUANTIZE=$1/llama-quantize
-MAIN=$1/llama-cli
+SPLIT=$1/jarvis-gguf-split
+QUANTIZE=$1/jarvis-quantize
+MAIN=$1/jarvis-cli
 WORK_PATH=$TMP_DIR/quantize
 ROOT_DIR=$(realpath $(dirname $0)/../../)
 

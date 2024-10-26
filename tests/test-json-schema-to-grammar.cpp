@@ -4,7 +4,7 @@
 
 #include "json-schema-to-grammar.h"
 
-#include "llama-grammar.h"
+#include "jarvis-grammar.h"
 
 #include <cassert>
 #include <fstream>
@@ -41,7 +41,7 @@ struct TestCase {
     }
     void verify_expectation_parseable() const {
         try {
-            llama_grammar_parser state;
+            jarvis_grammar_parser state;
             state.parse(expected_grammar.c_str());
             if (state.symbol_ids.find("root") == state.symbol_ids.end()) {
                 throw std::runtime_error("Grammar failed to parse:\n" + expected_grammar);
@@ -1241,8 +1241,8 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 }
 
 int main() {
-    fprintf(stderr, "LLAMA_NODE_AVAILABLE = %s\n", getenv("LLAMA_NODE_AVAILABLE") ? "true" : "false");
-    fprintf(stderr, "LLAMA_PYTHON_AVAILABLE = %s\n", getenv("LLAMA_PYTHON_AVAILABLE") ? "true" : "false");
+    fprintf(stderr, "JARVIS_NODE_AVAILABLE = %s\n", getenv("JARVIS_NODE_AVAILABLE") ? "true" : "false");
+    fprintf(stderr, "JARVIS_PYTHON_AVAILABLE = %s\n", getenv("JARVIS_PYTHON_AVAILABLE") ? "true" : "false");
 
     test_all("C++", [](const TestCase & tc) {
         try {
@@ -1254,10 +1254,10 @@ int main() {
         }
     });
 
-    if (getenv("LLAMA_SKIP_TESTS_SLOW_ON_EMULATOR")) {
+    if (getenv("JARVIS_SKIP_TESTS_SLOW_ON_EMULATOR")) {
         fprintf(stderr, "\033[33mWARNING: Skipping slow tests on emulator.\n\033[0m");
     } else {
-        if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python -c \"import sys; exit(1) if sys.version_info < (3, 8) else print('Python version is sufficient')\"") == 0)) {
+        if (getenv("JARVIS_PYTHON_AVAILABLE") || (std::system("python -c \"import sys; exit(1) if sys.version_info < (3, 8) else print('Python version is sufficient')\"") == 0)) {
             test_all("Python", [](const TestCase & tc) {
                 write("test-json-schema-input.tmp", tc.schema);
                 tc.verify_status(std::system(
@@ -1268,7 +1268,7 @@ int main() {
             fprintf(stderr, "\033[33mWARNING: Python not found (min version required is 3.8), skipping Python JSON schema -> grammar tests.\n\033[0m");
         }
 
-        if (getenv("LLAMA_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
+        if (getenv("JARVIS_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
             test_all("JavaScript", [](const TestCase & tc) {
                 write("test-json-schema-input.tmp", tc.schema);
                 tc.verify_status(std::system(

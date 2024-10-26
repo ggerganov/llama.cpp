@@ -9,7 +9,7 @@ ARG BASE_ROCM_DEV_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-co
 FROM ${BASE_ROCM_DEV_CONTAINER} AS build
 
 # Unless otherwise specified, we make a fat build.
-# List from https://github.com/ggerganov/llama.cpp/pull/1087#issuecomment-1682807878
+# List from https://github.com/ggerganov/jarvis.cpp/pull/1087#issuecomment-1682807878
 # This is mostly tied to rocBLAS supported archs.
 ARG ROCM_DOCKER_ARCH="\
     gfx803 \
@@ -41,7 +41,7 @@ ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
 # Enable cURL
-ENV LLAMA_CURL=1
+ENV JARVIS_CURL=1
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev
 

@@ -1,4 +1,4 @@
-# llama.cpp for CANN
+# jarvis.cpp for CANN
 
  - [Background](#background)
  - [News](#news)
@@ -17,9 +17,9 @@
 
 **CANN** (Compute Architecture for Neural Networks) is a heterogeneous computing architecture for AI scenarios, providing support for multiple AI frameworks on the top and serving AI processors and programming at the bottom. It plays a crucial role in bridging the gap between upper and lower layers, and is a key platform for improving the computing efficiency of Ascend AI processors. Meanwhile, it offers a highly efficient and easy-to-use programming interface for diverse application scenarios, allowing users to rapidly build AI applications and services based on the Ascend platform.
 
-**Llama.cpp + CANN**
+**Jarvis.cpp + CANN**
 
-The llama.cpp CANN backend is designed to support Ascend NPU. It utilize the ability of AscendC and ACLNN which are intergrated to CANN Toolkit and kernels to using Ascend NPU directly.
+The jarvis.cpp CANN backend is designed to support Ascend NPU. It utilize the ability of AscendC and ACLNN which are intergrated to CANN Toolkit and kernels to using Ascend NPU directly.
 
 ## News
 
@@ -78,11 +78,11 @@ The llama.cpp CANN backend is designed to support Ascend NPU. It utilize the abi
 | GritLM-7B                   |   √   |   √  |   √  |
 | internlm2_5-7b-chat         |   √   |   √  |   √  |
 | koala-7B-HF                 |   √   |   √  |   √  |
-| Llama-2-7b-chat-hf          |   √   |   √  |   √  |
-| Llama-3-Smaug-8B            |   √   |   √  |   √  |
-| Llama2-Chinese-7b-Chat      |   √   |   √  |   √  |
-| Llama3-8B                   |   √   |   √  |   √  |
-| Llama3-8b-chinese           |   √   |   √  |   √  |
+| Jarvis-2-7b-chat-hf          |   √   |   √  |   √  |
+| Jarvis-3-Smaug-8B            |   √   |   √  |   √  |
+| Jarvis2-Chinese-7b-Chat      |   √   |   √  |   √  |
+| Jarvis3-8B                   |   √   |   √  |   √  |
+| Jarvis3-8b-chinese           |   √   |   √  |   √  |
 | mamba-130m-hf               |   √   |   √  |   √  |
 | Mistral-7B-Instruct-v0.2    |   √   |   √  |   √  |
 | Mixtral-8x7B-Instruct-v0.1  |   x   |   √  |   √  |
@@ -120,9 +120,9 @@ The llama.cpp CANN backend is designed to support Ascend NPU. It utilize the abi
 ## Docker
 
 ### Build Images
-You can get a image with llama.cpp in one command.
+You can get a image with jarvis.cpp in one command.
 ```sh
-docker build -t llama-cpp-cann -f .devops/llama-cli-cann.Dockerfile .
+docker build -t jarvis-cpp-cann -f .devops/jarvis-cli-cann.Dockerfile .
 ```
 
 ### Run container
@@ -133,7 +133,7 @@ npu-smi info
 
 # Select the cards that you want to use, make sure these cards are not used by someone.
 # Following using cards of device0.
-docker run --name llamacpp --device /dev/davinci0  --device /dev/davinci_manager --device /dev/devmm_svm --device /dev/hisi_hdc -v /usr/local/dcmi:/usr/local/dcmi -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info -v /PATH_TO_YOUR_MODELS/:/app/models -it llama-cpp-cann -m /app/models/MODEL_PATH -ngl 32 -p "Building a website can be done in 10 simple steps:"
+docker run --name jarviscpp --device /dev/davinci0  --device /dev/davinci_manager --device /dev/devmm_svm --device /dev/hisi_hdc -v /usr/local/dcmi:/usr/local/dcmi -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info -v /PATH_TO_YOUR_MODELS/:/app/models -it jarvis-cpp-cann -m /app/models/MODEL_PATH -ngl 32 -p "Building a website can be done in 10 simple steps:"
 ```
 
 *Notes:*
@@ -208,7 +208,7 @@ docker run --name llamacpp --device /dev/davinci0  --device /dev/davinci_manager
 
 Upon a successful installation, CANN is enabled for the available ascend devices.
 
-### II. Build llama.cpp
+### II. Build jarvis.cpp
 
 ```sh
 cmake -B build -DGGML_CANN=on -DCMAKE_BUILD_TYPE=release
@@ -242,13 +242,13 @@ cmake --build build --config release
     - Use device 0:
 
     ```sh
-    ./build/bin/llama-cli -m path_to_model -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
+    ./build/bin/jarvis-cli -m path_to_model -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
     ```
 
     - Use multiple devices:
 
     ```sh
-    ./build/bin/llama-cli -m path_to_model -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
+    ./build/bin/jarvis-cli -m path_to_model -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
     ```
 
 ### **GitHub contribution**:

@@ -4,7 +4,7 @@ body {
   font-family: 'Arial', sans-serif;
   font-size: 90%;
   background-color: var(--background-color-1);
-  color: var(--text-color-subtile-1); /* head 1 llama.cpp & triangle options for some reason */
+  color: var(--text-color-subtile-1); /* head 1 jarvis.cpp & triangle options for some reason */
   max-width: 600px;
   min-width: 300px;
   line-height: 1.2;

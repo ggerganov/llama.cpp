@@ -21,8 +21,8 @@ from gguf import GGUFReader  # noqa: E402
 
 logger = logging.getLogger("gguf-hash")
 
-# UUID_NAMESPACE_LLAMA_CPP = uuid.uuid5(uuid.NAMESPACE_URL, 'en.wikipedia.org/wiki/Llama.cpp')
-UUID_NAMESPACE_LLAMA_CPP = uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5')
+# UUID_NAMESPACE_JARVIS_CPP = uuid.uuid5(uuid.NAMESPACE_URL, 'en.wikipedia.org/wiki/Jarvis.cpp')
+UUID_NAMESPACE_JARVIS_CPP = uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5')
 
 
 # For more information about what field.parts and field.data represent,
@@ -31,7 +31,7 @@ def gguf_hash(reader: GGUFReader, filename: str, disable_progress_bar: bool, no_
     sha1 = hashlib.sha1()
     sha256 = hashlib.sha256()
     uuidv5_sha1 = hashlib.sha1()
-    uuidv5_sha1.update(UUID_NAMESPACE_LLAMA_CPP.bytes)
+    uuidv5_sha1.update(UUID_NAMESPACE_JARVIS_CPP.bytes)
 
     # Total Weight Calculation For Progress Bar
     total_weights = 0

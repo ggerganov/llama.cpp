@@ -1,6 +1,6 @@
-set(TARGET llama-quantize)
+set(TARGET jarvis-quantize)
 add_executable(${TARGET} quantize.cpp)
 install(TARGETS ${TARGET} RUNTIME)
-target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${TARGET} PRIVATE common jarvis ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(${TARGET} PRIVATE ../../common)
 target_compile_features(${TARGET} PRIVATE cxx_std_11)

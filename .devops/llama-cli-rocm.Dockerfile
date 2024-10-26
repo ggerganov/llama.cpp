@@ -9,7 +9,7 @@ ARG BASE_ROCM_DEV_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-co
 FROM ${BASE_ROCM_DEV_CONTAINER} AS build
 
 # Unless otherwise specified, we make a fat build.
-# List from https://github.com/ggerganov/llama.cpp/pull/1087#issuecomment-1682807878
+# List from https://github.com/ggerganov/jarvis.cpp/pull/1087#issuecomment-1682807878
 # This is mostly tied to rocBLAS supported archs.
 ARG ROCM_DOCKER_ARCH="\
     gfx803 \
@@ -40,6 +40,6 @@ ENV GGML_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
-RUN make -j$(nproc) llama-cli
+RUN make -j$(nproc) jarvis-cli
 
-ENTRYPOINT [ "/app/llama-cli" ]
+ENTRYPOINT [ "/app/jarvis-cli" ]

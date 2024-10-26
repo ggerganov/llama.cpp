@@ -33,7 +33,7 @@
   useRocm ? config.rocmSupport,
   enableCurl ? true,
   useVulkan ? false,
-  llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
+  jarvisVersion ? "0.0.0", # Arbitrary version, substituted by the flake
 
   # It's necessary to consistently use backendStdenv when building with CUDA support,
   # otherwise we get libstdc++ errors downstream.
@@ -103,8 +103,8 @@ let
 in
 
 effectiveStdenv.mkDerivation (finalAttrs: {
-  pname = "llama-cpp${pnameSuffix}";
-  version = llamaVersion;
+  pname = "jarvis-cpp${pnameSuffix}";
+  version = jarvisVersion;
 
   # Note: none of the files discarded here are visible in the sandbox or
   # affect the output hash. This also means they can be modified without
@@ -132,12 +132,12 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
   '';
 
-  # With PR#6015 https://github.com/ggerganov/llama.cpp/pull/6015,
+  # With PR#6015 https://github.com/ggerganov/jarvis.cpp/pull/6015,
   # `default.metallib` may be compiled with Metal compiler from XCode
   # and we need to escape sandbox on MacOS to access Metal compiler.
   # `xcrun` is used find the path of the Metal compiler, which is varible
   # and not on $PATH
-  # see https://github.com/ggerganov/llama.cpp/pull/6118 for discussion
+  # see https://github.com/ggerganov/jarvis.cpp/pull/6118 for discussion
   __noChroot = effectiveStdenv.isDarwin && useMetalKit && precompileMetalShaders;
 
   nativeBuildInputs =
@@ -166,10 +166,10 @@ effectiveStdenv.mkDerivation (finalAttrs: {
 
   cmakeFlags =
     [
-      (cmakeBool "LLAMA_BUILD_SERVER" true)
+      (cmakeBool "JARVIS_BUILD_SERVER" true)
       (cmakeBool "BUILD_SHARED_LIBS" (!enableStatic))
       (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
-      (cmakeBool "LLAMA_CURL" enableCurl)
+      (cmakeBool "JARVIS_CURL" enableCurl)
       (cmakeBool "GGML_NATIVE" false)
       (cmakeBool "GGML_BLAS" useBlas)
       (cmakeBool "GGML_CUDA" useCuda)
@@ -205,7 +205,7 @@ effectiveStdenv.mkDerivation (finalAttrs: {
   # if they haven't been added yet.
   postInstall = ''
     mkdir -p $out/include
-    cp $src/include/llama.h $out/include/
+    cp $src/include/jarvis.h $out/include/
   '';
 
   meta = {
@@ -219,11 +219,11 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     broken = (useMetalKit && !effectiveStdenv.isDarwin);
 
     description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
-    homepage = "https://github.com/ggerganov/llama.cpp/";
+    homepage = "https://github.com/ggerganov/jarvis.cpp/";
     license = lib.licenses.mit;
 
     # Accommodates `nix run` and `lib.getExe`
-    mainProgram = "llama-cli";
+    mainProgram = "jarvis-cli";
 
     # These people might respond, on the best effort basis, if you ping them
     # in case of Nix-specific regressions or for reviewing Nix-specific PRs.

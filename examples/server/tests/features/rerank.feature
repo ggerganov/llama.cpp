@@ -1,6 +1,6 @@
-@llama.cpp
+@jarvis.cpp
 @rerank
-Feature: llama.cpp server
+Feature: jarvis.cpp server
 
   Background: Server startup
     Given a server listening on localhost:8080

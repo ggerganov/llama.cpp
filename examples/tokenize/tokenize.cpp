@@ -1,6 +1,6 @@
 #include "common.h"
 //#include "log.h" // TODO: start using log.h
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cstdio>
 #include <cstring>
@@ -36,7 +36,7 @@ static void print_usage_information(const char * argv0) {
     printf("    --show-count                         print the total number of tokens.\n");
 }
 
-static void llama_log_callback_null(ggml_log_level level, const char * text, void * user_data) {
+static void jarvis_log_callback_null(ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) text;
     (void) user_data;
@@ -326,21 +326,21 @@ int main(int raw_argc, char ** raw_argv) {
     //////
 
     if (disable_logging) {
-        llama_log_set(llama_log_callback_null, NULL);
+        jarvis_log_set(jarvis_log_callback_null, NULL);
     }
 
-    llama_backend_init();
+    jarvis_backend_init();
 
-    llama_model_params model_params = llama_model_default_params();
+    jarvis_model_params model_params = jarvis_model_default_params();
     model_params.vocab_only = true;
-    llama_model * model = llama_load_model_from_file(model_path, model_params);
+    jarvis_model * model = jarvis_load_model_from_file(model_path, model_params);
     if (!model) {
         fprintf(stderr, "Error: could not load model from file '%s'.\n", model_path);
         return 1;
     }
 
-    llama_context_params ctx_params = llama_context_default_params();
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    jarvis_context_params ctx_params = jarvis_context_default_params();
+    jarvis_context * ctx = jarvis_new_context_with_model(model, ctx_params);
     if (!ctx) {
         fprintf(stderr, "Error: could not create context.\n");
         return 1;
@@ -360,11 +360,11 @@ int main(int raw_argc, char ** raw_argv) {
         prompt = stdin_buffer.str();
     }
 
-    const bool model_wants_add_bos = llama_add_bos_token(model);
+    const bool model_wants_add_bos = jarvis_add_bos_token(model);
     const bool add_bos = model_wants_add_bos && !no_bos;
     const bool parse_special = !no_parse_special;
 
-    std::vector<llama_token> tokens;
+    std::vector<jarvis_token> tokens;
     tokens = common_tokenize(model, prompt, add_bos, parse_special);
 
     if (printing_ids) {
@@ -397,8 +397,8 @@ int main(int raw_argc, char ** raw_argv) {
         printf("Total number of tokens: %ld\n", tokens.size());
     }
     // silence valgrind
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
     return 0;
 }

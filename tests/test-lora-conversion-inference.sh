@@ -4,7 +4,7 @@ set -e
 # Array of models to iterate over
 declare -a params=(
     "Gemma2ForCausalLM 64"
-    "LlamaForCausalLM 64"
+    "JarvisForCausalLM 64"
     "Phi3ForCausalLM 64"
 )
 
@@ -66,27 +66,27 @@ run_conversion_and_inference_lora() {
         --outtype f32
 
     echo -e "\n\n---------------------------\n\n"
-    echo "Running llama-export-lora with lora for $model_name with hidden_size $hidden_size..."
-    ./llama-export-lora \
+    echo "Running jarvis-export-lora with lora for $model_name with hidden_size $hidden_size..."
+    ./jarvis-export-lora \
         -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
         -o $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32-lora-merged.gguf \
         --lora $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora/Lora-F32-LoRA.gguf
 
     # Run inference
     echo -e "\n\n---------------------------\n\n"
-    echo "Running llama-cli without lora for $model_name with hidden_size $hidden_size..."
-    OUTPUT_BASE=$(./llama-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
+    echo "Running jarvis-cli without lora for $model_name with hidden_size $hidden_size..."
+    OUTPUT_BASE=$(./jarvis-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
         -p "$EXPECTED_BASE_FIRST_WORD" -n 50 --seed 42 --temp 0)
 
     echo -e "\n\n---------------------------\n\n"
-    echo "Running llama-cli with hot lora for $model_name with hidden_size $hidden_size..."
-    OUTPUT_LORA_HOT=$(./llama-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
+    echo "Running jarvis-cli with hot lora for $model_name with hidden_size $hidden_size..."
+    OUTPUT_LORA_HOT=$(./jarvis-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
         --lora $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora/Lora-F32-LoRA.gguf \
         -p "$EXPECTED_LORA_FIRST_WORD" -n 50 --seed 42 --temp 0)
 
     echo -e "\n\n---------------------------\n\n"
-    echo "Running llama-cli with merged lora for $model_name with hidden_size $hidden_size..."
-    OUTPUT_LORA_MERGED=$(./llama-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32-lora-merged.gguf \
+    echo "Running jarvis-cli with merged lora for $model_name with hidden_size $hidden_size..."
+    OUTPUT_LORA_MERGED=$(./jarvis-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32-lora-merged.gguf \
         -p "$EXPECTED_LORA_FIRST_WORD" -n 50 --seed 42 --temp 0)
 
     # Remove any initial white space

@@ -9,7 +9,7 @@
 #include <thread>
 
 void common_ngram_cache_update(common_ngram_cache & ngram_cache, int ngram_min, int ngram_max,
-                              std::vector<llama_token> & inp, int nnew, bool print_progress) {
+                              std::vector<jarvis_token> & inp, int nnew, bool print_progress) {
     const int64_t t_start_ms = ggml_time_ms();
     const int64_t inp_size = inp.size();
 
@@ -21,7 +21,7 @@ void common_ngram_cache_update(common_ngram_cache & ngram_cache, int ngram_min, 
         for (int64_t i = i_start; i < inp_size; ++i) {
             const int64_t ngram_start = i - ngram_size;
             common_ngram ngram(&inp[ngram_start], ngram_size);
-            const llama_token token = inp[i];
+            const jarvis_token token = inp[i];
 
             common_ngram_cache::iterator part_it = ngram_cache.find(ngram);
             if (part_it == ngram_cache.end()) {
@@ -51,18 +51,18 @@ void common_ngram_cache_update(common_ngram_cache & ngram_cache, int ngram_min, 
 }
 
 // Helper function to get a token from the combined, speculative sequence of inp and draft.
-static llama_token get_token(const std::vector<llama_token> & inp, const std::vector<llama_token> & draft, const size_t i) {
+static jarvis_token get_token(const std::vector<jarvis_token> & inp, const std::vector<jarvis_token> & draft, const size_t i) {
     return i < inp.size() ? inp[i] : draft[1 + i - inp.size()];
 }
 
 // If sample size or percentage are below these thresholds the draft is aborted early:
-constexpr int    draft_min_sample_size_lax[LLAMA_NGRAM_MAX] = { 2,  2,  1,  1};
-constexpr int        draft_min_percent_lax[LLAMA_NGRAM_MAX] = {66, 50, 50, 50};
-constexpr int draft_min_sample_size_strict[LLAMA_NGRAM_MAX] = { 4,  3,  2,  2};
-constexpr int     draft_min_percent_strict[LLAMA_NGRAM_MAX] = {75, 66, 66, 66};
+constexpr int    draft_min_sample_size_lax[JARVIS_NGRAM_MAX] = { 2,  2,  1,  1};
+constexpr int        draft_min_percent_lax[JARVIS_NGRAM_MAX] = {66, 50, 50, 50};
+constexpr int draft_min_sample_size_strict[JARVIS_NGRAM_MAX] = { 4,  3,  2,  2};
+constexpr int     draft_min_percent_strict[JARVIS_NGRAM_MAX] = {75, 66, 66, 66};
 
 // Helper function that tries to draft a token from only the static ngram cache:
-static llama_token try_draft(common_ngram_cache & nc_static, const common_ngram ngram_static) {
+static jarvis_token try_draft(common_ngram_cache & nc_static, const common_ngram ngram_static) {
     common_ngram_cache::iterator part_static_it = nc_static.find(ngram_static);
     if (part_static_it == nc_static.end()) {
         return -1;
@@ -71,10 +71,10 @@ static llama_token try_draft(common_ngram_cache & nc_static, const common_ngram 
 
     int max_count_static  = 0;
     int sum_count_static  = 0;
-    llama_token max_token = -1;
+    jarvis_token max_token = -1;
 
-    for (std::pair<llama_token, int> token_count_static : part_static) {
-        const llama_token token = token_count_static.first;
+    for (std::pair<jarvis_token, int> token_count_static : part_static) {
+        const jarvis_token token = token_count_static.first;
         const int32_t count_static  = token_count_static.second;
 
         if (count_static > max_count_static) {
@@ -84,21 +84,21 @@ static llama_token try_draft(common_ngram_cache & nc_static, const common_ngram 
         sum_count_static += count_static;
     }
 
-    if (sum_count_static < draft_min_sample_size_lax[LLAMA_NGRAM_STATIC-1]) {
+    if (sum_count_static < draft_min_sample_size_lax[JARVIS_NGRAM_STATIC-1]) {
         return -1;
     }
-    if (100*max_count_static < draft_min_percent_lax[LLAMA_NGRAM_STATIC-1]*sum_count_static) {
+    if (100*max_count_static < draft_min_percent_lax[JARVIS_NGRAM_STATIC-1]*sum_count_static) {
         return -1;
     }
     return max_token;
 }
 
 // Try to draft a token from primary cache (context/dynamic), validate with static cache:
-static llama_token try_draft(
+static jarvis_token try_draft(
     common_ngram_cache & nc_primary, const std::vector<common_ngram> & ngrams_primary, common_ngram_cache_part & part_static,
     const int * min_sample_size, const int * min_percent) {
 
-    llama_token drafted_token = -1;
+    jarvis_token drafted_token = -1;
 
     for (int i = ngrams_primary.size()-1; i >= 0 && drafted_token == -1; --i) {
         const common_ngram ngram_primary = ngrams_primary[i];
@@ -112,10 +112,10 @@ static llama_token try_draft(
         int max_count_primary = 0;
         int max_count_static  = 0;
         int sum_count_primary = 0;
-        llama_token max_token = -1;
+        jarvis_token max_token = -1;
 
-        for (std::pair<llama_token, int> token_count_primary : part_primary) {
-            const llama_token token = token_count_primary.first;
+        for (std::pair<jarvis_token, int> token_count_primary : part_primary) {
+            const jarvis_token token = token_count_primary.first;
 
             common_ngram_cache_part::iterator token_count_static_it = part_static.find(token);
 
@@ -143,22 +143,22 @@ static llama_token try_draft(
 }
 
 void common_ngram_cache_draft(
-    std::vector<llama_token> & inp, std::vector<llama_token> & draft, int n_draft, int ngram_min, int ngram_max,
+    std::vector<jarvis_token> & inp, std::vector<jarvis_token> & draft, int n_draft, int ngram_min, int ngram_max,
     common_ngram_cache & nc_context, common_ngram_cache & nc_dynamic, common_ngram_cache & nc_static
 ) {
     GGML_ASSERT(draft.size() == 1);
     const int inp_size = inp.size();
 
-    if (inp_size < LLAMA_NGRAM_STATIC) {
+    if (inp_size < JARVIS_NGRAM_STATIC) {
         return;
     }
 
     while ((int) draft.size()-1 < n_draft) {
-        llama_token drafted_token = -1;
+        jarvis_token drafted_token = -1;
 
-        const int ngram_start_static = inp_size-LLAMA_NGRAM_STATIC + draft.size()-1;
+        const int ngram_start_static = inp_size-JARVIS_NGRAM_STATIC + draft.size()-1;
         common_ngram ngram_static;
-        for (int j = ngram_start_static; j < ngram_start_static + LLAMA_NGRAM_STATIC; ++j) {
+        for (int j = ngram_start_static; j < ngram_start_static + JARVIS_NGRAM_STATIC; ++j) {
             ngram_static.tokens[j-ngram_start_static] = get_token(inp, draft, j);
         }
         common_ngram_cache::iterator part_static_it = nc_static.find(ngram_static);
@@ -207,12 +207,12 @@ void common_ngram_cache_save(common_ngram_cache & ngram_cache, std::string & fil
 
         file_out.write(reinterpret_cast<const char *>(&ngram),   sizeof(common_ngram));
         file_out.write(reinterpret_cast<const char *>(&ntokens), sizeof(int32_t));
-        for (std::pair<llama_token, int32_t> item2 : token_counts) {
-            const llama_token token = item2.first;
+        for (std::pair<jarvis_token, int32_t> item2 : token_counts) {
+            const jarvis_token token = item2.first;
             const int32_t     count = item2.second;
             GGML_ASSERT(count > 0);
 
-            file_out.write(reinterpret_cast<const char *>(&token), sizeof(llama_token));
+            file_out.write(reinterpret_cast<const char *>(&token), sizeof(jarvis_token));
             file_out.write(reinterpret_cast<const char *>(&count), sizeof(int32_t));
         }
     }
@@ -228,7 +228,7 @@ common_ngram_cache common_ngram_cache_load(std::string & filename) {
 
     common_ngram ngram;
     int32_t     ntokens;
-    llama_token token;
+    jarvis_token token;
     int32_t     count;
 
     char * ngramc   = reinterpret_cast<char*>(&ngram);
@@ -243,7 +243,7 @@ common_ngram_cache common_ngram_cache_load(std::string & filename) {
 
         for (int i = 0; i < ntokens; ++i) {
             GGML_ASSERT(!hashmap_file.eof());
-            GGML_ASSERT(hashmap_file.read(tokenc, sizeof(llama_token)));
+            GGML_ASSERT(hashmap_file.read(tokenc, sizeof(jarvis_token)));
             GGML_ASSERT(!hashmap_file.eof());
             GGML_ASSERT(hashmap_file.read(countc, sizeof(int32_t)));
             GGML_ASSERT(count > 0);
@@ -268,8 +268,8 @@ void common_ngram_cache_merge(common_ngram_cache & ngram_cache_target, common_ng
             continue;
         }
 
-        for (std::pair<llama_token, int32_t> token_count : part) {
-            const llama_token token = token_count.first;
+        for (std::pair<jarvis_token, int32_t> token_count : part) {
+            const jarvis_token token = token_count.first;
             const int32_t     count = token_count.second;
             GGML_ASSERT(count > 0);
 

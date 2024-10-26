@@ -24,9 +24,9 @@ extern "C" {
 #endif
 
 
-// uuid.uuid5(uuid.NAMESPACE_URL, 'en.wikipedia.org/wiki/Llama.cpp')
-#define UUID_NAMESPACE_LLAMA_CPP "ef001206-dadc-5f6d-a15f-3359e577d4e5"
-#define UUID_NAMESPACE_LLAMA_CPP_HEX 0xef, 0x00, 0x12, 0x06, 0xda, 0xdc, 0x5f, 0x6d, 0xa1, 0x5f, 0x33, 0x59, 0xe5, 0x77, 0xd4, 0xe5
+// uuid.uuid5(uuid.NAMESPACE_URL, 'en.wikipedia.org/wiki/Jarvis.cpp')
+#define UUID_NAMESPACE_JARVIS_CPP "ef001206-dadc-5f6d-a15f-3359e577d4e5"
+#define UUID_NAMESPACE_JARVIS_CPP_HEX 0xef, 0x00, 0x12, 0x06, 0xda, 0xdc, 0x5f, 0x6d, 0xa1, 0x5f, 0x33, 0x59, 0xe5, 0x77, 0xd4, 0xe5
 
 
 #define HASH_TYPE_SHA256_STR "sha256"
@@ -320,7 +320,7 @@ static hash_exit_code_t gguf_hash(const hash_params & hash_params) {
     // sha1 for uuid init
     SHA1_CTX sha1_for_uuid_ctx;
     if (hash_params.uuid) {
-        unsigned char const uuidv5_namespace[] = {UUID_NAMESPACE_LLAMA_CPP_HEX};
+        unsigned char const uuidv5_namespace[] = {UUID_NAMESPACE_JARVIS_CPP_HEX};
         SHA1Init(&sha1_for_uuid_ctx);
         SHA1Update( &sha1_for_uuid_ctx, (unsigned char const *)uuidv5_namespace, sizeof(uuidv5_namespace));
     }

@@ -1038,7 +1038,7 @@ class tinyBLAS_Q0_AVX {
  *
  * For example, for single-threaded single-precision GEMM you can say
  *
- *     llamafile_sgemm(m, n, k, A, lda, B, ldb, C, ldc,
+ *     jarvisfile_sgemm(m, n, k, A, lda, B, ldb, C, ldc,
  *                     0, 1,
  *                     GGML_TYPE_F32, GGML_TYPE_F32, GGML_TYPE_F32);
  *
@@ -1058,7 +1058,7 @@ class tinyBLAS_Q0_AVX {
  * @param Ctype is GGML data type of `C`
  * @return true if this function was able to service the matmul request
  */
-bool llamafile_sgemm(int64_t m, int64_t n, int64_t k, const void *A, int64_t lda, const void *B, int64_t ldb, void *C,
+bool jarvisfile_sgemm(int64_t m, int64_t n, int64_t k, const void *A, int64_t lda, const void *B, int64_t ldb, void *C,
                      int64_t ldc, int ith, int nth, int Atype, int Btype, int Ctype) {
 
     assert(m >= 0);

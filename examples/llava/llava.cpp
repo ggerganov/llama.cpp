@@ -1,7 +1,7 @@
 #include "clip.h"
 #include "llava.h"
 
-#include "llama.h"
+#include "jarvis.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -367,12 +367,12 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     return true;
 }
 
-bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx * ctx_clip) {
+bool llava_validate_embed_size(const jarvis_context * ctx_jarvis, const clip_ctx * ctx_clip) {
         // make sure that the correct mmproj was used, i.e., compare apples to apples
-    int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
+    int n_jarvis_embd = jarvis_n_embd(jarvis_get_model(ctx_jarvis));
     auto n_image_embd = clip_n_mmproj_embd(ctx_clip);
-    if (n_image_embd != n_llama_embd) {
-        LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
+    if (n_image_embd != n_jarvis_embd) {
+        LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_jarvis_embd);
         return false;
     }
     return true;
@@ -402,13 +402,13 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
 }
 
 struct llava_embd_batch {
-    std::vector<llama_pos>      pos;
+    std::vector<jarvis_pos>      pos;
     std::vector<int32_t>        n_seq_id;
-    std::vector<llama_seq_id>   seq_id_0;
-    std::vector<llama_seq_id *> seq_ids;
+    std::vector<jarvis_seq_id>   seq_id_0;
+    std::vector<jarvis_seq_id *> seq_ids;
     std::vector<int8_t>         logits;
-    llama_batch batch;
-    llava_embd_batch(float * embd, int32_t n_tokens, llama_pos pos_0, llama_seq_id seq_id) {
+    jarvis_batch batch;
+    llava_embd_batch(float * embd, int32_t n_tokens, jarvis_pos pos_0, jarvis_seq_id seq_id) {
         pos     .resize(n_tokens);
         n_seq_id.resize(n_tokens);
         seq_ids .resize(n_tokens + 1);
@@ -434,8 +434,8 @@ struct llava_embd_batch {
     }
 };
 
-bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, int n_batch, int * n_past) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
+bool llava_eval_image_embed(jarvis_context * ctx_jarvis, const struct llava_image_embed * image_embed, int n_batch, int * n_past) {
+    int n_embd  = jarvis_n_embd(jarvis_get_model(ctx_jarvis));
 
     for (int i = 0; i < image_embed->n_image_pos; i += n_batch) {
         int n_eval = image_embed->n_image_pos - i;
@@ -444,7 +444,7 @@ bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_
         }
         float * embd = image_embed->embed+i*n_embd;
         llava_embd_batch llava_batch = llava_embd_batch(embd, n_eval, *n_past, 0);
-        if (llama_decode(ctx_llama, llava_batch.batch)) {
+        if (jarvis_decode(ctx_jarvis, llava_batch.batch)) {
             LOG_ERR("%s : failed to eval\n", __func__);
             return false;
         }

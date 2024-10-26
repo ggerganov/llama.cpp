@@ -1,12 +1,12 @@
-@llama.cpp
+@jarvis.cpp
 @server
-Feature: llama.cpp server
+Feature: jarvis.cpp server
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
+    And   a model file tinyjarviss/stories260K.gguf from HF repo ggml-org/models
     And   a model file test-model.gguf
-    And   a model alias tinyllama-2
+    And   a model alias tinyjarvis-2
     And   BOS token is 1
     And   42 as server seed
       # KV Cache corresponds to the total amount of tokens
@@ -33,7 +33,7 @@ Feature: llama.cpp server
     And   the completion is <truncated> truncated
     And   <n_prompt> prompt tokens are processed
     And   prometheus metrics are exposed
-    And   metric llamacpp:tokens_predicted is <n_predicted>
+    And   metric jarviscpp:tokens_predicted is <n_predicted>
 
     Examples: Prompts
       | prompt                                                                    | n_predict | re_content                                  | n_prompt | n_predicted | truncated |
@@ -67,8 +67,8 @@ Feature: llama.cpp server
 
     Examples: Prompts
       | model        | system_prompt               | user_prompt                          | max_tokens | re_content                        | n_prompt | n_predicted | enable_streaming | truncated |
-      | llama-2      | Book                        | What is the best book                | 8          | (Here\|what)+                     | 77       | 8           | disabled         | not       |
-      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 128        | (thanks\|happy\|bird\|Annabyear)+ | -1       | 64          | enabled          |           |
+      | jarvis-2      | Book                        | What is the best book                | 8          | (Here\|what)+                     | 77       | 8           | disabled         | not       |
+      | codejarvis70b | You are a coding assistant. | Write the fibonacci function in c++. | 128        | (thanks\|happy\|bird\|Annabyear)+ | -1       | 64          | enabled          |           |
 
 
   Scenario Outline: OAI Compatibility w/ response format
@@ -116,5 +116,5 @@ Feature: llama.cpp server
   Scenario: Models available
     Given available models
     Then  1 models are supported
-    Then  model 0 is identified by tinyllama-2
+    Then  model 0 is identified by tinyjarvis-2
     Then  model 0 is trained on 128 tokens context

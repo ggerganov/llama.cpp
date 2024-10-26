@@ -15,13 +15,13 @@ RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key 
 WORKDIR /app
 COPY . .
 RUN cmake -B build -DGGML_VULKAN=1 && \
-    cmake --build build --config Release --target llama-cli
+    cmake --build build --config Release --target jarvis-cli
 
 # Clean up
 WORKDIR /
-RUN cp /app/build/bin/llama-cli /llama-cli && \
+RUN cp /app/build/bin/jarvis-cli /jarvis-cli && \
     rm -rf /app
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/llama-cli" ]
+ENTRYPOINT [ "/jarvis-cli" ]

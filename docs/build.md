@@ -1,13 +1,13 @@
-# Build llama.cpp locally
+# Build jarvis.cpp locally
 
 **To get the Code:**
 
 ```bash
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp
+git clone https://github.com/ggerganov/jarvis.cpp
+cd jarvis.cpp
 ```
 
-In order to build llama.cpp you have four different options.
+In order to build jarvis.cpp you have four different options.
 
 - Using `make`:
   - On Linux or MacOS:
@@ -21,17 +21,17 @@ In order to build llama.cpp you have four different options.
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
     2. Extract `w64devkit` on your pc.
     3. Run `w64devkit.exe`.
-    4. Use the `cd` command to reach the `llama.cpp` folder.
+    4. Use the `cd` command to reach the `jarvis.cpp` folder.
     5. From here you can run:
         ```bash
         make
         ```
 
   - Notes:
-    - For `Q4_0_4_4` quantization type build, add the `GGML_NO_LLAMAFILE=1` flag. For example, use `make GGML_NO_LLAMAFILE=1`.
+    - For `Q4_0_4_4` quantization type build, add the `GGML_NO_JARVISFILE=1` flag. For example, use `make GGML_NO_JARVISFILE=1`.
     - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
     - For faster repeated compilation, install [ccache](https://ccache.dev/).
-    - For debug builds, run `make LLAMA_DEBUG=1`
+    - For debug builds, run `make JARVIS_DEBUG=1`
 
 - Using `CMake`:
 
@@ -42,7 +42,7 @@ In order to build llama.cpp you have four different options.
 
   **Notes**:
 
-    - For `Q4_0_4_4` quantization type build, add the `-DGGML_LLAMAFILE=OFF` cmake option. For example, use `cmake -B build -DGGML_LLAMAFILE=OFF`.
+    - For `Q4_0_4_4` quantization type build, add the `-DGGML_JARVISFILE=OFF` cmake option. For example, use `cmake -B build -DGGML_JARVISFILE=OFF`.
     - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
     - For faster repeated compilation, install [ccache](https://ccache.dev/).
     - For debug builds, there are two cases:
@@ -118,7 +118,7 @@ This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS i
     4. From the OpenBLAS zip that you just downloaded copy `libopenblas.a`, located inside the `lib` folder, inside `w64devkit\x86_64-w64-mingw32\lib`.
     5. From the same OpenBLAS zip copy the content of the `include` folder inside `w64devkit\x86_64-w64-mingw32\include`.
     6. Run `w64devkit.exe`.
-    7. Use the `cd` command to reach the `llama.cpp` folder.
+    7. Use the `cd` command to reach the `jarvis.cpp` folder.
     8. From here you can run:
 
         ```bash
@@ -140,13 +140,13 @@ Check [BLIS.md](./backend/BLIS.md) for more information.
 
 SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
 
-llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
+jarvis.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
 
-For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
+For detailed info, please refer to [jarvis.cpp for SYCL](./backend/SYCL.md).
 
 ### Intel oneMKL
 
-Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
+Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [jarvis.cpp for SYCL](./backend/SYCL.md).
 
 - Using manual oneAPI installation:
   By default, `GGML_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DGGML_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
@@ -159,7 +159,7 @@ Building through oneAPI compilers will make avx_vnni instruction set available f
 - Using oneAPI docker image:
   If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-basekit](https://hub.docker.com/r/intel/oneapi-basekit). Then, you can use the commands given above.
 
-Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
+Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-jarvis2-on-intel-cpu.html) for more information.
 
 ### CUDA
 
@@ -300,7 +300,7 @@ Libs: -lvulkan-1
 EOF
 
 ```
-Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
+Switch into the `jarvis.cpp` directory and run `make GGML_VULKAN=1`.
 
 #### MSYS2
 Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
@@ -311,7 +311,7 @@ Install [MSYS2](https://www.msys2.org/) and then run the following commands in a
       mingw-w64-ucrt-x86_64-vulkan-devel \
       mingw-w64-ucrt-x86_64-shaderc
   ```
-Switch into `llama.cpp` directory and build using CMake.
+Switch into `jarvis.cpp` directory and build using CMake.
 ```sh
 cmake -B build -DGGML_VULKAN=ON
 cmake --build build --config Release
@@ -323,10 +323,10 @@ You don't need to install Vulkan SDK. It will be installed inside the container.
 
 ```sh
 # Build the image
-docker build -t llama-cpp-vulkan -f .devops/llama-cli-vulkan.Dockerfile .
+docker build -t jarvis-cpp-vulkan -f .devops/jarvis-cli-vulkan.Dockerfile .
 
 # Then, use it:
-docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
+docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 jarvis-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
 ```
 
 **Without docker**:
@@ -348,13 +348,13 @@ Alternatively your package manager might be able to provide the appropriate libr
 For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
 For Fedora 40, you can install `vulkan-devel`, `glslc` and `glslang` packages.
 
-Then, build llama.cpp using the cmake command below:
+Then, build jarvis.cpp using the cmake command below:
 
 ```bash
 cmake -B build -DGGML_VULKAN=1
 cmake --build build --config Release
 # Test the output binary (with "-ngl 33" to offload all layers to GPU)
-./bin/llama-cli -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
+./bin/jarvis-cli -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 
 # You should see in the output, ggml_vulkan detected your GPU. For example:
 # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
@@ -367,7 +367,7 @@ For more information about Ascend NPU in [Ascend Community](https://www.hiascend
 
 Make sure to have the CANN toolkit installed. You can download it from here: [CANN Toolkit](https://www.hiascend.com/developer/download/community/result?module=cann)
 
-Go to `llama.cpp` directory and build using CMake.
+Go to `jarvis.cpp` directory and build using CMake.
 ```bash
 cmake -B build -DGGML_CANN=on -DCMAKE_BUILD_TYPE=release
 cmake --build build --config release
@@ -375,15 +375,15 @@ cmake --build build --config release
 
 You can test with:
 
-`./build/llama-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32`
+`./build/jarvis-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32`
 
-If the fllowing info is output on screen, you are using `llama.cpp by CANN backend`:
+If the fllowing info is output on screen, you are using `jarvis.cpp by CANN backend`:
 ```bash
 llm_load_tensors:       CANN buffer size = 13313.00 MiB
-llama_new_context_with_model:       CANN compute buffer size =  1260.81 MiB
+jarvis_new_context_with_model:       CANN compute buffer size =  1260.81 MiB
 ```
 
-For detailed info, such as model/device supports, CANN install, please refer to [llama.cpp for CANN](./backend/CANN.md).
+For detailed info, such as model/device supports, CANN install, please refer to [jarvis.cpp for CANN](./backend/CANN.md).
 
 ### Android
 
@@ -391,6 +391,6 @@ To read documentation for how to build on Android, [click here](./android.md)
 
 ### Arm CPU optimized mulmat kernels
 
-Llama.cpp includes a set of optimized mulmat kernels for the Arm architecture, leveraging Arm® Neon™, int8mm and SVE instructions. These kernels are enabled at build time through the appropriate compiler cpu-type flags, such as `-DCMAKE_C_FLAGS=-march=armv8.2a+i8mm+sve`. Note that these optimized kernels require the model to be quantized into one of the formats: `Q4_0_4_4` (Arm Neon), `Q4_0_4_8` (int8mm) or `Q4_0_8_8` (SVE). The SVE mulmat kernel specifically requires a vector width of 256 bits. When running on devices with a different vector width, it is recommended to use the `Q4_0_4_8` (int8mm) or `Q4_0_4_4` (Arm Neon) formats for better performance. Refer to [examples/quantize/README.md](../examples/quantize/README.md) for more information on the quantization formats.
+Jarvis.cpp includes a set of optimized mulmat kernels for the Arm architecture, leveraging Arm® Neon™, int8mm and SVE instructions. These kernels are enabled at build time through the appropriate compiler cpu-type flags, such as `-DCMAKE_C_FLAGS=-march=armv8.2a+i8mm+sve`. Note that these optimized kernels require the model to be quantized into one of the formats: `Q4_0_4_4` (Arm Neon), `Q4_0_4_8` (int8mm) or `Q4_0_8_8` (SVE). The SVE mulmat kernel specifically requires a vector width of 256 bits. When running on devices with a different vector width, it is recommended to use the `Q4_0_4_8` (int8mm) or `Q4_0_4_4` (Arm Neon) formats for better performance. Refer to [examples/quantize/README.md](../examples/quantize/README.md) for more information on the quantization formats.
 
-To support `Q4_0_4_4`, you must build with `GGML_NO_LLAMAFILE=1` (`make`) or `-DGGML_LLAMAFILE=OFF` (`cmake`).
+To support `Q4_0_4_4`, you must build with `GGML_NO_JARVISFILE=1` (`make`) or `-DGGML_JARVISFILE=OFF` (`cmake`).

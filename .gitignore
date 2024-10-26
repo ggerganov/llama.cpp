@@ -48,8 +48,8 @@ build*
 !build-info.sh
 !build.zig
 !docs/build.md
-/libllama.so
-/llama-*
+/libjarvis.so
+/jarvis-*
 /vulkan-shaders-gen
 android-ndk-*
 arm_neon.h
@@ -57,7 +57,7 @@ cmake-build-*
 CMakeSettings.json
 compile_commands.json
 ggml-metal-embed.metal
-llama-batched-swift
+jarvis-batched-swift
 /rpc-server
 out/
 tmp/
@@ -118,7 +118,7 @@ poetry.toml
 /tests/test-double-float
 /tests/test-grad0
 /tests/test-grammar-parser
-/tests/test-llama-grammar
+/tests/test-jarvis-grammar
 /tests/test-opt
 /tests/test-quantize-fns
 /tests/test-quantize-perf

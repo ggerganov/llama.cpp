@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "llama-cpp-scripts"
+name = "jarvis-cpp-scripts"
 version = "0.0.0"
-description = "Scripts that ship with llama.cpp"
+description = "Scripts that ship with jarvis.cpp"
 authors = ["GGML <ggml@ggml.ai>"]
 readme = "README.md"
 homepage = "https://ggml.ai"
-repository = "https://github.com/ggerganov/llama.cpp"
-keywords = ["ggml", "gguf", "llama.cpp"]
+repository = "https://github.com/ggerganov/jarvis.cpp"
+keywords = ["ggml", "gguf", "jarvis.cpp"]
 packages = [{ include = "*.py", from = "." }]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -39,6 +39,6 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-llama-convert-hf-to-gguf = "convert_hf_to_gguf:main"
-llama-convert-llama-ggml-to-gguf = "convert_llama_ggml_to_gguf:main"
-llama-ggml-vk-generate-shaders = "ggml_vk_generate_shaders:main"
+jarvis-convert-hf-to-gguf = "convert_hf_to_gguf:main"
+jarvis-convert-jarvis-ggml-to-gguf = "convert_jarvis_ggml_to_gguf:main"
+jarvis-ggml-vk-generate-shaders = "ggml_vk_generate_shaders:main"

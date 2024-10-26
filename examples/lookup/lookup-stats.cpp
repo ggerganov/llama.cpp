@@ -2,7 +2,7 @@
 #include "common.h"
 #include "log.h"
 #include "ngram-cache.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "ggml.h"
 
 #include <cstdint>
@@ -15,7 +15,7 @@
 int main(int argc, char ** argv){
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_LOOKUP)) {
         return 1;
     }
 
@@ -23,18 +23,18 @@ int main(int argc, char ** argv){
 
     const int n_draft = params.n_draft;
 
-    // init llama.cpp
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    // init jarvis.cpp
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
 
     // tokenize the prompt
-    std::vector<llama_token> inp;
+    std::vector<jarvis_token> inp;
     inp = common_tokenize(ctx, params.prompt, true, true);
 
     common_ngram_cache ngram_cache_context;
@@ -65,7 +65,7 @@ int main(int argc, char ** argv){
     }
 
     const int n_input = inp.size();
-    const int n_ctx = llama_n_ctx(ctx);
+    const int n_ctx = jarvis_n_ctx(ctx);
 
     int n_drafted = 0;
     int n_accept  = 0;
@@ -75,26 +75,26 @@ int main(int argc, char ** argv){
     // Iterate over input tokens in chunks of size n_ctx.
     // Each chunk is treated as if a sequential generation but with pre-determined tokens to ensure reproducibility.
     for (int i_start = 0; i_start + n_ctx < n_input; i_start += n_ctx) {
-        const std::vector<llama_token> inp_slice(inp.begin() + i_start, inp.begin() + i_start + n_ctx);
-        std::vector<llama_token> pseudo_output;
+        const std::vector<jarvis_token> inp_slice(inp.begin() + i_start, inp.begin() + i_start + n_ctx);
+        std::vector<jarvis_token> pseudo_output;
         pseudo_output.push_back(inp_slice[0]);
 
         while ((int) pseudo_output.size() < n_ctx) {
             // Simulate drafting and decoding from draft:
-            std::vector<llama_token> draft;
+            std::vector<jarvis_token> draft;
             draft.push_back(pseudo_output.back());
 
             {
                 const int64_t t_start_draft_us = ggml_time_us();
-                common_ngram_cache_draft(pseudo_output, draft, n_draft, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
+                common_ngram_cache_draft(pseudo_output, draft, n_draft, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
                 t_draft_us += ggml_time_us() - t_start_draft_us;
             }
 
             n_drafted += draft.size() - 1;
 
             for (size_t j = 1; j < draft.size() && (int) pseudo_output.size() < n_ctx; ++j) {
-                const llama_token ground_truth = inp_slice[pseudo_output.size()];
-                const llama_token drafted = draft[j];
+                const jarvis_token ground_truth = inp_slice[pseudo_output.size()];
+                const jarvis_token drafted = draft[j];
 
                 if (ground_truth != drafted) {
                     break;
@@ -105,7 +105,7 @@ int main(int argc, char ** argv){
 
                 {
                     const int64_t t_start_draft_us = ggml_time_us();
-                    common_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, pseudo_output, 1, false);
+                    common_ngram_cache_update(ngram_cache_context, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, pseudo_output, 1, false);
                     t_draft_us += ggml_time_us() - t_start_draft_us;
                 }
             }
@@ -115,7 +115,7 @@ int main(int argc, char ** argv){
                 pseudo_output.push_back(inp_slice[pseudo_output.size()]);
                 {
                     const int64_t t_start_draft_us = ggml_time_us();
-                    common_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, pseudo_output, 1, false);
+                    common_ngram_cache_update(ngram_cache_context, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, pseudo_output, 1, false);
                     t_draft_us += ggml_time_us() - t_start_draft_us;
                 }
             }
@@ -149,10 +149,10 @@ int main(int argc, char ** argv){
     LOG_INF("n_accept     = %d\n", n_accept);
     LOG_INF("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     LOG("\n\n");
 

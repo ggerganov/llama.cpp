@@ -435,7 +435,7 @@ namespace console {
                 fputc('\n', out);
                 has_more = !has_more;
             } else {
-                // llama will just eat the single space, it won't act as a space
+                // jarvis will just eat the single space, it won't act as a space
                 if (line.length() == 1 && line.back() == ' ') {
                     line.clear();
                     pop_cursor();

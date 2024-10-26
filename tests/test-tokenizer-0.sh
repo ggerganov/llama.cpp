@@ -22,7 +22,7 @@ set -e
 printf "Tokenizing using (py)  Python AutoTokenizer ...\n"
 python3 ./tests/test-tokenizer-0.py ./models/tokenizers/$name --fname-tok $input > /tmp/test-tokenizer-0-$name-py.log 2>&1
 
-printf "Tokenizing using (cpp) llama.cpp ...\n"
+printf "Tokenizing using (cpp) jarvis.cpp ...\n"
 ./tests/test-tokenizer-0 ./models/ggml-vocab-$name.gguf $input > /tmp/test-tokenizer-0-$name-cpp.log 2>&1
 
 cat /tmp/test-tokenizer-0-$name-py.log | grep "tokenized in"

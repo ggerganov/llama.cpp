@@ -2,11 +2,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct LoadCustomButton: View {
-    @ObservedObject private var llamaState: LlamaState
+    @ObservedObject private var jarvisState: JarvisState
     @State private var showFileImporter = false
 
-    init(llamaState: LlamaState) {
-        self.llamaState = llamaState
+    init(jarvisState: JarvisState) {
+        self.jarvisState = jarvisState
     }
 
     var body: some View {
@@ -29,7 +29,7 @@ struct LoadCustomButton: View {
                     if !gotAccess { return }
 
                     do {
-                        try llamaState.loadModel(modelUrl: file.absoluteURL)
+                        try jarvisState.loadModel(modelUrl: file.absoluteURL)
                     } catch let err {
                         print("Error: \(err.localizedDescription)")
                     }

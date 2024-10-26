@@ -1,4 +1,4 @@
-#include "llama.h"
+#include "jarvis.h"
 #include "common.h"
 #include "unicode.h"
 #include "console.h"
@@ -35,37 +35,37 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s : ignoring merges for tokens inside vocab\n", __func__);
     }
 
-    llama_model * model;
-    llama_context * ctx;
+    jarvis_model * model;
+    jarvis_context * ctx;
 
-    llama_backend_init();
+    jarvis_backend_init();
 
     // load the vocab
     {
-        auto mparams = llama_model_default_params();
+        auto mparams = jarvis_model_default_params();
 
         mparams.vocab_only = true;
 
-        model = llama_load_model_from_file(fname.c_str(), mparams);
+        model = jarvis_load_model_from_file(fname.c_str(), mparams);
 
         if (model == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
             return 1;
         }
 
-        auto cparams = llama_context_default_params();
+        auto cparams = jarvis_context_default_params();
 
-        ctx = llama_new_context_with_model(model, cparams);
+        ctx = jarvis_new_context_with_model(model, cparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
-            llama_free_model(model);
+            jarvis_free_model(model);
             return 1;
         }
     }
 
-    //GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_BPE);
-    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
+    //GGML_ASSERT(jarvis_vocab_type(model) == JARVIS_VOCAB_TYPE_BPE);
+    if (jarvis_vocab_type(model) != JARVIS_VOCAB_TYPE_BPE) {
         return 99;
     }
 
@@ -75,13 +75,13 @@ int main(int argc, char **argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_n_vocab(model);
+    const int n_vocab = jarvis_n_vocab(model);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = common_detokenize(ctx, std::vector<int>(1, i));
         try {
             auto cps = unicode_cpts_from_utf8(str);
-            std::vector<llama_token> tokens = common_tokenize(ctx, str, false, true);
+            std::vector<jarvis_token> tokens = common_tokenize(ctx, str, false, true);
             if (ignore_merges && tokens.size() > 1) {
                 fprintf(stderr,
                         "%s : error: token %d detokenizes to '%s'(%zu) but "
@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
                     }
 
                     std::string str = unicode_cpt_to_utf8(cp);
-                    std::vector<llama_token> tokens = common_tokenize(ctx, str, false);
+                    std::vector<jarvis_token> tokens = common_tokenize(ctx, str, false);
                     std::string check = common_detokenize(ctx, tokens);
                     if (cp != 9601 && str != check) {
                         fprintf(stderr, "error: codepoint 0x%x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
@@ -143,10 +143,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    llama_free_model(model);
-    llama_free(ctx);
+    jarvis_free_model(model);
+    jarvis_free(ctx);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

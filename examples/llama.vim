@@ -1,10 +1,10 @@
-" LLM-based text completion using llama.cpp
+" LLM-based text completion using jarvis.cpp
 "
 " requires:
 "
 "   - neovim or vim
 "   - curl
-"   - llama.cpp server instance
+"   - jarvis.cpp server instance
 "   - FIM-compatible model
 "
 " sample config:
@@ -13,11 +13,11 @@
 "   - Shift+Tab - accept just the first line of the suggestion
 "   - Ctrl+F    - toggle FIM completion manually
 "
-" make symlink or copy this file to ~/.config/nvim/autoload/llama.vim
+" make symlink or copy this file to ~/.config/nvim/autoload/jarvis.vim
 "
-" start the llama.cpp server with a FIM-compatible model. for example:
+" start the jarvis.cpp server with a FIM-compatible model. for example:
 "
-"   $ llama-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 256
+"   $ jarvis-server -m {model.gguf} --port 8012 -ngl 99 -fa -dt 0.1 --ubatch-size 512 --batch-size 1024 --cache-reuse 256
 "
 "   --batch-size [512, model max context]
 "
@@ -27,28 +27,28 @@
 "   --ubatch-size [64, 2048]
 "
 "     chunks the batch into smaller chunks for faster processing
-"     depends on the specific hardware. use llama-bench to profile and determine the best size
+"     depends on the specific hardware. use jarvis-bench to profile and determine the best size
 "
-"   --cache-reuse (ge:llama_config.n_predict, 1024]
+"   --cache-reuse (ge:jarvis_config.n_predict, 1024]
 "
-"     this should be either 0 (disabled) or strictly larger than g:llama_config.n_predict
+"     this should be either 0 (disabled) or strictly larger than g:jarvis_config.n_predict
 "     using non-zero value enables context reuse on the server side which dramatically improves the performance at
 "     large contexts. a value of 256 should be good for all cases
 "
-" run this once to initialise llama.vim:
+" run this once to initialise jarvis.vim:
 "
-"   :call llama#init()
+"   :call jarvis#init()
 "
-" more info: https://github.com/ggerganov/llama.cpp/pull/9787
+" more info: https://github.com/ggerganov/jarvis.cpp/pull/9787
 "
 
 " colors (adjust to your liking)
-highlight llama_hl_hint guifg=#ff772f ctermfg=202
-highlight llama_hl_info guifg=#77ff2f ctermfg=119
+highlight jarvis_hl_hint guifg=#ff772f ctermfg=202
+highlight jarvis_hl_info guifg=#77ff2f ctermfg=119
 
 " general parameters:
 "
-"   endpoint:         llama.cpp server endpoint
+"   endpoint:         jarvis.cpp server endpoint
 "   n_prefix:         number of lines before the cursor location to include in the local prefix
 "   n_suffix:         number of lines after  the cursor location to include in the local suffix
 "   n_predict:        max number of tokens to predict
@@ -91,7 +91,7 @@ let s:default_config = {
     \ 'ring_update_ms':   1000,
     \ }
 
-let g:llama_config = get(g:, 'llama_config', s:default_config)
+let g:jarvis_config = get(g:, 'jarvis_config', s:default_config)
 
 function! s:get_indent(str)
     let l:count = 0
@@ -109,10 +109,10 @@ function! s:rand(i0, i1) abort
     return a:i0 + rand() % (a:i1 - a:i0 + 1)
 endfunction
 
-function! llama#init()
+function! jarvis#init()
     if !executable('curl')
         echohl WarningMsg
-        echo 'llama.vim requires the "curl" command to be available'
+        echo 'jarvis.vim requires the "curl" command to be available'
         echohl None
         return
     endif
@@ -145,8 +145,8 @@ function! llama#init()
     let s:ghost_text_vim = has('textprop')
 
     if s:ghost_text_vim
-        let s:hlgroup_hint = 'llama_hl_hint'
-        let s:hlgroup_info = 'llama_hl_info'
+        let s:hlgroup_hint = 'jarvis_hl_hint'
+        let s:hlgroup_info = 'jarvis_hl_info'
 
         if empty(prop_type_get(s:hlgroup_hint))
             call prop_type_add(s:hlgroup_hint, {'highlight': s:hlgroup_hint})
@@ -156,34 +156,34 @@ function! llama#init()
         endif
     endif
 
-    augroup llama
+    augroup jarvis
         autocmd!
-        autocmd InsertEnter     * inoremap <expr> <silent> <C-F> llama#fim_inline(v:false)
-        autocmd InsertLeavePre  * call llama#fim_cancel()
+        autocmd InsertEnter     * inoremap <expr> <silent> <C-F> jarvis#fim_inline(v:false)
+        autocmd InsertLeavePre  * call jarvis#fim_cancel()
 
         autocmd CursorMoved     * call s:on_move()
         autocmd CursorMovedI    * call s:on_move()
-        autocmd CompleteChanged * call llama#fim_cancel()
+        autocmd CompleteChanged * call jarvis#fim_cancel()
 
-        if g:llama_config.auto_fim
-            autocmd CursorMovedI * call llama#fim(v:true)
+        if g:jarvis_config.auto_fim
+            autocmd CursorMovedI * call jarvis#fim(v:true)
         endif
 
         " gather chunks upon yanking
         autocmd TextYankPost    * if v:event.operator ==# 'y' | call s:pick_chunk(v:event.regcontents, v:false, v:true) | endif
 
         " gather chunks upon entering/leaving a buffer
-        autocmd BufEnter        * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)})
-        autocmd BufLeave        * call                      s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
+        autocmd BufEnter        * call timer_start(100, {-> s:pick_chunk(getline(max([1, line('.') - g:jarvis_config.ring_chunk_size/2]), min([line('.') + g:jarvis_config.ring_chunk_size/2, line('$')])), v:true, v:true)})
+        autocmd BufLeave        * call                      s:pick_chunk(getline(max([1, line('.') - g:jarvis_config.ring_chunk_size/2]), min([line('.') + g:jarvis_config.ring_chunk_size/2, line('$')])), v:true, v:true)
 
         " gather chunk upon saving the file
-        autocmd BufWritePost    * call s:pick_chunk(getline(max([1, line('.') - g:llama_config.ring_chunk_size/2]), min([line('.') + g:llama_config.ring_chunk_size/2, line('$')])), v:true, v:true)
+        autocmd BufWritePost    * call s:pick_chunk(getline(max([1, line('.') - g:jarvis_config.ring_chunk_size/2]), min([line('.') + g:jarvis_config.ring_chunk_size/2, line('$')])), v:true, v:true)
     augroup END
 
-    silent! call llama#fim_cancel()
+    silent! call jarvis#fim_cancel()
 
     " init background update of the ring buffer
-    if g:llama_config.ring_n_chunks > 0
+    if g:jarvis_config.ring_n_chunks > 0
         call s:ring_update()
     endif
 endfunction
@@ -209,7 +209,7 @@ function! s:chunk_sim(c0, c1)
     return 2.0 * l:common / (l:lines0 + l:lines1)
 endfunction
 
-" pick a random chunk of size g:llama_config.ring_chunk_size from the provided text and queue it for processing
+" pick a random chunk of size g:jarvis_config.ring_chunk_size from the provided text and queue it for processing
 "
 " no_mod   - do not pick chunks from buffers with pending changes
 " do_evict - evict chunks that are very similar to the new one
@@ -221,7 +221,7 @@ function! s:pick_chunk(text, no_mod, do_evict)
     endif
 
     " if the extra context option is disabled - do nothing
-    if g:llama_config.ring_n_chunks <= 0
+    if g:jarvis_config.ring_n_chunks <= 0
         return
     endif
 
@@ -230,11 +230,11 @@ function! s:pick_chunk(text, no_mod, do_evict)
         return
     endif
 
-    if len(a:text) + 1 < g:llama_config.ring_chunk_size
+    if len(a:text) + 1 < g:jarvis_config.ring_chunk_size
         let l:chunk = a:text
     else
-        let l:l0 = s:rand(0, max([0, len(a:text) - g:llama_config.ring_chunk_size/2]))
-        let l:l1 = min([l:l0 + g:llama_config.ring_chunk_size/2, len(a:text)])
+        let l:l0 = s:rand(0, max([0, len(a:text) - g:jarvis_config.ring_chunk_size/2]))
+        let l:l1 = min([l:l0 + g:jarvis_config.ring_chunk_size/2, len(a:text)])
 
         let l:chunk = a:text[l:l0:l:l1]
     endif
@@ -297,9 +297,9 @@ function! s:pick_chunk(text, no_mod, do_evict)
 endfunction
 
 " picks a queued chunk, sends it for processing and adds it to s:ring_chunks
-" called every g:llama_config.ring_update_ms
+" called every g:jarvis_config.ring_update_ms
 function! s:ring_update()
-    call timer_start(g:llama_config.ring_update_ms, {-> s:ring_update()})
+    call timer_start(g:jarvis_config.ring_update_ms, {-> s:ring_update()})
 
     " update only if in normal mode or if the cursor hasn't moved for a while
     if mode() !=# 'n' && reltimefloat(reltime(s:t_last_move)) < 3.0
@@ -311,7 +311,7 @@ function! s:ring_update()
     endif
 
     " move the first queued chunk to the ring buffer
-    if len(s:ring_chunks) == g:llama_config.ring_n_chunks
+    if len(s:ring_chunks) == g:jarvis_config.ring_n_chunks
         call remove(s:ring_chunks, 0)
     endif
 
@@ -349,7 +349,7 @@ function! s:ring_update()
         \ "--silent",
         \ "--no-buffer",
         \ "--request", "POST",
-        \ "--url", g:llama_config.endpoint,
+        \ "--url", g:jarvis_config.endpoint,
         \ "--header", "Content-Type: application/json",
         \ "--data", l:request
         \ ]
@@ -363,21 +363,21 @@ function! s:ring_update()
 endfunction
 
 " necessary for 'inoremap <expr>'
-function! llama#fim_inline(is_auto) abort
-    call llama#fim(a:is_auto)
+function! jarvis#fim_inline(is_auto) abort
+    call jarvis#fim(a:is_auto)
     return ''
 endfunction
 
 " the main FIM call
 " takes local context around the cursor and sends it together with the extra context to the server for completion
-function! llama#fim(is_auto) abort
+function! jarvis#fim(is_auto) abort
     " we already have a suggestion for the current cursor position
     if s:hint_shown && !a:is_auto
-        call llama#fim_cancel()
+        call jarvis#fim_cancel()
         return
     endif
 
-    call llama#fim_cancel()
+    call jarvis#fim_cancel()
 
     " avoid sending repeated requests too fast
     if reltimefloat(reltime(s:t_fim_start)) < 0.6
@@ -387,7 +387,7 @@ function! llama#fim(is_auto) abort
         endif
 
         let s:t_fim_start = reltime()
-        let s:timer_fim = timer_start(600, {-> llama#fim(v:true)})
+        let s:timer_fim = timer_start(600, {-> jarvis#fim(v:true)})
         return
     endif
 
@@ -400,15 +400,15 @@ function! llama#fim(is_auto) abort
     let s:pos_y = line('.')
     let l:max_y = line('$')
 
-    let l:lines_prefix = getline(max([1, s:pos_y - g:llama_config.n_prefix]), s:pos_y - 1)
-    let l:lines_suffix = getline(s:pos_y + 1, min([l:max_y, s:pos_y + g:llama_config.n_suffix]))
+    let l:lines_prefix = getline(max([1, s:pos_y - g:jarvis_config.n_prefix]), s:pos_y - 1)
+    let l:lines_suffix = getline(s:pos_y + 1, min([l:max_y, s:pos_y + g:jarvis_config.n_suffix]))
 
     let s:line_cur = getline('.')
 
     let s:line_cur_prefix = strpart(s:line_cur, 0, s:pos_x)
     let s:line_cur_suffix = strpart(s:line_cur, s:pos_x)
 
-    if a:is_auto && len(s:line_cur_suffix) > g:llama_config.max_line_suffix
+    if a:is_auto && len(s:line_cur_suffix) > g:jarvis_config.max_line_suffix
         return
     endif
 
@@ -443,15 +443,15 @@ function! llama#fim(is_auto) abort
         \ 'input_suffix':     l:suffix,
         \ 'input_extra':      l:extra_context,
         \ 'prompt':           l:prompt,
-        \ 'n_predict':        g:llama_config.n_predict,
+        \ 'n_predict':        g:jarvis_config.n_predict,
         \ 'n_indent':         l:indent,
         \ 'top_k':            40,
         \ 'top_p':            0.99,
         \ 'stream':           v:false,
         \ 'samplers':         ["top_k", "top_p", "infill"],
         \ 'cache_prompt':     v:true,
-        \ 't_max_prompt_ms':  g:llama_config.t_max_prompt_ms,
-        \ 't_max_predict_ms': g:llama_config.t_max_predict_ms
+        \ 't_max_prompt_ms':  g:jarvis_config.t_max_prompt_ms,
+        \ 't_max_predict_ms': g:jarvis_config.t_max_predict_ms
         \ })
 
     let l:curl_command = [
@@ -459,7 +459,7 @@ function! llama#fim(is_auto) abort
         \ "--silent",
         \ "--no-buffer",
         \ "--request", "POST",
-        \ "--url", g:llama_config.endpoint,
+        \ "--url", g:jarvis_config.endpoint,
         \ "--header", "Content-Type: application/json",
         \ "--data", l:request
         \ ]
@@ -494,17 +494,17 @@ function! llama#fim(is_auto) abort
     " TODO: something more clever? reranking?
     if a:is_auto && l:delta_y > 32
         " expand the prefix even further
-        call s:pick_chunk(getline(max([1,       s:pos_y - g:llama_config.ring_scope]), max([1,       s:pos_y - g:llama_config.n_prefix])), v:false, v:false)
+        call s:pick_chunk(getline(max([1,       s:pos_y - g:jarvis_config.ring_scope]), max([1,       s:pos_y - g:jarvis_config.n_prefix])), v:false, v:false)
 
         " pick a suffix chunk
-        call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:llama_config.n_suffix]),   min([l:max_y, s:pos_y + g:llama_config.n_suffix + g:llama_config.ring_chunk_size])), v:false, v:false)
+        call s:pick_chunk(getline(min([l:max_y, s:pos_y + g:jarvis_config.n_suffix]),   min([l:max_y, s:pos_y + g:jarvis_config.n_suffix + g:jarvis_config.ring_chunk_size])), v:false, v:false)
 
         let s:pos_y_pick = s:pos_y
     endif
 endfunction
 
 " if first_line == v:true accept only the first line of the response
-function! llama#fim_accept(first_line)
+function! jarvis#fim_accept(first_line)
     " insert the suggestion at the cursor location
     if s:can_accept && len(s:content) > 0
         call setline(s:pos_y, s:line_cur[:(s:pos_x - 1)] . s:content[0])
@@ -522,10 +522,10 @@ function! llama#fim_accept(first_line)
         endif
     endif
 
-    call llama#fim_cancel()
+    call jarvis#fim_cancel()
 endfunction
 
-function! llama#fim_cancel()
+function! jarvis#fim_cancel()
     let s:hint_shown = v:false
 
     " clear the virtual text
@@ -548,7 +548,7 @@ endfunction
 function! s:on_move()
     let s:t_last_move = reltime()
 
-    call llama#fim_cancel()
+    call jarvis#fim_cancel()
 endfunction
 
 " callback that processes the FIM result from the server and displays the suggestion
@@ -695,7 +695,7 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
 
     let s:content[-1] .= s:line_cur_suffix
 
-    call llama#fim_cancel()
+    call jarvis#fim_cancel()
 
     " display virtual text with the suggestion
     let l:bufnr = bufnr('%')
@@ -705,25 +705,25 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     endif
 
     " construct the info message
-    if g:llama_config.show_info > 0 && l:has_info
+    if g:jarvis_config.show_info > 0 && l:has_info
         let l:prefix = '   '
 
         if l:truncated
-            let l:info = printf("%s | WARNING: the context is full: %d / %d, increase the server context size or reduce g:llama_config.ring_n_chunks",
-                \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
+            let l:info = printf("%s | WARNING: the context is full: %d / %d, increase the server context size or reduce g:jarvis_config.ring_n_chunks",
+                \ g:jarvis_config.show_info == 2 ? l:prefix : 'jarvis.vim',
                 \ l:n_cached, l:n_ctx
                 \ )
         else
             let l:info = printf("%s | c: %d / %d, r: %d / %d, e: %d, q: %d / 16 | p: %d (%.2f ms, %.2f t/s) | g: %d (%.2f ms, %.2f t/s) | t: %.2f ms",
-                \ g:llama_config.show_info == 2 ? l:prefix : 'llama.vim',
-                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), g:llama_config.ring_n_chunks, s:ring_n_evict, len(s:ring_queued),
+                \ g:jarvis_config.show_info == 2 ? l:prefix : 'jarvis.vim',
+                \ l:n_cached,  l:n_ctx, len(s:ring_chunks), g:jarvis_config.ring_n_chunks, s:ring_n_evict, len(s:ring_queued),
                 \ l:n_prompt,  l:t_prompt_ms,  l:s_prompt,
                 \ l:n_predict, l:t_predict_ms, l:s_predict,
                 \ 1000.0 * reltimefloat(reltime(s:t_fim_start))
                 \ )
         endif
 
-        if g:llama_config.show_info == 1
+        if g:jarvis_config.show_info == 1
             " display the info in the statusline
             let &statusline = l:info
             let l:info = ''
@@ -733,12 +733,12 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     " display the suggestion and append the info to the end of the first line
     if s:ghost_text_nvim
         call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, s:pos_x - 1, {
-            \ 'virt_text': [[s:content[0], 'llama_hl_hint'], [l:info, 'llama_hl_info']],
+            \ 'virt_text': [[s:content[0], 'jarvis_hl_hint'], [l:info, 'jarvis_hl_info']],
             \ 'virt_text_win_col': virtcol('.') - 1
             \ })
 
         call nvim_buf_set_extmark(l:bufnr, l:id_vt_fim, s:pos_y - 1, 0, {
-            \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'llama_hl_hint']]}),
+            \ 'virt_lines': map(s:content[1:], {idx, val -> [[val, 'jarvis_hl_hint']]}),
             \ 'virt_text_win_col': virtcol('.')
             \ })
     elseif s:ghost_text_vim
@@ -768,8 +768,8 @@ function! s:fim_on_stdout(pos_x, pos_y, is_auto, job_id, data, event = v:null)
     endif
 
     " setup accept shortcuts
-    inoremap <buffer> <Tab>   <C-O>:call llama#fim_accept(v:false)<CR>
-    inoremap <buffer> <S-Tab> <C-O>:call llama#fim_accept(v:true)<CR>
+    inoremap <buffer> <Tab>   <C-O>:call jarvis#fim_accept(v:false)<CR>
+    inoremap <buffer> <S-Tab> <C-O>:call jarvis#fim_accept(v:true)<CR>
 
     let s:hint_shown = v:true
 endfunction

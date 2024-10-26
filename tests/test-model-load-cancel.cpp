@@ -1,4 +1,4 @@
-#include "llama.h"
+#include "jarvis.h"
 #include "get-model.h"
 
 #include <cstdlib>
@@ -14,14 +14,14 @@ int main(int argc, char *argv[] ) {
     fprintf(stderr, "using '%s'\n", model_path);
     fclose(file);
 
-    llama_backend_init();
-    auto params = llama_model_params{};
+    jarvis_backend_init();
+    auto params = jarvis_model_params{};
     params.use_mmap = false;
     params.progress_callback = [](float progress, void * ctx){
         (void) ctx;
         return progress > 0.50;
     };
-    auto * model = llama_load_model_from_file(model_path, params);
-    llama_backend_free();
+    auto * model = jarvis_load_model_from_file(model_path, params);
+    jarvis_backend_free();
     return model == nullptr ? EXIT_SUCCESS : EXIT_FAILURE;
 }

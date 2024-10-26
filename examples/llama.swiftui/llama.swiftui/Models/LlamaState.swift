@@ -9,17 +9,17 @@ struct Model: Identifiable {
 }
 
 @MainActor
-class LlamaState: ObservableObject {
+class JarvisState: ObservableObject {
     @Published var messageLog = ""
     @Published var cacheCleared = false
     @Published var downloadedModels: [Model] = []
     @Published var undownloadedModels: [Model] = []
     let NS_PER_S = 1_000_000_000.0
 
-    private var llamaContext: LlamaContext?
+    private var jarvisContext: JarvisContext?
     private var defaultModelUrl: URL? {
         Bundle.main.url(forResource: "ggml-model", withExtension: "gguf", subdirectory: "models")
-        // Bundle.main.url(forResource: "llama-2-7b-chat", withExtension: "Q2_K.gguf", subdirectory: "models")
+        // Bundle.main.url(forResource: "jarvis-2-7b-chat", withExtension: "Q2_K.gguf", subdirectory: "models")
     }
 
     init() {
@@ -64,17 +64,17 @@ class LlamaState: ObservableObject {
         return paths[0]
     }
     private let defaultModels: [Model] = [
-        Model(name: "TinyLlama-1.1B (Q4_0, 0.6 GiB)",url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf", status: "download"),
+        Model(name: "TinyJarvis-1.1B (Q4_0, 0.6 GiB)",url: "https://huggingface.co/TheBloke/TinyJarvis-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyjarvis-1.1b-1t-openorca.Q4_0.gguf?download=true",filename: "tinyjarvis-1.1b-1t-openorca.Q4_0.gguf", status: "download"),
         Model(
-            name: "TinyLlama-1.1B Chat (Q8_0, 1.1 GiB)",
-            url: "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q8_0.gguf?download=true",
-            filename: "tinyllama-1.1b-chat-v1.0.Q8_0.gguf", status: "download"
+            name: "TinyJarvis-1.1B Chat (Q8_0, 1.1 GiB)",
+            url: "https://huggingface.co/TheBloke/TinyJarvis-1.1B-Chat-v1.0-GGUF/resolve/main/tinyjarvis-1.1b-chat-v1.0.Q8_0.gguf?download=true",
+            filename: "tinyjarvis-1.1b-chat-v1.0.Q8_0.gguf", status: "download"
         ),
 
         Model(
-            name: "TinyLlama-1.1B (F16, 2.2 GiB)",
-            url: "https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true",
-            filename: "tinyllama-1.1b-f16.gguf", status: "download"
+            name: "TinyJarvis-1.1B (F16, 2.2 GiB)",
+            url: "https://huggingface.co/ggml-org/models/resolve/main/tinyjarvis-1.1b/ggml-model-f16.gguf?download=true",
+            filename: "tinyjarvis-1.1b-f16.gguf", status: "download"
         ),
 
         Model(
@@ -103,7 +103,7 @@ class LlamaState: ObservableObject {
     func loadModel(modelUrl: URL?) throws {
         if let modelUrl {
             messageLog += "Loading model...\n"
-            llamaContext = try LlamaContext.create_context(path: modelUrl.path())
+            jarvisContext = try JarvisContext.create_context(path: modelUrl.path())
             messageLog += "Loaded model \(modelUrl.lastPathComponent)\n"
 
             // Assuming that the model is successfully loaded, update the downloaded models
@@ -120,20 +120,20 @@ class LlamaState: ObservableObject {
 
 
     func complete(text: String) async {
-        guard let llamaContext else {
+        guard let jarvisContext else {
             return
         }
 
         let t_start = DispatchTime.now().uptimeNanoseconds
-        await llamaContext.completion_init(text: text)
+        await jarvisContext.completion_init(text: text)
         let t_heat_end = DispatchTime.now().uptimeNanoseconds
         let t_heat = Double(t_heat_end - t_start) / NS_PER_S
 
         messageLog += "\(text)"
 
         Task.detached {
-            while await !llamaContext.is_done {
-                let result = await llamaContext.completion_loop()
+            while await !jarvisContext.is_done {
+                let result = await jarvisContext.completion_loop()
                 await MainActor.run {
                     self.messageLog += "\(result)"
                 }
@@ -141,9 +141,9 @@ class LlamaState: ObservableObject {
 
             let t_end = DispatchTime.now().uptimeNanoseconds
             let t_generation = Double(t_end - t_heat_end) / self.NS_PER_S
-            let tokens_per_second = Double(await llamaContext.n_len) / t_generation
+            let tokens_per_second = Double(await jarvisContext.n_len) / t_generation
 
-            await llamaContext.clear()
+            await jarvisContext.clear()
 
             await MainActor.run {
                 self.messageLog += """
@@ -157,17 +157,17 @@ class LlamaState: ObservableObject {
     }
 
     func bench() async {
-        guard let llamaContext else {
+        guard let jarvisContext else {
             return
         }
 
         messageLog += "\n"
         messageLog += "Running benchmark...\n"
         messageLog += "Model info: "
-        messageLog += await llamaContext.model_info() + "\n"
+        messageLog += await jarvisContext.model_info() + "\n"
 
         let t_start = DispatchTime.now().uptimeNanoseconds
-        let _ = await llamaContext.bench(pp: 8, tg: 4, pl: 1) // heat up
+        let _ = await jarvisContext.bench(pp: 8, tg: 4, pl: 1) // heat up
         let t_end = DispatchTime.now().uptimeNanoseconds
 
         let t_heat = Double(t_end - t_start) / NS_PER_S
@@ -179,18 +179,18 @@ class LlamaState: ObservableObject {
             return
         }
 
-        let result = await llamaContext.bench(pp: 512, tg: 128, pl: 1, nr: 3)
+        let result = await jarvisContext.bench(pp: 512, tg: 128, pl: 1, nr: 3)
 
         messageLog += "\(result)"
         messageLog += "\n"
     }
 
     func clear() async {
-        guard let llamaContext else {
+        guard let jarvisContext else {
             return
         }
 
-        await llamaContext.clear()
+        await jarvisContext.clear()
         messageLog = ""
     }
 }

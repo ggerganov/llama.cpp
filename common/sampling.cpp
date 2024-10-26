@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity
-// TODO: deduplicate with llama-impl.h
+// TODO: deduplicate with jarvis-impl.h
 template<typename T>
 struct ring_buffer {
     ring_buffer(size_t cap) : capacity(cap), data(cap) {}
@@ -101,24 +101,24 @@ struct ring_buffer {
 struct common_sampler {
     common_sampler_params params;
 
-    struct llama_sampler * grmr;
-    struct llama_sampler * chain;
+    struct jarvis_sampler * grmr;
+    struct jarvis_sampler * chain;
 
-    ring_buffer<llama_token> prev;
+    ring_buffer<jarvis_token> prev;
 
-    std::vector<llama_token_data> cur;
+    std::vector<jarvis_token_data> cur;
 
-    llama_token_data_array cur_p;
+    jarvis_token_data_array cur_p;
 
-    void set_logits(struct llama_context * ctx, int idx) {
-        const auto * logits = llama_get_logits_ith(ctx, idx);
+    void set_logits(struct jarvis_context * ctx, int idx) {
+        const auto * logits = jarvis_get_logits_ith(ctx, idx);
 
-        const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+        const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
         cur.resize(n_vocab);
 
-        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
+        for (jarvis_token token_id = 0; token_id < n_vocab; token_id++) {
+            cur[token_id] = jarvis_token_data{token_id, logits[token_id], 0.0f};
         }
 
         cur_p = { cur.data(), cur.size(), -1, false };
@@ -141,31 +141,31 @@ std::string common_sampler_params::print() const {
     return std::string(result);
 }
 
-struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_sampler_params & params) {
-    llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
+struct common_sampler * common_sampler_init(const struct jarvis_model * model, const struct common_sampler_params & params) {
+    jarvis_sampler_chain_params lparams = jarvis_sampler_chain_default_params();
 
     lparams.no_perf = params.no_perf;
 
     auto * result = new common_sampler {
         /* .params = */ params,
-        /* .grmr   = */ llama_sampler_init_grammar(model, params.grammar.c_str(), "root"),
-        /* .chain  = */ llama_sampler_chain_init(lparams),
-        /* .prev   = */ ring_buffer<llama_token>(std::max(32, params.n_prev)),
+        /* .grmr   = */ jarvis_sampler_init_grammar(model, params.grammar.c_str(), "root"),
+        /* .chain  = */ jarvis_sampler_chain_init(lparams),
+        /* .prev   = */ ring_buffer<jarvis_token>(std::max(32, params.n_prev)),
         /* .cur    = */ {},
         /* .cur_p  = */ {},
     };
 
-    llama_sampler_chain_add(result->chain,
-            llama_sampler_init_logit_bias(
-                llama_n_vocab(model),
+    jarvis_sampler_chain_add(result->chain,
+            jarvis_sampler_init_logit_bias(
+                jarvis_n_vocab(model),
                 params.logit_bias.size(),
                 params.logit_bias.data()));
 
-    llama_sampler_chain_add(result->chain,
-            llama_sampler_init_penalties(
-                llama_n_vocab  (model),
-                llama_token_eos(model),
-                llama_token_nl (model),
+    jarvis_sampler_chain_add(result->chain,
+            jarvis_sampler_init_penalties(
+                jarvis_n_vocab  (model),
+                jarvis_token_eos(model),
+                jarvis_token_nl (model),
                 params.penalty_last_n,
                 params.penalty_repeat,
                 params.penalty_freq,
@@ -184,44 +184,44 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                             c_breakers.push_back(str.c_str());
                         }
 
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                        jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_dry      (model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
                     }
                         break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_top_k    (params.top_k));
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_top_p    (params.top_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_MIN_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_min_p    (params.min_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_XTC:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
                     break;
                 case COMMON_SAMPLER_TYPE_TFS_Z:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_tail_free(params.tfs_z, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_TYPICAL_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_typical  (params.typ_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                     break;
                 case COMMON_SAMPLER_TYPE_INFILL:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                    jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_infill   (model));
                     break;
                 default:
                     GGML_ASSERT(false && "unknown sampler type");
             }
         }
-        llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
+        jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_dist(params.seed));
     } else if (params.mirostat == 1) {
-        llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+        jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_temp(params.temp));
+        jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_mirostat(jarvis_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
-        llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
+        jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_temp(params.temp));
+        jarvis_sampler_chain_add(result->chain, jarvis_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
     } else {
         GGML_ASSERT(false && "unknown mirostat version");
     }
@@ -231,53 +231,53 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
 void common_sampler_free(struct common_sampler * gsmpl) {
     if (gsmpl) {
-        llama_sampler_free(gsmpl->grmr);
+        jarvis_sampler_free(gsmpl->grmr);
 
-        llama_sampler_free(gsmpl->chain);
+        jarvis_sampler_free(gsmpl->chain);
 
         delete gsmpl;
     }
 }
 
-void common_sampler_accept(struct common_sampler * gsmpl, llama_token token, bool accept_grammar) {
+void common_sampler_accept(struct common_sampler * gsmpl, jarvis_token token, bool accept_grammar) {
     if (accept_grammar) {
-        llama_sampler_accept(gsmpl->grmr, token);
+        jarvis_sampler_accept(gsmpl->grmr, token);
     }
 
-    llama_sampler_accept(gsmpl->chain, token);
+    jarvis_sampler_accept(gsmpl->chain, token);
 
     gsmpl->prev.push_back(token);
 }
 
 void common_sampler_reset(struct common_sampler * gsmpl) {
-    llama_sampler_reset(gsmpl->grmr);
+    jarvis_sampler_reset(gsmpl->grmr);
 
-    llama_sampler_reset(gsmpl->chain);
+    jarvis_sampler_reset(gsmpl->chain);
 }
 
 struct common_sampler * common_sampler_clone(common_sampler * gsmpl) {
     return new common_sampler {
         /* .params = */ gsmpl->params,
-        /* .grmr   = */ llama_sampler_clone(gsmpl->grmr),
-        /* .chain  = */ llama_sampler_clone(gsmpl->chain),
+        /* .grmr   = */ jarvis_sampler_clone(gsmpl->grmr),
+        /* .chain  = */ jarvis_sampler_clone(gsmpl->chain),
         /* .prev   = */ gsmpl->prev,
         /* .cur    = */ gsmpl->cur,
         /* .cur_p  = */ gsmpl->cur_p,
     };
 }
 
-void common_perf_print(const struct llama_context * ctx, const struct common_sampler * gsmpl) {
+void common_perf_print(const struct jarvis_context * ctx, const struct common_sampler * gsmpl) {
     // TODO: measure grammar performance
 
     if (gsmpl) {
-        llama_perf_sampler_print(gsmpl->chain);
+        jarvis_perf_sampler_print(gsmpl->chain);
     }
     if (ctx) {
-        llama_perf_context_print(ctx);
+        jarvis_perf_context_print(ctx);
     }
 }
 
-llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
+jarvis_token common_sampler_sample(struct common_sampler * gsmpl, struct jarvis_context * ctx, int idx, bool grammar_first) {
     gsmpl->set_logits(ctx, idx);
 
     auto & grmr  = gsmpl->grmr;
@@ -285,14 +285,14 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
     auto & cur_p = gsmpl->cur_p; // initialized by set_logits
 
     if (grammar_first) {
-        llama_sampler_apply(grmr, &cur_p);
+        jarvis_sampler_apply(grmr, &cur_p);
     }
 
-    llama_sampler_apply(chain, &cur_p);
+    jarvis_sampler_apply(chain, &cur_p);
 
     GGML_ASSERT(cur_p.selected != -1 && "no selected token during sampling - check your sampling configuration");
 
-    const llama_token id = cur_p.data[cur_p.selected].id;
+    const jarvis_token id = cur_p.data[cur_p.selected].id;
 
     if (grammar_first) {
         return id;
@@ -300,10 +300,10 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
 
     // check if it the sampled token fits the grammar
     {
-        llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
-        llama_token_data_array single_token_data_array = { &single_token_data, 1, -1, false };
+        jarvis_token_data       single_token_data       = { id, 1.0f, 0.0f };
+        jarvis_token_data_array single_token_data_array = { &single_token_data, 1, -1, false };
 
-        llama_sampler_apply(grmr, &single_token_data_array);
+        jarvis_sampler_apply(grmr, &single_token_data_array);
 
         const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
         if (is_valid) {
@@ -315,8 +315,8 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
     // if the token is not valid, sample again, but first apply the grammar sampler and then the sampling chain
     gsmpl->set_logits(ctx, idx);
 
-    llama_sampler_apply(grmr,  &cur_p);
-    llama_sampler_apply(chain, &cur_p);
+    jarvis_sampler_apply(grmr,  &cur_p);
+    jarvis_sampler_apply(chain, &cur_p);
 
     GGML_ASSERT(cur_p.selected != -1 && "no selected token during re-sampling - check your sampling configuration");
 
@@ -324,31 +324,31 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
 }
 
 uint32_t common_sampler_get_seed(const struct common_sampler * gsmpl) {
-    return llama_sampler_get_seed(gsmpl->chain);
+    return jarvis_sampler_get_seed(gsmpl->chain);
 }
 
 // helpers
 
-llama_token_data_array * common_sampler_get_candidates(struct common_sampler * gsmpl) {
+jarvis_token_data_array * common_sampler_get_candidates(struct common_sampler * gsmpl) {
     return &gsmpl->cur_p;
 }
 
-llama_token common_sampler_last(const struct common_sampler * gsmpl) {
+jarvis_token common_sampler_last(const struct common_sampler * gsmpl) {
     return gsmpl->prev.rat(0);
 }
 
 std::string common_sampler_print(const struct common_sampler * gsmpl) {
     std::string result = "logits ";
 
-    for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
-        const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);
-        result += std::string("-> ") + llama_sampler_name(smpl) + " ";
+    for (int i = 0; i < jarvis_sampler_chain_n(gsmpl->chain); i++) {
+        const auto * smpl = jarvis_sampler_chain_get(gsmpl->chain, i);
+        result += std::string("-> ") + jarvis_sampler_name(smpl) + " ";
     }
 
     return result;
 }
 
-std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx_main, int n) {
+std::string common_sampler_prev_str(common_sampler * gsmpl, jarvis_context * ctx_main, int n) {
     n = std::min(n, (int) gsmpl->prev.size());
 
     if (n <= 0) {
@@ -359,9 +359,9 @@ std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx_
     result.reserve(8*n); // 8 is the average length of a token [citation needed], TODO: compute this from the vocab
 
     for (int i = n - 1; i >= 0; i--) {
-        const llama_token id = gsmpl->prev.rat(i);
+        const jarvis_token id = gsmpl->prev.rat(i);
 
-        GGML_ASSERT(id != LLAMA_TOKEN_NULL && "null token in the sampling history - should not happen");
+        GGML_ASSERT(id != JARVIS_TOKEN_NULL && "null token in the sampling history - should not happen");
 
         result += common_token_to_piece(ctx_main, id);
     }

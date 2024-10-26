@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct llama_swiftuiApp: App {
+struct jarvis_swiftuiApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

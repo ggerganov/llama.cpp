@@ -1,4 +1,4 @@
-# llama.cpp for SYCL
+# jarvis.cpp for SYCL
 
 - [Background](#background)
 - [Recommended Release](#recommended-release)
@@ -24,9 +24,9 @@
 - **oneAPI LevelZero**: A high performance low level interface for fine-grained control over intel iGPUs and dGPUs.
 - **Nvidia & AMD Plugins**: These are plugins extending oneAPI's DPCPP support to SYCL on Nvidia and AMD GPU targets.
 
-### Llama.cpp + SYCL
+### Jarvis.cpp + SYCL
 
-The llama.cpp SYCL backend is designed to support **Intel GPU** firstly. Based on the cross-platform feature of SYCL, it also supports other vendor GPUs: Nvidia and AMD.
+The jarvis.cpp SYCL backend is designed to support **Intel GPU** firstly. Based on the cross-platform feature of SYCL, it also supports other vendor GPUs: Nvidia and AMD.
 
 ## Recommended Release
 
@@ -36,7 +36,7 @@ The following release is verified with good quality:
 
 |Commit ID|Tag|Release|Verified  Platform|
 |-|-|-|-|
-|fb76ec31a9914b7761c1727303ab30380fd4f05c|b3038 |[llama-b3038-bin-win-sycl-x64.zip](https://github.com/ggerganov/llama.cpp/releases/download/b3038/llama-b3038-bin-win-sycl-x64.zip) |Arc770/Linux/oneAPI 2024.1<br>MTL Arc GPU/Windows 11/oneAPI 2024.1|
+|fb76ec31a9914b7761c1727303ab30380fd4f05c|b3038 |[jarvis-b3038-bin-win-sycl-x64.zip](https://github.com/ggerganov/jarvis.cpp/releases/download/b3038/jarvis-b3038-bin-win-sycl-x64.zip) |Arc770/Linux/oneAPI 2024.1<br>MTL Arc GPU/Windows 11/oneAPI 2024.1|
 
 
 ## News
@@ -46,7 +46,7 @@ The following release is verified with good quality:
   - Use oneDNN as the default GEMM library, improve the compatibility for new Intel GPUs.
 
 - 2024.5
-  - Performance is increased: 34 -> 37 tokens/s of llama-2-7b.Q4_0 on Arc770.
+  - Performance is increased: 34 -> 37 tokens/s of jarvis-2-7b.Q4_0 on Arc770.
   - Arch Linux is verified successfully.
 
 - 2024.4
@@ -54,8 +54,8 @@ The following release is verified with good quality:
 
 - 2024.3
   - Release binary files of Windows.
-  - A blog is published: **Run LLM on all Intel GPUs Using llama.cpp**: [intel.com](https://www.intel.com/content/www/us/en/developer/articles/technical/run-llm-on-all-gpus-using-llama-cpp-artical.html) or [medium.com](https://medium.com/@jianyu_neo/run-llm-on-all-intel-gpus-using-llama-cpp-fd2e2dcbd9bd).
-  - New base line is ready: [tag b2437](https://github.com/ggerganov/llama.cpp/tree/b2437).
+  - A blog is published: **Run LLM on all Intel GPUs Using jarvis.cpp**: [intel.com](https://www.intel.com/content/www/us/en/developer/articles/technical/run-llm-on-all-gpus-using-jarvis-cpp-artical.html) or [medium.com](https://medium.com/@jianyu_neo/run-llm-on-all-intel-gpus-using-jarvis-cpp-fd2e2dcbd9bd).
+  - New base line is ready: [tag b2437](https://github.com/ggerganov/jarvis.cpp/tree/b2437).
   - Support multiple cards: **--split-mode**: [none|layer]; not support [row], it's on developing.
   - Support to assign main GPU by **--main-gpu**, replace $GGML_SYCL_DEVICE.
   - Support detecting all GPUs with level-zero and same top **Max compute units**.
@@ -100,9 +100,9 @@ SYCL backend supports Intel GPU Family:
 *Notes:*
 
 - **Memory**
-  - The device memory is a limitation when running a large model. The loaded model size, *`llm_load_tensors: buffer_size`*, is displayed in the log when running `./bin/llama-cli`.
+  - The device memory is a limitation when running a large model. The loaded model size, *`llm_load_tensors: buffer_size`*, is displayed in the log when running `./bin/jarvis-cli`.
 
-  - Please make sure the GPU shared memory from the host is large enough to account for the model's size. For e.g. the *llama-2-7b.Q4_0* requires at least 8.0GB for integrated GPU and 4.0GB for discrete GPU.
+  - Please make sure the GPU shared memory from the host is large enough to account for the model's size. For e.g. the *jarvis-2-7b.Q4_0* requires at least 8.0GB for integrated GPU and 4.0GB for discrete GPU.
 
 - **Execution Unit (EU)**
   - If the iGPU has less than 80 EUs, the inference speed will likely be too slow for practical use.
@@ -130,14 +130,14 @@ The docker build option is currently limited to *intel GPU* targets.
 ### Build image
 ```sh
 # Using FP16
-docker build -t llama-cpp-sycl --build-arg="GGML_SYCL_F16=ON" -f .devops/llama-cli-intel.Dockerfile .
+docker build -t jarvis-cpp-sycl --build-arg="GGML_SYCL_F16=ON" -f .devops/jarvis-cli-intel.Dockerfile .
 ```
 
 *Notes*:
 
 To build in default FP32 *(Slower than FP16 alternative)*, you can remove the `--build-arg="GGML_SYCL_F16=ON"` argument from the previous command.
 
-You can also use the `.devops/llama-server-intel.Dockerfile`, which builds the *"server"* alternative.
+You can also use the `.devops/jarvis-server-intel.Dockerfile`, which builds the *"server"* alternative.
 
 ### Run container
 
@@ -145,7 +145,7 @@ You can also use the `.devops/llama-server-intel.Dockerfile`, which builds the *
 # First, find all the DRI cards
 ls -la /dev/dri
 # Then, pick the card that you want to use (here for e.g. /dev/dri/card1).
-docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-sycl -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
+docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 jarvis-cpp-sycl -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
 ```
 
 *Notes:*
@@ -276,7 +276,7 @@ For AMD GPUs we should expect at least one SYCL-HIP device [`hip:gpu`]:
 [hip:gpu][hip:0] AMD HIP BACKEND, AMD Radeon PRO W6800 gfx1030 [HIP 60140.9]
 ```
 
-### II. Build llama.cpp
+### II. Build jarvis.cpp
 
 #### Intel GPU
 
@@ -309,7 +309,7 @@ export LIBRARY_PATH=/path/to/oneMKL/buildWithCublas/lib:$LIBRARY_PATH
 export CPLUS_INCLUDE_DIR=/path/to/oneMKL/buildWithCublas/include:$CPLUS_INCLUDE_DIR
 export CPLUS_INCLUDE_DIR=/path/to/oneMKL/include:$CPLUS_INCLUDE_DIR
 
-# Build LLAMA with Nvidia BLAS acceleration through SYCL
+# Build JARVIS with Nvidia BLAS acceleration through SYCL
 
 # Option 1: Use FP32 (recommended for better performance in most cases)
 cmake -B build -DGGML_SYCL=ON -DGGML_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
@@ -329,7 +329,7 @@ export LD_LIBRARY_PATH=/path/to/oneMKL/buildWithrocBLAS/lib:$LD_LIBRARY_PATH
 export LIBRARY_PATH=/path/to/oneMKL/buildWithrocBLAS/lib:$LIBRARY_PATH
 export CPLUS_INCLUDE_DIR=/path/to/oneMKL/buildWithrocBLAS/include:$CPLUS_INCLUDE_DIR
 
-# Build LLAMA with rocBLAS acceleration through SYCL
+# Build JARVIS with rocBLAS acceleration through SYCL
 
 ## AMD
 # Use FP32, FP16 is not supported
@@ -344,7 +344,7 @@ cmake --build build --config Release -j -v
 
 #### Retrieve and prepare model
 
-You can refer to the general [*Prepare and Quantize*](README.md#prepare-and-quantize) guide for model prepration, or simply download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) model as example.
+You can refer to the general [*Prepare and Quantize*](README.md#prepare-and-quantize) guide for model prepration, or simply download [jarvis-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Jarvis-2-7B-GGUF/blob/main/jarvis-2-7b.Q4_0.gguf) model as example.
 
 ##### Check device
 
@@ -359,7 +359,7 @@ source /opt/intel/oneapi/setvars.sh
 Similar to the native `sycl-ls`, available SYCL devices can be queried as follow:
 
 ```sh
-./build/bin/llama-ls-sycl-device
+./build/bin/jarvis-ls-sycl-device
 ```
 
 This command will only display the selected backend that is supported by SYCL. The default backend is level_zero. For example, in a system with 2 *intel GPU* it would look like the following:
@@ -390,12 +390,12 @@ Choose one of following methods to run.
 - Use device 0:
 
 ```sh
-./examples/sycl/run-llama2.sh 0
+./examples/sycl/run-jarvis2.sh 0
 ```
 - Use multiple devices:
 
 ```sh
-./examples/sycl/run-llama2.sh
+./examples/sycl/run-jarvis2.sh
 ```
 
 2. Command line
@@ -418,13 +418,13 @@ Examples:
 - Use device 0:
 
 ```sh
-ZES_ENABLE_SYSMAN=1 ./build/bin/llama-cli -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
+ZES_ENABLE_SYSMAN=1 ./build/bin/jarvis-cli -m models/jarvis-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
 ```
 
 - Use multiple devices:
 
 ```sh
-ZES_ENABLE_SYSMAN=1 ./build/bin/llama-cli -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
+ZES_ENABLE_SYSMAN=1 ./build/bin/jarvis-cli -m models/jarvis-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
 ```
 
 *Notes:*
@@ -492,7 +492,7 @@ a. Download & install cmake for Windows: https://cmake.org/download/ (CMake can 
 b. The new Visual Studio will install Ninja as default. (If not, please install it manually: https://ninja-build.org/)
 
 
-### II. Build llama.cpp
+### II. Build jarvis.cpp
 
 You could download the release package for Windows directly, which including binary files and depended oneAPI dll files.
 
@@ -506,7 +506,7 @@ Choose one of following methods to build from source code.
 
 2. CMake
 
-On the oneAPI command line window, step into the llama.cpp main directory and run the following:
+On the oneAPI command line window, step into the jarvis.cpp main directory and run the following:
 
 ```
 @call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
@@ -524,34 +524,34 @@ Or, use CMake presets to build:
 
 ```sh
 cmake --preset x64-windows-sycl-release
-cmake --build build-x64-windows-sycl-release -j --target llama-cli
+cmake --build build-x64-windows-sycl-release -j --target jarvis-cli
 
 cmake -DGGML_SYCL_F16=ON --preset x64-windows-sycl-release
-cmake --build build-x64-windows-sycl-release -j --target llama-cli
+cmake --build build-x64-windows-sycl-release -j --target jarvis-cli
 
 cmake --preset x64-windows-sycl-debug
-cmake --build build-x64-windows-sycl-debug -j --target llama-cli
+cmake --build build-x64-windows-sycl-debug -j --target jarvis-cli
 ```
 
 3. Visual Studio
 
-You can use Visual Studio to open llama.cpp folder as a CMake project. Choose the sycl CMake presets (`x64-windows-sycl-release` or `x64-windows-sycl-debug`) before you compile the project.
+You can use Visual Studio to open jarvis.cpp folder as a CMake project. Choose the sycl CMake presets (`x64-windows-sycl-release` or `x64-windows-sycl-debug`) before you compile the project.
 
 *Notes:*
 
-- In case of a minimal experimental setup, the user can build the inference executable only through `cmake --build build --config Release -j --target llama-cli`.
+- In case of a minimal experimental setup, the user can build the inference executable only through `cmake --build build --config Release -j --target jarvis-cli`.
 
 ### III. Run the inference
 
 #### Retrieve and prepare model
 
-You can refer to the general [*Prepare and Quantize*](README.md#prepare-and-quantize) guide for model prepration, or simply download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) model as example.
+You can refer to the general [*Prepare and Quantize*](README.md#prepare-and-quantize) guide for model prepration, or simply download [jarvis-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Jarvis-2-7B-GGUF/blob/main/jarvis-2-7b.Q4_0.gguf) model as example.
 
 ##### Check device
 
 1. Enable oneAPI running environment
 
-On the oneAPI command line window, run the following and step into the llama.cpp directory:
+On the oneAPI command line window, run the following and step into the jarvis.cpp directory:
 ```
 "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64
 ```
@@ -561,7 +561,7 @@ On the oneAPI command line window, run the following and step into the llama.cpp
 Similar to the native `sycl-ls`, available SYCL devices can be queried as follow:
 
 ```
-build\bin\llama-ls-sycl-device.exe
+build\bin\jarvis-ls-sycl-device.exe
 ```
 
 This command will only display the selected backend that is supported by SYCL. The default backend is level_zero. For example, in a system with 2 *intel GPU* it would look like the following:
@@ -589,7 +589,7 @@ Choose one of following methods to run.
 1. Script
 
 ```
-examples\sycl\win-run-llama2.bat
+examples\sycl\win-run-jarvis2.bat
 ```
 
 2. Command line
@@ -613,13 +613,13 @@ Examples:
 - Use device 0:
 
 ```
-build\bin\llama-cli.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm none -mg 0
+build\bin\jarvis-cli.exe -m models\jarvis-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm none -mg 0
 ```
 
 - Use multiple devices:
 
 ```
-build\bin\llama-cli.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm layer
+build\bin\jarvis-cli.exe -m models\jarvis-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm layer
 ```
 
 
@@ -682,13 +682,13 @@ use 1 SYCL GPUs: [0] with Max compute units:512
   ```
   Otherwise, please double-check the GPU driver installation steps.
 
-- Can I report Ollama issue on Intel GPU to llama.cpp SYCL backend?
+- Can I report Ojarvis issue on Intel GPU to jarvis.cpp SYCL backend?
 
-  No. We can't support Ollama issue directly, because we aren't familiar with Ollama.
+  No. We can't support Ojarvis issue directly, because we aren't familiar with Ojarvis.
 
-  Sugguest reproducing on llama.cpp and report similar issue to llama.cpp. We will surpport it.
+  Sugguest reproducing on jarvis.cpp and report similar issue to jarvis.cpp. We will surpport it.
 
-  It's same for other projects including llama.cpp SYCL backend.
+  It's same for other projects including jarvis.cpp SYCL backend.
 
 - Meet issue: `Native API failed. Native API returns: -6 (PI_ERROR_OUT_OF_HOST_MEMORY) -6 (PI_ERROR_OUT_OF_HOST_MEMORY) -999 (UNKNOWN PI error)` or `failed to allocate SYCL0 buffer`
 

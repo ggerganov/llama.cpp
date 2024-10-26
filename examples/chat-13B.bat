@@ -10,7 +10,7 @@ if not "%errorlevel%"=="0" (
 
 if not defined MODEL set "MODEL=models\13B\ggml-model-q4_0.bin"
 if not defined USER_NAME set "USER_NAME=User"
-if not defined AI_NAME set "AI_NAME=ChatLLaMa"
+if not defined AI_NAME set "AI_NAME=ChatJarvis"
 rem Adjust to the number of CPU cores you want to use.
 rem if not defined N_THREAD set "N_THREAD=8"
 rem Number of tokens to predict (made it larger than default because we want a long interaction)

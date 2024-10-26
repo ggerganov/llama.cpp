@@ -1,6 +1,6 @@
 # GBNF Guide
 
-GBNF (GGML BNF) is a format for defining [formal grammars](https://en.wikipedia.org/wiki/Formal_grammar) to constrain model outputs in `llama.cpp`. For example, you can use it to force the model to generate valid JSON, or speak only in emojis. GBNF grammars are supported in various ways in `examples/main` and `examples/server`.
+GBNF (GGML BNF) is a format for defining [formal grammars](https://en.wikipedia.org/wiki/Formal_grammar) to constrain model outputs in `jarvis.cpp`. For example, you can use it to force the model to generate valid JSON, or speak only in emojis. GBNF grammars are supported in various ways in `examples/main` and `examples/server`.
 
 ## Background
 
@@ -91,45 +91,45 @@ item ::= [^\n]+ "\n"
 
 This guide provides a brief overview. Check out the GBNF files in this directory (`grammars/`) for examples of full grammars. You can try them out with:
 ```
-./llama-cli -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
+./jarvis-cli -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
 ```
 
-`llama.cpp` can also convert JSON schemas to grammars either ahead of time or at each request, see below.
+`jarvis.cpp` can also convert JSON schemas to grammars either ahead of time or at each request, see below.
 
 ## Troubleshooting
 
-Grammars currently have performance gotchas (see https://github.com/ggerganov/llama.cpp/issues/4218).
+Grammars currently have performance gotchas (see https://github.com/ggerganov/jarvis.cpp/issues/4218).
 
 ### Efficient optional repetitions
 
 A common pattern is to allow repetitions of a pattern `x` up to N times.
 
-While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) may result in extremely slow sampling. Instead, you can write `x{0,N}` (or `(x (x (x ... (x)?...)?)?)?` w/ N-deep nesting in earlier llama.cpp versions).
+While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) may result in extremely slow sampling. Instead, you can write `x{0,N}` (or `(x (x (x ... (x)?...)?)?)?` w/ N-deep nesting in earlier jarvis.cpp versions).
 
 ## Using GBNF grammars
 
 You can use GBNF grammars:
 
-- In [llama-server](../examples/server)'s completion endpoints, passed as the `grammar` body field
-- In [llama-cli](../examples/main), passed as the `--grammar` & `--grammar-file` flags
-- With [llama-gbnf-validator](../examples/gbnf-validator) tool, to test them against strings.
+- In [jarvis-server](../examples/server)'s completion endpoints, passed as the `grammar` body field
+- In [jarvis-cli](../examples/main), passed as the `--grammar` & `--grammar-file` flags
+- With [jarvis-gbnf-validator](../examples/gbnf-validator) tool, to test them against strings.
 
 ## JSON Schemas → GBNF
 
-`llama.cpp` supports converting a subset of https://json-schema.org/ to GBNF grammars:
+`jarvis.cpp` supports converting a subset of https://json-schema.org/ to GBNF grammars:
 
-- In [llama-server](../examples/server):
+- In [jarvis-server](../examples/server):
     - For any completion endpoints, passed as the `json_schema` body field
     - For the `/chat/completions` endpoint, passed inside the `response_format` body field (e.g. `{"type", "json_object", "schema": {"items": {}}}` or `{ type: "json_schema", json_schema: {"schema": ...} }`)
-- In [llama-cli](../examples/main), passed as the `--json` / `-j` flag
+- In [jarvis-cli](../examples/main), passed as the `--json` / `-j` flag
 - To convert to a grammar ahead of time:
     - in CLI, with [examples/json_schema_to_grammar.py](../examples/json_schema_to_grammar.py)
     - in JavaScript with [json-schema-to-grammar.mjs](../examples/server/public/json-schema-to-grammar.mjs) (this is used by the [server](../examples/server)'s Web UI)
 
-Take a look at [tests](../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
+Take a look at [tests](../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/jarvis.cpp/pull/5978, https://github.com/ggerganov/jarvis.cpp/pull/6659 & https://github.com/ggerganov/jarvis.cpp/pull/6555).
 
 ```bash
-llama-cli \
+jarvis-cli \
   -hfr bartowski/Phi-3-medium-128k-instruct-GGUF \
   -hff Phi-3-medium-128k-instruct-Q8_0.gguf \
   -j '{
@@ -184,11 +184,11 @@ Here is also a list of known limitations (contributions welcome):
 
 - `additionalProperties` defaults to `false` (produces faster grammars + reduces hallucinations).
 - `"additionalProperties": true` may produce keys that contain unescaped newlines.
-- Unsupported features are skipped silently. It is currently advised to use the command-line Python converter (see above) to see any warnings, and to inspect the resulting grammar / test it w/ [llama-gbnf-validator](../examples/gbnf-validator/gbnf-validator.cpp).
-- Can't mix `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/llama.cpp/issues/7703)
+- Unsupported features are skipped silently. It is currently advised to use the command-line Python converter (see above) to see any warnings, and to inspect the resulting grammar / test it w/ [jarvis-gbnf-validator](../examples/gbnf-validator/gbnf-validator.cpp).
+- Can't mix `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/jarvis.cpp/issues/7703)
 - [prefixItems](https://json-schema.org/draft/2020-12/json-schema-core#name-prefixitems) is broken (but [items](https://json-schema.org/draft/2020-12/json-schema-core#name-items) works)
 - `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`: only supported for `"type": "integer"` for now, not `number`
-- Nested `$ref`s are broken (https://github.com/ggerganov/llama.cpp/issues/8073)
+- Nested `$ref`s are broken (https://github.com/ggerganov/jarvis.cpp/issues/8073)
 - [pattern](https://json-schema.org/draft/2020-12/json-schema-validation#name-pattern)s must start with `^` and end with `$`
 - Remote `$ref`s not supported in the C++ version (Python & JavaScript versions fetch https refs)
 - `string` [formats](https://json-schema.org/draft/2020-12/json-schema-validation#name-defined-formats) lack `uri`, `email`

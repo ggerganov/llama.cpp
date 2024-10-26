@@ -6367,7 +6367,7 @@ static size_t ggml_backend_vk_host_buffer_type_get_alignment(ggml_backend_buffer
 }
 
 // Should be changed to return device-specific host buffer type
-// but that probably requires changes in llama.cpp
+// but that probably requires changes in jarvis.cpp
 ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_vk_buffer_type_host = {
         /* .iface    = */ {

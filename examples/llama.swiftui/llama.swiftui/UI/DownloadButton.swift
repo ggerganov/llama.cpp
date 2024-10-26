@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DownloadButton: View {
-    @ObservedObject private var llamaState: LlamaState
+    @ObservedObject private var jarvisState: JarvisState
     private var modelName: String
     private var modelUrl: String
     private var filename: String
@@ -19,8 +19,8 @@ struct DownloadButton: View {
     private func checkFileExistenceAndUpdateStatus() {
     }
 
-    init(llamaState: LlamaState, modelName: String, modelUrl: String, filename: String) {
-        self.llamaState = llamaState
+    init(jarvisState: JarvisState, modelName: String, modelUrl: String, filename: String) {
+        self.jarvisState = jarvisState
         self.modelName = modelName
         self.modelUrl = modelUrl
         self.filename = filename
@@ -51,10 +51,10 @@ struct DownloadButton: View {
                     try FileManager.default.copyItem(at: temporaryURL, to: fileURL)
                     print("Writing to \(filename) completed")
 
-                    llamaState.cacheCleared = false
+                    jarvisState.cacheCleared = false
 
                     let model = Model(name: modelName, url: modelUrl, filename: filename, status: "downloaded")
-                    llamaState.downloadedModels.append(model)
+                    jarvisState.downloadedModels.append(model)
                     status = "downloaded"
                 }
             } catch let err {
@@ -90,7 +90,7 @@ struct DownloadButton: View {
                         return
                     }
                     do {
-                        try llamaState.loadModel(modelUrl: fileURL)
+                        try jarvisState.loadModel(modelUrl: fileURL)
                     } catch let err {
                         print("Error: \(err.localizedDescription)")
                     }
@@ -104,7 +104,7 @@ struct DownloadButton: View {
         .onDisappear() {
             downloadTask?.cancel()
         }
-        .onChange(of: llamaState.cacheCleared) { newValue in
+        .onChange(of: jarvisState.cacheCleared) { newValue in
             if newValue {
                 downloadTask?.cancel()
                 let fileURL = DownloadButton.getFileURL(filename: filename)
@@ -116,9 +116,9 @@ struct DownloadButton: View {
 
 // #Preview {
 //    DownloadButton(
-//        llamaState: LlamaState(),
-//        modelName: "TheBloke / TinyLlama-1.1B-1T-OpenOrca-GGUF (Q4_0)",
-//        modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",
-//        filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf"
+//        jarvisState: JarvisState(),
+//        modelName: "TheBloke / TinyJarvis-1.1B-1T-OpenOrca-GGUF (Q4_0)",
+//        modelUrl: "https://huggingface.co/TheBloke/TinyJarvis-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyjarvis-1.1b-1t-openorca.Q4_0.gguf?download=true",
+//        filename: "tinyjarvis-1.1b-1t-openorca.Q4_0.gguf"
 //    )
 // }

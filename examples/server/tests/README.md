@@ -27,8 +27,8 @@ To mitigate it, you can increase values in `n_predict`, `kv_size`.
 
 ```shell
 cd ../../..
-cmake -B build -DLLAMA_CURL=ON
-cmake --build build --target llama-server
+cmake -B build -DJARVIS_CURL=ON
+cmake --build build --target jarvis-server
 ```
 
 2. Start the test: `./tests.sh`
@@ -38,13 +38,13 @@ It's possible to override some scenario steps values with environment variables:
 | variable                 | description                                                                                    |
 |--------------------------|------------------------------------------------------------------------------------------------|
 | `PORT`                   | `context.server_port` to set the listening port of the server during scenario, default: `8080` |
-| `LLAMA_SERVER_BIN_PATH`  | to change the server binary path, default: `../../../build/bin/llama-server`                         |
+| `JARVIS_SERVER_BIN_PATH`  | to change the server binary path, default: `../../../build/bin/jarvis-server`                         |
 | `DEBUG`                  | "ON" to enable steps and server verbose mode `--verbose`                                       |
 | `N_GPU_LAYERS`           | number of model layers to offload to VRAM `-ngl --n-gpu-layers`                                |
 
 ### Run @bug, @wip or @wrong_usage annotated scenario
 
-Feature or Scenario must be annotated with `@llama.cpp` to be included in the default scope.
+Feature or Scenario must be annotated with `@jarvis.cpp` to be included in the default scope.
 
 - `@bug` annotation aims to link a scenario with a GitHub issue.
 - `@wrong_usage` are meant to show user issue that are actually an expected behavior

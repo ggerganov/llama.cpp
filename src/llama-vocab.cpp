@@ -1,4 +1,4 @@
-#include "llama-vocab.h"
+#include "jarvis-vocab.h"
 
 #include "unicode.h"
 
@@ -16,7 +16,7 @@
 // helpers
 //
 
-LLAMA_ATTRIBUTE_FORMAT(1, 2)
+JARVIS_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
     va_list ap2;
@@ -72,7 +72,7 @@ struct naive_trie {
     }
     std::map<char, struct naive_trie> children;
     bool has_value;
-    llama_token value;
+    jarvis_token value;
 };
 
 //
@@ -84,11 +84,11 @@ struct llm_tokenizer {
    virtual ~llm_tokenizer() = default;
 };
 
-llama_vocab::~llama_vocab() {
+jarvis_vocab::~jarvis_vocab() {
     delete tokenizer;
 }
 
-int llama_vocab::find_bpe_rank(const std::string & token_left, const std::string & token_right) const {
+int jarvis_vocab::find_bpe_rank(const std::string & token_left, const std::string & token_right) const {
     GGML_ASSERT(token_left.find(' ')   == std::string::npos);
     GGML_ASSERT(token_left.find('\n')  == std::string::npos);
     GGML_ASSERT(token_right.find(' ')  == std::string::npos);
@@ -102,55 +102,55 @@ int llama_vocab::find_bpe_rank(const std::string & token_left, const std::string
     return it->second;
 }
 
-static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
+static enum jarvis_vocab_type jarvis_vocab_get_type(const jarvis_vocab & vocab) {
     return vocab.type;
 }
 
-static bool llama_is_normal_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL;
+static bool jarvis_is_normal_token(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
+    return vocab.id_to_token[id].attr & JARVIS_TOKEN_ATTR_NORMAL;
 }
 
-static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_UNKNOWN;
+static bool jarvis_is_unknown_token(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
+    return vocab.id_to_token[id].attr & JARVIS_TOKEN_ATTR_UNKNOWN;
 }
 
-static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_CONTROL;
+static bool jarvis_is_control_token(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
+    return vocab.id_to_token[id].attr & JARVIS_TOKEN_ATTR_CONTROL;
 }
 
-static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_BYTE;
+static bool jarvis_is_byte_token(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
+    return vocab.id_to_token[id].attr & JARVIS_TOKEN_ATTR_BYTE;
 }
 
-static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_USER_DEFINED;
+static bool jarvis_is_user_defined_token(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
+    return vocab.id_to_token[id].attr & JARVIS_TOKEN_ATTR_USER_DEFINED;
 }
 
-static bool llama_is_unused_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_UNUSED;
+static bool jarvis_is_unused_token(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
+    return vocab.id_to_token[id].attr & JARVIS_TOKEN_ATTR_UNUSED;
 }
 
-static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
-    GGML_ASSERT(llama_is_byte_token(vocab, id));
+static uint8_t jarvis_token_to_byte(const jarvis_vocab & vocab, jarvis_token id) {
+    GGML_ASSERT(jarvis_vocab_get_type(vocab) != JARVIS_VOCAB_TYPE_NONE);
+    GGML_ASSERT(jarvis_is_byte_token(vocab, id));
     const auto & token_data = vocab.id_to_token.at(id);
-    switch (llama_vocab_get_type(vocab)) {
-        case LLAMA_VOCAB_TYPE_SPM:
-        case LLAMA_VOCAB_TYPE_UGM: {
+    switch (jarvis_vocab_get_type(vocab)) {
+        case JARVIS_VOCAB_TYPE_SPM:
+        case JARVIS_VOCAB_TYPE_UGM: {
             auto buf = token_data.text.substr(3, 2);
             return strtol(buf.c_str(), NULL, 16);
         }
-        case LLAMA_VOCAB_TYPE_BPE: {
+        case JARVIS_VOCAB_TYPE_BPE: {
             GGML_ABORT("fatal error");
             //return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
         }
-        case LLAMA_VOCAB_TYPE_WPM: {
+        case JARVIS_VOCAB_TYPE_WPM: {
             GGML_ABORT("fatal error");
         }
         default:
@@ -158,11 +158,11 @@ static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
     }
 }
 
-static void llama_escape_whitespace(std::string & text) {
+static void jarvis_escape_whitespace(std::string & text) {
     replace_all(text, " ", "\xe2\x96\x81");
 }
 
-static void llama_unescape_whitespace(std::string & word) {
+static void jarvis_unescape_whitespace(std::string & word) {
     replace_all(word, "\xe2\x96\x81", " ");
 }
 
@@ -179,7 +179,7 @@ static_assert(std::is_trivially_copyable<llm_symbol>::value, "llm_symbol is not 
 //
 // SPM tokenizer
 // original implementation:
-// https://github.com/ggerganov/llama.cpp/commit/074bea2eb1f1349a0118239c4152914aecaa1be4
+// https://github.com/ggerganov/jarvis.cpp/commit/074bea2eb1f1349a0118239c4152914aecaa1be4
 //
 
 struct llm_bigram_spm {
@@ -197,13 +197,13 @@ struct llm_bigram_spm {
 };
 
 struct llm_tokenizer_spm : llm_tokenizer {
-    llm_tokenizer_spm(const llama_vocab & /*vocab*/) : llm_tokenizer() {}
+    llm_tokenizer_spm(const jarvis_vocab & /*vocab*/) : llm_tokenizer() {}
 };
 
 struct llm_tokenizer_spm_session {
-    llm_tokenizer_spm_session(const llama_vocab & vocab) : vocab(vocab) {}
+    llm_tokenizer_spm_session(const jarvis_vocab & vocab) : vocab(vocab) {}
 
-    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+    void tokenize(const std::string & text, std::vector<jarvis_vocab::id> & output) {
 
         // split string into utf8 chars
         int index = 0;
@@ -243,7 +243,7 @@ struct llm_tokenizer_spm_session {
             left_sym.n += right_sym.n;
             right_sym.n = 0;
 
-            //LLAMA_LOG_INFO("left = '%*s' size = %zu\n", (int) left_sym.n, left_sym.text, bigram.size);
+            //JARVIS_LOG_INFO("left = '%*s' size = %zu\n", (int) left_sym.n, left_sym.text, bigram.size);
 
             // remove the right sym from the chain
             left_sym.next = right_sym.next;
@@ -263,7 +263,7 @@ struct llm_tokenizer_spm_session {
     }
 
 private:
-    void resegment(llm_symbol & symbol, std::vector<llama_vocab::id> & output) {
+    void resegment(llm_symbol & symbol, std::vector<jarvis_vocab::id> & output) {
         auto text = std::string(symbol.text, symbol.n);
         auto token = vocab.token_to_id.find(text);
 
@@ -279,7 +279,7 @@ private:
             // output any symbols that did not form tokens as bytes.
             output.reserve(output.size() + symbol.n);
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_byte_to_token_impl(vocab, symbol.text[j]);
+                jarvis_vocab::id token_id = jarvis_byte_to_token_impl(vocab, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -318,7 +318,7 @@ private:
         rev_merge[text] = std::make_pair(left, right);
     }
 
-    const llama_vocab & vocab;
+    const jarvis_vocab & vocab;
     // currently unused
     // const llm_tokenizer_spm * spm_tokenizer;
 
@@ -336,7 +336,7 @@ private:
 // TODO: there are a lot of common parts between spm and bpe tokenizers, should be refactored and reused
 
 template<typename T, typename Container = std::vector<T>, typename Compare = std::less<typename Container::value_type>>
-class llama_priority_queue : public std::priority_queue<T, Container, Compare> {
+class jarvis_priority_queue : public std::priority_queue<T, Container, Compare> {
 public:
     using std::priority_queue<T, Container, Compare>::priority_queue;
 
@@ -358,7 +358,7 @@ struct llm_bigram_bpe {
     };
 
     using queue_storage = std::vector<llm_bigram_bpe>;
-    using queue = llama_priority_queue<llm_bigram_bpe, queue_storage, comparator>;
+    using queue = jarvis_priority_queue<llm_bigram_bpe, queue_storage, comparator>;
     llm_symbol::index left;
     llm_symbol::index right;
     std::string text;
@@ -367,26 +367,26 @@ struct llm_bigram_bpe {
 };
 
 struct llm_tokenizer_bpe : llm_tokenizer {
-    llm_tokenizer_bpe(const llama_vocab & vocab) : llm_tokenizer() {
-        GGML_ASSERT(vocab.type == LLAMA_VOCAB_TYPE_BPE);
+    llm_tokenizer_bpe(const jarvis_vocab & vocab) : llm_tokenizer() {
+        GGML_ASSERT(vocab.type == JARVIS_VOCAB_TYPE_BPE);
         switch (vocab.type_pre) {
-            case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
+            case JARVIS_VOCAB_PRE_TYPE_JARVIS3:
                 regex_exprs = {
                     // original regex from tokenizer.json
                     //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
 
-                    // adapted: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
+                    // adapted: https://github.com/ggerganov/jarvis.cpp/pull/6920#issuecomment-2080233989
                     "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_DBRX:
-            case LLAMA_VOCAB_PRE_TYPE_SMAUG:
+            case JARVIS_VOCAB_PRE_TYPE_DBRX:
+            case JARVIS_VOCAB_PRE_TYPE_SMAUG:
                 regex_exprs = {
-                    // same as llama3
+                    // same as jarvis3
                     "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM:
+            case JARVIS_VOCAB_PRE_TYPE_DEEPSEEK_LLM:
                 regex_exprs = {
                     "[\r\n]",
                     "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
@@ -396,7 +396,7 @@ struct llm_tokenizer_bpe : llm_tokenizer {
                     "\\p{N}+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER:
+            case JARVIS_VOCAB_PRE_TYPE_DEEPSEEK_CODER:
                 regex_exprs = {
                     "[\r\n]",
                     "\\s?\\p{L}+",
@@ -405,66 +405,66 @@ struct llm_tokenizer_bpe : llm_tokenizer {
                     "\\p{N}",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_FALCON:
+            case JARVIS_VOCAB_PRE_TYPE_FALCON:
                 regex_exprs = {
                     "[\\p{P}\\$\\+<=>\\^~\\|`]+",
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                     "[0-9][0-9][0-9]",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_STARCODER:
-            case LLAMA_VOCAB_PRE_TYPE_REFACT:
-            case LLAMA_VOCAB_PRE_TYPE_COMMAND_R:
-            case LLAMA_VOCAB_PRE_TYPE_SMOLLM:
-            case LLAMA_VOCAB_PRE_TYPE_CODESHELL:
-            case LLAMA_VOCAB_PRE_TYPE_EXAONE:
+            case JARVIS_VOCAB_PRE_TYPE_STARCODER:
+            case JARVIS_VOCAB_PRE_TYPE_REFACT:
+            case JARVIS_VOCAB_PRE_TYPE_COMMAND_R:
+            case JARVIS_VOCAB_PRE_TYPE_SMOLLM:
+            case JARVIS_VOCAB_PRE_TYPE_CODESHELL:
+            case JARVIS_VOCAB_PRE_TYPE_EXAONE:
                 regex_exprs = {
                     "\\p{N}",
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_GPT2:
-            case LLAMA_VOCAB_PRE_TYPE_MPT:
-            case LLAMA_VOCAB_PRE_TYPE_OLMO:
-            case LLAMA_VOCAB_PRE_TYPE_JAIS:
+            case JARVIS_VOCAB_PRE_TYPE_GPT2:
+            case JARVIS_VOCAB_PRE_TYPE_MPT:
+            case JARVIS_VOCAB_PRE_TYPE_OLMO:
+            case JARVIS_VOCAB_PRE_TYPE_JAIS:
                 regex_exprs = {
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_STABLELM2:
-            case LLAMA_VOCAB_PRE_TYPE_QWEN2:
+            case JARVIS_VOCAB_PRE_TYPE_STABLELM2:
+            case JARVIS_VOCAB_PRE_TYPE_QWEN2:
                 regex_exprs = {
                     // original regex from tokenizer.json
                     // "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                     "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_PORO:
-            case LLAMA_VOCAB_PRE_TYPE_BLOOM:
-            case LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH:
+            case JARVIS_VOCAB_PRE_TYPE_PORO:
+            case JARVIS_VOCAB_PRE_TYPE_BLOOM:
+            case JARVIS_VOCAB_PRE_TYPE_GPT3_FINNISH:
                 regex_exprs = {
                     " ?[^(\\s|.,!?…。，、।۔،)]+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_CHATGLM4:
+            case JARVIS_VOCAB_PRE_TYPE_CHATGLM4:
                 regex_exprs = {
                     "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_VIKING:
+            case JARVIS_VOCAB_PRE_TYPE_VIKING:
                 regex_exprs = {
                     " ?[^(\\s|.,!?…。，、।۔،)]+",
                     "\\p{N}",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_TEKKEN:
+            case JARVIS_VOCAB_PRE_TYPE_TEKKEN:
                 // original regex from tokenizer.json
                 // "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                 regex_exprs = {
                     "[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))*((?=[\\p{L}])([^A-Z]))+|[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))+((?=[\\p{L}])([^A-Z]))*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_CHAMELEON:
+            case JARVIS_VOCAB_PRE_TYPE_CHAMELEON:
                 // Note: in theory, the special token (sentinel and image token) regex_exprs below
                 // are unnecessary, as they are split in `tokenizer_st_partition` anyway.
                 // However, since the upstream pre-tokenizer uses them, they are also
@@ -494,14 +494,14 @@ struct llm_tokenizer_bpe : llm_tokenizer {
 };
 
 struct llm_tokenizer_bpe_session {
-    llm_tokenizer_bpe_session(const llama_vocab & vocab) : vocab(vocab),
+    llm_tokenizer_bpe_session(const jarvis_vocab & vocab) : vocab(vocab),
         bpe_tokenizer(static_cast<const llm_tokenizer_bpe *>(vocab.tokenizer)) {}
 
-    static void append(const llama_vocab::id token_id, std::vector<llama_vocab::id> & output)  {
+    static void append(const jarvis_vocab::id token_id, std::vector<jarvis_vocab::id> & output)  {
         output.push_back(token_id);
     }
 
-    bool append_bos(std::vector<llama_vocab::id> & output) const {
+    bool append_bos(std::vector<jarvis_vocab::id> & output) const {
         if (vocab.tokenizer_add_bos) {
             GGML_ASSERT(vocab.special_bos_id != -1);
             output.push_back(vocab.special_bos_id);
@@ -510,7 +510,7 @@ struct llm_tokenizer_bpe_session {
         return false;
     }
 
-    bool append_eos(std::vector<llama_vocab::id> & output) const {
+    bool append_eos(std::vector<jarvis_vocab::id> & output) const {
         if (vocab.tokenizer_add_eos) {
             GGML_ASSERT(vocab.special_eos_id != -1);
             output.push_back(vocab.special_eos_id);
@@ -519,22 +519,22 @@ struct llm_tokenizer_bpe_session {
         return false;
     }
 
-    void check_double_bos_eos(const std::vector<llama_vocab::id> & output) const {
+    void check_double_bos_eos(const std::vector<jarvis_vocab::id> & output) const {
         if (vocab.tokenizer_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
-            LLAMA_LOG_WARN(
+            JARVIS_LOG_WARN(
                 "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                 "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                 "Are you sure this is what you want?\n", __FUNCTION__);
         }
         if (vocab.tokenizer_add_eos && output.size() >= 2 && *(output.end()-2) == vocab.special_eos_id) {
-            LLAMA_LOG_WARN(
+            JARVIS_LOG_WARN(
                 "%s: Added a EOS token to the prompt as specified by the model but the prompt "
                 "also ends with a EOS token. So now the final prompt ends with 2 EOS tokens. "
                 "Are you sure this is what you want?\n", __FUNCTION__);
         }
     }
 
-    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+    void tokenize(const std::string & text, std::vector<jarvis_vocab::id> & output) {
         int final_prev_index = -1;
         const auto word_collection = unicode_regex_split(text, bpe_tokenizer->regex_exprs);
 
@@ -665,7 +665,7 @@ private:
         work_queue.push(bigram);
     }
 
-    const llama_vocab & vocab;
+    const jarvis_vocab & vocab;
     const llm_tokenizer_bpe * bpe_tokenizer;
 
     std::vector<llm_symbol> symbols;
@@ -678,13 +678,13 @@ private:
 //
 
 struct llm_tokenizer_wpm : llm_tokenizer {
-    llm_tokenizer_wpm(const llama_vocab & /*vocab*/) : llm_tokenizer() {}
+    llm_tokenizer_wpm(const jarvis_vocab & /*vocab*/) : llm_tokenizer() {}
 };
 
 struct llm_tokenizer_wpm_session {
-    llm_tokenizer_wpm_session(const llama_vocab & vocab) : vocab(vocab) {}
+    llm_tokenizer_wpm_session(const jarvis_vocab & vocab) : vocab(vocab) {}
 
-    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+    void tokenize(const std::string & text, std::vector<jarvis_vocab::id> & output) {
         const auto & token_map = vocab.token_to_id;
         // normalize and split by whitespace
         std::vector<std::string> words = preprocess(text);
@@ -785,7 +785,7 @@ struct llm_tokenizer_wpm_session {
     }
 
 private:
-    const llama_vocab & vocab;
+    const jarvis_vocab & vocab;
     // currently unused
     // const llm_tokenizer_wpm * wpm_tokenizer;
 };
@@ -795,7 +795,7 @@ private:
 //
 
 struct llm_tokenizer_ugm : llm_tokenizer {
-    llm_tokenizer_ugm(const llama_vocab & vocab) : llm_tokenizer() {
+    llm_tokenizer_ugm(const jarvis_vocab & vocab) : llm_tokenizer() {
         if (vocab.precompiled_charsmap.size() > 0) {
             size_t charsmap_offset = 0;
 
@@ -822,18 +822,18 @@ struct llm_tokenizer_ugm : llm_tokenizer {
         for (unsigned int id = 0; id < vocab.id_to_token.size(); ++id) {
             const auto &token_data = vocab.id_to_token[id];
 
-            if (llama_is_normal_token(vocab, id)) {
+            if (jarvis_is_normal_token(vocab, id)) {
                 min_score = std::min<float>(min_score, token_data.score);
                 max_score = std::max<float>(max_score, token_data.score);
             }
 
-            if (llama_is_normal_token(vocab, id) ||
-                llama_is_user_defined_token(vocab, id) ||
-                llama_is_unused_token(vocab, id)) {
+            if (jarvis_is_normal_token(vocab, id) ||
+                jarvis_is_user_defined_token(vocab, id) ||
+                jarvis_is_unused_token(vocab, id)) {
                 token_matcher.insert(token_data.text.data(), token_data.text.size(), id);
             }
 
-            if (llama_is_user_defined_token(vocab, id)) {
+            if (jarvis_is_user_defined_token(vocab, id)) {
                 user_defined_token_matcher.insert(token_data.text.data(), token_data.text.size());
             }
         }
@@ -862,7 +862,7 @@ struct llm_tokenizer_ugm : llm_tokenizer {
 };
 
 struct llm_tokenizer_ugm_session {
-    llm_tokenizer_ugm_session(const llama_vocab & vocab) : vocab(vocab),
+    llm_tokenizer_ugm_session(const jarvis_vocab & vocab) : vocab(vocab),
         ugm_tokenizer(static_cast<const llm_tokenizer_ugm *>(vocab.tokenizer)) {}
 
     /* This implementation is based on SentencePiece optimized Viterbi algorithm for
@@ -878,7 +878,7 @@ struct llm_tokenizer_ugm_session {
      * After processing the whole sequence we backtrack from the end to get
      * the best tokenization.
     */
-    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+    void tokenize(const std::string & text, std::vector<jarvis_vocab::id> & output) {
         // get current size of output (for reversal later)
         size_t output_size = output.size();
 
@@ -912,14 +912,14 @@ struct llm_tokenizer_ugm_session {
                     if (prefix_offset - input_offset == n_utf8_code_units) {
                         single_codepoint_token_found = true;
                     }
-                    llama_token token_id = node->value;
+                    jarvis_token token_id = node->value;
                     const auto & token_data = vocab.id_to_token[token_id];
 
                     // we set the user-defined token scores to 0 to make them more likely to be selected
                     // (normal token scores are log probabilities, so they are negative)
                     // score type is double here to make tokenization results exactly
                     // the same as in the HF tokenizer using SentencePiece
-                    const double token_score = llama_is_user_defined_token(vocab, token_id) ? 0.0 : token_data.score;
+                    const double token_score = jarvis_is_user_defined_token(vocab, token_id) ? 0.0 : token_data.score;
                     const double challenger_score = current_best.score_sum + token_score;
                     struct best_tokenization & current_champ = tokenization_results[prefix_offset];
                     if (challenger_score > current_champ.score_sum) {
@@ -1061,7 +1061,7 @@ private:
 
     // this structure stores the best tokenization so far at input_offset
     struct best_tokenization {
-        llama_token token_id;
+        jarvis_token token_id;
         size_t input_offset;
         float score_sum;
     };
@@ -1137,7 +1137,7 @@ private:
         }
     }
 
-    const llama_vocab & vocab;
+    const jarvis_vocab & vocab;
     const llm_tokenizer_ugm * ugm_tokenizer;
 };
 
@@ -1145,7 +1145,7 @@ private:
 // RWKV tokenizer
 //
 
-static std::vector<uint8_t> llama_unescape_rwkv_token(const std::string & escaped) {
+static std::vector<uint8_t> jarvis_unescape_rwkv_token(const std::string & escaped) {
     std::vector<uint8_t> output;
     output.reserve(escaped.size());
 
@@ -1200,14 +1200,14 @@ static std::vector<uint8_t> llama_unescape_rwkv_token(const std::string & escape
 }
 
 struct llm_tokenizer_rwkv : llm_tokenizer {
-    llm_tokenizer_rwkv(const llama_vocab & vocab) : llm_tokenizer() {
+    llm_tokenizer_rwkv(const jarvis_vocab & vocab) : llm_tokenizer() {
         // RWKV supports arbitrary byte tokens, but the vocab struct only supports string tokens.
         // For now, we decode the vocab here into the lookup we'll use for tokenization.
 
         // build trie
         for (unsigned int id = 0; id < vocab.id_to_token.size(); ++id) {
             const auto & token = vocab.id_to_token[id];
-            const auto data = llama_unescape_rwkv_token(token.text);
+            const auto data = jarvis_unescape_rwkv_token(token.text);
             token_matcher.insert((const char *) data.data(), data.size(), id);
         }
     }
@@ -1216,10 +1216,10 @@ struct llm_tokenizer_rwkv : llm_tokenizer {
 };
 
 struct llm_tokenizer_rwkv_session {
-    llm_tokenizer_rwkv_session(const llama_vocab & vocab) : vocab(vocab),
+    llm_tokenizer_rwkv_session(const jarvis_vocab & vocab) : vocab(vocab),
         rwkv_tokenizer(static_cast<const llm_tokenizer_rwkv &>(*vocab.tokenizer)) {}
 
-    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+    void tokenize(const std::string & text, std::vector<jarvis_vocab::id> & output) {
         uint32_t position = 0;
         while (position < text.size()) {
             const struct naive_trie * node = rwkv_tokenizer.token_matcher.traverse(text[position]);
@@ -1248,25 +1248,25 @@ struct llm_tokenizer_rwkv_session {
     }
 
 private:
-    const llama_vocab & vocab;
+    const jarvis_vocab & vocab;
     const llm_tokenizer_rwkv & rwkv_tokenizer;
 };
 
-void llama_vocab::init_tokenizer() {
+void jarvis_vocab::init_tokenizer() {
     switch (type) {
-        case LLAMA_VOCAB_TYPE_SPM:
+        case JARVIS_VOCAB_TYPE_SPM:
             tokenizer = new llm_tokenizer_spm(*this);
             break;
-        case LLAMA_VOCAB_TYPE_BPE:
+        case JARVIS_VOCAB_TYPE_BPE:
             tokenizer = new llm_tokenizer_bpe(*this);
             break;
-        case LLAMA_VOCAB_TYPE_WPM:
+        case JARVIS_VOCAB_TYPE_WPM:
             tokenizer = new llm_tokenizer_wpm(*this);
             break;
-        case LLAMA_VOCAB_TYPE_UGM:
+        case JARVIS_VOCAB_TYPE_UGM:
             tokenizer = new llm_tokenizer_ugm(*this);
             break;
-        case LLAMA_VOCAB_TYPE_RWKV:
+        case JARVIS_VOCAB_TYPE_RWKV:
             tokenizer = new llm_tokenizer_rwkv(*this);
             break;
         default:
@@ -1284,7 +1284,7 @@ typedef enum FRAGMENT_BUFFER_VARIANT_TYPE {
 } FRAGMENT_BUFFER_VARIANT_TYPE;
 
 struct fragment_buffer_variant {
-    fragment_buffer_variant(llama_vocab::id _token)
+    fragment_buffer_variant(jarvis_vocab::id _token)
     :
         type(FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN),
         token(_token),
@@ -1295,7 +1295,7 @@ struct fragment_buffer_variant {
     fragment_buffer_variant(const std::string & _raw_text, int64_t _offset, int64_t _length)
     :
         type(FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT),
-        token((llama_vocab::id) - 1),
+        token((jarvis_vocab::id) - 1),
         raw_text(_raw_text),
         offset(_offset),
         length(_length){
@@ -1305,7 +1305,7 @@ struct fragment_buffer_variant {
         }
 
     const FRAGMENT_BUFFER_VARIANT_TYPE type;
-    const llama_vocab::id token;
+    const jarvis_vocab::id token;
     const std::string _dummy;
     const std::string & raw_text;
     const uint64_t offset;
@@ -1314,13 +1314,13 @@ struct fragment_buffer_variant {
 
 // #define PRETOKENIZERDEBUG
 
-static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer, bool parse_special) {
+static void tokenizer_st_partition(const jarvis_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer, bool parse_special) {
     // for each special token
-    for (const llama_vocab::id special_id : vocab.cache_special_tokens) {
+    for (const jarvis_vocab::id special_id : vocab.cache_special_tokens) {
         const auto & data = vocab.id_to_token[special_id];
         const auto & special_token = data.text;
 
-        if (!parse_special && (data.attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_UNKNOWN))) {
+        if (!parse_special && (data.attr & (JARVIS_TOKEN_ATTR_CONTROL | JARVIS_TOKEN_ATTR_UNKNOWN))) {
             // Ignore control and unknown tokens when parse_special == false
             continue;
             // User-defined tokens are still pre-tokenized before everything else
@@ -1354,7 +1354,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     if (match + special_token.length() > raw_text_base_offset + raw_text_base_length) break;
 
 #ifdef PRETOKENIZERDEBUG
-                    LLAMA_LOG_WARN("FF: (%ld %ld %ld) '%s'\n", raw_text->length(), raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
+                    JARVIS_LOG_WARN("FF: (%ld %ld %ld) '%s'\n", raw_text->length(), raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
 #endif
                     auto source = std::distance(buffer.begin(), it);
 
@@ -1365,7 +1365,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         const int64_t left_reminder_offset = raw_text_base_offset + 0;
                         int64_t left_reminder_length = match - raw_text_base_offset;
 
-                        if (data.attr & LLAMA_TOKEN_ATTR_LSTRIP) {
+                        if (data.attr & JARVIS_TOKEN_ATTR_LSTRIP) {
                             while (left_reminder_length > 0 && isspace(raw_text[left_reminder_offset + left_reminder_length - 1])) {
                                 left_reminder_length--;
                             }
@@ -1377,7 +1377,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         }
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
+                        JARVIS_LOG_WARN("FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
 #endif
                     }
 
@@ -1390,7 +1390,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         int64_t right_reminder_offset = match + special_token.length();
                         int64_t right_reminder_length = raw_text_base_length - ((match - raw_text_base_offset) + special_token.length());
 
-                        if (data.attr & LLAMA_TOKEN_ATTR_RSTRIP) {
+                        if (data.attr & JARVIS_TOKEN_ATTR_RSTRIP) {
                             while (right_reminder_length > 0 && isspace(raw_text[right_reminder_offset])) {
                                 right_reminder_offset++;
                                 right_reminder_length--;
@@ -1403,7 +1403,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         }
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
+                        JARVIS_LOG_WARN("FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
 #endif
 
                         if (source == 0) {
@@ -1417,7 +1417,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         raw_text_base_length = right_reminder_length;
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("RR: (%ld %ld) '%s'\n", raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
+                        JARVIS_LOG_WARN("RR: (%ld %ld) '%s'\n", raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
 #endif
                     } else {
                         if (source == 0) {
@@ -1434,14 +1434,14 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
     }
 }
 
-std::vector<llama_vocab::id> llama_tokenize_internal(
-        const llama_vocab & vocab,
+std::vector<jarvis_vocab::id> jarvis_tokenize_internal(
+        const jarvis_vocab & vocab,
         std::string raw_text,
         bool add_special,
         bool parse_special) {
-    GGML_ASSERT(vocab.tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
+    GGML_ASSERT(vocab.tokenizer && "Tokenizer not initialized. Call jarvis_vocab::init_tokenizer() first.");
 
-    std::vector<llama_vocab::id> output;
+    std::vector<jarvis_vocab::id> output;
     std::forward_list<fragment_buffer_variant> fragment_buffer;
 
     if (!raw_text.empty()) {
@@ -1450,7 +1450,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
     }
 
     switch (vocab.type) {
-        case LLAMA_VOCAB_TYPE_SPM:
+        case JARVIS_VOCAB_TYPE_SPM:
             {
                 // OG tokenizer behavior:
                 //
@@ -1475,9 +1475,9 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                         }
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        JARVIS_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
-                        llama_escape_whitespace(raw_text);
+                        jarvis_escape_whitespace(raw_text);
                         llm_tokenizer_spm_session session(vocab);
                         session.tokenize(raw_text, output);
                         is_prev_special = false;
@@ -1488,7 +1488,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                 }
 
                 if (add_special && vocab.tokenizer_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
-                    LLAMA_LOG_WARN(
+                    JARVIS_LOG_WARN(
                         "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                         "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                         "Are you sure this is what you want?\n", __FUNCTION__);
@@ -1499,7 +1499,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
-        case LLAMA_VOCAB_TYPE_BPE:
+        case JARVIS_VOCAB_TYPE_BPE:
             {
                 llm_tokenizer_bpe_session session(vocab);
                 // it calls some other methods that are not exist in llm_tokenizer,
@@ -1512,7 +1512,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        JARVIS_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         session.tokenize(raw_text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
@@ -1525,7 +1525,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     session.check_double_bos_eos(output);
                 }
             } break;
-        case LLAMA_VOCAB_TYPE_WPM:
+        case JARVIS_VOCAB_TYPE_WPM:
             {
                 if (add_special) {
                     GGML_ASSERT(vocab.special_cls_id != -1);
@@ -1539,7 +1539,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        JARVIS_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         session.tokenize(raw_text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
@@ -1552,7 +1552,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     output.push_back(vocab.special_sep_id);
                 }
             } break;
-        case LLAMA_VOCAB_TYPE_UGM:
+        case JARVIS_VOCAB_TYPE_UGM:
             {
                 if (add_special && vocab.tokenizer_add_bos) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
@@ -1564,7 +1564,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        JARVIS_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         session.tokenize(raw_text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
@@ -1573,7 +1573,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                 }
 
                 if (add_special && vocab.tokenizer_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
-                    LLAMA_LOG_WARN(
+                    JARVIS_LOG_WARN(
                         "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                         "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                         "Are you sure this is what you want?\n", __FUNCTION__);
@@ -1584,7 +1584,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
-        case LLAMA_VOCAB_TYPE_RWKV:
+        case JARVIS_VOCAB_TYPE_RWKV:
             {
                 llm_tokenizer_rwkv_session session(vocab);
                 for (const auto & fragment : fragment_buffer) {
@@ -1592,7 +1592,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        JARVIS_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
 
                         session.tokenize(raw_text, output);
@@ -1601,19 +1601,19 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                     }
                 }
             } break;
-        case LLAMA_VOCAB_TYPE_NONE:
+        case JARVIS_VOCAB_TYPE_NONE:
             GGML_ABORT("fatal error");
     }
 
     return output;
 }
 
-llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch) {
-    GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
+jarvis_token jarvis_byte_to_token_impl(const jarvis_vocab & vocab, uint8_t ch) {
+    GGML_ASSERT(jarvis_vocab_get_type(vocab) != JARVIS_VOCAB_TYPE_NONE);
     static const char * hex = "0123456789ABCDEF";
-    switch (llama_vocab_get_type(vocab)) {
-        case LLAMA_VOCAB_TYPE_SPM:
-        case LLAMA_VOCAB_TYPE_UGM: {
+    switch (jarvis_vocab_get_type(vocab)) {
+        case JARVIS_VOCAB_TYPE_SPM:
+        case JARVIS_VOCAB_TYPE_UGM: {
             const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
             auto token = vocab.token_to_id.find(buf);
             if (token != vocab.token_to_id.end()) {
@@ -1623,8 +1623,8 @@ llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch) {
             const char buf2[2] = { (char)ch, 0 };
             return vocab.token_to_id.at(buf2);
         }
-        case LLAMA_VOCAB_TYPE_WPM:
-        case LLAMA_VOCAB_TYPE_BPE: {
+        case JARVIS_VOCAB_TYPE_WPM:
+        case JARVIS_VOCAB_TYPE_BPE: {
             return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }
         default:
@@ -1632,116 +1632,116 @@ llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch) {
     }
 }
 
-const char * llama_token_get_text_impl(const struct llama_vocab & vocab, llama_token token) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
+const char * jarvis_token_get_text_impl(const struct jarvis_vocab & vocab, jarvis_token token) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
     return vocab.id_to_token[token].text.c_str();
 }
 
-float llama_token_get_score_impl(const struct llama_vocab & vocab, llama_token token) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
+float jarvis_token_get_score_impl(const struct jarvis_vocab & vocab, jarvis_token token) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
     return vocab.id_to_token[token].score;
 }
 
-llama_token_attr llama_token_get_attr_impl(const struct llama_vocab & vocab, llama_token token) {
-    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
+jarvis_token_attr jarvis_token_get_attr_impl(const struct jarvis_vocab & vocab, jarvis_token token) {
+    GGML_ASSERT(vocab.type != JARVIS_VOCAB_TYPE_NONE);
     return vocab.id_to_token[token].attr;
 }
 
-bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token) {
+bool jarvis_token_is_eog_impl(const struct jarvis_vocab & vocab, jarvis_token token) {
     return token != -1 && vocab.special_eog_ids.count(token) > 0;
 }
 
-bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token token) {
-    return llama_is_control_token(vocab, token);
+bool jarvis_token_is_control_impl(const struct jarvis_vocab & vocab, jarvis_token token) {
+    return jarvis_is_control_token(vocab, token);
 }
 
-llama_token llama_token_bos_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_bos_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_bos_id;
 }
 
-llama_token llama_token_eos_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_eos_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_eos_id;
 }
 
-llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_eot_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_eot_id;
 }
 
-llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_eom_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_eom_id;
 }
 
-llama_token llama_token_cls_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_cls_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_cls_id;
 }
 
-llama_token llama_token_sep_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_sep_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_sep_id;
 }
 
-llama_token llama_token_nl_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_nl_impl(const struct jarvis_vocab & vocab) {
     return vocab.linefeed_id;
 }
 
-llama_token llama_token_pad_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_pad_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_pad_id;
 }
 
-bool llama_add_bos_token_impl(const struct llama_vocab & vocab) {
+bool jarvis_add_bos_token_impl(const struct jarvis_vocab & vocab) {
     return vocab.tokenizer_add_bos;
 }
 
-bool llama_add_eos_token_impl(const struct llama_vocab & vocab) {
+bool jarvis_add_eos_token_impl(const struct jarvis_vocab & vocab) {
     return vocab.tokenizer_add_eos;
 }
 
-llama_token llama_token_prefix_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_prefix_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_pre_id;
 }
 
-llama_token llama_token_middle_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_middle_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_mid_id;
 }
 
-llama_token llama_token_suffix_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_suffix_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_suf_id;
 }
 
-llama_token llama_token_fim_pre_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_fim_pre_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_pre_id;
 }
 
-llama_token llama_token_fim_suf_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_fim_suf_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_suf_id;
 }
 
-llama_token llama_token_fim_mid_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_fim_mid_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_mid_id;
 }
 
-llama_token llama_token_fim_pad_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_fim_pad_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_pad_id;
 }
 
-llama_token llama_token_fim_rep_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_fim_rep_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_rep_id;
 }
 
-llama_token llama_token_fim_sep_impl(const struct llama_vocab & vocab) {
+jarvis_token jarvis_token_fim_sep_impl(const struct jarvis_vocab & vocab) {
     return vocab.special_fim_sep_id;
 }
 
-int32_t llama_tokenize_impl(
-        const struct llama_vocab & vocab,
+int32_t jarvis_tokenize_impl(
+        const struct jarvis_vocab & vocab,
                       const char * text,
                          int32_t   text_len,
-                     llama_token * tokens,
+                     jarvis_token * tokens,
                          int32_t   n_tokens_max,
                             bool   add_special,
                             bool   parse_special) {
-    auto res = llama_tokenize_internal(vocab, std::string(text, text_len), add_special, parse_special);
+    auto res = jarvis_tokenize_internal(vocab, std::string(text, text_len), add_special, parse_special);
     if (n_tokens_max < (int) res.size()) {
-        // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        // JARVIS_LOG_ERROR("%s: too many tokens\n", __func__);
         return -((int) res.size());
     }
 
@@ -1752,7 +1752,7 @@ int32_t llama_tokenize_impl(
     return res.size();
 }
 
-static std::string llama_decode_text(const std::string & text) {
+static std::string jarvis_decode_text(const std::string & text) {
     std::string decoded_text;
 
     const auto cpts = unicode_cpts_from_utf8(text);
@@ -1773,10 +1773,10 @@ static std::string llama_decode_text(const std::string & text) {
 }
 
 // does not write null-terminator to buf
-int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token token, char * buf, int32_t length, int32_t lstrip, bool special) {
-    // ref: https://github.com/ggerganov/llama.cpp/pull/7587#discussion_r1620983843
-    static const int attr_special = LLAMA_TOKEN_ATTR_UNKNOWN | LLAMA_TOKEN_ATTR_CONTROL;
-    const llama_token_attr attr = llama_token_get_attr_impl(vocab, token);
+int32_t jarvis_token_to_piece_impl(const struct jarvis_vocab & vocab, jarvis_token token, char * buf, int32_t length, int32_t lstrip, bool special) {
+    // ref: https://github.com/ggerganov/jarvis.cpp/pull/7587#discussion_r1620983843
+    static const int attr_special = JARVIS_TOKEN_ATTR_UNKNOWN | JARVIS_TOKEN_ATTR_CONTROL;
+    const jarvis_token_attr attr = jarvis_token_get_attr_impl(vocab, token);
     if (!special && (attr & attr_special)) {
         return 0;
     }
@@ -1807,40 +1807,40 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
 
     if (0 <= token && token < (int32_t) vocab.id_to_token.size()) {
         const std::string & token_text = vocab.id_to_token[token].text;
-        switch (llama_vocab_get_type(vocab)) {
-            case LLAMA_VOCAB_TYPE_WPM:
-            case LLAMA_VOCAB_TYPE_SPM:
-            case LLAMA_VOCAB_TYPE_UGM: {
+        switch (jarvis_vocab_get_type(vocab)) {
+            case JARVIS_VOCAB_TYPE_WPM:
+            case JARVIS_VOCAB_TYPE_SPM:
+            case JARVIS_VOCAB_TYPE_UGM: {
                 // NOTE: we accept all unsupported token types,
                 // suppressing them like CONTROL tokens.
-                if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
+                if (attr & (attr_special | JARVIS_TOKEN_ATTR_USER_DEFINED)) {
                     return _try_copy(token_text.data(), token_text.size());
                 }
-                if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
+                if (attr & JARVIS_TOKEN_ATTR_NORMAL) {
                     std::string result = token_text;
-                    llama_unescape_whitespace(result);
+                    jarvis_unescape_whitespace(result);
                     return _try_copy(result.data(), result.size());
                 }
-                if (attr & LLAMA_TOKEN_ATTR_BYTE) {
-                    char byte = (char) llama_token_to_byte(vocab, token);
+                if (attr & JARVIS_TOKEN_ATTR_BYTE) {
+                    char byte = (char) jarvis_token_to_byte(vocab, token);
                     return _try_copy((char*) &byte, 1);
                 }
                 break;
             }
-            case LLAMA_VOCAB_TYPE_BPE: {
+            case JARVIS_VOCAB_TYPE_BPE: {
                 // NOTE: we accept all unsupported token types,
                 // suppressing them like CONTROL tokens.
-                if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
+                if (attr & (attr_special | JARVIS_TOKEN_ATTR_USER_DEFINED)) {
                     return _try_copy(token_text.data(), token_text.size());
                 }
-                if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
-                    std::string result = llama_decode_text(token_text);
+                if (attr & JARVIS_TOKEN_ATTR_NORMAL) {
+                    std::string result = jarvis_decode_text(token_text);
                     return _try_copy(result.data(), result.size());
                 }
                 break;
             }
-            case LLAMA_VOCAB_TYPE_RWKV: {
-                std::vector<uint8_t> result = llama_unescape_rwkv_token(token_text);
+            case JARVIS_VOCAB_TYPE_RWKV: {
+                std::vector<uint8_t> result = jarvis_unescape_rwkv_token(token_text);
 
                 // If we don't have enough space, return an error
                 if (result.size() > (size_t)length) {
@@ -1858,15 +1858,15 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
     return 0;
 }
 
-int32_t llama_detokenize_impl(
-        const struct llama_vocab & vocab,
-               const llama_token * tokens,
+int32_t jarvis_detokenize_impl(
+        const struct jarvis_vocab & vocab,
+               const jarvis_token * tokens,
                          int32_t   n_tokens,
                             char * text,
                          int32_t   text_len_max,
                             bool   remove_special,
                             bool   unparse_special) {
-    GGML_ASSERT(vocab.tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
+    GGML_ASSERT(vocab.tokenizer && "Tokenizer not initialized. Call jarvis_vocab::init_tokenizer() first.");
 
     int32_t avail = text_len_max;
     int32_t total = 0;
@@ -1890,7 +1890,7 @@ int32_t llama_detokenize_impl(
 
     for (int32_t i = 0; i < n_tokens; ++i) {
         GGML_ASSERT(avail >= 0);
-        int32_t n_chars = llama_token_to_piece_impl(vocab, tokens[i], text, avail, remove_space, unparse_special);
+        int32_t n_chars = jarvis_token_to_piece_impl(vocab, tokens[i], text, avail, remove_space, unparse_special);
         remove_space = false;
         if (n_chars < 0) {
             avail = 0;
@@ -1967,13 +1967,13 @@ int32_t llama_detokenize_impl(
     return total <= text_len_max ? total : -total;
 }
 
-std::string llama_detokenize(const struct llama_vocab & vocab, const std::vector<llama_token> & tokens, bool special) {
+std::string jarvis_detokenize(const struct jarvis_vocab & vocab, const std::vector<jarvis_token> & tokens, bool special) {
     std::string text;
     text.resize(std::max(text.capacity(), tokens.size()));
-    int32_t n_chars = llama_detokenize_impl(vocab, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+    int32_t n_chars = jarvis_detokenize_impl(vocab, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
     if (n_chars < 0) {
         text.resize(-n_chars);
-        n_chars = llama_detokenize_impl(vocab, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+        n_chars = jarvis_detokenize_impl(vocab, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
         GGML_ASSERT(n_chars <= (int32_t)text.size());  // whitespace trimming is performed after per-token detokenization
     }
 

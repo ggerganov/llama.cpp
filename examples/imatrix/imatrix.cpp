@@ -1,7 +1,7 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cmath>
 #include <cstdio>
@@ -100,7 +100,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
     const float * data = is_host ? (const float *) src1->data : m_src1_data.data();
 
     // this has been adapted to the new format of storing merged experts in a single 3d tensor
-    // ref: https://github.com/ggerganov/llama.cpp/pull/6387
+    // ref: https://github.com/ggerganov/jarvis.cpp/pull/6387
     if (t->op == GGML_OP_MUL_MAT_ID) {
         //   ids  -> [n_experts_used, n_tokens]
         //   src1 -> [cols, n_expert_used, n_tokens]
@@ -428,15 +428,15 @@ static void process_logits(
     }
 }
 
-static bool compute_imatrix(llama_context * ctx, const common_params & params) {
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
-    const int n_ctx = llama_n_ctx(ctx);
+static bool compute_imatrix(jarvis_context * ctx, const common_params & params) {
+    const bool add_bos = jarvis_add_bos_token(jarvis_get_model(ctx));
+    GGML_ASSERT(!jarvis_add_eos_token(jarvis_get_model(ctx)));
+    const int n_ctx = jarvis_n_ctx(ctx);
 
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, true);
+    std::vector<jarvis_token> tokens = common_tokenize(ctx, params.prompt, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
@@ -467,7 +467,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const int n_chunk_max = tokens.size() / n_ctx;
 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
     const int n_batch = params.n_batch;
 
     int count = 0;
@@ -494,9 +494,9 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
         const auto t_start = std::chrono::high_resolution_clock::now();
 
         // clear the KV cache
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
-        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+        jarvis_batch batch = jarvis_batch_init(n_batch, 0, 1);
 
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
@@ -507,7 +507,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
+                tokens[batch_start] = jarvis_token_bos(jarvis_get_model(ctx));
             }
 
             common_batch_clear(batch);
@@ -515,9 +515,9 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
                 common_batch_add(batch, tokens[batch_start + i], j*n_batch + i, {0}, true);
             }
 
-            if (llama_decode(ctx, batch)) {
+            if (jarvis_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
-                llama_batch_free(batch);
+                jarvis_batch_free(batch);
                 return false;
             }
 
@@ -525,12 +525,12 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
             tokens[batch_start] = token_org;
 
             if (params.compute_ppl && num_batches > 1) {
-                const auto * batch_logits = llama_get_logits(ctx);
+                const auto * batch_logits = jarvis_get_logits(ctx);
                 logits.insert(logits.end(), batch_logits, batch_logits + batch_size * n_vocab);
             }
         }
 
-        llama_batch_free(batch);
+        jarvis_batch_free(batch);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
@@ -547,7 +547,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
 
         if (params.compute_ppl) {
             const int first = n_ctx/2;
-            const auto * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
+            const auto * all_logits = num_batches > 1 ? logits.data() : jarvis_get_logits(ctx);
             process_logits(n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
                     workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
             count += n_ctx - first - 1;
@@ -583,7 +583,7 @@ int main(int argc, char ** argv) {
     params.logits_all = true;
     params.escape = false;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_IMATRIX, print_usage)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_IMATRIX, print_usage)) {
         return 1;
     }
 
@@ -606,8 +606,8 @@ int main(int argc, char ** argv) {
         g_collector.save_imatrix();
     }
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
@@ -616,16 +616,16 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
     if (model == nullptr || ctx == nullptr) {
         LOG_ERR("%s : failed to init\n", __func__);
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = jarvis_n_ctx_train(model);
     if (params.n_ctx > n_ctx_train) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n",
                 __func__, n_ctx_train, params.n_ctx);
@@ -644,12 +644,12 @@ int main(int argc, char ** argv) {
     g_collector.save_imatrix();
 
     LOG("\n");
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

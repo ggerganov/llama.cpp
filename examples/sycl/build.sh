@@ -16,8 +16,8 @@ cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 #build example/main
 #cmake --build . --config Release --target main
 
-#build example/llama-bench
-#cmake --build . --config Release --target llama-bench
+#build example/jarvis-bench
+#cmake --build . --config Release --target jarvis-bench
 
 #build all binary
 cmake --build . --config Release -j -v

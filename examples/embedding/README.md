@@ -1,6 +1,6 @@
-# llama.cpp/example/embedding
+# jarvis.cpp/example/embedding
 
-This example demonstrates generate high-dimensional embedding vector of a given text with llama.cpp.
+This example demonstrates generate high-dimensional embedding vector of a given text with jarvis.cpp.
 
 ## Quick Start
 
@@ -9,13 +9,13 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./llama-embedding -m ./path/to/model --pooling mean --log-disable -p "Hello World!" 2>/dev/null
+./jarvis-embedding -m ./path/to/model --pooling mean --log-disable -p "Hello World!" 2>/dev/null
 ```
 
 ### Windows:
 
 ```powershell
-llama-embedding.exe -m ./path/to/model --pooling mean --log-disable -p "Hello World!" 2>$null
+jarvis-embedding.exe -m ./path/to/model --pooling mean --log-disable -p "Hello World!" 2>$null
 ```
 
 The above command will output space-separated float values.
@@ -50,11 +50,11 @@ The above command will output space-separated float values.
 ### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./llama-embedding -p 'Castle<#sep#>Stronghold<#sep#>Dog<#sep#>Cat' --pooling mean --embd-separator '<#sep#>' --embd-normalize 2  --embd-output-format '' -m './path/to/model.gguf' --n-gpu-layers 99 --log-disable 2>/dev/null
+./jarvis-embedding -p 'Castle<#sep#>Stronghold<#sep#>Dog<#sep#>Cat' --pooling mean --embd-separator '<#sep#>' --embd-normalize 2  --embd-output-format '' -m './path/to/model.gguf' --n-gpu-layers 99 --log-disable 2>/dev/null
 ```
 
 ### Windows:
 
 ```powershell
-llama-embedding.exe -p 'Castle<#sep#>Stronghold<#sep#>Dog<#sep#>Cat' --pooling mean --embd-separator '<#sep#>' --embd-normalize 2  --embd-output-format '' -m './path/to/model.gguf' --n-gpu-layers 99 --log-disable 2>/dev/null
+jarvis-embedding.exe -p 'Castle<#sep#>Stronghold<#sep#>Dog<#sep#>Cat' --pooling mean --embd-separator '<#sep#>' --embd-normalize 2  --embd-output-format '' -m './path/to/model.gguf' --n-gpu-layers 99 --log-disable 2>/dev/null
 ```

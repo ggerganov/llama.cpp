@@ -1,44 +1,44 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	libllava.a \
-	llama-baby-llama \
-	llama-batched \
-	llama-batched-bench \
-	llama-bench \
-	llama-cli \
-	llama-convert-llama2c-to-ggml \
-	llama-embedding \
-	llama-eval-callback \
-	llama-export-lora \
-	llama-gbnf-validator \
-	llama-gguf \
-	llama-gguf-hash \
-	llama-gguf-split \
-	llama-gritlm \
-	llama-imatrix \
-	llama-infill \
-	llama-llava-cli \
-	llama-minicpmv-cli\
-	llama-lookahead \
-	llama-lookup \
-	llama-lookup-create \
-	llama-lookup-merge \
-	llama-lookup-stats \
-	llama-parallel \
-	llama-passkey \
-	llama-perplexity \
-	llama-q8dot \
-	llama-quantize \
-	llama-quantize-stats \
-	llama-retrieval \
-	llama-save-load-state \
-	llama-server \
-	llama-simple \
-	llama-speculative \
-	llama-tokenize \
-	llama-vdot \
-	llama-cvector-generator \
-	llama-gen-docs \
+	jarvis-baby-jarvis \
+	jarvis-batched \
+	jarvis-batched-bench \
+	jarvis-bench \
+	jarvis-cli \
+	jarvis-convert-jarvis2c-to-ggml \
+	jarvis-embedding \
+	jarvis-eval-callback \
+	jarvis-export-lora \
+	jarvis-gbnf-validator \
+	jarvis-gguf \
+	jarvis-gguf-hash \
+	jarvis-gguf-split \
+	jarvis-gritlm \
+	jarvis-imatrix \
+	jarvis-infill \
+	jarvis-llava-cli \
+	jarvis-minicpmv-cli\
+	jarvis-lookahead \
+	jarvis-lookup \
+	jarvis-lookup-create \
+	jarvis-lookup-merge \
+	jarvis-lookup-stats \
+	jarvis-parallel \
+	jarvis-passkey \
+	jarvis-perplexity \
+	jarvis-q8dot \
+	jarvis-quantize \
+	jarvis-quantize-stats \
+	jarvis-retrieval \
+	jarvis-save-load-state \
+	jarvis-server \
+	jarvis-simple \
+	jarvis-speculative \
+	jarvis-tokenize \
+	jarvis-vdot \
+	jarvis-cvector-generator \
+	jarvis-gen-docs \
 	tests/test-c.o
 
 # Binaries only useful for tests
@@ -52,7 +52,7 @@ TEST_TARGETS = \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
-	tests/test-llama-grammar \
+	tests/test-jarvis-grammar \
 	tests/test-log \
 	tests/test-model-load-cancel \
 	tests/test-opt \
@@ -65,8 +65,8 @@ TEST_TARGETS = \
 	tests/test-tokenizer-1-spm
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
-LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
-	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
+LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-jarvis2c-to-ggml \
+	simple batched batched-bench save-load-state server gguf gguf-split eval-callback jarvis-bench libllava.a llava-cli baby-jarvis \
 	retrieval speculative infill tokenize parallel export-lora lookahead lookup passkey gritlm
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
@@ -74,80 +74,80 @@ LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding
 LEGACY_TARGETS_BUILD = main quantize perplexity embedding server
 
 # Deprecation aliases
-ifdef LLAMA_CUBLAS
-$(error LLAMA_CUBLAS is removed. Use GGML_CUDA instead.)
+ifdef JARVIS_CUBLAS
+$(error JARVIS_CUBLAS is removed. Use GGML_CUDA instead.)
 endif
 
-ifdef LLAMA_CUDA
+ifdef JARVIS_CUDA
 GGML_CUDA := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_KOMPUTE
+ifdef JARVIS_KOMPUTE
 GGML_KOMPUTE := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_METAL
+ifdef JARVIS_METAL
 GGML_METAL := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_RPC
+ifdef JARVIS_RPC
 GGML_RPC := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_SYCL
+ifdef JARVIS_SYCL
 GGML_SYCL := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_SYCL_F16
+ifdef JARVIS_SYCL_F16
 GGML_SYCL_F16 := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_OPENBLAS
+ifdef JARVIS_OPENBLAS
 GGML_OPENBLAS := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_OPENBLAS64
+ifdef JARVIS_OPENBLAS64
 GGML_OPENBLAS64 := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_BLIS
+ifdef JARVIS_BLIS
 GGML_BLIS := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_NO_LLAMAFILE
-GGML_NO_LLAMAFILE := 1
+ifdef JARVIS_NO_JARVISFILE
+GGML_NO_JARVISFILE := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_NO_ACCELERATE
+ifdef JARVIS_NO_ACCELERATE
 GGML_NO_ACCELERATE := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_NO_OPENMP
+ifdef JARVIS_NO_OPENMP
 GGML_NO_OPENMP := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_NO_METAL
+ifdef JARVIS_NO_METAL
 GGML_NO_METAL := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_DISABLE_LOGS
+ifdef JARVIS_DISABLE_LOGS
 REMOVE_WARNING := 1
 endif
 
-ifdef LLAMA_SERVER_VERBOSE
+ifdef JARVIS_SERVER_VERBOSE
 REMOVE_WARNING := 1
 endif
 
@@ -211,8 +211,8 @@ test: $(TEST_TARGETS)
 	@failures=0; \
 	for test_target in $(TEST_TARGETS); do \
 		if [ "$$test_target" = "tests/test-tokenizer-0" ]; then \
-			./$$test_target $(CURDIR)/models/ggml-vocab-llama-spm.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-llama-bpe.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-jarvis-spm.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-jarvis-bpe.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-phi-3.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-falcon.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-bert-bge.gguf; \
@@ -257,7 +257,7 @@ MK_CFLAGS    = -std=c11   -fPIC
 MK_CXXFLAGS  = -std=c++11 -fPIC
 MK_NVCCFLAGS = -std=c++11
 
-ifdef LLAMA_NO_CCACHE
+ifdef JARVIS_NO_CCACHE
 GGML_NO_CCACHE := 1
 DEPRECATE_WARNING := 1
 endif
@@ -320,7 +320,7 @@ ifdef GGML_SCHED_MAX_COPIES
 	MK_CPPFLAGS += -DGGML_SCHED_MAX_COPIES=$(GGML_SCHED_MAX_COPIES)
 endif
 
-ifdef LLAMA_DEBUG
+ifdef JARVIS_DEBUG
 	MK_CFLAGS    += -O0 -g
 	MK_CXXFLAGS  += -O0 -g
 	MK_LDFLAGS   += -g
@@ -336,25 +336,25 @@ else
 	MK_NVCCFLAGS  += -O3 -g
 endif
 
-ifdef LLAMA_SANITIZE_THREAD
+ifdef JARVIS_SANITIZE_THREAD
 	MK_CFLAGS   += -fsanitize=thread -g
 	MK_CXXFLAGS += -fsanitize=thread -g
 	MK_LDFLAGS  += -fsanitize=thread -g
 endif
 
-ifdef LLAMA_SANITIZE_ADDRESS
+ifdef JARVIS_SANITIZE_ADDRESS
 	MK_CFLAGS   += -fsanitize=address -fno-omit-frame-pointer -g
 	MK_CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer -g
 	MK_LDFLAGS  += -fsanitize=address -fno-omit-frame-pointer -g
 endif
 
-ifdef LLAMA_SANITIZE_UNDEFINED
+ifdef JARVIS_SANITIZE_UNDEFINED
 	MK_CFLAGS   += -fsanitize=undefined -g
 	MK_CXXFLAGS += -fsanitize=undefined -g
 	MK_LDFLAGS  += -fsanitize=undefined -g
 endif
 
-ifdef LLAMA_SERVER_SSL
+ifdef JARVIS_SERVER_SSL
 	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
 	MK_LDFLAGS += -lssl -lcrypto
 endif
@@ -381,7 +381,7 @@ MK_CXXFLAGS += \
 	-Wmissing-declarations \
 	-Wmissing-noreturn
 
-ifeq ($(LLAMA_FATAL_WARNINGS),1)
+ifeq ($(JARVIS_FATAL_WARNINGS),1)
 	MK_CFLAGS   += -Werror
 	MK_CXXFLAGS += -Werror
 endif
@@ -420,7 +420,7 @@ ifeq ($(_WIN32),1)
 	LWINSOCK2 := -lws2_32
 endif
 
-ifdef LLAMA_GPROF
+ifdef JARVIS_GPROF
 	MK_CFLAGS   += -pg
 	MK_CXXFLAGS += -pg
 endif
@@ -448,7 +448,7 @@ endif
 ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
 	# The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
 	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
-	# https://github.com/ggerganov/llama.cpp/issues/2922
+	# https://github.com/ggerganov/jarvis.cpp/issues/2922
 	MK_CFLAGS   += -Xassembler -muse-unaligned-vector-move
 	MK_CXXFLAGS += -Xassembler -muse-unaligned-vector-move
 
@@ -574,9 +574,9 @@ ifdef GGML_NVPL
 	OBJ_GGML    += ggml/src/ggml-blas.o
 endif # GGML_NVPL
 
-ifndef GGML_NO_LLAMAFILE
-	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
-	OBJ_GGML    += ggml/src/llamafile/sgemm.o
+ifndef GGML_NO_JARVISFILE
+	MK_CPPFLAGS += -DGGML_USE_JARVISFILE
+	OBJ_GGML    += ggml/src/jarvisfile/sgemm.o
 endif
 
 ifndef GGML_NO_AMX
@@ -627,9 +627,9 @@ ifdef GGML_CUDA
 	OBJ_GGML += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/*.cu))
 	OBJ_GGML += $(OBJ_CUDA_TMPL)
 
-ifdef LLAMA_FATAL_WARNINGS
+ifdef JARVIS_FATAL_WARNINGS
 	MK_NVCCFLAGS += -Werror all-warnings
-endif # LLAMA_FATAL_WARNINGS
+endif # JARVIS_FATAL_WARNINGS
 
 ifndef GGML_MUSA
 ifndef JETSON_EOL_MODULE_DETECT
@@ -637,9 +637,9 @@ ifndef JETSON_EOL_MODULE_DETECT
 endif # JETSON_EOL_MODULE_DETECT
 endif # GGML_MUSA
 
-ifdef LLAMA_DEBUG
+ifdef JARVIS_DEBUG
 	MK_NVCCFLAGS += -lineinfo
-endif # LLAMA_DEBUG
+endif # JARVIS_DEBUG
 
 ifdef GGML_CUDA_DEBUG
 	MK_NVCCFLAGS += --device-debug
@@ -920,11 +920,11 @@ OBJ_GGML += \
 	ggml/src/ggml-quants.o \
 	ggml/src/ggml-aarch64.o
 
-OBJ_LLAMA = \
-	src/llama.o \
-	src/llama-vocab.o \
-	src/llama-grammar.o \
-	src/llama-sampling.o \
+OBJ_JARVIS = \
+	src/jarvis.o \
+	src/jarvis-vocab.o \
+	src/jarvis-grammar.o \
+	src/jarvis-sampling.o \
 	src/unicode.o \
 	src/unicode-data.o
 
@@ -939,19 +939,19 @@ OBJ_COMMON = \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
-OBJ_ALL = $(OBJ_GGML) $(OBJ_LLAMA) $(OBJ_COMMON)
+OBJ_ALL = $(OBJ_GGML) $(OBJ_JARVIS) $(OBJ_COMMON)
 
 LIB_GGML   = $(LIB_PRE)ggml$(DSO_EXT)
 LIB_GGML_S = $(LIB_PRE)ggml.a
 
-LIB_LLAMA   = $(LIB_PRE)llama$(DSO_EXT)
-LIB_LLAMA_S = $(LIB_PRE)llama.a
+LIB_JARVIS   = $(LIB_PRE)jarvis$(DSO_EXT)
+LIB_JARVIS_S = $(LIB_PRE)jarvis.a
 
 LIB_COMMON   = $(LIB_PRE)common$(DSO_EXT)
 LIB_COMMON_S = $(LIB_PRE)common.a
 
-LIB_ALL   = $(LIB_GGML)   $(LIB_LLAMA)   $(LIB_COMMON)
-LIB_ALL_S = $(LIB_GGML_S) $(LIB_LLAMA_S) $(LIB_COMMON_S)
+LIB_ALL   = $(LIB_GGML)   $(LIB_JARVIS)   $(LIB_COMMON)
+LIB_ALL_S = $(LIB_GGML_S) $(LIB_JARVIS_S) $(LIB_COMMON_S)
 
 GF_CC := $(CC)
 include scripts/get-flags.mk
@@ -971,8 +971,8 @@ include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
 endif
 
-ifdef LLAMA_CURL
-override CXXFLAGS := $(CXXFLAGS) -DLLAMA_USE_CURL
+ifdef JARVIS_CURL
+override CXXFLAGS := $(CXXFLAGS) -DJARVIS_USE_CURL
 override LDFLAGS  := $(LDFLAGS) -lcurl
 endif
 
@@ -980,7 +980,7 @@ endif
 # Print build information
 #
 
-$(info I llama.cpp build info: )
+$(info I jarvis.cpp build info: )
 $(info I UNAME_S:   $(UNAME_S))
 $(info I UNAME_P:   $(UNAME_P))
 $(info I UNAME_M:   $(UNAME_M))
@@ -1009,30 +1009,30 @@ $(info )
 
 ifdef DEPRECATE_WARNING
 $(info !!! DEPRECATION WARNING !!!)
-$(info The following LLAMA_ options are deprecated and will be removed in the future. Use the GGML_ prefix instead)
-$(info   - LLAMA_CUDA)
-$(info   - LLAMA_METAL)
-$(info   - LLAMA_METAL_EMBED_LIBRARY)
-$(info   - LLAMA_OPENMP)
-$(info   - LLAMA_RPC)
-$(info   - LLAMA_SYCL)
-$(info   - LLAMA_SYCL_F16)
-$(info   - LLAMA_OPENBLAS)
-$(info   - LLAMA_OPENBLAS64)
-$(info   - LLAMA_BLIS)
-$(info   - LLAMA_NO_LLAMAFILE)
-$(info   - LLAMA_NO_ACCELERATE)
-$(info   - LLAMA_NO_OPENMP)
-$(info   - LLAMA_NO_METAL)
-$(info   - LLAMA_NO_CCACHE)
+$(info The following JARVIS_ options are deprecated and will be removed in the future. Use the GGML_ prefix instead)
+$(info   - JARVIS_CUDA)
+$(info   - JARVIS_METAL)
+$(info   - JARVIS_METAL_EMBED_LIBRARY)
+$(info   - JARVIS_OPENMP)
+$(info   - JARVIS_RPC)
+$(info   - JARVIS_SYCL)
+$(info   - JARVIS_SYCL_F16)
+$(info   - JARVIS_OPENBLAS)
+$(info   - JARVIS_OPENBLAS64)
+$(info   - JARVIS_BLIS)
+$(info   - JARVIS_NO_JARVISFILE)
+$(info   - JARVIS_NO_ACCELERATE)
+$(info   - JARVIS_NO_OPENMP)
+$(info   - JARVIS_NO_METAL)
+$(info   - JARVIS_NO_CCACHE)
 $(info )
 endif
 
 ifdef REMOVE_WARNING
 $(info !!! REMOVAL WARNING !!!)
-$(info The following LLAMA_ options have been removed and are no longer supported)
-$(info   - LLAMA_DISABLE_LOGS   (https://github.com/ggerganov/llama.cpp/pull/9418))
-$(info   - LLAMA_SERVER_VERBOSE (https://github.com/ggerganov/llama.cpp/pull/9418))
+$(info The following JARVIS_ options have been removed and are no longer supported)
+$(info   - JARVIS_DISABLE_LOGS   (https://github.com/ggerganov/jarvis.cpp/pull/9418))
+$(info   - JARVIS_SERVER_VERBOSE (https://github.com/ggerganov/jarvis.cpp/pull/9418))
 $(info )
 endif
 
@@ -1079,13 +1079,13 @@ ggml/src/ggml-blas.o: \
 	ggml/include/ggml-blas.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-ifndef GGML_NO_LLAMAFILE
-ggml/src/llamafile/sgemm.o: \
-	ggml/src/llamafile/sgemm.cpp \
-	ggml/src/llamafile/sgemm.h \
+ifndef GGML_NO_JARVISFILE
+ggml/src/jarvisfile/sgemm.o: \
+	ggml/src/jarvisfile/sgemm.cpp \
+	ggml/src/jarvisfile/sgemm.h \
 	ggml/include/ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-endif # GGML_NO_LLAMAFILE
+endif # GGML_NO_JARVISFILE
 
 ifndef GGML_NO_AMX
 ggml/src/ggml-amx.o: \
@@ -1115,7 +1115,7 @@ $(LIB_GGML_S): \
 	$(OBJ_GGML)
 	ar rcs $(LIB_GGML_S) $^
 
-# llama
+# jarvis
 
 src/unicode.o: \
 	src/unicode.cpp \
@@ -1127,14 +1127,14 @@ src/unicode-data.o: \
 	src/unicode-data.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/llama.o: \
-	src/llama.cpp \
-	src/llama-impl.h \
-	src/llama-vocab.h \
-	src/llama-grammar.h \
-	src/llama-sampling.h \
+src/jarvis.o: \
+	src/jarvis.cpp \
+	src/jarvis-impl.h \
+	src/jarvis-vocab.h \
+	src/jarvis-grammar.h \
+	src/jarvis-sampling.h \
 	src/unicode.h \
-	include/llama.h \
+	include/jarvis.h \
 	ggml/include/ggml-cuda.h \
 	ggml/include/ggml-metal.h \
 	ggml/include/ggml.h \
@@ -1142,37 +1142,37 @@ src/llama.o: \
 	ggml/include/ggml-backend.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/llama-vocab.o: \
-	src/llama-vocab.cpp \
-	src/llama-vocab.h \
-	src/llama-impl.h \
-	include/llama.h
+src/jarvis-vocab.o: \
+	src/jarvis-vocab.cpp \
+	src/jarvis-vocab.h \
+	src/jarvis-impl.h \
+	include/jarvis.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/llama-grammar.o: \
-	src/llama-grammar.cpp \
-	src/llama-grammar.h \
-	src/llama-impl.h \
-	src/llama-vocab.h \
-	src/llama-sampling.h \
-	include/llama.h
+src/jarvis-grammar.o: \
+	src/jarvis-grammar.cpp \
+	src/jarvis-grammar.h \
+	src/jarvis-impl.h \
+	src/jarvis-vocab.h \
+	src/jarvis-sampling.h \
+	include/jarvis.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/llama-sampling.o: \
-	src/llama-sampling.cpp \
-	src/llama-sampling.h \
-	src/llama-impl.h \
-	include/llama.h
+src/jarvis-sampling.o: \
+	src/jarvis-sampling.cpp \
+	src/jarvis-sampling.h \
+	src/jarvis-impl.h \
+	include/jarvis.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(LIB_LLAMA): \
-	$(OBJ_LLAMA) \
+$(LIB_JARVIS): \
+	$(OBJ_JARVIS) \
 	$(LIB_GGML)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
-$(LIB_LLAMA_S): \
-	$(OBJ_LLAMA)
-	ar rcs $(LIB_LLAMA_S) $^
+$(LIB_JARVIS_S): \
+	$(OBJ_JARVIS)
+	ar rcs $(LIB_JARVIS_S) $^
 
 # common
 
@@ -1183,7 +1183,7 @@ common/common.o: \
 	common/sampling.h \
 	common/json.hpp \
 	common/json-schema-to-grammar.h \
-	include/llama.h
+	include/jarvis.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/arg.o: \
@@ -1199,7 +1199,7 @@ common/log.o: \
 common/sampling.o: \
 	common/sampling.cpp \
 	common/sampling.h \
-	include/llama.h
+	include/jarvis.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/console.o: \
@@ -1224,7 +1224,7 @@ common/ngram-cache.o: \
 
 $(LIB_COMMON): \
 	$(OBJ_COMMON) \
-	$(LIB_LLAMA) \
+	$(LIB_JARVIS) \
 	$(LIB_GGML)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
@@ -1246,7 +1246,7 @@ clean:
 	rm -rvf ggml/*.dll
 	rm -rvf ggml/*.so
 	rm -vrf ggml/src/*.o
-	rm -rvf ggml/src/llamafile/*.o
+	rm -rvf ggml/src/jarvisfile/*.o
 	rm -rvf common/build-info.cpp
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
@@ -1269,75 +1269,75 @@ clean:
 # Helper function that replaces .c, .cpp, and .cu file endings with .o:
 GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
 
-llama-cli: examples/main/main.cpp \
+jarvis-cli: examples/main/main.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 	@echo
-	@echo '====  Run ./llama-cli -h for help.  ===='
+	@echo '====  Run ./jarvis-cli -h for help.  ===='
 	@echo
 
-llama-infill: examples/infill/infill.cpp \
+jarvis-infill: examples/infill/infill.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-simple: examples/simple/simple.cpp \
+jarvis-simple: examples/simple/simple.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-tokenize: examples/tokenize/tokenize.cpp \
+jarvis-tokenize: examples/tokenize/tokenize.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-batched: examples/batched/batched.cpp \
+jarvis-batched: examples/batched/batched.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-batched-bench: examples/batched-bench/batched-bench.cpp \
+jarvis-batched-bench: examples/batched-bench/batched-bench.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-quantize: examples/quantize/quantize.cpp \
+jarvis-quantize: examples/quantize/quantize.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-quantize-stats: examples/quantize-stats/quantize-stats.cpp \
+jarvis-quantize-stats: examples/quantize-stats/quantize-stats.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-perplexity: examples/perplexity/perplexity.cpp \
+jarvis-perplexity: examples/perplexity/perplexity.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-imatrix: examples/imatrix/imatrix.cpp \
+jarvis-imatrix: examples/imatrix/imatrix.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-embedding: examples/embedding/embedding.cpp \
+jarvis-embedding: examples/embedding/embedding.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-gritlm: examples/gritlm/gritlm.cpp \
+jarvis-gritlm: examples/gritlm/gritlm.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-save-load-state: examples/save-load-state/save-load-state.cpp \
+jarvis-save-load-state: examples/save-load-state/save-load-state.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-gguf: examples/gguf/gguf.cpp \
+jarvis-gguf: examples/gguf/gguf.cpp \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1354,92 +1354,92 @@ examples/gguf-hash/deps/sha256/sha256.o: \
 	examples/gguf-hash/deps/sha256/sha256.c
 	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
 
-llama-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.o examples/gguf-hash/deps/xxhash/xxhash.o examples/gguf-hash/deps/sha256/sha256.o\
+jarvis-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.o examples/gguf-hash/deps/xxhash/xxhash.o examples/gguf-hash/deps/sha256/sha256.o\
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/gguf-hash/deps -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-gguf-split: examples/gguf-split/gguf-split.cpp \
+jarvis-gguf-split: examples/gguf-split/gguf-split.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-eval-callback: examples/eval-callback/eval-callback.cpp \
+jarvis-eval-callback: examples/eval-callback/eval-callback.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
+jarvis-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp \
+jarvis-convert-jarvis2c-to-ggml: examples/convert-jarvis2c-to-ggml/convert-jarvis2c-to-ggml.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-bench: examples/llama-bench/llama-bench.cpp \
+jarvis-bench: examples/jarvis-bench/jarvis-bench.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-baby-llama: examples/baby-llama/baby-llama.cpp \
+jarvis-baby-jarvis: examples/baby-jarvis/baby-jarvis.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-export-lora: examples/export-lora/export-lora.cpp \
+jarvis-export-lora: examples/export-lora/export-lora.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-retrieval: examples/retrieval/retrieval.cpp \
+jarvis-retrieval: examples/retrieval/retrieval.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-speculative: examples/speculative/speculative.cpp \
+jarvis-speculative: examples/speculative/speculative.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-parallel: examples/parallel/parallel.cpp \
+jarvis-parallel: examples/parallel/parallel.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-lookahead: examples/lookahead/lookahead.cpp \
+jarvis-lookahead: examples/lookahead/lookahead.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-lookup: examples/lookup/lookup.cpp \
+jarvis-lookup: examples/lookup/lookup.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-lookup-create: examples/lookup/lookup-create.cpp \
+jarvis-lookup-create: examples/lookup/lookup-create.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-lookup-merge: examples/lookup/lookup-merge.cpp \
+jarvis-lookup-merge: examples/lookup/lookup-merge.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-lookup-stats: examples/lookup/lookup-stats.cpp \
+jarvis-lookup-stats: examples/lookup/lookup-stats.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-passkey: examples/passkey/passkey.cpp \
+jarvis-passkey: examples/passkey/passkey.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-gbnf-validator: examples/gbnf-validator/gbnf-validator.cpp \
+jarvis-gbnf-validator: examples/gbnf-validator/gbnf-validator.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1450,7 +1450,7 @@ rpc-server: examples/rpc/rpc-server.cpp \
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif # GGML_RPC
 
-llama-server: \
+jarvis-server: \
 	examples/server/server.cpp \
 	examples/server/utils.hpp \
 	examples/server/httplib.h \
@@ -1485,7 +1485,7 @@ examples/server/%.hpp: examples/server/public/% Makefile
 		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
 
-llama-gen-docs: examples/gen-docs/gen-docs.cpp \
+jarvis-gen-docs: examples/gen-docs/gen-docs.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1499,7 +1499,7 @@ libllava.a: examples/llava/llava.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -static -fPIC -c $< -o $@ -Wno-cast-qual
 
-llama-llava-cli: examples/llava/llava-cli.cpp \
+jarvis-llava-cli: examples/llava/llava-cli.cpp \
 	examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
@@ -1507,7 +1507,7 @@ llama-llava-cli: examples/llava/llava-cli.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
 
-llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
+jarvis-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
 	examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
@@ -1542,7 +1542,7 @@ tests/test-arg-parser: tests/test-arg-parser.cpp \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-llama-grammar: tests/test-llama-grammar.cpp \
+tests/test-jarvis-grammar: tests/test-jarvis-grammar.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1616,7 +1616,7 @@ tests/test-rope: tests/test-rope.cpp ggml/src/ggml.o \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-c.o: tests/test-c.c include/llama.h
+tests/test-c.o: tests/test-c.c include/jarvis.h
 	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
 
 tests/test-backend-ops: tests/test-backend-ops.cpp \
@@ -1643,12 +1643,12 @@ tests/test-chat-template: tests/test-chat-template.cpp \
 # PoCs
 #
 
-llama-vdot: pocs/vdot/vdot.cpp ggml/src/ggml.o \
+jarvis-vdot: pocs/vdot/vdot.cpp ggml/src/ggml.o \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
+jarvis-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1667,17 +1667,17 @@ examples/deprecation-warning/deprecation-warning.o: examples/deprecation-warning
 #  Eventually we will want to remove these target from building all the time.
 main: examples/deprecation-warning/deprecation-warning.o
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
-	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
+	@echo "NOTICE: The 'main' binary is deprecated. Please use 'jarvis-cli' instead."
 
 server: examples/deprecation-warning/deprecation-warning.o
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
-	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
+	@echo "NOTICE: The 'server' binary is deprecated. Please use 'jarvis-server' instead."
 
 quantize: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard quantize))
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
-	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
+	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'jarvis-quantize' instead."
 	@echo "  Remove the 'quantize' binary to remove this warning."
 	@echo "#########"
 endif
@@ -1686,7 +1686,7 @@ perplexity: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard perplexity))
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
-	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
+	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'jarvis-perplexity' instead."
 	@echo "  Remove the 'perplexity' binary to remove this warning."
 	@echo "#########"
 endif
@@ -1695,7 +1695,7 @@ embedding: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard embedding))
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
-	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
+	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'jarvis-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
 	@echo "#########"
 endif

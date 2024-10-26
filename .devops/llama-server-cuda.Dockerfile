@@ -22,8 +22,8 @@ COPY . .
 RUN if [ "${CUDA_DOCKER_ARCH}" != "default" ]; then \
         export CMAKE_ARGS="-DCMAKE_CUDA_ARCHITECTURES=${CUDA_DOCKER_ARCH}"; \
     fi && \
-    cmake -B build -DGGML_CUDA=ON -DLLAMA_CURL=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
-    cmake --build build --config Release --target llama-server -j$(nproc)
+    cmake -B build -DGGML_CUDA=ON -DJARVIS_CURL=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
+    cmake --build build --config Release --target jarvis-server -j$(nproc)
 
 FROM ${BASE_CUDA_RUN_CONTAINER} AS runtime
 
@@ -31,12 +31,12 @@ RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev libgomp1 curl
 
 COPY --from=build /app/build/ggml/src/libggml.so /libggml.so
-COPY --from=build /app/build/src/libllama.so /libllama.so
-COPY --from=build /app/build/bin/llama-server /llama-server
+COPY --from=build /app/build/src/libjarvis.so /libjarvis.so
+COPY --from=build /app/build/bin/jarvis-server /jarvis-server
 
 # Must be set to 0.0.0.0 so it can listen to requests from host machine
-ENV LLAMA_ARG_HOST=0.0.0.0
+ENV JARVIS_ARG_HOST=0.0.0.0
 
 HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
-ENTRYPOINT [ "/llama-server" ]
+ENTRYPOINT [ "/jarvis-server" ]

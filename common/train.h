@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "ggml.h"
-#include "llama.h"
+#include "jarvis.h"
 
-#define LLAMA_TRAIN_MAX_NODES 16384
+#define JARVIS_TRAIN_MAX_NODES 16384
 
 typedef std::string mt19937_state;
 
@@ -92,9 +92,9 @@ struct train_opt_callback_data {
     struct train_state         * train;
     save_train_files_callback    save_cb;
     void                       * save_data;
-    struct llama_context       * lctx;
+    struct jarvis_context       * lctx;
     int                          last_save_iter;
-    llama_token                * tokens_data;
+    jarvis_token                * tokens_data;
     size_t                       tokens_size;
     size_t                     * samples_begin;
     size_t                     * samples_size;
@@ -146,18 +146,18 @@ void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int6
 void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3);
 
 size_t tokenize_file(
-        struct llama_context     * lctx,
+        struct jarvis_context     * lctx,
         const char               * filename,
         const std::string        & sample_start,
         bool                       include_sample_start,
         bool                       overlapping_samples,
         unsigned                   context_length,
-        std::vector<llama_token> & out_tokens,
+        std::vector<jarvis_token> & out_tokens,
         std::vector<size_t>      & out_samples_begin,
         std::vector<size_t>      & out_samples_size);
 
 int64_t get_example_targets_batch(
-        struct llama_context * lctx,
+        struct jarvis_context * lctx,
         struct ggml_tensor   * tokens_input,
         struct ggml_tensor   * target_probs,
         int64_t                example_id,
@@ -165,7 +165,7 @@ int64_t get_example_targets_batch(
         const size_t         * samples_begin,
         const size_t         * samples_size,
               size_t           samples_count,
-        const llama_token    * train_data,
+        const jarvis_token    * train_data,
         size_t                 n_train_data,
         bool                   separate_with_eos,
         bool                   separate_with_bos,

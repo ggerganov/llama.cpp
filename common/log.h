@@ -11,7 +11,7 @@
 #endif
 
 #define LOG_DEFAULT_DEBUG 1
-#define LOG_DEFAULT_LLAMA 0
+#define LOG_DEFAULT_JARVIS 0
 
 // needed by the LOG_TMPL macro to avoid computing log arguments if the verbosity lower
 // set via common_log_set_verbosity()

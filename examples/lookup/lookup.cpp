@@ -4,7 +4,7 @@
 #include "ngram-cache.h"
 #include "sampling.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -15,7 +15,7 @@
 int main(int argc, char ** argv){
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_LOOKUP)) {
         return 1;
     }
 
@@ -26,18 +26,18 @@ int main(int argc, char ** argv){
 
     const bool dump_kv_cache = params.dump_kv_cache;
 
-    // init llama.cpp
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    // init jarvis.cpp
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
 
     // tokenize the prompt
-    std::vector<llama_token> inp;
+    std::vector<jarvis_token> inp;
     inp = common_tokenize(ctx, params.prompt, true, true);
 
     common_ngram_cache ngram_cache_context;
@@ -49,7 +49,7 @@ int main(int argc, char ** argv){
     {
         // Fill up context ngram cache with tokens from user input:
         const int64_t t_start_draft_us = ggml_time_us();
-        common_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp, inp.size(), false);
+        common_ngram_cache_update(ngram_cache_context, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, inp, inp.size(), false);
 
         if (!params.lookup_cache_static.empty()) {
             try {
@@ -69,7 +69,7 @@ int main(int argc, char ** argv){
         t_draft_flat_us += ggml_time_us() - t_start_draft_us;
     }
 
-    const int max_context_size     = llama_n_ctx(ctx);
+    const int max_context_size     = jarvis_n_ctx(ctx);
     const int max_tokens_list_size = max_context_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
@@ -89,8 +89,8 @@ int main(int argc, char ** argv){
 
     const auto t_enc_start = ggml_time_us();
 
-    llama_decode(ctx, llama_batch_get_one( inp.data(), n_input - 1));
-    llama_decode(ctx, llama_batch_get_one(&inp.back(),           1));
+    jarvis_decode(ctx, jarvis_batch_get_one( inp.data(), n_input - 1));
+    jarvis_decode(ctx, jarvis_batch_get_one(&inp.back(),           1));
 
     const auto t_enc_end = ggml_time_us();
 
@@ -104,19 +104,19 @@ int main(int argc, char ** argv){
 
     struct common_sampler * smpl = common_sampler_init(model, params.sparams);
 
-    std::vector<llama_token> draft;
+    std::vector<jarvis_token> draft;
 
-    llama_batch batch_tgt = llama_batch_init(params.n_ctx, 0, 1);
+    jarvis_batch batch_tgt = jarvis_batch_init(params.n_ctx, 0, 1);
 
     // debug
-    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, 1);
+    struct jarvis_kv_cache_view kvc_view = jarvis_kv_cache_view_init(ctx, 1);
 
     const auto t_dec_start = ggml_time_us();
 
     while (true) {
         // debug
         if (dump_kv_cache) {
-            llama_kv_cache_view_update(ctx, &kvc_view);
+            jarvis_kv_cache_view_update(ctx, &kvc_view);
             common_kv_cache_dump_view_seqs(kvc_view, 40);
         }
 
@@ -126,7 +126,7 @@ int main(int argc, char ** argv){
         int i_dft = 0;
         while (true) {
             // sample from the target model
-            llama_token id = common_sampler_sample(smpl, ctx, i_dft);
+            jarvis_token id = common_sampler_sample(smpl, ctx, i_dft);
 
             common_sampler_accept(smpl, id, true);
 
@@ -136,7 +136,7 @@ int main(int argc, char ** argv){
                 LOG("%s", token_str.c_str());
             }
 
-            if (llama_token_is_eog(model, id)) {
+            if (jarvis_token_is_eog(model, id)) {
                 has_eos = true;
             }
 
@@ -152,7 +152,7 @@ int main(int argc, char ** argv){
                 {
                     // Update context ngram cache with the newly accepted token:
                     const int64_t t_start_draft_us = ggml_time_us();
-                    common_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp, 1, false);
+                    common_ngram_cache_update(ngram_cache_context, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, inp, 1, false);
                     t_draft_us += ggml_time_us() - t_start_draft_us;
                 }
 
@@ -178,7 +178,7 @@ int main(int argc, char ** argv){
             {
                 // Update context ngram cache with the newly accepted token:
                 const int64_t t_start_draft_us = ggml_time_us();
-                common_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp, 1, false);
+                common_ngram_cache_update(ngram_cache_context, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, inp, 1, false);
                 t_draft_us += ggml_time_us() - t_start_draft_us;
             }
             break;
@@ -190,7 +190,7 @@ int main(int argc, char ** argv){
 
         // KV cache management
         // clean the cache of draft tokens that weren't accepted
-        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
+        jarvis_kv_cache_seq_rm(ctx, 0, n_past, -1);
 
         common_batch_clear(batch_tgt);
         common_batch_add(batch_tgt, draft[0], n_past, { 0 }, true);
@@ -200,7 +200,7 @@ int main(int argc, char ** argv){
         GGML_ASSERT(draft[0] == inp.back());
         const int64_t t_start_draft_us = ggml_time_us();
 
-        common_ngram_cache_draft(inp, draft, n_draft, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
+        common_ngram_cache_draft(inp, draft, n_draft, JARVIS_NGRAM_MIN, JARVIS_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
 
         for (size_t i = 1; i < draft.size(); ++i) {
             common_batch_add(batch_tgt, draft[i], n_past + i, { 0 }, true);
@@ -209,7 +209,7 @@ int main(int argc, char ** argv){
         t_draft_us += ggml_time_us() - t_start_draft_us;
         n_drafted += draft.size() - 1;
 
-        llama_decode(ctx, batch_tgt);
+        jarvis_decode(ctx, batch_tgt);
         ++n_past;
 
         draft.erase(draft.begin());
@@ -241,12 +241,12 @@ int main(int argc, char ** argv){
 
     common_sampler_free(smpl);
 
-    llama_batch_free(batch_tgt);
+    jarvis_batch_free(batch_tgt);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     LOG("\n\n");
 

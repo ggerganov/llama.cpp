@@ -3,7 +3,7 @@
 #include "console.h"
 #include "sampling.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -33,20 +33,20 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static llama_context           ** g_ctx;
-static llama_model             ** g_model;
+static jarvis_context           ** g_ctx;
+static jarvis_model             ** g_model;
 static common_sampler          ** g_smpl;
 static common_params            * g_params;
-static std::vector<llama_token> * g_input_tokens;
+static std::vector<jarvis_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
-static std::vector<llama_token> * g_output_tokens;
+static std::vector<jarvis_token> * g_output_tokens;
 
 static bool is_interacting = false;
 
 static void write_logfile(
-    const llama_context * ctx, const common_params & params, const llama_model * model,
-    const std::vector<llama_token> & input_tokens, const std::string & output,
-    const std::vector<llama_token> & output_tokens
+    const jarvis_context * ctx, const common_params & params, const jarvis_model * model,
+    const std::vector<jarvis_token> & input_tokens, const std::string & output,
+    const std::vector<jarvis_token> & output_tokens
 ) {
     if (params.logdir.empty()) {
         return;
@@ -71,7 +71,7 @@ static void write_logfile(
 
     fprintf(logfile, "binary: infill\n");
     char model_desc[128];
-    llama_model_desc(model, model_desc, sizeof(model_desc));
+    jarvis_model_desc(model, model_desc, sizeof(model_desc));
     yaml_dump_non_result_info(logfile, params, ctx, timestamp, input_tokens, model_desc);
 
     fprintf(logfile, "\n");
@@ -83,7 +83,7 @@ static void write_logfile(
     yaml_dump_string_multiline(logfile, "output", output.c_str());
     yaml_dump_vector_int(logfile, "output_tokens", output_tokens);
 
-    llama_perf_dump_yaml(logfile, ctx);
+    jarvis_perf_dump_yaml(logfile, ctx);
     fclose(logfile);
 }
 
@@ -112,7 +112,7 @@ int main(int argc, char ** argv) {
     common_params params;
     g_params = &params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_INFILL)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_INFILL)) {
         return 1;
     }
 
@@ -160,12 +160,12 @@ int main(int argc, char ** argv) {
         LOG_WRN("%s: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
-    LOG_INF("%s: llama backend init\n", __func__);
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    LOG_INF("%s: jarvis backend init\n", __func__);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
-    llama_model * model = nullptr;
-    llama_context * ctx = nullptr;
+    jarvis_model * model = nullptr;
+    jarvis_context * ctx = nullptr;
     common_sampler * smpl = nullptr;
 
     g_model = &model;
@@ -174,18 +174,18 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    model = llama_init.model;
-    ctx = llama_init.context;
+    model = jarvis_init.model;
+    ctx = jarvis_init.context;
 
     if (model == NULL) {
         LOG_ERR("%s: unable to load model\n", __func__);
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
-    const int n_ctx = llama_n_ctx(ctx);
+    const int n_ctx_train = jarvis_n_ctx_train(model);
+    const int n_ctx = jarvis_n_ctx(ctx);
     LOG_DBG("n_ctx: %d\n", n_ctx);
 
     if (n_ctx > n_ctx_train) {
@@ -197,28 +197,28 @@ int main(int argc, char ** argv) {
         LOG_INF("\n");
         LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
-    const bool add_bos = llama_add_bos_token(model);
-    GGML_ASSERT(!llama_add_eos_token(model));
+    const bool add_bos = jarvis_add_bos_token(model);
+    GGML_ASSERT(!jarvis_add_eos_token(model));
 
-    std::vector<llama_token> embd_inp;
-    std::vector<llama_token> embd_end;
-    std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
-    std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
+    std::vector<jarvis_token> embd_inp;
+    std::vector<jarvis_token> embd_end;
+    std::vector<jarvis_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
+    std::vector<jarvis_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
-    GGML_ASSERT(llama_token_fim_pre(model) >= 0);
-    GGML_ASSERT(llama_token_fim_suf(model) >= 0);
+    GGML_ASSERT(jarvis_token_fim_pre(model) >= 0);
+    GGML_ASSERT(jarvis_token_fim_suf(model) >= 0);
 
-    inp_pfx.insert(inp_pfx.begin(), llama_token_fim_pre(model));
-    inp_sfx.insert(inp_sfx.begin(), llama_token_fim_suf(model));
+    inp_pfx.insert(inp_pfx.begin(), jarvis_token_fim_pre(model));
+    inp_sfx.insert(inp_sfx.begin(), jarvis_token_fim_suf(model));
 
     embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
     embd_end = params.spm_infill ? inp_pfx : inp_sfx;
     if (add_bos) {
-        embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+        embd_inp.insert(embd_inp.begin(), jarvis_token_bos(model));
     }
     embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
 
-    const llama_token middle_token = llama_token_fim_mid(model);
+    const jarvis_token middle_token = jarvis_token_fim_mid(model);
     if (middle_token >= 0) {
         embd_inp.push_back(middle_token);
     }
@@ -230,7 +230,7 @@ int main(int argc, char ** argv) {
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
-        embd_inp.push_back(llama_token_bos(model));
+        embd_inp.push_back(jarvis_token_bos(model));
         LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from(ctx, embd_inp).c_str());
     }
 
@@ -340,7 +340,7 @@ int main(int argc, char ** argv) {
     // the first thing we will do is to output the prompt, so set color accordingly
     console::set_display(console::prompt);
 
-    std::vector<llama_token> embd;
+    std::vector<jarvis_token> embd;
 
     while (n_remain != 0 || params.interactive) {
         // predict
@@ -375,8 +375,8 @@ int main(int argc, char ** argv) {
                 LOG_DBG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
                     n_past, n_left, n_ctx, params.n_keep, n_discard);
 
-                llama_kv_cache_seq_rm (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
-                llama_kv_cache_seq_add(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
+                jarvis_kv_cache_seq_rm (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
+                jarvis_kv_cache_seq_add(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
 
                 n_past -= n_discard;
 
@@ -396,7 +396,7 @@ int main(int argc, char ** argv) {
 
                 LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
 
-                if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval))) {
+                if (jarvis_decode(ctx, jarvis_batch_get_one(&embd[i], n_eval))) {
                     LOG_ERR("%s : failed to eval\n", __func__);
                     return 1;
                 }
@@ -411,7 +411,7 @@ int main(int argc, char ** argv) {
         embd.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
-            const llama_token id = common_sampler_sample(smpl, ctx, -1);
+            const jarvis_token id = common_sampler_sample(smpl, ctx, -1);
 
             common_sampler_accept(smpl, id, true);
 
@@ -465,10 +465,10 @@ int main(int argc, char ** argv) {
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
             // deal with eot token in infill mode
-            if ((common_sampler_last(smpl) == llama_token_eot(model) || is_interacting) && params.interactive){
+            if ((common_sampler_last(smpl) == jarvis_token_eot(model) || is_interacting) && params.interactive){
                 if (is_interacting && !params.interactive_first) {
                     // print an eot token
-                    LOG("%s", common_token_to_piece(ctx, llama_token_eot(model)).c_str());
+                    LOG("%s", common_token_to_piece(ctx, jarvis_token_eot(model)).c_str());
                 }
                 LOG("\n");
                 console::set_display(console::user_input);
@@ -505,16 +505,16 @@ int main(int argc, char ** argv) {
                 }
 
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
-                std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
+                std::vector<jarvis_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
+                std::vector<jarvis_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
 
-                inp_pfx.insert(inp_pfx.begin(), llama_token_fim_pre(model));
-                inp_sfx.insert(inp_sfx.begin(), llama_token_fim_suf(model));
+                inp_pfx.insert(inp_pfx.begin(), jarvis_token_fim_pre(model));
+                inp_sfx.insert(inp_sfx.begin(), jarvis_token_fim_suf(model));
 
                 embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
                 embd_end = params.spm_infill ? inp_pfx : inp_sfx;
                 if (add_bos) {
-                    embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+                    embd_inp.insert(embd_inp.begin(), jarvis_token_bos(model));
                 }
                 embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
 
@@ -529,7 +529,7 @@ int main(int argc, char ** argv) {
                 is_interacting = false;
             }
             // deal with end of generation tokens in interactive mode
-            else if (llama_token_is_eog(model, common_sampler_last(smpl))) {
+            else if (jarvis_token_is_eog(model, common_sampler_last(smpl))) {
                 LOG_DBG("found EOS token\n");
 
                 if (params.interactive) {
@@ -545,7 +545,7 @@ int main(int argc, char ** argv) {
 
                 if (params.input_prefix_bos) {
                     LOG_DBG("adding input prefix BOS token\n");
-                    embd_inp.push_back(llama_token_bos(model));
+                    embd_inp.push_back(jarvis_token_bos(model));
                 }
 
                 std::string buffer;
@@ -585,7 +585,7 @@ int main(int argc, char ** argv) {
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
-                        const llama_token token = embd_inp[i];
+                        const jarvis_token token = embd_inp[i];
                         output_tokens.push_back(token);
                         output_ss << common_token_to_piece(ctx, token);
                     }
@@ -608,7 +608,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of generation
-        if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !params.interactive) {
+        if (!embd.empty() && jarvis_token_is_eog(model, embd.back()) && !params.interactive) {
             break;
         }
 
@@ -620,18 +620,18 @@ int main(int argc, char ** argv) {
         }
     }
     if (!params.interactive && n_remain <= 0) {
-        LOG("%s", common_token_to_piece(ctx, llama_token_eot(model)).c_str());
+        LOG("%s", common_token_to_piece(ctx, jarvis_token_eot(model)).c_str());
     }
 
     LOG("\n");
     common_perf_print(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
     common_sampler_free(smpl);
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

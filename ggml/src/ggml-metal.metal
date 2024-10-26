@@ -1745,7 +1745,7 @@ static float rope_yarn_ramp(const float low, const float high, const int i0) {
     return 1.0f - min(1.0f, max(0.0f, y));
 }
 
-// YaRN algorithm based on LlamaYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
+// YaRN algorithm based on JarvisYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
 static void rope_yarn(
     float theta_extrap, float freq_scale, float corr_dims[2], int64_t i0, float ext_factor, float mscale,

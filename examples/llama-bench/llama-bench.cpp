@@ -19,7 +19,7 @@
 #include <thread>
 
 #include "ggml.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "common.h"
 #include "ggml-cuda.h"
 #include "ggml-sycl.h"
@@ -207,11 +207,11 @@ static bool output_format_from_str(const std::string & s, output_formats & forma
     return true;
 }
 
-static const char * split_mode_str(llama_split_mode mode) {
+static const char * split_mode_str(jarvis_split_mode mode) {
     switch (mode) {
-        case LLAMA_SPLIT_MODE_NONE:  return "none";
-        case LLAMA_SPLIT_MODE_LAYER: return "layer";
-        case LLAMA_SPLIT_MODE_ROW:   return "row";
+        case JARVIS_SPLIT_MODE_NONE:  return "none";
+        case JARVIS_SPLIT_MODE_LAYER: return "layer";
+        case JARVIS_SPLIT_MODE_ROW:   return "row";
         default: GGML_ABORT("invalid split mode");
     }
 }
@@ -237,7 +237,7 @@ struct cmd_params {
     std::vector<int> poll;
     std::vector<int> n_gpu_layers;
     std::vector<std::string> rpc_servers;
-    std::vector<llama_split_mode> split_mode;
+    std::vector<jarvis_split_mode> split_mode;
     std::vector<int> main_gpu;
     std::vector<bool> no_kv_offload;
     std::vector<bool> flash_attn;
@@ -269,11 +269,11 @@ static const cmd_params cmd_params_defaults = {
     /* poll                 */ {50},
     /* n_gpu_layers         */ {99},
     /* rpc_servers          */ {""},
-    /* split_mode           */ {LLAMA_SPLIT_MODE_LAYER},
+    /* split_mode           */ {JARVIS_SPLIT_MODE_LAYER},
     /* main_gpu             */ {0},
     /* no_kv_offload        */ {false},
     /* flash_attn           */ {false},
-    /* tensor_split         */ {std::vector<float>(llama_max_devices(), 0.0f)},
+    /* tensor_split         */ {std::vector<float>(jarvis_max_devices(), 0.0f)},
     /* use_mmap             */ {true},
     /* embeddings           */ {false},
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
@@ -304,7 +304,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  --cpu-strict <0|1>                        (default: %s)\n", join(cmd_params_defaults.cpu_strict, ",").c_str());
     printf("  --poll <0...100>                          (default: %s)\n", join(cmd_params_defaults.poll, ",").c_str());
     printf("  -ngl, --n-gpu-layers <n>                  (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
-    if (llama_supports_rpc()) {
+    if (jarvis_supports_rpc()) {
         printf("  -rpc, --rpc <rpc_servers>                 (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
     }
     printf("  -sm, --split-mode <none|layer|row>        (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
@@ -497,7 +497,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<int>(argv[i], split_delim);
             params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
-        } else if (llama_supports_rpc() && (arg == "-rpc" || arg == "--rpc")) {
+        } else if (jarvis_supports_rpc() && (arg == "-rpc" || arg == "--rpc")) {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -509,15 +509,15 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 break;
             }
             auto p = string_split<std::string>(argv[i], split_delim);
-            std::vector<llama_split_mode> modes;
+            std::vector<jarvis_split_mode> modes;
             for (const auto & m : p) {
-                llama_split_mode mode;
+                jarvis_split_mode mode;
                 if (m == "none") {
-                    mode = LLAMA_SPLIT_MODE_NONE;
+                    mode = JARVIS_SPLIT_MODE_NONE;
                 } else if (m == "layer") {
-                    mode = LLAMA_SPLIT_MODE_LAYER;
+                    mode = JARVIS_SPLIT_MODE_LAYER;
                 } else if (m == "row") {
-                    mode = LLAMA_SPLIT_MODE_ROW;
+                    mode = JARVIS_SPLIT_MODE_ROW;
                 } else {
                     invalid_param = true;
                     break;
@@ -583,10 +583,10 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 const std::regex regex{R"([;/]+)"};
                 std::sregex_token_iterator it{ts.begin(), ts.end(), regex, -1};
                 std::vector<std::string> split_arg{it, {}};
-                GGML_ASSERT(split_arg.size() <= llama_max_devices());
+                GGML_ASSERT(split_arg.size() <= jarvis_max_devices());
 
-                std::vector<float> tensor_split(llama_max_devices());
-                for (size_t i = 0; i < llama_max_devices(); ++i) {
+                std::vector<float> tensor_split(jarvis_max_devices());
+                for (size_t i = 0; i < jarvis_max_devices(); ++i) {
                     if (i < split_arg.size()) {
                         tensor_split[i] = std::stof(split_arg[i]);
                     } else {
@@ -680,7 +680,7 @@ struct cmd_params_instance {
     int poll;
     int n_gpu_layers;
     std::string rpc_servers;
-    llama_split_mode split_mode;
+    jarvis_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
     bool flash_attn;
@@ -688,8 +688,8 @@ struct cmd_params_instance {
     bool use_mmap;
     bool embeddings;
 
-    llama_model_params to_llama_mparams() const {
-        llama_model_params mparams = llama_model_default_params();
+    jarvis_model_params to_jarvis_mparams() const {
+        jarvis_model_params mparams = jarvis_model_default_params();
 
         mparams.n_gpu_layers = n_gpu_layers;
         if (!rpc_servers.empty()) {
@@ -713,8 +713,8 @@ struct cmd_params_instance {
                tensor_split == other.tensor_split;
     }
 
-    llama_context_params to_llama_cparams() const {
-        llama_context_params cparams = llama_context_default_params();
+    jarvis_context_params to_jarvis_cparams() const {
+        jarvis_context_params cparams = jarvis_context_default_params();
 
         cparams.n_ctx = n_prompt + n_gen;
         cparams.n_batch = n_batch;
@@ -868,7 +868,7 @@ struct test {
     ggml_type type_k;
     ggml_type type_v;
     int n_gpu_layers;
-    llama_split_mode split_mode;
+    jarvis_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
     bool flash_attn;
@@ -880,13 +880,13 @@ struct test {
     std::string test_time;
     std::vector<uint64_t> samples_ns;
 
-    test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) {
+    test(const cmd_params_instance & inst, const jarvis_model * lmodel, const jarvis_context * ctx) {
         model_filename = inst.model;
         char buf[128];
-        llama_model_desc(lmodel, buf, sizeof(buf));
+        jarvis_model_desc(lmodel, buf, sizeof(buf));
         model_type = buf;
-        model_size = llama_model_size(lmodel);
-        model_n_params = llama_model_n_params(lmodel);
+        model_size = jarvis_model_size(lmodel);
+        model_n_params = jarvis_model_n_params(lmodel);
         n_batch = inst.n_batch;
         n_ubatch = inst.n_ubatch;
         n_threads = inst.n_threads;
@@ -1008,7 +1008,7 @@ struct test {
     std::vector<std::string> get_values() const {
         std::string tensor_split_str;
         int max_nonzero = 0;
-        for (size_t i = 0; i < llama_max_devices(); i++) {
+        for (size_t i = 0; i < jarvis_max_devices(); i++) {
             if (tensor_split[i] > 0) {
                 max_nonzero = i;
             }
@@ -1050,8 +1050,8 @@ struct test {
     }
 };
 
-const std::string test::build_commit = LLAMA_COMMIT;
-const int         test::build_number = LLAMA_BUILD_NUMBER;
+const std::string test::build_commit = JARVIS_COMMIT;
+const int         test::build_number = JARVIS_BUILD_NUMBER;
 const bool        test::cuda         = !!ggml_cpu_has_cuda();
 const bool        test::vulkan       = !!ggml_cpu_has_vulkan();
 const bool        test::kompute      = !!ggml_cpu_has_kompute();
@@ -1428,45 +1428,45 @@ struct sql_printer : public printer {
     }
 };
 
-static void test_prompt(llama_context * ctx, int n_prompt, int n_batch, int n_threads) {
-    llama_set_n_threads(ctx, n_threads, n_threads);
+static void test_prompt(jarvis_context * ctx, int n_prompt, int n_batch, int n_threads) {
+    jarvis_set_n_threads(ctx, n_threads, n_threads);
 
-    const llama_model * model = llama_get_model(ctx);
-    const int32_t n_vocab = llama_n_vocab(model);
+    const jarvis_model * model = jarvis_get_model(ctx);
+    const int32_t n_vocab = jarvis_n_vocab(model);
 
-    std::vector<llama_token> tokens(n_batch);
+    std::vector<jarvis_token> tokens(n_batch);
 
     int n_processed = 0;
 
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
-        tokens[0] = n_processed == 0 && llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
+        tokens[0] = n_processed == 0 && jarvis_add_bos_token(model) ? jarvis_token_bos(model) : std::rand() % n_vocab;
         for (int i = 1; i < n_tokens; i++) {
             tokens[i] = std::rand() % n_vocab;
         }
-        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens));
+        jarvis_decode(ctx, jarvis_batch_get_one(tokens.data(), n_tokens));
         n_processed += n_tokens;
     }
 
-    llama_synchronize(ctx);
+    jarvis_synchronize(ctx);
 }
 
-static void test_gen(llama_context * ctx, int n_gen, int n_threads) {
-    llama_set_n_threads(ctx, n_threads, n_threads);
+static void test_gen(jarvis_context * ctx, int n_gen, int n_threads) {
+    jarvis_set_n_threads(ctx, n_threads, n_threads);
 
-    const llama_model * model = llama_get_model(ctx);
-    const int32_t n_vocab = llama_n_vocab(model);
+    const jarvis_model * model = jarvis_get_model(ctx);
+    const int32_t n_vocab = jarvis_n_vocab(model);
 
-    llama_token token = llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
+    jarvis_token token = jarvis_add_bos_token(model) ? jarvis_token_bos(model) : std::rand() % n_vocab;
 
     for (int i = 0; i < n_gen; i++) {
-        llama_decode(ctx, llama_batch_get_one(&token, 1));
-        llama_synchronize(ctx);
+        jarvis_decode(ctx, jarvis_batch_get_one(&token, 1));
+        jarvis_synchronize(ctx);
         token = std::rand() % n_vocab;
     }
 }
 
-static void llama_null_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
+static void jarvis_null_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) text;
     (void) user_data;
@@ -1508,12 +1508,12 @@ int main(int argc, char ** argv) {
 
     cmd_params params = parse_cmd_params(argc, argv);
 
-    // initialize llama.cpp
+    // initialize jarvis.cpp
     if (!params.verbose) {
-        llama_log_set(llama_null_log_callback, NULL);
+        jarvis_log_set(jarvis_null_log_callback, NULL);
     }
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     set_process_priority(params.prio);
 
@@ -1533,7 +1533,7 @@ int main(int argc, char ** argv) {
 
     std::vector<cmd_params_instance> params_instances = get_cmd_params_instances(params);
 
-    llama_model * lmodel = nullptr;
+    jarvis_model * lmodel = nullptr;
     const cmd_params_instance * prev_inst = nullptr;
 
     int params_idx = 0;
@@ -1541,15 +1541,15 @@ int main(int argc, char ** argv) {
     for (const auto & inst : params_instances) {
         params_idx ++;
         if (params.progress) {
-            fprintf(stderr, "llama-bench: benchmark %d/%ld: starting\n", params_idx, params_count);
+            fprintf(stderr, "jarvis-bench: benchmark %d/%ld: starting\n", params_idx, params_count);
         }
         // keep the same model between tests when possible
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
             if (lmodel) {
-                llama_free_model(lmodel);
+                jarvis_free_model(lmodel);
             }
 
-            lmodel = llama_load_model_from_file(inst.model.c_str(), inst.to_llama_mparams());
+            lmodel = jarvis_load_model_from_file(inst.model.c_str(), inst.to_jarvis_mparams());
             if (lmodel == NULL) {
                 fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
                 return 1;
@@ -1557,16 +1557,16 @@ int main(int argc, char ** argv) {
             prev_inst = &inst;
         }
 
-        llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());
+        jarvis_context * ctx = jarvis_new_context_with_model(lmodel, inst.to_jarvis_cparams());
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, inst.model.c_str());
-            llama_free_model(lmodel);
+            jarvis_free_model(lmodel);
             return 1;
         }
 
         test t(inst, lmodel, ctx);
 
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
         // cool off before the test
         if (params.delay) {
@@ -1588,37 +1588,37 @@ int main(int argc, char ** argv) {
             exit(1);
         }
 
-        llama_attach_threadpool(ctx, threadpool, NULL);
+        jarvis_attach_threadpool(ctx, threadpool, NULL);
 
         // warmup run
         if (t.n_prompt > 0) {
             if (params.progress) {
-                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup prompt run\n", params_idx, params_count);
+                fprintf(stderr, "jarvis-bench: benchmark %d/%ld: warmup prompt run\n", params_idx, params_count);
             }
             //test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
             test_prompt(ctx, t.n_prompt, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
             if (params.progress) {
-                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup generation run\n", params_idx, params_count);
+                fprintf(stderr, "jarvis-bench: benchmark %d/%ld: warmup generation run\n", params_idx, params_count);
             }
             test_gen(ctx, 1, t.n_threads);
         }
 
         for (int i = 0; i < params.reps; i++) {
-            llama_kv_cache_clear(ctx);
+            jarvis_kv_cache_clear(ctx);
 
             uint64_t t_start = get_time_ns();
 
             if (t.n_prompt > 0) {
                 if (params.progress) {
-                    fprintf(stderr, "llama-bench: benchmark %d/%ld: prompt run %d/%d\n", params_idx, params_count, i + 1, params.reps);
+                    fprintf(stderr, "jarvis-bench: benchmark %d/%ld: prompt run %d/%d\n", params_idx, params_count, i + 1, params.reps);
                 }
                 test_prompt(ctx, t.n_prompt, t.n_batch, t.n_threads);
             }
             if (t.n_gen > 0) {
                 if (params.progress) {
-                    fprintf(stderr, "llama-bench: benchmark %d/%ld: generation run %d/%d\n", params_idx, params_count, i + 1, params.reps);
+                    fprintf(stderr, "jarvis-bench: benchmark %d/%ld: generation run %d/%d\n", params_idx, params_count, i + 1, params.reps);
                 }
                 test_gen(ctx, t.n_gen, t.n_threads);
             }
@@ -1637,14 +1637,14 @@ int main(int argc, char ** argv) {
             fflush(p_err->fout);
         }
 
-        llama_perf_context_print(ctx);
+        jarvis_perf_context_print(ctx);
 
-        llama_free(ctx);
+        jarvis_free(ctx);
 
         ggml_threadpool_free(threadpool);
     }
 
-    llama_free_model(lmodel);
+    jarvis_free_model(lmodel);
 
     if (p) {
         p->print_footer();
@@ -1654,7 +1654,7 @@ int main(int argc, char ** argv) {
         p_err->print_footer();
     }
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

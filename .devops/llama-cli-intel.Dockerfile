@@ -17,12 +17,12 @@ RUN if [ "${GGML_SYCL_F16}" = "ON" ]; then \
     echo "Building with static libs" && \
     cmake -B build -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
     ${OPT_SYCL_F16} -DBUILD_SHARED_LIBS=OFF && \
-    cmake --build build --config Release --target llama-cli
+    cmake --build build --config Release --target jarvis-cli
 
 FROM intel/oneapi-basekit:$ONEAPI_VERSION AS runtime
 
-COPY --from=build /app/build/bin/llama-cli /llama-cli
+COPY --from=build /app/build/bin/jarvis-cli /jarvis-cli
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/llama-cli" ]
+ENTRYPOINT [ "/jarvis-cli" ]

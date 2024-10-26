@@ -1,5 +1,5 @@
 
-# llama-gguf-hash
+# jarvis-gguf-hash
 
 CLI to hash GGUF files to detect difference on a per model and per tensor level.
 
@@ -38,8 +38,8 @@ For Maintainers:
 For Model Creators:
 - Optional consistent UUID generation based on model tensor content
     - This is served by UUIDv5 which is useful for databases keys
-        - llama.cpp UUIDv5 Namespace: `ef001206-dadc-5f6d-a15f-3359e577d4e5`
-            - Made via UUIDv5 URL namespace of `en.wikipedia.org/wiki/Llama.cpp`
+        - jarvis.cpp UUIDv5 Namespace: `ef001206-dadc-5f6d-a15f-3359e577d4e5`
+            - Made via UUIDv5 URL namespace of `en.wikipedia.org/wiki/Jarvis.cpp`
 
 For Model Users:
 - Assurance of tensor layer integrity even if metadata was updated
@@ -57,14 +57,14 @@ For Model Users:
 ## Compile Example
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Debug -DLLAMA_FATAL_WARNINGS=ON
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DJARVIS_FATAL_WARNINGS=ON
 make -C build clean
-make -C build llama-gguf-hash VERBOSE=1
-./build/bin/llama-gguf-hash test.gguf
-./build/bin/llama-gguf-hash --xxh64 test.gguf
-./build/bin/llama-gguf-hash --sha1 test.gguf
-./build/bin/llama-gguf-hash --uuid test.gguf
-./build/bin/llama-gguf-hash --sha256 test.gguf
+make -C build jarvis-gguf-hash VERBOSE=1
+./build/bin/jarvis-gguf-hash test.gguf
+./build/bin/jarvis-gguf-hash --xxh64 test.gguf
+./build/bin/jarvis-gguf-hash --sha1 test.gguf
+./build/bin/jarvis-gguf-hash --uuid test.gguf
+./build/bin/jarvis-gguf-hash --sha256 test.gguf
 ```
 
 ## Generation and Verification Example
@@ -72,7 +72,7 @@ make -C build llama-gguf-hash VERBOSE=1
 To generate we may use this command
 
 ```bash
-./llama-gguf-hash --all test.gguf > test.gguf.manifest
+./jarvis-gguf-hash --all test.gguf > test.gguf.manifest
 ```
 
 Which would generate a manifest that looks like below, which contains multiple hash type and per tensor layer hashes as well
@@ -117,7 +117,7 @@ sha256    7dd641b32f59b60dbd4b5420c4b0f6321ccf48f58f6ae201a3dbc4a58a27c6e4  test
 We can then use the normal check command which will by default check for the highest security strength hash and verify against that:
 
 ```bash
-$ ./llama-gguf-hash --check test.gguf.manifest test.gguf
+$ ./jarvis-gguf-hash --check test.gguf.manifest test.gguf
 manifest  test.gguf.manifest  sha256  sha1  xxh64
 sha256    c0510d38fa060c46265e0160a85c7243096b01dd31c2f355bdbb5516b20de1bd  test.gguf:tensor_0  -  Ok
 sha256    8514cbcc73692a2c56bd7a33a022edd5ff819614bd23b19915d7224387f397a7  test.gguf:tensor_1  -  Ok
@@ -137,7 +137,7 @@ Verification results for test.gguf.manifest - Success
 Or we may explicitly ask for a faster hash like:
 
 ```bash
-$ ./llama-gguf-hash --check test.gguf.manifest --xxh64 test.gguf
+$ ./jarvis-gguf-hash --check test.gguf.manifest --xxh64 test.gguf
 manifest  test.gguf.manifest  sha256  sha1  xxh64
 xxh64     f66e9cd66a4396a0  test.gguf:tensor_0  -  Ok
 xxh64     7d3a1f9ac04d0537  test.gguf:tensor_1  -  Ok
@@ -157,7 +157,7 @@ Verification results for test.gguf.manifest - Success
 Or maybe we want to just check that all the hash is valid:
 
 ```bash
-$./llama-gguf-hash --check test.gguf.manifest --all test.gguf.manifest
+$./jarvis-gguf-hash --check test.gguf.manifest --all test.gguf.manifest
 manifest  test.gguf.manifest  sha256  sha1  xxh64
 xxh64     f66e9cd66a4396a0  test.gguf:tensor_0  -  Ok
 sha1      59f79ecefd8125a996fdf419239051a7e99e5f20  test.gguf:tensor_0  -  Ok

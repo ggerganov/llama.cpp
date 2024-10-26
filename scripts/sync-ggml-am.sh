@@ -1,10 +1,10 @@
 #!/bin/bash
 #
-# Synchronize ggml changes to llama.cpp
+# Synchronize ggml changes to jarvis.cpp
 #
 # Usage:
 #
-#   $ cd /path/to/llama.cpp
+#   $ cd /path/to/jarvis.cpp
 #   $ ./scripts/sync-ggml-am.sh -skip hash0,hash1,hash2... -C 3
 #
 
@@ -13,7 +13,7 @@ set -e
 sd=$(dirname $0)
 cd $sd/../
 
-SRC_LLAMA=$(pwd)
+SRC_JARVIS=$(pwd)
 SRC_GGML=$(cd ../ggml; pwd)
 
 if [ ! -d $SRC_GGML ]; then
@@ -21,7 +21,7 @@ if [ ! -d $SRC_GGML ]; then
     exit 1
 fi
 
-lc=$(cat $SRC_LLAMA/scripts/sync-ggml.last)
+lc=$(cat $SRC_JARVIS/scripts/sync-ggml.last)
 echo "Syncing ggml changes since commit $lc"
 
 to_skip=""
@@ -46,16 +46,16 @@ done
 cd $SRC_GGML
 
 git log --oneline $lc..HEAD
-git log --oneline $lc..HEAD --reverse | grep -v "(llama/[0-9]*)" | cut -d' ' -f1 > $SRC_LLAMA/ggml-commits
+git log --oneline $lc..HEAD --reverse | grep -v "(jarvis/[0-9]*)" | cut -d' ' -f1 > $SRC_JARVIS/ggml-commits
 
-if [ ! -s $SRC_LLAMA/ggml-commits ]; then
-    rm -v $SRC_LLAMA/ggml-commits
+if [ ! -s $SRC_JARVIS/ggml-commits ]; then
+    rm -v $SRC_JARVIS/ggml-commits
     echo "No new commits"
     exit 0
 fi
 
-if [ -f $SRC_LLAMA/ggml-src.patch ]; then
-    rm -v $SRC_LLAMA/ggml-src.patch
+if [ -f $SRC_JARVIS/ggml-src.patch ]; then
+    rm -v $SRC_JARVIS/ggml-src.patch
 fi
 
 while read c; do
@@ -89,19 +89,19 @@ while read c; do
         tests/test-backend-ops.cpp \
         LICENSE \
         scripts/gen-authors.sh \
-        >> $SRC_LLAMA/ggml-src.patch
-done < $SRC_LLAMA/ggml-commits
+        >> $SRC_JARVIS/ggml-src.patch
+done < $SRC_JARVIS/ggml-commits
 
-rm -v $SRC_LLAMA/ggml-commits
+rm -v $SRC_JARVIS/ggml-commits
 
 # delete files if empty
-if [ ! -s $SRC_LLAMA/ggml-src.patch ]; then
-    rm -v $SRC_LLAMA/ggml-src.patch
+if [ ! -s $SRC_JARVIS/ggml-src.patch ]; then
+    rm -v $SRC_JARVIS/ggml-src.patch
 fi
 
-cd $SRC_LLAMA
+cd $SRC_JARVIS
 
-if [ -f $SRC_LLAMA/ggml-src.patch ]; then
+if [ -f $SRC_JARVIS/ggml-src.patch ]; then
     # replace PR numbers
     #
     # Subject: some text (#1234)
@@ -214,12 +214,12 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
 
     git am -C${ctx} ggml-src.patch
 
-    rm -v $SRC_LLAMA/ggml-src.patch
+    rm -v $SRC_JARVIS/ggml-src.patch
 fi
 
 # update last commit
 cd $SRC_GGML
-git log -1 --format=%H > $SRC_LLAMA/scripts/sync-ggml.last
+git log -1 --format=%H > $SRC_JARVIS/scripts/sync-ggml.last
 
 echo "Done"
 

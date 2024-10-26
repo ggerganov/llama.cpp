@@ -1,4 +1,4 @@
-#include "llama.h"
+#include "jarvis.h"
 #include "common.h"
 
 #include <algorithm>
@@ -99,8 +99,8 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
             split_print_usage(argv[0]);
             exit(0);
         } else if (arg == "--version") {
-            fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
-            fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+            fprintf(stderr, "version: %d (%s)\n", JARVIS_BUILD_NUMBER, JARVIS_COMMIT);
+            fprintf(stderr, "built with %s for %s\n", JARVIS_COMPILER, JARVIS_BUILD_TARGET);
             exit(0);
         } else if (arg == "--dry-run") {
             arg_found = true;
@@ -308,7 +308,7 @@ struct split_strategy {
         for (auto & ctx_out : ctx_outs) {
             // construct file path
             char split_path[PATH_MAX] = {0};
-            llama_split_path(split_path, sizeof(split_path), params.output.c_str(), i_split, n_split);
+            jarvis_split_path(split_path, sizeof(split_path), params.output.c_str(), i_split, n_split);
 
             // open the output file
             printf("Writing file %s ... ", split_path);
@@ -430,7 +430,7 @@ static void gguf_merge(const split_params & split_params) {
         };
 
         if (i_split > 0) {
-            llama_split_path(split_path, sizeof(split_path), split_prefix, i_split, n_split);
+            jarvis_split_path(split_path, sizeof(split_path), split_prefix, i_split, n_split);
         }
         fprintf(stderr, "%s: reading metadata %s ...", __func__, split_path);
 
@@ -470,7 +470,7 @@ static void gguf_merge(const split_params & split_params) {
             }
 
             // Verify the file naming and extract split_prefix
-            if (!llama_split_prefix(split_prefix, sizeof (split_prefix), split_path, i_split, n_split)) {
+            if (!jarvis_split_prefix(split_prefix, sizeof (split_prefix), split_path, i_split, n_split)) {
                 fprintf(stderr, "\n%s: unexpected input file name: %s"
                                 " i_split=%d"
                                 " n_split=%d\n", __func__,
@@ -508,7 +508,7 @@ static void gguf_merge(const split_params & split_params) {
 
     // Write tensors data
     for (int i_split = 0; i_split < n_split; i_split++) {
-        llama_split_path(split_path, sizeof(split_path), split_prefix, i_split, n_split);
+        jarvis_split_path(split_path, sizeof(split_path), split_prefix, i_split, n_split);
         std::ifstream f_input(split_path, std::ios::binary);
         if (!f_input.is_open()) {
             fprintf(stderr, "%s:  failed to open input GGUF from %s\n", __func__, split_path);

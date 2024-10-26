@@ -28,9 +28,9 @@ env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
-  LLAMA_LOG_COLORS: 1
-  LLAMA_LOG_PREFIX: 1
-  LLAMA_LOG_TIMESTAMPS: 1
+  JARVIS_LOG_COLORS: 1
+  JARVIS_LOG_PREFIX: 1
+  JARVIS_LOG_TIMESTAMPS: 1
 
 jobs:
   macOS-latest-cmake-arm64:
@@ -55,7 +55,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF ..
+          cmake -DJARVIS_FATAL_WARNINGS=ON -DGGML_METAL_EMBED_LIBRARY=ON -DJARVIS_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -82,14 +82,14 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
-          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
+          zip -r jarvis-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
-          name: llama-bin-macos-arm64.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
+          name: jarvis-bin-macos-arm64.zip
 
   macOS-latest-cmake-x64:
     runs-on: macos-12
@@ -112,8 +112,8 @@ jobs:
         run: |
           sysctl -a
           # Metal is disabled due to intermittent failures with Github runners not having a GPU:
-          # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
-          cmake -B build -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL=OFF -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
+          # https://github.com/ggerganov/jarvis.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
+          cmake -B build -DJARVIS_FATAL_WARNINGS=ON -DGGML_METAL=OFF -DJARVIS_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
           cmake --build build --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -140,20 +140,20 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
-          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
+          zip -r jarvis-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
-          name: llama-bin-macos-x64.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
+          name: jarvis-bin-macos-x64.zip
 
   ubuntu-focal-make:
     runs-on: ubuntu-20.04
     env:
-      LLAMA_NODE_AVAILABLE: true
-      LLAMA_PYTHON_AVAILABLE: true
+      JARVIS_NODE_AVAILABLE: true
+      JARVIS_PYTHON_AVAILABLE: true
 
     steps:
       - name: Clone
@@ -177,7 +177,7 @@ jobs:
       - name: Build
         id: make_build
         env:
-            LLAMA_FATAL_WARNINGS: 1
+            JARVIS_FATAL_WARNINGS: 1
         run: |
           CC=gcc-8 make -j $(nproc)
 
@@ -204,8 +204,8 @@ jobs:
       - name: Build
         id: make_build
         env:
-          LLAMA_FATAL_WARNINGS: 1
-          LLAMA_CURL: 1
+          JARVIS_FATAL_WARNINGS: 1
+          JARVIS_CURL: 1
         run: |
           CC=gcc-8 make -j $(nproc)
 
@@ -230,7 +230,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
+          cmake .. -DJARVIS_FATAL_WARNINGS=ON -DJARVIS_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
@@ -239,16 +239,16 @@ jobs:
           cd build
           ctest -L 'main|curl' --verbose --timeout 900
 
-      - name: Test llama2c conversion
-        id: llama2c_test
+      - name: Test jarvis2c conversion
+        id: jarvis2c_test
         run: |
           cd build
           echo "Fetch tokenizer"
-          wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/tok512.bin
-          echo "Fetch llama2c model"
-          wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin
-          ./bin/llama-convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
-          ./bin/llama-cli -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
+          wget https://huggingface.co/karpathy/tinyjarviss/resolve/main/stories260K/tok512.bin
+          echo "Fetch jarvis2c model"
+          wget https://huggingface.co/karpathy/tinyjarviss/resolve/main/stories260K/stories260K.bin
+          ./bin/jarvis-convert-jarvis2c-to-ggml --copy-vocab-from-model ./tok512.bin --jarvis2c-model stories260K.bin --jarvis2c-output-model stories260K.gguf
+          ./bin/jarvis-cli -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
 
       - name: Determine tag name
         id: tag
@@ -268,14 +268,14 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
-          zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
+          zip -r jarvis-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
-          name: llama-bin-ubuntu-x64.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
+          name: jarvis-bin-ubuntu-x64.zip
 
   ubuntu-latest-cmake-sanitizer:
     runs-on: ubuntu-latest
@@ -304,7 +304,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake .. -DJARVIS_FATAL_WARNINGS=ON -DJARVIS_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Build (no OpenMP)
@@ -313,7 +313,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGGML_OPENMP=OFF
+          cmake .. -DJARVIS_FATAL_WARNINGS=ON -DJARVIS_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGGML_OPENMP=OFF
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
@@ -487,7 +487,7 @@ jobs:
 
   # TODO: build with GGML_NO_METAL because test-backend-ops fail on "Apple Paravirtual device" and I don't know
   #       how to debug it.
-  #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7131777249/job/19420981052#step:5:1124
+  #       ref: https://github.com/ggerganov/jarvis.cpp/actions/runs/7131777249/job/19420981052#step:5:1124
   macOS-latest-make:
     runs-on: macos-latest
 
@@ -505,7 +505,7 @@ jobs:
       - name: Build
         id: make_build
         env:
-            LLAMA_FATAL_WARNINGS: 1
+            JARVIS_FATAL_WARNINGS: 1
         run: |
           GGML_NO_METAL=1 make -j $(sysctl -n hw.logicalcpu)
 
@@ -517,7 +517,7 @@ jobs:
 
   # TODO: build with GGML_METAL=OFF because test-backend-ops fail on "Apple Paravirtual device" and I don't know
   #       how to debug it.
-  #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7132125951/job/19422043567?pr=4359#step:5:6584
+  #       ref: https://github.com/ggerganov/jarvis.cpp/actions/runs/7132125951/job/19422043567?pr=4359#step:5:6584
   #       would be great if we fix these
   macOS-latest-cmake:
     runs-on: macos-latest
@@ -539,7 +539,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL=OFF ..
+          cmake -DJARVIS_FATAL_WARNINGS=ON -DGGML_METAL=OFF ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -570,9 +570,9 @@ jobs:
           cd build
           cmake -G Xcode .. \
             -DGGML_METAL_EMBED_LIBRARY=ON \
-            -DLLAMA_BUILD_EXAMPLES=OFF \
-            -DLLAMA_BUILD_TESTS=OFF \
-            -DLLAMA_BUILD_SERVER=OFF \
+            -DJARVIS_BUILD_EXAMPLES=OFF \
+            -DJARVIS_BUILD_TESTS=OFF \
+            -DJARVIS_BUILD_SERVER=OFF \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
@@ -600,9 +600,9 @@ jobs:
           cd build
           cmake -G Xcode .. \
             -DGGML_METAL_EMBED_LIBRARY=ON \
-            -DLLAMA_BUILD_EXAMPLES=OFF \
-            -DLLAMA_BUILD_TESTS=OFF \
-            -DLLAMA_BUILD_SERVER=OFF \
+            -DJARVIS_BUILD_EXAMPLES=OFF \
+            -DJARVIS_BUILD_TESTS=OFF \
+            -DJARVIS_BUILD_SERVER=OFF \
             -DCMAKE_SYSTEM_NAME=tvOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
@@ -629,7 +629,7 @@ jobs:
       - name: xcodebuild for swift package
         id: xcodebuild
         run: |
-          xcodebuild -scheme llama -destination "${{ matrix.destination }}"
+          xcodebuild -scheme jarvis -destination "${{ matrix.destination }}"
 
       - name: Build Swift Example
         id: make_build_swift_example
@@ -705,23 +705,23 @@ jobs:
       matrix:
         include:
           - build: 'noavx-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx2-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'avx-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx512-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_AVX512=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'openblas-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_BLAS=ON -DBUILD_SHARED_LIBS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_BLAS=ON -DBUILD_SHARED_LIBS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
           - build: 'kompute-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'vulkan-x64'
-            defines: '-DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_RPC=ON -DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'llvm-arm64'
-            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake -DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'msvc-arm64'
-            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-msvc.cmake -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-msvc.cmake -DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
 
     steps:
       - name: Clone
@@ -807,7 +807,7 @@ jobs:
           7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/sde.tar
           $sde = $(join-path $env:RUNNER_TEMP sde-external-${env:SDE_VERSION}-win/sde.exe)
           cd build
-          $env:LLAMA_SKIP_TESTS_SLOW_ON_EMULATOR = 1
+          $env:JARVIS_SKIP_TESTS_SLOW_ON_EMULATOR = 1
           & $sde -future -- ctest -L main -C Release --verbose --timeout 900
 
       - name: Determine tag name
@@ -827,15 +827,15 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
-          7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip .\build\bin\Release\*
+          Copy-Item LICENSE .\build\bin\Release\jarvis.cpp.txt
+          7z a jarvis-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip .\build\bin\Release\*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip
-          name: llama-bin-win-${{ matrix.build }}.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip
+          name: jarvis-bin-win-${{ matrix.build }}.zip
 
   windows-latest-cmake-cuda:
     runs-on: windows-2019
@@ -865,7 +865,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON -DGGML_RPC=ON
+          cmake .. -DGGML_NATIVE=OFF -DJARVIS_BUILD_SERVER=ON -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON -DGGML_RPC=ON
           cmake --build . --config Release -j $((${env:NUMBER_OF_PROCESSORS} - 1)) -t ggml
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
@@ -886,28 +886,28 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
+          7z a jarvis-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
-          name: llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+          name: jarvis-bin-win-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
         run: |
           echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
           $dst='.\build\bin\cudart\'
           robocopy "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip $dst\*
+          7z a cudart-jarvis-bin-win-cu${{ matrix.cuda }}-x64.zip $dst\*
 
       - name: Upload Cuda runtime
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
-          name: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+          path: cudart-jarvis-bin-win-cu${{ matrix.cuda }}-x64.zip
+          name: cudart-jarvis-bin-win-cu${{ matrix.cuda }}-x64.zip
 
   windows-latest-cmake-sycl:
     runs-on: windows-latest
@@ -963,14 +963,14 @@ jobs:
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libmmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libiomp5md.dll" ./build/bin
           echo "cp oneAPI running time dll files to ./build/bin done"
-          7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
+          7z a jarvis-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
-          name: llama-bin-win-sycl-x64.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
+          name: jarvis-bin-win-sycl-x64.zip
 
   windows-latest-cmake-hip:
     if: ${{ github.event.inputs.create_release != 'true' }}
@@ -1060,13 +1060,13 @@ jobs:
       - name: Pack artifacts
         id: pack_artifacts
         run: |
-          7z a llama-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip .\build\bin\*
+          7z a jarvis-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip .\build\bin\*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          path: llama-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
-          name: llama-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
+          path: jarvis-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
+          name: jarvis-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
 
   ios-xcode-build:
     runs-on: macos-latest
@@ -1076,7 +1076,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Xcode project
-        run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
+        run: xcodebuild -project examples/jarvis.swiftui/jarvis.swiftui.xcodeproj -scheme jarvis.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
 
   android-build:
     runs-on: ubuntu-latest
@@ -1098,7 +1098,7 @@ jobs:
 
       - name: Build
         run: |
-          cd examples/llama.android
+          cd examples/jarvis.android
 
           ./gradlew build --no-daemon
 
@@ -1261,7 +1261,7 @@ jobs:
 #          sudo apt-get install cmake
 #
 #      - name: Configure
-#        run: cmake . -DCMAKE_BUILD_TYPE=Debug -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON
+#        run: cmake . -DCMAKE_BUILD_TYPE=Debug -DJARVIS_SANITIZE_${{ matrix.sanitizer }}=ON
 #
 #      - name: Build
 #        run: |
@@ -1300,7 +1300,7 @@ jobs:
 #      - name: Upload binaries
 #        uses: actions/upload-artifact@v4
 #        with:
-#          name: llama-bin-${{ matrix.arch }}
+#          name: jarvis-bin-${{ matrix.arch }}
 #          path: build/bin/${{ matrix.build }}
 #
 #  windows-blas:
@@ -1339,7 +1339,7 @@ jobs:
 #        run: >
 #          cmake -S . -B ./build -A ${{ matrix.arch }}
 #          -DCMAKE_BUILD_TYPE=${{ matrix.build }}
-#          -DLLAMA_SUPPORT_OPENBLAS=${{ matrix.blas }}
+#          -DJARVIS_SUPPORT_OPENBLAS=${{ matrix.blas }}
 #          -DCMAKE_LIBRARY_PATH="$env:blasdir/lib"
 #
 #      - name: Build
@@ -1355,7 +1355,7 @@ jobs:
 #        if: matrix.blas == 'ON'
 #        uses: actions/upload-artifact@v4
 #        with:
-#          name: llama-blas-bin-${{ matrix.arch }}
+#          name: jarvis-blas-bin-${{ matrix.arch }}
 #          path: build/bin/${{ matrix.build }}
 #
 #  emscripten:

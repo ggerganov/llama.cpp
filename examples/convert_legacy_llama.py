@@ -33,7 +33,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent.parent / 'gguf-py'))
 
 import gguf
-from gguf import BaseVocab, Vocab, NoVocab, BpeVocab, SentencePieceVocab, LlamaHfVocab
+from gguf import BaseVocab, Vocab, NoVocab, BpeVocab, SentencePieceVocab, JarvisHfVocab
 
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
@@ -45,7 +45,7 @@ if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
-ARCH = gguf.MODEL_ARCH.LLAMA
+ARCH = gguf.MODEL_ARCH.JARVIS
 
 DEFAULT_CONCURRENCY = 8
 
@@ -130,8 +130,8 @@ SAFETENSORS_DATA_TYPES: dict[str, DataType] = {
     'I32': DT_I32,
 }
 
-# TODO: match this with `llama_ftype`
-# TODO: rename to LLAMAFileType
+# TODO: match this with `jarvis_ftype`
+# TODO: rename to JARVISFileType
 # TODO: move to `gguf.py`
 
 
@@ -288,12 +288,12 @@ class Params:
         f_rope_freq_base = None
         n_ff = None
 
-        # hack to determine LLaMA v1 vs v2 vs CodeLlama
+        # hack to determine LLaMA v1 vs v2 vs CodeJarvis
         if config.get("moe"):
             # Mixtral
             n_ctx = 32768
         elif config.get("rope_theta") == 1000000:
-            # CodeLlama
+            # CodeJarvis
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
             # LLaMA v2
@@ -1199,7 +1199,7 @@ def load_some_model(path: Path) -> ModelPlus:
 
 
 class VocabFactory:
-    _VOCAB_CLASSES: list[type[Vocab]] = [SentencePieceVocab, BpeVocab, LlamaHfVocab]
+    _VOCAB_CLASSES: list[type[Vocab]] = [SentencePieceVocab, BpeVocab, JarvisHfVocab]
 
     def __init__(self, path: Path):
         self.path = path

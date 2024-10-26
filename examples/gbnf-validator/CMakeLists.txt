@@ -1,5 +1,5 @@
-set(TARGET llama-gbnf-validator)
+set(TARGET jarvis-gbnf-validator)
 add_executable(${TARGET} gbnf-validator.cpp)
 install(TARGETS ${TARGET} RUNTIME)
-target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${TARGET} PRIVATE common jarvis ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)

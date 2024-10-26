@@ -1,6 +1,6 @@
-#include "llama-impl.h"
-#include "llama-vocab.h"
-#include "llama-sampling.h"
+#include "jarvis-impl.h"
+#include "jarvis-vocab.h"
+#include "jarvis-sampling.h"
 
 #include "unicode.h"
 
@@ -88,8 +88,8 @@
 #endif
 
 // bump if necessary
-#define LLAMA_MAX_LAYERS  512
-#define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
+#define JARVIS_MAX_LAYERS  512
+#define JARVIS_MAX_EXPERTS 160  // DeepSeekV2
 
 //
 // helpers
@@ -135,7 +135,7 @@ static void zeros(std::ofstream & file, size_t n) {
     }
 }
 
-LLAMA_ATTRIBUTE_FORMAT(1, 2)
+JARVIS_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
     va_list ap2;
@@ -156,7 +156,7 @@ static std::string format(const char * fmt, ...) {
 //
 
 enum llm_arch {
-    LLM_ARCH_LLAMA,
+    LLM_ARCH_JARVIS,
     LLM_ARCH_FALCON,
     LLM_ARCH_BAICHUAN,
     LLM_ARCH_GROK,
@@ -209,7 +209,7 @@ enum llm_arch {
 };
 
 static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
-    { LLM_ARCH_LLAMA,           "llama"        },
+    { LLM_ARCH_JARVIS,           "jarvis"        },
     { LLM_ARCH_FALCON,          "falcon"       },
     { LLM_ARCH_GROK,            "grok"         },
     { LLM_ARCH_GPT2,            "gpt2"         },
@@ -616,7 +616,7 @@ enum llm_tensor {
 
 static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_NAMES = {
     {
-        LLM_ARCH_LLAMA,
+        LLM_ARCH_JARVIS,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
@@ -1552,7 +1552,7 @@ static llm_arch llm_arch_from_string(const std::string & name) {
 // helper to handle gguf constants
 // usage:
 //
-//   const auto tn = LLM_TN(LLM_ARCH_LLAMA);
+//   const auto tn = LLM_TN(LLM_ARCH_JARVIS);
 //
 //   std::string name = tn(LLM_TENSOR_OUTPUT);                     -> "output"
 //   std::string name = tn(LLM_TENSOR_TOKEN_EMBD, "bias");         -> "token_embd.bias"
@@ -1603,20 +1603,20 @@ struct LLM_TN {
 // gguf helpers
 //
 
-static const std::map<llama_rope_scaling_type, const char *> LLAMA_ROPE_SCALING_TYPES = {
-    { LLAMA_ROPE_SCALING_TYPE_NONE,   "none"   },
-    { LLAMA_ROPE_SCALING_TYPE_LINEAR, "linear" },
-    { LLAMA_ROPE_SCALING_TYPE_YARN,   "yarn"   },
+static const std::map<jarvis_rope_scaling_type, const char *> JARVIS_ROPE_SCALING_TYPES = {
+    { JARVIS_ROPE_SCALING_TYPE_NONE,   "none"   },
+    { JARVIS_ROPE_SCALING_TYPE_LINEAR, "linear" },
+    { JARVIS_ROPE_SCALING_TYPE_YARN,   "yarn"   },
 };
 
-static llama_rope_scaling_type llama_rope_scaling_type_from_string(const std::string & name) {
-    for (const auto & kv : LLAMA_ROPE_SCALING_TYPES) {
+static jarvis_rope_scaling_type jarvis_rope_scaling_type_from_string(const std::string & name) {
+    for (const auto & kv : JARVIS_ROPE_SCALING_TYPES) {
         if (kv.second == name) {
-            return (llama_rope_scaling_type) kv.first;
+            return (jarvis_rope_scaling_type) kv.first;
         }
     }
 
-    return LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
+    return JARVIS_ROPE_SCALING_TYPE_UNSPECIFIED;
 }
 
 static std::string gguf_data_to_str(enum gguf_type type, const void * data, int i) {
@@ -1674,11 +1674,11 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
 }
 
 //
-// llama helpers
+// jarvis helpers
 //
 
 #if defined(_WIN32)
-static std::string llama_format_win_err(DWORD err) {
+static std::string jarvis_format_win_err(DWORD err) {
     LPSTR buf;
     size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);
@@ -1697,7 +1697,7 @@ struct no_init {
     no_init() { /* do nothing */ }
 };
 
-struct llama_file {
+struct jarvis_file {
 
 #if defined(_WIN32)
     // use FILE * so we don't have to re-open the file to mmap
@@ -1723,7 +1723,7 @@ private:
 
 public:
 
-    llama_file(const char * fname, const char * mode) {
+    jarvis_file(const char * fname, const char * mode) {
         fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
@@ -1812,7 +1812,7 @@ public:
         write_raw(&val, sizeof(val));
     }
 
-    ~llama_file() {
+    ~jarvis_file() {
         if (fp) {
             std::fclose(fp);
         }
@@ -1822,7 +1822,7 @@ public:
     FILE * fp;
     size_t size;
 
-    llama_file(const char * fname, const char * mode) {
+    jarvis_file(const char * fname, const char * mode) {
         fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
@@ -1891,20 +1891,20 @@ public:
         write_raw(&val, sizeof(val));
     }
 
-    ~llama_file() {
+    ~jarvis_file() {
         if (fp) {
             std::fclose(fp);
         }
     }
 #endif
 };
-using llama_files = std::vector<std::unique_ptr<llama_file>>;
+using jarvis_files = std::vector<std::unique_ptr<jarvis_file>>;
 
-struct llama_mmap {
+struct jarvis_mmap {
     void * addr;
     size_t size;
 
-    llama_mmap(const llama_mmap &) = delete;
+    jarvis_mmap(const jarvis_mmap &) = delete;
 
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
@@ -1912,7 +1912,7 @@ struct llama_mmap {
     // list of mapped fragments (first_offset, last_offset)
     std::vector<std::pair<size_t, size_t>> mapped_fragments;
 
-    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false) {
+    jarvis_mmap(struct jarvis_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false) {
         size = file->size;
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
@@ -1921,7 +1921,7 @@ struct llama_mmap {
 #ifdef __linux__
         // advise the kernel to read the file sequentially (increases readahead)
         if (posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
-            LLAMA_LOG_WARN("warning: posix_fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
+            JARVIS_LOG_WARN("warning: posix_fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
                     strerror(errno));
         }
         if (prefetch) { flags |= MAP_POPULATE; }
@@ -1934,7 +1934,7 @@ struct llama_mmap {
         if (prefetch > 0) {
             // advise the kernel to preload the mapped memory
             if (posix_madvise(addr, std::min(file->size, prefetch), POSIX_MADV_WILLNEED)) {
-                LLAMA_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
+                JARVIS_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
                         strerror(errno));
             }
         }
@@ -1942,7 +1942,7 @@ struct llama_mmap {
             // advise the kernel not to use readahead
             // (because the next page might not belong on the same node)
             if (posix_madvise(addr, file->size, POSIX_MADV_RANDOM)) {
-                LLAMA_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
+                JARVIS_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
         }
@@ -1985,7 +1985,7 @@ struct llama_mmap {
 
         // unmap the range
         if (munmap(next_page_start, len)) {
-            LLAMA_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
+            JARVIS_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
         }
 
         // update the list of mapped fragments to avoid unmapping the same range again in the destructor
@@ -2011,17 +2011,17 @@ struct llama_mmap {
         mapped_fragments = std::move(new_mapped_fragments);
     }
 
-    ~llama_mmap() {
+    ~jarvis_mmap() {
         for (const auto & frag : mapped_fragments) {
             if (munmap((char *) addr + frag.first, frag.second - frag.first)) {
-                LLAMA_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
+                JARVIS_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
             }
         }
     }
 #elif defined(_WIN32)
     static constexpr bool SUPPORTED = true;
 
-    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1, bool numa = false) {
+    jarvis_mmap(struct jarvis_file * file, size_t prefetch = (size_t) -1, bool numa = false) {
         GGML_UNUSED(numa);
 
         size = file->size;
@@ -2032,7 +2032,7 @@ struct llama_mmap {
 
         if (hMapping == NULL) {
             DWORD error = GetLastError();
-            throw std::runtime_error(format("CreateFileMappingA failed: %s", llama_format_win_err(error).c_str()));
+            throw std::runtime_error(format("CreateFileMappingA failed: %s", jarvis_format_win_err(error).c_str()));
         }
 
         addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
@@ -2040,7 +2040,7 @@ struct llama_mmap {
         CloseHandle(hMapping);
 
         if (addr == NULL) {
-            throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str()));
+            throw std::runtime_error(format("MapViewOfFile failed: %s", jarvis_format_win_err(error).c_str()));
         }
 
         if (prefetch > 0) {
@@ -2058,8 +2058,8 @@ struct llama_mmap {
                 range.VirtualAddress = addr;
                 range.NumberOfBytes = (SIZE_T) std::min(size, prefetch);
                 if (!pPrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
-                    LLAMA_LOG_WARN("warning: PrefetchVirtualMemory failed: %s\n",
-                            llama_format_win_err(GetLastError()).c_str());
+                    JARVIS_LOG_WARN("warning: PrefetchVirtualMemory failed: %s\n",
+                            jarvis_format_win_err(GetLastError()).c_str());
                 }
             }
 #else
@@ -2074,16 +2074,16 @@ struct llama_mmap {
         GGML_UNUSED(last);
     }
 
-    ~llama_mmap() {
+    ~jarvis_mmap() {
         if (!UnmapViewOfFile(addr)) {
-            LLAMA_LOG_WARN("warning: UnmapViewOfFile failed: %s\n",
-                    llama_format_win_err(GetLastError()).c_str());
+            JARVIS_LOG_WARN("warning: UnmapViewOfFile failed: %s\n",
+                    jarvis_format_win_err(GetLastError()).c_str());
         }
     }
 #else
     static constexpr bool SUPPORTED = false;
 
-    llama_mmap(struct llama_file * file, size_t prefetch = -1, bool numa = false) {
+    jarvis_mmap(struct jarvis_file * file, size_t prefetch = -1, bool numa = false) {
         GGML_UNUSED(file);
         GGML_UNUSED(prefetch);
         GGML_UNUSED(numa);
@@ -2099,20 +2099,20 @@ struct llama_mmap {
     }
 #endif
 };
-using llama_mmaps = std::vector<std::unique_ptr<llama_mmap>>;
+using jarvis_mmaps = std::vector<std::unique_ptr<jarvis_mmap>>;
 
 // Represents some region of memory being locked using mlock or VirtualLock;
 // will automatically unlock on destruction.
-struct llama_mlock {
+struct jarvis_mlock {
     void * addr = NULL;
     size_t size = 0;
 
     bool failed_already = false;
 
-    llama_mlock() {}
-    llama_mlock(const llama_mlock &) = delete;
+    jarvis_mlock() {}
+    jarvis_mlock(const jarvis_mlock &) = delete;
 
-    ~llama_mlock() {
+    ~jarvis_mlock() {
         if (size) {
             raw_unlock(addr, size);
         }
@@ -2172,7 +2172,7 @@ struct llama_mlock {
             suggest = false;
         }
 
-        LLAMA_LOG_WARN("warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n%s",
+        JARVIS_LOG_WARN("warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n%s",
                 size, this->size, errmsg, suggest ? MLOCK_SUGGESTION : "");
         return false;
     }
@@ -2181,7 +2181,7 @@ struct llama_mlock {
 
     static void raw_unlock(void * addr, size_t size) {
         if (munlock(addr, size)) {
-            LLAMA_LOG_WARN("warning: failed to munlock buffer: %s\n", std::strerror(errno));
+            JARVIS_LOG_WARN("warning: failed to munlock buffer: %s\n", std::strerror(errno));
         }
     }
 #elif defined(_WIN32)
@@ -2199,8 +2199,8 @@ struct llama_mlock {
                 return true;
             }
             if (tries == 2) {
-                LLAMA_LOG_WARN("warning: failed to VirtualLock %zu-byte buffer (after previously locking %zu bytes): %s\n",
-                    len, size, llama_format_win_err(GetLastError()).c_str());
+                JARVIS_LOG_WARN("warning: failed to VirtualLock %zu-byte buffer (after previously locking %zu bytes): %s\n",
+                    len, size, jarvis_format_win_err(GetLastError()).c_str());
                 return false;
             }
 
@@ -2208,8 +2208,8 @@ struct llama_mlock {
             // set size and try again.
             SIZE_T min_ws_size, max_ws_size;
             if (!GetProcessWorkingSetSize(GetCurrentProcess(), &min_ws_size, &max_ws_size)) {
-                LLAMA_LOG_WARN("warning: GetProcessWorkingSetSize failed: %s\n",
-                        llama_format_win_err(GetLastError()).c_str());
+                JARVIS_LOG_WARN("warning: GetProcessWorkingSetSize failed: %s\n",
+                        jarvis_format_win_err(GetLastError()).c_str());
                 return false;
             }
             // Per MSDN: "The maximum number of pages that a process can lock
@@ -2221,8 +2221,8 @@ struct llama_mlock {
             min_ws_size += increment;
             max_ws_size += increment;
             if (!SetProcessWorkingSetSize(GetCurrentProcess(), min_ws_size, max_ws_size)) {
-                LLAMA_LOG_WARN("warning: SetProcessWorkingSetSize failed: %s\n",
-                        llama_format_win_err(GetLastError()).c_str());
+                JARVIS_LOG_WARN("warning: SetProcessWorkingSetSize failed: %s\n",
+                        jarvis_format_win_err(GetLastError()).c_str());
                 return false;
             }
         }
@@ -2230,8 +2230,8 @@ struct llama_mlock {
 
     static void raw_unlock(void * ptr, size_t len) {
         if (!VirtualUnlock(ptr, len)) {
-            LLAMA_LOG_WARN("warning: failed to VirtualUnlock buffer: %s\n",
-                    llama_format_win_err(GetLastError()).c_str());
+            JARVIS_LOG_WARN("warning: failed to VirtualUnlock buffer: %s\n",
+                    jarvis_format_win_err(GetLastError()).c_str());
         }
     }
 #else
@@ -2242,23 +2242,23 @@ struct llama_mlock {
     }
 
     bool raw_lock(const void * addr, size_t len) const {
-        LLAMA_LOG_WARN("warning: mlock not supported on this system\n");
+        JARVIS_LOG_WARN("warning: mlock not supported on this system\n");
         return false;
     }
 
     static void raw_unlock(const void * addr, size_t len) {}
 #endif
 };
-using llama_mlocks = std::vector<std::unique_ptr<llama_mlock>>;
+using jarvis_mlocks = std::vector<std::unique_ptr<jarvis_mlock>>;
 
 // NOTE: avoid ever using this except for building the token_to_piece caches
-static std::string llama_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
+static std::string jarvis_token_to_piece(const struct jarvis_model * model, jarvis_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache
-    const int n_chars = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
+    const int n_chars = jarvis_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
+        int check = jarvis_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -2272,14 +2272,14 @@ static std::string llama_token_to_piece(const struct llama_model * model, llama_
 // globals
 //
 
-struct llama_logger_state {
-    ggml_log_callback log_callback = llama_log_callback_default;
+struct jarvis_logger_state {
+    ggml_log_callback log_callback = jarvis_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
-static llama_logger_state g_logger_state;
+static jarvis_logger_state g_logger_state;
 
-// available llama models
+// available jarvis models
 enum e_model {
     MODEL_UNKNOWN,
     MODEL_14M,
@@ -2347,7 +2347,7 @@ static const size_t kiB = 1024;
 static const size_t MiB = 1024*kiB;
 static const size_t GiB = 1024*MiB;
 
-struct llama_hparams {
+struct jarvis_hparams {
     bool vocab_only;
     bool rope_finetuned;
     bool use_par_res;
@@ -2366,9 +2366,9 @@ struct llama_hparams {
     uint32_t n_vocab_type = 0; // for BERT-style token types
     uint32_t n_rel_attn_bkts = 0;
 
-    std::array<uint32_t, LLAMA_MAX_LAYERS> n_head_arr;
-    std::array<uint32_t, LLAMA_MAX_LAYERS> n_head_kv_arr;
-    std::array<uint32_t, LLAMA_MAX_LAYERS> n_ff_arr;
+    std::array<uint32_t, JARVIS_MAX_LAYERS> n_head_arr;
+    std::array<uint32_t, JARVIS_MAX_LAYERS> n_head_kv_arr;
+    std::array<uint32_t, JARVIS_MAX_LAYERS> n_ff_arr;
 
     uint32_t n_layer_dense_lead = 0;
     uint32_t n_lora_q = 0;
@@ -2417,14 +2417,14 @@ struct llama_hparams {
     bool attn_soft_cap = false;
 
     // needed by encoder-decoder models (e.g. T5, FLAN-T5)
-    // ref: https://github.com/ggerganov/llama.cpp/pull/8141
-    llama_token dec_start_token_id = LLAMA_TOKEN_NULL;
+    // ref: https://github.com/ggerganov/jarvis.cpp/pull/8141
+    jarvis_token dec_start_token_id = JARVIS_TOKEN_NULL;
 
-    enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
-    enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
-    enum llama_rope_scaling_type rope_scaling_type_train = LLAMA_ROPE_SCALING_TYPE_NONE;
+    enum jarvis_pooling_type      pooling_type            = JARVIS_POOLING_TYPE_NONE;
+    enum jarvis_rope_type         rope_type               = JARVIS_ROPE_TYPE_NONE;
+    enum jarvis_rope_scaling_type rope_scaling_type_train = JARVIS_ROPE_SCALING_TYPE_NONE;
 
-    bool operator!=(const llama_hparams & other) const {
+    bool operator!=(const jarvis_hparams & other) const {
         if (this->vocab_only    != other.vocab_only)    return true;
         if (this->n_vocab       != other.n_vocab)       return true;
         if (this->n_ctx_train   != other.n_ctx_train)   return true;
@@ -2551,9 +2551,9 @@ struct llama_hparams {
     }
 };
 
-static_assert(std::is_trivially_copyable<llama_hparams>::value, "llama_hparams must be trivially copyable");
+static_assert(std::is_trivially_copyable<jarvis_hparams>::value, "jarvis_hparams must be trivially copyable");
 
-struct llama_cparams {
+struct jarvis_cparams {
     uint32_t n_ctx;           // context size used during inference
     uint32_t n_batch;
     uint32_t n_ubatch;
@@ -2579,14 +2579,14 @@ struct llama_cparams {
     bool flash_attn;
     bool no_perf;
 
-    enum llama_pooling_type pooling_type;
+    enum jarvis_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
     void * cb_eval_user_data;
 };
 
-// TODO: separate into "llama_layer_enc" and "llama_layer_dec"
-struct llama_layer {
+// TODO: separate into "jarvis_layer_enc" and "jarvis_layer_dec"
+struct jarvis_layer {
     // normalization
     struct ggml_tensor * attn_norm;
     struct ggml_tensor * attn_norm_b;
@@ -2732,9 +2732,9 @@ struct llama_layer {
     struct ggml_tensor * ffn_down_scale;
 };
 
-// very similar to llama_batch,
+// very similar to jarvis_batch,
 // but has more metadata about sequences
-struct llama_ubatch {
+struct jarvis_ubatch {
     bool equal_seqs;
     // TODO: whole_seqs for embeddings?
 
@@ -2742,23 +2742,23 @@ struct llama_ubatch {
     uint32_t n_seq_tokens; // tokens per sequence
     uint32_t n_seqs;
 
-    llama_token  *  token;    // [n_tokens]
+    jarvis_token  *  token;    // [n_tokens]
     float        *  embd;     // [n_embd, n_tokens]
-    llama_pos    *  pos;      // [n_tokens]
+    jarvis_pos    *  pos;      // [n_tokens]
     int32_t      *  n_seq_id; // [n_seqs]
-    llama_seq_id ** seq_id;   // [n_seqs]
+    jarvis_seq_id ** seq_id;   // [n_seqs]
     int8_t       *  output;   // [n_tokens]
 };
 
-struct llama_kv_cell {
-    llama_pos pos   = -1;
-    llama_pos delta = 0;
+struct jarvis_kv_cell {
+    jarvis_pos pos   = -1;
+    jarvis_pos delta = 0;
     int32_t   src   = -1; // used by recurrent state models to copy states
     int32_t   tail  = -1;
 
-    std::set<llama_seq_id> seq_id;
+    std::set<jarvis_seq_id> seq_id;
 
-    bool has_seq_id(const llama_seq_id & id) const {
+    bool has_seq_id(const jarvis_seq_id & id) const {
         return seq_id.find(id) != seq_id.end();
     }
 
@@ -2766,20 +2766,20 @@ struct llama_kv_cell {
         return seq_id.empty();
     }
 
-    bool is_same_seq(const llama_kv_cell & other) const {
+    bool is_same_seq(const jarvis_kv_cell & other) const {
         return seq_id == other.seq_id;
     }
 };
 
 // ring-buffer of cached KV data
-struct llama_kv_cache {
+struct jarvis_kv_cache {
     bool has_shift = false;
     bool do_defrag = false;
     bool recurrent = false; // with recurrent state models, a cell can hold the state for more than one past token
     bool v_trans   = true;  // the value tensor is transposed
 
     // Note: The value of head isn't only used to optimize searching
-    // for a free KV slot. llama_decode_internal also uses it, so it
+    // for a free KV slot. jarvis_decode_internal also uses it, so it
     // cannot be freely changed after a slot has been allocated.
     uint32_t head = 0;
     uint32_t size = 0;
@@ -2791,7 +2791,7 @@ struct llama_kv_cache {
     ggml_type type_k = GGML_TYPE_F16;
     ggml_type type_v = GGML_TYPE_F16;
 
-    std::vector<llama_kv_cell> cells;
+    std::vector<jarvis_kv_cell> cells;
 
     std::vector<struct ggml_tensor *> k_l; // per layer
     std::vector<struct ggml_tensor *> v_l;
@@ -2807,7 +2807,7 @@ struct llama_kv_cache {
         return size;
     }
 
-    ~llama_kv_cache() {
+    ~jarvis_kv_cache() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
         }
@@ -2817,7 +2817,7 @@ struct llama_kv_cache {
     }
 };
 
-struct llama_control_vector {
+struct jarvis_control_vector {
     std::vector<struct ggml_tensor *> tensors; // per layer
     std::vector<struct ggml_context *> ctxs;
     std::vector<ggml_backend_buffer_t> bufs;
@@ -2840,7 +2840,7 @@ struct llama_control_vector {
         return cur;
     }
 
-    ~llama_control_vector() {
+    ~jarvis_control_vector() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
         }
@@ -2850,15 +2850,15 @@ struct llama_control_vector {
     }
 };
 
-struct llama_model {
+struct jarvis_model {
     e_model     type  = MODEL_UNKNOWN;
     llm_arch    arch  = LLM_ARCH_UNKNOWN;
-    llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
+    jarvis_ftype ftype = JARVIS_FTYPE_ALL_F32;
 
     std::string name = "n/a";
 
-    llama_hparams hparams = {};
-    llama_vocab   vocab;
+    jarvis_hparams hparams = {};
+    jarvis_vocab   vocab;
 
     // TODO: should init all tensors to nullptr
     struct ggml_tensor * tok_embd;
@@ -2879,12 +2879,12 @@ struct llama_model {
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
-    std::vector<llama_layer> layers;
+    std::vector<jarvis_layer> layers;
 
     // gguf metadata
     std::unordered_map<std::string, std::string> gguf_kv;
 
-    llama_split_mode split_mode;
+    jarvis_split_mode split_mode;
     int main_gpu;
     int n_gpu_layers;
 
@@ -2914,11 +2914,11 @@ struct llama_model {
     std::vector<ggml_backend_buffer_t> bufs;
 
     // model memory mapped files
-    llama_mmaps mappings;
+    jarvis_mmaps mappings;
 
     // objects representing data potentially being locked in memory
-    llama_mlocks mlock_bufs;
-    llama_mlocks mlock_mmaps;
+    jarvis_mlocks mlock_bufs;
+    jarvis_mlocks mlock_mmaps;
 
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
@@ -2927,9 +2927,9 @@ struct llama_model {
     int64_t t_start_us = 0;
 
     // keep track of loaded lora adapters
-    std::set<struct llama_lora_adapter *> lora_adapters;
+    std::set<struct jarvis_lora_adapter *> lora_adapters;
 
-    ~llama_model() {
+    ~jarvis_model() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
         }
@@ -2937,20 +2937,20 @@ struct llama_model {
             ggml_backend_buffer_free(buf);
         }
         while (!lora_adapters.empty()) {
-            llama_lora_adapter_free(*lora_adapters.begin());
+            jarvis_lora_adapter_free(*lora_adapters.begin());
         }
     }
 };
 
-struct llama_sbatch_seq {
+struct jarvis_sbatch_seq {
     int32_t n_seq_id;
-    llama_seq_id * seq_id;
+    jarvis_seq_id * seq_id;
     size_t offset;
     size_t length;
 };
 
 // sequence-length-aware batch splitting
-struct llama_sbatch {
+struct jarvis_sbatch {
     // tokens left in this batch
     size_t n_tokens;
 
@@ -2962,18 +2962,18 @@ struct llama_sbatch {
     std::vector<size_t> ids;
     // batch indices of the output
     std::vector<size_t> out_ids;
-    std::vector<llama_sbatch_seq> seq;
-    const llama_batch * batch = nullptr;
+    std::vector<jarvis_sbatch_seq> seq;
+    const jarvis_batch * batch = nullptr;
 
     // buffers for the ubatch
-    std::vector<llama_token>    ubatch_token;
+    std::vector<jarvis_token>    ubatch_token;
     std::vector<float>          ubatch_embd;
-    std::vector<llama_pos>      ubatch_pos;
+    std::vector<jarvis_pos>      ubatch_pos;
     std::vector<int32_t>        ubatch_n_seq_id;
-    std::vector<llama_seq_id *> ubatch_seq_id;
+    std::vector<jarvis_seq_id *> ubatch_seq_id;
     std::vector<int8_t>         ubatch_output;
 
-    llama_ubatch reserve_ubatch(size_t n_ubatch, bool has_embd = false) {
+    jarvis_ubatch reserve_ubatch(size_t n_ubatch, bool has_embd = false) {
         // clear empty sequences
         // the previous ubatch is assumed to be gone,
         // so nothing should refer to values in these sequences anymore.
@@ -2990,7 +2990,7 @@ struct llama_sbatch {
         ubatch_n_seq_id.resize(n_ubatch);
         ubatch_seq_id.resize(n_ubatch);
         ubatch_output.resize(n_ubatch);
-        llama_ubatch ubatch = {
+        jarvis_ubatch ubatch = {
             /*equal_seqs   =*/ true,
             /*n_tokens     =*/ 0,
             /*n_seq_tokens =*/ 0,
@@ -3005,7 +3005,7 @@ struct llama_sbatch {
         return ubatch;
     }
 
-    void add_seq_to_ubatch(llama_ubatch & ubatch, llama_sbatch_seq & seq, size_t length) {
+    void add_seq_to_ubatch(jarvis_ubatch & ubatch, jarvis_sbatch_seq & seq, size_t length) {
         GGML_ASSERT(batch != nullptr);
         GGML_ASSERT(length <= seq.length);
         // Can only add sequences of equal lengths to a batch,
@@ -3108,12 +3108,12 @@ struct llama_sbatch {
     }
 
     // simple split, unknown number of sequences of unequal lengths
-    llama_ubatch split_simple(size_t n_ubatch) {
+    jarvis_ubatch split_simple(size_t n_ubatch) {
         n_ubatch = n_tokens < n_ubatch ? n_tokens : n_ubatch;
-        llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
+        jarvis_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
         ubatch.equal_seqs = false;
         if (!seq.empty()) {
-            llama_sbatch_seq & s = seq[0];
+            jarvis_sbatch_seq & s = seq[0];
             size_t length = s.length < n_ubatch ? s.length : n_ubatch;
             GGML_ASSERT(seq.size() == 1 && s.n_seq_id == 0); // don't mix with other splits
             add_seq_to_ubatch(ubatch, s, length);
@@ -3122,9 +3122,9 @@ struct llama_sbatch {
     }
 
     // make batches of equal-length sequences
-    llama_ubatch split_equal(size_t n_ubatch) {
+    jarvis_ubatch split_equal(size_t n_ubatch) {
         n_ubatch = n_tokens < n_ubatch ? n_tokens : n_ubatch;
-        llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
+        jarvis_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
         if (!seq.empty()) {
             size_t length = 0;
             size_t n_tokens_in_ubatch = 0;
@@ -3132,7 +3132,7 @@ struct llama_sbatch {
             // smallest first, because it's easier to split this way;
             // starting from the end to pop in constant time.
             for (size_t i = seq.size(); i-- > 0;) {
-                llama_sbatch_seq & s = seq[i];
+                jarvis_sbatch_seq & s = seq[i];
                 GGML_ASSERT(s.length > 0);
                 if (length == 0) {
                     length = s.length < n_ubatch ? s.length : n_ubatch;
@@ -3150,11 +3150,11 @@ struct llama_sbatch {
     }
 
     // sequence-wise split
-    llama_ubatch split_seq(size_t n_ubatch) {
+    jarvis_ubatch split_seq(size_t n_ubatch) {
         n_ubatch = n_tokens < n_ubatch ? n_tokens : n_ubatch;
-        llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
+        jarvis_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
         if (!seq.empty()) {
-            llama_sbatch_seq & s = seq[seq.size() - 1];
+            jarvis_sbatch_seq & s = seq[seq.size() - 1];
             size_t length = s.length < n_ubatch ? s.length : n_ubatch;
             GGML_ASSERT(s.n_seq_id > 0); // should not be mixed with simple splits
             add_seq_to_ubatch(ubatch, s, length);
@@ -3162,7 +3162,7 @@ struct llama_sbatch {
         return ubatch;
     }
 
-    void from_batch(const llama_batch & batch, const size_t n_embd, const bool simple_split = false, const bool logits_all = false) {
+    void from_batch(const jarvis_batch & batch, const size_t n_embd, const bool simple_split = false, const bool logits_all = false) {
         GGML_ASSERT(batch.n_tokens >= 0);
         this->batch = &batch;
         this->n_embd = n_embd;
@@ -3178,7 +3178,7 @@ struct llama_sbatch {
         }
         if (simple_split) {
             seq.resize(1);
-            llama_sbatch_seq & s = seq[0];
+            jarvis_sbatch_seq & s = seq[0];
             s.n_seq_id = 0;
             s.seq_id = nullptr;
             s.offset = 0;
@@ -3193,8 +3193,8 @@ struct llama_sbatch {
                 if (n_seq_a == n_seq_b) {
                     if (batch.seq_id) {
                         for (int32_t i = 0; i < n_seq_a; ++i) {
-                            llama_seq_id seq_id_a = batch.seq_id[a][i];
-                            llama_seq_id seq_id_b = batch.seq_id[b][i];
+                            jarvis_seq_id seq_id_a = batch.seq_id[a][i];
+                            jarvis_seq_id seq_id_b = batch.seq_id[b][i];
                             // smaller seq_ids go first
                             if (seq_id_a != seq_id_b) {
                                 return seq_id_a < seq_id_b;
@@ -3213,12 +3213,12 @@ struct llama_sbatch {
             }
         );
         // init seq
-        llama_sbatch_seq * last_seq = nullptr;
+        jarvis_sbatch_seq * last_seq = nullptr;
 
         for (size_t i = 0; i < n_tokens; ++i) {
             const size_t bi = ids[i];
             const int32_t n_seqs = batch.n_seq_id[bi];
-            llama_seq_id * seq_ids = batch.seq_id[bi];
+            jarvis_seq_id * seq_ids = batch.seq_id[bi];
             if (last_seq != nullptr) {
                 bool same = n_seqs == last_seq->n_seq_id;
                 for (int32_t j = 0; same && j < n_seqs; ++j) {
@@ -3231,13 +3231,13 @@ struct llama_sbatch {
                     continue;
                 }
             }
-            llama_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1};
+            jarvis_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1};
             seq.push_back(new_seq);
             last_seq = &seq.back();
         }
         // keep shared prompts first at the end, then sort by length descending.
         std::sort(seq.begin(), seq.end(),
-            [](llama_sbatch_seq & a, llama_sbatch_seq & b) {
+            [](jarvis_sbatch_seq & a, jarvis_sbatch_seq & b) {
                 if (a.n_seq_id == b.n_seq_id) {
                     return a.length > b.length;
                 }
@@ -3247,13 +3247,13 @@ struct llama_sbatch {
     }
 };
 
-struct llama_context {
-    llama_context(const llama_model & model)
+struct jarvis_context {
+    jarvis_context(const jarvis_model & model)
         : model(model)
         , t_start_us(model.t_start_us)
         , t_load_us(model.t_load_us) {}
 
-    ~llama_context() {
+    ~jarvis_context() {
         ggml_backend_sched_free(sched);
 
         for (ggml_backend_t backend : backends) {
@@ -3263,14 +3263,14 @@ struct llama_context {
         ggml_backend_buffer_free(buf_output);
     }
 
-    const struct llama_model & model;
+    const struct jarvis_model & model;
 
-    struct llama_cparams        cparams;
-    struct llama_sbatch         sbatch;
-    struct llama_kv_cache       kv_self;
-    struct llama_control_vector cvec;
+    struct jarvis_cparams        cparams;
+    struct jarvis_sbatch         sbatch;
+    struct jarvis_kv_cache       kv_self;
+    struct jarvis_control_vector cvec;
 
-    std::unordered_map<struct llama_lora_adapter *, float> lora_adapters;
+    std::unordered_map<struct jarvis_lora_adapter *, float> lora_adapters;
 
     std::vector<ggml_backend_t> backends;
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
@@ -3307,20 +3307,20 @@ struct llama_context {
     bool logits_all = false;
 
     // embeddings output (2-dimensional array: [n_outputs][n_embd])
-    // populated only when pooling_type == LLAMA_POOLING_TYPE_NONE
+    // populated only when pooling_type == JARVIS_POOLING_TYPE_NONE
     size_t  embd_size = 0; // capacity (of floats) for embeddings
     float * embd      = nullptr;
 
     // sequence embeddings output (map of [n_embd] vectors)
-    // populated only when pooling_type != LLAMA_POOLING_TYPE_NONE
-    std::map<llama_seq_id, std::vector<float>> embd_seq;
+    // populated only when pooling_type != JARVIS_POOLING_TYPE_NONE
+    std::map<jarvis_seq_id, std::vector<float>> embd_seq;
 
     // whether we are computing encoder output or decoder output
     bool is_encoding = false;
 
     // output of the encoder part of the encoder-decoder models
     std::vector<float> embd_enc;
-    std::vector<std::set<llama_seq_id>> seq_ids_enc;
+    std::vector<std::set<jarvis_seq_id>> seq_ids_enc;
 
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
@@ -3347,27 +3347,27 @@ struct llama_context {
     struct ggml_tensor * inp_KQ_mask_cross; // F32 [n_outputs_enc, n_batch]
 };
 
-struct llama_lora_weight {
+struct jarvis_lora_weight {
     struct ggml_tensor * a = nullptr;
     struct ggml_tensor * b = nullptr;
-    llama_lora_weight() = default;
-    llama_lora_weight(struct ggml_tensor * a, struct ggml_tensor * b): a(a), b(b) {}
+    jarvis_lora_weight() = default;
+    jarvis_lora_weight(struct ggml_tensor * a, struct ggml_tensor * b): a(a), b(b) {}
 };
 
-struct llama_lora_adapter {
-    struct llama_model * base_model;
+struct jarvis_lora_adapter {
+    struct jarvis_model * base_model;
     // map tensor name to lora_a_b
-    std::unordered_map<std::string, struct llama_lora_weight> ab_map;
+    std::unordered_map<std::string, struct jarvis_lora_weight> ab_map;
     std::vector<struct ggml_context *> ctxs;
     std::vector<ggml_backend_buffer_t> bufs;
 
     float alpha;
 
-    llama_lora_adapter(struct llama_model * base_model): base_model(base_model) {
+    jarvis_lora_adapter(struct jarvis_model * base_model): base_model(base_model) {
         base_model->lora_adapters.insert(this);
     }
 
-    llama_lora_weight * get_weight(struct ggml_tensor * w) {
+    jarvis_lora_weight * get_weight(struct ggml_tensor * w) {
         std::string name(w->name);
         auto pos = ab_map.find(name);
         if (ab_map.find(name) != ab_map.end()) {
@@ -3376,7 +3376,7 @@ struct llama_lora_adapter {
         return nullptr;
     }
 
-    ~llama_lora_adapter() {
+    ~jarvis_lora_adapter() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
         }
@@ -3390,7 +3390,7 @@ struct llama_lora_adapter {
     }
 };
 
-static int llama_get_device_count(const llama_model & model) {
+static int jarvis_get_device_count(const jarvis_model & model) {
     int count = (int) model.devices.size();
 
 #if defined(GGML_USE_RPC)
@@ -3402,7 +3402,7 @@ static int llama_get_device_count(const llama_model & model) {
     GGML_UNUSED(model);
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_model & model, bool host_buffer) {
+static ggml_backend_buffer_type_t jarvis_default_buffer_type_cpu(const jarvis_model & model, bool host_buffer) {
     ggml_backend_buffer_type_t buft = nullptr;
 
     if (host_buffer) {
@@ -3426,7 +3426,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(const llama_mode
     GGML_UNUSED(host_buffer);
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int device) {
+static ggml_backend_buffer_type_t jarvis_default_buffer_type_offload(const jarvis_model & model, int device) {
     ggml_backend_buffer_type_t buft = nullptr;
 
     if (device < (int)model.devices.size()) {
@@ -3439,14 +3439,14 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
 #endif
 
     if (buft == nullptr) {
-        buft = llama_default_buffer_type_cpu(model, true);
+        buft = jarvis_default_buffer_type_cpu(model, true);
     }
     return buft;
 
     GGML_UNUSED(model);
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_model & model, int fallback_gpu, const float * tensor_split) {
+static ggml_backend_buffer_type_t jarvis_default_buffer_type_split(const jarvis_model & model, int fallback_gpu, const float * tensor_split) {
     ggml_backend_buffer_type_t buft = nullptr;
 
     // find a backend that supports split buffers
@@ -3463,14 +3463,14 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
     }
 
     if (buft == nullptr) {
-        buft = llama_default_buffer_type_offload(model, fallback_gpu);
+        buft = jarvis_default_buffer_type_offload(model, fallback_gpu);
     }
     return buft;
 
     GGML_UNUSED(tensor_split);
 }
 
-static size_t llama_get_device_memory(const llama_model & model, int device) {
+static size_t jarvis_get_device_memory(const jarvis_model & model, int device) {
     if (device < (int)model.devices.size()) {
         ggml_backend_dev_t dev = model.devices[device];
         size_t total;
@@ -3481,9 +3481,9 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 
     if (model.devices.size() > 0) {
         ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(model.devices[0]);
-        LLAMA_LOG_WARN("%s: failed to get free memmory of device:%d of backend:%s, for device id is out of range.\n", __func__, device, ggml_backend_reg_name(reg));
+        JARVIS_LOG_WARN("%s: failed to get free memmory of device:%d of backend:%s, for device id is out of range.\n", __func__, device, ggml_backend_reg_name(reg));
     } else {
-        LLAMA_LOG_WARN("%s: failed to get free memmory of device, no devices in inputted model.\n", __func__);
+        JARVIS_LOG_WARN("%s: failed to get free memmory of device, no devices in inputted model.\n", __func__);
     }
     return 1;
 
@@ -3495,23 +3495,23 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 // kv cache helpers
 //
 
-static bool llama_kv_cache_init(
-             struct llama_kv_cache & cache,
-               const llama_context * ctx,
+static bool jarvis_kv_cache_init(
+             struct jarvis_kv_cache & cache,
+               const jarvis_context * ctx,
                          ggml_type   type_k,
                          ggml_type   type_v,
                           uint32_t   kv_size,
                               bool   offload) {
-    const llama_model & model = ctx->model;
-    const llama_cparams & cparams = ctx->cparams;
+    const jarvis_model & model = ctx->model;
+    const jarvis_cparams & cparams = ctx->cparams;
 
-    const struct llama_hparams & hparams = model.hparams;
+    const struct jarvis_hparams & hparams = model.hparams;
 
     const int64_t  n_layer = hparams.n_layer;
 
     cache.has_shift = false;
 
-    cache.recurrent = llama_model_is_recurrent(&model);
+    cache.recurrent = jarvis_model_is_recurrent(&model);
     cache.v_trans   = !cache.recurrent && !cparams.flash_attn;
 
     cache.head = 0;
@@ -3531,7 +3531,7 @@ static bool llama_kv_cache_init(
             buft_layer_count[model.buft_layer[i].buft]++;
         }
     } else {
-        buft_layer_count[llama_default_buffer_type_cpu(model, true)] = n_layer;
+        buft_layer_count[jarvis_default_buffer_type_cpu(model, true)] = n_layer;
     }
 
     // create a context for each buffer type
@@ -3545,7 +3545,7 @@ static bool llama_kv_cache_init(
         };
         ggml_context * ctx = ggml_init(params);
         if (!ctx) {
-            LLAMA_LOG_ERROR("%s: failed to allocate context for kv cache\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to allocate context for kv cache\n", __func__);
             return false;
         }
         ctx_map[it.first] = ctx;
@@ -3574,11 +3574,11 @@ static bool llama_kv_cache_init(
         ggml_context * ctx = it.second;
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
         if (!buf) {
-            LLAMA_LOG_ERROR("%s: failed to allocate buffer for kv cache\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to allocate buffer for kv cache\n", __func__);
             return false;
         }
         ggml_backend_buffer_clear(buf, 0);
-        LLAMA_LOG_INFO("%s: %10s KV buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
+        JARVIS_LOG_INFO("%s: %10s KV buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
         cache.bufs.push_back(buf);
     }
 
@@ -3589,9 +3589,9 @@ static bool llama_kv_cache_init(
 // updates the cache head
 // Note: On success, it's important that cache.head points
 // to the first cell of the slot.
-static bool llama_kv_cache_find_slot(
-           struct llama_kv_cache & cache,
-       const struct llama_ubatch & batch) {
+static bool jarvis_kv_cache_find_slot(
+           struct jarvis_kv_cache & cache,
+       const struct jarvis_ubatch & batch) {
     const uint32_t n_tokens = batch.n_tokens;
     const uint32_t n_seqs   = batch.n_seqs;
     const uint32_t n_seq_tokens = batch.n_seq_tokens;
@@ -3611,18 +3611,18 @@ static bool llama_kv_cache_find_slot(
         for (uint32_t s = 0; s < n_seqs; ++s) {
             const uint32_t n_seq_id = batch.n_seq_id[s];
             for (uint32_t j = 0; j < n_seq_id; ++j) {
-                const llama_seq_id seq_id = batch.seq_id[s][j];
+                const jarvis_seq_id seq_id = batch.seq_id[s][j];
 
                 if (seq_id < 0 || (uint32_t) seq_id >= cache.size) {
                     // too big seq_id
                     // TODO: would it be possible to resize the cache instead?
-                    LLAMA_LOG_ERROR("%s: seq_id=%d >= n_seq_max=%d Try using a bigger --parallel value\n", __func__, seq_id, cache.size);
+                    JARVIS_LOG_ERROR("%s: seq_id=%d >= n_seq_max=%d Try using a bigger --parallel value\n", __func__, seq_id, cache.size);
                     return false;
                 }
                 if (j > 0) {
-                    llama_kv_cell & seq = cache.cells[seq_id];
+                    jarvis_kv_cell & seq = cache.cells[seq_id];
                     if (seq.tail >= 0) {
-                        llama_kv_cell & cell = cache.cells[seq.tail];
+                        jarvis_kv_cell & cell = cache.cells[seq.tail];
                         // clear cells from seq_ids that become shared
                         // (should not normally happen, but let's handle it anyway)
                         cell.seq_id.erase(seq_id);
@@ -3642,17 +3642,17 @@ static bool llama_kv_cache_find_slot(
             std::vector<int32_t> tails_verif;
             tails_verif.assign(cache.size, -1);
             for (uint32_t i = 0; i < cache.size; ++i) {
-                llama_kv_cell & cell = cache.cells[i];
-                for (llama_seq_id seq_id : cell.seq_id) {
+                jarvis_kv_cell & cell = cache.cells[i];
+                for (jarvis_seq_id seq_id : cell.seq_id) {
                     if (tails_verif[seq_id] != -1) {
-                        LLAMA_LOG_ERROR("%s: duplicate tail for seq_id %d in cell %d and %d\n", __func__, seq_id, i, tails_verif[seq_id]);
+                        JARVIS_LOG_ERROR("%s: duplicate tail for seq_id %d in cell %d and %d\n", __func__, seq_id, i, tails_verif[seq_id]);
                     }
                     tails_verif[seq_id] = i;
                 }
             }
             for (uint32_t i = 0; i < cache.size; ++i) {
                 if (tails_verif[i] != cache.cells[i].tail) {
-                    LLAMA_LOG_ERROR("%s: wrong tail for seq_id %d, (%d instead of %d)\n", __func__, i, cache.cells[i].tail, tails_verif[i]);
+                    JARVIS_LOG_ERROR("%s: wrong tail for seq_id %d, (%d instead of %d)\n", __func__, i, cache.cells[i].tail, tails_verif[i]);
                 }
             }
         }
@@ -3663,28 +3663,28 @@ static bool llama_kv_cache_find_slot(
 
         for (uint32_t i = 0; i < cache.size; ++i) {
             if (next_empty_cell >= cache.size) { next_empty_cell -= cache.size; }
-            llama_kv_cell & cell = cache.cells[next_empty_cell];
+            jarvis_kv_cell & cell = cache.cells[next_empty_cell];
             if (cell.is_empty()) { break; }
             next_empty_cell += 1;
         }
 
         // find usable cell range
         for (uint32_t s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = batch.seq_id[s][0];
-            llama_kv_cell & seq_meta = cache.cells[seq_id];
+            const jarvis_seq_id seq_id = batch.seq_id[s][0];
+            jarvis_kv_cell & seq_meta = cache.cells[seq_id];
             bool has_cell = false;
             if (seq_meta.tail >= 0) {
-                llama_kv_cell & cell = cache.cells[seq_meta.tail];
+                jarvis_kv_cell & cell = cache.cells[seq_meta.tail];
                 GGML_ASSERT(cell.has_seq_id(seq_id));
                 // does this seq_id "own" the cell?
                 if (cell.seq_id.size() == 1) { has_cell = true; }
             }
             if (!has_cell) {
-                llama_kv_cell & empty_cell = cache.cells[next_empty_cell];
+                jarvis_kv_cell & empty_cell = cache.cells[next_empty_cell];
                 GGML_ASSERT(empty_cell.is_empty());
                 // copy old tail into the empty cell
                 if (seq_meta.tail >= 0) {
-                    llama_kv_cell & orig_cell = cache.cells[seq_meta.tail];
+                    jarvis_kv_cell & orig_cell = cache.cells[seq_meta.tail];
                     empty_cell.pos = orig_cell.pos;
                     empty_cell.src = orig_cell.src;
                     orig_cell.seq_id.erase(seq_id);
@@ -3696,7 +3696,7 @@ static bool llama_kv_cache_find_slot(
                     next_empty_cell += 1;
                     for (uint32_t i = 0; i < cache.size; ++i) {
                         if (next_empty_cell >= cache.size) { next_empty_cell -= cache.size; }
-                        llama_kv_cell & cell = cache.cells[next_empty_cell];
+                        jarvis_kv_cell & cell = cache.cells[next_empty_cell];
                         if (cell.is_empty()) { break; }
                         next_empty_cell += 1;
                     }
@@ -3711,18 +3711,18 @@ static bool llama_kv_cache_find_slot(
             int32_t dst_id = s + min;
             int32_t src_id = cache.cells[batch.seq_id[s][0]].tail;
             if (dst_id != src_id) {
-                llama_kv_cell & dst_cell = cache.cells[dst_id];
-                llama_kv_cell & src_cell = cache.cells[src_id];
+                jarvis_kv_cell & dst_cell = cache.cells[dst_id];
+                jarvis_kv_cell & src_cell = cache.cells[src_id];
 
                 std::swap(dst_cell.pos, src_cell.pos);
                 std::swap(dst_cell.src, src_cell.src);
                 std::swap(dst_cell.seq_id, src_cell.seq_id);
 
                 // swap tails (assuming they NEVER overlap)
-                for (const llama_seq_id seq_id : src_cell.seq_id) {
+                for (const jarvis_seq_id seq_id : src_cell.seq_id) {
                     cache.cells[seq_id].tail = src_id;
                 }
-                for (const llama_seq_id seq_id : dst_cell.seq_id) {
+                for (const jarvis_seq_id seq_id : dst_cell.seq_id) {
                     cache.cells[seq_id].tail = dst_id;
                 }
             }
@@ -3730,20 +3730,20 @@ static bool llama_kv_cache_find_slot(
 
         // update the pos of the used seqs
         for (uint32_t s = 0; s < n_seqs; ++s) {
-            const llama_pos last_pos = batch.pos[n_seq_tokens * s + n_seq_tokens - 1];
+            const jarvis_pos last_pos = batch.pos[n_seq_tokens * s + n_seq_tokens - 1];
             int32_t cell_id = s + min;
-            llama_kv_cell & cell = cache.cells[cell_id];
+            jarvis_kv_cell & cell = cache.cells[cell_id];
 
-            if (cell.pos >= 0 && last_pos != cell.pos + (llama_pos) n_seq_tokens) {
+            if (cell.pos >= 0 && last_pos != cell.pos + (jarvis_pos) n_seq_tokens) {
                 // What should happen when the pos backtracks or skips a value?
                 // Clearing the state mid-batch would require special-casing which isn't done.
-                LLAMA_LOG_WARN("%s: non-consecutive token position %d after %d for sequence %d with %u new tokens\n",
+                JARVIS_LOG_WARN("%s: non-consecutive token position %d after %d for sequence %d with %u new tokens\n",
                     __func__, last_pos, cell.pos, batch.seq_id[s][0], n_seq_tokens);
             }
             cell.pos = last_pos;
             cell.seq_id.clear();
             for (int32_t j = 0; j < batch.n_seq_id[s]; ++j) {
-                const llama_seq_id seq_id = batch.seq_id[s][j];
+                const jarvis_seq_id seq_id = batch.seq_id[s][j];
                 cell.seq_id.insert(seq_id);
                 cache.cells[seq_id].tail = cell_id;
             }
@@ -3759,7 +3759,7 @@ static bool llama_kv_cache_find_slot(
     // otherwise, one cell per token.
 
     if (n_tokens > cache.size) {
-        LLAMA_LOG_ERROR("%s: n_tokens=%d > cache.size=%d\n", __func__, n_tokens, cache.size);
+        JARVIS_LOG_ERROR("%s: n_tokens=%d > cache.size=%d\n", __func__, n_tokens, cache.size);
         return false;
     }
 
@@ -3787,7 +3787,7 @@ static bool llama_kv_cache_find_slot(
         }
 
         if (n_tested >= cache.size) {
-            //LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
+            //JARVIS_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
             return false;
         }
     }
@@ -3809,9 +3809,9 @@ static bool llama_kv_cache_find_slot(
 }
 
 // find how many cells are currently in use
-static uint32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
+static uint32_t jarvis_kv_cache_cell_max(const struct jarvis_kv_cache & cache) {
     for (uint32_t i = cache.size; i > 0; --i) {
-        const llama_kv_cell & cell = cache.cells[i - 1];
+        const jarvis_kv_cell & cell = cache.cells[i - 1];
 
         if (cell.pos >= 0 && !cell.is_empty()) {
             return i;
@@ -3821,7 +3821,7 @@ static uint32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
     return 0;
 }
 
-static void llama_kv_cache_clear(struct llama_kv_cache & cache) {
+static void jarvis_kv_cache_clear(struct jarvis_kv_cache & cache) {
     for (int32_t i = 0; i < (int32_t) cache.size; ++i) {
         cache.cells[i].pos = -1;
         cache.cells[i].seq_id.clear();
@@ -3836,15 +3836,15 @@ static void llama_kv_cache_clear(struct llama_kv_cache & cache) {
     }
 }
 
-static bool llama_kv_cache_seq_rm(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id,
-                    llama_pos   p0,
-                    llama_pos   p1) {
+static bool jarvis_kv_cache_seq_rm(
+        struct jarvis_kv_cache & cache,
+                 jarvis_seq_id   seq_id,
+                    jarvis_pos   p0,
+                    jarvis_pos   p1) {
     uint32_t new_head = cache.size;
 
     if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+    if (p1 < 0) p1 = std::numeric_limits<jarvis_pos>::max();
 
     // models like Mamba or RWKV can't have a state partially erased
     if (cache.recurrent) {
@@ -3855,7 +3855,7 @@ static bool llama_kv_cache_seq_rm(
         if (0 <= seq_id) {
             int32_t & tail_id = cache.cells[seq_id].tail;
             if (tail_id >= 0) {
-                const llama_kv_cell & cell = cache.cells[tail_id];
+                const jarvis_kv_cell & cell = cache.cells[tail_id];
                 // partial intersection is invalid
                 if ((0 < p0 && p0 <= cell.pos) || (0 < p1 && p1 <= cell.pos)) {
                     return false;
@@ -3867,7 +3867,7 @@ static bool llama_kv_cache_seq_rm(
             }
         } else {
             // seq_id is negative, then the range should include everything or nothing
-            if (p0 != p1 && (p0 != 0 || p1 != std::numeric_limits<llama_pos>::max())) {
+            if (p0 != p1 && (p0 != 0 || p1 != std::numeric_limits<jarvis_pos>::max())) {
                 return false;
             }
         }
@@ -3899,22 +3899,22 @@ static bool llama_kv_cache_seq_rm(
     return true;
 }
 
-static void llama_kv_cache_seq_cp(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id_src,
-                 llama_seq_id   seq_id_dst,
-                    llama_pos   p0,
-                    llama_pos   p1) {
+static void jarvis_kv_cache_seq_cp(
+        struct jarvis_kv_cache & cache,
+                 jarvis_seq_id   seq_id_src,
+                 jarvis_seq_id   seq_id_dst,
+                    jarvis_pos   p0,
+                    jarvis_pos   p1) {
     if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+    if (p1 < 0) p1 = std::numeric_limits<jarvis_pos>::max();
 
     if (cache.recurrent) {
         if ((uint32_t) seq_id_dst < cache.size && (uint32_t) seq_id_src < cache.size) {
-            llama_kv_cell & tail_src = cache.cells[seq_id_src];
-            llama_kv_cell & tail_dst = cache.cells[seq_id_dst];
+            jarvis_kv_cell & tail_src = cache.cells[seq_id_src];
+            jarvis_kv_cell & tail_dst = cache.cells[seq_id_dst];
             if (tail_dst.tail >= 0) {
                 // clear destination seq_id if it wasn't empty
-                llama_kv_cell & cell_dst = cache.cells[tail_dst.tail];
+                jarvis_kv_cell & cell_dst = cache.cells[tail_dst.tail];
 
                 cell_dst.seq_id.erase(seq_id_dst);
                 tail_dst.tail = -1;
@@ -3926,7 +3926,7 @@ static void llama_kv_cache_seq_cp(
                 }
             }
             if (tail_src.tail >= 0) {
-                llama_kv_cell & cell_src = cache.cells[tail_src.tail];
+                jarvis_kv_cell & cell_src = cache.cells[tail_src.tail];
 
                 cell_src.seq_id.insert(seq_id_dst);
                 tail_dst.tail = tail_src.tail;
@@ -3946,11 +3946,11 @@ static void llama_kv_cache_seq_cp(
     }
 }
 
-static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id seq_id) {
+static void jarvis_kv_cache_seq_keep(struct jarvis_kv_cache & cache, jarvis_seq_id seq_id) {
     uint32_t new_head = cache.size;
 
     for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.recurrent && (llama_seq_id) i != seq_id) {
+        if (cache.recurrent && (jarvis_seq_id) i != seq_id) {
             cache.cells[i].tail = -1;
         }
         if (!cache.cells[i].has_seq_id(seq_id)) {
@@ -3969,16 +3969,16 @@ static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id 
     if (new_head != cache.size && new_head < cache.head) cache.head = new_head;
 }
 
-static void llama_kv_cache_seq_add(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id,
-                    llama_pos   p0,
-                    llama_pos   p1,
-                    llama_pos   delta) {
+static void jarvis_kv_cache_seq_add(
+        struct jarvis_kv_cache & cache,
+                 jarvis_seq_id   seq_id,
+                    jarvis_pos   p0,
+                    jarvis_pos   p1,
+                    jarvis_pos   delta) {
     uint32_t new_head = cache.size;
 
     if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+    if (p1 < 0) p1 = std::numeric_limits<jarvis_pos>::max();
     // If there is no range then return early to avoid looping over the cache.
     if (p0 == p1) return;
 
@@ -3987,7 +3987,7 @@ static void llama_kv_cache_seq_add(
         if (0 <= seq_id && seq_id < (int64_t) cache.size) {
             const int32_t tail_id = cache.cells[seq_id].tail;
             if (tail_id >= 0) {
-                llama_kv_cell & cell = cache.cells[tail_id];
+                jarvis_kv_cell & cell = cache.cells[tail_id];
                 if (cell.has_seq_id(seq_id) && p0 <= cell.pos && cell.pos < p1) {
                     cell.pos += delta;
                 }
@@ -4020,14 +4020,14 @@ static void llama_kv_cache_seq_add(
     cache.head = new_head != cache.size ? new_head : 0;
 }
 
-static void llama_kv_cache_seq_div(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id,
-                    llama_pos   p0,
-                    llama_pos   p1,
+static void jarvis_kv_cache_seq_div(
+        struct jarvis_kv_cache & cache,
+                 jarvis_seq_id   seq_id,
+                    jarvis_pos   p0,
+                    jarvis_pos   p1,
                           int   d) {
     if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+    if (p1 < 0) p1 = std::numeric_limits<jarvis_pos>::max();
     // If there is no range then return early to avoid looping over the cache.
     if (p0 == p1) return;
 
@@ -4036,7 +4036,7 @@ static void llama_kv_cache_seq_div(
         if (0 <= seq_id && seq_id < (int64_t) cache.size) {
             const int32_t tail_id = cache.cells[seq_id].tail;
             if (tail_id >= 0) {
-                llama_kv_cell & cell = cache.cells[tail_id];
+                jarvis_kv_cell & cell = cache.cells[tail_id];
                 if (cell.has_seq_id(seq_id) && p0 <= cell.pos && cell.pos < p1) {
                     cell.pos /= d;
                 }
@@ -4050,7 +4050,7 @@ static void llama_kv_cache_seq_div(
             cache.has_shift = true;
 
             {
-                llama_pos p_old = cache.cells[i].pos;
+                jarvis_pos p_old = cache.cells[i].pos;
                 cache.cells[i].pos   /= d;
                 cache.cells[i].delta += cache.cells[i].pos - p_old;
             }
@@ -4058,8 +4058,8 @@ static void llama_kv_cache_seq_div(
     }
 }
 
-static llama_pos llama_kv_cache_seq_pos_max(struct llama_kv_cache & cache, llama_seq_id seq_id) {
-    llama_pos result = 0;
+static jarvis_pos jarvis_kv_cache_seq_pos_max(struct jarvis_kv_cache & cache, jarvis_seq_id seq_id) {
+    jarvis_pos result = 0;
 
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id)) {
@@ -4070,13 +4070,13 @@ static llama_pos llama_kv_cache_seq_pos_max(struct llama_kv_cache & cache, llama
     return result;
 }
 
-static void llama_kv_cache_defrag(struct llama_kv_cache & cache) {
+static void jarvis_kv_cache_defrag(struct jarvis_kv_cache & cache) {
     if (!cache.recurrent) {
         cache.do_defrag = true;
     }
 }
 
-static uint32_t llama_kv_cache_get_padding(const struct llama_cparams & cparams) {
+static uint32_t jarvis_kv_cache_get_padding(const struct jarvis_cparams & cparams) {
     // the FA kernels require padding to avoid extra runtime boundary checks
     return cparams.flash_attn ? 256u : 32u;
 }
@@ -4085,13 +4085,13 @@ static uint32_t llama_kv_cache_get_padding(const struct llama_cparams & cparams)
 // model loading and saving
 //
 
-enum llama_fver {
+enum jarvis_fver {
     GGUF_FILE_VERSION_V1 = 1,
     GGUF_FILE_VERSION_V2 = 2,
     GGUF_FILE_VERSION_V3 = 3,
 };
 
-static const char * llama_file_version_name(llama_fver version) {
+static const char * jarvis_file_version_name(jarvis_fver version) {
     switch (version) {
         case GGUF_FILE_VERSION_V1: return "GGUF V1 (support until nov 2023)";
         case GGUF_FILE_VERSION_V2: return "GGUF V2";
@@ -4101,7 +4101,7 @@ static const char * llama_file_version_name(llama_fver version) {
     return "unknown";
 }
 
-static std::string llama_format_tensor_shape(const std::vector<int64_t> & ne) {
+static std::string jarvis_format_tensor_shape(const std::vector<int64_t> & ne) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%5" PRId64, ne.at(0));
     for (size_t i = 1; i < ne.size(); i++) {
@@ -4110,7 +4110,7 @@ static std::string llama_format_tensor_shape(const std::vector<int64_t> & ne) {
     return buf;
 }
 
-static std::string llama_format_tensor_shape(const struct ggml_tensor * t) {
+static std::string jarvis_format_tensor_shape(const struct ggml_tensor * t) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%5" PRId64, t->ne[0]);
     for (int i = 1; i < GGML_MAX_DIMS; i++) {
@@ -4185,33 +4185,33 @@ namespace GGUFMeta {
             return GKV::getter(ctx, k);
         }
 
-        static const char * override_type_to_str(const llama_model_kv_override_type ty) {
+        static const char * override_type_to_str(const jarvis_model_kv_override_type ty) {
             switch (ty) {
-                case LLAMA_KV_OVERRIDE_TYPE_BOOL:  return "bool";
-                case LLAMA_KV_OVERRIDE_TYPE_INT:   return "int";
-                case LLAMA_KV_OVERRIDE_TYPE_FLOAT: return "float";
-                case LLAMA_KV_OVERRIDE_TYPE_STR:   return "str";
+                case JARVIS_KV_OVERRIDE_TYPE_BOOL:  return "bool";
+                case JARVIS_KV_OVERRIDE_TYPE_INT:   return "int";
+                case JARVIS_KV_OVERRIDE_TYPE_FLOAT: return "float";
+                case JARVIS_KV_OVERRIDE_TYPE_STR:   return "str";
             }
             return "unknown";
         }
 
-        static bool validate_override(const llama_model_kv_override_type expected_type, const struct llama_model_kv_override * ovrd) {
+        static bool validate_override(const jarvis_model_kv_override_type expected_type, const struct jarvis_model_kv_override * ovrd) {
             if (!ovrd) { return false; }
             if (ovrd->tag == expected_type) {
-                LLAMA_LOG_INFO("%s: Using metadata override (%5s) '%s' = ",
+                JARVIS_LOG_INFO("%s: Using metadata override (%5s) '%s' = ",
                     __func__, override_type_to_str(ovrd->tag), ovrd->key);
                 switch (ovrd->tag) {
-                    case LLAMA_KV_OVERRIDE_TYPE_BOOL:  {
-                        LLAMA_LOG_INFO("%s\n", ovrd->val_bool ? "true" : "false");
+                    case JARVIS_KV_OVERRIDE_TYPE_BOOL:  {
+                        JARVIS_LOG_INFO("%s\n", ovrd->val_bool ? "true" : "false");
                     } break;
-                    case LLAMA_KV_OVERRIDE_TYPE_INT:   {
-                        LLAMA_LOG_INFO("%" PRId64 "\n", ovrd->val_i64);
+                    case JARVIS_KV_OVERRIDE_TYPE_INT:   {
+                        JARVIS_LOG_INFO("%" PRId64 "\n", ovrd->val_i64);
                     } break;
-                    case LLAMA_KV_OVERRIDE_TYPE_FLOAT: {
-                        LLAMA_LOG_INFO("%.6f\n", ovrd->val_f64);
+                    case JARVIS_KV_OVERRIDE_TYPE_FLOAT: {
+                        JARVIS_LOG_INFO("%.6f\n", ovrd->val_f64);
                     } break;
-                    case LLAMA_KV_OVERRIDE_TYPE_STR: {
-                        LLAMA_LOG_INFO("%s\n", ovrd->val_str);
+                    case JARVIS_KV_OVERRIDE_TYPE_STR: {
+                        JARVIS_LOG_INFO("%s\n", ovrd->val_str);
                     } break;
                     default:
                         // Shouldn't be possible to end up here, but just in case...
@@ -4221,15 +4221,15 @@ namespace GGUFMeta {
                 }
                 return true;
             }
-            LLAMA_LOG_WARN("%s: Warning: Bad metadata override type for key '%s', expected %s but got %s\n",
+            JARVIS_LOG_WARN("%s: Warning: Bad metadata override type for key '%s', expected %s but got %s\n",
                 __func__, ovrd->key, override_type_to_str(expected_type), override_type_to_str(ovrd->tag));
             return false;
         }
 
         template<typename OT>
         static typename std::enable_if<std::is_same<OT, bool>::value, bool>::type
-        try_override(OT & target, const struct llama_model_kv_override * ovrd) {
-            if (validate_override(LLAMA_KV_OVERRIDE_TYPE_BOOL, ovrd)) {
+        try_override(OT & target, const struct jarvis_model_kv_override * ovrd) {
+            if (validate_override(JARVIS_KV_OVERRIDE_TYPE_BOOL, ovrd)) {
                 target = ovrd->val_bool;
                 return true;
             }
@@ -4238,8 +4238,8 @@ namespace GGUFMeta {
 
         template<typename OT>
         static typename std::enable_if<!std::is_same<OT, bool>::value && std::is_integral<OT>::value, bool>::type
-        try_override(OT & target, const struct llama_model_kv_override * ovrd) {
-            if (validate_override(LLAMA_KV_OVERRIDE_TYPE_INT, ovrd)) {
+        try_override(OT & target, const struct jarvis_model_kv_override * ovrd) {
+            if (validate_override(JARVIS_KV_OVERRIDE_TYPE_INT, ovrd)) {
                 target = ovrd->val_i64;
                 return true;
             }
@@ -4248,8 +4248,8 @@ namespace GGUFMeta {
 
         template<typename OT>
         static typename std::enable_if<std::is_floating_point<OT>::value, bool>::type
-        try_override(T & target, const struct llama_model_kv_override * ovrd) {
-            if (validate_override(LLAMA_KV_OVERRIDE_TYPE_FLOAT, ovrd)) {
+        try_override(T & target, const struct jarvis_model_kv_override * ovrd) {
+            if (validate_override(JARVIS_KV_OVERRIDE_TYPE_FLOAT, ovrd)) {
                 target = ovrd->val_f64;
                 return true;
             }
@@ -4258,15 +4258,15 @@ namespace GGUFMeta {
 
         template<typename OT>
         static typename std::enable_if<std::is_same<OT, std::string>::value, bool>::type
-        try_override(T & target, const struct llama_model_kv_override * ovrd) {
-            if (validate_override(LLAMA_KV_OVERRIDE_TYPE_STR, ovrd)) {
+        try_override(T & target, const struct jarvis_model_kv_override * ovrd) {
+            if (validate_override(JARVIS_KV_OVERRIDE_TYPE_STR, ovrd)) {
                 target = ovrd->val_str;
                 return true;
             }
             return false;
         }
 
-        static bool set(const gguf_context * ctx, const int k, T & target, const struct llama_model_kv_override * ovrd = nullptr) {
+        static bool set(const gguf_context * ctx, const int k, T & target, const struct jarvis_model_kv_override * ovrd = nullptr) {
             if (try_override<T>(target, ovrd)) {
                 return true;
             }
@@ -4275,23 +4275,23 @@ namespace GGUFMeta {
             return true;
         }
 
-        static bool set(const gguf_context * ctx, const char * key, T & target, const struct llama_model_kv_override * ovrd = nullptr) {
+        static bool set(const gguf_context * ctx, const char * key, T & target, const struct jarvis_model_kv_override * ovrd = nullptr) {
             return set(ctx, gguf_find_key(ctx, key), target, ovrd);
         }
 
-        static bool set(const gguf_context * ctx, const std::string & key, T & target, const struct llama_model_kv_override * ovrd = nullptr) {
+        static bool set(const gguf_context * ctx, const std::string & key, T & target, const struct jarvis_model_kv_override * ovrd = nullptr) {
             return set(ctx, key.c_str(), target, ovrd);
         }
     };
 }
 
-using llama_buf_map = std::unordered_map<uint32_t, ggml_backend_buffer_t>;
+using jarvis_buf_map = std::unordered_map<uint32_t, ggml_backend_buffer_t>;
 
-static size_t llama_model_max_nodes(const llama_model & model) {
+static size_t jarvis_model_max_nodes(const jarvis_model & model) {
     return std::max<size_t>(8192, model.tensors_by_name.size()*5);
 }
 
-struct llama_model_loader {
+struct jarvis_model_loader {
     int n_kv      = 0;
     int n_tensors = 0;
     int n_created = 0;
@@ -4302,20 +4302,20 @@ struct llama_model_loader {
     bool use_mmap = false;
     bool check_tensors;
 
-    llama_files files;
-    llama_ftype ftype;
-    llama_fver  fver;
+    jarvis_files files;
+    jarvis_ftype ftype;
+    jarvis_fver  fver;
 
-    llama_mmaps mappings;
+    jarvis_mmaps mappings;
 
     // Holds information on a model weight
-    struct llama_tensor_weight {
+    struct jarvis_tensor_weight {
         uint16_t  idx; // source file index
         size_t   offs; // tensor data offset in the original file
 
         ggml_tensor * tensor;
 
-        llama_tensor_weight(const llama_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
+        jarvis_tensor_weight(const jarvis_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
 
@@ -4324,9 +4324,9 @@ struct llama_model_loader {
             }
         }
     };
-    std::vector<llama_tensor_weight> weights;
+    std::vector<jarvis_tensor_weight> weights;
 
-    std::unordered_map<std::string, struct llama_model_kv_override> kv_overrides;
+    std::unordered_map<std::string, struct jarvis_model_kv_override> kv_overrides;
 
     struct gguf_context * meta = NULL;
     std::vector<ggml_context *> contexts;
@@ -4334,14 +4334,14 @@ struct llama_model_loader {
     std::string arch_name;
     LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);
 
-    llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
+    jarvis_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct jarvis_model_kv_override * param_overrides_p) {
         int trace = 0;
-        if (getenv("LLAMA_TRACE")) {
-            trace = atoi(getenv("LLAMA_TRACE"));
+        if (getenv("JARVIS_TRACE")) {
+            trace = atoi(getenv("JARVIS_TRACE"));
         }
 
         if (param_overrides_p != nullptr) {
-            for (const struct llama_model_kv_override * p = param_overrides_p; p->key[0] != 0; p++) {
+            for (const struct jarvis_model_kv_override * p = param_overrides_p; p->key[0] != 0; p++) {
                 kv_overrides.insert({std::string(p->key), *p});
             }
         }
@@ -4360,7 +4360,7 @@ struct llama_model_loader {
         get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);
         llm_kv = LLM_KV(llm_arch_from_string(arch_name));
 
-        files.emplace_back(new llama_file(fname.c_str(), "rb"));
+        files.emplace_back(new jarvis_file(fname.c_str(), "rb"));
         contexts.emplace_back(ctx);
 
         // Save tensors data offset of the main file.
@@ -4381,17 +4381,17 @@ struct llama_model_loader {
             }
 
             char split_prefix[PATH_MAX] = {0};
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
+            if (!jarvis_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
                 throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
             }
 
             if (trace > 0) {
-                LLAMA_LOG_INFO("%s: loading additional %d GGUFs\n", __func__, n_split);
+                JARVIS_LOG_INFO("%s: loading additional %d GGUFs\n", __func__, n_split);
             }
 
             char split_path[PATH_MAX] = {0};
             for (idx = 1; idx < n_split; idx++) {
-                llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
+                jarvis_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
 
                 struct gguf_init_params split_params = {
                     /*.no_alloc = */ true,
@@ -4402,7 +4402,7 @@ struct llama_model_loader {
                     throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, split_path));
                 }
 
-                files.emplace_back(new llama_file(split_path, "rb"));
+                files.emplace_back(new jarvis_file(split_path, "rb"));
                 contexts.emplace_back(ctx);
 
                 // Save tensors data offset info of the shard.
@@ -4423,13 +4423,13 @@ struct llama_model_loader {
                 }
             }
 
-            LLAMA_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split - 1);
+            JARVIS_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split - 1);
         }
 
         n_kv      = gguf_get_n_kv(meta);
         n_tensors = weights.size();
 
-        fver = (enum llama_fver) gguf_get_version(meta);
+        fver = (enum jarvis_fver) gguf_get_version(meta);
 
         std::set<std::string> tensor_names;
         for (auto & w : weights) {
@@ -4444,8 +4444,8 @@ struct llama_model_loader {
             tensor_names.insert(name);
         }
 
-        LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
-                __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(fver));
+        JARVIS_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
+                __func__, n_kv, n_tensors, fname.c_str(), jarvis_file_version_name(fver));
 
         // determine file type based on the number of tensors for each quantization and print meta data
         // TODO: make optional
@@ -4468,56 +4468,56 @@ struct llama_model_loader {
 
                 if (trace > 0) {
                     const uint16_t sid = weights.at(i).idx;
-                    LLAMA_LOG_INFO("%s: - tensor %4d, split %2d: %32s %-8s [ %s ]\n", __func__, i, sid, ggml_get_name(tensor), ggml_type_name(type), llama_format_tensor_shape(tensor).c_str());
+                    JARVIS_LOG_INFO("%s: - tensor %4d, split %2d: %32s %-8s [ %s ]\n", __func__, i, sid, ggml_get_name(tensor), ggml_type_name(type), jarvis_format_tensor_shape(tensor).c_str());
                 }
             }
 
             switch (type_max) {
-                case GGML_TYPE_F32:     ftype = LLAMA_FTYPE_ALL_F32;        break;
-                case GGML_TYPE_F16:     ftype = LLAMA_FTYPE_MOSTLY_F16;     break;
-                case GGML_TYPE_BF16:    ftype = LLAMA_FTYPE_MOSTLY_BF16;    break;
-                case GGML_TYPE_Q4_0:    ftype = LLAMA_FTYPE_MOSTLY_Q4_0;    break;
-                case GGML_TYPE_Q4_1:    ftype = LLAMA_FTYPE_MOSTLY_Q4_1;    break;
-                case GGML_TYPE_Q5_0:    ftype = LLAMA_FTYPE_MOSTLY_Q5_0;    break;
-                case GGML_TYPE_Q5_1:    ftype = LLAMA_FTYPE_MOSTLY_Q5_1;    break;
-                case GGML_TYPE_Q8_0:    ftype = LLAMA_FTYPE_MOSTLY_Q8_0;    break;
-                case GGML_TYPE_Q2_K:    ftype = LLAMA_FTYPE_MOSTLY_Q2_K;    break;
-                case GGML_TYPE_Q3_K:    ftype = LLAMA_FTYPE_MOSTLY_Q3_K_M;  break;
-                case GGML_TYPE_Q4_K:    ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M;  break;
-                case GGML_TYPE_Q5_K:    ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M;  break;
-                case GGML_TYPE_Q6_K:    ftype = LLAMA_FTYPE_MOSTLY_Q6_K;    break;
-                case GGML_TYPE_TQ1_0:   ftype = LLAMA_FTYPE_MOSTLY_TQ1_0;   break;
-                case GGML_TYPE_TQ2_0:   ftype = LLAMA_FTYPE_MOSTLY_TQ2_0;   break;
-                case GGML_TYPE_IQ2_XXS: ftype = LLAMA_FTYPE_MOSTLY_IQ2_XXS; break;
-                case GGML_TYPE_IQ2_XS:  ftype = LLAMA_FTYPE_MOSTLY_IQ2_XS;  break;
-                case GGML_TYPE_IQ2_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ2_S;   break;
-                case GGML_TYPE_IQ3_XXS: ftype = LLAMA_FTYPE_MOSTLY_IQ3_XXS; break;
-                case GGML_TYPE_IQ1_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ1_S;   break;
-                case GGML_TYPE_IQ1_M:   ftype = LLAMA_FTYPE_MOSTLY_IQ1_M;   break;
-                case GGML_TYPE_IQ4_NL:  ftype = LLAMA_FTYPE_MOSTLY_IQ4_NL;  break;
-                case GGML_TYPE_IQ4_XS:  ftype = LLAMA_FTYPE_MOSTLY_IQ4_XS;  break;
-                case GGML_TYPE_IQ3_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ3_S;   break;
-                case GGML_TYPE_Q4_0_4_4: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_4; break;
-                case GGML_TYPE_Q4_0_4_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_8; break;
-                case GGML_TYPE_Q4_0_8_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_8_8; break;
+                case GGML_TYPE_F32:     ftype = JARVIS_FTYPE_ALL_F32;        break;
+                case GGML_TYPE_F16:     ftype = JARVIS_FTYPE_MOSTLY_F16;     break;
+                case GGML_TYPE_BF16:    ftype = JARVIS_FTYPE_MOSTLY_BF16;    break;
+                case GGML_TYPE_Q4_0:    ftype = JARVIS_FTYPE_MOSTLY_Q4_0;    break;
+                case GGML_TYPE_Q4_1:    ftype = JARVIS_FTYPE_MOSTLY_Q4_1;    break;
+                case GGML_TYPE_Q5_0:    ftype = JARVIS_FTYPE_MOSTLY_Q5_0;    break;
+                case GGML_TYPE_Q5_1:    ftype = JARVIS_FTYPE_MOSTLY_Q5_1;    break;
+                case GGML_TYPE_Q8_0:    ftype = JARVIS_FTYPE_MOSTLY_Q8_0;    break;
+                case GGML_TYPE_Q2_K:    ftype = JARVIS_FTYPE_MOSTLY_Q2_K;    break;
+                case GGML_TYPE_Q3_K:    ftype = JARVIS_FTYPE_MOSTLY_Q3_K_M;  break;
+                case GGML_TYPE_Q4_K:    ftype = JARVIS_FTYPE_MOSTLY_Q4_K_M;  break;
+                case GGML_TYPE_Q5_K:    ftype = JARVIS_FTYPE_MOSTLY_Q5_K_M;  break;
+                case GGML_TYPE_Q6_K:    ftype = JARVIS_FTYPE_MOSTLY_Q6_K;    break;
+                case GGML_TYPE_TQ1_0:   ftype = JARVIS_FTYPE_MOSTLY_TQ1_0;   break;
+                case GGML_TYPE_TQ2_0:   ftype = JARVIS_FTYPE_MOSTLY_TQ2_0;   break;
+                case GGML_TYPE_IQ2_XXS: ftype = JARVIS_FTYPE_MOSTLY_IQ2_XXS; break;
+                case GGML_TYPE_IQ2_XS:  ftype = JARVIS_FTYPE_MOSTLY_IQ2_XS;  break;
+                case GGML_TYPE_IQ2_S:   ftype = JARVIS_FTYPE_MOSTLY_IQ2_S;   break;
+                case GGML_TYPE_IQ3_XXS: ftype = JARVIS_FTYPE_MOSTLY_IQ3_XXS; break;
+                case GGML_TYPE_IQ1_S:   ftype = JARVIS_FTYPE_MOSTLY_IQ1_S;   break;
+                case GGML_TYPE_IQ1_M:   ftype = JARVIS_FTYPE_MOSTLY_IQ1_M;   break;
+                case GGML_TYPE_IQ4_NL:  ftype = JARVIS_FTYPE_MOSTLY_IQ4_NL;  break;
+                case GGML_TYPE_IQ4_XS:  ftype = JARVIS_FTYPE_MOSTLY_IQ4_XS;  break;
+                case GGML_TYPE_IQ3_S:   ftype = JARVIS_FTYPE_MOSTLY_IQ3_S;   break;
+                case GGML_TYPE_Q4_0_4_4: ftype = JARVIS_FTYPE_MOSTLY_Q4_0_4_4; break;
+                case GGML_TYPE_Q4_0_4_8: ftype = JARVIS_FTYPE_MOSTLY_Q4_0_4_8; break;
+                case GGML_TYPE_Q4_0_8_8: ftype = JARVIS_FTYPE_MOSTLY_Q4_0_8_8; break;
                 default:
                     {
-                        LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
-                        ftype = LLAMA_FTYPE_ALL_F32;
+                        JARVIS_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
+                        ftype = JARVIS_FTYPE_ALL_F32;
                     } break;
             }
 
             // this is a way to mark that we have "guessed" the file type
-            ftype = (llama_ftype) (ftype | LLAMA_FTYPE_GUESSED);
+            ftype = (jarvis_ftype) (ftype | JARVIS_FTYPE_GUESSED);
 
             {
                 const int kid = gguf_find_key(meta, "general.file_type"); // TODO: use LLM_KV
                 if (kid >= 0) {
-                    ftype = (llama_ftype) gguf_get_val_u32(meta, kid);
+                    ftype = (jarvis_ftype) gguf_get_val_u32(meta, kid);
                 }
             }
 
-            LLAMA_LOG_INFO("%s: Dumping metadata keys/values. Note: KV overrides do not apply in this output.\n", __func__);
+            JARVIS_LOG_INFO("%s: Dumping metadata keys/values. Note: KV overrides do not apply in this output.\n", __func__);
 
             for (int i = 0; i < n_kv; i++) {
                 const char * name           = gguf_get_key(meta, i);
@@ -4534,7 +4534,7 @@ struct llama_model_loader {
                 }
                 replace_all(value, "\n", "\\n");
 
-                LLAMA_LOG_INFO("%s: - kv %3d: %42s %-16s = %s\n", __func__, i, name, type_name.c_str(), value.c_str());
+                JARVIS_LOG_INFO("%s: - kv %3d: %42s %-16s = %s\n", __func__, i, name, type_name.c_str(), value.c_str());
             }
 
             // print type counts
@@ -4543,12 +4543,12 @@ struct llama_model_loader {
                     continue;
                 }
 
-                LLAMA_LOG_INFO("%s: - type %4s: %4d tensors\n", __func__, ggml_type_name(kv.first), kv.second);
+                JARVIS_LOG_INFO("%s: - type %4s: %4d tensors\n", __func__, ggml_type_name(kv.first), kv.second);
             }
         }
 
-        if (!llama_mmap::SUPPORTED) {
-            LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
+        if (!jarvis_mmap::SUPPORTED) {
+            JARVIS_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
             use_mmap = false;
         }
 
@@ -4556,7 +4556,7 @@ struct llama_model_loader {
         this->check_tensors = check_tensors;
     }
 
-    ~llama_model_loader() {
+    ~jarvis_model_loader() {
         if (meta) {
             gguf_free(meta);
         }
@@ -4661,7 +4661,7 @@ struct llama_model_loader {
     bool get_key(const std::string & key, T & result, const bool required = true) {
         auto it = kv_overrides.find(key);
 
-        const struct llama_model_kv_override * override =
+        const struct jarvis_model_kv_override * override =
             it != kv_overrides.end() ? &it->second : nullptr;
 
         const bool found = GGUFMeta::GKV<T>::set(meta, key, result, override);
@@ -4736,7 +4736,7 @@ struct llama_model_loader {
         return weights.at(i).tensor->name;
     }
 
-    const llama_tensor_weight * get_weight(const char * name) const {
+    const jarvis_tensor_weight * get_weight(const char * name) const {
         for (const auto & weight : weights) {
             if (strcmp(name, weight.tensor->name) == 0) {
                 return &weight;
@@ -4745,12 +4745,12 @@ struct llama_model_loader {
         return nullptr;
     }
 
-    const llama_tensor_weight * get_weight(int i) const {
+    const jarvis_tensor_weight * get_weight(int i) const {
         return get_weight(get_tensor_name(i));
     }
 
-    const llama_tensor_weight & require_weight(const char * name) const {
-        const llama_tensor_weight * weight = get_weight(name);
+    const jarvis_tensor_weight & require_weight(const char * name) const {
+        const jarvis_tensor_weight * weight = get_weight(name);
         if (!weight) {
             throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name));
         }
@@ -4812,8 +4812,8 @@ struct llama_model_loader {
                 throw std::runtime_error(
                         format("%s: tensor '%s' has wrong shape; expected %s, got %s",
                             __func__, name.c_str(),
-                            llama_format_tensor_shape(ne).c_str(),
-                            llama_format_tensor_shape(cur).c_str()));
+                            jarvis_format_tensor_shape(ne).c_str(),
+                            jarvis_format_tensor_shape(cur).c_str()));
             }
         }
 
@@ -4867,15 +4867,15 @@ struct llama_model_loader {
         }
     }
 
-    void init_mappings(bool prefetch = true, llama_mlocks * mlock_mmaps = nullptr) {
+    void init_mappings(bool prefetch = true, jarvis_mlocks * mlock_mmaps = nullptr) {
         if (use_mmap) {
             mappings.reserve(files.size());
             mmaps_used.reserve(files.size());
             for (const auto & file : files) {
-                std::unique_ptr<llama_mmap> mapping(new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa()));
+                std::unique_ptr<jarvis_mmap> mapping(new jarvis_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa()));
                 mmaps_used.emplace_back(mapping->size, 0);
                 if (mlock_mmaps) {
-                    std::unique_ptr<llama_mlock> mlock_mmap(new llama_mlock());
+                    std::unique_ptr<jarvis_mlock> mlock_mmap(new jarvis_mlock());
                     mlock_mmap->init(mapping->addr);
                     mlock_mmaps->emplace_back(std::move(mlock_mmap));
                 }
@@ -4944,9 +4944,9 @@ struct llama_model_loader {
     // Returns false if cancelled by progress_callback
     bool load_all_data(
             struct ggml_context * ctx,
-            llama_buf_map & bufs,
-            llama_mlocks * lmlocks,
-            llama_progress_callback progress_callback,
+            jarvis_buf_map & bufs,
+            jarvis_mlocks * lmlocks,
+            jarvis_progress_callback progress_callback,
             void * progress_callback_user_data) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
@@ -4970,20 +4970,20 @@ struct llama_model_loader {
             // First determine if the backend supports the necessary features for async uploads.
             auto * buf = bufs.count(0) ? bufs.at(0) : nullptr;
             if (!buf) {
-                LLAMA_LOG_DEBUG("%s: no buffer found for async uploads\n", fn);
+                JARVIS_LOG_DEBUG("%s: no buffer found for async uploads\n", fn);
                 return nullptr;
             }
 
             auto * buft = ggml_backend_buffer_get_type(buf);
             auto * dev = ggml_backend_buft_get_device(buft);
             if (!dev) {
-                LLAMA_LOG_DEBUG("%s: no device found for buffer type %s for async uploads\n", fn,
+                JARVIS_LOG_DEBUG("%s: no device found for buffer type %s for async uploads\n", fn,
                     ggml_backend_buft_name(buft));
                 return nullptr;
             }
 
             if (buft != ggml_backend_dev_buffer_type(dev)) {
-                LLAMA_LOG_DEBUG("%s: buffer type %s is not the default buffer type for device %s for async uploads\n", fn,
+                JARVIS_LOG_DEBUG("%s: buffer type %s is not the default buffer type for device %s for async uploads\n", fn,
                     ggml_backend_buft_name(buft), ggml_backend_dev_name(dev));
                 return nullptr;
             }
@@ -4991,14 +4991,14 @@ struct llama_model_loader {
             ggml_backend_dev_props props;
             ggml_backend_dev_get_props(dev, &props);
             if (!props.caps.async || !props.caps.host_buffer || !props.caps.events) {
-                LLAMA_LOG_DEBUG("%s: device %s does not support async, host buffers or events\n", fn,
+                JARVIS_LOG_DEBUG("%s: device %s does not support async, host buffers or events\n", fn,
                     ggml_backend_dev_name(dev));
                 return nullptr;
             }
 
             auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
             if (!host_buft) {
-                LLAMA_LOG_DEBUG("%s: no host buffer type found for device %s\n", fn,
+                JARVIS_LOG_DEBUG("%s: no host buffer type found for device %s\n", fn,
                     ggml_backend_dev_name(dev));
                 return nullptr;
             }
@@ -5007,7 +5007,7 @@ struct llama_model_loader {
             for (size_t idx = 0; idx < n_buffers; ++idx) {
                 auto * buf = ggml_backend_buft_alloc_buffer(host_buft, buffer_size);
                 if (!buf) {
-                    LLAMA_LOG_DEBUG("%s: failed to allocate host buffer for async uploads for device %s\n", fn,
+                    JARVIS_LOG_DEBUG("%s: failed to allocate host buffer for async uploads for device %s\n", fn,
                         ggml_backend_dev_name(dev));
                     return nullptr;
                 }
@@ -5017,7 +5017,7 @@ struct llama_model_loader {
 
                 auto * event = ggml_backend_event_new(dev);
                 if (!event) {
-                    LLAMA_LOG_DEBUG("%s: failed to create event for async uploads for device %s\n", fn,
+                    JARVIS_LOG_DEBUG("%s: failed to create event for async uploads for device %s\n", fn,
                         ggml_backend_dev_name(dev));
                     return nullptr;
                 }
@@ -5027,7 +5027,7 @@ struct llama_model_loader {
 
             ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
             if (!backend) {
-                LLAMA_LOG_DEBUG("%s: failed to initialize backend for device %s for async uploads\n", fn,
+                JARVIS_LOG_DEBUG("%s: failed to initialize backend for device %s for async uploads\n", fn,
                     ggml_backend_dev_name(dev));
                 return nullptr;
             }
@@ -5036,7 +5036,7 @@ struct llama_model_loader {
         }(__func__);
 
         if (upload_backend) {
-            LLAMA_LOG_DEBUG("%s: using async uploads for device %s, buffer type %s, backend %s\n", __func__,
+            JARVIS_LOG_DEBUG("%s: using async uploads for device %s, buffer type %s, backend %s\n", __func__,
                 ggml_backend_dev_name(ggml_backend_get_device(upload_backend)),
                 ggml_backend_buft_name(ggml_backend_buffer_get_type(bufs.at(0))),
                 ggml_backend_name(upload_backend));
@@ -5145,7 +5145,7 @@ struct llama_model_loader {
         for (auto & future : validation_result) {
             auto result = future.get();
             if (!result.second) {
-                LLAMA_LOG_ERROR("%s: tensor '%s' has invalid data\n", __func__, ggml_get_name(result.first));
+                JARVIS_LOG_ERROR("%s: tensor '%s' has invalid data\n", __func__, ggml_get_name(result.first));
                 validation_failed = true;
             }
         }
@@ -5178,21 +5178,21 @@ struct llama_model_loader {
 };
 
 // temporary allocate memory for the input batch if needed
-static const llama_seq_id batch_default_seq_id = 0;
-struct llama_batch_allocr {
-    std::array<llama_seq_id, 1> seq_id_0 = {batch_default_seq_id};
-    std::vector<llama_pos>      pos;
+static const jarvis_seq_id batch_default_seq_id = 0;
+struct jarvis_batch_allocr {
+    std::array<jarvis_seq_id, 1> seq_id_0 = {batch_default_seq_id};
+    std::vector<jarvis_pos>      pos;
     std::vector<int32_t>        n_seq_id;
-    std::vector<llama_seq_id *> seq_id;
+    std::vector<jarvis_seq_id *> seq_id;
     std::vector<int8_t>         logits;
-    struct llama_batch          batch;
-    // optionally fulfill the batch returned by llama_batch_get_one
-    llama_batch_allocr(llama_context & ctx, struct llama_batch in_batch) {
+    struct jarvis_batch          batch;
+    // optionally fulfill the batch returned by jarvis_batch_get_one
+    jarvis_batch_allocr(jarvis_context & ctx, struct jarvis_batch in_batch) {
         batch = in_batch;
         GGML_ASSERT(batch.n_tokens > 0);
         if (!batch.pos) {
             // determine the last position in KV cache
-            llama_pos last_pos = -1;
+            jarvis_pos last_pos = -1;
             for (const auto & cell : ctx.kv_self.cells) {
                 if (cell.has_seq_id(batch_default_seq_id)) {
                     last_pos = std::max(last_pos, cell.pos);
@@ -5229,13 +5229,13 @@ struct llama_batch_allocr {
 };
 
 template<>
-bool llama_model_loader::get_key(const enum llm_kv kid, enum llama_pooling_type & result, const bool required) {
+bool jarvis_model_loader::get_key(const enum llm_kv kid, enum jarvis_pooling_type & result, const bool required) {
     uint32_t tmp;
     const bool found = get_key(kid, tmp, required);
     if (found) {
-        result = (enum llama_pooling_type) tmp;
+        result = (enum jarvis_pooling_type) tmp;
     } else {
-        result = LLAMA_POOLING_TYPE_UNSPECIFIED;
+        result = JARVIS_POOLING_TYPE_UNSPECIFIED;
     }
     return found;
 }
@@ -5245,7 +5245,7 @@ bool llama_model_loader::get_key(const enum llm_kv kid, enum llama_pooling_type 
 // load LLaMA models
 //
 
-static const char * llama_model_arch_name(llm_arch arch) {
+static const char * jarvis_model_arch_name(llm_arch arch) {
     auto it = LLM_ARCH_NAMES.find(arch);
     if (it == LLM_ARCH_NAMES.end()) {
         return "unknown";
@@ -5253,53 +5253,53 @@ static const char * llama_model_arch_name(llm_arch arch) {
     return it->second;
 }
 
-static std::string llama_model_ftype_name(llama_ftype ftype) {
-    if (ftype & LLAMA_FTYPE_GUESSED) {
-        return llama_model_ftype_name((enum llama_ftype) (ftype & ~LLAMA_FTYPE_GUESSED)) + " (guessed)";
+static std::string jarvis_model_ftype_name(jarvis_ftype ftype) {
+    if (ftype & JARVIS_FTYPE_GUESSED) {
+        return jarvis_model_ftype_name((enum jarvis_ftype) (ftype & ~JARVIS_FTYPE_GUESSED)) + " (guessed)";
     }
 
     switch (ftype) {
-        case LLAMA_FTYPE_ALL_F32:         return "all F32";
-        case LLAMA_FTYPE_MOSTLY_F16:      return "F16";
-        case LLAMA_FTYPE_MOSTLY_BF16:     return "BF16";
-        case LLAMA_FTYPE_MOSTLY_Q4_0:     return "Q4_0";
-        case LLAMA_FTYPE_MOSTLY_Q4_1:     return "Q4_1";
-        case LLAMA_FTYPE_MOSTLY_Q5_0:     return "Q5_0";
-        case LLAMA_FTYPE_MOSTLY_Q5_1:     return "Q5_1";
-        case LLAMA_FTYPE_MOSTLY_Q8_0:     return "Q8_0";
-        case LLAMA_FTYPE_MOSTLY_Q2_K:     return "Q2_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q2_K_S:   return "Q2_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q3_K_S:   return "Q3_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q3_K_M:   return "Q3_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q3_K_L:   return "Q3_K - Large";
-        case LLAMA_FTYPE_MOSTLY_Q4_K_S:   return "Q4_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q4_K_M:   return "Q4_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q5_K_S:   return "Q5_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q5_K_M:   return "Q5_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q6_K:     return "Q6_K";
-        case LLAMA_FTYPE_MOSTLY_TQ1_0:    return "TQ1_0 - 1.69 bpw ternary";
-        case LLAMA_FTYPE_MOSTLY_TQ2_0:    return "TQ2_0 - 2.06 bpw ternary";
-        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:  return "IQ2_XXS - 2.0625 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ2_XS:   return "IQ2_XS - 2.3125 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ2_S:    return "IQ2_S - 2.5 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ2_M:    return "IQ2_M - 2.7 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ3_XS:   return "IQ3_XS - 3.3 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:  return "IQ3_XXS - 3.0625 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ1_S:    return "IQ1_S - 1.5625 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ1_M:    return "IQ1_M - 1.75 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ4_NL:   return "IQ4_NL - 4.5 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ4_XS:   return "IQ4_XS - 4.25 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ3_S:    return "IQ3_S - 3.4375 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ3_M:    return "IQ3_S mix - 3.66 bpw";
-        case LLAMA_FTYPE_MOSTLY_Q4_0_4_4: return "Q4_0_4_4";
-        case LLAMA_FTYPE_MOSTLY_Q4_0_4_8: return "Q4_0_4_8";
-        case LLAMA_FTYPE_MOSTLY_Q4_0_8_8: return "Q4_0_8_8";
+        case JARVIS_FTYPE_ALL_F32:         return "all F32";
+        case JARVIS_FTYPE_MOSTLY_F16:      return "F16";
+        case JARVIS_FTYPE_MOSTLY_BF16:     return "BF16";
+        case JARVIS_FTYPE_MOSTLY_Q4_0:     return "Q4_0";
+        case JARVIS_FTYPE_MOSTLY_Q4_1:     return "Q4_1";
+        case JARVIS_FTYPE_MOSTLY_Q5_0:     return "Q5_0";
+        case JARVIS_FTYPE_MOSTLY_Q5_1:     return "Q5_1";
+        case JARVIS_FTYPE_MOSTLY_Q8_0:     return "Q8_0";
+        case JARVIS_FTYPE_MOSTLY_Q2_K:     return "Q2_K - Medium";
+        case JARVIS_FTYPE_MOSTLY_Q2_K_S:   return "Q2_K - Small";
+        case JARVIS_FTYPE_MOSTLY_Q3_K_S:   return "Q3_K - Small";
+        case JARVIS_FTYPE_MOSTLY_Q3_K_M:   return "Q3_K - Medium";
+        case JARVIS_FTYPE_MOSTLY_Q3_K_L:   return "Q3_K - Large";
+        case JARVIS_FTYPE_MOSTLY_Q4_K_S:   return "Q4_K - Small";
+        case JARVIS_FTYPE_MOSTLY_Q4_K_M:   return "Q4_K - Medium";
+        case JARVIS_FTYPE_MOSTLY_Q5_K_S:   return "Q5_K - Small";
+        case JARVIS_FTYPE_MOSTLY_Q5_K_M:   return "Q5_K - Medium";
+        case JARVIS_FTYPE_MOSTLY_Q6_K:     return "Q6_K";
+        case JARVIS_FTYPE_MOSTLY_TQ1_0:    return "TQ1_0 - 1.69 bpw ternary";
+        case JARVIS_FTYPE_MOSTLY_TQ2_0:    return "TQ2_0 - 2.06 bpw ternary";
+        case JARVIS_FTYPE_MOSTLY_IQ2_XXS:  return "IQ2_XXS - 2.0625 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ2_XS:   return "IQ2_XS - 2.3125 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ2_S:    return "IQ2_S - 2.5 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ2_M:    return "IQ2_M - 2.7 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ3_XS:   return "IQ3_XS - 3.3 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ3_XXS:  return "IQ3_XXS - 3.0625 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ1_S:    return "IQ1_S - 1.5625 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ1_M:    return "IQ1_M - 1.75 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ4_NL:   return "IQ4_NL - 4.5 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ4_XS:   return "IQ4_XS - 4.25 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ3_S:    return "IQ3_S - 3.4375 bpw";
+        case JARVIS_FTYPE_MOSTLY_IQ3_M:    return "IQ3_S mix - 3.66 bpw";
+        case JARVIS_FTYPE_MOSTLY_Q4_0_4_4: return "Q4_0_4_4";
+        case JARVIS_FTYPE_MOSTLY_Q4_0_4_8: return "Q4_0_4_8";
+        case JARVIS_FTYPE_MOSTLY_Q4_0_8_8: return "Q4_0_8_8";
 
         default: return "unknown, may not work";
     }
 }
 
-static const char * llama_model_type_name(e_model type) {
+static const char * jarvis_model_type_name(e_model type) {
     switch (type) {
         case MODEL_14M:           return "14M";
         case MODEL_17M:           return "17M";
@@ -5364,19 +5364,19 @@ static const char * llama_model_type_name(e_model type) {
     }
 }
 
-static const char * llama_model_vocab_type_name(enum llama_vocab_type type){
+static const char * jarvis_model_vocab_type_name(enum jarvis_vocab_type type){
     switch (type) {
-        case LLAMA_VOCAB_TYPE_NONE: return "no vocab";
-        case LLAMA_VOCAB_TYPE_SPM:  return "SPM";
-        case LLAMA_VOCAB_TYPE_BPE:  return "BPE";
-        case LLAMA_VOCAB_TYPE_WPM:  return "WPM";
-        case LLAMA_VOCAB_TYPE_UGM:  return "UGM";
-        case LLAMA_VOCAB_TYPE_RWKV: return "RWKV";
+        case JARVIS_VOCAB_TYPE_NONE: return "no vocab";
+        case JARVIS_VOCAB_TYPE_SPM:  return "SPM";
+        case JARVIS_VOCAB_TYPE_BPE:  return "BPE";
+        case JARVIS_VOCAB_TYPE_WPM:  return "WPM";
+        case JARVIS_VOCAB_TYPE_UGM:  return "UGM";
+        case JARVIS_VOCAB_TYPE_RWKV: return "RWKV";
         default:                    return "unknown";
     }
 }
 
-static void llm_load_arch(llama_model_loader & ml, llama_model & model) {
+static void llm_load_arch(jarvis_model_loader & ml, jarvis_model & model) {
     model.arch = ml.get_arch();
     if (model.arch == LLM_ARCH_UNKNOWN) {
         throw std::runtime_error("unknown model architecture: '" + ml.get_arch_name() + "'");
@@ -5384,8 +5384,8 @@ static void llm_load_arch(llama_model_loader & ml, llama_model & model) {
 }
 
 static void llm_load_hparams(
-        llama_model_loader & ml,
-        llama_model & model) {
+        jarvis_model_loader & ml,
+        jarvis_model & model) {
     auto & hparams = model.hparams;
     const gguf_context * ctx = ml.meta;
 
@@ -5417,7 +5417,7 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_EXPERT_COUNT,      hparams.n_expert,      false);
     ml.get_key(LLM_KV_EXPERT_USED_COUNT, hparams.n_expert_used, false);
 
-    GGML_ASSERT(hparams.n_expert <= LLAMA_MAX_EXPERTS);
+    GGML_ASSERT(hparams.n_expert <= JARVIS_MAX_EXPERTS);
     GGML_ASSERT(hparams.n_expert_used <= hparams.n_expert);
     if (hparams.n_expert > 0) {
         GGML_ASSERT(hparams.n_expert_used > 0);
@@ -5451,8 +5451,8 @@ static void llm_load_hparams(
 
     std::string rope_scaling("linear");
     ml.get_key(LLM_KV_ROPE_SCALING_TYPE, rope_scaling, false);
-    hparams.rope_scaling_type_train = llama_rope_scaling_type_from_string(rope_scaling);
-    GGML_ASSERT(hparams.rope_scaling_type_train != LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED);
+    hparams.rope_scaling_type_train = jarvis_rope_scaling_type_from_string(rope_scaling);
+    GGML_ASSERT(hparams.rope_scaling_type_train != JARVIS_ROPE_SCALING_TYPE_UNSPECIFIED);
 
     // rope_freq_scale (inverse of the kv) is optional
     float ropescale = 0.0f;
@@ -5480,7 +5480,7 @@ static void llm_load_hparams(
 
         ml.get_key(LLM_KV_ROPE_DIMENSION_COUNT, hparams.n_rot, false);
 
-        if (model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON) {
+        if (model.arch == LLM_ARCH_JARVIS || model.arch == LLM_ARCH_FALCON) {
             if (hparams.n_rot != hparams.n_embd_head_k) {
                 throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot, hparams.n_embd_head_k));
             }
@@ -5493,7 +5493,7 @@ static void llm_load_hparams(
 
     // arch-specific KVs
     switch (model.arch) {
-        case LLM_ARCH_LLAMA:
+        case LLM_ARCH_JARVIS:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
@@ -5505,10 +5505,10 @@ static void llm_load_hparams(
                     }
                 } else {
                     switch (hparams.n_layer) {
-                        case 16: model.type = e_model::MODEL_1B; break; // Llama 3.2 1B
+                        case 16: model.type = e_model::MODEL_1B; break; // Jarvis 3.2 1B
                         case 22: model.type = e_model::MODEL_1B; break;
                         case 26: model.type = e_model::MODEL_3B; break;
-                        case 28: model.type = e_model::MODEL_3B; break; // Llama 3.2 3B
+                        case 28: model.type = e_model::MODEL_3B; break; // Jarvis 3.2 3B
                         // granite uses a vocab with len 49152
                         case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
                         case 36: model.type = e_model::MODEL_8B; break; // granite
@@ -5733,7 +5733,7 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
 
-                // for backward compatibility ; see: https://github.com/ggerganov/llama.cpp/pull/8931
+                // for backward compatibility ; see: https://github.com/ggerganov/jarvis.cpp/pull/8931
                 if ((hparams.n_layer == 32 || hparams.n_layer == 40) && hparams.n_ctx_train == 4096) {
                     // default value for Phi-3-mini-4k-instruct and Phi-3-medium-4k-instruct
                     hparams.n_swa = 2047;
@@ -6146,12 +6146,12 @@ static void llm_load_hparams(
         hparams.use_alibi = true;
     }
 
-    hparams.rope_type = llama_rope_type(&model);
+    hparams.rope_type = jarvis_rope_type(&model);
 }
 
 static void llm_load_vocab(
-        llama_model_loader & ml,
-        llama_model & model) {
+        jarvis_model_loader & ml,
+        jarvis_model & model) {
     auto & vocab = model.vocab;
 
     struct gguf_context * ctx = ml.meta;
@@ -6167,50 +6167,50 @@ static void llm_load_vocab(
         ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
 
         if (tokenizer_model == "no_vocab") {
-            vocab.type = LLAMA_VOCAB_TYPE_NONE;
+            vocab.type = JARVIS_VOCAB_TYPE_NONE;
 
             // default special tokens
-            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
-            vocab.special_eos_id  = LLAMA_TOKEN_NULL;
-            vocab.special_unk_id  = LLAMA_TOKEN_NULL;
-            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
-            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
-            vocab.special_mask_id = LLAMA_TOKEN_NULL;
-            vocab.linefeed_id     = LLAMA_TOKEN_NULL;
+            vocab.special_bos_id  = JARVIS_TOKEN_NULL;
+            vocab.special_eos_id  = JARVIS_TOKEN_NULL;
+            vocab.special_unk_id  = JARVIS_TOKEN_NULL;
+            vocab.special_sep_id  = JARVIS_TOKEN_NULL;
+            vocab.special_pad_id  = JARVIS_TOKEN_NULL;
+            vocab.special_cls_id  = JARVIS_TOKEN_NULL;
+            vocab.special_mask_id = JARVIS_TOKEN_NULL;
+            vocab.linefeed_id     = JARVIS_TOKEN_NULL;
 
             // read vocab size from metadata
             if (!ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab, false)) {
                 vocab.n_vocab = 0;
-                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata, vocab.n_vocab will be set to %u\n", __func__, vocab.n_vocab);
+                JARVIS_LOG_WARN("%s: there is no vocab_size in metadata, vocab.n_vocab will be set to %u\n", __func__, vocab.n_vocab);
             }
             return;
         }
 
-        if (tokenizer_model == "llama") {
-            vocab.type = LLAMA_VOCAB_TYPE_SPM;
+        if (tokenizer_model == "jarvis") {
+            vocab.type = JARVIS_VOCAB_TYPE_SPM;
 
             // default special tokens
             vocab.special_bos_id  = 1;
             vocab.special_eos_id  = 2;
             vocab.special_unk_id  = 0;
-            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
-            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
-            vocab.special_mask_id = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id  = JARVIS_TOKEN_NULL;
+            vocab.special_pad_id  = JARVIS_TOKEN_NULL;
+            vocab.special_cls_id  = JARVIS_TOKEN_NULL;
+            vocab.special_mask_id = JARVIS_TOKEN_NULL;
         } else if (tokenizer_model == "bert") {
-            vocab.type = LLAMA_VOCAB_TYPE_WPM;
+            vocab.type = JARVIS_VOCAB_TYPE_WPM;
 
             // default special tokens
-            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
-            vocab.special_eos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_bos_id  = JARVIS_TOKEN_NULL;
+            vocab.special_eos_id  = JARVIS_TOKEN_NULL;
             vocab.special_unk_id  = 100;
             vocab.special_sep_id  = 102;
             vocab.special_pad_id  = 0;
             vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
         } else if (tokenizer_model == "gpt2") {
-            vocab.type = LLAMA_VOCAB_TYPE_BPE;
+            vocab.type = JARVIS_VOCAB_TYPE_BPE;
 
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
@@ -6239,22 +6239,22 @@ static void llm_load_vocab(
             // default special tokens
             vocab.special_bos_id  = 11;
             vocab.special_eos_id  = 11;
-            vocab.special_unk_id  = LLAMA_TOKEN_NULL;
-            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
-            vocab.special_pad_id  = LLAMA_TOKEN_NULL;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
-            vocab.special_mask_id = LLAMA_TOKEN_NULL;
+            vocab.special_unk_id  = JARVIS_TOKEN_NULL;
+            vocab.special_sep_id  = JARVIS_TOKEN_NULL;
+            vocab.special_pad_id  = JARVIS_TOKEN_NULL;
+            vocab.special_cls_id  = JARVIS_TOKEN_NULL;
+            vocab.special_mask_id = JARVIS_TOKEN_NULL;
         } else if (tokenizer_model == "t5") {
-            vocab.type = LLAMA_VOCAB_TYPE_UGM;
+            vocab.type = JARVIS_VOCAB_TYPE_UGM;
 
             // default special tokens
-            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_bos_id  = JARVIS_TOKEN_NULL;
             vocab.special_eos_id  = 1;
             vocab.special_unk_id  = 2;
-            vocab.special_sep_id  = LLAMA_TOKEN_NULL;
+            vocab.special_sep_id  = JARVIS_TOKEN_NULL;
             vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
-            vocab.special_mask_id = LLAMA_TOKEN_NULL;
+            vocab.special_cls_id  = JARVIS_TOKEN_NULL;
+            vocab.special_mask_id = JARVIS_TOKEN_NULL;
 
             const int precompiled_charsmap_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP).c_str());
             if (precompiled_charsmap_keyidx != -1) {
@@ -6274,57 +6274,57 @@ static void llm_load_vocab(
 #endif
             }
         } else if (tokenizer_model == "rwkv") {
-            vocab.type = LLAMA_VOCAB_TYPE_RWKV;
+            vocab.type = JARVIS_VOCAB_TYPE_RWKV;
 
             // default special tokens
-            vocab.special_bos_id = LLAMA_TOKEN_NULL;
-            vocab.special_eos_id = LLAMA_TOKEN_NULL;
-            vocab.special_unk_id = LLAMA_TOKEN_NULL;
-            vocab.special_sep_id = LLAMA_TOKEN_NULL;
-            vocab.special_pad_id = LLAMA_TOKEN_NULL;
+            vocab.special_bos_id = JARVIS_TOKEN_NULL;
+            vocab.special_eos_id = JARVIS_TOKEN_NULL;
+            vocab.special_unk_id = JARVIS_TOKEN_NULL;
+            vocab.special_sep_id = JARVIS_TOKEN_NULL;
+            vocab.special_pad_id = JARVIS_TOKEN_NULL;
         } else {
             throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
         }
 
         // for now, only BPE models have pre-tokenizers
-        if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
+        if (vocab.type == JARVIS_VOCAB_TYPE_BPE) {
             vocab.tokenizer_add_space_prefix = false;
             vocab.tokenizer_clean_spaces = true;
             if (tokenizer_pre.empty()) {
-                LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
-                LLAMA_LOG_WARN("%s:                                             \n", __func__);
-                LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
-                LLAMA_LOG_WARN("%s: GENERATION QUALITY WILL BE DEGRADED!        \n", __func__);
-                LLAMA_LOG_WARN("%s: CONSIDER REGENERATING THE MODEL             \n", __func__);
-                LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
-                LLAMA_LOG_WARN("%s:                                             \n", __func__);
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+                JARVIS_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
+                JARVIS_LOG_WARN("%s:                                             \n", __func__);
+                JARVIS_LOG_WARN("%s: ************************************        \n", __func__);
+                JARVIS_LOG_WARN("%s: GENERATION QUALITY WILL BE DEGRADED!        \n", __func__);
+                JARVIS_LOG_WARN("%s: CONSIDER REGENERATING THE MODEL             \n", __func__);
+                JARVIS_LOG_WARN("%s: ************************************        \n", __func__);
+                JARVIS_LOG_WARN("%s:                                             \n", __func__);
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
             } else if (tokenizer_pre == "default") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
             } else if (
-                    tokenizer_pre == "llama3"   ||
-                    tokenizer_pre == "llama-v3" ||
-                    tokenizer_pre == "llama-bpe") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
+                    tokenizer_pre == "jarvis3"   ||
+                    tokenizer_pre == "jarvis-v3" ||
+                    tokenizer_pre == "jarvis-bpe") {
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_JARVIS3;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
             } else if (
                     tokenizer_pre == "deepseek-llm") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                     tokenizer_pre == "deepseek-coder") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                     tokenizer_pre == "falcon") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_FALCON;
             } else if (
                     tokenizer_pre == "mpt") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MPT;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_MPT;
             } else if (
                     tokenizer_pre == "starcoder") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STARCODER;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_STARCODER;
             } else if (
                     tokenizer_pre == "gpt-2"   ||
                     tokenizer_pre == "phi-2"   ||
@@ -6334,99 +6334,99 @@ static void llm_load_vocab(
                     tokenizer_pre == "jina-v2-es" ||
                     tokenizer_pre == "jina-v2-de" ||
                     tokenizer_pre == "jina-v2-code") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_GPT2;
             } else if (
                     tokenizer_pre == "refact") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_REFACT;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_REFACT;
             } else if (
                 tokenizer_pre == "command-r") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_COMMAND_R;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_COMMAND_R;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "qwen2") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_QWEN2;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_QWEN2;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "stablelm2") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STABLELM2;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_STABLELM2;
             } else if (
                 tokenizer_pre == "olmo") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_OLMO;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_OLMO;
             } else if (
                 tokenizer_pre == "dbrx") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DBRX;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DBRX;
             } else if (
                 tokenizer_pre == "smaug-bpe") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMAUG;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_SMAUG;
             } else if (
                 tokenizer_pre == "poro-chat") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_PORO;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_PORO;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "chatglm-bpe") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM4;
-                vocab.special_bos_id = LLAMA_TOKEN_NULL;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_CHATGLM4;
+                vocab.special_bos_id = JARVIS_TOKEN_NULL;
             } else if (
                 tokenizer_pre == "viking") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_VIKING;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "jais") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_JAIS;
             } else if (
                 tokenizer_pre == "tekken") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_TEKKEN;
                 vocab.tokenizer_clean_spaces = false;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
             } else if (
                 tokenizer_pre == "smollm") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMOLLM;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_SMOLLM;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "codeshell") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CODESHELL;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_CODESHELL;
             } else if (
                 tokenizer_pre == "bloom") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_BLOOM;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_BLOOM;
             } else if (
                 tokenizer_pre == "gpt3-finnish") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_GPT3_FINNISH;
             } else if (
                 tokenizer_pre == "exaone") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_EXAONE;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_EXAONE;
             } else if (
                 tokenizer_pre == "chameleon") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHAMELEON;
+                vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_CHAMELEON;
                 vocab.tokenizer_add_bos = true;
                 vocab.tokenizer_clean_spaces = false;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
-        } else if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        } else if (vocab.type == JARVIS_VOCAB_TYPE_SPM) {
+            vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_space_prefix = true;
             vocab.tokenizer_clean_spaces = false;
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
-        } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        } else if (vocab.type == JARVIS_VOCAB_TYPE_WPM) {
+            vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_space_prefix = false;
             vocab.tokenizer_clean_spaces = true;
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
-        } else if (vocab.type == LLAMA_VOCAB_TYPE_UGM) {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        } else if (vocab.type == JARVIS_VOCAB_TYPE_UGM) {
+            vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_bos = false;
             vocab.tokenizer_add_eos = true;
-        } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        } else if (vocab.type == JARVIS_VOCAB_TYPE_RWKV) {
+            vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_space_prefix = false;
             vocab.tokenizer_clean_spaces = false;
             vocab.tokenizer_add_bos = false;
             vocab.tokenizer_add_eos = false;
         } else {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            vocab.type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
         }
 
         ml.get_key(LLM_KV_TOKENIZER_ADD_PREFIX,      vocab.tokenizer_add_space_prefix,         false);
@@ -6460,7 +6460,7 @@ static void llm_load_vocab(
 
         //GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
         if (word.empty()) {
-            LLAMA_LOG_WARN("%s: empty token at index %u\n", __func__, i);
+            JARVIS_LOG_WARN("%s: empty token at index %u\n", __func__, i);
             word = "[EMPTY_" + std::to_string(i) + "]";
         }
 
@@ -6470,18 +6470,18 @@ static void llm_load_vocab(
         auto & token_data = vocab.id_to_token[i];
         token_data.text  = std::move(word);
         token_data.score = scores ? scores[i] : 0.0f;
-        token_data.attr  = LLAMA_TOKEN_ATTR_NORMAL;
+        token_data.attr  = JARVIS_TOKEN_ATTR_NORMAL;
 
         if (toktypes) {  //TODO: remove, required until per token attributes are available from GGUF file
             switch(toktypes[i]) {
-                case LLAMA_TOKEN_TYPE_UNKNOWN:      token_data.attr = LLAMA_TOKEN_ATTR_UNKNOWN;      break;
-                case LLAMA_TOKEN_TYPE_UNUSED:       token_data.attr = LLAMA_TOKEN_ATTR_UNUSED;       break;
-                case LLAMA_TOKEN_TYPE_NORMAL:       token_data.attr = LLAMA_TOKEN_ATTR_NORMAL;       break;
-                case LLAMA_TOKEN_TYPE_CONTROL:      token_data.attr = LLAMA_TOKEN_ATTR_CONTROL;      break;
-                case LLAMA_TOKEN_TYPE_USER_DEFINED: token_data.attr = LLAMA_TOKEN_ATTR_USER_DEFINED; break;
-                case LLAMA_TOKEN_TYPE_BYTE:         token_data.attr = LLAMA_TOKEN_ATTR_BYTE;         break;
-                case LLAMA_TOKEN_TYPE_UNDEFINED:    token_data.attr = LLAMA_TOKEN_ATTR_UNDEFINED;    break;
-                default:                            token_data.attr = LLAMA_TOKEN_ATTR_UNDEFINED;    break;
+                case JARVIS_TOKEN_TYPE_UNKNOWN:      token_data.attr = JARVIS_TOKEN_ATTR_UNKNOWN;      break;
+                case JARVIS_TOKEN_TYPE_UNUSED:       token_data.attr = JARVIS_TOKEN_ATTR_UNUSED;       break;
+                case JARVIS_TOKEN_TYPE_NORMAL:       token_data.attr = JARVIS_TOKEN_ATTR_NORMAL;       break;
+                case JARVIS_TOKEN_TYPE_CONTROL:      token_data.attr = JARVIS_TOKEN_ATTR_CONTROL;      break;
+                case JARVIS_TOKEN_TYPE_USER_DEFINED: token_data.attr = JARVIS_TOKEN_ATTR_USER_DEFINED; break;
+                case JARVIS_TOKEN_TYPE_BYTE:         token_data.attr = JARVIS_TOKEN_ATTR_BYTE;         break;
+                case JARVIS_TOKEN_TYPE_UNDEFINED:    token_data.attr = JARVIS_TOKEN_ATTR_UNDEFINED;    break;
+                default:                            token_data.attr = JARVIS_TOKEN_ATTR_UNDEFINED;    break;
             }
         }
     }
@@ -6490,25 +6490,25 @@ static void llm_load_vocab(
     vocab.init_tokenizer();
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
-    if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
+    if (vocab.type == JARVIS_VOCAB_TYPE_SPM) {
         try {
-            vocab.linefeed_id = llama_byte_to_token_impl(vocab, '\n');
+            vocab.linefeed_id = jarvis_byte_to_token_impl(vocab, '\n');
         } catch (const std::exception & e) {
-            LLAMA_LOG_WARN("%s: SPM vocabulary, but newline token not found: %s! Using special_pad_id instead.", __func__, e.what());
+            JARVIS_LOG_WARN("%s: SPM vocabulary, but newline token not found: %s! Using special_pad_id instead.", __func__, e.what());
             vocab.linefeed_id = vocab.special_pad_id;
         }
-    } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
+    } else if (vocab.type == JARVIS_VOCAB_TYPE_WPM) {
         vocab.linefeed_id = vocab.special_pad_id;
-    } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
-        const std::vector<int> ids = llama_tokenize_internal(vocab, "\n", false);
+    } else if (vocab.type == JARVIS_VOCAB_TYPE_RWKV) {
+        const std::vector<int> ids = jarvis_tokenize_internal(vocab, "\n", false);
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     } else {
-        const std::vector<int> ids = llama_tokenize_internal(vocab, "\xC4\x8A", false); // U+010A
+        const std::vector<int> ids = jarvis_tokenize_internal(vocab, "\xC4\x8A", false); // U+010A
 
         //GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         if (ids.empty()) {
-            LLAMA_LOG_WARN("%s: model vocab missing newline token, using special_pad_id instead\n", __func__);
+            JARVIS_LOG_WARN("%s: model vocab missing newline token, using special_pad_id instead\n", __func__);
             vocab.linefeed_id = vocab.special_pad_id;
         } else {
             vocab.linefeed_id = ids[0];
@@ -6549,7 +6549,7 @@ static void llm_load_vocab(
                 continue;
             }
             if (new_id >= vocab.id_to_token.size()) {
-                LLAMA_LOG_WARN("%s: bad special token: '%s' = %ud, using default id %d\n",
+                JARVIS_LOG_WARN("%s: bad special token: '%s' = %ud, using default id %d\n",
                     __func__, key.c_str(), new_id, id);
             } else {
                 id = new_id;
@@ -6574,7 +6574,7 @@ static void llm_load_vocab(
 
         for (const auto & t : vocab.token_to_id) {
             // find EOT token: "<|eot_id|>", "<|im_end|>", "<end_of_turn>", etc.
-            if (vocab.special_eot_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_eot_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|eot_id|>"
                         || t.first == "<|im_end|>"
@@ -6585,30 +6585,30 @@ static void llm_load_vocab(
                         || t.first == "<｜end▁of▁sentence｜>" // DeepSeek
                    ) {
                     vocab.special_eot_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find EOM token: "<|eom_id|>"
-            if (vocab.special_eom_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_eom_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|eom_id|>"
                         ) {
                     vocab.special_eom_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find FIM_PRE token: "<|fim_prefix|>", "<fim-prefix>", "<PRE>", etc.
-            if (vocab.special_fim_pre_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_fim_pre_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|fim_prefix|>"  // Qwen
                         || t.first == "<fim-prefix>"
@@ -6616,16 +6616,16 @@ static void llm_load_vocab(
                         || t.first == "<PRE>"
                         ) {
                     vocab.special_fim_pre_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find FIM_SUF token: "<|fim_suffix|>", "<fim-suffix>", "<SUF>", etc.
-            if (vocab.special_fim_suf_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_fim_suf_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|fim_suffix|>" // Qwen
                         || t.first == "<fim-suffix>"
@@ -6633,16 +6633,16 @@ static void llm_load_vocab(
                         || t.first == "<SUF>"
                         ) {
                     vocab.special_fim_suf_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find FIM_MID token: "<|fim_middle|>", "<fim-middle>", "<MID>", etc.
-            if (vocab.special_fim_mid_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_fim_mid_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|fim_middle|>" // Qwen
                         || t.first == "<fim-middle>"
@@ -6650,32 +6650,32 @@ static void llm_load_vocab(
                         || t.first == "<MID>"
                         ) {
                     vocab.special_fim_mid_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find FIM_PAD token: "<|fim_pad|>", "<fim-pad>", "<PAD>", etc.
-            if (vocab.special_fim_pad_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_fim_pad_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|fim_pad|>" // Qwen
                         || t.first == "<fim-pad>"
                         || t.first == "<PAD>"
                         ) {
                     vocab.special_fim_pad_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find FIM_REP token: "<|fim_repo|>", "<fim-repo>", "<REP>", etc.
-            if (vocab.special_fim_rep_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_fim_rep_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|fim_repo|>"  // Qwen
                         || t.first == "<|repo_name|>"
@@ -6683,24 +6683,24 @@ static void llm_load_vocab(
                         || t.first == "<REPO>"
                         ) {
                     vocab.special_fim_rep_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
 
             // find FIM_SEP token: "<|file_sep|>"
-            if (vocab.special_fim_sep_id == LLAMA_TOKEN_NULL) {
+            if (vocab.special_fim_sep_id == JARVIS_TOKEN_NULL) {
                 if (false
                         || t.first == "<|file_sep|>" // Qwen
                         ) {
                     vocab.special_fim_sep_id = t.second;
-                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                        LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                    if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                        JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                                 __func__, t.second, t.first.c_str());
-                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                        vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                     }
                 }
             }
@@ -6708,18 +6708,18 @@ static void llm_load_vocab(
 
         // maintain a list of tokens that cause end-of-generation
         // this is currently determined based on the token text, which is obviously not ideal
-        // ref: https://github.com/ggerganov/llama.cpp/issues/9606
+        // ref: https://github.com/ggerganov/jarvis.cpp/issues/9606
         vocab.special_eog_ids.clear();
 
-        if (vocab.special_fim_pad_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_pad_id) == 0) {
+        if (vocab.special_fim_pad_id != JARVIS_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_pad_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_fim_pad_id);
         }
 
-        if (vocab.special_fim_rep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_rep_id) == 0) {
+        if (vocab.special_fim_rep_id != JARVIS_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_rep_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_fim_rep_id);
         }
 
-        if (vocab.special_fim_sep_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_sep_id) == 0) {
+        if (vocab.special_fim_sep_id != JARVIS_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_fim_sep_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_fim_sep_id);
         }
 
@@ -6734,69 +6734,69 @@ static void llm_load_vocab(
                     || t.first == "<EOT>"
                ) {
                 vocab.special_eog_ids.insert(t.second);
-                if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
-                    LLAMA_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                if ((vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL) == 0) {
+                    JARVIS_LOG_WARN("%s: control-looking token: %6d '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
                             __func__, t.second, t.first.c_str());
-                    vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    vocab.id_to_token[t.second].attr = JARVIS_TOKEN_ATTR_CONTROL;
                 }
             } else {
                 // token is control, but not marked as EOG -> print a debug log
-                if (vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL && vocab.special_eog_ids.count(t.second) == 0) {
-                    LLAMA_LOG_DEBUG("%s: control token: %6d '%s' is not marked as EOG\n",
+                if (vocab.id_to_token[t.second].attr & JARVIS_TOKEN_ATTR_CONTROL && vocab.special_eog_ids.count(t.second) == 0) {
+                    JARVIS_LOG_DEBUG("%s: control token: %6d '%s' is not marked as EOG\n",
                             __func__, t.second, t.first.c_str());
                 }
             }
         }
 
         // sanity checks
-        if (vocab.special_eos_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
+        if (vocab.special_eos_id != JARVIS_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eos_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eos_id);
-            LLAMA_LOG_WARN("%s: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
+            JARVIS_LOG_WARN("%s: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
 
-        if (vocab.special_eot_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eot_id) == 0) {
+        if (vocab.special_eot_id != JARVIS_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eot_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eot_id);
-            LLAMA_LOG_WARN("%s: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
+            JARVIS_LOG_WARN("%s: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
 
-        if (vocab.special_eom_id != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eom_id) == 0) {
+        if (vocab.special_eom_id != JARVIS_TOKEN_NULL && vocab.special_eog_ids.count(vocab.special_eom_id) == 0) {
             vocab.special_eog_ids.insert(vocab.special_eom_id);
-            LLAMA_LOG_WARN("%s: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
+            JARVIS_LOG_WARN("%s: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect\n", __func__);
         }
     }
 
     // build special tokens cache
     {
-        for (llama_vocab::id id = 0; id < (llama_vocab::id)n_vocab; ++id) {
-            if (vocab.id_to_token[id].attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED | LLAMA_TOKEN_ATTR_UNKNOWN)) {
+        for (jarvis_vocab::id id = 0; id < (jarvis_vocab::id)n_vocab; ++id) {
+            if (vocab.id_to_token[id].attr & (JARVIS_TOKEN_ATTR_CONTROL | JARVIS_TOKEN_ATTR_USER_DEFINED | JARVIS_TOKEN_ATTR_UNKNOWN)) {
                 vocab.cache_special_tokens.push_back(id);
             }
         }
 
         std::sort(vocab.cache_special_tokens.begin(), vocab.cache_special_tokens.end(),
-            [&] (const llama_vocab::id a, const llama_vocab::id b) {
+            [&] (const jarvis_vocab::id a, const jarvis_vocab::id b) {
                 return vocab.id_to_token[a].text.size() > vocab.id_to_token[b].text.size();
             }
         );
 
-        LLAMA_LOG_INFO("%s: special tokens cache size = %u\n", __func__, (uint32_t)vocab.cache_special_tokens.size());
+        JARVIS_LOG_INFO("%s: special tokens cache size = %u\n", __func__, (uint32_t)vocab.cache_special_tokens.size());
     }
 
     // build token to piece cache
     {
         size_t size_cache = 0;
 
-        std::vector<llama_vocab::token> cache_token_to_piece(n_vocab);
+        std::vector<jarvis_vocab::token> cache_token_to_piece(n_vocab);
 
         for (uint32_t id = 0; id < n_vocab; ++id) {
-            cache_token_to_piece[id] = llama_token_to_piece(&model, id, true);
+            cache_token_to_piece[id] = jarvis_token_to_piece(&model, id, true);
 
             size_cache += cache_token_to_piece[id].size();
         }
 
         std::swap(vocab.cache_token_to_piece, cache_token_to_piece);
 
-        LLAMA_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
+        JARVIS_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
     }
 
     // Handle per token attributes
@@ -6813,13 +6813,13 @@ static void llm_load_vocab(
             return false;
         };
 
-        auto _set_tokenid_attr = [&] (const llama_vocab::id id, llama_token_attr attr, bool value) {
+        auto _set_tokenid_attr = [&] (const jarvis_vocab::id id, jarvis_token_attr attr, bool value) {
             uint32_t current = vocab.id_to_token.at(id).attr;
             current = value ? (current | attr) : (current & ~attr);
-            vocab.id_to_token[id].attr = (llama_token_attr) current;
+            vocab.id_to_token[id].attr = (jarvis_token_attr) current;
         };
 
-        auto _set_token_attr = [&] (const std::string & token, llama_token_attr attr, bool value) {
+        auto _set_token_attr = [&] (const std::string & token, jarvis_token_attr attr, bool value) {
             _set_tokenid_attr(vocab.token_to_id.at(token), attr, value);
         };
 
@@ -6838,26 +6838,26 @@ static void llm_load_vocab(
 
         // set attributes by model/tokenizer name
         if (_contains_any(tokenizer_pre, {"jina-v2-de", "jina-v2-es", "jina-v2-code"})) {
-            _set_token_attr("<mask>", LLAMA_TOKEN_ATTR_LSTRIP, true);
+            _set_token_attr("<mask>", JARVIS_TOKEN_ATTR_LSTRIP, true);
         } else if (_contains_any(model_name, {"phi-3", "phi3"})) {
             for (auto id : vocab.cache_special_tokens) {
-                _set_tokenid_attr(id, LLAMA_TOKEN_ATTR_RSTRIP, true);
+                _set_tokenid_attr(id, JARVIS_TOKEN_ATTR_RSTRIP, true);
             }
             for (auto token : {"</s>"}) {
-                _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, true);
+                _set_token_attr(token, JARVIS_TOKEN_ATTR_RSTRIP, true);
             }
             for (auto token : {"<unk>", "<s>", "<|endoftext|>"}) {
-                _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, false);
+                _set_token_attr(token, JARVIS_TOKEN_ATTR_RSTRIP, false);
             }
         }
     }
 }
 
-static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
+static void llm_load_print_meta(jarvis_model_loader & ml, jarvis_model & model) {
     const auto & hparams = model.hparams;
     const auto & vocab   = model.vocab;
 
-    const char * rope_scaling_type = LLAMA_ROPE_SCALING_TYPES.at(hparams.rope_scaling_type_train);
+    const char * rope_scaling_type = JARVIS_ROPE_SCALING_TYPES.at(hparams.rope_scaling_type_train);
 
     auto print_f = [](const std::function<uint32_t(uint32_t)> & f, uint32_t n) {
         bool is_var = false;
@@ -6889,135 +6889,135 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     };
 
     // hparams
-    LLAMA_LOG_INFO("%s: format           = %s\n",     __func__, llama_file_version_name(ml.fver));
-    LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch));
-    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, llama_model_vocab_type_name(vocab.type));
-    LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
-    LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
-    LLAMA_LOG_INFO("%s: vocab_only       = %d\n",     __func__, hparams.vocab_only);
+    JARVIS_LOG_INFO("%s: format           = %s\n",     __func__, jarvis_file_version_name(ml.fver));
+    JARVIS_LOG_INFO("%s: arch             = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch));
+    JARVIS_LOG_INFO("%s: vocab type       = %s\n",     __func__, jarvis_model_vocab_type_name(vocab.type));
+    JARVIS_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
+    JARVIS_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
+    JARVIS_LOG_INFO("%s: vocab_only       = %d\n",     __func__, hparams.vocab_only);
 
     if (!hparams.vocab_only) {
-        LLAMA_LOG_INFO("%s: n_ctx_train      = %u\n",     __func__, hparams.n_ctx_train);
-        LLAMA_LOG_INFO("%s: n_embd           = %u\n",     __func__, hparams.n_embd);
-        LLAMA_LOG_INFO("%s: n_layer          = %u\n",     __func__, hparams.n_layer);
-        LLAMA_LOG_INFO("%s: n_head           = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_head(il);    }, hparams.n_layer).c_str());
-        LLAMA_LOG_INFO("%s: n_head_kv        = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_head_kv(il); }, hparams.n_layer).c_str());
-        LLAMA_LOG_INFO("%s: n_rot            = %u\n",     __func__, hparams.n_rot);
-        LLAMA_LOG_INFO("%s: n_swa            = %u\n",     __func__, hparams.n_swa);
-        LLAMA_LOG_INFO("%s: n_embd_head_k    = %u\n",     __func__, hparams.n_embd_head_k);
-        LLAMA_LOG_INFO("%s: n_embd_head_v    = %u\n",     __func__, hparams.n_embd_head_v);
-        LLAMA_LOG_INFO("%s: n_gqa            = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_gqa(il);        }, hparams.n_layer).c_str());
-        LLAMA_LOG_INFO("%s: n_embd_k_gqa     = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_embd_k_gqa(il); }, hparams.n_layer).c_str());
-        LLAMA_LOG_INFO("%s: n_embd_v_gqa     = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_embd_v_gqa(il); }, hparams.n_layer).c_str());
-        LLAMA_LOG_INFO("%s: f_norm_eps       = %.1e\n",   __func__, hparams.f_norm_eps);
-        LLAMA_LOG_INFO("%s: f_norm_rms_eps   = %.1e\n",   __func__, hparams.f_norm_rms_eps);
-        LLAMA_LOG_INFO("%s: f_clamp_kqv      = %.1e\n",   __func__, hparams.f_clamp_kqv);
-        LLAMA_LOG_INFO("%s: f_max_alibi_bias = %.1e\n",   __func__, hparams.f_max_alibi_bias);
-        LLAMA_LOG_INFO("%s: f_logit_scale    = %.1e\n",   __func__, hparams.f_logit_scale);
-        LLAMA_LOG_INFO("%s: n_ff             = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_ff(il); }, hparams.n_layer).c_str());
-        LLAMA_LOG_INFO("%s: n_expert         = %u\n",     __func__, hparams.n_expert);
-        LLAMA_LOG_INFO("%s: n_expert_used    = %u\n",     __func__, hparams.n_expert_used);
-        LLAMA_LOG_INFO("%s: causal attn      = %d\n",     __func__, hparams.causal_attn);
-        LLAMA_LOG_INFO("%s: pooling type     = %d\n",     __func__, hparams.pooling_type);
-        LLAMA_LOG_INFO("%s: rope type        = %d\n",     __func__, hparams.rope_type);
-        LLAMA_LOG_INFO("%s: rope scaling     = %s\n",     __func__, rope_scaling_type);
-        LLAMA_LOG_INFO("%s: freq_base_train  = %.1f\n",   __func__, hparams.rope_freq_base_train);
-        LLAMA_LOG_INFO("%s: freq_scale_train = %g\n",     __func__, hparams.rope_freq_scale_train);
-        LLAMA_LOG_INFO("%s: n_ctx_orig_yarn  = %u\n",     __func__, hparams.n_ctx_orig_yarn);
-        LLAMA_LOG_INFO("%s: rope_finetuned   = %s\n",     __func__, hparams.rope_finetuned ? "yes" : "unknown");
-        LLAMA_LOG_INFO("%s: ssm_d_conv       = %u\n",     __func__, hparams.ssm_d_conv);
-        LLAMA_LOG_INFO("%s: ssm_d_inner      = %u\n",     __func__, hparams.ssm_d_inner);
-        LLAMA_LOG_INFO("%s: ssm_d_state      = %u\n",     __func__, hparams.ssm_d_state);
-        LLAMA_LOG_INFO("%s: ssm_dt_rank      = %u\n",     __func__, hparams.ssm_dt_rank);
-        LLAMA_LOG_INFO("%s: ssm_dt_b_c_rms   = %d\n",     __func__, hparams.ssm_dt_b_c_rms);
+        JARVIS_LOG_INFO("%s: n_ctx_train      = %u\n",     __func__, hparams.n_ctx_train);
+        JARVIS_LOG_INFO("%s: n_embd           = %u\n",     __func__, hparams.n_embd);
+        JARVIS_LOG_INFO("%s: n_layer          = %u\n",     __func__, hparams.n_layer);
+        JARVIS_LOG_INFO("%s: n_head           = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_head(il);    }, hparams.n_layer).c_str());
+        JARVIS_LOG_INFO("%s: n_head_kv        = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_head_kv(il); }, hparams.n_layer).c_str());
+        JARVIS_LOG_INFO("%s: n_rot            = %u\n",     __func__, hparams.n_rot);
+        JARVIS_LOG_INFO("%s: n_swa            = %u\n",     __func__, hparams.n_swa);
+        JARVIS_LOG_INFO("%s: n_embd_head_k    = %u\n",     __func__, hparams.n_embd_head_k);
+        JARVIS_LOG_INFO("%s: n_embd_head_v    = %u\n",     __func__, hparams.n_embd_head_v);
+        JARVIS_LOG_INFO("%s: n_gqa            = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_gqa(il);        }, hparams.n_layer).c_str());
+        JARVIS_LOG_INFO("%s: n_embd_k_gqa     = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_embd_k_gqa(il); }, hparams.n_layer).c_str());
+        JARVIS_LOG_INFO("%s: n_embd_v_gqa     = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_embd_v_gqa(il); }, hparams.n_layer).c_str());
+        JARVIS_LOG_INFO("%s: f_norm_eps       = %.1e\n",   __func__, hparams.f_norm_eps);
+        JARVIS_LOG_INFO("%s: f_norm_rms_eps   = %.1e\n",   __func__, hparams.f_norm_rms_eps);
+        JARVIS_LOG_INFO("%s: f_clamp_kqv      = %.1e\n",   __func__, hparams.f_clamp_kqv);
+        JARVIS_LOG_INFO("%s: f_max_alibi_bias = %.1e\n",   __func__, hparams.f_max_alibi_bias);
+        JARVIS_LOG_INFO("%s: f_logit_scale    = %.1e\n",   __func__, hparams.f_logit_scale);
+        JARVIS_LOG_INFO("%s: n_ff             = %s\n",     __func__, print_f([&](uint32_t il) { return hparams.n_ff(il); }, hparams.n_layer).c_str());
+        JARVIS_LOG_INFO("%s: n_expert         = %u\n",     __func__, hparams.n_expert);
+        JARVIS_LOG_INFO("%s: n_expert_used    = %u\n",     __func__, hparams.n_expert_used);
+        JARVIS_LOG_INFO("%s: causal attn      = %d\n",     __func__, hparams.causal_attn);
+        JARVIS_LOG_INFO("%s: pooling type     = %d\n",     __func__, hparams.pooling_type);
+        JARVIS_LOG_INFO("%s: rope type        = %d\n",     __func__, hparams.rope_type);
+        JARVIS_LOG_INFO("%s: rope scaling     = %s\n",     __func__, rope_scaling_type);
+        JARVIS_LOG_INFO("%s: freq_base_train  = %.1f\n",   __func__, hparams.rope_freq_base_train);
+        JARVIS_LOG_INFO("%s: freq_scale_train = %g\n",     __func__, hparams.rope_freq_scale_train);
+        JARVIS_LOG_INFO("%s: n_ctx_orig_yarn  = %u\n",     __func__, hparams.n_ctx_orig_yarn);
+        JARVIS_LOG_INFO("%s: rope_finetuned   = %s\n",     __func__, hparams.rope_finetuned ? "yes" : "unknown");
+        JARVIS_LOG_INFO("%s: ssm_d_conv       = %u\n",     __func__, hparams.ssm_d_conv);
+        JARVIS_LOG_INFO("%s: ssm_d_inner      = %u\n",     __func__, hparams.ssm_d_inner);
+        JARVIS_LOG_INFO("%s: ssm_d_state      = %u\n",     __func__, hparams.ssm_d_state);
+        JARVIS_LOG_INFO("%s: ssm_dt_rank      = %u\n",     __func__, hparams.ssm_dt_rank);
+        JARVIS_LOG_INFO("%s: ssm_dt_b_c_rms   = %d\n",     __func__, hparams.ssm_dt_b_c_rms);
     }
 
-    LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, llama_model_type_name(model.type));
-    LLAMA_LOG_INFO("%s: model ftype      = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
+    JARVIS_LOG_INFO("%s: model type       = %s\n",     __func__, jarvis_model_type_name(model.type));
+    JARVIS_LOG_INFO("%s: model ftype      = %s\n",     __func__, jarvis_model_ftype_name(model.ftype).c_str());
     if (ml.n_elements >= 1e12) {
-        LLAMA_LOG_INFO("%s: model params     = %.2f T\n", __func__, ml.n_elements*1e-12);
+        JARVIS_LOG_INFO("%s: model params     = %.2f T\n", __func__, ml.n_elements*1e-12);
     } else if (ml.n_elements >= 1e9) {
-        LLAMA_LOG_INFO("%s: model params     = %.2f B\n", __func__, ml.n_elements*1e-9);
+        JARVIS_LOG_INFO("%s: model params     = %.2f B\n", __func__, ml.n_elements*1e-9);
     } else if (ml.n_elements >= 1e6) {
-        LLAMA_LOG_INFO("%s: model params     = %.2f M\n", __func__, ml.n_elements*1e-6);
+        JARVIS_LOG_INFO("%s: model params     = %.2f M\n", __func__, ml.n_elements*1e-6);
     } else {
-        LLAMA_LOG_INFO("%s: model params     = %.2f K\n", __func__, ml.n_elements*1e-3);
+        JARVIS_LOG_INFO("%s: model params     = %.2f K\n", __func__, ml.n_elements*1e-3);
     }
     if (ml.n_bytes < GiB) {
-        LLAMA_LOG_INFO("%s: model size       = %.2f MiB (%.2f BPW) \n", __func__, ml.n_bytes/1024.0/1024.0,        ml.n_bytes*8.0/ml.n_elements);
+        JARVIS_LOG_INFO("%s: model size       = %.2f MiB (%.2f BPW) \n", __func__, ml.n_bytes/1024.0/1024.0,        ml.n_bytes*8.0/ml.n_elements);
     } else {
-        LLAMA_LOG_INFO("%s: model size       = %.2f GiB (%.2f BPW) \n", __func__, ml.n_bytes/1024.0/1024.0/1024.0, ml.n_bytes*8.0/ml.n_elements);
+        JARVIS_LOG_INFO("%s: model size       = %.2f GiB (%.2f BPW) \n", __func__, ml.n_bytes/1024.0/1024.0/1024.0, ml.n_bytes*8.0/ml.n_elements);
     }
 
     // general kv
-    LLAMA_LOG_INFO("%s: general.name     = %s\n",    __func__, model.name.c_str());
+    JARVIS_LOG_INFO("%s: general.name     = %s\n",    __func__, model.name.c_str());
 
     // special tokens
-    if (vocab.special_bos_id  != -1)    { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,     vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
-    if (vocab.special_eos_id  != -1)    { LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,     vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
-    if (vocab.special_eot_id  != -1)    { LLAMA_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,     vocab.id_to_token[vocab.special_eot_id].text.c_str() );  }
-    if (vocab.special_eom_id  != -1)    { LLAMA_LOG_INFO( "%s: EOM token        = %d '%s'\n", __func__, vocab.special_eom_id,     vocab.id_to_token[vocab.special_eom_id].text.c_str() );  }
-    if (vocab.special_unk_id  != -1)    { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,     vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
-    if (vocab.special_sep_id  != -1)    { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,     vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
-    if (vocab.special_pad_id  != -1)    { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,     vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
-    if (vocab.special_cls_id  != -1)    { LLAMA_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,     vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
-    if (vocab.special_mask_id != -1)    { LLAMA_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id,    vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
+    if (vocab.special_bos_id  != -1)    { JARVIS_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,     vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
+    if (vocab.special_eos_id  != -1)    { JARVIS_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,     vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
+    if (vocab.special_eot_id  != -1)    { JARVIS_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,     vocab.id_to_token[vocab.special_eot_id].text.c_str() );  }
+    if (vocab.special_eom_id  != -1)    { JARVIS_LOG_INFO( "%s: EOM token        = %d '%s'\n", __func__, vocab.special_eom_id,     vocab.id_to_token[vocab.special_eom_id].text.c_str() );  }
+    if (vocab.special_unk_id  != -1)    { JARVIS_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,     vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
+    if (vocab.special_sep_id  != -1)    { JARVIS_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,     vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
+    if (vocab.special_pad_id  != -1)    { JARVIS_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,     vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
+    if (vocab.special_cls_id  != -1)    { JARVIS_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,     vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
+    if (vocab.special_mask_id != -1)    { JARVIS_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id,    vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
 
-    if (vocab.linefeed_id != -1)        { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,        vocab.id_to_token[vocab.linefeed_id].text.c_str() ); }
+    if (vocab.linefeed_id != -1)        { JARVIS_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,        vocab.id_to_token[vocab.linefeed_id].text.c_str() ); }
 
-    if (vocab.special_fim_pre_id != -1) { LLAMA_LOG_INFO( "%s: FIM PRE token    = %d '%s'\n", __func__, vocab.special_fim_pre_id, vocab.id_to_token[vocab.special_fim_pre_id].text.c_str() ); }
-    if (vocab.special_fim_suf_id != -1) { LLAMA_LOG_INFO( "%s: FIM SUF token    = %d '%s'\n", __func__, vocab.special_fim_suf_id, vocab.id_to_token[vocab.special_fim_suf_id].text.c_str() ); }
-    if (vocab.special_fim_mid_id != -1) { LLAMA_LOG_INFO( "%s: FIM MID token    = %d '%s'\n", __func__, vocab.special_fim_mid_id, vocab.id_to_token[vocab.special_fim_mid_id].text.c_str() ); }
-    if (vocab.special_fim_pad_id != -1) { LLAMA_LOG_INFO( "%s: FIM PAD token    = %d '%s'\n", __func__, vocab.special_fim_pad_id, vocab.id_to_token[vocab.special_fim_pad_id].text.c_str() ); }
-    if (vocab.special_fim_rep_id != -1) { LLAMA_LOG_INFO( "%s: FIM REP token    = %d '%s'\n", __func__, vocab.special_fim_rep_id, vocab.id_to_token[vocab.special_fim_rep_id].text.c_str() ); }
-    if (vocab.special_fim_sep_id != -1) { LLAMA_LOG_INFO( "%s: FIM SEP token    = %d '%s'\n", __func__, vocab.special_fim_sep_id, vocab.id_to_token[vocab.special_fim_sep_id].text.c_str() ); }
+    if (vocab.special_fim_pre_id != -1) { JARVIS_LOG_INFO( "%s: FIM PRE token    = %d '%s'\n", __func__, vocab.special_fim_pre_id, vocab.id_to_token[vocab.special_fim_pre_id].text.c_str() ); }
+    if (vocab.special_fim_suf_id != -1) { JARVIS_LOG_INFO( "%s: FIM SUF token    = %d '%s'\n", __func__, vocab.special_fim_suf_id, vocab.id_to_token[vocab.special_fim_suf_id].text.c_str() ); }
+    if (vocab.special_fim_mid_id != -1) { JARVIS_LOG_INFO( "%s: FIM MID token    = %d '%s'\n", __func__, vocab.special_fim_mid_id, vocab.id_to_token[vocab.special_fim_mid_id].text.c_str() ); }
+    if (vocab.special_fim_pad_id != -1) { JARVIS_LOG_INFO( "%s: FIM PAD token    = %d '%s'\n", __func__, vocab.special_fim_pad_id, vocab.id_to_token[vocab.special_fim_pad_id].text.c_str() ); }
+    if (vocab.special_fim_rep_id != -1) { JARVIS_LOG_INFO( "%s: FIM REP token    = %d '%s'\n", __func__, vocab.special_fim_rep_id, vocab.id_to_token[vocab.special_fim_rep_id].text.c_str() ); }
+    if (vocab.special_fim_sep_id != -1) { JARVIS_LOG_INFO( "%s: FIM SEP token    = %d '%s'\n", __func__, vocab.special_fim_sep_id, vocab.id_to_token[vocab.special_fim_sep_id].text.c_str() ); }
 
     for (const auto & id : vocab.special_eog_ids) {
-        LLAMA_LOG_INFO( "%s: EOG token        = %d '%s'\n", __func__, id, vocab.id_to_token[id].text.c_str() );
+        JARVIS_LOG_INFO( "%s: EOG token        = %d '%s'\n", __func__, id, vocab.id_to_token[id].text.c_str() );
     }
 
-    LLAMA_LOG_INFO("%s: max token length = %d\n", __func__, vocab.max_token_len);
+    JARVIS_LOG_INFO("%s: max token length = %d\n", __func__, vocab.max_token_len);
 
     if (model.arch == LLM_ARCH_DEEPSEEK2) {
-        LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
-        LLAMA_LOG_INFO("%s: n_lora_q             = %d\n",     __func__, hparams.n_lora_q);
-        LLAMA_LOG_INFO("%s: n_lora_kv            = %d\n",     __func__, hparams.n_lora_kv);
-        LLAMA_LOG_INFO("%s: n_ff_exp             = %d\n",     __func__, hparams.n_ff_exp);
-        LLAMA_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
-        LLAMA_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
-        LLAMA_LOG_INFO("%s: rope_yarn_log_mul    = %.4f\n",   __func__, hparams.rope_yarn_log_mul);
+        JARVIS_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
+        JARVIS_LOG_INFO("%s: n_lora_q             = %d\n",     __func__, hparams.n_lora_q);
+        JARVIS_LOG_INFO("%s: n_lora_kv            = %d\n",     __func__, hparams.n_lora_kv);
+        JARVIS_LOG_INFO("%s: n_ff_exp             = %d\n",     __func__, hparams.n_ff_exp);
+        JARVIS_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
+        JARVIS_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
+        JARVIS_LOG_INFO("%s: rope_yarn_log_mul    = %.4f\n",   __func__, hparams.rope_yarn_log_mul);
     }
 
     if (model.arch == LLM_ARCH_QWEN2MOE) {
-        LLAMA_LOG_INFO("%s: n_ff_exp         = %d\n",     __func__, hparams.n_ff_exp);
-        LLAMA_LOG_INFO("%s: n_ff_shexp       = %d\n",     __func__, hparams.n_ff_shexp);
+        JARVIS_LOG_INFO("%s: n_ff_exp         = %d\n",     __func__, hparams.n_ff_exp);
+        JARVIS_LOG_INFO("%s: n_ff_shexp       = %d\n",     __func__, hparams.n_ff_shexp);
     }
 
     if (model.arch == LLM_ARCH_GRANITE || model.arch == LLM_ARCH_GRANITE_MOE) {
-        LLAMA_LOG_INFO("%s: f_embedding_scale = %f\n", __func__, hparams.f_embedding_scale);
-        LLAMA_LOG_INFO("%s: f_residual_scale  = %f\n", __func__, hparams.f_residual_scale);
-        LLAMA_LOG_INFO("%s: f_attention_scale = %f\n", __func__, hparams.f_attention_scale);
+        JARVIS_LOG_INFO("%s: f_embedding_scale = %f\n", __func__, hparams.f_embedding_scale);
+        JARVIS_LOG_INFO("%s: f_residual_scale  = %f\n", __func__, hparams.f_residual_scale);
+        JARVIS_LOG_INFO("%s: f_attention_scale = %f\n", __func__, hparams.f_attention_scale);
     }
 }
 
 // Returns false if cancelled by progress_callback
 static bool llm_load_tensors(
-        llama_model_loader & ml,
-        llama_model & model,
+        jarvis_model_loader & ml,
+        jarvis_model & model,
         int n_gpu_layers,
-        enum llama_split_mode split_mode,
+        enum jarvis_split_mode split_mode,
         int main_gpu,
         const float * tensor_split,
         bool use_mlock,
-        llama_progress_callback progress_callback,
+        jarvis_progress_callback progress_callback,
         void * progress_callback_user_data) {
     auto & hparams = model.hparams;
 
     // check if the value of main_gpu is valid
-    if (llama_get_device_count(model) > 0 &&
-        split_mode != LLAMA_SPLIT_MODE_LAYER &&
-        (main_gpu < 0 || main_gpu >= llama_get_device_count(model))) {
-        throw std::runtime_error(format("invalid value for main_gpu: %d (available devices: %d)", main_gpu, llama_get_device_count(model)));
+    if (jarvis_get_device_count(model) > 0 &&
+        split_mode != JARVIS_SPLIT_MODE_LAYER &&
+        (main_gpu < 0 || main_gpu >= jarvis_get_device_count(model))) {
+        throw std::runtime_error(format("invalid value for main_gpu: %d (available devices: %d)", main_gpu, jarvis_get_device_count(model)));
     }
 
     model.split_mode   = split_mode;
@@ -7029,8 +7029,8 @@ static bool llm_load_tensors(
     bool use_mmap_buffer = true;
 
     // there is very little benefit to offloading the input layer, so always keep it on the CPU
-    model.buft_input = llama_default_buffer_type_cpu(model, true);
-    //model.buft_input = llama_default_buffer_type_offload(main_gpu);
+    model.buft_input = jarvis_default_buffer_type_cpu(model, true);
+    //model.buft_input = jarvis_default_buffer_type_offload(main_gpu);
 
     model.buft_layer.resize(n_layer);
 
@@ -7039,22 +7039,22 @@ static bool llm_load_tensors(
 #ifdef GGML_USE_AMX
         model.buft_layer[i] = {
             ggml_backend_amx_buffer_type(),
-            llama_default_buffer_type_cpu(model, true)
+            jarvis_default_buffer_type_cpu(model, true)
         };
 #else
-        model.buft_layer[i] = llama_default_buffer_type_cpu(model, true);
+        model.buft_layer[i] = jarvis_default_buffer_type_cpu(model, true);
 #endif
     }
 
-    if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
+    if (split_mode == JARVIS_SPLIT_MODE_LAYER) {
         // calculate the split points
-        int device_count = llama_get_device_count(model);
+        int device_count = jarvis_get_device_count(model);
         bool all_zero = tensor_split == nullptr || std::all_of(tensor_split, tensor_split + device_count, [](float x) { return x == 0.0f; });
         std::vector<float> splits(device_count);
         if (all_zero) {
             // default split, by free memory
             for (int i = 0; i < device_count; ++i) {
-                splits[i] = llama_get_device_memory(model, i);
+                splits[i] = jarvis_get_device_memory(model, i);
             }
         } else {
             std::copy(tensor_split, tensor_split + device_count, splits.begin());
@@ -7074,38 +7074,38 @@ static bool llm_load_tensors(
         int act_gpu_layers = std::min(n_gpu_layers, (int)n_layer + 1);
         for (int i = i_gpu_start; i < n_layer; ++i) {
             int layer_gpu = std::upper_bound(splits.begin(), splits.begin() + device_count, float(i - i_gpu_start)/act_gpu_layers) - splits.begin();
-            model.buft_layer[i] = llama_default_buffer_type_offload(model, layer_gpu);
+            model.buft_layer[i] = jarvis_default_buffer_type_offload(model, layer_gpu);
         }
         // assign the output layer
         if (n_gpu_layers > n_layer) {
             int layer_gpu = std::upper_bound(splits.begin(), splits.begin() + device_count, float(act_gpu_layers - 1)/act_gpu_layers) - splits.begin();
-            model.buft_output = llama_default_buffer_type_offload(model, layer_gpu);
+            model.buft_output = jarvis_default_buffer_type_offload(model, layer_gpu);
         } else {
-            model.buft_output = llama_default_buffer_type_cpu(model, true);
+            model.buft_output = jarvis_default_buffer_type_cpu(model, true);
         }
     } else {
         ggml_backend_buffer_type_t split_buft;
-        if (split_mode == LLAMA_SPLIT_MODE_ROW) {
-            split_buft = llama_default_buffer_type_split(model, main_gpu, tensor_split);
+        if (split_mode == JARVIS_SPLIT_MODE_ROW) {
+            split_buft = jarvis_default_buffer_type_split(model, main_gpu, tensor_split);
         } else {
-            // LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_LAYER in backends where it is not supported
-            split_buft = llama_default_buffer_type_offload(model, main_gpu);
+            // JARVIS_SPLIT_MODE_NONE or JARVIS_SPLIT_MODE_LAYER in backends where it is not supported
+            split_buft = jarvis_default_buffer_type_offload(model, main_gpu);
         }
         // assign the repeating layers
         for (int i = i_gpu_start; i < n_layer; ++i) {
             model.buft_layer[i] = {
                 split_buft,
-                llama_default_buffer_type_offload(model, main_gpu)
+                jarvis_default_buffer_type_offload(model, main_gpu)
             };
         }
         // assign the output layer
         if (n_gpu_layers > n_layer) {
             model.buft_output = {
                 split_buft,
-                llama_default_buffer_type_offload(model, main_gpu)
+                jarvis_default_buffer_type_offload(model, main_gpu)
             };
         } else {
-            model.buft_output = llama_default_buffer_type_cpu(model, true);
+            model.buft_output = jarvis_default_buffer_type_cpu(model, true);
         }
     }
 
@@ -7141,7 +7141,7 @@ static bool llm_load_tensors(
         model.ctxs.push_back(ctx);
     }
 
-    LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
+    JARVIS_LOG_INFO("%s: ggml ctx size = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
 
     // create tensors for the weights
     {
@@ -7177,7 +7177,7 @@ static bool llm_load_tensors(
 
         const auto tn = LLM_TN(model.arch);
         switch (model.arch) {
-            case LLM_ARCH_LLAMA:
+            case LLM_ARCH_JARVIS:
             case LLM_ARCH_REFACT:
             case LLM_ARCH_MINICPM:
             case LLM_ARCH_GRANITE:
@@ -7188,11 +7188,11 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -7210,14 +7210,14 @@ static bool llm_load_tensors(
                         layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd_head_k * n_head, n_embd});
 
                         // optional bias tensors
-                        layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bo = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd},     llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bo = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd},     jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
-                        layer.rope_freqs = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FREQS, "weight"), {n_rot/2}, llama_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? llama_model_loader::TENSOR_DUPLICATED : 0));
+                        layer.rope_freqs = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FREQS, "weight"), {n_rot/2}, jarvis_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? jarvis_model_loader::TENSOR_DUPLICATED : 0));
 
                         if (n_expert == 0) {
                             layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
@@ -7225,13 +7225,13 @@ static bool llm_load_tensors(
                             layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
 
                             // optional MLP bias
-                            layer.ffn_gate_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE, "bias", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                            layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                            layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_gate_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE, "bias", i), {n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         } else {
                             layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
 
-                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, n_expert}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, n_expert}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                             if (layer.ffn_gate_exps) {
                                 layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, n_expert});
                                 layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, n_expert});
@@ -7274,11 +7274,11 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -7306,8 +7306,8 @@ static bool llm_load_tensors(
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
 
-                        layer.rope_long  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_LONG,  "weight"), { n_embd_head_qk_rope/2 }, llama_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? llama_model_loader::TENSOR_DUPLICATED : 0));
-                        layer.rope_short = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_SHORT, "weight"), { n_embd_head_qk_rope/2 }, llama_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? llama_model_loader::TENSOR_DUPLICATED : 0));
+                        layer.rope_long  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_LONG,  "weight"), { n_embd_head_qk_rope/2 }, jarvis_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? jarvis_model_loader::TENSOR_DUPLICATED : 0));
+                        layer.rope_short = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_SHORT, "weight"), { n_embd_head_qk_rope/2 }, jarvis_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? jarvis_model_loader::TENSOR_DUPLICATED : 0));
                     }
                 } break;
             case LLM_ARCH_GROK:
@@ -7321,11 +7321,11 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -7347,7 +7347,7 @@ static bool llm_load_tensors(
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
                         layer.ffn_gate_inp  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP,  "weight", i), {n_embd, n_expert});
-                        layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd, n_ff, n_expert}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd, n_ff, n_expert}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         if (layer.ffn_gate_exps) {
                             layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, n_expert});
@@ -7450,9 +7450,9 @@ static bool llm_load_tensors(
                         model.output_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd});
 
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         if (!model.output) {
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED); // needs to be on GPU
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED); // needs to be on GPU
                         }
                     }
 
@@ -7465,8 +7465,8 @@ static bool llm_load_tensors(
                         layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
                         layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd});
 
-                        layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa});
                         layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
@@ -7484,10 +7484,10 @@ static bool llm_load_tensors(
                     {
                         model.output_norm   = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         model.output_norm_b = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd});
-                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         if (!model.output) {
                             // needs to be on GPU
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
 
                     }
@@ -7526,11 +7526,11 @@ static bool llm_load_tensors(
                     if (model.arch == LLM_ARCH_BERT) {
                         model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,    "weight"), {n_embd, n_ctx_train});
 
-                        model.cls   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "weight"), {n_embd, n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        model.cls_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "bias"),   {n_embd},         llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.cls   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "weight"), {n_embd, n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        model.cls_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "bias"),   {n_embd},         jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
-                        model.cls_out   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS_OUT, "weight"), {n_embd, 1}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        model.cls_out_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS_OUT, "bias"),   {1},         llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.cls_out   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS_OUT, "weight"), {n_embd, 1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        model.cls_out_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS_OUT, "bias"),   {1},         jarvis_model_loader::TENSOR_NOT_REQUIRED);
                     }
 
                     model.tok_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
@@ -7583,8 +7583,8 @@ static bool llm_load_tensors(
                     model.tok_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd}); // LayerNorm
                     model.tok_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd}); //LayerNorm bias
 
-                    model.cls   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "weight"), {n_embd, 1}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                    model.cls_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "bias"),   {1},         llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.cls   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "weight"), {n_embd, 1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                    model.cls_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_CLS, "bias"),   {1},         jarvis_model_loader::TENSOR_NOT_REQUIRED);
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
                         ggml_context * ctx_split = ctx_for_layer_split(i);
@@ -7594,14 +7594,14 @@ static bool llm_load_tensors(
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, n_embd});
                         layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q, "bias", i),   {n_embd});
 
-                        layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias",   i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias",   i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K, "weight", i), {n_embd, n_embd_gqa});
                         layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K, "bias",   i), {n_embd_gqa});
 
-                        layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias",   i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias",   i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V, "weight", i), {n_embd, n_embd_gqa});
                         layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V, "bias",   i), {n_embd_gqa});
@@ -7612,8 +7612,8 @@ static bool llm_load_tensors(
                         layer.attn_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "weight", i), {n_embd}); //output_norm
                         layer.attn_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "bias",   i), {n_embd});
 
-                        layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias",   i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias",   i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
@@ -7666,16 +7666,16 @@ static bool llm_load_tensors(
             case LLM_ARCH_MPT:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                    model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,   "weight"), {n_embd, n_ctx_train}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,   "weight"), {n_embd, n_ctx_train}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                     // output
                     {
                         model.output_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
-                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         if (!model.output) {
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED); // needs to be on GPU
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED); // needs to be on GPU
                         }
                     }
 
@@ -7686,31 +7686,31 @@ static bool llm_load_tensors(
                         auto & layer = model.layers[i];
 
                         layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
-                        layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa});
-                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
-                        layer.bo   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bo   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
-                        layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_down   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
-                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
-                        layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
-                        layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias",   i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias",   i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
-                        layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias",   i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias",   i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // AWQ ScaleActivation layer
-                        layer.ffn_act = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_act = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                     }
                 } break;
             case LLM_ARCH_STABLELM:
@@ -7739,17 +7739,17 @@ static bool llm_load_tensors(
                         layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
 
                         // optional bias tensors, present in Stable LM 2 1.6B
-                        layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // optional q and k layernorms, present in StableLM 2 12B
-                        layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd_head_k, n_head},    llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd_head_k, n_head_kv}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd_head_k, n_head},    jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd_head_k, n_head_kv}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // optional FFN norm, not present in StableLM 2 12B which uses parallel residual
-                        layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
@@ -7792,10 +7792,10 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -7896,8 +7896,8 @@ static bool llm_load_tensors(
                         layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
                         layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd});
 
-                        layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         if (layer.wqkv == nullptr) {
                             layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, n_embd});
@@ -7940,7 +7940,7 @@ static bool llm_load_tensors(
 
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), { n_embd });
 
-                        layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), { n_embd, n_embd + 2 * n_embd_gqa }, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), { n_embd, n_embd + 2 * n_embd_gqa }, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), { n_embd, n_embd });
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), { n_embd });
@@ -7948,8 +7948,8 @@ static bool llm_load_tensors(
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), { n_ff, n_embd });
                         layer.ffn_up = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP, "weight", i), { n_embd, 2 * n_ff });
 
-                        layer.rope_long  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_LONG,  "weight"), { n_embd_head/2 }, llama_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? llama_model_loader::TENSOR_DUPLICATED : 0));
-                        layer.rope_short = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_SHORT, "weight"), { n_embd_head/2 }, llama_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? llama_model_loader::TENSOR_DUPLICATED : 0));
+                        layer.rope_long  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_LONG,  "weight"), { n_embd_head/2 }, jarvis_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? jarvis_model_loader::TENSOR_DUPLICATED : 0));
+                        layer.rope_short = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_SHORT, "weight"), { n_embd_head/2 }, jarvis_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? jarvis_model_loader::TENSOR_DUPLICATED : 0));
                     }
                 } break;
             case LLM_ARCH_PLAMO:
@@ -8118,7 +8118,7 @@ static bool llm_load_tensors(
 
                     // output
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED); // same as tok_embd, duplicated to allow offloading
+                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED); // same as tok_embd, duplicated to allow offloading
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -8145,7 +8145,7 @@ static bool llm_load_tensors(
 
                     // output
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED); // same as tok_embd, duplicated to allow offloading
+                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED); // same as tok_embd, duplicated to allow offloading
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -8177,10 +8177,10 @@ static bool llm_load_tensors(
                         model.output_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd});
 
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
 
                     }
@@ -8232,10 +8232,10 @@ static bool llm_load_tensors(
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
 
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         // if output is NULL, init from the input tok embed, duplicated to allow offloading
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -8301,7 +8301,7 @@ static bool llm_load_tensors(
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         // init output from the input tok embed
-                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                     }
 
                     for (int i = 0; i < n_layer; ++i) {
@@ -8327,16 +8327,16 @@ static bool llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
                     }
                 } break;
-            case LLM_ARCH_OLMO:  // adapted from LLM_ARCH_LLAMA with norm params removed
+            case LLM_ARCH_OLMO:  // adapted from LLM_ARCH_JARVIS with norm params removed
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
                     // output
                     {
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -8401,7 +8401,7 @@ static bool llm_load_tensors(
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         // init output from the input tok embed
-                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                     }
 
                     for (int i = 0; i < n_layer; ++i) {
@@ -8470,11 +8470,11 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -8592,23 +8592,23 @@ static bool llm_load_tensors(
                         layer.attn_sub_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_SUB_NORM, "weight", i), {n_embd});
 
                         layer.wq       = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
-                        layer.wq_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.wq_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.wk       = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
-                        layer.wk_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.wk_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.wv       = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa});
-                        layer.wv_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.wv_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.wo       = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
-                        layer.wo_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.wo_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_norm     = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM,     "weight", i), {n_embd});
                         layer.ffn_sub_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_SUB_NORM, "weight", i), {n_ff});
 
                         layer.ffn_gate       = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
-                        layer.ffn_gate_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE, "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_gate_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE, "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.ffn_down       = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
-                        layer.ffn_down_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_down_scale = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.ffn_up         = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
-                        layer.ffn_up_scale   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "scale",  i), {1}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_up_scale   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "scale",  i), {1}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                     }
                 } break;
             case LLM_ARCH_T5:
@@ -8622,10 +8622,10 @@ static bool llm_load_tensors(
                         model.output_norm_enc = ml.create_tensor(ctx_output, tn(LLM_TENSOR_ENC_OUTPUT_NORM, "weight"), {n_embd});
                         model.output_norm     = ml.create_tensor(ctx_output, tn(LLM_TENSOR_DEC_OUTPUT_NORM, "weight"), {n_embd});
 
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -8636,7 +8636,7 @@ static bool llm_load_tensors(
                         auto & layer = model.layers[i];
 
                         layer.attn_norm_enc  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_ATTN_NORM,  "weight", i), {n_embd});
-                        layer.attn_rel_b_enc = ml.create_tensor(ctx_input, tn(LLM_TENSOR_ENC_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_rel_b_enc = ml.create_tensor(ctx_input, tn(LLM_TENSOR_ENC_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wq_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_ATTN_Q,   "weight", i), {n_embd, n_embd_k_gqa});
                         layer.wk_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_ATTN_K,   "weight", i), {n_embd, n_embd_k_gqa});
@@ -8644,12 +8644,12 @@ static bool llm_load_tensors(
                         layer.wo_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_ATTN_OUT, "weight", i), {n_embd_v_gqa, n_embd});
 
                         layer.ffn_norm_enc = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_FFN_NORM, "weight", i), {n_embd});
-                        layer.ffn_gate_enc = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_FFN_GATE, "weight", i), {n_embd,   n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_gate_enc = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_FFN_GATE, "weight", i), {n_embd,   n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.ffn_down_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                         layer.ffn_up_enc   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_FFN_UP,   "weight", i), {n_embd,   n_ff});
 
                         layer.attn_norm  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_DEC_ATTN_NORM,  "weight", i), {n_embd});
-                        layer.attn_rel_b = ml.create_tensor(ctx_input, tn(LLM_TENSOR_DEC_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_rel_b = ml.create_tensor(ctx_input, tn(LLM_TENSOR_DEC_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_ATTN_Q,   "weight", i), {n_embd, n_embd_k_gqa});
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_ATTN_K,   "weight", i), {n_embd, n_embd_k_gqa});
@@ -8658,7 +8658,7 @@ static bool llm_load_tensors(
 
                         layer.attn_norm_cross  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_DEC_CROSS_ATTN_NORM,  "weight", i), {n_embd});
                         // this tensor seems to be unused in HF transformers implementation
-                        layer.attn_rel_b_cross = ml.create_tensor(ctx_input, tn(LLM_TENSOR_DEC_CROSS_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_rel_b_cross = ml.create_tensor(ctx_input, tn(LLM_TENSOR_DEC_CROSS_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wq_cross = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_CROSS_ATTN_Q,   "weight", i), {n_embd, n_embd_k_gqa});
                         layer.wk_cross = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_CROSS_ATTN_K,   "weight", i), {n_embd, n_embd_k_gqa});
@@ -8666,7 +8666,7 @@ static bool llm_load_tensors(
                         layer.wo_cross = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_CROSS_ATTN_OUT, "weight", i), {n_embd_v_gqa, n_embd});
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_DEC_FFN_NORM, "weight", i), {n_embd});
-                        layer.ffn_gate = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_DEC_FFN_GATE, "weight", i), {n_embd,   n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_gate = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_DEC_FFN_GATE, "weight", i), {n_embd,   n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_DEC_FFN_UP,   "weight", i), {n_embd,   n_ff});
                     }
@@ -8680,10 +8680,10 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm_enc = ml.create_tensor(ctx_output, tn(LLM_TENSOR_ENC_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -8694,7 +8694,7 @@ static bool llm_load_tensors(
                         auto & layer = model.layers[i];
 
                         layer.attn_norm_enc  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_ATTN_NORM,  "weight", i), {n_embd});
-                        layer.attn_rel_b_enc = ml.create_tensor(ctx_input, tn(LLM_TENSOR_ENC_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_rel_b_enc = ml.create_tensor(ctx_input, tn(LLM_TENSOR_ENC_ATTN_REL_B, "weight", i), {n_head, n_rel_attn_bkts}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wq_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_ATTN_Q,   "weight", i), {n_embd, n_embd_k_gqa});
                         layer.wk_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_ATTN_K,   "weight", i), {n_embd, n_embd_k_gqa});
@@ -8702,7 +8702,7 @@ static bool llm_load_tensors(
                         layer.wo_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_ATTN_OUT, "weight", i), {n_embd_v_gqa, n_embd});
 
                         layer.ffn_norm_enc = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_FFN_NORM, "weight", i), {n_embd});
-                        layer.ffn_gate_enc = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_FFN_GATE, "weight", i), {n_embd,   n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_gate_enc = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ENC_FFN_GATE, "weight", i), {n_embd,   n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                         layer.ffn_down_enc = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                         layer.ffn_up_enc   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ENC_FFN_UP,   "weight", i), {n_embd,   n_ff});
                     }
@@ -8802,10 +8802,10 @@ static bool llm_load_tensors(
                         layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
 
                         // optional bias tensors
-                        layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.bo = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd},     llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.bo = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd},     jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
                         layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i), {n_embd});
@@ -8814,8 +8814,8 @@ static bool llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
 
                         // optional MLP bias
-                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
                     }
                 } break;
             case LLM_ARCH_EXAONE:
@@ -8842,7 +8842,7 @@ static bool llm_load_tensors(
                         layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd_head_k * n_head, n_embd});
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
-                        layer.rope_freqs = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FREQS, "weight"), {n_rot/2}, llama_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? llama_model_loader::TENSOR_DUPLICATED : 0));
+                        layer.rope_freqs = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FREQS, "weight"), {n_rot/2}, jarvis_model_loader::TENSOR_NOT_REQUIRED | (i != 0 ? jarvis_model_loader::TENSOR_DUPLICATED : 0));
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
@@ -8917,11 +8917,11 @@ static bool llm_load_tensors(
                  // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, jarvis_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -8934,8 +8934,8 @@ static bool llm_load_tensors(
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
                         layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd_head_k, n_head});
                         layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd_head_k, n_head_kv});
-                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias", i),  {n_embd_head_k, n_head}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias", i),  {n_embd_head_k, n_head_kv}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias", i),  {n_embd_head_k, n_head}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias", i),  {n_embd_head_k, n_head_kv}, jarvis_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
@@ -8960,7 +8960,7 @@ static bool llm_load_tensors(
     model.mappings.reserve(ml.mappings.size());
 
     // create the backend buffers
-    std::vector<std::pair<ggml_context *, llama_buf_map>> ctx_bufs;
+    std::vector<std::pair<ggml_context *, jarvis_buf_map>> ctx_bufs;
     ctx_bufs.reserve(ctx_map.size());
 
     // Ensure we have enough capacity for the maximum backend buffer we will potentially create
@@ -8971,12 +8971,12 @@ static bool llm_load_tensors(
         ggml_backend_buffer_type_t buft = it.first;
         ggml_context * ctx              = it.second;
 
-        llama_buf_map bufs;
+        jarvis_buf_map bufs;
         bufs.reserve(n_max_backend_buffer);
 
         // check if this backend device supports buffer_from_host_ptr
         // when using a host buffer as the CPU bakcend buffer, use the CPU device to prioritize using buffer_from_host_ptr over the host buffer
-        ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft == llama_default_buffer_type_cpu(model, true) ? ggml_backend_cpu_buffer_type() : buft);
+        ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft == jarvis_default_buffer_type_cpu(model, true) ? ggml_backend_cpu_buffer_type() : buft);
         bool buffer_from_host_ptr_supported = false;
         if (dev) {
             ggml_backend_dev_props props;
@@ -9011,7 +9011,7 @@ static bool llm_load_tensors(
             }
             model.bufs.push_back(buf);
             if (use_mlock && ggml_backend_buffer_is_host(buf)) {
-                model.mlock_bufs.emplace_back(new llama_mlock);
+                model.mlock_bufs.emplace_back(new jarvis_mlock);
                 auto & mlock_buf = model.mlock_bufs.back();
                 mlock_buf->init   (ggml_backend_buffer_get_base(buf));
                 mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
@@ -9034,23 +9034,23 @@ static bool llm_load_tensors(
         ctx_bufs.emplace_back(ctx, bufs);
     }
 
-    if (llama_supports_gpu_offload()) {
+    if (jarvis_supports_gpu_offload()) {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
-        LLAMA_LOG_INFO("%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
+        JARVIS_LOG_INFO("%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
         if (n_gpu_layers > (int) hparams.n_layer) {
-            LLAMA_LOG_INFO("%s: offloading non-repeating layers to GPU\n", __func__);
+            JARVIS_LOG_INFO("%s: offloading non-repeating layers to GPU\n", __func__);
         }
 
         const int max_backend_supported_layers = hparams.n_layer + 1;
         const int max_offloadable_layers       = hparams.n_layer + 1;
 
-        LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
+        JARVIS_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
     }
 
     // print memory requirements
     for (ggml_backend_buffer_t buf : model.bufs) {
-        LLAMA_LOG_INFO("%s: %10s buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
+        JARVIS_LOG_INFO("%s: %10s buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
     }
 
     // populate tensors_by_name
@@ -9078,12 +9078,12 @@ static bool llm_load_tensors(
     return true;
 }
 
-// Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
-static int llama_model_load(const std::string & fname, llama_model & model, llama_model_params & params) {
+// Returns 0 on success, -1 on error, and -2 on cancellation via jarvis_progress_callback
+static int jarvis_model_load(const std::string & fname, jarvis_model & model, jarvis_model_params & params) {
     model.t_start_us = ggml_time_us();
 
     try {
-        llama_model_loader ml(fname, params.use_mmap, params.check_tensors, params.kv_overrides);
+        jarvis_model_loader ml(fname, params.use_mmap, params.check_tensors, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
 
@@ -9105,29 +9105,29 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 
         llm_load_print_meta(ml, model);
 
-        if (model.vocab.type != LLAMA_VOCAB_TYPE_NONE &&
+        if (model.vocab.type != JARVIS_VOCAB_TYPE_NONE &&
             model.hparams.n_vocab != model.vocab.id_to_token.size()) {
             throw std::runtime_error("vocab size mismatch");
         }
 
         if (params.vocab_only) {
-            LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
+            JARVIS_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
             return 0;
         }
 
 #ifdef GGML_USE_KOMPUTE
         if (params.n_gpu_layers > 0 && (
-            !(model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON)
+            !(model.arch == LLM_ARCH_JARVIS || model.arch == LLM_ARCH_FALCON)
             || !(
-                model.ftype == LLAMA_FTYPE_ALL_F32 ||
-                model.ftype == LLAMA_FTYPE_MOSTLY_F16 ||
-                model.ftype == LLAMA_FTYPE_MOSTLY_BF16 ||
-                model.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
-                model.ftype == LLAMA_FTYPE_MOSTLY_Q4_1
+                model.ftype == JARVIS_FTYPE_ALL_F32 ||
+                model.ftype == JARVIS_FTYPE_MOSTLY_F16 ||
+                model.ftype == JARVIS_FTYPE_MOSTLY_BF16 ||
+                model.ftype == JARVIS_FTYPE_MOSTLY_Q4_0 ||
+                model.ftype == JARVIS_FTYPE_MOSTLY_Q4_1
             )
         )) {
-            // TODO(cebtenzzre): propagate this error outside of llama_load_model_from_file
-            LLAMA_LOG_WARN("%s: disabling Kompute due to unsupported model arch or quantization\n", __func__);
+            // TODO(cebtenzzre): propagate this error outside of jarvis_load_model_from_file
+            JARVIS_LOG_WARN("%s: disabling Kompute due to unsupported model arch or quantization\n", __func__);
             params.n_gpu_layers = 0;
         }
 #endif
@@ -9139,7 +9139,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
             return -2;
         }
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error loading model: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error loading model: %s\n", __func__, err.what());
         return -1;
     }
 
@@ -9176,9 +9176,9 @@ enum llm_norm_type {
 
 static struct ggml_tensor * llm_build_inp_embd(
         struct ggml_context * ctx,
-       struct llama_context & lctx,
-        const llama_hparams & hparams,
-         const llama_ubatch & batch,
+       struct jarvis_context & lctx,
+        const jarvis_hparams & hparams,
+         const jarvis_ubatch & batch,
          struct ggml_tensor * tok_embd,
          const llm_build_cb & cb) {
     const int64_t n_embd = hparams.n_embd;
@@ -9209,9 +9209,9 @@ static struct ggml_tensor * llm_build_inp_embd(
 
 static void llm_build_kv_store(
         struct ggml_context * ctx,
-        const llama_hparams & hparams,
-        const llama_cparams & cparams,
-       const llama_kv_cache & kv,
+        const jarvis_hparams & hparams,
+        const jarvis_cparams & cparams,
+       const jarvis_kv_cache & kv,
          struct ggml_cgraph * graph,
          struct ggml_tensor * k_cur,
          struct ggml_tensor * v_cur,
@@ -9253,13 +9253,13 @@ static void llm_build_kv_store(
 
 // do mat_mul, while optionally apply lora
 static struct ggml_tensor * llm_build_lora_mm(
-        struct llama_context & lctx,
+        struct jarvis_context & lctx,
          struct ggml_context * ctx0,
           struct ggml_tensor * w,
           struct ggml_tensor * cur) {
     struct ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
     for (auto & it : lctx.lora_adapters) {
-        struct llama_lora_weight * lora = it.first->get_weight(w);
+        struct jarvis_lora_weight * lora = it.first->get_weight(w);
         if (lora == nullptr) {
             continue;
         }
@@ -9278,14 +9278,14 @@ static struct ggml_tensor * llm_build_lora_mm(
 
 // do mat_mul_id, while optionally apply lora
 static struct ggml_tensor * llm_build_lora_mm_id(
-        struct llama_context & lctx,
+        struct jarvis_context & lctx,
          struct ggml_context * ctx0,
           struct ggml_tensor * w,   // struct ggml_tensor * as
           struct ggml_tensor * cur, // struct ggml_tensor * b
           struct ggml_tensor * ids) {
     struct ggml_tensor * res = ggml_mul_mat_id(ctx0, w, cur, ids);
     for (auto & it : lctx.lora_adapters) {
-        struct llama_lora_weight * lora = it.first->get_weight(w);
+        struct jarvis_lora_weight * lora = it.first->get_weight(w);
         if (lora == nullptr) {
             continue;
         }
@@ -9306,7 +9306,7 @@ static struct ggml_tensor * llm_build_lora_mm_id(
 static struct ggml_tensor * llm_build_norm(
         struct ggml_context * ctx,
          struct ggml_tensor * cur,
-        const llama_hparams & hparams,
+        const jarvis_hparams & hparams,
          struct ggml_tensor * mw,
          struct ggml_tensor * mb,
               llm_norm_type   type,
@@ -9337,7 +9337,7 @@ static struct ggml_tensor * llm_build_norm(
 
 static struct ggml_tensor * llm_build_ffn(
         struct ggml_context * ctx,
-       struct llama_context & lctx,
+       struct jarvis_context & lctx,
          struct ggml_tensor * cur,
          struct ggml_tensor * up,
          struct ggml_tensor * up_b,
@@ -9464,7 +9464,7 @@ static struct ggml_tensor * llm_build_ffn(
 
 static struct ggml_tensor * llm_build_moe_ffn(
         struct ggml_context * ctx,
-       struct llama_context & lctx,
+       struct jarvis_context & lctx,
          struct ggml_tensor * cur,
          struct ggml_tensor * gate_inp,
          struct ggml_tensor * up_exps,
@@ -9565,8 +9565,8 @@ static struct ggml_tensor * llm_build_moe_ffn(
 
 static struct ggml_tensor * llm_build_kqv(
         struct ggml_context * ctx,
-       struct llama_context & lctx,
-       const llama_kv_cache & kv,
+       struct jarvis_context & lctx,
+       const jarvis_kv_cache & kv,
          struct ggml_cgraph * graph,
          struct ggml_tensor * wo,
          struct ggml_tensor * wo_b,
@@ -9577,9 +9577,9 @@ static struct ggml_tensor * llm_build_kqv(
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
-    const llama_model   & model   = lctx.model;
-    const llama_hparams & hparams = lctx.model.hparams;
-    const llama_cparams & cparams = lctx.cparams;
+    const jarvis_model   & model   = lctx.model;
+    const jarvis_hparams & hparams = lctx.model.hparams;
+    const jarvis_cparams & cparams = lctx.cparams;
 
     const int64_t n_ctx         = cparams.n_ctx;
     const int64_t n_head        = hparams.n_head(il);
@@ -9629,7 +9629,7 @@ static struct ggml_tensor * llm_build_kqv(
 
         if (model.arch == LLM_ARCH_PHI2 || model.arch == LLM_ARCH_PHI3 || model.arch == LLM_ARCH_GPTNEOX || model.arch == LLM_ARCH_QWEN2 || model.arch == LLM_ARCH_NEMOTRON || model.arch == LLM_ARCH_CHATGLM) {
             // for this arch, we need to perform the KQ multiplication with F32 precision, otherwise we get NaNs
-            // ref: https://github.com/ggerganov/llama.cpp/pull/4490#issuecomment-1859055847
+            // ref: https://github.com/ggerganov/jarvis.cpp/pull/4490#issuecomment-1859055847
             ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
         }
 
@@ -9696,8 +9696,8 @@ static struct ggml_tensor * llm_build_kqv(
 
 static struct ggml_tensor * llm_build_kv(
         struct ggml_context * ctx,
-       struct llama_context & lctx,
-       const llama_kv_cache & kv,
+       struct jarvis_context & lctx,
+       const jarvis_kv_cache & kv,
          struct ggml_cgraph * graph,
          struct ggml_tensor * wo,
          struct ggml_tensor * wo_b,
@@ -9711,8 +9711,8 @@ static struct ggml_tensor * llm_build_kv(
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
-    const llama_hparams & hparams = lctx.model.hparams;
-    const llama_cparams & cparams = lctx.cparams;
+    const jarvis_hparams & hparams = lctx.model.hparams;
+    const jarvis_cparams & cparams = lctx.cparams;
 
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
@@ -9765,8 +9765,8 @@ static struct ggml_tensor * llm_build_copy_mask_state(
 // TODO: split
 static struct ggml_tensor * llm_build_mamba(
         struct ggml_context * ctx,
-       struct llama_context & lctx,
-         const llama_ubatch & batch,
+       struct jarvis_context & lctx,
+         const jarvis_ubatch & batch,
          struct ggml_cgraph * graph,
          struct ggml_tensor * cur,
          struct ggml_tensor * state_copy,
@@ -9775,9 +9775,9 @@ static struct ggml_tensor * llm_build_mamba(
                     int32_t   n_kv,
          const llm_build_cb & cb,
                     int       il) {
-    const llama_model    & model   = lctx.model;
-    const llama_hparams  & hparams = model.hparams;
-    const llama_kv_cache & kv      = lctx.kv_self;
+    const jarvis_model    & model   = lctx.model;
+    const jarvis_hparams  & hparams = model.hparams;
+    const jarvis_kv_cache & kv      = lctx.kv_self;
     const int64_t d_conv  = hparams.ssm_d_conv;
     const int64_t d_inner = hparams.ssm_d_inner;
     const int64_t d_state = hparams.ssm_d_state;
@@ -9899,9 +9899,9 @@ static struct ggml_tensor * llm_build_mamba(
 }
 
 static struct ggml_tensor * llm_build_rwkv6_time_mix(
-        struct llama_context & lctx,
+        struct jarvis_context & lctx,
         struct ggml_context * ctx,
-        const struct llama_layer * layer,
+        const struct jarvis_layer * layer,
         struct ggml_tensor * cur,
         struct ggml_tensor * x_prev,
         struct ggml_tensor ** wkv_state) {
@@ -10042,9 +10042,9 @@ static struct ggml_tensor * llm_build_rwkv6_time_mix(
 }
 
 static struct ggml_tensor * llm_build_rwkv6_channel_mix(
-        struct llama_context & lctx,
+        struct jarvis_context & lctx,
         struct ggml_context * ctx,
-        const struct llama_layer * layer,
+        const struct jarvis_layer * layer,
         struct ggml_tensor * cur,
         struct ggml_tensor * x_prev) {
     struct ggml_tensor * sx = ggml_sub(ctx, x_prev, cur);
@@ -10064,12 +10064,12 @@ static struct ggml_tensor * llm_build_rwkv6_channel_mix(
 }
 
 struct llm_build_context {
-    const llama_model    & model;
-          llama_context  & lctx;
-    const llama_hparams  & hparams;
-    const llama_cparams  & cparams;
-    const llama_ubatch   & ubatch;
-    const llama_kv_cache & kv_self;
+    const jarvis_model    & model;
+          jarvis_context  & lctx;
+    const jarvis_hparams  & hparams;
+    const jarvis_cparams  & cparams;
+    const jarvis_ubatch   & ubatch;
+    const jarvis_kv_cache & kv_self;
 
     const int64_t n_embd;
     const int64_t n_layer;
@@ -10102,8 +10102,8 @@ struct llm_build_context {
 
     const bool flash_attn;
 
-    const enum llama_pooling_type pooling_type;
-    const enum llama_rope_type    rope_type;
+    const enum jarvis_pooling_type pooling_type;
+    const enum jarvis_rope_type    rope_type;
 
     const llm_build_cb & cb;
 
@@ -10113,8 +10113,8 @@ struct llm_build_context {
 
     // TODO: consider making the entire interface noexcept
     llm_build_context(
-        llama_context  & lctx,
-    const llama_ubatch & ubatch,
+        jarvis_context  & lctx,
+    const jarvis_ubatch & ubatch,
     const llm_build_cb & cb,
                   bool   worst_case) :
         model            (lctx.model),
@@ -10191,7 +10191,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_k_shift() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         GGML_ASSERT(kv_self.size == n_ctx);
 
@@ -10241,7 +10241,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_defrag(const std::vector<uint32_t> & ids) {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         for (uint32_t i = 0; i < ids.size(); ++i) {
             const uint32_t id = ids[i];
@@ -10303,7 +10303,7 @@ struct llm_build_context {
             i += nm - 1;
         }
 
-        //LLAMA_LOG_INFO("gf->n_nodes = %d\n", gf->n_nodes);
+        //JARVIS_LOG_INFO("gf->n_nodes = %d\n", gf->n_nodes);
 
         return gf;
     }
@@ -10403,22 +10403,22 @@ struct llm_build_context {
         struct ggml_tensor * cur;
 
         switch (pooling_type) {
-            case LLAMA_POOLING_TYPE_NONE:
+            case JARVIS_POOLING_TYPE_NONE:
                 {
                     cur = inp;
                 } break;
-            case LLAMA_POOLING_TYPE_MEAN:
+            case JARVIS_POOLING_TYPE_MEAN:
                 {
                     struct ggml_tensor * inp_mean = build_inp_mean();
                     cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, inp)), inp_mean);
                 } break;
-            case LLAMA_POOLING_TYPE_CLS:
-            case LLAMA_POOLING_TYPE_LAST:
+            case JARVIS_POOLING_TYPE_CLS:
+            case JARVIS_POOLING_TYPE_LAST:
                 {
                     struct ggml_tensor * inp_cls = build_inp_cls();
                     cur = ggml_get_rows(ctx0, inp, inp_cls);
                 } break;
-            case LLAMA_POOLING_TYPE_RANK:
+            case JARVIS_POOLING_TYPE_RANK:
                 {
                     struct ggml_tensor * inp_cls = build_inp_cls();
                     inp = ggml_get_rows(ctx0, inp, inp_cls);
@@ -10499,8 +10499,8 @@ struct llm_build_context {
         return lctx.inp_KQ_mask_cross;
     }
 
-    struct ggml_cgraph * build_llama() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+    struct ggml_cgraph * build_jarvis() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -10532,7 +10532,7 @@ struct llm_build_context {
 
             // self-attention
             {
-                // rope freq factors for llama3; may return nullptr for llama2 and other models
+                // rope freq factors for jarvis3; may return nullptr for jarvis2 and other models
                 struct ggml_tensor * rope_factors = build_rope_factors(il);
 
                 // compute Q and K and RoPE them
@@ -10663,7 +10663,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_baichuan() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -10778,7 +10778,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_xverse() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -10881,7 +10881,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_falcon() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -11001,7 +11001,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_grok() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -11158,7 +11158,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_dbrx() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -11284,7 +11284,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_starcoder() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -11388,7 +11388,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_refact() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -11482,7 +11482,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_bert() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -11610,7 +11610,7 @@ struct llm_build_context {
             }
             cb(cur, "kqv_out", il);
 
-            if (il == n_layer - 1 && pooling_type == LLAMA_POOLING_TYPE_NONE) {
+            if (il == n_layer - 1 && pooling_type == JARVIS_POOLING_TYPE_NONE) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
@@ -11676,7 +11676,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_bloom() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -11777,7 +11777,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_mpt() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -12067,7 +12067,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_qwen() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -12179,7 +12179,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_qwen2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -12291,7 +12291,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_qwen2moe() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -12437,7 +12437,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_phi2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -12558,7 +12558,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_phi3() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa = hparams.n_embd_v_gqa();
@@ -12790,7 +12790,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_gpt2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -12895,7 +12895,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_codeshell() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -13006,7 +13006,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_orion() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -13124,7 +13124,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_internlm2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -13242,10 +13242,10 @@ struct llm_build_context {
     }
 
     // ref: https://arxiv.org/abs/2203.03466
-    //      https://github.com/ggerganov/llama.cpp/issues/5276#issuecomment-1925774738
-    // based on the original build_llama() function
+    //      https://github.com/ggerganov/jarvis.cpp/issues/5276#issuecomment-1925774738
+    // based on the original build_jarvis() function
     struct ggml_cgraph * build_minicpm() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -13389,7 +13389,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_minicpm3() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         //TODO: if the model varies, these parameters need to be read from the model
         const int64_t n_embd_base = 256;
@@ -13598,7 +13598,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_gemma() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head_k = hparams.n_embd_head_k;
 
@@ -13706,7 +13706,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_gemma2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head_k = hparams.n_embd_head_k;
 
@@ -13842,7 +13842,7 @@ struct llm_build_context {
 
 
     struct ggml_cgraph * build_starcoder2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -13961,7 +13961,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_mamba() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -14016,7 +14016,7 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_command_r() {
 
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -14164,13 +14164,13 @@ struct llm_build_context {
     }
 
     // ref: https://allenai.org/olmo
-    // based on the original build_llama() function, changes:
+    // based on the original build_jarvis() function, changes:
     //   * non-parametric layer norm
     //   * clamp qkv
     //   * removed bias
     //   * removed MoE
     struct ggml_cgraph * build_olmo() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -14298,7 +14298,7 @@ struct llm_build_context {
     //   * removed bias
     //   * added q, k norm
     struct ggml_cgraph * build_olmoe() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -14422,7 +14422,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_openelm() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -14547,7 +14547,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_gptneox() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -14689,7 +14689,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_arctic() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -14821,7 +14821,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_deepseek2() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -14829,7 +14829,7 @@ struct llm_build_context {
         bool is_lite = (hparams.n_layer == 27);
 
         // We have to pre-scale kq_scale and attn_factor to make the YaRN RoPE work correctly.
-        // See https://github.com/ggerganov/llama.cpp/discussions/7416 for detailed explanation.
+        // See https://github.com/ggerganov/jarvis.cpp/discussions/7416 for detailed explanation.
         const float mscale = attn_factor * (1.0f + hparams.rope_yarn_log_mul * logf(1.0f / freq_scale));
         const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
         const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
@@ -15049,7 +15049,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_bitnet() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -15199,7 +15199,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_t5_encoder() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -15331,7 +15331,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_t5_decoder() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -15346,7 +15346,7 @@ struct llm_build_context {
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         GGML_ASSERT(!lctx.is_encoding);
-        GGML_ASSERT(n_outputs_enc > 0 && "call llama_encode() first");
+        GGML_ASSERT(n_outputs_enc > 0 && "call jarvis_encode() first");
 
         struct ggml_tensor * embd_enc       = llm_build_inp_embd_enc();
         struct ggml_tensor * pos_bucket_dec = llm_build_pos_bucket(true);
@@ -15536,7 +15536,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_jais() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -15628,7 +15628,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_chatglm() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -15742,7 +15742,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_nemotron() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -15863,7 +15863,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_exaone() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -15894,7 +15894,7 @@ struct llm_build_context {
 
             // self-attention
             {
-                // rope freq factors for llama3; may return nullptr for llama2 and other models
+                // rope freq factors for jarvis3; may return nullptr for jarvis2 and other models
                 struct ggml_tensor * rope_factors = build_rope_factors(il);
 
                 // compute Q and K and RoPE them
@@ -15990,7 +15990,7 @@ struct llm_build_context {
     }
 
     ggml_cgraph * build_rwkv6() {
-        ggml_cgraph *gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        ggml_cgraph *gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // Token shift state dimensions should be 2 * n_emb
         GGML_ASSERT(n_embd == hparams.n_embd_k_s() / 2);
@@ -16011,7 +16011,7 @@ struct llm_build_context {
         inpL = llm_build_norm(ctx0, inpL, hparams, model.tok_norm, model.tok_norm_b, LLM_NORM, cb, -1);
 
         for (int il = 0; il < n_layer; ++il) {
-            const llama_layer * layer = &model.layers[il];
+            const jarvis_layer * layer = &model.layers[il];
 
             // (ab)using the KV cache to store the states
             struct ggml_tensor * token_shift = llm_build_copy_mask_state(ctx0,
@@ -16103,13 +16103,13 @@ struct llm_build_context {
     }
 
     // ref: https://github.com/facebookresearch/chameleon
-    // based on the original build_llama() function, changes:
+    // based on the original build_jarvis() function, changes:
     //   * qk-norm
     //   * swin-norm
     //   * removed bias
     //   * removed MoE
     struct ggml_cgraph * build_chameleon() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, jarvis_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
@@ -16281,8 +16281,8 @@ struct llm_build_context {
     }
 };
 
-static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const std::vector<uint32_t> & ids) {
-    llama_ubatch dummy = {};
+static struct ggml_cgraph * jarvis_build_graph_defrag(jarvis_context & lctx, const std::vector<uint32_t> & ids) {
+    jarvis_ubatch dummy = {};
     dummy.equal_seqs = true;
 
     llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
@@ -16298,8 +16298,8 @@ static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const
     return result;
 }
 
-static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
-    llama_ubatch dummy = {};
+static struct ggml_cgraph * jarvis_build_graph_k_shift(jarvis_context & lctx) {
+    jarvis_ubatch dummy = {};
     dummy.equal_seqs = true;
 
     llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
@@ -16315,9 +16315,9 @@ static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
     return result;
 }
 
-static struct ggml_cgraph * llama_build_graph(
-         llama_context & lctx,
-    const llama_ubatch & ubatch,
+static struct ggml_cgraph * jarvis_build_graph(
+         jarvis_context & lctx,
+    const jarvis_ubatch & ubatch,
                   bool   worst_case) {
     const auto & model = lctx.model;
 
@@ -16359,11 +16359,11 @@ static struct ggml_cgraph * llama_build_graph(
     llm.init();
 
     switch (model.arch) {
-        case LLM_ARCH_LLAMA:
+        case LLM_ARCH_JARVIS:
         case LLM_ARCH_GRANITE:
         case LLM_ARCH_GRANITE_MOE:
             {
-                result = llm.build_llama();
+                result = llm.build_jarvis();
             } break;
         case LLM_ARCH_BAICHUAN:
             {
@@ -16557,7 +16557,7 @@ static struct ggml_cgraph * llama_build_graph(
     return result;
 }
 
-static void llama_set_k_shift(llama_context & lctx) {
+static void jarvis_set_k_shift(jarvis_context & lctx) {
     const int64_t kv_size = lctx.kv_self.size;
 
     assert(ggml_backend_buffer_is_host(lctx.inp_K_shift->buffer));
@@ -16569,7 +16569,7 @@ static void llama_set_k_shift(llama_context & lctx) {
     }
 }
 
-static void llama_set_s_copy(llama_context & lctx) {
+static void jarvis_set_s_copy(jarvis_context & lctx) {
     const int64_t kv_size = lctx.kv_self.size;
 
     assert(ggml_backend_buffer_is_host(lctx.inp_s_copy->buffer));
@@ -16581,7 +16581,7 @@ static void llama_set_s_copy(llama_context & lctx) {
     }
 }
 
-static int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t n_buckets, bool bidirectional) {
+static int32_t jarvis_relative_position_bucket(jarvis_pos x, jarvis_pos y, uint64_t n_buckets, bool bidirectional) {
     // TODO move to hparams if a T5 variant appears that uses a different value
     const int64_t max_distance = 128;
 
@@ -16605,7 +16605,7 @@ static int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t
     return relative_bucket;
 }
 
-static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) {
+static void jarvis_set_inputs(jarvis_context & lctx, const jarvis_ubatch & ubatch) {
     //
     // set input data
     //
@@ -16633,7 +16633,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         ggml_backend_tensor_set(lctx.inp_pos, ubatch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
     }
 
-    if (hparams.causal_attn || cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
+    if (hparams.causal_attn || cparams.pooling_type == JARVIS_POOLING_TYPE_NONE) {
         GGML_ASSERT(lctx.inp_out_ids && "every model that can must skip unused outputs");
         const int64_t n_tokens = ubatch.n_tokens;
 
@@ -16695,10 +16695,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
             // It's assumed that if a token in the batch has multiple sequences, they are equivalent.
             for (int h = 0; h < 1; ++h) {
                 for (int s = 0; s < n_seqs; ++s) {
-                    const llama_seq_id seq_id = ubatch.seq_id[s][0];
+                    const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
 
                     for (int j = 0; j < n_seq_tokens; ++j) {
-                        const llama_pos pos = ubatch.pos[s*n_seq_tokens + j];
+                        const jarvis_pos pos = ubatch.pos[s*n_seq_tokens + j];
 
                         for (int i = 0; i < n_kv; ++i) {
                             float f;
@@ -16756,7 +16756,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
 
             for (int h = 0; h < 1; ++h) {
                 for (int s1 = 0; s1 < n_seqs; ++s1) {
-                    const llama_seq_id seq_id = ubatch.seq_id[s1][0];
+                    const jarvis_seq_id seq_id = ubatch.seq_id[s1][0];
 
                     for (int j = 0; j < n_seq_tokens; ++j) {
                         const int32_t tj = s1*n_seq_tokens + j;
@@ -16790,7 +16790,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         }
     }
 
-    if (cparams.embeddings && cparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
+    if (cparams.embeddings && cparams.pooling_type == JARVIS_POOLING_TYPE_MEAN) {
         const int64_t n_tokens     = ubatch.n_tokens;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
         const int64_t n_seqs       = ubatch.n_seqs;
@@ -16804,7 +16804,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         std::vector<uint64_t> sum(n_tokens, 0);
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+            const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
 
             // TODO: adapt limits to n_seqs when ubatch.equal_seqs is true
             GGML_ASSERT(seq_id < n_tokens && "seq_id cannot be larger than n_tokens with pooling_type == MEAN");
@@ -16821,7 +16821,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         }
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+            const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
 
             for (int i = 0; i < n_seq_tokens; ++i) {
                 data[seq_id*n_tokens + s*n_seq_tokens + i] = div[seq_id];
@@ -16830,8 +16830,8 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
     }
 
     if (cparams.embeddings && (
-                cparams.pooling_type == LLAMA_POOLING_TYPE_CLS ||
-                cparams.pooling_type == LLAMA_POOLING_TYPE_RANK)) {
+                cparams.pooling_type == JARVIS_POOLING_TYPE_CLS ||
+                cparams.pooling_type == JARVIS_POOLING_TYPE_RANK)) {
         const int64_t n_tokens     = ubatch.n_tokens;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
         const int64_t n_seqs       = ubatch.n_seqs;
@@ -16843,13 +16843,13 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         memset(lctx.inp_cls->data, 0, n_tokens * ggml_element_size(lctx.inp_cls));
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+            const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
 
             // TODO: adapt limits to n_seqs when ubatch.equal_seqs is true
             GGML_ASSERT(seq_id < n_tokens && "seq_id cannot be larger than n_tokens with pooling_type == CLS or RANK");
 
             for (int i = 0; i < n_seq_tokens; ++i) {
-                const llama_pos pos = ubatch.pos[s*n_seq_tokens + i];
+                const jarvis_pos pos = ubatch.pos[s*n_seq_tokens + i];
 
                 if (pos == 0) {
                     data[seq_id] = s*n_seq_tokens + i;
@@ -16858,7 +16858,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         }
     }
 
-    if (cparams.embeddings && cparams.pooling_type == LLAMA_POOLING_TYPE_LAST) {
+    if (cparams.embeddings && cparams.pooling_type == JARVIS_POOLING_TYPE_LAST) {
         const int64_t n_tokens     = ubatch.n_tokens;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
         const int64_t n_seqs       = ubatch.n_seqs;
@@ -16873,13 +16873,13 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
         std::vector<int> last_row(n_tokens, -1);
 
         for (int s = 0; s < n_seqs; ++s) {
-            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+            const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
 
             // TODO: adapt limits to n_seqs when ubatch.equal_seqs is true
             GGML_ASSERT(seq_id < n_tokens && "seq_id cannot be larger than n_tokens with pooling_type == LAST");
 
             for (int i = 0; i < n_seq_tokens; ++i) {
-                const llama_pos pos = ubatch.pos[s*n_seq_tokens + i];
+                const jarvis_pos pos = ubatch.pos[s*n_seq_tokens + i];
 
                 if (pos >= last_pos[seq_id]) {
                     last_pos[seq_id] = pos;
@@ -16905,7 +16905,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
             // clear unused states
             for (int i = 0; i < n_kv; ++i) {
                 const uint32_t  cell_id = i + kv_self.head;
-                llama_kv_cell & kv_cell = lctx.kv_self.cells[cell_id];
+                jarvis_kv_cell & kv_cell = lctx.kv_self.cells[cell_id];
 
                 data[i] = (float) (kv_cell.src >= 0);
 
@@ -16923,7 +16923,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
             // assuming copy destinations ALWAYS happen ONLY on the cells between head and head+n
             for (uint32_t i = 0; i < n_kv; ++i) {
                 const uint32_t  cell_id = i + kv_self.head;
-                llama_kv_cell & kv_cell = lctx.kv_self.cells[cell_id];
+                jarvis_kv_cell & kv_cell = lctx.kv_self.cells[cell_id];
 
                 // prevent out-of-bound sources
                 if (kv_cell.src < 0 || (uint32_t) kv_cell.src >= kv_self.size) {
@@ -16953,7 +16953,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
             for (int h = 0; h < 1; ++h) {
                 for (int j = 0; j < n_tokens; ++j) {
                     for (int i = 0; i < n_kv; ++i) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = llama_relative_position_bucket(lctx.kv_self.cells[i].pos, ubatch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
+                        data[h*(n_kv*n_tokens) + j*n_kv + i] = jarvis_relative_position_bucket(lctx.kv_self.cells[i].pos, ubatch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
                     }
                 }
             }
@@ -16961,7 +16961,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
             for (int h = 0; h < 1; ++h) {
                 for (int j = 0; j < n_tokens; ++j) {
                     for (int i = 0; i < n_tokens; ++i) {
-                        data[h*(n_tokens*n_tokens) + j*n_tokens + i] = llama_relative_position_bucket(ubatch.pos[i], ubatch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
+                        data[h*(n_tokens*n_tokens) + j*n_tokens + i] = jarvis_relative_position_bucket(ubatch.pos[i], ubatch.pos[j], hparams.n_rel_attn_bkts, lctx.is_encoding);
                     }
                 }
             }
@@ -16989,7 +16989,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
                 for (int i = 0; i < n_output_enc; ++i) {
                     float f = -INFINITY;
                     for (int s = 0; s < ubatch.n_seq_id[j]; ++s) {
-                        const llama_seq_id seq_id = ubatch.seq_id[j][s];
+                        const jarvis_seq_id seq_id = ubatch.seq_id[j][s];
                         if (lctx.seq_ids_enc[i].find(seq_id) != lctx.seq_ids_enc[i].end()) {
                             f = 0.0f;
                         }
@@ -17009,7 +17009,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch) 
 
 // Make sure enough space is available for outputs.
 // Returns max number of outputs for which space was reserved.
-static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
+static size_t jarvis_output_reserve(jarvis_context & lctx, size_t n_outputs) {
     const auto & cparams = lctx.cparams;
     const auto & hparams = lctx.model.hparams;
 
@@ -17021,7 +17021,7 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
 
     // TODO: use a per-batch flag for logits presence instead
     const bool has_logits = !cparams.embeddings;
-    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
+    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == JARVIS_POOLING_TYPE_NONE);
 
     const size_t logits_size = has_logits ? n_vocab*n_outputs_max : 0;
     const size_t embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
@@ -17040,7 +17040,7 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
         if (lctx.buf_output) {
 #ifndef NDEBUG
             // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
-            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
+            JARVIS_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
 #endif
             ggml_backend_buffer_free(lctx.buf_output);
             lctx.buf_output = nullptr;
@@ -17048,9 +17048,9 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
             lctx.embd = nullptr;
         }
 
-        lctx.buf_output = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(lctx.model, true), new_size);
+        lctx.buf_output = ggml_backend_buft_alloc_buffer(jarvis_default_buffer_type_cpu(lctx.model, true), new_size);
         if (lctx.buf_output == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
+            JARVIS_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
             return 0;
         }
     }
@@ -17075,7 +17075,7 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
 }
 
 // make the outputs have the same order they had in the user-provided batch
-static void llama_output_reorder(struct llama_context * ctx) {
+static void jarvis_output_reorder(struct jarvis_context * ctx) {
     std::vector<size_t> & out_ids = ctx->sbatch.out_ids;
     if (!out_ids.empty()) {
         uint32_t n_vocab = ctx->model.hparams.n_vocab;
@@ -17112,8 +17112,8 @@ static void llama_output_reorder(struct llama_context * ctx) {
     }
 }
 
-static void llama_graph_compute(
-          llama_context & lctx,
+static void jarvis_graph_compute(
+          jarvis_context & lctx,
             ggml_cgraph * gf,
                     int   n_threads,
         ggml_threadpool * threadpool) {
@@ -17129,7 +17129,7 @@ static void llama_graph_compute(
 
     auto err = ggml_backend_sched_graph_compute_async(lctx.sched, gf);
     if (err != GGML_STATUS_SUCCESS) {
-        LLAMA_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, err);
+        JARVIS_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, err);
     }
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
@@ -17137,27 +17137,27 @@ static void llama_graph_compute(
 
 // decode a batch of tokens by evaluating the transformer
 //
-//   - lctx:      llama context
+//   - lctx:      jarvis context
 //   - batch:     batch to evaluate
 //
 // return 0 on success
 // return positive int on warning
 // return negative int on error
 //
-static int llama_decode_internal(
-         llama_context & lctx,
-           llama_batch   inp_batch) {
+static int jarvis_decode_internal(
+         jarvis_context & lctx,
+           jarvis_batch   inp_batch) {
 
     lctx.is_encoding = false;
 
     if (inp_batch.n_tokens == 0) {
-        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
+        JARVIS_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
     }
 
     // temporary allocate memory for the input batch if needed
-    llama_batch_allocr batch_allocr(lctx, inp_batch);
-    const llama_batch & batch = batch_allocr.batch;
+    jarvis_batch_allocr batch_allocr(lctx, inp_batch);
+    const jarvis_batch & batch = batch_allocr.batch;
     const uint32_t n_tokens_all = batch.n_tokens;
 
     const auto & model   = lctx.model;
@@ -17169,7 +17169,7 @@ static int llama_decode_internal(
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
             if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
+                JARVIS_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
         }
@@ -17195,7 +17195,7 @@ static int llama_decode_internal(
     const auto n_ubatch = cparams.n_ubatch;
 
     // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
-    const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
+    const bool embd_pooled = cparams.embeddings && cparams.pooling_type != JARVIS_POOLING_TYPE_NONE;
 
     lctx.embd_seq.clear();
 
@@ -17216,13 +17216,13 @@ static int llama_decode_internal(
         /* logits_all   */ n_outputs == n_tokens_all);
 
     // reserve output buffer
-    if (llama_output_reserve(lctx, n_outputs) < n_outputs) {
-        LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_outputs);
+    if (jarvis_output_reserve(lctx, n_outputs) < n_outputs) {
+        JARVIS_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_outputs);
         return -2;
     };
 
     while (lctx.sbatch.n_tokens > 0) {
-        llama_ubatch ubatch;
+        jarvis_ubatch ubatch;
         if (kv_self.recurrent) {
             if (embd_pooled) {
                 // Pooled embeddings cannot be split across ubatches (yet)
@@ -17261,7 +17261,7 @@ static int llama_decode_internal(
 
         // non-causal masks do not use the KV cache
         if (hparams.causal_attn) {
-            llama_kv_cache_update(&lctx);
+            jarvis_kv_cache_update(&lctx);
 
             // if we have enough unused cells before the current head ->
             //   better to start searching from the beginning of the cache, hoping to fill it
@@ -17269,7 +17269,7 @@ static int llama_decode_internal(
                 kv_self.head = 0;
             }
 
-            if (!llama_kv_cache_find_slot(kv_self, ubatch)) {
+            if (!jarvis_kv_cache_find_slot(kv_self, ubatch)) {
                 return 1;
             }
 
@@ -17277,9 +17277,9 @@ static int llama_decode_internal(
                 // a heuristic, to avoid attending the full cache if it is not yet utilized
                 // after enough generations, the benefit from this heuristic disappears
                 // if we start defragmenting the cache, the benefit from this will be more important
-                const uint32_t pad = llama_kv_cache_get_padding(cparams);
-                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self), pad)));
-                //kv_self.n = llama_kv_cache_cell_max(kv_self);
+                const uint32_t pad = jarvis_kv_cache_get_padding(cparams);
+                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(jarvis_kv_cache_cell_max(kv_self), pad)));
+                //kv_self.n = jarvis_kv_cache_cell_max(kv_self);
             }
         }
 
@@ -17288,7 +17288,7 @@ static int llama_decode_internal(
         ggml_backend_sched_reset(lctx.sched);
         ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
 
-        ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
+        ggml_cgraph * gf = jarvis_build_graph(lctx, ubatch, false);
 
         // the output is always the last tensor in the graph
         struct ggml_tensor * res  = ggml_graph_node(gf, -1);
@@ -17312,13 +17312,13 @@ static int llama_decode_internal(
             embd = nullptr; // do not extract embeddings when not needed
             GGML_ASSERT(strcmp(res->name, "result_output") == 0 && "missing result_output tensor");
         }
-        // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
+        // JARVIS_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
         ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
-        llama_set_inputs(lctx, ubatch);
+        jarvis_set_inputs(lctx, ubatch);
 
-        llama_graph_compute(lctx, gf, n_threads, threadpool);
+        jarvis_graph_compute(lctx, gf, n_threads, threadpool);
 
         // update the kv ring buffer
         {
@@ -17332,7 +17332,7 @@ static int llama_decode_internal(
 
         // plot the computation graph in dot format (for debugging purposes)
         //if (n_past%100 == 0) {
-        //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
+        //    ggml_graph_dump_dot(gf, NULL, "jarvis.dot");
         //}
 
         // extract logits
@@ -17357,7 +17357,7 @@ static int llama_decode_internal(
             GGML_ASSERT(backend_embd != nullptr);
 
             switch (cparams.pooling_type) {
-                case LLAMA_POOLING_TYPE_NONE:
+                case JARVIS_POOLING_TYPE_NONE:
                     {
                         // extract token embeddings
                         GGML_ASSERT(lctx.embd != nullptr);
@@ -17370,15 +17370,15 @@ static int llama_decode_internal(
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
                         }
                     } break;
-                case LLAMA_POOLING_TYPE_MEAN:
-                case LLAMA_POOLING_TYPE_CLS:
-                case LLAMA_POOLING_TYPE_LAST:
+                case JARVIS_POOLING_TYPE_MEAN:
+                case JARVIS_POOLING_TYPE_CLS:
+                case JARVIS_POOLING_TYPE_LAST:
                     {
                         // extract sequence embeddings (cleared before processing each batch)
                         auto & embd_seq_out = lctx.embd_seq;
 
                         for (uint32_t s = 0; s < ubatch.n_seqs; ++s) {
-                            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+                            const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
                             if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
                                 continue;
                             }
@@ -17386,13 +17386,13 @@ static int llama_decode_internal(
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_seq_out[seq_id].data(), (n_embd*seq_id)*sizeof(float), n_embd*sizeof(float));
                         }
                     } break;
-                case LLAMA_POOLING_TYPE_RANK:
+                case JARVIS_POOLING_TYPE_RANK:
                     {
                         // extract the rerank score - a single float per sequence
                         auto & embd_seq_out = lctx.embd_seq;
 
                         for (uint32_t s = 0; s < ubatch.n_seqs; ++s) {
-                            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+                            const jarvis_seq_id seq_id = ubatch.seq_id[s][0];
                             if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
                                 continue;
                             }
@@ -17400,7 +17400,7 @@ static int llama_decode_internal(
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_seq_out[seq_id].data(), (seq_id)*sizeof(float), sizeof(float));
                         }
                     } break;
-                case LLAMA_POOLING_TYPE_UNSPECIFIED:
+                case JARVIS_POOLING_TYPE_UNSPECIFIED:
                     {
                         GGML_ABORT("unknown pooling type");
                     }
@@ -17428,21 +17428,21 @@ static int llama_decode_internal(
         }
     }
 
-    // set to total number of outputs in the batch, for use in llama_get_logits_ith
+    // set to total number of outputs in the batch, for use in jarvis_get_logits_ith
     lctx.n_outputs = n_outputs;
 
     // wait for the computation to finish (automatically done when obtaining the model output)
-    //llama_synchronize(&lctx);
+    //jarvis_synchronize(&lctx);
 
     // decide if we need to defrag the kv cache
     if (cparams.causal_attn && cparams.defrag_thold >= 0.0f) {
         const float fragmentation = kv_self.n >= 128 ? 1.0f - float(kv_self.used)/float(kv_self.n) : 0.0f;
 
-        // queue defragmentation for next llama_kv_cache_update
+        // queue defragmentation for next jarvis_kv_cache_update
         if (fragmentation > cparams.defrag_thold) {
-            //LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
+            //JARVIS_LOG_INFO("fragmentation: %.2f\n", fragmentation);
 
-            llama_kv_cache_defrag(kv_self);
+            jarvis_kv_cache_defrag(kv_self);
         }
     }
 
@@ -17455,27 +17455,27 @@ static int llama_decode_internal(
 
 // encode a batch of tokens by evaluating the encoder part of the transformer
 //
-//   - lctx:      llama context
+//   - lctx:      jarvis context
 //   - batch:     batch to evaluate
 //
 // return 0 on success
 // return positive int on warning
 // return negative int on error
 //
-static int llama_encode_internal(
-         llama_context & lctx,
-           llama_batch   inp_batch) {
+static int jarvis_encode_internal(
+         jarvis_context & lctx,
+           jarvis_batch   inp_batch) {
 
     lctx.is_encoding = true;
 
     if (inp_batch.n_tokens == 0) {
-        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
+        JARVIS_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
     }
 
     // temporary allocate memory for the input batch if needed
-    llama_batch_allocr batch_allocr(lctx, inp_batch);
-    const llama_batch & batch = batch_allocr.batch;
+    jarvis_batch_allocr batch_allocr(lctx, inp_batch);
+    const jarvis_batch & batch = batch_allocr.batch;
     const uint32_t n_tokens = batch.n_tokens;
 
     const auto & model   = lctx.model;
@@ -17487,7 +17487,7 @@ static int llama_encode_internal(
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens; ++i) {
             if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
-                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
+                JARVIS_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
         }
@@ -17506,11 +17506,11 @@ static int llama_encode_internal(
 
     lctx.sbatch.from_batch(batch, n_embd, /* simple_split */ true, /* logits_all */ true);
 
-    const llama_ubatch ubatch = lctx.sbatch.split_simple(n_tokens);
+    const jarvis_ubatch ubatch = lctx.sbatch.split_simple(n_tokens);
 
     // reserve output buffer
-    if (llama_output_reserve(lctx, n_tokens) < n_tokens) {
-        LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_tokens);
+    if (jarvis_output_reserve(lctx, n_tokens) < n_tokens) {
+        JARVIS_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_tokens);
         return -2;
     };
 
@@ -17529,13 +17529,13 @@ static int llama_encode_internal(
     ggml_backend_sched_reset(lctx.sched);
     ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
 
-    ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
+    ggml_cgraph * gf = jarvis_build_graph(lctx, ubatch, false);
 
     // the output embeddings after the final encoder normalization
     struct ggml_tensor * embd = nullptr;
 
     // there are two cases here
-    if (llama_model_has_decoder(&lctx.model)) {
+    if (jarvis_model_has_decoder(&lctx.model)) {
         // first case is an encoder-decoder T5 model where embeddings are passed to decoder
         embd = ggml_graph_node(gf, -1);
         GGML_ASSERT(strcmp(embd->name, "result_norm") == 0 && "missing result_output tensor");
@@ -17553,16 +17553,16 @@ static int llama_encode_internal(
 
     ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
-    llama_set_inputs(lctx, ubatch);
+    jarvis_set_inputs(lctx, ubatch);
 
-    llama_graph_compute(lctx, gf, n_threads, threadpool);
+    jarvis_graph_compute(lctx, gf, n_threads, threadpool);
 
     // extract embeddings
     if (embd) {
         ggml_backend_t backend_embd = ggml_backend_sched_get_tensor_backend(lctx.sched, embd);
         GGML_ASSERT(backend_embd != nullptr);
 
-        if (llama_model_has_decoder(&lctx.model)) {
+        if (jarvis_model_has_decoder(&lctx.model)) {
             lctx.embd_enc.resize(n_tokens*n_embd);
             float * embd_out = lctx.embd_enc.data();
 
@@ -17573,7 +17573,7 @@ static int llama_encode_internal(
             lctx.seq_ids_enc.resize(n_tokens);
             for (uint32_t i = 0; i < n_tokens; i++) {
                 for (int s = 0; s < ubatch.n_seq_id[i]; s++) {
-                    llama_seq_id seq_id = ubatch.seq_id[i][s];
+                    jarvis_seq_id seq_id = ubatch.seq_id[i][s];
                     lctx.seq_ids_enc[i].insert(seq_id);
                 }
             }
@@ -17581,7 +17581,7 @@ static int llama_encode_internal(
             GGML_ASSERT(lctx.embd != nullptr);
 
             switch (cparams.pooling_type) {
-                case LLAMA_POOLING_TYPE_NONE:
+                case JARVIS_POOLING_TYPE_NONE:
                     {
                         // extract token embeddings
                         GGML_ASSERT(lctx.embd != nullptr);
@@ -17590,9 +17590,9 @@ static int llama_encode_internal(
                         GGML_ASSERT(n_tokens*n_embd <= (int64_t) lctx.embd_size);
                         ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_tokens*n_embd*sizeof(float));
                     } break;
-                case LLAMA_POOLING_TYPE_MEAN:
-                case LLAMA_POOLING_TYPE_CLS:
-                case LLAMA_POOLING_TYPE_LAST:
+                case JARVIS_POOLING_TYPE_MEAN:
+                case JARVIS_POOLING_TYPE_CLS:
+                case JARVIS_POOLING_TYPE_LAST:
                     {
                         // extract sequence embeddings
                         auto & embd_seq_out = lctx.embd_seq;
@@ -17601,7 +17601,7 @@ static int llama_encode_internal(
                         GGML_ASSERT(!ubatch.equal_seqs); // TODO: handle equal splits
 
                         for (uint32_t i = 0; i < n_tokens; i++) {
-                            const llama_seq_id seq_id = ubatch.seq_id[i][0];
+                            const jarvis_seq_id seq_id = ubatch.seq_id[i][0];
                             if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
                                 continue;
                             }
@@ -17609,14 +17609,14 @@ static int llama_encode_internal(
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_seq_out[seq_id].data(), (n_embd*seq_id)*sizeof(float), n_embd*sizeof(float));
                         }
                     } break;
-                case LLAMA_POOLING_TYPE_RANK:
+                case JARVIS_POOLING_TYPE_RANK:
                     {
-                        // TODO: this likely should be the same logic as in llama_decoder_internal, but better to
+                        // TODO: this likely should be the same logic as in jarvis_decoder_internal, but better to
                         //       wait for an encoder model that requires this pooling type in order to test it
-                        //       https://github.com/ggerganov/llama.cpp/pull/9510
+                        //       https://github.com/ggerganov/jarvis.cpp/pull/9510
                         GGML_ABORT("RANK pooling not implemented yet");
                     }
-                case LLAMA_POOLING_TYPE_UNSPECIFIED:
+                case JARVIS_POOLING_TYPE_UNSPECIFIED:
                     {
                         GGML_ABORT("unknown pooling type");
                     }
@@ -17632,14 +17632,14 @@ static int llama_encode_internal(
 }
 
 // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
-static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
+static void jarvis_kv_cache_defrag_internal(struct jarvis_context & lctx) {
     auto & kv_self = lctx.kv_self;
 
     const auto & hparams = lctx.model.hparams;
 
     const uint32_t n_layer = hparams.n_layer;
 
-    const uint32_t n_kv   = llama_kv_cache_cell_max(kv_self);
+    const uint32_t n_kv   = jarvis_kv_cache_cell_max(kv_self);
     const uint32_t n_used = kv_self.used;
 
     assert(n_used <= n_kv);
@@ -17652,9 +17652,9 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     // each move requires 6*n_layer tensors (see build_defrag)
     //   - source view, destination view, copy operation
     //   - x2 for keys and values
-    //const uint32_t max_moves = llama_model_max_nodes(model)/(6*n_layer);
-    // TODO: tmp fix https://github.com/ggerganov/llama.cpp/issues/6685#issuecomment-2057579516
-    const uint32_t max_moves = (llama_model_max_nodes(lctx.model) - 2*n_layer)/(6*n_layer);
+    //const uint32_t max_moves = jarvis_model_max_nodes(model)/(6*n_layer);
+    // TODO: tmp fix https://github.com/ggerganov/jarvis.cpp/issues/6685#issuecomment-2057579516
+    const uint32_t max_moves = (jarvis_model_max_nodes(lctx.model) - 2*n_layer)/(6*n_layer);
 
     // determine which KV cells to move where
     //
@@ -17735,7 +17735,7 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
             kv_self.cells[i0 + nf] = cell1;
 
             // clear the old cell and move the head there
-            cell1 = llama_kv_cell();
+            cell1 = jarvis_kv_cell();
             kv_self.head = n_used;
 
             if (!cont) {
@@ -17754,7 +17754,7 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
             break;
         }
 
-        //LLAMA_LOG_INFO("(tmp log) KV defrag: move [%u, %u) to [%u, %u)\n", is, i1 + 1, i0, i0 + nh);
+        //JARVIS_LOG_INFO("(tmp log) KV defrag: move [%u, %u) to [%u, %u)\n", is, i1 + 1, i0, i0 + nh);
 
         i0 += nh - 1;
     }
@@ -17763,9 +17763,9 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
         return;
     }
 
-    //LLAMA_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
+    //JARVIS_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
 
-    //LLAMA_LOG_INFO("expected gf nodes: %u\n", 6*n_moves*n_layer);
+    //JARVIS_LOG_INFO("expected gf nodes: %u\n", 6*n_moves*n_layer);
 
 #if 0
     // CPU defrag
@@ -17842,21 +17842,21 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
 
     ggml_backend_sched_reset(lctx.sched);
 
-    ggml_cgraph * gf = llama_build_graph_defrag(lctx, ids);
+    ggml_cgraph * gf = jarvis_build_graph_defrag(lctx, ids);
 
-    llama_graph_compute(lctx, gf, lctx.cparams.n_threads, lctx.threadpool);
+    jarvis_graph_compute(lctx, gf, lctx.cparams.n_threads, lctx.threadpool);
 #endif
 
     //const int64_t t_end = ggml_time_us();
 
-    //LLAMA_LOG_INFO("(tmp log) KV defrag time: %.3f ms\n", (t_end - t_start)/1000.0);
+    //JARVIS_LOG_INFO("(tmp log) KV defrag time: %.3f ms\n", (t_end - t_start)/1000.0);
 }
 
-static void llama_kv_cache_update_internal(struct llama_context & lctx) {
+static void jarvis_kv_cache_update_internal(struct jarvis_context & lctx) {
     bool need_reserve = false;
 
     // apply K-shift if needed
-    if (lctx.model.hparams.rope_type != LLAMA_ROPE_TYPE_NONE && lctx.kv_self.has_shift) {
+    if (lctx.model.hparams.rope_type != JARVIS_ROPE_TYPE_NONE && lctx.kv_self.has_shift) {
         if (lctx.model.arch == LLM_ARCH_DEEPSEEK2) { // not supported due to MLA
             GGML_ABORT("Deepseek2 does not support K-shift");
         }
@@ -17864,13 +17864,13 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
         {
             ggml_backend_sched_reset(lctx.sched);
 
-            ggml_cgraph * gf = llama_build_graph_k_shift(lctx);
+            ggml_cgraph * gf = jarvis_build_graph_k_shift(lctx);
 
             ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
-            llama_set_k_shift(lctx);
+            jarvis_set_k_shift(lctx);
 
-            llama_graph_compute(lctx, gf, lctx.cparams.n_threads, lctx.threadpool);
+            jarvis_graph_compute(lctx, gf, lctx.cparams.n_threads, lctx.threadpool);
 
             need_reserve = true;
         }
@@ -17888,7 +17888,7 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
 
     // defragment the KV cache if needed
     if (lctx.kv_self.do_defrag) {
-        llama_kv_cache_defrag_internal(lctx);
+        jarvis_kv_cache_defrag_internal(lctx);
 
         need_reserve = true;
 
@@ -17901,14 +17901,14 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
         // build worst-case graph
         uint32_t n_seqs = 1; // TODO: worst-case number of sequences
         uint32_t n_tokens = std::min(lctx.cparams.n_ctx, lctx.cparams.n_ubatch);
-        llama_token token = llama_token_bos(&lctx.model); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
-        llama_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
-        ggml_cgraph * gf = llama_build_graph(lctx, ubatch, true);
+        jarvis_token token = jarvis_token_bos(&lctx.model); // not actually used by jarvis_build_graph, but required to choose between token and embedding inputs graph
+        jarvis_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
+        ggml_cgraph * gf = jarvis_build_graph(lctx, ubatch, true);
 
         // initialize scheduler with the worst-case graph
         ggml_backend_sched_reset(lctx.sched);
         if (!ggml_backend_sched_reserve(lctx.sched, gf)) {
-            LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
         }
     }
 }
@@ -17918,8 +17918,8 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
 //
 
 struct quantize_state_internal {
-    const llama_model                 & model;
-    const llama_model_quantize_params * params;
+    const jarvis_model                 & model;
+    const jarvis_model_quantize_params * params;
 
     int n_attention_wv    = 0;
     int n_ffn_down        = 0;
@@ -17938,13 +17938,13 @@ struct quantize_state_internal {
     // used to figure out if a model shares tok_embd with the output weight
     bool has_output       = false;
 
-    quantize_state_internal(const llama_model & model, const llama_model_quantize_params * params)
+    quantize_state_internal(const jarvis_model & model, const jarvis_model_quantize_params * params)
         : model(model)
         , params(params)
         {}
 };
 
-static void llama_tensor_dequantize_internal(
+static void jarvis_tensor_dequantize_internal(
     struct ggml_tensor * tensor, std::vector<no_init<float>> & output, std::vector<std::thread> & workers,
     const size_t nelements, const int nthread
 ) {
@@ -18016,7 +18016,7 @@ static void llama_tensor_dequantize_internal(
     workers.clear();
 }
 
-static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type new_type, const ggml_tensor * tensor, llama_ftype ftype) {
+static ggml_type jarvis_tensor_get_type(quantize_state_internal & qs, ggml_type new_type, const ggml_tensor * tensor, jarvis_ftype ftype) {
     const std::string name = ggml_get_name(tensor);
 
     // TODO: avoid hardcoded tensor names - use the TN_* constants
@@ -18053,9 +18053,9 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             if (arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
                 new_type = GGML_TYPE_Q8_0;
             }
-            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
-                     ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M   ||
-                     ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
+            else if (ftype == JARVIS_FTYPE_MOSTLY_IQ2_XXS || ftype == JARVIS_FTYPE_MOSTLY_IQ2_XS || ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS ||
+                     ftype == JARVIS_FTYPE_MOSTLY_IQ1_S   || ftype == JARVIS_FTYPE_MOSTLY_IQ2_S  || ftype == JARVIS_FTYPE_MOSTLY_IQ2_M   ||
+                     ftype == JARVIS_FTYPE_MOSTLY_IQ1_M) {
                 new_type = GGML_TYPE_Q5_K;
             }
             else if (new_type != GGML_TYPE_Q8_0) {
@@ -18066,29 +18066,29 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         if (qs.params->token_embedding_type < GGML_TYPE_COUNT) {
             new_type = qs.params->token_embedding_type;
         } else {
-            if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS ||
-                ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
+            if (ftype == JARVIS_FTYPE_MOSTLY_IQ2_XXS || ftype == JARVIS_FTYPE_MOSTLY_IQ2_XS ||
+                ftype == JARVIS_FTYPE_MOSTLY_IQ1_S   || ftype == JARVIS_FTYPE_MOSTLY_IQ1_M) {
                 new_type = GGML_TYPE_Q2_K;
             }
-            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M) {
+            else if (ftype == JARVIS_FTYPE_MOSTLY_IQ2_S || ftype == JARVIS_FTYPE_MOSTLY_IQ2_M) {
                 new_type = GGML_TYPE_IQ3_S;
             }
-            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
+            else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS) {
                 new_type = GGML_TYPE_IQ3_S;
             }
             else if (new_type == GGML_TYPE_Q4_0_4_4 || new_type == GGML_TYPE_Q4_0_4_8 ||
                      new_type == GGML_TYPE_Q4_0_8_8) {
                 new_type = GGML_TYPE_Q4_0;
             }
-            else if (ftype == LLAMA_FTYPE_MOSTLY_TQ1_0 || ftype == LLAMA_FTYPE_MOSTLY_TQ2_0) {
+            else if (ftype == JARVIS_FTYPE_MOSTLY_TQ1_0 || ftype == JARVIS_FTYPE_MOSTLY_TQ2_0) {
                 new_type = GGML_TYPE_Q4_K;
             }
         }
-    } else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
-               ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M    || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
+    } else if (ftype == JARVIS_FTYPE_MOSTLY_IQ2_XXS || ftype == JARVIS_FTYPE_MOSTLY_IQ2_XS || ftype == JARVIS_FTYPE_MOSTLY_IQ1_S ||
+               ftype == JARVIS_FTYPE_MOSTLY_IQ2_S || ftype == JARVIS_FTYPE_MOSTLY_IQ2_M    || ftype == JARVIS_FTYPE_MOSTLY_IQ1_M) {
         if (name.find("attn_v.weight") != std::string::npos) {
             if (qs.model.hparams.n_gqa() >= 4 || qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q4_K;
-            else new_type = ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M ? GGML_TYPE_IQ3_S : GGML_TYPE_Q2_K;
+            else new_type = ftype == JARVIS_FTYPE_MOSTLY_IQ2_S || ftype == JARVIS_FTYPE_MOSTLY_IQ2_M ? GGML_TYPE_IQ3_S : GGML_TYPE_Q2_K;
             ++qs.i_attention_wv;
         }
         else if (qs.model.hparams.n_expert == 8 && name.find("attn_k.weight") != std::string::npos) {
@@ -18096,7 +18096,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         }
         else if (name.find("ffn_down") != std::string::npos) {
             if (qs.i_ffn_down < qs.n_ffn_down/8) {
-                new_type = ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M ? GGML_TYPE_IQ3_S : GGML_TYPE_Q2_K;
+                new_type = ftype == JARVIS_FTYPE_MOSTLY_IQ2_S || ftype == JARVIS_FTYPE_MOSTLY_IQ2_M ? GGML_TYPE_IQ3_S : GGML_TYPE_Q2_K;
             }
             ++qs.i_ffn_down;
         }
@@ -18104,36 +18104,36 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             if (qs.model.hparams.n_expert == 8) {
                 new_type = GGML_TYPE_Q5_K;
             } else {
-                if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_S || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) new_type = GGML_TYPE_IQ2_XXS;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M) new_type = GGML_TYPE_IQ3_S;
+                if (ftype == JARVIS_FTYPE_MOSTLY_IQ1_S || ftype == JARVIS_FTYPE_MOSTLY_IQ1_M) new_type = GGML_TYPE_IQ2_XXS;
+                else if (ftype == JARVIS_FTYPE_MOSTLY_IQ2_S || ftype == JARVIS_FTYPE_MOSTLY_IQ2_M) new_type = GGML_TYPE_IQ3_S;
             }
         }
     } else if (name.find("attn_v.weight") != std::string::npos) {
-        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) {
+        if      (ftype == JARVIS_FTYPE_MOSTLY_Q2_K) {
             new_type = qs.model.hparams.n_gqa() >= 4 ? GGML_TYPE_Q4_K : GGML_TYPE_Q3_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && qs.model.hparams.n_gqa() >= 4) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q2_K_S && qs.model.hparams.n_gqa() >= 4) {
             new_type = GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS) {
             new_type = qs.model.hparams.n_gqa() >= 4 ? GGML_TYPE_Q4_K : !qs.has_imatrix ? GGML_TYPE_IQ3_S : GGML_TYPE_IQ3_XXS;
         }
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S) && qs.model.hparams.n_gqa() >= 4) {
+        else if ((ftype == JARVIS_FTYPE_MOSTLY_IQ3_XS || ftype == JARVIS_FTYPE_MOSTLY_IQ3_S) && qs.model.hparams.n_gqa() >= 4) {
             new_type = GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_M) {
             new_type = GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_M) {
             new_type = qs.i_attention_wv < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) && qs.model.hparams.n_gqa() >= 4) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+        else if ((ftype == JARVIS_FTYPE_MOSTLY_IQ4_NL || ftype == JARVIS_FTYPE_MOSTLY_IQ4_XS) && qs.model.hparams.n_gqa() >= 4) {
             new_type = GGML_TYPE_Q5_K;
         }
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
+        else if ((ftype == JARVIS_FTYPE_MOSTLY_Q4_K_M || ftype == JARVIS_FTYPE_MOSTLY_Q5_K_M) &&
                 use_more_bits(qs.i_attention_wv, qs.n_attention_wv)) new_type = GGML_TYPE_Q6_K;
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && qs.i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q4_K_S && qs.i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
         if (qs.model.type == MODEL_70B) {
             // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
             // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
@@ -18152,42 +18152,42 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             // TODO: explore better strategies
             new_type = GGML_TYPE_Q8_0;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XS) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS) {
             new_type = GGML_TYPE_IQ2_S;
         }
     } else if (name.find("attn_q.weight") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS) {
+        if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XS) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS) {
             new_type = GGML_TYPE_IQ2_S;
         }
     } else if (name.find("ffn_down") != std::string::npos) {
         auto info = layer_info(qs.i_ffn_down, qs.n_ffn_down, name.c_str());
         int i_layer = info.first, n_layer = info.second;
-        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S) {
+        if      (ftype == JARVIS_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q2_K_S) {
             if (i_layer < n_layer/8) new_type = GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS && !qs.has_imatrix) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS && !qs.has_imatrix) {
             new_type = i_layer < n_layer/8 ? GGML_TYPE_Q4_K : GGML_TYPE_Q3_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_M) {
             new_type = i_layer < n_layer/16 ? GGML_TYPE_Q5_K
                      : arch != LLM_ARCH_FALCON || use_more_bits(i_layer, n_layer) ? GGML_TYPE_Q4_K
                      : GGML_TYPE_Q3_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M && (i_layer < n_layer/8 ||
+        else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_M && (i_layer < n_layer/8 ||
                     (qs.model.hparams.n_expert == 8 && use_more_bits(i_layer, n_layer)))) {
             new_type = GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_L) {
             new_type = arch == LLM_ARCH_FALCON ? GGML_TYPE_Q4_K : GGML_TYPE_Q5_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q4_K_M) {
             if (arch == LLM_ARCH_FALCON) {
                 new_type = i_layer < n_layer/16 ? GGML_TYPE_Q6_K :
                            use_more_bits(i_layer, n_layer) ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
@@ -18195,52 +18195,52 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                 if (use_more_bits(i_layer, n_layer)) new_type = GGML_TYPE_Q6_K;
             }
         }
-        else if (i_layer < n_layer/8 && (ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) && !qs.has_imatrix) {
+        else if (i_layer < n_layer/8 && (ftype == JARVIS_FTYPE_MOSTLY_IQ4_NL || ftype == JARVIS_FTYPE_MOSTLY_IQ4_XS) && !qs.has_imatrix) {
             new_type = GGML_TYPE_Q5_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M && use_more_bits(i_layer, n_layer)) new_type = GGML_TYPE_Q6_K;
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && arch != LLM_ARCH_FALCON && i_layer < n_layer/8) {
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q5_K_M && use_more_bits(i_layer, n_layer)) new_type = GGML_TYPE_Q6_K;
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q4_K_S && arch != LLM_ARCH_FALCON && i_layer < n_layer/8) {
             new_type = GGML_TYPE_Q5_K;
         }
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_0 || ftype == LLAMA_FTYPE_MOSTLY_Q5_0)
+        else if ((ftype == JARVIS_FTYPE_MOSTLY_Q4_0 || ftype == JARVIS_FTYPE_MOSTLY_Q5_0)
                 && qs.has_imatrix && i_layer < n_layer/8) {
             // Guard against craziness in the first few ffn_down layers that can happen even with imatrix for Q4_0/Q5_0.
             // We only do it when an imatrix is provided because a) we want to make sure that one can always get the
             // same quantization as before imatrix stuff, and b) Q4_1/Q5_1 do go crazy on ffn_down without an imatrix.
-            new_type = ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ? GGML_TYPE_Q4_1 : GGML_TYPE_Q5_1;
+            new_type = ftype == JARVIS_FTYPE_MOSTLY_Q4_0 ? GGML_TYPE_Q4_1 : GGML_TYPE_Q5_1;
         }
         ++qs.i_ffn_down;
     } else if (name.find("attn_output.weight") != std::string::npos) {
         if (arch != LLM_ARCH_FALCON) {
             if (qs.model.hparams.n_expert == 8) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
-                    ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL  ||
-                    ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S  ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ3_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) {
+                if (ftype == JARVIS_FTYPE_MOSTLY_Q2_K   || ftype == JARVIS_FTYPE_MOSTLY_IQ3_XS || ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS ||
+                    ftype == JARVIS_FTYPE_MOSTLY_Q3_K_S || ftype == JARVIS_FTYPE_MOSTLY_Q3_K_M  || ftype == JARVIS_FTYPE_MOSTLY_IQ4_NL  ||
+                    ftype == JARVIS_FTYPE_MOSTLY_Q4_K_S || ftype == JARVIS_FTYPE_MOSTLY_Q4_K_M  || ftype == JARVIS_FTYPE_MOSTLY_IQ3_S  ||
+                    ftype == JARVIS_FTYPE_MOSTLY_IQ3_M  || ftype == JARVIS_FTYPE_MOSTLY_IQ4_XS) {
                     new_type = GGML_TYPE_Q5_K;
                 }
             } else {
-                if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   ) new_type = GGML_TYPE_Q3_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) new_type = GGML_TYPE_IQ3_S;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M ) new_type = GGML_TYPE_Q4_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L ) new_type = GGML_TYPE_Q5_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M  ) new_type = GGML_TYPE_Q4_K;
+                if      (ftype == JARVIS_FTYPE_MOSTLY_Q2_K   ) new_type = GGML_TYPE_Q3_K;
+                else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XXS) new_type = GGML_TYPE_IQ3_S;
+                else if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_M ) new_type = GGML_TYPE_Q4_K;
+                else if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_L ) new_type = GGML_TYPE_Q5_K;
+                else if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_M  ) new_type = GGML_TYPE_Q4_K;
             }
         } else {
-            if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+            if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
         }
     }
     else if (name.find("attn_qkv.weight") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L || ftype == LLAMA_FTYPE_MOSTLY_IQ3_M) {
+        if (ftype == JARVIS_FTYPE_MOSTLY_Q3_K_M || ftype == JARVIS_FTYPE_MOSTLY_Q3_K_L || ftype == JARVIS_FTYPE_MOSTLY_IQ3_M) {
             new_type = GGML_TYPE_Q4_K;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) new_type = GGML_TYPE_Q5_K;
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q4_K_M) new_type = GGML_TYPE_Q5_K;
+        else if (ftype == JARVIS_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
     }
     else if (name.find("ffn_gate") != std::string::npos) {
         auto info = layer_info(qs.i_ffn_gate, qs.n_ffn_gate, name.c_str());
         int i_layer = info.first, n_layer = info.second;
-        if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS && (i_layer >= n_layer/8 && i_layer < 7*n_layer/8)) {
+        if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XS && (i_layer >= n_layer/8 && i_layer < 7*n_layer/8)) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
         ++qs.i_ffn_gate;
@@ -18248,22 +18248,22 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
     else if (name.find("ffn_up") != std::string::npos) {
         auto info = layer_info(qs.i_ffn_up, qs.n_ffn_up, name.c_str());
         int i_layer = info.first, n_layer = info.second;
-        if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS && (i_layer >= n_layer/8 && i_layer < 7*n_layer/8)) {
+        if (ftype == JARVIS_FTYPE_MOSTLY_IQ3_XS && (i_layer >= n_layer/8 && i_layer < 7*n_layer/8)) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
         ++qs.i_ffn_up;
     }
 
-    //    if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+    //    if (ftype == JARVIS_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
     //}
     // IK: let's remove this, else Q2_K is almost the same as Q3_K_S
     //else if (name.find("ffn_gate") != std::string::npos || name.find("ffn_up") != std::string::npos) {
-    //    if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+    //    if (ftype == JARVIS_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
     //}
     // This can be used to reduce the size of the Q5_K_S model.
     // The associated PPL increase is fully in line with the size reduction
     //else {
-    //    if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_S) new_type = GGML_TYPE_Q4_K;
+    //    if (ftype == JARVIS_FTYPE_MOSTLY_Q5_K_S) new_type = GGML_TYPE_Q4_K;
     //}
     bool convert_incompatible_tensor = false;
     if (new_type == GGML_TYPE_Q2_K    || new_type == GGML_TYPE_Q3_K    || new_type == GGML_TYPE_Q4_K   ||
@@ -18274,7 +18274,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         int nx = tensor->ne[0];
         int ny = tensor->ne[1];
         if (nx % QK_K != 0) {
-            LLAMA_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for %s", __func__, nx, ny, QK_K, ggml_type_name(new_type));
+            JARVIS_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for %s", __func__, nx, ny, QK_K, ggml_type_name(new_type));
             convert_incompatible_tensor = true;
         } else {
             ++qs.n_k_quantized;
@@ -18302,14 +18302,14 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         if (tensor->ne[0] % ggml_blck_size(new_type) != 0) {
             new_type = GGML_TYPE_F16;
         }
-        LLAMA_LOG_WARN(" - using fallback quantization %s\n", ggml_type_name(new_type));
+        JARVIS_LOG_WARN(" - using fallback quantization %s\n", ggml_type_name(new_type));
         ++qs.n_fallback;
     }
 
     return new_type;
 }
 
-static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int64_t chunk_size, int64_t nrows, int64_t n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
+static size_t jarvis_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int64_t chunk_size, int64_t nrows, int64_t n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
     if (nthread < 2) {
         // single-thread
         size_t new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, imatrix);
@@ -18363,48 +18363,48 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
     return new_size;
 }
 
-static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
+static void jarvis_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const jarvis_model_quantize_params * params) {
     ggml_type default_type;
-    llama_ftype ftype = params->ftype;
+    jarvis_ftype ftype = params->ftype;
 
     switch (params->ftype) {
-        case LLAMA_FTYPE_MOSTLY_Q4_0: default_type = GGML_TYPE_Q4_0; break;
-        case LLAMA_FTYPE_MOSTLY_Q4_1: default_type = GGML_TYPE_Q4_1; break;
-        case LLAMA_FTYPE_MOSTLY_Q5_0: default_type = GGML_TYPE_Q5_0; break;
-        case LLAMA_FTYPE_MOSTLY_Q5_1: default_type = GGML_TYPE_Q5_1; break;
-        case LLAMA_FTYPE_MOSTLY_Q8_0: default_type = GGML_TYPE_Q8_0; break;
-        case LLAMA_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
-        case LLAMA_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
-        case LLAMA_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
+        case JARVIS_FTYPE_MOSTLY_Q4_0: default_type = GGML_TYPE_Q4_0; break;
+        case JARVIS_FTYPE_MOSTLY_Q4_1: default_type = GGML_TYPE_Q4_1; break;
+        case JARVIS_FTYPE_MOSTLY_Q5_0: default_type = GGML_TYPE_Q5_0; break;
+        case JARVIS_FTYPE_MOSTLY_Q5_1: default_type = GGML_TYPE_Q5_1; break;
+        case JARVIS_FTYPE_MOSTLY_Q8_0: default_type = GGML_TYPE_Q8_0; break;
+        case JARVIS_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
+        case JARVIS_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
+        case JARVIS_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
 
         // K-quants
-        case LLAMA_FTYPE_MOSTLY_Q2_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q2_K:    default_type = GGML_TYPE_Q2_K;    break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_XS:  default_type = GGML_TYPE_IQ3_S;   break;
-        case LLAMA_FTYPE_MOSTLY_Q3_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q3_K_M:
-        case LLAMA_FTYPE_MOSTLY_Q3_K_L:  default_type = GGML_TYPE_Q3_K;    break;
-        case LLAMA_FTYPE_MOSTLY_Q4_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q4_K_M:  default_type = GGML_TYPE_Q4_K;    break;
-        case LLAMA_FTYPE_MOSTLY_Q5_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q5_K_M:  default_type = GGML_TYPE_Q5_K;    break;
-        case LLAMA_FTYPE_MOSTLY_Q6_K:    default_type = GGML_TYPE_Q6_K;    break;
-        case LLAMA_FTYPE_MOSTLY_TQ1_0:   default_type = GGML_TYPE_TQ1_0;   break;
-        case LLAMA_FTYPE_MOSTLY_TQ2_0:   default_type = GGML_TYPE_TQ2_0;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_XXS: default_type = GGML_TYPE_IQ2_XXS; break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_XS:  default_type = GGML_TYPE_IQ2_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_S:   default_type = GGML_TYPE_IQ2_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_M:   default_type = GGML_TYPE_IQ2_S;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_XXS: default_type = GGML_TYPE_IQ3_XXS; break;
-        case LLAMA_FTYPE_MOSTLY_IQ1_S:   default_type = GGML_TYPE_IQ1_S;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ1_M:   default_type = GGML_TYPE_IQ1_M;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ4_NL:  default_type = GGML_TYPE_IQ4_NL;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ4_XS:  default_type = GGML_TYPE_IQ4_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_S:   default_type = GGML_TYPE_IQ3_S;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_M:   default_type = GGML_TYPE_IQ3_S;   break;
-        case LLAMA_FTYPE_MOSTLY_Q4_0_4_4: default_type = GGML_TYPE_Q4_0_4_4; break;
-        case LLAMA_FTYPE_MOSTLY_Q4_0_4_8: default_type = GGML_TYPE_Q4_0_4_8; break;
-        case LLAMA_FTYPE_MOSTLY_Q4_0_8_8: default_type = GGML_TYPE_Q4_0_8_8; break;
+        case JARVIS_FTYPE_MOSTLY_Q2_K_S:
+        case JARVIS_FTYPE_MOSTLY_Q2_K:    default_type = GGML_TYPE_Q2_K;    break;
+        case JARVIS_FTYPE_MOSTLY_IQ3_XS:  default_type = GGML_TYPE_IQ3_S;   break;
+        case JARVIS_FTYPE_MOSTLY_Q3_K_S:
+        case JARVIS_FTYPE_MOSTLY_Q3_K_M:
+        case JARVIS_FTYPE_MOSTLY_Q3_K_L:  default_type = GGML_TYPE_Q3_K;    break;
+        case JARVIS_FTYPE_MOSTLY_Q4_K_S:
+        case JARVIS_FTYPE_MOSTLY_Q4_K_M:  default_type = GGML_TYPE_Q4_K;    break;
+        case JARVIS_FTYPE_MOSTLY_Q5_K_S:
+        case JARVIS_FTYPE_MOSTLY_Q5_K_M:  default_type = GGML_TYPE_Q5_K;    break;
+        case JARVIS_FTYPE_MOSTLY_Q6_K:    default_type = GGML_TYPE_Q6_K;    break;
+        case JARVIS_FTYPE_MOSTLY_TQ1_0:   default_type = GGML_TYPE_TQ1_0;   break;
+        case JARVIS_FTYPE_MOSTLY_TQ2_0:   default_type = GGML_TYPE_TQ2_0;   break;
+        case JARVIS_FTYPE_MOSTLY_IQ2_XXS: default_type = GGML_TYPE_IQ2_XXS; break;
+        case JARVIS_FTYPE_MOSTLY_IQ2_XS:  default_type = GGML_TYPE_IQ2_XS;  break;
+        case JARVIS_FTYPE_MOSTLY_IQ2_S:   default_type = GGML_TYPE_IQ2_XS;  break;
+        case JARVIS_FTYPE_MOSTLY_IQ2_M:   default_type = GGML_TYPE_IQ2_S;   break;
+        case JARVIS_FTYPE_MOSTLY_IQ3_XXS: default_type = GGML_TYPE_IQ3_XXS; break;
+        case JARVIS_FTYPE_MOSTLY_IQ1_S:   default_type = GGML_TYPE_IQ1_S;   break;
+        case JARVIS_FTYPE_MOSTLY_IQ1_M:   default_type = GGML_TYPE_IQ1_M;   break;
+        case JARVIS_FTYPE_MOSTLY_IQ4_NL:  default_type = GGML_TYPE_IQ4_NL;  break;
+        case JARVIS_FTYPE_MOSTLY_IQ4_XS:  default_type = GGML_TYPE_IQ4_XS;  break;
+        case JARVIS_FTYPE_MOSTLY_IQ3_S:   default_type = GGML_TYPE_IQ3_S;   break;
+        case JARVIS_FTYPE_MOSTLY_IQ3_M:   default_type = GGML_TYPE_IQ3_S;   break;
+        case JARVIS_FTYPE_MOSTLY_Q4_0_4_4: default_type = GGML_TYPE_Q4_0_4_4; break;
+        case JARVIS_FTYPE_MOSTLY_Q4_0_4_8: default_type = GGML_TYPE_Q4_0_4_8; break;
+        case JARVIS_FTYPE_MOSTLY_Q4_0_8_8: default_type = GGML_TYPE_Q4_0_8_8; break;
 
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
@@ -18423,15 +18423,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     constexpr bool use_mmap = false;
 #endif
 
-    llama_model_kv_override * kv_overrides = nullptr;
+    jarvis_model_kv_override * kv_overrides = nullptr;
     if (params->kv_overrides) {
-        auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
+        auto v = (std::vector<jarvis_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
-    llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
+    jarvis_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
-    llama_model model;
+    jarvis_model model;
     llm_load_arch(ml, model);
     llm_load_hparams(ml, model);
 
@@ -18444,7 +18444,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     if (params->imatrix) {
         imatrix_data = static_cast<const std::unordered_map<std::string, std::vector<float>>*>(params->imatrix);
         if (imatrix_data) {
-            LLAMA_LOG_INFO("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
+            JARVIS_LOG_INFO("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
             qs.has_imatrix = true;
             // check imatrix for nans or infs
             for (const auto & kv : *imatrix_data) {
@@ -18471,19 +18471,19 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     gguf_remove_key(ctx_out, ml.llm_kv(LLM_KV_SPLIT_TENSORS_COUNT).c_str());
 
     if (params->kv_overrides) {
-        const std::vector<llama_model_kv_override> & overrides = *(const std::vector<llama_model_kv_override> *)params->kv_overrides;
+        const std::vector<jarvis_model_kv_override> & overrides = *(const std::vector<jarvis_model_kv_override> *)params->kv_overrides;
         for (auto & o : overrides) {
             if (o.key[0] == 0) break;
-            if (o.tag == LLAMA_KV_OVERRIDE_TYPE_FLOAT) {
+            if (o.tag == JARVIS_KV_OVERRIDE_TYPE_FLOAT) {
                 gguf_set_val_f32(ctx_out, o.key, o.val_f64);
-            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_INT) {
+            } else if (o.tag == JARVIS_KV_OVERRIDE_TYPE_INT) {
                 gguf_set_val_i32(ctx_out, o.key, o.val_i64);
-            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_BOOL) {
+            } else if (o.tag == JARVIS_KV_OVERRIDE_TYPE_BOOL) {
                 gguf_set_val_bool(ctx_out, o.key, o.val_bool);
-            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_STR) {
+            } else if (o.tag == JARVIS_KV_OVERRIDE_TYPE_STR) {
                 gguf_set_val_str(ctx_out, o.key, o.val_str);
             } else {
-                LLAMA_LOG_WARN("%s: unknown KV override type for key %s\n", __func__, o.key);
+                JARVIS_LOG_WARN("%s: unknown KV override type for key %s\n", __func__, o.key);
             }
         }
     }
@@ -18510,7 +18510,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         const auto & n_head_kv_iter = model.hparams.n_head_kv_arr.begin();
         // attention layers have a non-zero number of kv heads
         int32_t n_attn_layer = model.hparams.n_layer - std::count(n_head_kv_iter, n_head_kv_iter + model.hparams.n_layer, 0);
-        if (llama_model_has_encoder(&model)) {
+        if (jarvis_model_has_encoder(&model)) {
             n_attn_layer *= 3;
         }
         GGML_ASSERT((qs.n_attention_wv == n_attn_layer) && "n_attention_wv is unexpected");
@@ -18576,7 +18576,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         std::string fname = fname_out;
         if (params->keep_split) {
             char split_path[PATH_MAX] = {0};
-            llama_split_path(split_path, sizeof(split_path), fname_out.c_str(), cur_split, n_split);
+            jarvis_split_path(split_path, sizeof(split_path), fname_out.c_str(), cur_split, n_split);
             fname = std::string(split_path);
         }
 
@@ -18607,10 +18607,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
         ml.load_data_for(tensor);
 
-        LLAMA_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s, ",
+        JARVIS_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s, ",
                ++idx, ml.n_tensors,
                ggml_get_name(tensor),
-               llama_format_tensor_shape(tensor).c_str(),
+               jarvis_format_tensor_shape(tensor).c_str(),
                ggml_type_name(tensor->type));
 
         // This used to be a regex, but <regex> has an extreme cost to compile times.
@@ -18656,7 +18656,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             // get more optimal quantization type based on the tensor shape, layer, etc.
             if (!params->pure && ggml_is_quantized(default_type)) {
-                new_type = llama_tensor_get_type(qs, new_type, tensor, ftype);
+                new_type = jarvis_tensor_get_type(qs, new_type, tensor, ftype);
             }
             if (params->token_embedding_type < GGML_TYPE_COUNT && strcmp(tensor->name, "token_embd.weight") == 0) {
                 new_type = params->token_embedding_type;
@@ -18674,7 +18674,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_type = tensor->type;
             new_data = tensor->data;
             new_size = ggml_nbytes(tensor);
-            LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
+            JARVIS_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
         } else {
             const int64_t nelements = ggml_nelements(tensor);
 
@@ -18682,12 +18682,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (imatrix_data) {
                 auto it = imatrix_data->find(tensor->name);
                 if (it == imatrix_data->end()) {
-                    LLAMA_LOG_INFO("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
+                    JARVIS_LOG_INFO("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
                 } else {
                     if (it->second.size() == (size_t)tensor->ne[0]*tensor->ne[2]) {
                         imatrix = it->second.data();
                     } else {
-                        LLAMA_LOG_INFO("\n====== %s: imatrix size %d is different from tensor size %d for %s\n", __func__,
+                        JARVIS_LOG_INFO("\n====== %s: imatrix size %d is different from tensor size %d for %s\n", __func__,
                                 int(it->second.size()), int(tensor->ne[0]*tensor->ne[2]), tensor->name);
 
                         // this can happen when quantizing an old mixtral model with split tensors with a new incompatible imatrix
@@ -18706,11 +18706,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                  new_type == GGML_TYPE_IQ2_S   ||
                  new_type == GGML_TYPE_IQ1_S   ||
                 (new_type == GGML_TYPE_IQ1_M && strcmp(tensor->name, "token_embd.weight") && strcmp(tensor->name, "output.weight"))  ||
-                (new_type == GGML_TYPE_Q2_K && params->ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && strcmp(tensor->name, "token_embd.weight") != 0)) && !imatrix) {
-                LLAMA_LOG_ERROR("\n\n============================================================\n");
-                LLAMA_LOG_ERROR("Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
-                LLAMA_LOG_ERROR("The result will be garbage, so bailing out\n");
-                LLAMA_LOG_ERROR("============================================================\n\n");
+                (new_type == GGML_TYPE_Q2_K && params->ftype == JARVIS_FTYPE_MOSTLY_Q2_K_S && strcmp(tensor->name, "token_embd.weight") != 0)) && !imatrix) {
+                JARVIS_LOG_ERROR("\n\n============================================================\n");
+                JARVIS_LOG_ERROR("Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
+                JARVIS_LOG_ERROR("The result will be garbage, so bailing out\n");
+                JARVIS_LOG_ERROR("============================================================\n\n");
                 throw std::runtime_error(format("Missing importance matrix for tensor %s in a very low-bit quantization", tensor->name));
             }
 
@@ -18721,7 +18721,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
-                llama_tensor_dequantize_internal(tensor, f32_conv_buf, workers, nelements, nthread);
+                jarvis_tensor_dequantize_internal(tensor, f32_conv_buf, workers, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.data();
             }
 
@@ -18733,7 +18733,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if (new_type == GGML_TYPE_Q4_0_4_4 || new_type == GGML_TYPE_Q4_0_4_8) chunk_size_multiplier = 4;
             }
 
-            LLAMA_LOG_INFO("converting to %s .. ", ggml_type_name(new_type));
+            JARVIS_LOG_INFO("converting to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
             if (work.size() < (size_t)nelements * 4) {
@@ -18759,9 +18759,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 void * new_data_03 = (char *)new_data + ggml_row_size(new_type, n_per_row) * i03 * nrows;
                 const float * imatrix_03 = imatrix ? imatrix + i03 * n_per_row : nullptr;
 
-                new_size += llama_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
+                new_size += jarvis_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
             }
-            LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
+            JARVIS_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
         }
         total_size_org += ggml_nbytes(tensor);
         total_size_new += new_size;
@@ -18779,17 +18779,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         gguf_free(c);
     }
 
-    LLAMA_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
-    LLAMA_LOG_INFO("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
+    JARVIS_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
+    JARVIS_LOG_INFO("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
 
     if (qs.n_fallback > 0) {
-        LLAMA_LOG_WARN("%s: WARNING: %d of %d tensor(s) required fallback quantization\n",
+        JARVIS_LOG_WARN("%s: WARNING: %d of %d tensor(s) required fallback quantization\n",
                 __func__, qs.n_fallback, qs.n_k_quantized + qs.n_fallback);
     }
 }
 
-static void llama_lora_adapter_init_internal(struct llama_model * model, const char * path_lora, struct llama_lora_adapter & adapter) {
-    LLAMA_LOG_INFO("%s: loading lora adapter from '%s' ...\n", __func__, path_lora);
+static void jarvis_lora_adapter_init_internal(struct jarvis_model * model, const char * path_lora, struct jarvis_lora_adapter & adapter) {
+    JARVIS_LOG_INFO("%s: loading lora adapter from '%s' ...\n", __func__, path_lora);
 
     ggml_context * ctx = nullptr;
     struct gguf_init_params meta_gguf_params = {
@@ -18856,7 +18856,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     };
 
     // bundle lora_a and lora_b into pairs
-    std::map<std::string, llama_lora_weight> ab_map;
+    std::map<std::string, jarvis_lora_weight> ab_map;
     auto str_endswith = [](const std::string & str, const std::string & suffix) {
         return str.size() >= suffix.size() && str.compare(str.size()-suffix.size(), suffix.size(), suffix) == 0;
     };
@@ -18865,14 +18865,14 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
         if (str_endswith(name, ".lora_a")) {
             replace_all(name, ".lora_a", "");
             if (ab_map.find(name) == ab_map.end()) {
-                ab_map[name] = llama_lora_weight(cur, nullptr);
+                ab_map[name] = jarvis_lora_weight(cur, nullptr);
             } else {
                 ab_map[name].a = cur;
             }
         } else if (str_endswith(name, ".lora_b")) {
             replace_all(name, ".lora_b", "");
             if (ab_map.find(name) == ab_map.end()) {
-                ab_map[name] = llama_lora_weight(nullptr, cur);
+                ab_map[name] = jarvis_lora_weight(nullptr, cur);
             } else {
                 ab_map[name].b = cur;
             }
@@ -18886,7 +18886,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     // add tensors
     for (auto & it : ab_map) {
         const std::string & name = it.first;
-        llama_lora_weight & w = it.second;
+        jarvis_lora_weight & w = it.second;
 
         if (!w.a || !w.b) {
             gguf_free(ctx_gguf);
@@ -18895,7 +18895,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
         }
 
         // device buft and device ctx
-        auto * model_tensor = llama_get_model_tensor(model, name.c_str());
+        auto * model_tensor = jarvis_get_model_tensor(model, name.c_str());
         if (!model_tensor) {
             gguf_free(ctx_gguf);
             ggml_free(ctx);
@@ -18918,7 +18918,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
         struct ggml_tensor * tensor_b = ggml_dup_tensor(dev_ctx, w.b);
         ggml_set_name(tensor_a, w.a->name);
         ggml_set_name(tensor_b, w.b->name);
-        adapter.ab_map[name] = llama_lora_weight(tensor_a, tensor_b);
+        adapter.ab_map[name] = jarvis_lora_weight(tensor_a, tensor_b);
     }
 
     // allocate tensors / buffers and zero
@@ -18934,7 +18934,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
                 ggml_free(ctx);
                 throw std::runtime_error("failed to allocate buffer for lora adapter\n");
             }
-            LLAMA_LOG_INFO("%s: %10s LoRA buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
+            JARVIS_LOG_INFO("%s: %10s LoRA buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
             adapter.ctxs.push_back(ctx_dev);
             adapter.bufs.push_back(buf);
         }
@@ -18942,7 +18942,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
 
     // set tensor data
     {
-        llama_file gguf_file(path_lora, "rb");
+        jarvis_file gguf_file(path_lora, "rb");
         std::vector<uint8_t> read_buf;
         auto set_tensor = [&](struct ggml_tensor * orig, struct ggml_tensor * dev) {
             size_t offs = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, gguf_find_tensor(ctx_gguf, orig->name));
@@ -18960,28 +18960,28 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
         }
     }
 
-    LLAMA_LOG_INFO("%s: loaded %ld tensors from lora file\n", __func__, adapter.ab_map.size()*2);
+    JARVIS_LOG_INFO("%s: loaded %ld tensors from lora file\n", __func__, adapter.ab_map.size()*2);
 
     // free ctx for reading gguf
     gguf_free(ctx_gguf);
     ggml_free(ctx);
 }
 
-int32_t llama_lora_adapter_set(
-            struct llama_context * ctx,
-            struct llama_lora_adapter * adapter,
+int32_t jarvis_lora_adapter_set(
+            struct jarvis_context * ctx,
+            struct jarvis_lora_adapter * adapter,
             float scale) {
     if (ctx->cparams.flash_attn) {
-        LLAMA_LOG_ERROR("%s: flash_attn is not compatible with LoRA\n", __func__);
+        JARVIS_LOG_ERROR("%s: flash_attn is not compatible with LoRA\n", __func__);
         return -1;
     }
     ctx->lora_adapters[adapter] = scale;
     return 0;
 }
 
-int32_t llama_lora_adapter_remove(
-            struct llama_context * ctx,
-            struct llama_lora_adapter * adapter) {
+int32_t jarvis_lora_adapter_remove(
+            struct jarvis_context * ctx,
+            struct jarvis_lora_adapter * adapter) {
     auto pos = ctx->lora_adapters.find(adapter);
     if (pos != ctx->lora_adapters.end()) {
         ctx->lora_adapters.erase(pos);
@@ -18990,21 +18990,21 @@ int32_t llama_lora_adapter_remove(
     return -1;
 }
 
-void llama_lora_adapter_clear(struct llama_context * ctx) {
+void jarvis_lora_adapter_clear(struct jarvis_context * ctx) {
     ctx->lora_adapters.clear();
 }
 
-void llama_lora_adapter_free(struct llama_lora_adapter * adapter) {
+void jarvis_lora_adapter_free(struct jarvis_lora_adapter * adapter) {
     delete adapter;
 }
 
 //
 // interface implementation
 //
-struct llama_model_params llama_model_default_params() {
-    struct llama_model_params result = {
+struct jarvis_model_params jarvis_model_default_params() {
+    struct jarvis_model_params result = {
         /*.n_gpu_layers                =*/ 0,
-        /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
+        /*.split_mode                  =*/ JARVIS_SPLIT_MODE_LAYER,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.rpc_servers                 =*/ nullptr,
@@ -19025,17 +19025,17 @@ struct llama_model_params llama_model_default_params() {
     return result;
 }
 
-struct llama_context_params llama_context_default_params() {
-    struct llama_context_params result = {
+struct jarvis_context_params jarvis_context_default_params() {
+    struct jarvis_context_params result = {
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 2048,
         /*.n_ubatch                    =*/ 512,
         /*.n_seq_max                   =*/ 1,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
-        /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
-        /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
-        /*.attention_type              =*/ LLAMA_ATTENTION_TYPE_UNSPECIFIED,
+        /*.rope_scaling_type           =*/ JARVIS_ROPE_SCALING_TYPE_UNSPECIFIED,
+        /*.pooling_type                =*/ JARVIS_POOLING_TYPE_UNSPECIFIED,
+        /*.attention_type              =*/ JARVIS_ATTENTION_TYPE_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
         /*.yarn_ext_factor             =*/ -1.0f,
@@ -19060,18 +19060,18 @@ struct llama_context_params llama_context_default_params() {
     return result;
 }
 
-struct llama_sampler_chain_params llama_sampler_chain_default_params() {
-    struct llama_sampler_chain_params result = {
+struct jarvis_sampler_chain_params jarvis_sampler_chain_default_params() {
+    struct jarvis_sampler_chain_params result = {
         /*.no_perf                     =*/ true,
     };
 
     return result;
 }
 
-struct llama_model_quantize_params llama_model_quantize_default_params() {
-    struct llama_model_quantize_params result = {
+struct jarvis_model_quantize_params jarvis_model_quantize_default_params() {
+    struct jarvis_model_quantize_params result = {
         /*.nthread                     =*/ 0,
-        /*.ftype                       =*/ LLAMA_FTYPE_MOSTLY_Q5_1,
+        /*.ftype                       =*/ JARVIS_FTYPE_MOSTLY_Q5_1,
         /*.output_tensor_type          =*/ GGML_TYPE_COUNT,
         /*.token_embedding_type        =*/ GGML_TYPE_COUNT,
         /*.allow_requantize            =*/ false,
@@ -19086,34 +19086,34 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
-size_t llama_max_devices(void) {
+size_t jarvis_max_devices(void) {
     return 16;
 }
 
-bool llama_supports_mmap(void) {
-    return llama_mmap::SUPPORTED;
+bool jarvis_supports_mmap(void) {
+    return jarvis_mmap::SUPPORTED;
 }
 
-bool llama_supports_mlock(void) {
-    return llama_mlock::SUPPORTED;
+bool jarvis_supports_mlock(void) {
+    return jarvis_mlock::SUPPORTED;
 }
 
-bool llama_supports_gpu_offload(void) {
+bool jarvis_supports_gpu_offload(void) {
 #if defined(GGML_USE_KOMPUTE)
-    // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
+    // Defined when jarvis.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
     return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU) != nullptr ||
            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU_FULL) != nullptr ||
-           llama_supports_rpc();
+           jarvis_supports_rpc();
 #endif
 }
 
-bool llama_supports_rpc(void) {
+bool jarvis_supports_rpc(void) {
     return ggml_backend_reg_by_name("RPC") != nullptr;
 }
 
-void llama_backend_init(void) {
+void jarvis_backend_init(void) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -19124,39 +19124,39 @@ void llama_backend_init(void) {
     }
 }
 
-void llama_numa_init(enum ggml_numa_strategy numa) {
+void jarvis_numa_init(enum ggml_numa_strategy numa) {
     if (numa != GGML_NUMA_STRATEGY_DISABLED) {
         ggml_numa_init(numa);
     }
 }
 
-void llama_attach_threadpool(
-             struct llama_context * ctx,
+void jarvis_attach_threadpool(
+             struct jarvis_context * ctx,
         ggml_threadpool_t   threadpool,
         ggml_threadpool_t   threadpool_batch) {
     ctx->threadpool       = threadpool;
     ctx->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
 }
 
-void llama_detach_threadpool(struct llama_context * ctx) {
+void jarvis_detach_threadpool(struct jarvis_context * ctx) {
     ctx->threadpool       = nullptr;
     ctx->threadpool_batch = nullptr;
 }
 
-void llama_backend_free(void) {
+void jarvis_backend_free(void) {
     ggml_quantize_free();
 }
 
-int64_t llama_time_us(void) {
+int64_t jarvis_time_us(void) {
     return ggml_time_us();
 }
 
-struct llama_model * llama_load_model_from_file(
+struct jarvis_model * jarvis_load_model_from_file(
         const char * path_model,
-        struct llama_model_params   params) {
+        struct jarvis_model_params   params) {
     ggml_time_init();
 
-    llama_model * model = new llama_model;
+    jarvis_model * model = new jarvis_model;
 
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
@@ -19166,9 +19166,9 @@ struct llama_model * llama_load_model_from_file(
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
                 *cur_percentage_p = percentage;
-                LLAMA_LOG_CONT(".");
+                JARVIS_LOG_CONT(".");
                 if (percentage >= 100) {
-                    LLAMA_LOG_CONT("\n");
+                    JARVIS_LOG_CONT("\n");
                 }
             }
             return true;
@@ -19191,8 +19191,8 @@ struct llama_model * llama_load_model_from_file(
     if (!model->rpc_servers.empty()) {
         ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
         if (!rpc_reg) {
-            LLAMA_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
-            llama_free_model(model);
+            JARVIS_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
+            jarvis_free_model(model);
             return nullptr;
         }
 
@@ -19200,8 +19200,8 @@ struct llama_model * llama_load_model_from_file(
         using ggml_backend_rpc_add_device_t = ggml_backend_dev_t (*)(const char *);
         ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
         if (!ggml_backend_rpc_add_device_fn) {
-            LLAMA_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
-            llama_free_model(model);
+            JARVIS_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
+            jarvis_free_model(model);
             return nullptr;
         }
 
@@ -19210,8 +19210,8 @@ struct llama_model * llama_load_model_from_file(
             if (dev) {
                 model->devices.push_back(dev);
             } else {
-                LLAMA_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
-                llama_free_model(model);
+                JARVIS_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
+                jarvis_free_model(model);
                 return nullptr;
             }
         }
@@ -19233,67 +19233,67 @@ struct llama_model * llama_load_model_from_file(
             {
                 size_t free, total; // NOLINT
                 ggml_backend_dev_memory(dev, &free, &total);
-                LLAMA_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
+                JARVIS_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
                 model->devices.push_back(dev);
                 break;
             }
         }
     }
 
-    int status = llama_model_load(path_model, *model, params);
+    int status = jarvis_model_load(path_model, *model, params);
     GGML_ASSERT(status <= 0);
     if (status < 0) {
         if (status == -1) {
-            LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to load model\n", __func__);
         } else if (status == -2) {
-            LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+            JARVIS_LOG_INFO("%s: cancelled model load\n", __func__);
         }
-        llama_free_model(model);
+        jarvis_free_model(model);
         return nullptr;
     }
 
     return model;
 }
 
-void llama_free_model(struct llama_model * model) {
+void jarvis_free_model(struct jarvis_model * model) {
     delete model;
 }
 
-struct llama_context * llama_new_context_with_model(
-                 struct llama_model * model,
-        struct llama_context_params   params) {
+struct jarvis_context * jarvis_new_context_with_model(
+                 struct jarvis_model * model,
+        struct jarvis_context_params   params) {
 
     if (!model) {
-        LLAMA_LOG_ERROR("%s: model cannot be NULL\n", __func__);
+        JARVIS_LOG_ERROR("%s: model cannot be NULL\n", __func__);
         return nullptr;
     }
 
     if (params.n_batch == 0 && params.n_ubatch == 0) {
-        LLAMA_LOG_ERROR("%s: n_batch and n_ubatch cannot both be zero\n", __func__);
+        JARVIS_LOG_ERROR("%s: n_batch and n_ubatch cannot both be zero\n", __func__);
         return nullptr;
     }
 
     if (params.n_ctx == 0 && model->hparams.n_ctx_train == 0) {
-        LLAMA_LOG_ERROR("%s: n_ctx and model->hparams.n_ctx_train cannot both be zero\n", __func__);
+        JARVIS_LOG_ERROR("%s: n_ctx and model->hparams.n_ctx_train cannot both be zero\n", __func__);
         return nullptr;
     }
 
     if (params.flash_attn && model->arch == LLM_ARCH_GROK) {
-        LLAMA_LOG_WARN("%s: flash_attn is not compatible with Grok - forcing off\n", __func__);
+        JARVIS_LOG_WARN("%s: flash_attn is not compatible with Grok - forcing off\n", __func__);
         params.flash_attn = false;
     }
 
     if (params.flash_attn && model->hparams.n_embd_head_k != model->hparams.n_embd_head_v) {
-        LLAMA_LOG_WARN("%s: flash_attn requires n_embd_head_k == n_embd_head_v - forcing off\n", __func__);
+        JARVIS_LOG_WARN("%s: flash_attn requires n_embd_head_k == n_embd_head_v - forcing off\n", __func__);
         params.flash_attn = false;
     }
 
     if (ggml_is_quantized(params.type_v) && !params.flash_attn) {
-        LLAMA_LOG_ERROR("%s: V cache quantization requires flash_attn\n", __func__);
+        JARVIS_LOG_ERROR("%s: V cache quantization requires flash_attn\n", __func__);
         return nullptr;
     }
 
-    llama_context * ctx = new llama_context(*model);
+    jarvis_context * ctx = new jarvis_context(*model);
 
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;
@@ -19317,16 +19317,16 @@ struct llama_context * llama_new_context_with_model(
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;
 
     // this is necessary due to kv_self.n being padded later during inference
-    cparams.n_ctx            = GGML_PAD(cparams.n_ctx, llama_kv_cache_get_padding(cparams));
+    cparams.n_ctx            = GGML_PAD(cparams.n_ctx, jarvis_kv_cache_get_padding(cparams));
 
     // with causal attention, the batch size is limited by the context size
     cparams.n_batch          = hparams.causal_attn ? std::min(cparams.n_ctx, params.n_batch) : params.n_batch;
 
     // the batch has to be at least GGML_KQ_MASK_PAD because we will be padding the KQ_mask
     // this is required by GPU kernels in order to avoid out-of-bounds accesses (e.g. ggml_flash_attn_ext)
-    // ref: https://github.com/ggerganov/llama.cpp/pull/5021
+    // ref: https://github.com/ggerganov/jarvis.cpp/pull/5021
     if (cparams.n_batch < GGML_KQ_MASK_PAD) {
-        LLAMA_LOG_WARN("%s: n_batch is less than GGML_KQ_MASK_PAD - increasing to %d\n", __func__, GGML_KQ_MASK_PAD);
+        JARVIS_LOG_WARN("%s: n_batch is less than GGML_KQ_MASK_PAD - increasing to %d\n", __func__, GGML_KQ_MASK_PAD);
         cparams.n_batch = GGML_KQ_MASK_PAD;
     }
 
@@ -19340,40 +19340,40 @@ struct llama_context * llama_new_context_with_model(
     cparams.cb_eval_user_data = params.cb_eval_user_data;
 
     auto rope_scaling_type = params.rope_scaling_type;
-    if (rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED) {
+    if (rope_scaling_type == JARVIS_ROPE_SCALING_TYPE_UNSPECIFIED) {
         rope_scaling_type = hparams.rope_scaling_type_train;
     }
 
-    if (rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_NONE) {
+    if (rope_scaling_type == JARVIS_ROPE_SCALING_TYPE_NONE) {
         cparams.rope_freq_scale = 1.0f; // never scale if scaling type is none
     }
 
     if (cparams.yarn_ext_factor < 0.0f) { // negative indicates 'not set'
-        cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_YARN ? 1.0f : 0.0f;
+        cparams.yarn_ext_factor = rope_scaling_type == JARVIS_ROPE_SCALING_TYPE_YARN ? 1.0f : 0.0f;
     }
 
     cparams.yarn_attn_factor *= hparams.rope_attn_factor;
 
-    if (cparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
-        if (hparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
-            cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
+    if (cparams.pooling_type == JARVIS_POOLING_TYPE_UNSPECIFIED) {
+        if (hparams.pooling_type == JARVIS_POOLING_TYPE_UNSPECIFIED) {
+            cparams.pooling_type = JARVIS_POOLING_TYPE_NONE;
         } else {
             cparams.pooling_type = hparams.pooling_type;
         }
     }
 
-    if (params.attention_type == LLAMA_ATTENTION_TYPE_UNSPECIFIED) {
+    if (params.attention_type == JARVIS_ATTENTION_TYPE_UNSPECIFIED) {
         cparams.causal_attn = hparams.causal_attn;
     } else {
-        cparams.causal_attn = params.attention_type == LLAMA_ATTENTION_TYPE_CAUSAL;
+        cparams.causal_attn = params.attention_type == JARVIS_ATTENTION_TYPE_CAUSAL;
     }
 
-    LLAMA_LOG_INFO("%s: n_ctx      = %u\n",     __func__, cparams.n_ctx);
-    LLAMA_LOG_INFO("%s: n_batch    = %u\n",     __func__, cparams.n_batch);
-    LLAMA_LOG_INFO("%s: n_ubatch   = %u\n",     __func__, cparams.n_ubatch);
-    LLAMA_LOG_INFO("%s: flash_attn = %d\n",     __func__, cparams.flash_attn);
-    LLAMA_LOG_INFO("%s: freq_base  = %.1f\n",   __func__, cparams.rope_freq_base);
-    LLAMA_LOG_INFO("%s: freq_scale = %g\n",     __func__, cparams.rope_freq_scale);
+    JARVIS_LOG_INFO("%s: n_ctx      = %u\n",     __func__, cparams.n_ctx);
+    JARVIS_LOG_INFO("%s: n_batch    = %u\n",     __func__, cparams.n_batch);
+    JARVIS_LOG_INFO("%s: n_ubatch   = %u\n",     __func__, cparams.n_ubatch);
+    JARVIS_LOG_INFO("%s: flash_attn = %d\n",     __func__, cparams.flash_attn);
+    JARVIS_LOG_INFO("%s: freq_base  = %.1f\n",   __func__, cparams.rope_freq_base);
+    JARVIS_LOG_INFO("%s: freq_scale = %g\n",     __func__, cparams.rope_freq_scale);
 
     ctx->abort_callback      = params.abort_callback;
     ctx->abort_callback_data = params.abort_callback_data;
@@ -19381,14 +19381,14 @@ struct llama_context * llama_new_context_with_model(
     ctx->logits_all = params.logits_all;
 
     // build worst-case graph for encoder if a model contains encoder
-    ctx->is_encoding = llama_model_has_encoder(model);
+    ctx->is_encoding = jarvis_model_has_encoder(model);
 
     uint32_t kv_size = cparams.n_ctx;
     ggml_type type_k = params.type_k;
     ggml_type type_v = params.type_v;
 
     // Mamba only needs a constant number of KV cache cells per sequence
-    if (llama_model_is_recurrent(model)) {
+    if (jarvis_model_is_recurrent(model)) {
         // Mamba needs at least as many KV cells as there are sequences kept at any time
         kv_size = std::max((uint32_t) 1, params.n_seq_max);
         // it's probably best to keep as much precision as possible for the states
@@ -19404,24 +19404,24 @@ struct llama_context * llama_new_context_with_model(
         int main_gpu = model->main_gpu;
 
         // with registry
-        if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+        if (model->split_mode == JARVIS_SPLIT_MODE_NONE || model->split_mode == JARVIS_SPLIT_MODE_ROW) {
             if (main_gpu >= 0 && main_gpu < (int)model->devices.size()) {
                 ggml_backend_dev_t main_dev = model->devices[main_gpu];
                 ggml_backend_t backend = ggml_backend_dev_init(main_dev, nullptr);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(main_dev));
-                    llama_free(ctx);
+                    JARVIS_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(main_dev));
+                    jarvis_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
             }
         } else {
-            // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+            // JARVIS_SPLIT_MODE_LAYER requires a backend for each GPU
             for (auto * dev : model->devices) {
                 ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
-                    llama_free(ctx);
+                    JARVIS_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
+                    jarvis_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
@@ -19435,8 +19435,8 @@ struct llama_context * llama_new_context_with_model(
         if (model->n_gpu_layers > 0) {
             auto * backend = ggml_backend_kompute_init(main_gpu);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
-                llama_free(ctx);
+                JARVIS_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
+                jarvis_free(ctx);
                 return nullptr;
             }
             ctx->backends.push_back(backend);
@@ -19449,8 +19449,8 @@ struct llama_context * llama_new_context_with_model(
             if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
                 ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
-                    llama_free(ctx);
+                    JARVIS_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
+                    jarvis_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
@@ -19459,8 +19459,8 @@ struct llama_context * llama_new_context_with_model(
 
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
-            llama_free(ctx);
+            JARVIS_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
+            jarvis_free(ctx);
             return nullptr;
         }
         ctx->backends.push_back(ctx->backend_cpu);
@@ -19477,9 +19477,9 @@ struct llama_context * llama_new_context_with_model(
             }
         }
 
-        if (!llama_kv_cache_init(ctx->kv_self, ctx, type_k, type_v, kv_size, cparams.offload_kqv)) {
-            LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
-            llama_free(ctx);
+        if (!jarvis_kv_cache_init(ctx->kv_self, ctx, type_k, type_v, kv_size, cparams.offload_kqv)) {
+            JARVIS_LOG_ERROR("%s: jarvis_kv_cache_init() failed for self-attention cache\n", __func__);
+            jarvis_free(ctx);
             return nullptr;
         }
 
@@ -19495,7 +19495,7 @@ struct llama_context * llama_new_context_with_model(
                 memory_size_v += ggml_nbytes(v);
             }
 
-            LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
+            JARVIS_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
                       (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
                 ggml_type_name(type_k), (float)memory_size_k / (1024.0f * 1024.0f),
                 ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
@@ -19504,13 +19504,13 @@ struct llama_context * llama_new_context_with_model(
         // graph outputs buffer
         {
             // resized during inference when a batch uses more outputs
-            if (llama_output_reserve(*ctx, params.n_seq_max) < params.n_seq_max) {
-                LLAMA_LOG_ERROR("%s: failed to reserve initial output buffer\n", __func__);
-                llama_free(ctx);
+            if (jarvis_output_reserve(*ctx, params.n_seq_max) < params.n_seq_max) {
+                JARVIS_LOG_ERROR("%s: failed to reserve initial output buffer\n", __func__);
+                jarvis_free(ctx);
                 return nullptr;
             }
 
-            LLAMA_LOG_INFO("%s: %10s  output buffer size = %8.2f MiB\n", __func__,
+            JARVIS_LOG_INFO("%s: %10s  output buffer size = %8.2f MiB\n", __func__,
                     ggml_backend_buffer_name(ctx->buf_output),
                     ggml_backend_buffer_get_size(ctx->buf_output) / 1024.0 / 1024.0);
         }
@@ -19522,13 +19522,13 @@ struct llama_context * llama_new_context_with_model(
             for (auto * backend : ctx->backends) {
                 if (ggml_backend_is_cpu(backend)) {
                     // use host buffers for the CPU backend compute buffer
-                    backend_buft.push_back(llama_default_buffer_type_cpu(*model, true));
+                    backend_buft.push_back(jarvis_default_buffer_type_cpu(*model, true));
                 } else {
                     backend_buft.push_back(ggml_backend_get_default_buffer_type(backend));
                 }
             }
 
-            const size_t max_nodes = llama_model_max_nodes(*model);
+            const size_t max_nodes = jarvis_model_max_nodes(*model);
 
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
@@ -19536,9 +19536,9 @@ struct llama_context * llama_new_context_with_model(
             // TODO: move these checks to ggml_backend_sched
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
             bool pipeline_parallel =
-                llama_get_device_count(*model) > 1 &&
+                jarvis_get_device_count(*model) > 1 &&
                 model->n_gpu_layers > (int)model->hparams.n_layer &&
-                model->split_mode == LLAMA_SPLIT_MODE_LAYER &&
+                model->split_mode == JARVIS_SPLIT_MODE_LAYER &&
                 params.offload_kqv;
 
             // pipeline parallelism requires support for async compute and events in all devices
@@ -19567,20 +19567,20 @@ struct llama_context * llama_new_context_with_model(
             ctx->sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), max_nodes, pipeline_parallel);
 
             if (pipeline_parallel) {
-                LLAMA_LOG_INFO("%s: pipeline parallelism enabled (n_copies=%d)\n", __func__, ggml_backend_sched_get_n_copies(ctx->sched));
+                JARVIS_LOG_INFO("%s: pipeline parallelism enabled (n_copies=%d)\n", __func__, ggml_backend_sched_get_n_copies(ctx->sched));
             }
 
             // build worst-case graph
             uint32_t n_seqs = 1; // TODO: worst-case number of sequences
             uint32_t n_tokens = std::min(cparams.n_ctx, cparams.n_ubatch);
-            llama_token token = llama_token_bos(&ctx->model); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
-            llama_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
-            ggml_cgraph * gf = llama_build_graph(*ctx, ubatch, true);
+            jarvis_token token = jarvis_token_bos(&ctx->model); // not actually used by jarvis_build_graph, but required to choose between token and embedding inputs graph
+            jarvis_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
+            ggml_cgraph * gf = jarvis_build_graph(*ctx, ubatch, true);
 
             // initialize scheduler with the worst-case graph
             if (!ggml_backend_sched_reserve(ctx->sched, gf)) {
-                LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
-                llama_free(ctx);
+                JARVIS_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
+                jarvis_free(ctx);
                 return nullptr;
             }
 
@@ -19589,7 +19589,7 @@ struct llama_context * llama_new_context_with_model(
                 ggml_backend_buffer_type_t buft = backend_buft[i];
                 size_t size = ggml_backend_sched_get_buffer_size(ctx->sched, backend);
                 if (size > 1) {
-                    LLAMA_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
+                    JARVIS_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
                             ggml_backend_buft_name(buft),
                             size / 1024.0 / 1024.0);
                 }
@@ -19597,67 +19597,67 @@ struct llama_context * llama_new_context_with_model(
 
             // note: the number of splits during measure is higher than during inference due to the kv shift
             int n_splits = ggml_backend_sched_get_n_splits(ctx->sched);
-            LLAMA_LOG_INFO("%s: graph nodes  = %d\n", __func__, ggml_graph_n_nodes(gf));
-            LLAMA_LOG_INFO("%s: graph splits = %d\n", __func__, n_splits);
+            JARVIS_LOG_INFO("%s: graph nodes  = %d\n", __func__, ggml_graph_n_nodes(gf));
+            JARVIS_LOG_INFO("%s: graph splits = %d\n", __func__, n_splits);
         }
     }
 
     return ctx;
 }
 
-void llama_free(struct llama_context * ctx) {
+void jarvis_free(struct jarvis_context * ctx) {
     delete ctx;
 }
 
-uint32_t llama_n_ctx(const struct llama_context * ctx) {
+uint32_t jarvis_n_ctx(const struct jarvis_context * ctx) {
     return ctx->cparams.n_ctx;
 }
 
-uint32_t llama_n_batch(const struct llama_context * ctx) {
+uint32_t jarvis_n_batch(const struct jarvis_context * ctx) {
     return ctx->cparams.n_batch;
 }
 
-uint32_t llama_n_ubatch(const struct llama_context * ctx) {
+uint32_t jarvis_n_ubatch(const struct jarvis_context * ctx) {
     return ctx->cparams.n_ubatch;
 }
 
-uint32_t llama_n_seq_max(const struct llama_context * ctx) {
+uint32_t jarvis_n_seq_max(const struct jarvis_context * ctx) {
     return ctx->kv_self.size;
 }
 
-enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
+enum jarvis_vocab_type jarvis_vocab_type(const struct jarvis_model * model) {
     return model->vocab.type;
 }
 
-int32_t llama_n_vocab(const struct llama_model * model) {
+int32_t jarvis_n_vocab(const struct jarvis_model * model) {
     return model->hparams.n_vocab;
 }
 
-int32_t llama_n_ctx_train(const struct llama_model * model) {
+int32_t jarvis_n_ctx_train(const struct jarvis_model * model) {
     return model->hparams.n_ctx_train;
 }
 
-int32_t llama_n_embd(const struct llama_model * model) {
+int32_t jarvis_n_embd(const struct jarvis_model * model) {
     return model->hparams.n_embd;
 }
 
-int32_t llama_n_layer(const struct llama_model * model) {
+int32_t jarvis_n_layer(const struct jarvis_model * model) {
     return model->hparams.n_layer;
 }
 
-int32_t llama_n_head(const struct llama_model * model) {
+int32_t jarvis_n_head(const struct jarvis_model * model) {
     return model->hparams.n_head();
 }
 
-const struct llama_model * llama_get_model(const struct llama_context * ctx) {
+const struct jarvis_model * jarvis_get_model(const struct jarvis_context * ctx) {
     return &ctx->model;
 }
 
-enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
+enum jarvis_pooling_type jarvis_pooling_type(const struct jarvis_context * ctx) {
     return ctx->cparams.pooling_type;
 }
 
-enum llama_rope_type llama_rope_type(const struct llama_model * model) {
+enum jarvis_rope_type jarvis_rope_type(const struct jarvis_model * model) {
     switch (model->arch) {
         // these models do not use RoPE
         case LLM_ARCH_GPT2:
@@ -19671,10 +19671,10 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_T5ENCODER:
         case LLM_ARCH_JAIS:
         case LLM_ARCH_RWKV6:
-            return LLAMA_ROPE_TYPE_NONE;
+            return JARVIS_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values
-        case LLM_ARCH_LLAMA:
+        case LLM_ARCH_JARVIS:
         case LLM_ARCH_BAICHUAN:
         case LLM_ARCH_STARCODER:
         case LLM_ARCH_PLAMO:
@@ -19690,7 +19690,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_GRANITE:
         case LLM_ARCH_GRANITE_MOE:
         case LLM_ARCH_CHAMELEON:
-            return LLAMA_ROPE_TYPE_NORM;
+            return JARVIS_ROPE_TYPE_NORM;
 
         // the pairs of head values are offset by n_rot/2
         case LLM_ARCH_FALCON:
@@ -19715,21 +19715,21 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_NEMOTRON:
         case LLM_ARCH_EXAONE:
         case LLM_ARCH_MINICPM3:
-            return LLAMA_ROPE_TYPE_NEOX;
+            return JARVIS_ROPE_TYPE_NEOX;
 
         // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:
             GGML_ABORT("unknown architecture");
     }
 
-    return LLAMA_ROPE_TYPE_NONE;
+    return JARVIS_ROPE_TYPE_NONE;
 }
 
-float llama_rope_freq_scale_train(const struct llama_model * model) {
+float jarvis_rope_freq_scale_train(const struct jarvis_model * model) {
     return model->hparams.rope_freq_scale_train;
 }
 
-int32_t llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size) {
+int32_t jarvis_model_meta_val_str(const struct jarvis_model * model, const char * key, char * buf, size_t buf_size) {
     const auto & it = model->gguf_kv.find(key);
     if (it == model->gguf_kv.end()) {
         if (buf_size > 0) {
@@ -19740,11 +19740,11 @@ int32_t llama_model_meta_val_str(const struct llama_model * model, const char * 
     return snprintf(buf, buf_size, "%s", it->second.c_str());
 }
 
-int32_t llama_model_meta_count(const struct llama_model * model) {
+int32_t jarvis_model_meta_count(const struct jarvis_model * model) {
     return (int)model->gguf_kv.size();
 }
 
-int32_t llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size) {
+int32_t jarvis_model_meta_key_by_index(const struct jarvis_model * model, int i, char * buf, size_t buf_size) {
     if (i < 0 || i >= (int)model->gguf_kv.size()) {
         if (buf_size > 0) {
             buf[0] = '\0';
@@ -19756,7 +19756,7 @@ int32_t llama_model_meta_key_by_index(const struct llama_model * model, int i, c
     return snprintf(buf, buf_size, "%s", it->first.c_str());
 }
 
-int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int32_t i, char * buf, size_t buf_size) {
+int32_t jarvis_model_meta_val_str_by_index(const struct jarvis_model * model, int32_t i, char * buf, size_t buf_size) {
     if (i < 0 || i >= (int)model->gguf_kv.size()) {
         if (buf_size > 0) {
             buf[0] = '\0';
@@ -19768,14 +19768,14 @@ int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int3
     return snprintf(buf, buf_size, "%s", it->second.c_str());
 }
 
-int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
+int32_t jarvis_model_desc(const struct jarvis_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
-            llama_model_arch_name(model->arch),
-            llama_model_type_name(model->type),
-            llama_model_ftype_name(model->ftype).c_str());
+            jarvis_model_arch_name(model->arch),
+            jarvis_model_type_name(model->type),
+            jarvis_model_ftype_name(model->ftype).c_str());
 }
 
-uint64_t llama_model_size(const struct llama_model * model) {
+uint64_t jarvis_model_size(const struct jarvis_model * model) {
     uint64_t size = 0;
     for (const auto & it : model->tensors_by_name) {
         size += ggml_nbytes(it.second);
@@ -19783,7 +19783,7 @@ uint64_t llama_model_size(const struct llama_model * model) {
     return size;
 }
 
-uint64_t llama_model_n_params(const struct llama_model * model) {
+uint64_t jarvis_model_n_params(const struct jarvis_model * model) {
     uint64_t nparams = 0;
     for (const auto & it : model->tensors_by_name) {
         nparams += ggml_nelements(it.second);
@@ -19791,7 +19791,7 @@ uint64_t llama_model_n_params(const struct llama_model * model) {
     return nparams;
 }
 
-struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name) {
+struct ggml_tensor * jarvis_get_model_tensor(struct jarvis_model * model, const char * name) {
     auto it = std::find_if(model->tensors_by_name.begin(), model->tensors_by_name.end(),
             [name](const std::pair<std::string, struct ggml_tensor *> & it) {
                 return it.first == name;
@@ -19802,7 +19802,7 @@ struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const ch
     return it->second;
 }
 
-bool llama_model_has_encoder(const struct llama_model * model) {
+bool jarvis_model_has_encoder(const struct jarvis_model * model) {
     switch (model->arch) {
         case LLM_ARCH_T5:        return true;
         case LLM_ARCH_T5ENCODER: return true;
@@ -19810,18 +19810,18 @@ bool llama_model_has_encoder(const struct llama_model * model) {
     }
 }
 
-bool llama_model_has_decoder(const struct llama_model * model) {
+bool jarvis_model_has_decoder(const struct jarvis_model * model) {
     switch (model->arch) {
         case LLM_ARCH_T5ENCODER: return false;
         default:                 return true;
     }
 }
 
-llama_token llama_model_decoder_start_token(const struct llama_model * model) {
+jarvis_token jarvis_model_decoder_start_token(const struct jarvis_model * model) {
     return model->hparams.dec_start_token_id;
 }
 
-bool llama_model_is_recurrent(const struct llama_model * model) {
+bool jarvis_model_is_recurrent(const struct jarvis_model * model) {
     switch (model->arch) {
         case LLM_ARCH_MAMBA:  return true;
         case LLM_ARCH_RWKV6:  return true;
@@ -19829,31 +19829,31 @@ bool llama_model_is_recurrent(const struct llama_model * model) {
     }
 }
 
-uint32_t llama_model_quantize(
+uint32_t jarvis_model_quantize(
         const char * fname_inp,
         const char * fname_out,
-        const llama_model_quantize_params * params) {
+        const jarvis_model_quantize_params * params) {
     try {
-        llama_model_quantize_internal(fname_inp, fname_out, params);
+        jarvis_model_quantize_internal(fname_inp, fname_out, params);
         return 0;
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: failed to quantize: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: failed to quantize: %s\n", __func__, err.what());
         return 1;
     }
 }
 
-struct llama_lora_adapter * llama_lora_adapter_init(struct llama_model * model, const char * path_lora) {
+struct jarvis_lora_adapter * jarvis_lora_adapter_init(struct jarvis_model * model, const char * path_lora) {
     try {
-        struct llama_lora_adapter * adapter = new llama_lora_adapter(model);
-        llama_lora_adapter_init_internal(model, path_lora, *adapter);
+        struct jarvis_lora_adapter * adapter = new jarvis_lora_adapter(model);
+        jarvis_lora_adapter_init_internal(model, path_lora, *adapter);
         return adapter;
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
         return nullptr;
     }
 }
 
-static bool llama_control_vector_init(struct llama_control_vector & cvec, const llama_model & model) {
+static bool jarvis_control_vector_init(struct jarvis_control_vector & cvec, const jarvis_model & model) {
     GGML_ASSERT(cvec.tensors.empty());
     GGML_ASSERT(cvec.ctxs.empty());
     GGML_ASSERT(cvec.bufs.empty());
@@ -19875,7 +19875,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
         };
         ggml_context * ctx = ggml_init(params);
         if (!ctx) {
-            LLAMA_LOG_ERROR("%s: failed to allocate context for control vector\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to allocate context for control vector\n", __func__);
             return 1;
         }
         ctx_map[it.first] = ctx;
@@ -19898,7 +19898,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
         ggml_context * ctx = it.second;
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
         if (!buf) {
-            LLAMA_LOG_ERROR("%s: failed to allocate buffer for control vector\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to allocate buffer for control vector\n", __func__);
             return false;
         }
         ggml_backend_buffer_clear(buf, 0);
@@ -19909,9 +19909,9 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
     return true;
 }
 
-int32_t llama_control_vector_apply(struct llama_context * lctx, const float * data, size_t len, int32_t n_embd, int32_t il_start, int32_t il_end) {
-    const llama_model & model = lctx->model;
-    llama_control_vector & cvec = lctx->cvec;
+int32_t jarvis_control_vector_apply(struct jarvis_context * lctx, const float * data, size_t len, int32_t n_embd, int32_t il_start, int32_t il_end) {
+    const jarvis_model & model = lctx->model;
+    jarvis_control_vector & cvec = lctx->cvec;
 
     if (data == nullptr) {
         // disable the current control vector (but leave allocated for later)
@@ -19921,12 +19921,12 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, const float * da
     }
 
     if (n_embd != (int) model.hparams.n_embd) {
-        LLAMA_LOG_ERROR("%s: control vector n_embd does not match model\n", __func__);
+        JARVIS_LOG_ERROR("%s: control vector n_embd does not match model\n", __func__);
         return 1;
     }
 
     if (cvec.tensors.empty()) {
-        if (!llama_control_vector_init(cvec, model)) {
+        if (!jarvis_control_vector_init(cvec, model)) {
             return 1;
         }
     }
@@ -19946,12 +19946,12 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, const float * da
     return 0;
 }
 
-struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_seq_max) {
-    struct llama_kv_cache_view result = {
+struct jarvis_kv_cache_view jarvis_kv_cache_view_init(const struct jarvis_context * ctx, int32_t n_seq_max) {
+    struct jarvis_kv_cache_view result = {
         /*.n_cells            = */ 0,
         /*.n_seq_max          = */ n_seq_max,
         /*.token_count        = */ 0,
-        /*.used_cells         = */ llama_get_kv_cache_used_cells(ctx),
+        /*.used_cells         = */ jarvis_get_kv_cache_used_cells(ctx),
         /*.max_contiguous     = */ 0,
         /*.max_contiguous_idx = */ -1,
         /*.cells              = */ nullptr,
@@ -19960,7 +19960,7 @@ struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context *
     return result;
 }
 
-void llama_kv_cache_view_free(struct llama_kv_cache_view * view) {
+void jarvis_kv_cache_view_free(struct jarvis_kv_cache_view * view) {
     if (view->cells != nullptr) {
         free(view->cells);
         view->cells = nullptr;
@@ -19971,20 +19971,20 @@ void llama_kv_cache_view_free(struct llama_kv_cache_view * view) {
     }
 }
 
-void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view) {
+void jarvis_kv_cache_view_update(const struct jarvis_context * ctx, struct jarvis_kv_cache_view * view) {
     if (uint32_t(view->n_cells) < ctx->kv_self.size || view->cells == nullptr) {
         view->n_cells = int32_t(ctx->kv_self.size);
-        void * p = realloc(view->cells, sizeof(struct llama_kv_cache_view_cell) * view->n_cells);
+        void * p = realloc(view->cells, sizeof(struct jarvis_kv_cache_view_cell) * view->n_cells);
         GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells");
-        view->cells = (struct llama_kv_cache_view_cell *)p;
-        p = realloc(view->cells_sequences, sizeof(llama_seq_id) * view->n_seq_max * view->n_cells);
+        view->cells = (struct jarvis_kv_cache_view_cell *)p;
+        p = realloc(view->cells_sequences, sizeof(jarvis_seq_id) * view->n_seq_max * view->n_cells);
         GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells sequences");
-        view->cells_sequences = (llama_seq_id *)p;
+        view->cells_sequences = (jarvis_seq_id *)p;
     }
 
-    const std::vector<llama_kv_cell> & kv_cells = ctx->kv_self.cells;
-    llama_kv_cache_view_cell * c_curr = view->cells;
-    llama_seq_id * cs_curr = view->cells_sequences;
+    const std::vector<jarvis_kv_cell> & kv_cells = ctx->kv_self.cells;
+    jarvis_kv_cache_view_cell * c_curr = view->cells;
+    jarvis_seq_id * cs_curr = view->cells_sequences;
     int32_t used_cells = 0;
     int32_t token_count = 0;
     int32_t curr_contig_idx = -1;
@@ -20007,7 +20007,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
         }
 
         int seq_idx = 0;
-        for (const llama_seq_id it : kv_cells[i].seq_id) {
+        for (const jarvis_seq_id it : kv_cells[i].seq_id) {
             if (seq_idx >= view->n_seq_max) {
                 break;
             }
@@ -20030,12 +20030,12 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
     view->token_count = token_count;
     view->used_cells = used_cells;
     if (uint32_t(used_cells) != ctx->kv_self.used) {
-        LLAMA_LOG_ERROR("%s: used cells mismatch. kv_cache says %d but we calculated %d\n",
+        JARVIS_LOG_ERROR("%s: used cells mismatch. kv_cache says %d but we calculated %d\n",
             __func__, ctx->kv_self.used, used_cells);
     }
 }
 
-int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx) {
+int32_t jarvis_get_kv_cache_token_count(const struct jarvis_context * ctx) {
     int result = 0;
 
     for (uint32_t i = 0; i < ctx->kv_self.size; i++) {
@@ -20045,88 +20045,88 @@ int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     return result;
 }
 
-int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx) {
+int32_t jarvis_get_kv_cache_used_cells(const struct jarvis_context * ctx) {
     return ctx->kv_self.used;
 }
 
-void llama_kv_cache_clear(struct llama_context * ctx) {
-    llama_kv_cache_clear(ctx->kv_self);
+void jarvis_kv_cache_clear(struct jarvis_context * ctx) {
+    jarvis_kv_cache_clear(ctx->kv_self);
 }
 
-bool llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
-    return llama_kv_cache_seq_rm(ctx->kv_self, seq_id, p0, p1);
+bool jarvis_kv_cache_seq_rm(struct jarvis_context * ctx, jarvis_seq_id seq_id, jarvis_pos p0, jarvis_pos p1) {
+    return jarvis_kv_cache_seq_rm(ctx->kv_self, seq_id, p0, p1);
 }
 
-void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
+void jarvis_kv_cache_seq_cp(struct jarvis_context * ctx, jarvis_seq_id seq_id_src, jarvis_seq_id seq_id_dst, jarvis_pos p0, jarvis_pos p1) {
     if (seq_id_src == seq_id_dst) {
         return;
     }
-    llama_kv_cache_seq_cp(ctx->kv_self, seq_id_src, seq_id_dst, p0, p1);
+    jarvis_kv_cache_seq_cp(ctx->kv_self, seq_id_src, seq_id_dst, p0, p1);
 }
 
-void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_kv_cache_seq_keep(ctx->kv_self, seq_id);
+void jarvis_kv_cache_seq_keep(struct jarvis_context * ctx, jarvis_seq_id seq_id) {
+    jarvis_kv_cache_seq_keep(ctx->kv_self, seq_id);
 }
 
-void llama_kv_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+void jarvis_kv_cache_seq_add(struct jarvis_context * ctx, jarvis_seq_id seq_id, jarvis_pos p0, jarvis_pos p1, jarvis_pos delta) {
     if (delta == 0) {
         return;
     }
 
-    llama_kv_cache_seq_add(ctx->kv_self, seq_id, p0, p1, delta);
+    jarvis_kv_cache_seq_add(ctx->kv_self, seq_id, p0, p1, delta);
 }
 
-void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+void jarvis_kv_cache_seq_div(struct jarvis_context * ctx, jarvis_seq_id seq_id, jarvis_pos p0, jarvis_pos p1, int d) {
     if (d == 1) {
         return;
     }
 
-    llama_kv_cache_seq_div(ctx->kv_self, seq_id, p0, p1, d);
+    jarvis_kv_cache_seq_div(ctx->kv_self, seq_id, p0, p1, d);
 }
 
-llama_pos llama_kv_cache_seq_pos_max(struct llama_context * ctx, llama_seq_id seq_id) {
-    return llama_kv_cache_seq_pos_max(ctx->kv_self, seq_id);
+jarvis_pos jarvis_kv_cache_seq_pos_max(struct jarvis_context * ctx, jarvis_seq_id seq_id) {
+    return jarvis_kv_cache_seq_pos_max(ctx->kv_self, seq_id);
 }
 
-void llama_kv_cache_defrag(struct llama_context * ctx) {
-    llama_kv_cache_defrag(ctx->kv_self);
+void jarvis_kv_cache_defrag(struct jarvis_context * ctx) {
+    jarvis_kv_cache_defrag(ctx->kv_self);
 }
 
-void llama_kv_cache_update(struct llama_context * ctx) {
-    llama_kv_cache_update_internal(*ctx);
-}
-
-// deprecated
-size_t llama_get_state_size(struct llama_context * ctx) {
-    return llama_state_get_size(ctx);
+void jarvis_kv_cache_update(struct jarvis_context * ctx) {
+    jarvis_kv_cache_update_internal(*ctx);
 }
 
 // deprecated
-size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
-    return llama_state_get_data(ctx, dst, -1);
+size_t jarvis_get_state_size(struct jarvis_context * ctx) {
+    return jarvis_state_get_size(ctx);
 }
 
 // deprecated
-size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
-    return llama_state_set_data(ctx, src, -1);
+size_t jarvis_copy_state_data(struct jarvis_context * ctx, uint8_t * dst) {
+    return jarvis_state_get_data(ctx, dst, -1);
 }
 
 // deprecated
-bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
-    return llama_state_load_file(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+size_t jarvis_set_state_data(struct jarvis_context * ctx, const uint8_t * src) {
+    return jarvis_state_set_data(ctx, src, -1);
 }
 
 // deprecated
-bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
-    return llama_state_save_file(ctx, path_session, tokens, n_token_count);
+bool jarvis_load_session_file(struct jarvis_context * ctx, const char * path_session, jarvis_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    return jarvis_state_load_file(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+}
+
+// deprecated
+bool jarvis_save_session_file(struct jarvis_context * ctx, const char * path_session, const jarvis_token * tokens, size_t n_token_count) {
+    return jarvis_state_save_file(ctx, path_session, tokens, n_token_count);
 }
 
 // TODO: replace all non-fatal assertions with returned errors or exceptions
-struct llama_data_write {
+struct jarvis_data_write {
     virtual void write(const void * src, size_t size) = 0;
     virtual void write_tensor_data(const struct ggml_tensor * tensor, size_t offset, size_t size) = 0;
     virtual size_t get_size_written() = 0;
-    virtual ~llama_data_write() = default;
+    virtual ~jarvis_data_write() = default;
 
     void write_string(const std::string & str) {
         uint32_t str_size = str.size();
@@ -20135,7 +20135,7 @@ struct llama_data_write {
         write(str.data(), str_size);
     }
 
-    void write_model_info(const struct llama_context * ctx) {
+    void write_model_info(const struct jarvis_context * ctx) {
         std::string arch_str = LLM_ARCH_NAMES.at(ctx->model.arch);
         write_string(arch_str);
         // TODO: add more model-specific info which should prevent loading the session file if not identical
@@ -20150,8 +20150,8 @@ struct llama_data_write {
     //    write_string(rng_str);
     //}
 
-    void write_output_ids(struct llama_context * ctx) {
-        llama_output_reorder(ctx);
+    void write_output_ids(struct jarvis_context * ctx) {
+        jarvis_output_reorder(ctx);
 
         const uint32_t n_outputs = ctx->n_outputs;
 
@@ -20181,7 +20181,7 @@ struct llama_data_write {
         }
     }
 
-    void write_logits(const struct llama_context * ctx) {
+    void write_logits(const struct jarvis_context * ctx) {
         const uint64_t logits_size = std::min((uint64_t) ctx->logits_size, (uint64_t) ctx->n_outputs * ctx->model.hparams.n_vocab);
 
         write(&logits_size, sizeof(logits_size));
@@ -20191,7 +20191,7 @@ struct llama_data_write {
         }
     }
 
-    void write_embeddings(const struct llama_context * ctx) {
+    void write_embeddings(const struct jarvis_context * ctx) {
         const uint64_t embeddings_size = std::min((uint64_t) ctx->embd_size, (uint64_t) ctx->n_outputs * ctx->model.hparams.n_embd);
 
         write(&embeddings_size, sizeof(embeddings_size));
@@ -20201,12 +20201,12 @@ struct llama_data_write {
         }
     }
 
-    void write_kv_cache_meta(const llama_kv_cache & kv_self, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, llama_seq_id seq_id = -1) {
+    void write_kv_cache_meta(const jarvis_kv_cache & kv_self, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, jarvis_seq_id seq_id = -1) {
 
         for (const auto & range : cell_ranges) {
             for (uint32_t i = range.first; i < range.second; ++i) {
                 const auto & cell = kv_self.cells[i];
-                const llama_pos pos      = cell.pos;
+                const jarvis_pos pos      = cell.pos;
                 const uint32_t  n_seq_id = seq_id == -1 ? cell.seq_id.size() : 0;
 
                 write(&pos,      sizeof(pos));
@@ -20221,9 +20221,9 @@ struct llama_data_write {
         }
     }
 
-    void write_kv_cache_data(const struct llama_context * ctx, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges) {
-        const struct llama_kv_cache & kv_self = ctx->kv_self;
-        const struct llama_hparams & hparams = ctx->model.hparams;
+    void write_kv_cache_data(const struct jarvis_context * ctx, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges) {
+        const struct jarvis_kv_cache & kv_self = ctx->kv_self;
+        const struct jarvis_hparams & hparams = ctx->model.hparams;
 
         const uint32_t v_trans = kv_self.v_trans ? 1 : 0;
         const uint32_t n_layer = hparams.n_layer;
@@ -20304,8 +20304,8 @@ struct llama_data_write {
         }
     }
 
-    void write_kv_cache(const struct llama_context * ctx, llama_seq_id seq_id = -1) {
-        const struct llama_kv_cache & kv_self = ctx->kv_self;
+    void write_kv_cache(const struct jarvis_context * ctx, jarvis_seq_id seq_id = -1) {
+        const struct jarvis_kv_cache & kv_self = ctx->kv_self;
         std::vector<std::pair<uint32_t, uint32_t>> cell_ranges; // ranges, from inclusive, to exclusive
         uint32_t cell_count = 0;
 
@@ -20344,11 +20344,11 @@ struct llama_data_write {
     }
 };
 
-struct llama_data_read {
+struct jarvis_data_read {
     virtual const uint8_t * read(size_t size) = 0;
     virtual void read_to(void * dst, size_t size) = 0;
     virtual size_t get_size_read() = 0;
-    virtual ~llama_data_read() = default;
+    virtual ~jarvis_data_read() = default;
 
     void read_string(std::string & str) {
         uint32_t str_size;
@@ -20358,7 +20358,7 @@ struct llama_data_read {
     }
 
     // validate model information
-    void read_model_info(const struct llama_context * ctx) {
+    void read_model_info(const struct jarvis_context * ctx) {
         std::string cur_arch_str = LLM_ARCH_NAMES.at(ctx->model.arch);
         std::string arch_str;
         read_string(arch_str);
@@ -20380,13 +20380,13 @@ struct llama_data_read {
     //    }
     //}
 
-    void read_output_ids(struct llama_context * ctx) {
+    void read_output_ids(struct jarvis_context * ctx) {
         std::vector<int32_t> output_pos;
 
         uint32_t n_outputs;
         read_to(&n_outputs, sizeof(n_outputs));
 
-        if (n_outputs > llama_output_reserve(*ctx, n_outputs)) {
+        if (n_outputs > jarvis_output_reserve(*ctx, n_outputs)) {
             throw std::runtime_error("could not reserve outputs");
         }
 
@@ -20406,7 +20406,7 @@ struct llama_data_read {
         }
     }
 
-    void read_logits(struct llama_context * ctx) {
+    void read_logits(struct jarvis_context * ctx) {
         uint64_t logits_size;
         read_to(&logits_size, sizeof(logits_size));
 
@@ -20419,7 +20419,7 @@ struct llama_data_read {
         }
     }
 
-    void read_embeddings(struct llama_context * ctx) {
+    void read_embeddings(struct jarvis_context * ctx) {
         uint64_t embeddings_size;
         read_to(&embeddings_size, sizeof(embeddings_size));
 
@@ -20432,28 +20432,28 @@ struct llama_data_read {
         }
     }
 
-    bool read_kv_cache_meta(struct llama_context * ctx, uint32_t cell_count, llama_seq_id dest_seq_id = -1) {
-        struct llama_kv_cache & kv_self = ctx->kv_self;
+    bool read_kv_cache_meta(struct jarvis_context * ctx, uint32_t cell_count, jarvis_seq_id dest_seq_id = -1) {
+        struct jarvis_kv_cache & kv_self = ctx->kv_self;
 
         if (dest_seq_id != -1) {
             // single sequence
 
-            llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            jarvis_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
 
-            llama_ubatch batch = ctx->sbatch.reserve_ubatch(cell_count, /* has_embd */ false);
+            jarvis_ubatch batch = ctx->sbatch.reserve_ubatch(cell_count, /* has_embd */ false);
             batch.n_tokens = cell_count;
             batch.n_seq_tokens = cell_count;
             batch.n_seqs = 1;
 
             for (uint32_t i = 0; i < cell_count; ++i) {
-                llama_pos pos;
+                jarvis_pos pos;
                 uint32_t n_seq_id;
 
                 read_to(&pos, sizeof(pos));
                 read_to(&n_seq_id, sizeof(n_seq_id));
 
                 if (n_seq_id != 0) {
-                    LLAMA_LOG_ERROR("%s: invalid seq_id-agnostic kv cell\n", __func__);
+                    JARVIS_LOG_ERROR("%s: invalid seq_id-agnostic kv cell\n", __func__);
                     return false;
                 }
 
@@ -20461,8 +20461,8 @@ struct llama_data_read {
             }
             batch.n_seq_id[0] = 1;
             batch.seq_id[0] = &dest_seq_id;
-            if (!llama_kv_cache_find_slot(kv_self, batch)) {
-                LLAMA_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
+            if (!jarvis_kv_cache_find_slot(kv_self, batch)) {
+                JARVIS_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
                 return false;
             }
 
@@ -20477,16 +20477,16 @@ struct llama_data_read {
             // whole KV cache restore
 
             if (cell_count > kv_self.size) {
-                LLAMA_LOG_ERROR("%s: not enough cells in kv cache\n", __func__);
+                JARVIS_LOG_ERROR("%s: not enough cells in kv cache\n", __func__);
                 return false;
             }
 
-            llama_kv_cache_clear(kv_self);
+            jarvis_kv_cache_clear(kv_self);
 
             for (uint32_t i = 0; i < cell_count; ++i) {
-                llama_kv_cell & cell = kv_self.cells[i];
+                jarvis_kv_cell & cell = kv_self.cells[i];
 
-                llama_pos pos;
+                jarvis_pos pos;
                 uint32_t  n_seq_id;
 
                 read_to(&pos,      sizeof(pos));
@@ -20495,11 +20495,11 @@ struct llama_data_read {
                 cell.pos = pos;
 
                 for (uint32_t j = 0; j < n_seq_id; ++j) {
-                    llama_seq_id seq_id;
+                    jarvis_seq_id seq_id;
                     read_to(&seq_id, sizeof(seq_id));
 
-                    if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) {
-                        LLAMA_LOG_ERROR("%s: invalid seq_id, %d is out of range [0, %u)\n", __func__, seq_id, llama_n_seq_max(ctx));
+                    if (seq_id < 0 || (uint32_t) seq_id >= jarvis_n_seq_max(ctx)) {
+                        JARVIS_LOG_ERROR("%s: invalid seq_id, %d is out of range [0, %u)\n", __func__, seq_id, jarvis_n_seq_max(ctx));
                         return false;
                     }
 
@@ -20508,7 +20508,7 @@ struct llama_data_read {
                     if (kv_self.recurrent) {
                         int32_t & tail = kv_self.cells[seq_id].tail;
                         if (tail != -1) {
-                            LLAMA_LOG_ERROR("%s: duplicate tail for seq_id %d in cell %d and %d\n", __func__, seq_id, i, tail);
+                            JARVIS_LOG_ERROR("%s: duplicate tail for seq_id %d in cell %d and %d\n", __func__, seq_id, i, tail);
                             return false;
                         }
                         tail = i;
@@ -20531,24 +20531,24 @@ struct llama_data_read {
         return true;
     }
 
-    bool read_kv_cache_data(struct llama_context * ctx, uint32_t cell_count) {
-        const struct llama_hparams & hparams = ctx->model.hparams;
-        struct llama_kv_cache & kv_self = ctx->kv_self;
+    bool read_kv_cache_data(struct jarvis_context * ctx, uint32_t cell_count) {
+        const struct jarvis_hparams & hparams = ctx->model.hparams;
+        struct jarvis_kv_cache & kv_self = ctx->kv_self;
         uint32_t v_trans;
         uint32_t n_layer;
         read_to(&v_trans, sizeof(v_trans));
         read_to(&n_layer, sizeof(n_layer));
 
         if (n_layer != hparams.n_layer) {
-            LLAMA_LOG_ERROR("%s: mismatched layer count (%u instead of %u)\n", __func__, n_layer, hparams.n_layer);
+            JARVIS_LOG_ERROR("%s: mismatched layer count (%u instead of %u)\n", __func__, n_layer, hparams.n_layer);
             return false;
         }
         if (cell_count > kv_self.size) {
-            LLAMA_LOG_ERROR("%s: not enough cells in kv cache to restore state (%u > %u)\n", __func__, cell_count, kv_self.size);
+            JARVIS_LOG_ERROR("%s: not enough cells in kv cache to restore state (%u > %u)\n", __func__, cell_count, kv_self.size);
             return false;
         }
         if (kv_self.v_trans != (bool) v_trans) {
-            LLAMA_LOG_ERROR("%s: incompatible V transposition\n", __func__);
+            JARVIS_LOG_ERROR("%s: incompatible V transposition\n", __func__);
             return false;
         }
 
@@ -20561,7 +20561,7 @@ struct llama_data_read {
             read_to(&k_type_i_ref, sizeof(k_type_i_ref));
             const int32_t k_type_i = (int32_t)kv_self.k_l[il]->type;
             if (k_type_i != k_type_i_ref) {
-                LLAMA_LOG_ERROR("%s: mismatched key type (%d != %d, layer %d)\n", __func__, k_type_i, k_type_i_ref, il);
+                JARVIS_LOG_ERROR("%s: mismatched key type (%d != %d, layer %d)\n", __func__, k_type_i, k_type_i_ref, il);
                 return false;
             }
 
@@ -20570,7 +20570,7 @@ struct llama_data_read {
             read_to(&k_size_row_ref, sizeof(k_size_row_ref));
             const size_t k_size_row = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa);
             if (k_size_row != k_size_row_ref) {
-                LLAMA_LOG_ERROR("%s: mismatched key row size (%zu != %zu, layer %d)\n", __func__, k_size_row, (size_t) k_size_row_ref, il);
+                JARVIS_LOG_ERROR("%s: mismatched key row size (%zu != %zu, layer %d)\n", __func__, k_size_row, (size_t) k_size_row_ref, il);
                 return false;
             }
 
@@ -20589,7 +20589,7 @@ struct llama_data_read {
                 read_to(&v_type_i_ref, sizeof(v_type_i_ref));
                 const int32_t v_type_i = (int32_t)kv_self.v_l[il]->type;
                 if (v_type_i != v_type_i_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value type (%d != %d, layer %d)\n", __func__, v_type_i, v_type_i_ref, il);
+                    JARVIS_LOG_ERROR("%s: mismatched value type (%d != %d, layer %d)\n", __func__, v_type_i, v_type_i_ref, il);
                     return false;
                 }
 
@@ -20598,7 +20598,7 @@ struct llama_data_read {
                 read_to(&v_size_row_ref, sizeof(v_size_row_ref));
                 const size_t v_size_row = ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa);
                 if (v_size_row != v_size_row_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value row size (%zu != %zu, layer %d)\n", __func__, v_size_row, (size_t) v_size_row_ref, il);
+                    JARVIS_LOG_ERROR("%s: mismatched value row size (%zu != %zu, layer %d)\n", __func__, v_size_row, (size_t) v_size_row_ref, il);
                     return false;
                 }
 
@@ -20617,7 +20617,7 @@ struct llama_data_read {
                 read_to(&v_type_i_ref, sizeof(v_type_i_ref));
                 const int32_t v_type_i = (int32_t)kv_self.v_l[il]->type;
                 if (v_type_i != v_type_i_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value type (%d != %d, layer %d)\n", __func__, v_type_i, v_type_i_ref, il);
+                    JARVIS_LOG_ERROR("%s: mismatched value type (%d != %d, layer %d)\n", __func__, v_type_i, v_type_i_ref, il);
                     return false;
                 }
 
@@ -20626,7 +20626,7 @@ struct llama_data_read {
                 read_to(&v_size_el_ref, sizeof(v_size_el_ref));
                 const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
                 if (v_size_el != v_size_el_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %zu, layer %d)\n", __func__, v_size_el, (size_t) v_size_el_ref, il);
+                    JARVIS_LOG_ERROR("%s: mismatched value element size (%zu != %zu, layer %d)\n", __func__, v_size_el, (size_t) v_size_el_ref, il);
                     return false;
                 }
 
@@ -20634,7 +20634,7 @@ struct llama_data_read {
                 uint32_t n_embd_v_gqa_ref;
                 read_to(&n_embd_v_gqa_ref, sizeof(n_embd_v_gqa_ref));
                 if (n_embd_v_gqa != n_embd_v_gqa_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched GQA embedding size (%u != %u, layer %d)\n", __func__, n_embd_v_gqa, n_embd_v_gqa_ref, il);
+                    JARVIS_LOG_ERROR("%s: mismatched GQA embedding size (%u != %u, layer %d)\n", __func__, n_embd_v_gqa, n_embd_v_gqa_ref, il);
                     return false;
                 }
 
@@ -20650,7 +20650,7 @@ struct llama_data_read {
         return true;
     }
 
-    void read_kv_cache(struct llama_context * ctx, llama_seq_id seq_id = -1) {
+    void read_kv_cache(struct jarvis_context * ctx, jarvis_seq_id seq_id = -1) {
         uint32_t cell_count;
         read_to(&cell_count, sizeof(cell_count));
 
@@ -20658,19 +20658,19 @@ struct llama_data_read {
 
         if (!res) {
             if (seq_id == -1) {
-                llama_kv_cache_clear(ctx);
+                jarvis_kv_cache_clear(ctx);
             } else {
-                llama_kv_cache_seq_rm(ctx, seq_id, -1, -1);
+                jarvis_kv_cache_seq_rm(ctx, seq_id, -1, -1);
             }
             throw std::runtime_error("failed to restore kv cache");
         }
     }
 };
 
-struct llama_data_write_dummy : llama_data_write {
+struct jarvis_data_write_dummy : jarvis_data_write {
     size_t size_written = 0;
 
-    llama_data_write_dummy() {}
+    jarvis_data_write_dummy() {}
 
     void write(const void * /* src */, size_t size) override {
         size_written += size;
@@ -20685,12 +20685,12 @@ struct llama_data_write_dummy : llama_data_write {
     }
 };
 
-struct llama_data_write_buffer : llama_data_write {
+struct jarvis_data_write_buffer : jarvis_data_write {
     uint8_t * ptr;
     size_t buf_size = 0;
     size_t size_written = 0;
 
-    llama_data_write_buffer(uint8_t * p, size_t len) : ptr(p), buf_size(len) {}
+    jarvis_data_write_buffer(uint8_t * p, size_t len) : ptr(p), buf_size(len) {}
 
     void write(const void * src, size_t size) override {
         if (size > buf_size) {
@@ -20717,12 +20717,12 @@ struct llama_data_write_buffer : llama_data_write {
     }
 };
 
-struct llama_data_read_buffer : llama_data_read {
+struct jarvis_data_read_buffer : jarvis_data_read {
     const uint8_t * ptr;
     size_t buf_size = 0;
     size_t size_read = 0;
 
-    llama_data_read_buffer(const uint8_t * p, size_t len) : ptr(p), buf_size(len) {}
+    jarvis_data_read_buffer(const uint8_t * p, size_t len) : ptr(p), buf_size(len) {}
 
     const uint8_t * read(size_t size) override {
         const uint8_t * base_ptr = ptr;
@@ -20744,12 +20744,12 @@ struct llama_data_read_buffer : llama_data_read {
     }
 };
 
-struct llama_data_write_file : llama_data_write {
-    llama_file * file;
+struct jarvis_data_write_file : jarvis_data_write {
+    jarvis_file * file;
     size_t size_written = 0;
     std::vector<uint8_t> temp_buffer;
 
-    llama_data_write_file(llama_file * f) : file(f) {}
+    jarvis_data_write_file(jarvis_file * f) : file(f) {}
 
     void write(const void * src, size_t size) override {
         file->write_raw(src, size);
@@ -20767,12 +20767,12 @@ struct llama_data_write_file : llama_data_write {
     }
 };
 
-struct llama_data_read_file : llama_data_read {
-    llama_file * file;
+struct jarvis_data_read_file : jarvis_data_read {
+    jarvis_file * file;
     size_t size_read = 0;
     std::vector<uint8_t> temp_buffer;
 
-    llama_data_read_file(llama_file * f) : file(f) {}
+    jarvis_data_read_file(jarvis_file * f) : file(f) {}
 
     void read_to(void * dst, size_t size) override {
         file->read_raw(dst, size);
@@ -20793,18 +20793,18 @@ struct llama_data_read_file : llama_data_read {
 /** copy state data into either a buffer or file depending on the passed in context
  *
  * file context:
- * llama_file file("/path", "wb");
- * llama_data_write_file data_ctx(&file);
- * llama_state_get_data_internal(ctx, data_ctx);
+ * jarvis_file file("/path", "wb");
+ * jarvis_data_write_file data_ctx(&file);
+ * jarvis_state_get_data_internal(ctx, data_ctx);
  *
  * buffer context:
  * std::vector<uint8_t> buf(max_size, 0);
- * llama_data_write_buffer data_ctx(buf.data(), max_size);
- * llama_state_get_data_internal(ctx, data_ctx);
+ * jarvis_data_write_buffer data_ctx(buf.data(), max_size);
+ * jarvis_state_get_data_internal(ctx, data_ctx);
  *
 */
-static size_t llama_state_get_data_internal(struct llama_context * ctx, llama_data_write & data_ctx) {
-    llama_synchronize(ctx);
+static size_t jarvis_state_get_data_internal(struct jarvis_context * ctx, jarvis_data_write & data_ctx) {
+    jarvis_synchronize(ctx);
 
     data_ctx.write_model_info(ctx);
 
@@ -20818,30 +20818,30 @@ static size_t llama_state_get_data_internal(struct llama_context * ctx, llama_da
     return data_ctx.get_size_written();
 }
 
-size_t llama_state_get_data(struct llama_context * ctx, uint8_t * dst, size_t size) {
-    llama_data_write_buffer data_ctx(dst, size);
+size_t jarvis_state_get_data(struct jarvis_context * ctx, uint8_t * dst, size_t size) {
+    jarvis_data_write_buffer data_ctx(dst, size);
     try {
-        return llama_state_get_data_internal(ctx, data_ctx);
+        return jarvis_state_get_data_internal(ctx, data_ctx);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error saving state: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error saving state: %s\n", __func__, err.what());
         return 0;
     }
 }
 
 // Returns the *actual* size of the state.
 // Intended to be used when saving to state to a buffer.
-size_t llama_state_get_size(struct llama_context * ctx) {
-    llama_data_write_dummy data_ctx;
+size_t jarvis_state_get_size(struct jarvis_context * ctx) {
+    jarvis_data_write_dummy data_ctx;
     try {
-        return llama_state_get_data_internal(ctx, data_ctx);
+        return jarvis_state_get_data_internal(ctx, data_ctx);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error getting state size: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error getting state size: %s\n", __func__, err.what());
         return 0;
     }
 }
 
-static size_t llama_state_set_data_internal(struct llama_context * ctx, llama_data_read & data_ctx) {
-    llama_synchronize(ctx);
+static size_t jarvis_state_set_data_internal(struct jarvis_context * ctx, jarvis_data_read & data_ctx) {
+    jarvis_synchronize(ctx);
 
     data_ctx.read_model_info(ctx);
 
@@ -20856,26 +20856,26 @@ static size_t llama_state_set_data_internal(struct llama_context * ctx, llama_da
 }
 
 // Sets the state reading from the specified source address
-size_t llama_state_set_data(struct llama_context * ctx, const uint8_t * src, size_t size) {
-    llama_data_read_buffer data_ctx(src, size);
+size_t jarvis_state_set_data(struct jarvis_context * ctx, const uint8_t * src, size_t size) {
+    jarvis_data_read_buffer data_ctx(src, size);
     try {
-        return llama_state_set_data_internal(ctx, data_ctx);
+        return jarvis_state_set_data_internal(ctx, data_ctx);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error loading state: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error loading state: %s\n", __func__, err.what());
         return 0;
     }
 }
 
-static bool llama_state_load_file_internal(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
-    llama_file file(path_session, "rb");
+static bool jarvis_state_load_file_internal(struct jarvis_context * ctx, const char * path_session, jarvis_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    jarvis_file file(path_session, "rb");
 
     // sanity checks
     {
         const uint32_t magic   = file.read_u32();
         const uint32_t version = file.read_u32();
 
-        if (magic != LLAMA_SESSION_MAGIC || version != LLAMA_SESSION_VERSION) {
-            LLAMA_LOG_ERROR("%s: unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
+        if (magic != JARVIS_SESSION_MAGIC || version != JARVIS_SESSION_VERSION) {
+            JARVIS_LOG_ERROR("%s: unknown (magic, version) for session file: %08x, %08x\n", __func__, magic, version);
             return false;
         }
     }
@@ -20885,11 +20885,11 @@ static bool llama_state_load_file_internal(struct llama_context * ctx, const cha
         const uint32_t n_token_count = file.read_u32();
 
         if (n_token_count > n_token_capacity) {
-            LLAMA_LOG_ERROR("%s: token count in session file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
+            JARVIS_LOG_ERROR("%s: token count in session file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
             return false;
         }
 
-        file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
+        file.read_raw(tokens_out, sizeof(jarvis_token) * n_token_count);
         *n_token_count_out = n_token_count;
     }
 
@@ -20897,122 +20897,122 @@ static bool llama_state_load_file_internal(struct llama_context * ctx, const cha
     {
         const size_t n_state_size_cur = file.size - file.tell();
 
-        llama_data_read_file data_ctx(&file);
-        const size_t n_read = llama_state_set_data_internal(ctx, data_ctx);
+        jarvis_data_read_file data_ctx(&file);
+        const size_t n_read = jarvis_state_set_data_internal(ctx, data_ctx);
 
         if (n_read != n_state_size_cur) {
-            LLAMA_LOG_ERROR("%s: did not read all of the session file data! size %zu, got %zu\n", __func__, n_state_size_cur, n_read);
+            JARVIS_LOG_ERROR("%s: did not read all of the session file data! size %zu, got %zu\n", __func__, n_state_size_cur, n_read);
             return false;
         }
     }
     return true;
 }
 
-bool llama_state_load_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+bool jarvis_state_load_file(struct jarvis_context * ctx, const char * path_session, jarvis_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     try {
-        return llama_state_load_file_internal(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+        return jarvis_state_load_file_internal(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error loading session file: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error loading session file: %s\n", __func__, err.what());
         return false;
     }
 }
 
-static bool llama_state_save_file_internal(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
-    llama_file file(path_session, "wb");
+static bool jarvis_state_save_file_internal(struct jarvis_context * ctx, const char * path_session, const jarvis_token * tokens, size_t n_token_count) {
+    jarvis_file file(path_session, "wb");
 
-    file.write_u32(LLAMA_SESSION_MAGIC);
-    file.write_u32(LLAMA_SESSION_VERSION);
+    file.write_u32(JARVIS_SESSION_MAGIC);
+    file.write_u32(JARVIS_SESSION_VERSION);
 
     // save the prompt
     file.write_u32((uint32_t) n_token_count);
-    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
+    file.write_raw(tokens, sizeof(jarvis_token) * n_token_count);
 
     // save the context state using stream saving
-    llama_data_write_file data_ctx(&file);
-    llama_state_get_data_internal(ctx, data_ctx);
+    jarvis_data_write_file data_ctx(&file);
+    jarvis_state_get_data_internal(ctx, data_ctx);
 
     return true;
 }
 
-bool llama_state_save_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+bool jarvis_state_save_file(struct jarvis_context * ctx, const char * path_session, const jarvis_token * tokens, size_t n_token_count) {
     try {
-        return llama_state_save_file_internal(ctx, path_session, tokens, n_token_count);
+        return jarvis_state_save_file_internal(ctx, path_session, tokens, n_token_count);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error saving session file: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error saving session file: %s\n", __func__, err.what());
         return false;
     }
 }
 
-static size_t llama_state_seq_get_data_internal(struct llama_context * ctx, llama_data_write & data_ctx, llama_seq_id seq_id) {
-    llama_synchronize(ctx);
+static size_t jarvis_state_seq_get_data_internal(struct jarvis_context * ctx, jarvis_data_write & data_ctx, jarvis_seq_id seq_id) {
+    jarvis_synchronize(ctx);
 
     data_ctx.write_kv_cache(ctx, seq_id);
 
     return data_ctx.get_size_written();
 }
 
-size_t llama_state_seq_get_size(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_data_write_dummy data_ctx;
-    return llama_state_seq_get_data_internal(ctx, data_ctx, seq_id);
+size_t jarvis_state_seq_get_size(struct jarvis_context * ctx, jarvis_seq_id seq_id) {
+    jarvis_data_write_dummy data_ctx;
+    return jarvis_state_seq_get_data_internal(ctx, data_ctx, seq_id);
 }
 
-size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, size_t size, llama_seq_id seq_id) {
-    llama_data_write_buffer data_ctx(dst, size);
+size_t jarvis_state_seq_get_data(struct jarvis_context * ctx, uint8_t * dst, size_t size, jarvis_seq_id seq_id) {
+    jarvis_data_write_buffer data_ctx(dst, size);
     try {
-        return llama_state_seq_get_data_internal(ctx, data_ctx, seq_id);
+        return jarvis_state_seq_get_data_internal(ctx, data_ctx, seq_id);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error saving sequence state: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error saving sequence state: %s\n", __func__, err.what());
         return 0;
     }
 }
 
-static size_t llama_state_seq_set_data_internal(struct llama_context * ctx, llama_data_read & data_ctx, llama_seq_id dest_seq_id) {
-    llama_synchronize(ctx);
+static size_t jarvis_state_seq_set_data_internal(struct jarvis_context * ctx, jarvis_data_read & data_ctx, jarvis_seq_id dest_seq_id) {
+    jarvis_synchronize(ctx);
 
     data_ctx.read_kv_cache(ctx, dest_seq_id);
 
     return data_ctx.get_size_read();
 }
 
-size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src, size_t size, llama_seq_id dest_seq_id) {
-    llama_data_read_buffer data_ctx(src, size);
+size_t jarvis_state_seq_set_data(struct jarvis_context * ctx, const uint8_t * src, size_t size, jarvis_seq_id dest_seq_id) {
+    jarvis_data_read_buffer data_ctx(src, size);
     try {
-        return llama_state_seq_set_data_internal(ctx, data_ctx, dest_seq_id);
+        return jarvis_state_seq_set_data_internal(ctx, data_ctx, dest_seq_id);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error loading sequence state: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error loading sequence state: %s\n", __func__, err.what());
         return 0;
     }
 }
 
-static size_t llama_state_seq_save_file_internal(struct llama_context * ctx, const char * filepath, llama_seq_id seq_id, const llama_token * tokens, size_t n_token_count) {
-    llama_file file(filepath, "wb");
+static size_t jarvis_state_seq_save_file_internal(struct jarvis_context * ctx, const char * filepath, jarvis_seq_id seq_id, const jarvis_token * tokens, size_t n_token_count) {
+    jarvis_file file(filepath, "wb");
 
-    file.write_u32(LLAMA_STATE_SEQ_MAGIC);
-    file.write_u32(LLAMA_STATE_SEQ_VERSION);
+    file.write_u32(JARVIS_STATE_SEQ_MAGIC);
+    file.write_u32(JARVIS_STATE_SEQ_VERSION);
 
     // save the prompt
     file.write_u32((uint32_t) n_token_count);
-    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
+    file.write_raw(tokens, sizeof(jarvis_token) * n_token_count);
 
     // save the context state using stream saving
-    llama_data_write_file data_ctx(&file);
-    llama_state_seq_get_data_internal(ctx, data_ctx, seq_id);
+    jarvis_data_write_file data_ctx(&file);
+    jarvis_state_seq_get_data_internal(ctx, data_ctx, seq_id);
 
     const size_t res = file.tell();
-    GGML_ASSERT(res == sizeof(uint32_t) * 3 + sizeof(llama_token) * n_token_count + data_ctx.get_size_written());
+    GGML_ASSERT(res == sizeof(uint32_t) * 3 + sizeof(jarvis_token) * n_token_count + data_ctx.get_size_written());
     return res;
 }
 
-static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, const char * filepath, llama_seq_id dest_seq_id, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
-    llama_file file(filepath, "rb");
+static size_t jarvis_state_seq_load_file_internal(struct jarvis_context * ctx, const char * filepath, jarvis_seq_id dest_seq_id, jarvis_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    jarvis_file file(filepath, "rb");
 
     // version checks
     {
         const uint32_t magic   = file.read_u32();
         const uint32_t version = file.read_u32();
 
-        if (magic != LLAMA_STATE_SEQ_MAGIC || version != LLAMA_STATE_SEQ_VERSION) {
-            LLAMA_LOG_ERROR("%s: unknown (magic, version) for sequence state file: %08x, %08x\n", __func__, magic, version);
+        if (magic != JARVIS_STATE_SEQ_MAGIC || version != JARVIS_STATE_SEQ_VERSION) {
+            JARVIS_LOG_ERROR("%s: unknown (magic, version) for sequence state file: %08x, %08x\n", __func__, magic, version);
             return 0;
         }
     }
@@ -21022,76 +21022,76 @@ static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, con
         const uint32_t n_token_count = file.read_u32();
 
         if (n_token_count > n_token_capacity) {
-            LLAMA_LOG_ERROR("%s: token count in sequence state file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
+            JARVIS_LOG_ERROR("%s: token count in sequence state file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
             return 0;
         }
 
-        file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
+        file.read_raw(tokens_out, sizeof(jarvis_token) * n_token_count);
         *n_token_count_out = n_token_count;
     }
 
     // restore the context state
     {
         const size_t state_size = file.size - file.tell();
-        llama_data_read_file data_ctx(&file);
-        const size_t nread = llama_state_seq_set_data_internal(ctx, data_ctx, dest_seq_id);
+        jarvis_data_read_file data_ctx(&file);
+        const size_t nread = jarvis_state_seq_set_data_internal(ctx, data_ctx, dest_seq_id);
         if (!nread) {
-            LLAMA_LOG_ERROR("%s: failed to restore sequence state\n", __func__);
+            JARVIS_LOG_ERROR("%s: failed to restore sequence state\n", __func__);
             return 0;
         }
         GGML_ASSERT(nread <= state_size);
-        GGML_ASSERT(nread + sizeof(uint32_t) * 3 + sizeof(llama_token) * *n_token_count_out == file.tell());
+        GGML_ASSERT(nread + sizeof(uint32_t) * 3 + sizeof(jarvis_token) * *n_token_count_out == file.tell());
     }
 
     return file.tell();
 }
 
-size_t llama_state_seq_save_file(struct llama_context * ctx, const char * filepath, llama_seq_id seq_id, const llama_token * tokens, size_t n_token_count) {
+size_t jarvis_state_seq_save_file(struct jarvis_context * ctx, const char * filepath, jarvis_seq_id seq_id, const jarvis_token * tokens, size_t n_token_count) {
     try {
-        return llama_state_seq_save_file_internal(ctx, filepath, seq_id, tokens, n_token_count);
+        return jarvis_state_seq_save_file_internal(ctx, filepath, seq_id, tokens, n_token_count);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error saving sequence state file: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error saving sequence state file: %s\n", __func__, err.what());
         return 0;
     }
 }
 
-size_t llama_state_seq_load_file(struct llama_context * ctx, const char * filepath, llama_seq_id dest_seq_id, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+size_t jarvis_state_seq_load_file(struct jarvis_context * ctx, const char * filepath, jarvis_seq_id dest_seq_id, jarvis_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     try {
-        return llama_state_seq_load_file_internal(ctx, filepath, dest_seq_id, tokens_out, n_token_capacity, n_token_count_out);
+        return jarvis_state_seq_load_file_internal(ctx, filepath, dest_seq_id, tokens_out, n_token_capacity, n_token_count_out);
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: error loading sequence state file: %s\n", __func__, err.what());
+        JARVIS_LOG_ERROR("%s: error loading sequence state file: %s\n", __func__, err.what());
         return 0;
     }
 }
 
-void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t n_threads_batch) {
+void jarvis_set_n_threads(struct jarvis_context * ctx, int32_t n_threads, int32_t n_threads_batch) {
     ctx->cparams.n_threads       = n_threads;
     ctx->cparams.n_threads_batch = n_threads_batch;
 }
 
-int32_t llama_n_threads(struct llama_context * ctx) {
+int32_t jarvis_n_threads(struct jarvis_context * ctx) {
     return ctx->cparams.n_threads;
 }
 
-int32_t llama_n_threads_batch(struct llama_context * ctx) {
+int32_t jarvis_n_threads_batch(struct jarvis_context * ctx) {
     return ctx->cparams.n_threads_batch;
 }
 
-void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
+void jarvis_set_abort_callback(struct jarvis_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
     ctx->abort_callback      = abort_callback;
     ctx->abort_callback_data = abort_callback_data;
 }
 
-void llama_set_embeddings(struct llama_context * ctx, bool embeddings) {
+void jarvis_set_embeddings(struct jarvis_context * ctx, bool embeddings) {
     ctx->cparams.embeddings = embeddings;
 }
 
-void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
+void jarvis_set_causal_attn(struct jarvis_context * ctx, bool causal_attn) {
     ctx->cparams.causal_attn = causal_attn;
 }
 
-struct llama_batch llama_batch_get_one(
-             llama_token * tokens,
+struct jarvis_batch jarvis_batch_get_one(
+             jarvis_token * tokens,
                  int32_t   n_tokens) {
     return {
         /*n_tokens       =*/ n_tokens,
@@ -21104,8 +21104,8 @@ struct llama_batch llama_batch_get_one(
     };
 }
 
-struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_t n_seq_max) {
-    llama_batch batch = {
+struct jarvis_batch jarvis_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_t n_seq_max) {
+    jarvis_batch batch = {
         /*n_tokens       =*/ 0,
         /*tokens         =*/ nullptr,
         /*embd           =*/ nullptr,
@@ -21118,14 +21118,14 @@ struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_
     if (embd) {
         batch.embd = (float *) malloc(sizeof(float) * n_tokens_alloc * embd);
     } else {
-        batch.token = (llama_token *) malloc(sizeof(llama_token) * n_tokens_alloc);
+        batch.token = (jarvis_token *) malloc(sizeof(jarvis_token) * n_tokens_alloc);
     }
 
-    batch.pos      = (llama_pos *)     malloc(sizeof(llama_pos)      * n_tokens_alloc);
+    batch.pos      = (jarvis_pos *)     malloc(sizeof(jarvis_pos)      * n_tokens_alloc);
     batch.n_seq_id = (int32_t *)       malloc(sizeof(int32_t)        * n_tokens_alloc);
-    batch.seq_id   = (llama_seq_id **) malloc(sizeof(llama_seq_id *) * (n_tokens_alloc + 1));
+    batch.seq_id   = (jarvis_seq_id **) malloc(sizeof(jarvis_seq_id *) * (n_tokens_alloc + 1));
     for (int i = 0; i < n_tokens_alloc; ++i) {
-        batch.seq_id[i] = (llama_seq_id *) malloc(sizeof(llama_seq_id) * n_seq_max);
+        batch.seq_id[i] = (jarvis_seq_id *) malloc(sizeof(jarvis_seq_id) * n_seq_max);
     }
     batch.seq_id[n_tokens_alloc] = nullptr;
 
@@ -21134,7 +21134,7 @@ struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_
     return batch;
 }
 
-void llama_batch_free(struct llama_batch batch) {
+void jarvis_batch_free(struct jarvis_batch batch) {
     if (batch.token)    free(batch.token);
     if (batch.embd)     free(batch.embd);
     if (batch.pos)      free(batch.pos);
@@ -21148,29 +21148,29 @@ void llama_batch_free(struct llama_batch batch) {
     if (batch.logits)   free(batch.logits);
 }
 
-int32_t llama_encode(
-        struct llama_context * ctx,
-          struct llama_batch   batch) {
-    const int ret = llama_encode_internal(*ctx, batch);
+int32_t jarvis_encode(
+        struct jarvis_context * ctx,
+          struct jarvis_batch   batch) {
+    const int ret = jarvis_encode_internal(*ctx, batch);
     if (ret != 0) {
-        LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
+        JARVIS_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
     }
 
     return ret;
 }
 
-int32_t llama_decode(
-        struct llama_context * ctx,
-          struct llama_batch   batch) {
-    const int ret = llama_decode_internal(*ctx, batch);
+int32_t jarvis_decode(
+        struct jarvis_context * ctx,
+          struct jarvis_batch   batch) {
+    const int ret = jarvis_decode_internal(*ctx, batch);
     if (ret != 0) {
-        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
+        JARVIS_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
     return ret;
 }
 
-void llama_synchronize(struct llama_context * ctx) {
+void jarvis_synchronize(struct jarvis_context * ctx) {
     ggml_backend_sched_synchronize(ctx->sched);
 
     // FIXME: if multiple single tokens are evaluated without a synchronization,
@@ -21200,19 +21200,19 @@ void llama_synchronize(struct llama_context * ctx) {
     ctx->t_compute_start_us = 0;
 }
 
-float * llama_get_logits(struct llama_context * ctx) {
-    llama_synchronize(ctx);
+float * jarvis_get_logits(struct jarvis_context * ctx) {
+    jarvis_synchronize(ctx);
 
     // reorder logits for backward compatibility
     // TODO: maybe deprecate this
-    llama_output_reorder(ctx);
+    jarvis_output_reorder(ctx);
 
     return ctx->logits;
 }
 
-float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
+float * jarvis_get_logits_ith(struct jarvis_context * ctx, int32_t i) {
     int32_t j = -1;
-    llama_synchronize(ctx);
+    jarvis_synchronize(ctx);
 
     try {
         if (ctx->logits == nullptr) {
@@ -21240,7 +21240,7 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
 
         return ctx->logits + j*ctx->model.hparams.n_vocab;
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
+        JARVIS_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
 #ifndef NDEBUG
         GGML_ABORT("fatal error");
 #else
@@ -21249,20 +21249,20 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
     }
 }
 
-float * llama_get_embeddings(struct llama_context * ctx) {
-    llama_synchronize(ctx);
+float * jarvis_get_embeddings(struct jarvis_context * ctx) {
+    jarvis_synchronize(ctx);
 
     // reorder embeddings for backward compatibility
     // TODO: maybe deprecate this
-    llama_output_reorder(ctx);
+    jarvis_output_reorder(ctx);
 
     return ctx->embd;
 }
 
-float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
+float * jarvis_get_embeddings_ith(struct jarvis_context * ctx, int32_t i) {
     int32_t j = -1;
 
-    llama_synchronize(ctx);
+    jarvis_synchronize(ctx);
 
     try {
         if (ctx->embd == nullptr) {
@@ -21290,7 +21290,7 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
 
         return ctx->embd + j*ctx->model.hparams.n_embd;
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
+        JARVIS_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
 #ifndef NDEBUG
         GGML_ABORT("fatal error");
 #else
@@ -21299,8 +21299,8 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
     }
 }
 
-float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_synchronize(ctx);
+float * jarvis_get_embeddings_seq(struct jarvis_context * ctx, jarvis_seq_id seq_id) {
+    jarvis_synchronize(ctx);
 
     auto it = ctx->embd_seq.find(seq_id);
     if (it == ctx->embd_seq.end()) {
@@ -21314,145 +21314,145 @@ float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id
 // vocab
 //
 
-const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
-    return llama_token_get_text_impl(model->vocab, token);
+const char * jarvis_token_get_text(const struct jarvis_model * model, jarvis_token token) {
+    return jarvis_token_get_text_impl(model->vocab, token);
 }
 
-float llama_token_get_score(const struct llama_model * model, llama_token token) {
-    return llama_token_get_score_impl(model->vocab, token);
+float jarvis_token_get_score(const struct jarvis_model * model, jarvis_token token) {
+    return jarvis_token_get_score_impl(model->vocab, token);
 }
 
-enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
-    return llama_token_get_attr_impl(model->vocab, token);
+enum jarvis_token_attr jarvis_token_get_attr(const struct jarvis_model * model, jarvis_token token) {
+    return jarvis_token_get_attr_impl(model->vocab, token);
 }
 
-bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    return llama_token_is_eog_impl(model->vocab, token);
+bool jarvis_token_is_eog(const struct jarvis_model * model, jarvis_token token) {
+    return jarvis_token_is_eog_impl(model->vocab, token);
 }
 
-bool llama_token_is_control(const struct llama_model * model, llama_token token) {
-    return llama_token_is_control_impl(model->vocab, token);
+bool jarvis_token_is_control(const struct jarvis_model * model, jarvis_token token) {
+    return jarvis_token_is_control_impl(model->vocab, token);
 }
 
-llama_token llama_token_bos(const struct llama_model * model) {
-    return llama_token_bos_impl(model->vocab);
+jarvis_token jarvis_token_bos(const struct jarvis_model * model) {
+    return jarvis_token_bos_impl(model->vocab);
 }
 
-llama_token llama_token_eos(const struct llama_model * model) {
-    return llama_token_eos_impl(model->vocab);
+jarvis_token jarvis_token_eos(const struct jarvis_model * model) {
+    return jarvis_token_eos_impl(model->vocab);
 }
 
-llama_token llama_token_eot(const struct llama_model * model) {
-    return llama_token_eot_impl(model->vocab);
+jarvis_token jarvis_token_eot(const struct jarvis_model * model) {
+    return jarvis_token_eot_impl(model->vocab);
 }
 
-llama_token llama_token_cls(const struct llama_model * model) {
-    return llama_token_cls_impl(model->vocab);
+jarvis_token jarvis_token_cls(const struct jarvis_model * model) {
+    return jarvis_token_cls_impl(model->vocab);
 }
 
-llama_token llama_token_sep(const struct llama_model * model) {
-    return llama_token_sep_impl(model->vocab);
+jarvis_token jarvis_token_sep(const struct jarvis_model * model) {
+    return jarvis_token_sep_impl(model->vocab);
 }
 
-llama_token llama_token_nl (const struct llama_model * model) {
-    return llama_token_nl_impl(model->vocab);
+jarvis_token jarvis_token_nl (const struct jarvis_model * model) {
+    return jarvis_token_nl_impl(model->vocab);
 }
 
-llama_token llama_token_pad(const struct llama_model * model) {
-    return llama_token_pad_impl(model->vocab);
+jarvis_token jarvis_token_pad(const struct jarvis_model * model) {
+    return jarvis_token_pad_impl(model->vocab);
 }
 
-bool llama_add_bos_token(const struct llama_model * model) {
-    return llama_add_bos_token_impl(model->vocab);
+bool jarvis_add_bos_token(const struct jarvis_model * model) {
+    return jarvis_add_bos_token_impl(model->vocab);
 }
 
-bool llama_add_eos_token(const struct llama_model * model) {
-    return llama_add_eos_token_impl(model->vocab);
+bool jarvis_add_eos_token(const struct jarvis_model * model) {
+    return jarvis_add_eos_token_impl(model->vocab);
 }
 
-llama_token llama_token_prefix(const struct llama_model * model) {
-    return llama_token_prefix_impl(model->vocab);
+jarvis_token jarvis_token_prefix(const struct jarvis_model * model) {
+    return jarvis_token_prefix_impl(model->vocab);
 }
 
-llama_token llama_token_middle(const struct llama_model * model) {
-    return llama_token_middle_impl(model->vocab);
+jarvis_token jarvis_token_middle(const struct jarvis_model * model) {
+    return jarvis_token_middle_impl(model->vocab);
 }
 
-llama_token llama_token_suffix(const struct llama_model * model) {
-    return llama_token_suffix_impl(model->vocab);
+jarvis_token jarvis_token_suffix(const struct jarvis_model * model) {
+    return jarvis_token_suffix_impl(model->vocab);
 }
 
-llama_token llama_token_fim_pre(const struct llama_model * model) {
-    return llama_token_fim_pre_impl(model->vocab);
+jarvis_token jarvis_token_fim_pre(const struct jarvis_model * model) {
+    return jarvis_token_fim_pre_impl(model->vocab);
 }
 
-llama_token llama_token_fim_suf(const struct llama_model * model) {
-    return llama_token_fim_suf_impl(model->vocab);
+jarvis_token jarvis_token_fim_suf(const struct jarvis_model * model) {
+    return jarvis_token_fim_suf_impl(model->vocab);
 }
 
-llama_token llama_token_fim_mid(const struct llama_model * model) {
-    return llama_token_fim_mid_impl(model->vocab);
+jarvis_token jarvis_token_fim_mid(const struct jarvis_model * model) {
+    return jarvis_token_fim_mid_impl(model->vocab);
 }
 
-llama_token llama_token_fim_pad(const struct llama_model * model) {
-    return llama_token_fim_pad_impl(model->vocab);
+jarvis_token jarvis_token_fim_pad(const struct jarvis_model * model) {
+    return jarvis_token_fim_pad_impl(model->vocab);
 }
 
-llama_token llama_token_fim_rep(const struct llama_model * model) {
-    return llama_token_fim_rep_impl(model->vocab);
+jarvis_token jarvis_token_fim_rep(const struct jarvis_model * model) {
+    return jarvis_token_fim_rep_impl(model->vocab);
 }
 
-llama_token llama_token_fim_sep(const struct llama_model * model) {
-    return llama_token_fim_sep_impl(model->vocab);
+jarvis_token jarvis_token_fim_sep(const struct jarvis_model * model) {
+    return jarvis_token_fim_sep_impl(model->vocab);
 }
 
 //
 // tokenization
 //
 
-int32_t llama_tokenize(
-    const struct llama_model * model,
+int32_t jarvis_tokenize(
+    const struct jarvis_model * model,
                   const char * text,
                      int32_t   text_len,
-                 llama_token * tokens,
+                 jarvis_token * tokens,
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
-    return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
+    return jarvis_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
-int32_t llama_token_to_piece(
-    const struct llama_model * model,
-                 llama_token   token,
+int32_t jarvis_token_to_piece(
+    const struct jarvis_model * model,
+                 jarvis_token   token,
                         char * buf,
                      int32_t   length,
                      int32_t   lstrip,
                         bool   special) {
-    return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
+    return jarvis_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
 }
 
-int32_t llama_detokenize(
-    const struct llama_model * model,
-           const llama_token * tokens,
+int32_t jarvis_detokenize(
+    const struct jarvis_model * model,
+           const jarvis_token * tokens,
                      int32_t   n_tokens,
                         char * text,
                      int32_t   text_len_max,
                         bool   remove_special,
                         bool   unparse_special) {
-    return llama_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
+    return jarvis_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
 }
 
 //
 // chat templates
 //
 
-// Simple version of "llama_apply_chat_template" that only works with strings
+// Simple version of "jarvis_apply_chat_template" that only works with strings
 // This function uses heuristic checks to determine commonly used template. It is not a jinja parser.
-static int32_t llama_chat_apply_template_internal(
+static int32_t jarvis_chat_apply_template_internal(
     const std::string & tmpl,
-    const std::vector<const llama_chat_message *> & chat,
+    const std::vector<const jarvis_chat_message *> & chat,
     std::string & dest, bool add_ass) {
-    // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
+    // Taken from the research: https://github.com/ggerganov/jarvis.cpp/issues/5527
     std::stringstream ss;
     auto tmpl_contains = [&tmpl](std::string haystack) -> bool {
         return tmpl.find(haystack) != std::string::npos;
@@ -21465,8 +21465,8 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|im_start|>assistant\n";
         }
-    } else if (tmpl == "llama2" || tmpl == "mistral" || tmpl_contains("[INST]")) {
-        // llama2 template and its variants
+    } else if (tmpl == "jarvis2" || tmpl == "mistral" || tmpl_contains("[INST]")) {
+        // jarvis2 template and its variants
         // [variant] support system message
         bool support_system_message = tmpl_contains("<<SYS>>") || tmpl == "mistral";
         // [variant] space before + after response
@@ -21499,7 +21499,7 @@ static int32_t llama_chat_apply_template_internal(
                 is_inside_turn = false;
             }
         }
-        // llama2 templates seem to not care about "add_generation_prompt"
+        // jarvis2 templates seem to not care about "add_generation_prompt"
     } else if (tmpl == "phi3" || (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>"))) {
         // Phi 3
         for (auto message : chat) {
@@ -21632,8 +21632,8 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
         }
-    } else if (tmpl == "llama3" || (tmpl_contains("<|start_header_id|>") && tmpl_contains("<|end_header_id|>"))) {
-        // Llama 3
+    } else if (tmpl == "jarvis3" || (tmpl_contains("<|start_header_id|>") && tmpl_contains("<|end_header_id|>"))) {
+        // Jarvis 3
         for (auto message : chat) {
             std::string role(message->role);
             ss << "<|start_header_id|>" << role << "<|end_header_id|>\n\n" << trim(message->content) << "<|eot_id|>";
@@ -21721,10 +21721,10 @@ static int32_t llama_chat_apply_template_internal(
     return dest.size();
 }
 
-int32_t llama_chat_apply_template(
-                const struct llama_model * model,
+int32_t jarvis_chat_apply_template(
+                const struct jarvis_model * model,
                               const char * tmpl,
-         const struct llama_chat_message * chat,
+         const struct jarvis_chat_message * chat,
                                   size_t   n_msg,
                                     bool   add_ass,
                                     char * buf,
@@ -21735,24 +21735,24 @@ int32_t llama_chat_apply_template(
         // load template from model
         std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
         std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        int32_t res = jarvis_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
         if (res < 0) {
             // worst case: there is no information about template, we will use chatml by default
-            curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
+            curr_tmpl = "chatml"; // see jarvis_chat_apply_template_internal
         } else {
             curr_tmpl = std::string(model_template.data(), model_template.size());
         }
     }
 
     // format the chat to string
-    std::vector<const llama_chat_message *> chat_vec;
+    std::vector<const jarvis_chat_message *> chat_vec;
     chat_vec.resize(n_msg);
     for (size_t i = 0; i < n_msg; i++) {
         chat_vec[i] = &chat[i];
     }
 
     std::string formatted_chat;
-    int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
+    int32_t res = jarvis_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
     if (res < 0) {
         return res;
     }
@@ -21766,24 +21766,24 @@ int32_t llama_chat_apply_template(
 // sampling
 //
 
-// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
-struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
-    return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
+// TODO: remove indirection when vocab becomes accesible in jarvis-sampling.cpp
+struct jarvis_sampler * jarvis_sampler_init_grammar(const struct jarvis_model * model, const char * grammar_str, const char * grammar_root) {
+    return jarvis_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
 
-struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
-    return llama_sampler_init_infill_impl(model->vocab);
+struct jarvis_sampler * jarvis_sampler_init_infill(const struct jarvis_model * model) {
+    return jarvis_sampler_init_infill_impl(model->vocab);
 }
 
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
-    return llama_sampler_init_dry_impl(model->vocab, llama_n_ctx_train(model), dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers, num_breakers);
+struct jarvis_sampler * jarvis_sampler_init_dry(const struct jarvis_model * model, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+    return jarvis_sampler_init_dry_impl(model->vocab, jarvis_n_ctx_train(model), dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers, num_breakers);
 }
 
 //
 // model split
 //
 
-int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {
+int jarvis_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {
     static const char * const SPLIT_PATH_FORMAT = "%s-%05d-of-%05d.gguf";
     if (snprintf(split_path, maxlen, SPLIT_PATH_FORMAT, path_prefix, split_no + 1, split_count)) {
         return strlen(split_path);
@@ -21791,7 +21791,7 @@ int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix,
     return 0;
 }
 
-int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int split_no, int split_count) {
+int jarvis_split_prefix(char * dest, size_t maxlen, const char * split_path, int split_no, int split_count) {
     std::string str_split_path(split_path);
     char postfix[32];
     snprintf(postfix, 32, "-%05d-of-%05d.gguf", split_no + 1, split_count);
@@ -21807,7 +21807,7 @@ int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int 
     return 0;
 }
 
-const char * llama_print_system_info(void) {
+const char * jarvis_print_system_info(void) {
     static std::string s;
 
     s  = "";
@@ -21832,13 +21832,13 @@ const char * llama_print_system_info(void) {
     s += "SSSE3 = "       + std::to_string(ggml_cpu_has_ssse3())       + " | ";
     s += "VSX = "         + std::to_string(ggml_cpu_has_vsx())         + " | ";
     s += "MATMUL_INT8 = " + std::to_string(ggml_cpu_has_matmul_int8()) + " | ";
-    s += "LLAMAFILE = "   + std::to_string(ggml_cpu_has_llamafile())   + " | ";
+    s += "JARVISFILE = "   + std::to_string(ggml_cpu_has_jarvisfile())   + " | ";
 
     return s.c_str();
 }
 
-struct llama_perf_context_data llama_perf_context(const struct llama_context * ctx) {
-    struct llama_perf_context_data data = {};
+struct jarvis_perf_context_data jarvis_perf_context(const struct jarvis_context * ctx) {
+    struct jarvis_perf_context_data data = {};
 
     if (ctx == nullptr) {
         return data;
@@ -21854,26 +21854,26 @@ struct llama_perf_context_data llama_perf_context(const struct llama_context * c
     return data;
 }
 
-void llama_perf_context_print(const struct llama_context * ctx) {
-    const auto data = llama_perf_context(ctx);
+void jarvis_perf_context_print(const struct jarvis_context * ctx) {
+    const auto data = jarvis_perf_context(ctx);
 
     const double t_end_ms = 1e-3 * ggml_time_us();
 
-    LLAMA_LOG_INFO("%s:        load time = %10.2f ms\n", __func__, data.t_load_ms);
-    LLAMA_LOG_INFO("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
+    JARVIS_LOG_INFO("%s:        load time = %10.2f ms\n", __func__, data.t_load_ms);
+    JARVIS_LOG_INFO("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, data.t_p_eval_ms, data.n_p_eval, data.t_p_eval_ms / data.n_p_eval, 1e3 / data.t_p_eval_ms * data.n_p_eval);
-    LLAMA_LOG_INFO("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+    JARVIS_LOG_INFO("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, data.t_eval_ms, data.n_eval, data.t_eval_ms / data.n_eval, 1e3 / data.t_eval_ms * data.n_eval);
-    LLAMA_LOG_INFO("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - data.t_start_ms), (data.n_p_eval + data.n_eval));
+    JARVIS_LOG_INFO("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - data.t_start_ms), (data.n_p_eval + data.n_eval));
 }
 
-void llama_perf_context_reset(struct llama_context * ctx) {
+void jarvis_perf_context_reset(struct jarvis_context * ctx) {
     ctx->t_start_us  = ggml_time_us();
     ctx->t_eval_us   = ctx->n_eval = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
 }
 
-void llama_perf_dump_yaml(FILE * stream, const llama_context * ctx) {
+void jarvis_perf_dump_yaml(FILE * stream, const jarvis_context * ctx) {
     fprintf(stream, "\n");
     fprintf(stream, "###########\n");
     fprintf(stream, "# Timings #\n");
@@ -21896,19 +21896,19 @@ void llama_perf_dump_yaml(FILE * stream, const llama_context * ctx) {
 }
 
 // For internal test use
-const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
-    struct llama_context * ctx
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & jarvis_internal_get_tensor_map(
+    struct jarvis_context * ctx
 ) {
     return ctx->model.tensors_by_name;
 }
 
-void llama_log_set(ggml_log_callback log_callback, void * user_data) {
+void jarvis_log_set(ggml_log_callback log_callback, void * user_data) {
     ggml_log_set(log_callback, user_data);
-    g_logger_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
+    g_logger_state.log_callback = log_callback ? log_callback : jarvis_log_callback_default;
     g_logger_state.log_callback_user_data = user_data;
 }
 
-static void llama_log_internal_v(ggml_log_level level, const char * format, va_list args) {
+static void jarvis_log_internal_v(ggml_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
@@ -21925,14 +21925,14 @@ static void llama_log_internal_v(ggml_log_level level, const char * format, va_l
     va_end(args_copy);
 }
 
-void llama_log_internal(ggml_log_level level, const char * format, ...) {
+void jarvis_log_internal(ggml_log_level level, const char * format, ...) {
     va_list args;
     va_start(args, format);
-    llama_log_internal_v(level, format, args);
+    jarvis_log_internal_v(level, format, args);
     va_end(args);
 }
 
-void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
+void jarvis_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) user_data;
     fputs(text, stderr);

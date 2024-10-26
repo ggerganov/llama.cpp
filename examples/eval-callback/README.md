@@ -1,4 +1,4 @@
-# llama.cpp/examples/eval-callback
+# jarvis.cpp/examples/eval-callback
 
 A simple example which demonstrates how to use callback during the inference.
 It simply prints to the console all operations and tensor data.
@@ -6,7 +6,7 @@ It simply prints to the console all operations and tensor data.
 Usage:
 
 ```shell
-llama-eval-callback \
+jarvis-eval-callback \
   --hf-repo ggml-org/models \
   --hf-file phi-2/ggml-model-q4_0.gguf \
   --model phi-2-q4_0.gguf \
@@ -20,12 +20,12 @@ Will print:
 ```shell
 llm_load_tensors: offloaded 33/33 layers to GPU
 ...
-llama_new_context_with_model: n_ctx      = 512
+jarvis_new_context_with_model: n_ctx      = 512
 ...
-llama_new_context_with_model:      CUDA0 compute buffer size =   105.00 MiB
-llama_new_context_with_model:  CUDA_Host compute buffer size =     6.01 MiB
-llama_new_context_with_model: graph nodes  = 1225
-llama_new_context_with_model: graph splits = 2
+jarvis_new_context_with_model:      CUDA0 compute buffer size =   105.00 MiB
+jarvis_new_context_with_model:  CUDA_Host compute buffer size =     6.01 MiB
+jarvis_new_context_with_model: graph nodes  = 1225
+jarvis_new_context_with_model: graph splits = 2
 ggml_debug:                 inp_embd = (f32)   GET_ROWS(token_embd.weight{2560, 51200, 1, 1}, inp_tokens{1, 1, 1, 1}}) = {2560, 1, 1, 1}
                                      [
                                       [

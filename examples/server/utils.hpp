@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -24,7 +24,7 @@
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
 using json = nlohmann::ordered_json;
-using llama_tokens = std::vector<llama_token>;
+using jarvis_tokens = std::vector<jarvis_token>;
 
 #define SLT_INF(slot, fmt, ...) LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
 #define SLT_WRN(slot, fmt, ...) LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
@@ -104,10 +104,10 @@ static bool json_is_array_of_mixed_numbers_strings(const json & data) {
  * - only string, example: "string"
  * - mixed string and tokens, example: [12, 34, "string", 56, 78]
  */
-static llama_tokens tokenize_mixed(const llama_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
+static jarvis_tokens tokenize_mixed(const jarvis_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
     // If `add_bos` is true, we only add BOS, when json_prompt is a string,
     // or the first element of the json_prompt array is a string.
-    llama_tokens prompt_tokens;
+    jarvis_tokens prompt_tokens;
 
     if (json_prompt.is_array()) {
         bool first = true;
@@ -115,7 +115,7 @@ static llama_tokens tokenize_mixed(const llama_context * ctx, const json & json_
             if (p.is_string()) {
                 auto s = p.template get<std::string>();
 
-                llama_tokens p;
+                jarvis_tokens p;
                 if (first) {
                     p = common_tokenize(ctx, s, add_special, parse_special);
                     first = false;
@@ -129,7 +129,7 @@ static llama_tokens tokenize_mixed(const llama_context * ctx, const json & json_
                     first = false;
                 }
 
-                prompt_tokens.push_back(p.template get<llama_token>());
+                prompt_tokens.push_back(p.template get<jarvis_token>());
             }
         }
     } else {
@@ -151,14 +151,14 @@ static llama_tokens tokenize_mixed(const llama_context * ctx, const json & json_
  * - "prompt": ["string1", [12, 34, 56]]
  * - "prompt": [[12, 34, "string", 56, 78], [12, 34, 56]]
  */
-static std::vector<llama_tokens> tokenize_input_prompts(llama_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
-    std::vector<llama_tokens> result;
+static std::vector<jarvis_tokens> tokenize_input_prompts(jarvis_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
+    std::vector<jarvis_tokens> result;
     if (json_prompt.is_string() || json_is_array_of_mixed_numbers_strings(json_prompt)) {
         // string or mixed
         result.push_back(tokenize_mixed(ctx, json_prompt, add_special, parse_special));
     } else if (json_is_array_of_numbers(json_prompt)) {
         // array of tokens
-        result.push_back(json_prompt.get<llama_tokens>());
+        result.push_back(json_prompt.get<jarvis_tokens>());
     } else if (json_prompt.is_array()) {
         // array of prompts
         result.reserve(json_prompt.size());
@@ -167,7 +167,7 @@ static std::vector<llama_tokens> tokenize_input_prompts(llama_context * ctx, con
                 result.push_back(tokenize_mixed(ctx, p, add_special, parse_special));
             } else if (json_is_array_of_numbers(p)) {
                 // array of tokens
-                result.push_back(p.get<llama_tokens>());
+                result.push_back(p.get<jarvis_tokens>());
             } else {
                 throw std::runtime_error("element of \"prompt\" must be a string, an list of tokens, or a list of mixed strings & tokens");
             }
@@ -183,21 +183,21 @@ static std::vector<llama_tokens> tokenize_input_prompts(llama_context * ctx, con
 //
 
 // format rerank task: [BOS]query[EOS][SEP]doc[EOS]
-static llama_tokens format_rerank(const struct llama_model * model, const llama_tokens & query, const llama_tokens & doc) {
-    llama_tokens result;
+static jarvis_tokens format_rerank(const struct jarvis_model * model, const jarvis_tokens & query, const jarvis_tokens & doc) {
+    jarvis_tokens result;
     result.reserve(doc.size() + query.size() + 4);
-    result.push_back(llama_token_bos(model));
+    result.push_back(jarvis_token_bos(model));
     result.insert(result.end(), query.begin(), query.end());
-    result.push_back(llama_token_eos(model));
-    result.push_back(llama_token_sep(model));
+    result.push_back(jarvis_token_eos(model));
+    result.push_back(jarvis_token_sep(model));
     result.insert(result.end(), doc.begin(), doc.end());
-    result.push_back(llama_token_eos(model));
+    result.push_back(jarvis_token_eos(model));
     return result;
 }
 
 // format infill task
-static llama_tokens format_infill(
-        const llama_context * ctx,
+static jarvis_tokens format_infill(
+        const jarvis_context * ctx,
         const json & input_prefix,
         const json & input_suffix,
         const json & input_extra,
@@ -205,7 +205,7 @@ static llama_tokens format_infill(
         const int n_predict,
         const int n_ctx,
         const bool spm_infill,
-        const llama_tokens & tokens_prompt
+        const jarvis_tokens & tokens_prompt
     ) {
     // TODO: optimize this block by reducing memory allocations and movement
 
@@ -221,18 +221,18 @@ static llama_tokens format_infill(
     // [FIM_SEP]filename
     // [FIM_PRE]prefix[FIM_SUF]suffix[FIM_MID]prompt
     //
-    llama_tokens extra_tokens;
+    jarvis_tokens extra_tokens;
     extra_tokens.reserve(n_ctx);
 
-    auto model = llama_get_model(ctx);
+    auto model = jarvis_get_model(ctx);
     auto tokens_prefix = tokenize_mixed(ctx, input_prefix, false, false);
     auto tokens_suffix = tokenize_mixed(ctx, input_suffix, false, false);
 
-    if (llama_token_fim_rep(model) != LLAMA_TOKEN_NULL) {
+    if (jarvis_token_fim_rep(model) != JARVIS_TOKEN_NULL) {
         // TODO: make project name an input
         static const auto k_fim_repo = common_tokenize(ctx, "myproject\n", false, false);
 
-        extra_tokens.push_back(llama_token_fim_rep(model));
+        extra_tokens.push_back(jarvis_token_fim_rep(model));
         extra_tokens.insert(extra_tokens.end(), k_fim_repo.begin(), k_fim_repo.end());
     }
     for (const auto & chunk : input_extra) {
@@ -240,10 +240,10 @@ static llama_tokens format_infill(
         const std::string text     = json_value(chunk, "text",     std::string());
         const std::string filename = json_value(chunk, "filename", std::string("tmp"));
 
-        if (llama_token_fim_sep(model) != LLAMA_TOKEN_NULL) {
+        if (jarvis_token_fim_sep(model) != JARVIS_TOKEN_NULL) {
             const auto k_fim_file = common_tokenize(ctx, filename + "\n", false, false);
 
-            extra_tokens.insert(extra_tokens.end(), llama_token_fim_sep(model));
+            extra_tokens.insert(extra_tokens.end(), jarvis_token_fim_sep(model));
             extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
         } else {
             // chunk separator in binary form to avoid confusing the AI
@@ -257,11 +257,11 @@ static llama_tokens format_infill(
         extra_tokens.insert(extra_tokens.end(), chunk_tokens.begin(), chunk_tokens.end());
     }
 
-    if (llama_token_fim_sep(model) != LLAMA_TOKEN_NULL) {
+    if (jarvis_token_fim_sep(model) != JARVIS_TOKEN_NULL) {
         // TODO: current filename
         static const auto k_fim_file = common_tokenize(ctx, "filename\n", false, false);
 
-        extra_tokens.insert(extra_tokens.end(), llama_token_fim_sep(model));
+        extra_tokens.insert(extra_tokens.end(), jarvis_token_fim_sep(model));
         extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
     }
 
@@ -275,15 +275,15 @@ static llama_tokens format_infill(
     tokens_prefix.erase(tokens_prefix.begin(), tokens_prefix.begin() + tokens_prefix.size() - n_prefix_take);
     tokens_suffix.resize(n_suffix_take);
 
-    tokens_prefix.insert(tokens_prefix.begin(), llama_token_fim_pre(model));
+    tokens_prefix.insert(tokens_prefix.begin(), jarvis_token_fim_pre(model));
     tokens_prefix.insert(tokens_prefix.end(),   tokens_prompt.begin(), tokens_prompt.end());
-    tokens_suffix.insert(tokens_suffix.begin(), llama_token_fim_suf(model));
+    tokens_suffix.insert(tokens_suffix.begin(), jarvis_token_fim_suf(model));
 
     auto embd_inp = spm_infill ? tokens_suffix : tokens_prefix;
     auto embd_end = spm_infill ? tokens_prefix : tokens_suffix;
 
-    if (llama_add_bos_token(model)) {
-        embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+    if (jarvis_add_bos_token(model)) {
+        embd_inp.insert(embd_inp.begin(), jarvis_token_bos(model));
     }
 
     SRV_DBG("extra: n_ctx = %d, n_extra_take = %d, n_extra = %d\n", n_ctx, n_extra_take, (int) extra_tokens.size());
@@ -292,13 +292,13 @@ static llama_tokens format_infill(
     embd_inp.insert(embd_inp.begin(), extra_tokens.end() - n_extra_take, extra_tokens.end());
 
     embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
-    embd_inp.push_back(llama_token_fim_mid(model));
+    embd_inp.push_back(jarvis_token_fim_mid(model));
 
     return embd_inp;
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+inline std::string format_chat(const struct jarvis_model * model, const std::string & tmpl, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
@@ -317,10 +317,10 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
                     }
                 }
             } else {
-                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/jarvis.cpp/issues/8367)");
             }
         } else {
-            throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+            throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/jarvis.cpp/issues/8367)");
         }
 
         chat.push_back({role, content});
@@ -332,15 +332,15 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     return formatted_chat;
 }
 
-static std::string llama_get_chat_template(const struct llama_model * model) {
+static std::string jarvis_get_chat_template(const struct jarvis_model * model) {
     std::string template_key = "tokenizer.chat_template";
     // call with NULL buffer to get the total size of the string
-    int32_t res = llama_model_meta_val_str(model, template_key.c_str(), NULL, 0);
+    int32_t res = jarvis_model_meta_val_str(model, template_key.c_str(), NULL, 0);
     if (res < 0) {
         return "";
     } else {
         std::vector<char> model_template(res, 0);
-        llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        jarvis_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
         return std::string(model_template.data(), model_template.size());
     }
 }
@@ -437,7 +437,7 @@ static std::string gen_chatcmplid() {
 // other common utils
 //
 
-static size_t longest_common_prefix(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
+static size_t longest_common_prefix(const std::vector<jarvis_token> & a, const std::vector<jarvis_token> & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
@@ -471,9 +471,9 @@ static size_t find_partial_stop_string(const std::string &stop, const std::strin
     return std::string::npos;
 }
 
-// TODO: reuse llama_detokenize
+// TODO: reuse jarvis_detokenize
 template <class Iter>
-static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
+static std::string tokens_to_str(jarvis_context * ctx, Iter begin, Iter end) {
     std::string ret;
     for (; begin != end; ++begin) {
         ret += common_token_to_piece(ctx, *begin);
@@ -483,7 +483,7 @@ static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
 }
 
 // format incomplete utf-8 multibyte character for output
-static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
+static std::string tokens_to_output_formatted_string(const jarvis_context * ctx, const jarvis_token token) {
     std::string out = token == -1 ? "" : common_token_to_piece(ctx, token);
 
     // if the size is 1 and first bit is 1, meaning it's a partial character
@@ -499,11 +499,11 @@ static std::string tokens_to_output_formatted_string(const llama_context * ctx, 
 }
 
 struct completion_token_output {
-    llama_token tok;
+    jarvis_token tok;
     std::string text_to_send;
 
     struct token_prob {
-        llama_token tok;
+        jarvis_token tok;
         float prob;
     };
 
@@ -511,7 +511,7 @@ struct completion_token_output {
 };
 
 // convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
+static json probs_vector_to_json(const jarvis_context * ctx, const std::vector<completion_token_output> & probs) {
     json out = json::array();
 
     for (const auto & prob : probs) {
@@ -551,21 +551,21 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 //
 
 static json oaicompat_completion_params_parse(
-    const struct llama_model * model,
+    const struct jarvis_model * model,
     const json & body, /* openai api json semantics */
     const std::string & chat_template) {
-    json llama_params;
+    json jarvis_params;
 
-    llama_params["__oaicompat"] = true;
+    jarvis_params["__oaicompat"] = true;
 
     // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    jarvis_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
-        llama_params["stop"] = json::array({body.at("stop").get<std::string>()});
+        jarvis_params["stop"] = json::array({body.at("stop").get<std::string>()});
     } else {
-        llama_params["stop"] = json_value(body, "stop", json::array());
+        jarvis_params["stop"] = json_value(body, "stop", json::array());
     }
 
     // Handle "response_format" field
@@ -573,10 +573,10 @@ static json oaicompat_completion_params_parse(
         json response_format      = json_value(body, "response_format", json::object());
         std::string response_type = json_value(response_format, "type", std::string());
         if (response_type == "json_object") {
-            llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+            jarvis_params["json_schema"] = json_value(response_format, "schema", json::object());
         } else if (response_type == "json_schema") {
             json json_schema = json_value(response_format, "json_schema", json::object());
-            llama_params["json_schema"] = json_value(json_schema, "schema", json::object());
+            jarvis_params["json_schema"] = json_value(json_schema, "schema", json::object());
         } else if (!response_type.empty() && response_type != "text") {
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
@@ -591,12 +591,12 @@ static json oaicompat_completion_params_parse(
     // Handle "logprobs" field
     // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
     if (json_value(body, "logprobs", false)) {
-        llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
+        jarvis_params["n_probs"] = json_value(body, "top_logprobs", 20);
     } else if (body.contains("top_logprobs") && !body.at("top_logprobs").is_null()) {
         throw std::runtime_error("top_logprobs requires logprobs to be set to true");
     }
 
-    // Params supported by OAI but unsupported by llama.cpp
+    // Params supported by OAI but unsupported by jarvis.cpp
     static const std::vector<std::string> unsupported_params { "tools", "tool_choice" };
     for (const auto & param : unsupported_params) {
         if (body.contains(param)) {
@@ -604,17 +604,17 @@ static json oaicompat_completion_params_parse(
         }
     }
 
-    // Copy remaining properties to llama_params
-    // This allows user to use llama.cpp-specific params like "mirostat", "tfs_z",... via OAI endpoint.
-    // See "launch_slot_with_task()" for a complete list of params supported by llama.cpp
+    // Copy remaining properties to jarvis_params
+    // This allows user to use jarvis.cpp-specific params like "mirostat", "tfs_z",... via OAI endpoint.
+    // See "launch_slot_with_task()" for a complete list of params supported by jarvis.cpp
     for (const auto & item : body.items()) {
         // Exception: if "n_predict" is present, we overwrite the value specified earlier by "max_tokens"
-        if (!llama_params.contains(item.key()) || item.key() == "n_predict") {
-            llama_params[item.key()] = item.value();
+        if (!jarvis_params.contains(item.key()) || item.key() == "n_predict") {
+            jarvis_params[item.key()] = item.value();
         }
     }
 
-    return llama_params;
+    return jarvis_params;
 }
 
 static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false) {

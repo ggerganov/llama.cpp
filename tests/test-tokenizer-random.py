@@ -1,9 +1,9 @@
-# Test libllama tokenizer == AutoTokenizer.
+# Test libjarvis tokenizer == AutoTokenizer.
 # Brute force random words/text generation.
 #
 # Sample usage:
 #
-#   python3 tests/test-tokenizer-random.py ./models/ggml-vocab-llama-bpe.gguf ./models/tokenizers/llama-bpe
+#   python3 tests/test-tokenizer-random.py ./models/ggml-vocab-jarvis-bpe.gguf ./models/tokenizers/jarvis-bpe
 #
 
 from __future__ import annotations
@@ -26,22 +26,22 @@ from transformers import AutoTokenizer, PreTrainedTokenizer
 logger = logging.getLogger("test-tokenizer-random")
 
 
-class LibLlama:
+class LibJarvis:
 
-    DEFAULT_PATH_LLAMA_H = "./include/llama.h"
+    DEFAULT_PATH_JARVIS_H = "./include/jarvis.h"
     DEFAULT_PATH_INCLUDES = ["./ggml/include/", "./include/"]
-    DEFAULT_PATH_LIBLLAMA = "./build/src/libllama.so"  # CMakeLists.txt: BUILD_SHARED_LIBS ON
+    DEFAULT_PATH_LIBJARVIS = "./build/src/libjarvis.so"  # CMakeLists.txt: BUILD_SHARED_LIBS ON
 
-    def __init__(self, path_llama_h: str | None = None, path_includes: list[str] = [], path_libllama: str | None = None):
-        path_llama_h = path_llama_h or self.DEFAULT_PATH_LLAMA_H
+    def __init__(self, path_jarvis_h: str | None = None, path_includes: list[str] = [], path_libjarvis: str | None = None):
+        path_jarvis_h = path_jarvis_h or self.DEFAULT_PATH_JARVIS_H
         path_includes = path_includes or self.DEFAULT_PATH_INCLUDES
-        path_libllama = path_libllama or self.DEFAULT_PATH_LIBLLAMA
-        (self.ffi, self.lib) = self._load_libllama_cffi(path_llama_h, path_includes, path_libllama)
-        self.lib.llama_backend_init()
+        path_libjarvis = path_libjarvis or self.DEFAULT_PATH_LIBJARVIS
+        (self.ffi, self.lib) = self._load_libjarvis_cffi(path_jarvis_h, path_includes, path_libjarvis)
+        self.lib.jarvis_backend_init()
 
-    def _load_libllama_cffi(self, path_llama_h: str, path_includes: list[str], path_libllama: str) -> tuple[cffi.FFI, Any]:
+    def _load_libjarvis_cffi(self, path_jarvis_h: str, path_includes: list[str], path_libjarvis: str) -> tuple[cffi.FFI, Any]:
         cmd = ["gcc", "-O0", "-E", "-P", "-D__restrict=", "-D__attribute__(x)=", "-D__asm__(x)="]
-        cmd += ["-I" + path for path in path_includes] + [path_llama_h]
+        cmd += ["-I" + path for path in path_includes] + [path_jarvis_h]
         res = subprocess.run(cmd, stdout=subprocess.PIPE)
         assert (res.returncode == 0)
         source = res.stdout.decode()
@@ -53,67 +53,67 @@ class LibLlama:
             source = source.replace("sizeof (size_t)", str(ffi.sizeof("size_t")))
             source = source.replace("sizeof(int32_t)", str(ffi.sizeof("int32_t")))
         ffi.cdef(source, override=True)
-        lib = ffi.dlopen(path_libllama)
+        lib = ffi.dlopen(path_libjarvis)
         return (ffi, lib)
 
     def model_default_params(self, **kwargs):
-        mparams = self.lib.llama_model_default_params()
+        mparams = self.lib.jarvis_model_default_params()
         for k, v in kwargs.items():
             setattr(mparams, k, v)
         return mparams
 
     def context_default_params(self, **kwargs):
-        cparams = self.lib.llama_context_default_params()
+        cparams = self.lib.jarvis_context_default_params()
         for k, v in kwargs.items():
             setattr(cparams, k, v)
         return cparams
 
 
-class LibLlamaModel:
+class LibJarvisModel:
 
-    def __init__(self, libllama: LibLlama, path_model: str, mparams={}, cparams={}):
-        self.lib: Any = libllama.lib
-        self.ffi = libllama.ffi
+    def __init__(self, libjarvis: LibJarvis, path_model: str, mparams={}, cparams={}):
+        self.lib: Any = libjarvis.lib
+        self.ffi = libjarvis.ffi
         if isinstance(mparams, dict):
-            mparams = libllama.model_default_params(**mparams)
-        self.model = self.lib.llama_load_model_from_file(path_model.encode(), mparams)
+            mparams = libjarvis.model_default_params(**mparams)
+        self.model = self.lib.jarvis_load_model_from_file(path_model.encode(), mparams)
         if not self.model:
             raise RuntimeError("error: failed to load model '%s'" % path_model)
         if isinstance(cparams, dict):
-            cparams = libllama.context_default_params(**cparams)
-        self.ctx = self.lib.llama_new_context_with_model(self.model, cparams)
+            cparams = libjarvis.context_default_params(**cparams)
+        self.ctx = self.lib.jarvis_new_context_with_model(self.model, cparams)
         if not self.ctx:
             raise RuntimeError("error: failed to create context for model '%s'" % path_model)
-        n_tokens_max = self.lib.llama_n_ctx(self.ctx)
-        self.token_ids = self.ffi.new("llama_token[]", n_tokens_max)
+        n_tokens_max = self.lib.jarvis_n_ctx(self.ctx)
+        self.token_ids = self.ffi.new("jarvis_token[]", n_tokens_max)
         self.text_buff = self.ffi.new("uint8_t[]", 1024)
 
     def free(self):
         if self.ctx:
-            self.lib.llama_free(self.ctx)
+            self.lib.jarvis_free(self.ctx)
         if self.model:
-            self.lib.llama_free_model(self.model)
+            self.lib.jarvis_free_model(self.model)
         self.ctx = None
         self.model = None
         self.lib = None
 
     def tokenize(self, text: str, add_special: bool = False, parse_special: bool = False) -> list[int]:
         encoded_text: bytes = text.encode("utf-8")
-        num = self.lib.llama_tokenize(self.model, encoded_text, len(encoded_text), self.token_ids, len(self.token_ids), add_special, parse_special)
+        num = self.lib.jarvis_tokenize(self.model, encoded_text, len(encoded_text), self.token_ids, len(self.token_ids), add_special, parse_special)
         while num < 0 and len(self.token_ids) < (16 << 20):
-            self.token_ids = self.ffi.new("llama_token[]", -2 * num)
-            num = self.lib.llama_tokenize(self.model, encoded_text, len(encoded_text), self.token_ids, len(self.token_ids), add_special, parse_special)
+            self.token_ids = self.ffi.new("jarvis_token[]", -2 * num)
+            num = self.lib.jarvis_tokenize(self.model, encoded_text, len(encoded_text), self.token_ids, len(self.token_ids), add_special, parse_special)
         return list(self.token_ids[0:num])
 
     def detokenize(self, ids: list[int], remove_special: bool = False, unparse_special: bool = False) -> str:
         if len(self.token_ids) < len(ids):
-            self.token_ids = self.ffi.new("llama_token[]", 2 * len(ids))
+            self.token_ids = self.ffi.new("jarvis_token[]", 2 * len(ids))
         for i, id in enumerate(ids):
             self.token_ids[i] = id
-        num = self.lib.llama_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), remove_special, unparse_special)
+        num = self.lib.jarvis_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), remove_special, unparse_special)
         while num < 0 and len(self.text_buff) < (16 << 20):
             self.text_buff = self.ffi.new("uint8_t[]", -2 * num)
-            num = self.lib.llama_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), remove_special, unparse_special)
+            num = self.lib.jarvis_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), remove_special, unparse_special)
         return str(cast(Buffer, self.ffi.buffer(self.text_buff, num)), encoding="utf-8", errors="replace")  # replace errors with '\uFFFD'
 
 
@@ -154,14 +154,14 @@ class TokenizerGroundtruth (Tokenizer):
         return self.model.decode(ids, skip_special_tokens=False)
 
 
-class TokenizerLlamaCpp (Tokenizer):
+class TokenizerJarvisCpp (Tokenizer):
 
-    libllama: LibLlama | None = None
+    libjarvis: LibJarvis | None = None
 
     def __init__(self, vocab_file: str):
-        if not self.libllama:
-            self.libllama = LibLlama()
-        self.model = LibLlamaModel(self.libllama, vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=4096))
+        if not self.libjarvis:
+            self.libjarvis = LibJarvis()
+        self.model = LibJarvisModel(self.libjarvis, vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=4096))
 
     def encode(self, text: str) -> list[int]:
         return self.model.tokenize(text, add_special=True, parse_special=True)
@@ -226,7 +226,7 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         'a 〇b',      # unicode_ranges_digit, 0x3007
         'Ⅵ-a',       # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
         '\uFEFF//',   # unicode_ranges_control, 0xFEFF (BOM)
-        'Cửa Việt',   # llama-3, ignore_merges = true
+        'Cửa Việt',   # jarvis-3, ignore_merges = true
         '<s>a',       # Phi-3 fail
         '<unk><|endoftext|><s>',  # Phi-3 fail
         'a\na',            # bert fail
@@ -407,7 +407,7 @@ def generator_random_vocab_words(tokenizer: TokenizerGroundtruth, iterations=100
         yield "".join(text)
 
 
-def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLlamaCpp, generator: Iterator[str]):
+def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerJarvisCpp, generator: Iterator[str]):
 
     def find_first_mismatch(ids1: list[int] | str, ids2: list[int] | str):
         for i, (a, b) in enumerate(zip(ids1, ids2)):
@@ -491,7 +491,7 @@ def main(argv: list[str] | None = None):
     logger.info(f"VOCABFILE: '{args.vocab_file}'")
 
     tokenizer1 = TokenizerGroundtruth(args.dir_tokenizer)
-    tokenizer2 = TokenizerLlamaCpp(args.vocab_file)
+    tokenizer2 = TokenizerJarvisCpp(args.vocab_file)
 
     # compare_tokenizers(tokenizer1, tokenizer2, generator_custom_text())
     # compare_tokenizers(tokenizer1, tokenizer2, generator_custom_text_edge_cases())
@@ -529,14 +529,14 @@ if __name__ == "__main__":
     path_vocab_format = "./models/ggml-vocab-%s.gguf"
 
     tokenizers = [
-        "llama-spm",      # SPM
+        "jarvis-spm",      # SPM
         "phi-3",          # SPM
         "gemma",          # SPM
         "gemma-2",        # SPM
         "baichuan",       # SPM
         "bert-bge",       # WPM
         "jina-v2-en",     # WPM
-        "llama-bpe",      # BPE
+        "jarvis-bpe",      # BPE
         "phi-2",          # BPE
         "deepseek-llm",   # BPE
         "deepseek-coder", # BPE

@@ -1,5 +1,5 @@
 #include "unicode.h"
-#include "llama-grammar.h"
+#include "jarvis-grammar.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -8,17 +8,17 @@
 #include <string>
 #include <vector>
 
-static bool llama_grammar_validate(struct llama_grammar * grammar, const std::string & input_str, size_t & error_pos, std::string & error_msg) {
+static bool jarvis_grammar_validate(struct jarvis_grammar * grammar, const std::string & input_str, size_t & error_pos, std::string & error_msg) {
     const auto cpts = unicode_cpts_from_utf8(input_str);
 
-    const llama_grammar_rules  & rules      = llama_grammar_get_rules (grammar);
-          llama_grammar_stacks & stacks_cur = llama_grammar_get_stacks(grammar);
+    const jarvis_grammar_rules  & rules      = jarvis_grammar_get_rules (grammar);
+          jarvis_grammar_stacks & stacks_cur = jarvis_grammar_get_stacks(grammar);
 
     size_t pos = 0;
     for (const auto & cpt : cpts) {
-        const llama_grammar_stacks stacks_prev = llama_grammar_get_stacks(grammar); // copy
+        const jarvis_grammar_stacks stacks_prev = jarvis_grammar_get_stacks(grammar); // copy
 
-        llama_grammar_accept(rules, stacks_prev, cpt, stacks_cur);
+        jarvis_grammar_accept(rules, stacks_prev, cpt, stacks_cur);
 
         if (stacks_cur.empty()) {
             error_pos = pos;
@@ -80,9 +80,9 @@ int main(int argc, char** argv) {
         grammar_str = buffer.str();
     }
 
-    llama_grammar * grammar = llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root");
+    jarvis_grammar * grammar = jarvis_grammar_init_impl(nullptr, grammar_str.c_str(), "root");
     if (grammar == nullptr) {
-        throw std::runtime_error("Failed to initialize llama_grammar");
+        throw std::runtime_error("Failed to initialize jarvis_grammar");
     }
     // Read the input file
     std::string input_str;
@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     // Validate the input string against the grammar
     size_t error_pos;
     std::string error_msg;
-    bool is_valid = llama_grammar_validate(grammar, input_str, error_pos, error_msg);
+    bool is_valid = jarvis_grammar_validate(grammar, input_str, error_pos, error_msg);
 
     if (is_valid) {
         fprintf(stdout, "Input string is valid according to the grammar.\n");
@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
     }
 
     // Clean up
-    llama_grammar_free_impl(grammar);
+    jarvis_grammar_free_impl(grammar);
 
     return 0;
 }

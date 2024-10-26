@@ -3,8 +3,8 @@ exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
-Name: llama
+Name: jarvis
 Description: Port of Facebook's LLaMA model in C/C++
 Version: @PROJECT_VERSION@
-Libs: -L${libdir} -lllama
+Libs: -L${libdir} -ljarvis
 Cflags: -I${includedir}

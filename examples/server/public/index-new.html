@@ -6,7 +6,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta name="color-scheme" content="light dark">
-  <title>llama.cpp - chat</title>
+  <title>jarvis.cpp - chat</title>
 
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="stylesheet" href="style.css">
@@ -16,7 +16,7 @@
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
     } from './index.js';
 
-    import { llama } from './completion.js';
+    import { jarvis } from './completion.js';
     import { SchemaConverter } from './json-schema-to-grammar.mjs';
     import { promptFormats } from './prompt-formats.js';
     import { systemPrompts } from './system-prompts.js'; // multilingual is wip
@@ -68,7 +68,7 @@
 
     /* START: Support for storing prompt templates and parameters in browser's LocalStorage */
 
-    const local_storage_storageKey = "llamacpp_server_local_storage";
+    const local_storage_storageKey = "jarviscpp_server_local_storage";
 
     function local_storage_setDataFromObject(tag, content) {
       localStorage.setItem(local_storage_storageKey + '/' + tag, JSON.stringify(content));
@@ -199,7 +199,7 @@
 
     /* END: Support for storing prompt templates and parameters in browser's LocalStorage */
 
-    const llamaStats = signal(null)
+    const jarvisStats = signal(null)
     const controller = signal(null)
 
     // currently generating a completion?
@@ -224,14 +224,14 @@
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
     }
 
-    async function runLlama(prompt, llamaParams, char) {
+    async function runJarvis(prompt, jarvisParams, char) {
       const currentMessages = [];
       const history = session.value.transcript;
       if (controller.value) {
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: new URL('.', document.baseURI).href })) {
+      for await (const chunk of jarvis(prompt, jarvisParams, { controller: controller.value, api_url: new URL('.', document.baseURI).href })) {
         const data = chunk.data;
         if (data.stop) {
           while (
@@ -251,8 +251,8 @@
           transcriptUpdate([...history, [char, currentMessages]])
         }
         if (data.timings) {
-          // llamaStats.value = data.timings;
-          llamaStats.value = data;
+          // jarvisStats.value = data.timings;
+          jarvisStats.value = data;
         }
       }
       controller.value = null;
@@ -264,7 +264,7 @@
         console.log('already running...');
         return;
       }
-    // just in case (e.g. llama2)
+    // just in case (e.g. jarvis2)
     const suffix = session.value.userMsgSuffix || "";
     const prefix = session.value.userMsgPrefix || "";
     const userMsg = prefix + msg + suffix;
@@ -289,7 +289,7 @@
       if (selected_image) {
         prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:[img-10]${msg}\nASSISTANT:`;
       }
-      await runLlama(prompt, {
+      await runJarvis(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: ["</s>", "<|end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_end|>", "<|EOT|>", "<|END_OF_TURN_TOKEN|>", "<|end_of_turn|>", "<|endoftext|>", template("{{char}}"), template("{{user}}")],
@@ -303,7 +303,7 @@
       }
       const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
-      runLlama(prompt, {
+      runJarvis(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: [],
@@ -483,7 +483,7 @@ function updatePromptFormat(e) {
       ...promptFormats[promptFormat]
     };
   } else {
-    // Use vicuna as llama.cpp's default setting, since it's most common
+    // Use vicuna as jarvis.cpp's default setting, since it's most common
     session.value = {
       ...session.value,
       template: "{{prompt}}\n{{history}}{{char}}",
@@ -681,8 +681,8 @@ return html`
               <option value="alpaca">Alpaca</option>
               <option value="chatml">ChatML</option>
               <option value="commandr">Command R/+</option>
-              <option value="llama2">Llama 2</option>
-              <option value="llama3">Llama 3</option>
+              <option value="jarvis2">Jarvis 2</option>
+              <option value="jarvis3">Jarvis 3</option>
               <option value="phi3">Phi-3</option>
               <option value="openchat">OpenChat/Starling</option>
               <option value="vicuna">Vicuna</option>
@@ -703,7 +703,7 @@ return html`
               <option value="vicuna">Marx</option>
               <option value="med42">Med42</option>
               <option value="alpaca">MetaMath</option>
-              <option value="llama2">Mistral Instruct</option>
+              <option value="jarvis2">Mistral Instruct</option>
               <option value="chatml">Mistral 7B OpenOrca</option>
               <option value="alpaca">MythoMax</option>
               <option value="neuralchat">Neural Chat</option>
@@ -950,12 +950,12 @@ return html`
     };
 
     const ModelGenerationInfo = (params) => {
-      if (!llamaStats.value) {
+      if (!jarvisStats.value) {
         return html`<span/>`
       }
       return html`
       <span class=generation-statistics>
-          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
+          ${jarvisStats.value.tokens_predicted} predicted, ${jarvisStats.value.tokens_cached} cached, ${jarvisStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }
@@ -1075,7 +1075,7 @@ return html`
       return html`
         <div class="mode-${session.value.type}">
           <header>
-            <h2>llama.cpp</h2>
+            <h2>jarvis.cpp</h2>
             <div class="dropdown">
               <button class="dropbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg></button>
               <div class="dropdown-content" id="theme-selector">
@@ -1099,7 +1099,7 @@ return html`
           </section>
           <footer>
             <p><${ModelGenerationInfo} /></p>
-            <p>Powered By <a href="https://github.com/ggerganov/llama.cpp#readme" target="_blank">llama.cpp</a> and <a href="https://ggml.ai/" target="_blank">ggml.ai</a></p>
+            <p>Powered By <a href="https://github.com/ggerganov/jarvis.cpp#readme" target="_blank">jarvis.cpp</a> and <a href="https://ggml.ai/" target="_blank">ggml.ai</a></p>
           </footer>
         </div>
       `;

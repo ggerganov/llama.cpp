@@ -14,18 +14,18 @@ RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key 
 # Build it
 WORKDIR /app
 COPY . .
-RUN cmake -B build -DGGML_VULKAN=1 -DLLAMA_CURL=1 && \
-    cmake --build build --config Release --target llama-server
+RUN cmake -B build -DGGML_VULKAN=1 -DJARVIS_CURL=1 && \
+    cmake --build build --config Release --target jarvis-server
 
 # Clean up
 WORKDIR /
-RUN cp /app/build/bin/llama-server /llama-server && \
+RUN cp /app/build/bin/jarvis-server /jarvis-server && \
     rm -rf /app
 
 ENV LC_ALL=C.utf8
 # Must be set to 0.0.0.0 so it can listen to requests from host machine
-ENV LLAMA_ARG_HOST=0.0.0.0
+ENV JARVIS_ARG_HOST=0.0.0.0
 
 HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
-ENTRYPOINT [ "/llama-server" ]
+ENTRYPOINT [ "/jarvis-server" ]

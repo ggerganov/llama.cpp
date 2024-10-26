@@ -13,7 +13,7 @@ from gguf import GGUFWriter  # noqa: E402
 # Example usage:
 def writer_example() -> None:
     # Example usage with a file
-    gguf_writer = GGUFWriter("example.gguf", "llama")
+    gguf_writer = GGUFWriter("example.gguf", "jarvis")
 
     gguf_writer.add_block_count(12)
     gguf_writer.add_uint32("answer", 42)  # Write a 32-bit integer

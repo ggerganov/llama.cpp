@@ -2,27 +2,27 @@
 #undef NDEBUG
 #endif
 
-#include "llama.h"
-#include "llama-grammar.h"
+#include "jarvis.h"
+#include "jarvis-grammar.h"
 
 #include <cassert>
 
-static const char * type_str(llama_gretype type) {
+static const char * type_str(jarvis_gretype type) {
     switch (type) {
-        case LLAMA_GRETYPE_CHAR: return "LLAMA_GRETYPE_CHAR";
-        case LLAMA_GRETYPE_CHAR_NOT: return "LLAMA_GRETYPE_CHAR_NOT";
-        case LLAMA_GRETYPE_CHAR_ALT: return "LLAMA_GRETYPE_CHAR_ALT";
-        case LLAMA_GRETYPE_CHAR_RNG_UPPER: return "LLAMA_GRETYPE_CHAR_RNG_UPPER";
-        case LLAMA_GRETYPE_RULE_REF: return "LLAMA_GRETYPE_RULE_REF";
-        case LLAMA_GRETYPE_ALT: return "LLAMA_GRETYPE_ALT";
-        case LLAMA_GRETYPE_END: return "LLAMA_GRETYPE_END";
+        case JARVIS_GRETYPE_CHAR: return "JARVIS_GRETYPE_CHAR";
+        case JARVIS_GRETYPE_CHAR_NOT: return "JARVIS_GRETYPE_CHAR_NOT";
+        case JARVIS_GRETYPE_CHAR_ALT: return "JARVIS_GRETYPE_CHAR_ALT";
+        case JARVIS_GRETYPE_CHAR_RNG_UPPER: return "JARVIS_GRETYPE_CHAR_RNG_UPPER";
+        case JARVIS_GRETYPE_RULE_REF: return "JARVIS_GRETYPE_RULE_REF";
+        case JARVIS_GRETYPE_ALT: return "JARVIS_GRETYPE_ALT";
+        case JARVIS_GRETYPE_END: return "JARVIS_GRETYPE_END";
         default: return "?";
     }
 }
 
-static void verify_parsing(const char *grammar_bytes, const std::vector<std::pair<std::string, uint32_t>> expected, const std::vector<llama_grammar_element> &expected_rules) {
+static void verify_parsing(const char *grammar_bytes, const std::vector<std::pair<std::string, uint32_t>> expected, const std::vector<jarvis_grammar_element> &expected_rules) {
     uint32_t index = 0;
-    llama_grammar_parser parsed_grammar;
+    jarvis_grammar_parser parsed_grammar;
     parsed_grammar.parse(grammar_bytes);
 
     std::map<uint32_t, std::string> symbol_names;
@@ -42,8 +42,8 @@ static void verify_parsing(const char *grammar_bytes, const std::vector<std::pai
             for (uint32_t i = 0; i < rule.size(); i++) {
                 std::string rule_str;
                 fprintf(stderr, "        {%s, ", type_str(rule[i].type));
-                if (rule[i].type == LLAMA_GRETYPE_CHAR || rule[i].type == LLAMA_GRETYPE_CHAR_ALT ||
-                    rule[i].type == LLAMA_GRETYPE_CHAR_NOT || rule[i].type == LLAMA_GRETYPE_CHAR_RNG_UPPER) {
+                if (rule[i].type == JARVIS_GRETYPE_CHAR || rule[i].type == JARVIS_GRETYPE_CHAR_ALT ||
+                    rule[i].type == JARVIS_GRETYPE_CHAR_NOT || rule[i].type == JARVIS_GRETYPE_CHAR_RNG_UPPER) {
                     char c = rule[i].value;
                     if (c == '\n') {
                         fprintf(stderr, "'\\n'");
@@ -56,7 +56,7 @@ static void verify_parsing(const char *grammar_bytes, const std::vector<std::pai
                     } else {
                         fprintf(stderr, "'%c'", c);
                     }
-                } else if (rule[i].type == LLAMA_GRETYPE_RULE_REF) {
+                } else if (rule[i].type == JARVIS_GRETYPE_RULE_REF) {
                     fprintf(stderr, "/* %s */ %u", symbol_names[rule[i].value].c_str(), rule[i].value);
                 } else {
                     fprintf(stderr, "%u", rule[i].value);
@@ -109,8 +109,8 @@ static void verify_parsing(const char *grammar_bytes, const std::vector<std::pai
         // compare rule to expected rule
         for (uint32_t i = 0; i < rule.size(); i++)
         {
-            llama_grammar_element element = rule[i];
-            llama_grammar_element expected_element = expected_rules[index];
+            jarvis_grammar_element element = rule[i];
+            jarvis_grammar_element expected_element = expected_rules[index];
 
             // pretty print error message before asserting
             if (expected_element.type != element.type || expected_element.value != element.value)
@@ -132,7 +132,7 @@ static void verify_parsing(const char *grammar_bytes, const std::vector<std::pai
 
 static void verify_failure(const char * grammar_bytes) {
     fprintf(stderr, "Testing expected failure:%s\n", grammar_bytes);
-    llama_grammar_parser result;
+    jarvis_grammar_parser result;
     result.parse(grammar_bytes);
     assert(result.rules.empty() && "should have failed");
 }
@@ -153,8 +153,8 @@ int main()
         {"root", 0},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -163,16 +163,16 @@ int main()
         {"root", 0},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_CHAR, 'b'},
-        {LLAMA_GRETYPE_CHAR_ALT, 'd'},
-        {LLAMA_GRETYPE_CHAR_ALT, 'x'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, 'z'},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_CHAR_NOT, '1'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, '3'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_CHAR, 'b'},
+        {JARVIS_GRETYPE_CHAR_ALT, 'd'},
+        {JARVIS_GRETYPE_CHAR_ALT, 'x'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, 'z'},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_CHAR_NOT, '1'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, '3'},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -184,17 +184,17 @@ int main()
         {"root_2", 2},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* a */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_2 */ 2},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* a */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_2 */ 2},
+        {JARVIS_GRETYPE_END, 0},
         // a (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_END, 0},
         // root_2 (index 2)
-        {LLAMA_GRETYPE_RULE_REF, /* a */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_2 */ 2},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* a */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_2 */ 2},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -204,14 +204,14 @@ int main()
         {"root_1", 1},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -223,15 +223,15 @@ int main()
         {"root_2", 2},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* root_2 */ 2},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_2 */ 2},
+        {JARVIS_GRETYPE_END, 0},
         // a (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_END, 0},
         // root_2 (index 2)
-        {LLAMA_GRETYPE_RULE_REF, /* a */ 1},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* a */ 1},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -241,12 +241,12 @@ int main()
         {"root_1", 1},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -258,16 +258,16 @@ int main()
         {"root_2", 2},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* root_2 */ 2},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_2 */ 2},
+        {JARVIS_GRETYPE_END, 0},
         // a (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_END, 0},
         // root_2 (index 2)
-        {LLAMA_GRETYPE_RULE_REF, /* a */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_2 */ 2},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* a */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_2 */ 2},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -277,13 +277,13 @@ int main()
         {"root_1", 1},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -292,9 +292,9 @@ int main()
         {"root", 0},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -304,15 +304,15 @@ int main()
         {"root_1", 1},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -321,11 +321,11 @@ int main()
         {"root", 0},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -336,19 +336,19 @@ int main()
         {"root_2", 2},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_2 */ 2},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_2 */ 2},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // root_2 (index 2)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -366,47 +366,47 @@ int main()
         {"term_7", 7},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_4 */ 4},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_4 */ 4},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_RULE_REF, /* expr */ 2},
-        {LLAMA_GRETYPE_CHAR, '='},
-        {LLAMA_GRETYPE_RULE_REF, /* term */ 3},
-        {LLAMA_GRETYPE_CHAR, '\n'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* expr */ 2},
+        {JARVIS_GRETYPE_CHAR, '='},
+        {JARVIS_GRETYPE_RULE_REF, /* term */ 3},
+        {JARVIS_GRETYPE_CHAR, '\n'},
+        {JARVIS_GRETYPE_END, 0},
         // expr (index 2)
-        {LLAMA_GRETYPE_RULE_REF, /* term */ 3},
-        {LLAMA_GRETYPE_RULE_REF, /* expr_6 */ 6},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* term */ 3},
+        {JARVIS_GRETYPE_RULE_REF, /* expr_6 */ 6},
+        {JARVIS_GRETYPE_END, 0},
         // term (index 3)
-        {LLAMA_GRETYPE_CHAR, '0'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, '9'},
-        {LLAMA_GRETYPE_RULE_REF, /* term_7 */ 7},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, '0'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, '9'},
+        {JARVIS_GRETYPE_RULE_REF, /* term_7 */ 7},
+        {JARVIS_GRETYPE_END, 0},
         // root_4 (index 4)
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_4 */ 4},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_4 */ 4},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // expr_5 (index 5)
-        {LLAMA_GRETYPE_CHAR, '-'},
-        {LLAMA_GRETYPE_CHAR_ALT, '+'},
-        {LLAMA_GRETYPE_CHAR_ALT, '*'},
-        {LLAMA_GRETYPE_CHAR_ALT, '/'},
-        {LLAMA_GRETYPE_RULE_REF, /* term */ 3},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, '-'},
+        {JARVIS_GRETYPE_CHAR_ALT, '+'},
+        {JARVIS_GRETYPE_CHAR_ALT, '*'},
+        {JARVIS_GRETYPE_CHAR_ALT, '/'},
+        {JARVIS_GRETYPE_RULE_REF, /* term */ 3},
+        {JARVIS_GRETYPE_END, 0},
         // expr_6 (index 6)
-        {LLAMA_GRETYPE_RULE_REF, /* expr_5 */ 5},
-        {LLAMA_GRETYPE_RULE_REF, /* expr_6 */ 6},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* expr_5 */ 5},
+        {JARVIS_GRETYPE_RULE_REF, /* expr_6 */ 6},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // term_7 (index 7)
-        {LLAMA_GRETYPE_CHAR, '0'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, '9'},
-        {LLAMA_GRETYPE_RULE_REF, /* term_7 */ 7},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, '0'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, '9'},
+        {JARVIS_GRETYPE_RULE_REF, /* term_7 */ 7},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     verify_parsing(R"""(
@@ -432,85 +432,85 @@ int main()
         {"ws_12", 12},
     }, {
         // root (index 0)
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_5 */ 5},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_5 */ 5},
+        {JARVIS_GRETYPE_END, 0},
         // root_1 (index 1)
-        {LLAMA_GRETYPE_RULE_REF, /* expr */ 2},
-        {LLAMA_GRETYPE_CHAR, '='},
-        {LLAMA_GRETYPE_RULE_REF, /* ws */ 3},
-        {LLAMA_GRETYPE_RULE_REF, /* term */ 4},
-        {LLAMA_GRETYPE_CHAR, '\n'},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* expr */ 2},
+        {JARVIS_GRETYPE_CHAR, '='},
+        {JARVIS_GRETYPE_RULE_REF, /* ws */ 3},
+        {JARVIS_GRETYPE_RULE_REF, /* term */ 4},
+        {JARVIS_GRETYPE_CHAR, '\n'},
+        {JARVIS_GRETYPE_END, 0},
         // expr (index 2)
-        {LLAMA_GRETYPE_RULE_REF, /* term */ 4},
-        {LLAMA_GRETYPE_RULE_REF, /* expr_7 */ 7},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* term */ 4},
+        {JARVIS_GRETYPE_RULE_REF, /* expr_7 */ 7},
+        {JARVIS_GRETYPE_END, 0},
         // ws (index 3)
-        {LLAMA_GRETYPE_RULE_REF, /* ws_12 */ 12},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* ws_12 */ 12},
+        {JARVIS_GRETYPE_END, 0},
         // term (index 4)
-        {LLAMA_GRETYPE_RULE_REF, /* ident */ 8},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_RULE_REF, /* num */ 9},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_CHAR, '('},
-        {LLAMA_GRETYPE_RULE_REF, /* ws */ 3},
-        {LLAMA_GRETYPE_RULE_REF, /* expr */ 2},
-        {LLAMA_GRETYPE_CHAR, ')'},
-        {LLAMA_GRETYPE_RULE_REF, /* ws */ 3},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* ident */ 8},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* num */ 9},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_CHAR, '('},
+        {JARVIS_GRETYPE_RULE_REF, /* ws */ 3},
+        {JARVIS_GRETYPE_RULE_REF, /* expr */ 2},
+        {JARVIS_GRETYPE_CHAR, ')'},
+        {JARVIS_GRETYPE_RULE_REF, /* ws */ 3},
+        {JARVIS_GRETYPE_END, 0},
         // root_5 (index 5)
-        {LLAMA_GRETYPE_RULE_REF, /* root_1 */ 1},
-        {LLAMA_GRETYPE_RULE_REF, /* root_5 */ 5},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* root_1 */ 1},
+        {JARVIS_GRETYPE_RULE_REF, /* root_5 */ 5},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // expr_6 (index 6)
-        {LLAMA_GRETYPE_CHAR, '-'},
-        {LLAMA_GRETYPE_CHAR_ALT, '+'},
-        {LLAMA_GRETYPE_CHAR_ALT, '*'},
-        {LLAMA_GRETYPE_CHAR_ALT, '/'},
-        {LLAMA_GRETYPE_RULE_REF, /* term */ 4},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, '-'},
+        {JARVIS_GRETYPE_CHAR_ALT, '+'},
+        {JARVIS_GRETYPE_CHAR_ALT, '*'},
+        {JARVIS_GRETYPE_CHAR_ALT, '/'},
+        {JARVIS_GRETYPE_RULE_REF, /* term */ 4},
+        {JARVIS_GRETYPE_END, 0},
         // expr_7 (index 7)
-        {LLAMA_GRETYPE_RULE_REF, /* expr_6 */ 6},
-        {LLAMA_GRETYPE_RULE_REF, /* expr_7 */ 7},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_RULE_REF, /* expr_6 */ 6},
+        {JARVIS_GRETYPE_RULE_REF, /* expr_7 */ 7},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // ident (index 8)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, 'z'},
-        {LLAMA_GRETYPE_RULE_REF, /* ident_10 */ 10},
-        {LLAMA_GRETYPE_RULE_REF, /* ws */ 3},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, 'z'},
+        {JARVIS_GRETYPE_RULE_REF, /* ident_10 */ 10},
+        {JARVIS_GRETYPE_RULE_REF, /* ws */ 3},
+        {JARVIS_GRETYPE_END, 0},
         // num (index 9)
-        {LLAMA_GRETYPE_CHAR, '0'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, '9'},
-        {LLAMA_GRETYPE_RULE_REF, /* num_11 */ 11},
-        {LLAMA_GRETYPE_RULE_REF, /* ws */ 3},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, '0'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, '9'},
+        {JARVIS_GRETYPE_RULE_REF, /* num_11 */ 11},
+        {JARVIS_GRETYPE_RULE_REF, /* ws */ 3},
+        {JARVIS_GRETYPE_END, 0},
         // ident_10 (index 10)
-        {LLAMA_GRETYPE_CHAR, 'a'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, 'z'},
-        {LLAMA_GRETYPE_CHAR_ALT, '0'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, '9'},
-        {LLAMA_GRETYPE_CHAR_ALT, '_'},
-        {LLAMA_GRETYPE_RULE_REF, /* ident_10 */ 10},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, 'a'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, 'z'},
+        {JARVIS_GRETYPE_CHAR_ALT, '0'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, '9'},
+        {JARVIS_GRETYPE_CHAR_ALT, '_'},
+        {JARVIS_GRETYPE_RULE_REF, /* ident_10 */ 10},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // num_11 (index 11)
-        {LLAMA_GRETYPE_CHAR, '0'},
-        {LLAMA_GRETYPE_CHAR_RNG_UPPER, '9'},
-        {LLAMA_GRETYPE_RULE_REF, /* num_11 */ 11},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, '0'},
+        {JARVIS_GRETYPE_CHAR_RNG_UPPER, '9'},
+        {JARVIS_GRETYPE_RULE_REF, /* num_11 */ 11},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
         // ws_12 (index 12)
-        {LLAMA_GRETYPE_CHAR, ' '},
-        {LLAMA_GRETYPE_CHAR_ALT, '\t'},
-        {LLAMA_GRETYPE_CHAR_ALT, '\n'},
-        {LLAMA_GRETYPE_RULE_REF, /* ws_12 */ 12},
-        {LLAMA_GRETYPE_ALT, 0},
-        {LLAMA_GRETYPE_END, 0},
+        {JARVIS_GRETYPE_CHAR, ' '},
+        {JARVIS_GRETYPE_CHAR_ALT, '\t'},
+        {JARVIS_GRETYPE_CHAR_ALT, '\n'},
+        {JARVIS_GRETYPE_RULE_REF, /* ws_12 */ 12},
+        {JARVIS_GRETYPE_ALT, 0},
+        {JARVIS_GRETYPE_END, 0},
     });
 
     return 0;

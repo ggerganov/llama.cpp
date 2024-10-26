@@ -1,7 +1,7 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cmath>
 #include <cstdio>
@@ -21,7 +21,7 @@ int main(int argc, char ** argv) {
     params.n_keep = 32;
     params.i_pos  = -1;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PASSKEY, print_usage)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_PASSKEY, print_usage)) {
         return 1;
     }
 
@@ -56,14 +56,14 @@ int main(int argc, char ** argv) {
 
     // init LLM
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // initialize the model
 
-    llama_model_params model_params = common_model_params_to_llama(params);
+    jarvis_model_params model_params = common_model_params_to_jarvis(params);
 
-    llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
+    jarvis_model * model = jarvis_load_model_from_file(params.model.c_str(), model_params);
 
     if (model == NULL) {
         LOG_ERR("%s: unable to load model\n" , __func__);
@@ -72,26 +72,26 @@ int main(int argc, char ** argv) {
 
     // initialize the context
 
-    llama_context_params ctx_params = common_context_params_to_llama(params);
+    jarvis_context_params ctx_params = common_context_params_to_jarvis(params);
 
-    ctx_params.n_ctx = llama_n_ctx_train(model)*n_grp + n_keep;
+    ctx_params.n_ctx = jarvis_n_ctx_train(model)*n_grp + n_keep;
 
     GGML_ASSERT(ctx_params.n_batch % n_grp == 0 && "n_batch must be divisible by n_grp");
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    jarvis_context * ctx = jarvis_new_context_with_model(model, ctx_params);
     if (ctx == NULL) {
-        LOG_ERR("%s: failed to create the llama_context\n" , __func__);
+        LOG_ERR("%s: failed to create the jarvis_context\n" , __func__);
         return 1;
     }
 
-    auto sparams = llama_sampler_chain_default_params();
+    auto sparams = jarvis_sampler_chain_default_params();
 
-    llama_sampler * smpl = llama_sampler_chain_init(sparams);
+    jarvis_sampler * smpl = jarvis_sampler_chain_init(sparams);
 
-    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    jarvis_sampler_chain_add(smpl, jarvis_sampler_init_greedy());
 
     // tokenize the prompt
-    std::vector<llama_token> tokens_list;
+    std::vector<jarvis_token> tokens_list;
     tokens_list = common_tokenize(ctx, params.prompt, true);
 
     // tokenize the prefix and use it as a sink
@@ -105,8 +105,8 @@ int main(int argc, char ** argv) {
     // total length of the sequences including the prompt
     const int n_len = n_tokens_all + n_predict;
 
-    const int n_ctx       = llama_n_ctx(ctx) - n_keep;
-    const int n_kv_req    = llama_n_ctx(ctx);
+    const int n_ctx       = jarvis_n_ctx(ctx) - n_keep;
+    const int n_kv_req    = jarvis_n_ctx(ctx);
     const int n_batch     = ctx_params.n_batch;
     const int n_batch_grp = ctx_params.n_batch/n_grp;
 
@@ -119,7 +119,7 @@ int main(int argc, char ** argv) {
     LOG_INF("prompt tokens: %d\n", n_tokens_all);
     //LOG_INF("prompt: %s\n", params.prompt.c_str());
 
-    llama_batch batch = llama_batch_init(params.n_batch, 0, 1);
+    jarvis_batch batch = jarvis_batch_init(params.n_batch, 0, 1);
 
     int n_past = 0;
 
@@ -130,11 +130,11 @@ int main(int argc, char ** argv) {
             const int ib = i/n_batch - 1;
             const int bd = n_batch_grp*(n_grp - 1);
 
-            llama_kv_cache_seq_add (ctx, 0, n_past - n_batch,         n_past,         ib*bd);
-            llama_kv_cache_seq_div (ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
-            llama_kv_cache_update  (ctx);
+            jarvis_kv_cache_seq_add (ctx, 0, n_past - n_batch,         n_past,         ib*bd);
+            jarvis_kv_cache_seq_div (ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
+            jarvis_kv_cache_update  (ctx);
 
-            n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
+            n_past = jarvis_kv_cache_seq_pos_max(ctx, 0) + 1;
         }
 
         common_batch_clear(batch);
@@ -147,8 +147,8 @@ int main(int argc, char ** argv) {
             batch.logits[batch.n_tokens - 1] = true;
         }
 
-        if (llama_decode(ctx, batch) != 0) {
-            LOG_INF("%s: llama_decode() failed\n", __func__);
+        if (jarvis_decode(ctx, batch) != 0) {
+            LOG_INF("%s: jarvis_decode() failed\n", __func__);
             return 1;
         }
 
@@ -164,12 +164,12 @@ int main(int argc, char ** argv) {
 
         LOG_INF("%s: shifting KV cache with %d\n", __func__, n_discard);
 
-        llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
-        llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
-      //llama_kv_cache_defrag (ctx);
-        llama_kv_cache_update (ctx);
+        jarvis_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
+        jarvis_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
+      //jarvis_kv_cache_defrag (ctx);
+        jarvis_kv_cache_update (ctx);
 
-        n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
+        n_past = jarvis_kv_cache_seq_pos_max(ctx, 0) + 1;
 
         common_batch_clear(batch);
 
@@ -181,8 +181,8 @@ int main(int argc, char ** argv) {
             batch.logits[batch.n_tokens - 1] = true;
         }
 
-        if (llama_decode(ctx, batch) != 0) {
-            LOG_ERR("%s: llama_decode() failed\n", __func__);
+        if (jarvis_decode(ctx, batch) != 0) {
+            LOG_ERR("%s: jarvis_decode() failed\n", __func__);
             return 1;
         }
 
@@ -195,12 +195,12 @@ int main(int argc, char ** argv) {
         if (n_discard > 0) {
             LOG_INF("%s: shifting KV cache with %d to free space for the answer\n", __func__, n_discard);
 
-            llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
-            llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
-          //llama_kv_cache_defrag (ctx);
-            llama_kv_cache_update (ctx);
+            jarvis_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
+            jarvis_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
+          //jarvis_kv_cache_defrag (ctx);
+            jarvis_kv_cache_update (ctx);
 
-            n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
+            n_past = jarvis_kv_cache_seq_pos_max(ctx, 0) + 1;
         }
     }
 
@@ -220,10 +220,10 @@ int main(int argc, char ** argv) {
     while (n_cur <= n_len) {
         // sample the next token
         {
-            const llama_token new_token_id = llama_sampler_sample(smpl, ctx, batch.n_tokens - 1);
+            const jarvis_token new_token_id = jarvis_sampler_sample(smpl, ctx, batch.n_tokens - 1);
 
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+            if (jarvis_token_is_eog(model, new_token_id) || n_cur == n_len) {
                 LOG("\n");
 
                 break;
@@ -243,7 +243,7 @@ int main(int argc, char ** argv) {
         n_cur += 1;
 
         // evaluate the current batch with the transformer model
-        if (llama_decode(ctx, batch)) {
+        if (jarvis_decode(ctx, batch)) {
             LOG_ERR("%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
@@ -257,18 +257,18 @@ int main(int argc, char ** argv) {
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
     LOG("\n");
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
     LOG("\n");
 
-    llama_sampler_free(smpl);
+    jarvis_sampler_free(smpl);
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

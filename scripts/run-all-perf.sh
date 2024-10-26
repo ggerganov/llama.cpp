@@ -31,4 +31,4 @@ for q in ${qnt[@]}; do
     mstr="${mstr} -m ../models/${model}/ggml-model-${q}.gguf"
 done
 
-./bin/llama-bench ${mstr} ${args} 2> /dev/null
+./bin/jarvis-bench ${mstr} ${args} 2> /dev/null

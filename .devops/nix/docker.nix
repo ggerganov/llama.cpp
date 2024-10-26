@@ -2,14 +2,14 @@
   lib,
   dockerTools,
   buildEnv,
-  llama-cpp,
+  jarvis-cpp,
   interactive ? true,
   coreutils,
 }:
 
 # A tar that can be fed into `docker load`:
 #
-# $ nix build .#llamaPackages.docker
+# $ nix build .#jarvisPackages.docker
 # $ docker load < result
 
 # For details and variations cf.
@@ -19,16 +19,16 @@
 
 # Approximate (compressed) sizes, at the time of writing, are:
 #
-# .#llamaPackages.docker: 125M;
-# .#llamaPackagesCuda.docker: 537M;
-# .#legacyPackages.aarch64-linux.llamaPackagesXavier.docker: 415M.
+# .#jarvisPackages.docker: 125M;
+# .#jarvisPackagesCuda.docker: 537M;
+# .#legacyPackages.aarch64-linux.jarvisPackagesXavier.docker: 415M.
 
 dockerTools.buildLayeredImage {
-  name = llama-cpp.pname;
+  name = jarvis-cpp.pname;
   tag = "latest";
 
   contents =
-    [ llama-cpp ]
+    [ jarvis-cpp ]
     ++ lib.optionals interactive [
       coreutils
       dockerTools.binSh

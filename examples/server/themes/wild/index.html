@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta name="color-scheme" content="light dark">
-  <title>llama.cpp - chat</title>
+  <title>jarvis.cpp - chat</title>
 
   <style>
     body {
       font-family: system-ui;
       font-size: 90%;
-      background-image: url('llamapattern.png');
+      background-image: url('jarvispattern.png');
     }
 
     #container {
@@ -204,18 +204,18 @@
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
     } from './index.js';
 
-    import { llama } from './completion.js';
+    import { jarvis } from './completion.js';
     import { SchemaConverter } from './json-schema-to-grammar.mjs';
     let selected_image = false;
     var slot_id = -1;
 
     const session = signal({
-      prompt: "This is a conversation between User and Llama, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
+      prompt: "This is a conversation between User and Jarvis, a friendly chatbot. Jarvis is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
       template: "{{prompt}}\n\n{{history}}\n{{char}}:",
       historyTemplate: "{{name}}: {{message}}",
       transcript: [],
       type: "chat",  // "chat" | "completion"
-      char: "Llama",
+      char: "Jarvis",
       user: "User",
       image_selected: ''
     })
@@ -246,7 +246,7 @@
 
     /* START: Support for storing prompt templates and parameters in browsers LocalStorage */
 
-    const local_storage_storageKey = "llamacpp_server_local_storage";
+    const local_storage_storageKey = "jarviscpp_server_local_storage";
 
     function local_storage_setDataFromObject(tag, content) {
       localStorage.setItem(local_storage_storageKey + '/' + tag, JSON.stringify(content));
@@ -377,7 +377,7 @@
 
     /* END: Support for storing prompt templates and parameters in browsers LocalStorage */
 
-    const llamaStats = signal(null)
+    const jarvisStats = signal(null)
     const controller = signal(null)
 
     // currently generating a completion?
@@ -402,14 +402,14 @@
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
     }
 
-    async function runLlama(prompt, llamaParams, char) {
+    async function runJarvis(prompt, jarvisParams, char) {
       const currentMessages = [];
       const history = session.value.transcript;
       if (controller.value) {
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: location.pathname.replace(/\/+$/, '') })) {
+      for await (const chunk of jarvis(prompt, jarvisParams, { controller: controller.value, api_url: location.pathname.replace(/\/+$/, '') })) {
         const data = chunk.data;
 
         if (data.stop) {
@@ -432,7 +432,7 @@
         }
 
         if (data.timings) {
-          llamaStats.value = data;
+          jarvisStats.value = data;
         }
       }
 
@@ -466,7 +466,7 @@
       if (selected_image) {
         prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:[img-10]${msg}\nASSISTANT:`;
       }
-      await runLlama(prompt, {
+      await runJarvis(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
@@ -480,7 +480,7 @@
       }
       const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
-      runLlama(prompt, {
+      runJarvis(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: [],
@@ -896,12 +896,12 @@
     };
 
     const ModelGenerationInfo = (params) => {
-      if (!llamaStats.value) {
+      if (!jarvisStats.value) {
         return html`<span/>`
       }
       return html`
         <span>
-          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
+          ${jarvisStats.value.tokens_predicted} predicted, ${jarvisStats.value.tokens_cached} cached, ${jarvisStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${jarvisStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }
@@ -1026,7 +1026,7 @@
       return html`
         <div class="mode-${session.value.type}">
           <header>
-            <img src="llama_cpp.png" style="width:100%"/>
+            <img src="jarvis_cpp.png" style="width:100%"/>
           </header>
 
           <section id="write">
@@ -1040,7 +1040,7 @@
 
           <footer>
             <p><${ModelGenerationInfo} /></p>
-            <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a>.</p>
+            <p>Powered by <a href="https://github.com/ggerganov/jarvis.cpp">jarvis.cpp</a> and <a href="https://ggml.ai">ggml.ai</a>.</p>
           </footer>
         </div>
       `;

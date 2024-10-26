@@ -223,13 +223,13 @@ class GGMLToGGUF:
                 assert n_kv_head is not None, "Couldn't determine n_kv_head from GQA param"
                 logger.info(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
         self.n_kv_head = n_kv_head
-        self.name_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.LLAMA, ggml_model.hyperparameters.n_layer)
+        self.name_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.JARVIS, ggml_model.hyperparameters.n_layer)
 
     def save(self):
         logger.info('* Preparing to save GGUF file')
         gguf_writer = gguf.GGUFWriter(
             self.cfg.output,
-            gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA],
+            gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.JARVIS],
             use_temp_file = False)
         self.add_params(gguf_writer)
         self.add_vocab(gguf_writer)
@@ -286,7 +286,7 @@ class GGMLToGGUF:
 
     def add_vocab(self, gguf_writer):
         hp = self.model.hyperparameters
-        gguf_writer.add_tokenizer_model('llama')
+        gguf_writer.add_tokenizer_model('jarvis')
         gguf_writer.add_tokenizer_pre('default')
         tokens = []
         scores = []
@@ -358,7 +358,7 @@ class GGMLToGGUF:
 
 
 def handle_metadata(cfg, hp):
-    import examples.convert_legacy_llama as convert
+    import examples.convert_legacy_jarvis as convert
 
     assert cfg.model_metadata_dir.is_dir(), 'Metadata dir is not a directory'
     hf_config_path   = cfg.model_metadata_dir / "config.json"

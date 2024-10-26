@@ -1,5 +1,5 @@
 #include "common.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "ggml.h"
 
 #ifdef GGML_USE_CUDA
@@ -290,7 +290,7 @@ static void power_iteration(
     ggml_gallocr_free(allocr);
 
     // TODO @ngxson : The output vector is randomly inverted
-    // Solution: https://github.com/ggerganov/llama.cpp/pull/8069#issuecomment-2185328171
+    // Solution: https://github.com/ggerganov/jarvis.cpp/pull/8069#issuecomment-2185328171
 }
 
 static void run_pca(

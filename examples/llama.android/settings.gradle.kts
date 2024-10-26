@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LlamaAndroid"
+rootProject.name = "JarvisAndroid"
 include(":app")
-include(":llama")
+include(":jarvis")

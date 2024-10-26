@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-int common_log_verbosity_thold = LOG_DEFAULT_LLAMA;
+int common_log_verbosity_thold = LOG_DEFAULT_JARVIS;
 
 void common_log_set_verbosity_thold(int verbosity) {
     common_log_verbosity_thold = verbosity;

@@ -11,8 +11,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#ifdef LLAMA_DEFAULT_RMS_EPS
-constexpr float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+#ifdef JARVIS_DEFAULT_RMS_EPS
+constexpr float rms_norm_eps = JARVIS_DEFAULT_RMS_EPS;
 #else
 constexpr float rms_norm_eps = 5e-6f;
 #endif
@@ -71,7 +71,7 @@ static struct ggml_tensor * randomize_tensor(
     return tensor;
 }
 
-struct llama_hparams {
+struct jarvis_hparams {
     uint32_t n_vocab = 32000;
     uint32_t n_ctx   = 512;   // this is provided as user input?
     uint32_t n_embd  = 4096;
@@ -80,17 +80,17 @@ struct llama_hparams {
     uint32_t n_layer = 32;
     uint32_t n_rot   = 64;
 
-    bool operator!=(const llama_hparams & other) const {
-        return memcmp(this, &other, sizeof(llama_hparams));
+    bool operator!=(const jarvis_hparams & other) const {
+        return memcmp(this, &other, sizeof(jarvis_hparams));
     }
 };
 
-static uint32_t get_n_ff(const struct llama_hparams* hparams) {
+static uint32_t get_n_ff(const struct jarvis_hparams* hparams) {
     const uint32_t n_ff = ((2*(4*hparams->n_embd)/3 + hparams->n_mult - 1)/hparams->n_mult)*hparams->n_mult;
     return n_ff;
 }
 
-struct llama_hparams_lora {
+struct jarvis_hparams_lora {
     uint32_t n_vocab = 32000;
     uint32_t n_ctx   = 512;   // this is provided as user input?
     uint32_t n_embd  = 4096;
@@ -100,12 +100,12 @@ struct llama_hparams_lora {
     uint32_t n_rot   = 64;
     uint32_t n_lora  = 64;
 
-    bool operator!=(const llama_hparams_lora & other) const {
-        return memcmp(this, &other, sizeof(llama_hparams_lora)) != 0;
+    bool operator!=(const jarvis_hparams_lora & other) const {
+        return memcmp(this, &other, sizeof(jarvis_hparams_lora)) != 0;
     }
 };
 
-struct llama_layer {
+struct jarvis_layer {
     // normalization
     struct ggml_tensor * attention_norm;
 
@@ -124,7 +124,7 @@ struct llama_layer {
     struct ggml_tensor * w3;
 };
 
-struct llama_layer_lora {
+struct jarvis_layer_lora {
     // normalization
     struct ggml_tensor * attention_norm;
 
@@ -148,34 +148,34 @@ struct llama_layer_lora {
 };
 
 
-struct llama_kv_cache {
+struct jarvis_kv_cache {
     struct ggml_context * ctx = NULL;
 
     struct ggml_tensor * k;
     struct ggml_tensor * v;
 
-    // llama_ctx_buffer buf;
+    // jarvis_ctx_buffer buf;
 
     int n; // number of tokens currently in the cache
 };
 
-struct llama_model {
+struct jarvis_model {
     struct ggml_context * ctx = NULL;
 
-    llama_hparams hparams;
+    jarvis_hparams hparams;
 
     struct ggml_tensor * tok_embeddings;
 
     struct ggml_tensor * norm;
     struct ggml_tensor * output;
 
-    std::vector<llama_layer> layers;
+    std::vector<jarvis_layer> layers;
 };
 
-struct llama_model_lora {
+struct jarvis_model_lora {
     struct ggml_context * ctx = NULL;
 
-    llama_hparams_lora hparams;
+    jarvis_hparams_lora hparams;
 
     struct ggml_tensor * tok_embeddings;
 
@@ -183,10 +183,10 @@ struct llama_model_lora {
     struct ggml_tensor * outputa;
     struct ggml_tensor * outputb;
 
-    std::vector<llama_layer_lora> layers;
+    std::vector<jarvis_layer_lora> layers;
 };
 
-static void init_model(struct llama_model * model) {
+static void init_model(struct jarvis_model * model) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_embd  = hparams.n_embd;
@@ -223,7 +223,7 @@ static void init_model(struct llama_model * model) {
 }
 
 
-static void init_model_lora(struct llama_model_lora * model) {
+static void init_model_lora(struct jarvis_model_lora * model) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_embd  = hparams.n_embd;
@@ -266,7 +266,7 @@ static void init_model_lora(struct llama_model_lora * model) {
     }
 }
 
-static void set_param_model(struct llama_model * model) {
+static void set_param_model(struct jarvis_model * model) {
     const auto& hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -292,7 +292,7 @@ static void set_param_model(struct llama_model * model) {
     }
 }
 
-static void set_param_model_lora(struct llama_model_lora * model) {
+static void set_param_model_lora(struct jarvis_model_lora * model) {
     const auto& hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -323,7 +323,7 @@ static void set_param_model_lora(struct llama_model_lora * model) {
     }
 }
 
-static void randomize_model(struct llama_model * model, int seed, float mean, float std, float min, float max) {
+static void randomize_model(struct jarvis_model * model, int seed, float mean, float std, float min, float max) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -355,7 +355,7 @@ static void randomize_model(struct llama_model * model, int seed, float mean, fl
 
 
 static void randomize_model_lora(
-    struct llama_model_lora * model, int seed, float mean, float std, float min, float max
+    struct jarvis_model_lora * model, int seed, float mean, float std, float min, float max
 ) {
     const auto & hparams = model->hparams;
 
@@ -391,7 +391,7 @@ static void randomize_model_lora(
     free_random_normal_distribution(rnd);
 }
 
-static void init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
+static void init_kv_cache(struct jarvis_kv_cache* cache, struct jarvis_model * model, int n_batch) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_ctx   = hparams.n_ctx;
@@ -425,7 +425,7 @@ static void init_kv_cache(struct llama_kv_cache* cache, struct llama_model * mod
     cache->v = ggml_new_tensor_1d(cache->ctx, GGML_TYPE_F32, n_elements);
 }
 
-static bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * model, int n_batch) {
+static bool init_kv_cache_lora(struct jarvis_kv_cache* cache, struct jarvis_model_lora * model, int n_batch) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_ctx   = hparams.n_ctx;
@@ -462,8 +462,8 @@ static bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_
 }
 
 static struct ggml_tensor * forward(
-    struct llama_model    * model,
-    struct llama_kv_cache * cache,
+    struct jarvis_model    * model,
+    struct jarvis_kv_cache * cache,
     struct ggml_context   * ctx0,
     struct ggml_cgraph    * gf,
     struct ggml_tensor    * tokens_input,
@@ -472,7 +472,7 @@ static struct ggml_tensor * forward(
 ) {
     const int N = n_tokens;
 
-    struct llama_kv_cache& kv_self = *cache;
+    struct jarvis_kv_cache& kv_self = *cache;
     const auto & hparams = model->hparams;
     const int n_ctx   = hparams.n_ctx;
     const int n_embd  = hparams.n_embd;
@@ -692,8 +692,8 @@ static struct ggml_tensor * forward(
 }
 
 static struct ggml_tensor * forward_batch(
-    struct llama_model    * model,
-    struct llama_kv_cache * cache,
+    struct jarvis_model    * model,
+    struct jarvis_kv_cache * cache,
     struct ggml_context   * ctx0,
     struct ggml_cgraph    * gf,
     struct ggml_tensor    * tokens_input,
@@ -703,7 +703,7 @@ static struct ggml_tensor * forward_batch(
 ) {
     const int N = n_tokens;
 
-    struct llama_kv_cache& kv_self = *cache;
+    struct jarvis_kv_cache& kv_self = *cache;
     const auto & hparams = model->hparams;
     const int n_ctx   = hparams.n_ctx;
     const int n_vocab = hparams.n_vocab;
@@ -989,8 +989,8 @@ static struct ggml_tensor * forward_batch(
 }
 
 static struct ggml_tensor * forward_lora(
-    struct llama_model_lora * model,
-    struct llama_kv_cache   * cache,
+    struct jarvis_model_lora * model,
+    struct jarvis_kv_cache   * cache,
     struct ggml_context     * ctx0,
     struct ggml_cgraph      * gf,
     struct ggml_tensor      * tokens_input,
@@ -999,7 +999,7 @@ static struct ggml_tensor * forward_lora(
 ) {
     const int N = n_tokens;
 
-    struct llama_kv_cache& kv_self = *cache;
+    struct jarvis_kv_cache& kv_self = *cache;
     const auto & hparams = model->hparams;
 
     const int n_ctx   = hparams.n_ctx;
@@ -1444,7 +1444,7 @@ int main(int argc, char ** argv) {
     lcparams.mem_buffer = NULL;
     lcparams.no_alloc   = false;
 
-    struct llama_model model;
+    struct jarvis_model model;
     model.hparams.n_vocab = 8;
     model.hparams.n_ctx   = 8;
     model.hparams.n_embd  = 32;
@@ -1467,7 +1467,7 @@ int main(int argc, char ** argv) {
     randomize_model(&model, 1337, 0.0f, 1.0f, -1.0f, +1.0f);
 
 /*
-    struct llama_model_lora model_lora;
+    struct jarvis_model_lora model_lora;
     // model.hparams.n_vocab = 6;
     // model.hparams.n_ctx   = 64;
     // model.hparams.n_embd  = 128;
@@ -1501,7 +1501,7 @@ int main(int argc, char ** argv) {
 */
     int n_batch = 8;
     // key + value cache for the self attention
-    struct llama_kv_cache kv_self;
+    struct jarvis_kv_cache kv_self;
     printf("init_kv_cache\n");
     kv_self.ctx = model.ctx;
     init_kv_cache(&kv_self, &model, n_batch);
@@ -1533,7 +1533,7 @@ int main(int argc, char ** argv) {
         int n_past = 0;
 
         struct ggml_cgraph * gf = NULL;
-        gf = ggml_new_graph_custom(ctx0, LLAMA_TRAIN_MAX_NODES, true);
+        gf = ggml_new_graph_custom(ctx0, JARVIS_TRAIN_MAX_NODES, true);
 
         get_example_targets_batch(ctx0, 64*ex+0,  tokens_input, targets);
 
@@ -1601,7 +1601,7 @@ int main(int argc, char ** argv) {
             struct ggml_context * ctx0 = ggml_init(params);
 
             struct ggml_cgraph * gf = NULL;
-            gf = ggml_new_graph_custom(ctx0, LLAMA_TRAIN_MAX_NODES, true);
+            gf = ggml_new_graph_custom(ctx0, JARVIS_TRAIN_MAX_NODES, true);
 
             int n_past = 0;
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, gf, tokens_input, sample_ctx, n_past);

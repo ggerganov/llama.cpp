@@ -5,14 +5,14 @@
 
 [Termux](https://termux.dev/en/) is an Android terminal emulator and Linux environment app (no root required). As of writing, Termux is available experimentally in the Google Play Store; otherwise, it may be obtained directly from the project repo or on F-Droid.
 
-With Termux, you can install and run `llama.cpp` as if the environment were Linux. Once in the Termux shell:
+With Termux, you can install and run `jarvis.cpp` as if the environment were Linux. Once in the Termux shell:
 
 ```
 $ apt update && apt upgrade -y
 $ apt install git cmake
 ```
 
-Then, follow the [build instructions](https://github.com/ggerganov/llama.cpp/blob/master/docs/build.md), specifically for CMake.
+Then, follow the [build instructions](https://github.com/ggerganov/jarvis.cpp/blob/master/docs/build.md), specifically for CMake.
 
 Once the binaries are built, download your model of choice (e.g., from Hugging Face). It's recommended to place it in the `~/` directory for best performance:
 
@@ -20,22 +20,22 @@ Once the binaries are built, download your model of choice (e.g., from Hugging F
 $ curl -L {model-url} -o ~/{model}.gguf
 ```
 
-Then, if you are not already in the repo directory, `cd` into `llama.cpp` and:
+Then, if you are not already in the repo directory, `cd` into `jarvis.cpp` and:
 
 ```
-$ ./build/bin/llama-simple -m ~/{model}.gguf -c {context-size} -p "{your-prompt}"
+$ ./build/bin/jarvis-simple -m ~/{model}.gguf -c {context-size} -p "{your-prompt}"
 ```
 
-Here, we show `llama-simple`, but any of the executables under `examples` should work, in theory. Be sure to set `context-size` to a reasonable number (say, 4096) to start with; otherwise, memory could spike and kill your terminal.
+Here, we show `jarvis-simple`, but any of the executables under `examples` should work, in theory. Be sure to set `context-size` to a reasonable number (say, 4096) to start with; otherwise, memory could spike and kill your terminal.
 
 To see what it might look like visually, here's an old demo of an interactive session running on a Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
 ## Cross-compile using Android NDK
-It's possible to build `llama.cpp` for Android on your host system via CMake and the Android NDK. If you are interested in this path, ensure you already have an environment prepared to cross-compile programs for Android (i.e., install the Android SDK). Note that, unlike desktop environments, the Android environment ships with a limited set of native libraries, and so only those libraries are available to CMake when building with the Android NDK (see: https://developer.android.com/ndk/guides/stable_apis.)
+It's possible to build `jarvis.cpp` for Android on your host system via CMake and the Android NDK. If you are interested in this path, ensure you already have an environment prepared to cross-compile programs for Android (i.e., install the Android SDK). Note that, unlike desktop environments, the Android environment ships with a limited set of native libraries, and so only those libraries are available to CMake when building with the Android NDK (see: https://developer.android.com/ndk/guides/stable_apis.)
 
-Once you're ready and have cloned `llama.cpp`, invoke the following in the project directory:
+Once you're ready and have cloned `jarvis.cpp`, invoke the following in the project directory:
 
 ```
 $ cmake \
@@ -45,15 +45,15 @@ $ cmake \
   -DCMAKE_C_FLAGS="-march=armv8.7a" \
   -DCMAKE_CXX_FLAGS="-march=armv8.7a" \
   -DGGML_OPENMP=OFF \
-  -DGGML_LLAMAFILE=OFF \
+  -DGGML_JARVISFILE=OFF \
   -B build-android
 ```
 
 Notes:
   - While later versions of Android NDK ship with OpenMP, it must still be installed by CMake as a dependency, which is not supported at this time
-  - `llamafile` does not appear to support Android devices (see: https://github.com/Mozilla-Ocho/llamafile/issues/325)
+  - `jarvisfile` does not appear to support Android devices (see: https://github.com/Mozilla-Ocho/jarvisfile/issues/325)
 
-The above command should configure `llama.cpp` with the most performant options for modern devices. Even if your device is not running `armv8.7a`, `llama.cpp` includes runtime checks for available CPU features it can use.
+The above command should configure `jarvis.cpp` with the most performant options for modern devices. Even if your device is not running `armv8.7a`, `jarvis.cpp` includes runtime checks for available CPU features it can use.
 
 Feel free to adjust the Android ABI for your target. Once the project is configured:
 
@@ -65,17 +65,17 @@ $ cmake --install build-android --prefix {install-dir} --config Release
 After installing, go ahead and download the model of your choice to your host system. Then:
 
 ```
-$ adb shell "mkdir /data/local/tmp/llama.cpp"
-$ adb push {install-dir} /data/local/tmp/llama.cpp/
-$ adb push {model}.gguf /data/local/tmp/llama.cpp/
+$ adb shell "mkdir /data/local/tmp/jarvis.cpp"
+$ adb push {install-dir} /data/local/tmp/jarvis.cpp/
+$ adb push {model}.gguf /data/local/tmp/jarvis.cpp/
 $ adb shell
 ```
 
 In the `adb shell`:
 
 ```
-$ cd /data/local/tmp/llama.cpp
-$ LD_LIBRARY_PATH=lib ./bin/llama-simple -m {model}.gguf -c {context-size} -p "{your-prompt}"
+$ cd /data/local/tmp/jarvis.cpp
+$ LD_LIBRARY_PATH=lib ./bin/jarvis-simple -m {model}.gguf -c {context-size} -p "{your-prompt}"
 ```
 
 That's it!

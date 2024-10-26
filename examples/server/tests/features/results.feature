@@ -1,10 +1,10 @@
-@llama.cpp
+@jarvis.cpp
 @results
 Feature: Results
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/split/stories15M-00001-of-00003.gguf from HF repo ggml-org/models
+    And   a model file tinyjarviss/split/stories15M-00001-of-00003.gguf from HF repo ggml-org/models
     And   a model file test-model-00001-of-00003.gguf
     And   128 as batch size
     And   1024 KV cache size
@@ -77,8 +77,8 @@ Feature: Results
       | 1          | 1.0  |
       # FIXME: unified KV cache nondeterminism
       # See https://github.com/ggerganov/whisper.cpp/issues/1941#issuecomment-1986923227
-      # and https://github.com/ggerganov/llama.cpp/pull/6122#discussion_r1531405574
-      # and https://github.com/ggerganov/llama.cpp/pull/7347 .
+      # and https://github.com/ggerganov/jarvis.cpp/pull/6122#discussion_r1531405574
+      # and https://github.com/ggerganov/jarvis.cpp/pull/7347 .
       # | 2          | 0.0  |
       # | 4          | 0.0  |
       # | 2          | 1.0  |
@@ -110,8 +110,8 @@ Feature: Results
       | 4       | 1024 | 1         | 1          |
       # FIXME: unified KV cache nondeterminism
       # See https://github.com/ggerganov/whisper.cpp/issues/1941#issuecomment-1986923227
-      # and https://github.com/ggerganov/llama.cpp/pull/6122#discussion_r1531405574
-      # and https://github.com/ggerganov/llama.cpp/pull/7347 .
+      # and https://github.com/ggerganov/jarvis.cpp/pull/6122#discussion_r1531405574
+      # and https://github.com/ggerganov/jarvis.cpp/pull/7347 .
       # | 4       | 1024 | 1         | 4          |
       # | 4       | 1024 | 100       | 1          |
       # This test still fails even the above patches; the first token probabilities are already different.

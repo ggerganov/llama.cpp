@@ -2843,7 +2843,7 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
 
 void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     // TODO: use ascendc
-    // Only test with LLAMA model.
+    // Only test with JARVIS model.
     ggml_tensor* src0 = dst->src[0];  // input
     ggml_tensor* src2 = dst->src[2];  // freq_factors
 

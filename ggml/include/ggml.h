@@ -2510,7 +2510,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_vsx        (void);
     GGML_API int ggml_cpu_has_matmul_int8(void);
     GGML_API int ggml_cpu_has_cann       (void);
-    GGML_API int ggml_cpu_has_llamafile  (void);
+    GGML_API int ggml_cpu_has_jarvisfile  (void);
 
     // get the sve vector length in bytes
     GGML_API int ggml_cpu_get_sve_cnt(void);

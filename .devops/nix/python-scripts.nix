@@ -9,7 +9,7 @@
 }@inputs:
 
 let
-  llama-python-deps = with python3Packages; [
+  jarvis-python-deps = with python3Packages; [
     numpy
     sentencepiece
     transformers
@@ -18,7 +18,7 @@ let
     gguf-py
     tqdm
 
-    # for scripts/compare-llama-bench.py
+    # for scripts/compare-jarvis-bench.py
     gitpython
     tabulate
 
@@ -28,7 +28,7 @@ let
 
   ];
 
-  llama-python-test-deps = with python3Packages; [
+  jarvis-python-test-deps = with python3Packages; [
     # Server bench
     matplotlib
 
@@ -40,7 +40,7 @@ let
 in
 
 buildPythonPackage ({
-  pname = "llama-scripts";
+  pname = "jarvis-scripts";
   version = "0.0.0";
   pyproject = true;
 
@@ -61,6 +61,6 @@ buildPythonPackage ({
     src = lib.cleanSource ../../.;
   };
   nativeBuildInputs = [ poetry-core ];
-  nativeCheckInputs = llama-python-test-deps;
-  dependencies = llama-python-deps;
+  nativeCheckInputs = jarvis-python-test-deps;
+  dependencies = jarvis-python-deps;
 })

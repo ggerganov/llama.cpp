@@ -186,10 +186,10 @@ struct lora_merge_ctx {
         // prepare metadata
         gguf_set_kv(ctx_out, base_model.ctx_gguf);
         // output is forced to f16 for now
-        gguf_set_val_u32(ctx_out, "general.file_type", LLAMA_FTYPE_MOSTLY_F16);
+        gguf_set_val_u32(ctx_out, "general.file_type", JARVIS_FTYPE_MOSTLY_F16);
 
         // check if all lora adapters have the same tensors
-        // TODO: remove this when we can support merging subset of adapters. Ref: https://github.com/ggerganov/llama.cpp/pull/8607#discussion_r1686027777
+        // TODO: remove this when we can support merging subset of adapters. Ref: https://github.com/ggerganov/jarvis.cpp/pull/8607#discussion_r1686027777
         static const char * err_no_subset_adapter = "Input adapters do not have the same list of tensors. This is not yet supported. Please merge the adapter one-by-one instead of merging all at once.";
         if (adapters.size() > 1) {
             for (size_t i = 1; i < adapters.size(); ++i) {
@@ -402,7 +402,7 @@ static void print_usage(int, char ** argv) {
 int main(int argc, char ** argv) {
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 

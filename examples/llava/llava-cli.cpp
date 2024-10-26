@@ -5,7 +5,7 @@
 #include "sampling.h"
 #include "clip.h"
 #include "llava.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "ggml.h"
 
 #include <cstdio>
@@ -13,14 +13,14 @@
 #include <cstring>
 #include <vector>
 
-static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
+static bool eval_tokens(struct jarvis_context * ctx_jarvis, std::vector<jarvis_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
     for (int i = 0; i < N; i += n_batch) {
         int n_eval = (int) tokens.size() - i;
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval))) {
+        if (jarvis_decode(ctx_jarvis, jarvis_batch_get_one(&tokens[i], n_eval))) {
             LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
         }
@@ -29,31 +29,31 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
     return true;
 }
 
-static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
-    std::vector<llama_token> tokens;
+static bool eval_id(struct jarvis_context * ctx_jarvis, int id, int * n_past) {
+    std::vector<jarvis_token> tokens;
     tokens.push_back(id);
-    return eval_tokens(ctx_llama, tokens, 1, n_past);
+    return eval_tokens(ctx_jarvis, tokens, 1, n_past);
 }
 
-static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
+static bool eval_string(struct jarvis_context * ctx_jarvis, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = common_tokenize(ctx_llama, str2, add_bos, true);
-    eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
+    std::vector<jarvis_token> embd_inp = common_tokenize(ctx_jarvis, str2, add_bos, true);
+    eval_tokens(ctx_jarvis, embd_inp, n_batch, n_past);
     return true;
 }
 
 static const char * sample(struct common_sampler * smpl,
-                           struct llama_context * ctx_llama,
+                           struct jarvis_context * ctx_jarvis,
                            int * n_past) {
-    const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
+    const jarvis_token id = common_sampler_sample(smpl, ctx_jarvis, -1);
     common_sampler_accept(smpl, id, true);
     static std::string ret;
-    if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
+    if (jarvis_token_is_eog(jarvis_get_model(ctx_jarvis), id)) {
         ret = "</s>";
     } else {
-        ret = common_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_jarvis, id);
     }
-    eval_id(ctx_llama, id, n_past);
+    eval_id(ctx_jarvis, id, n_past);
     return ret.c_str();
 }
 
@@ -110,8 +110,8 @@ static std::string remove_image_from_prompt(const std::string& prompt, const cha
 
 struct llava_context {
     struct clip_ctx * ctx_clip = NULL;
-    struct llama_context * ctx_llama = NULL;
-    struct llama_model * model = NULL;
+    struct jarvis_context * ctx_jarvis = NULL;
+    struct jarvis_model * model = NULL;
 };
 
 static void print_usage(int, char ** argv) {
@@ -159,16 +159,16 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         user_prompt = prompt.substr(image_pos + std::string("<image>").length());
         LOG_INF("system_prompt: %s\n", system_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_jarvis, system_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_jarvis, tmp[i]).c_str());
             }
         }
         LOG_INF("user_prompt: %s\n", user_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_jarvis, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_jarvis, tmp[i]).c_str());
             }
         }
     } else {
@@ -176,16 +176,16 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         system_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
         user_prompt = prompt + "\nASSISTANT:";
         if (params->verbose_prompt) {
-            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_jarvis, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_jarvis, tmp[i]).c_str());
             }
         }
     }
 
-    eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, true);
-    llava_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past);
-    eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
+    eval_string(ctx_llava->ctx_jarvis, system_prompt.c_str(), params->n_batch, &n_past, true);
+    llava_eval_image_embed(ctx_llava->ctx_jarvis, image_embed, params->n_batch, &n_past);
+    eval_string(ctx_llava->ctx_jarvis, user_prompt.c_str(), params->n_batch, &n_past, false);
 
     // generate the response
 
@@ -199,7 +199,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     std::string response = "";
     for (int i = 0; i < max_tgt_len; i++) {
-        const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past);
+        const char * tmp = sample(smpl, ctx_llava->ctx_jarvis, &n_past);
         response += tmp;
         if (strcmp(tmp, "</s>") == 0) break;
         if (strstr(tmp, "###")) break; // Yi-VL behavior
@@ -215,13 +215,13 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     LOG("\n");
 }
 
-static struct llama_model * llava_init(common_params * params) {
-    llama_backend_init();
-    llama_numa_init(params->numa);
+static struct jarvis_model * llava_init(common_params * params) {
+    jarvis_backend_init();
+    jarvis_numa_init(params->numa);
 
-    llama_model_params model_params = common_model_params_to_llama(*params);
+    jarvis_model_params model_params = common_model_params_to_jarvis(*params);
 
-    llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
+    jarvis_model * model = jarvis_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
         LOG_ERR("%s: unable to load model\n" , __func__);
         return NULL;
@@ -229,7 +229,7 @@ static struct llama_model * llava_init(common_params * params) {
     return model;
 }
 
-static struct llava_context * llava_init_context(common_params * params, llama_model * model) {
+static struct llava_context * llava_init_context(common_params * params, jarvis_model * model) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
@@ -240,19 +240,19 @@ static struct llava_context * llava_init_context(common_params * params, llama_m
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
 
-    llama_context_params ctx_params = common_context_params_to_llama(*params);
+    jarvis_context_params ctx_params = common_context_params_to_jarvis(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
-    llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
+    jarvis_context * ctx_jarvis = jarvis_new_context_with_model(model, ctx_params);
 
-    if (ctx_llama == NULL) {
-        LOG_ERR("%s: failed to create the llama_context\n" , __func__);
+    if (ctx_jarvis == NULL) {
+        LOG_ERR("%s: failed to create the jarvis_context\n" , __func__);
         return NULL;
     }
 
     auto * ctx_llava = (struct llava_context *)malloc(sizeof(llava_context));
 
-    ctx_llava->ctx_llama = ctx_llama;
+    ctx_llava->ctx_jarvis = ctx_jarvis;
     ctx_llava->ctx_clip = ctx_clip;
     ctx_llava->model = model;
     return ctx_llava;
@@ -264,9 +264,9 @@ static void llava_free(struct llava_context * ctx_llava) {
         ctx_llava->ctx_clip = NULL;
     }
 
-    llama_free(ctx_llava->ctx_llama);
-    llama_free_model(ctx_llava->model);
-    llama_backend_free();
+    jarvis_free(ctx_llava->ctx_jarvis);
+    jarvis_free_model(ctx_llava->model);
+    jarvis_backend_free();
 }
 
 int main(int argc, char ** argv) {
@@ -274,7 +274,7 @@ int main(int argc, char ** argv) {
 
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_LLAVA, print_usage)) {
         return 1;
     }
 
@@ -299,7 +299,7 @@ int main(int argc, char ** argv) {
         // process the prompt
         process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-        llama_perf_context_print(ctx_llava->ctx_llama);
+        jarvis_perf_context_print(ctx_llava->ctx_jarvis);
         llava_image_embed_free(image_embed);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
@@ -316,14 +316,14 @@ int main(int argc, char ** argv) {
             // process the prompt
             process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-            llama_perf_context_print(ctx_llava->ctx_llama);
+            jarvis_perf_context_print(ctx_llava->ctx_jarvis);
             llava_image_embed_free(image_embed);
             ctx_llava->model = NULL;
             llava_free(ctx_llava);
         }
     }
 
-    llama_free_model(model);
+    jarvis_free_model(model);
 
     return 0;
 }

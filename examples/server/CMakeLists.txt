@@ -1,11 +1,11 @@
-set(TARGET llama-server)
+set(TARGET jarvis-server)
 
-option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
+option(JARVIS_SERVER_SSL "Build SSL support for the server" OFF)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 if (MINGW)
-    # fix: https://github.com/ggerganov/llama.cpp/actions/runs/9651004652/job/26617901362?pr=8006
+    # fix: https://github.com/ggerganov/jarvis.cpp/actions/runs/9651004652/job/26617901362?pr=8006
     add_compile_definitions(_WIN32_WINNT=${GGML_WIN_VER})
 endif()
 
@@ -49,7 +49,7 @@ install(TARGETS ${TARGET} RUNTIME)
 
 target_link_libraries(${TARGET} PRIVATE common ${CMAKE_THREAD_LIBS_INIT})
 
-if (LLAMA_SERVER_SSL)
+if (JARVIS_SERVER_SSL)
     find_package(OpenSSL REQUIRED)
     target_link_libraries(${TARGET} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     target_compile_definitions(${TARGET} PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)

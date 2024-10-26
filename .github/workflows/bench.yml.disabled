@@ -1,5 +1,5 @@
 # TODO: there have been some issues with the workflow, so disabling for now
-#       https://github.com/ggerganov/llama.cpp/issues/7893
+#       https://github.com/ggerganov/jarvis.cpp/issues/7893
 #
 # Benchmark
 name: Benchmark
@@ -27,10 +27,10 @@ on:
   push:
     branches:
       - master
-    paths: ['llama.cpp', 'ggml.c', 'ggml-backend.cpp', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
+    paths: ['jarvis.cpp', 'ggml.c', 'ggml-backend.cpp', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
   pull_request_target:
     types: [opened, synchronize, reopened]
-    paths: ['llama.cpp', 'ggml.c', 'ggml-backend.cpp', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
+    paths: ['jarvis.cpp', 'ggml.c', 'ggml-backend.cpp', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
   schedule:
     -  cron: '04 2 * * *'
 
@@ -113,16 +113,16 @@ jobs:
           set -eux
           cmake -B build \
               -DGGML_NATIVE=OFF \
-              -DLLAMA_BUILD_SERVER=ON \
-              -DLLAMA_CURL=ON \
-              -DLLAMA_CUBLAS=ON \
+              -DJARVIS_BUILD_SERVER=ON \
+              -DJARVIS_CURL=ON \
+              -DJARVIS_CUBLAS=ON \
               -DCUDAToolkit_ROOT=/usr/local/cuda \
               -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
               -DCMAKE_CUDA_ARCHITECTURES=75 \
-              -DLLAMA_FATAL_WARNINGS=OFF \
-              -DLLAMA_ALL_WARNINGS=OFF \
+              -DJARVIS_FATAL_WARNINGS=OFF \
+              -DJARVIS_ALL_WARNINGS=OFF \
               -DCMAKE_BUILD_TYPE=Release;
-          cmake --build build --config Release -j $(nproc) --target llama-server
+          cmake --build build --config Release -j $(nproc) --target jarvis-server
 
       - name: Download the dataset
         id: download_dataset
@@ -240,7 +240,7 @@ jobs:
           message: |
             <p align="center">
 
-            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for `${{ matrix.model }}`-`${{ matrix.ftype }}`: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+            📈 **jarvis.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for `${{ matrix.model }}`-`${{ matrix.ftype }}`: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
 
             </p>
 
@@ -249,9 +249,9 @@ jobs:
             <summary>Expand details for performance related PR only</summary>
 
             - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
-            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(95)=${{ env.HTTP_REQ_DURATION_P_95_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
-            - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_P_95_ }}tk/s
-            - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_TOKENS_SECOND_P_95_ }}tk/s
+            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(95)=${{ env.HTTP_REQ_DURATION_P_95_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.JARVISCPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.JARVISCPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
+            - Prompt processing (pp): avg=${{ env.JARVISCPP_PROMPT_PROCESSING_SECOND_AVG }}tk/s p(95)=${{ env.JARVISCPP_PROMPT_PROCESSING_SECOND_P_95_ }}tk/s
+            - Token generation  (tg): avg=${{ env.JARVISCPP_TOKENS_SECOND_AVG }}tk/s p(95)=${{ env.JARVISCPP_TOKENS_SECOND_P_95_ }}tk/s
             - ${{ env.BENCH_GRAPH_XLABEL }}
 
 

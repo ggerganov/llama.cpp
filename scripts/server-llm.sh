@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# Helper script for deploying llama.cpp server with a single Bash command
+# Helper script for deploying jarvis.cpp server with a single Bash command
 #
 # - Works on Linux and macOS
 # - Supports: CPU, CUDA, Metal
 # - Can run all GGUF models from HuggingFace
 # - Can serve requests in parallel
-# - Always builds latest llama.cpp from GitHub
+# - Always builds latest jarvis.cpp from GitHub
 #
 # Limitations
 #
@@ -172,12 +172,12 @@ fi
 
 # sample repos
 repos=(
-    "https://huggingface.co/TheBloke/Llama-2-7B-GGUF"
-    "https://huggingface.co/TheBloke/Llama-2-13B-GGUF"
-    "https://huggingface.co/TheBloke/Llama-2-70B-GGUF"
-    "https://huggingface.co/TheBloke/CodeLlama-7B-GGUF"
-    "https://huggingface.co/TheBloke/CodeLlama-13B-GGUF"
-    "https://huggingface.co/TheBloke/CodeLlama-34B-GGUF"
+    "https://huggingface.co/TheBloke/Jarvis-2-7B-GGUF"
+    "https://huggingface.co/TheBloke/Jarvis-2-13B-GGUF"
+    "https://huggingface.co/TheBloke/Jarvis-2-70B-GGUF"
+    "https://huggingface.co/TheBloke/CodeJarvis-7B-GGUF"
+    "https://huggingface.co/TheBloke/CodeJarvis-13B-GGUF"
+    "https://huggingface.co/TheBloke/CodeJarvis-34B-GGUF"
     "https://huggingface.co/TheBloke/Mistral-7B-v0.1-GGUF"
     "https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF"
     "https://huggingface.co/TheBloke/OpenHermes-2-Mistral-7B-GGUF"
@@ -185,13 +185,13 @@ repos=(
 )
 if [ $is_interactive -eq 1 ]; then
     printf "\n"
-    printf "[I] This is a helper script for deploying llama.cpp's server on this machine.\n\n"
+    printf "[I] This is a helper script for deploying jarvis.cpp's server on this machine.\n\n"
     printf "    Based on the options that follow, the script might download a model file\n"
     printf "    from the internet, which can be a few GBs in size. The script will also\n"
-    printf "    build the latest llama.cpp source code from GitHub, which can be unstable.\n"
+    printf "    build the latest jarvis.cpp source code from GitHub, which can be unstable.\n"
     printf "\n"
     printf "    Upon success, an HTTP server will be started and it will serve the selected\n"
-    printf "    model using llama.cpp for demonstration purposes.\n"
+    printf "    model using jarvis.cpp for demonstration purposes.\n"
     printf "\n"
     printf "    Please note:\n"
     printf "\n"
@@ -199,7 +199,7 @@ if [ $is_interactive -eq 1 ]; then
     printf "    - The server will be listening on all network interfaces\n"
     printf "    - The server will run with default settings which are not always optimal\n"
     printf "    - Do not judge the quality of a model based on the results from this script\n"
-    printf "    - Do not use this script to benchmark llama.cpp\n"
+    printf "    - Do not use this script to benchmark jarvis.cpp\n"
     printf "    - Do not use this script in production\n"
     printf "    - This script is only for demonstration purposes\n"
     printf "\n"
@@ -334,42 +334,42 @@ else
     printf "[+] Using cached weights %s\n" "$wfile"
 fi
 
-# get latest llama.cpp and build
+# get latest jarvis.cpp and build
 
-printf "[+] Downloading latest llama.cpp\n"
+printf "[+] Downloading latest jarvis.cpp\n"
 
-llama_cpp_dir="__llama_cpp_port_${port}__"
+jarvis_cpp_dir="__jarvis_cpp_port_${port}__"
 
-if [[ -d "$llama_cpp_dir" && ! -f "$llama_cpp_dir/__ggml_script__" ]]; then
+if [[ -d "$jarvis_cpp_dir" && ! -f "$jarvis_cpp_dir/__ggml_script__" ]]; then
     # if the dir exists and there isn't a file "__ggml_script__" in it, abort
-    printf "[-] Directory %s already exists\n" "$llama_cpp_dir"
+    printf "[-] Directory %s already exists\n" "$jarvis_cpp_dir"
     printf "[-] Please remove it and try again\n"
     exit 1
-elif [[ -d "$llama_cpp_dir" ]]; then
-    printf "[+] Directory %s already exists\n" "$llama_cpp_dir"
-    printf "[+] Using cached llama.cpp\n"
+elif [[ -d "$jarvis_cpp_dir" ]]; then
+    printf "[+] Directory %s already exists\n" "$jarvis_cpp_dir"
+    printf "[+] Using cached jarvis.cpp\n"
 
-    cd "$llama_cpp_dir"
+    cd "$jarvis_cpp_dir"
     git reset --hard
     git fetch
     git checkout origin/master
 
     cd ..
 else
-    printf "[+] Cloning llama.cpp\n"
+    printf "[+] Cloning jarvis.cpp\n"
 
-    git clone https://github.com/ggerganov/llama.cpp "$llama_cpp_dir"
+    git clone https://github.com/ggerganov/jarvis.cpp "$jarvis_cpp_dir"
 fi
 
 # mark that that the directory is made by this script
-touch "$llama_cpp_dir/__ggml_script__"
+touch "$jarvis_cpp_dir/__ggml_script__"
 
 if [[ $verbose -eq 1 ]]; then
     set -x
 fi
 
 # build
-cd "$llama_cpp_dir"
+cd "$jarvis_cpp_dir"
 
 make clean
 
@@ -380,13 +380,13 @@ fi
 
 if [[ "$backend" == "cuda" ]]; then
     printf "[+] Building with CUDA backend\n"
-    GGML_CUDA=1 make -j llama-server $log
+    GGML_CUDA=1 make -j jarvis-server $log
 elif [[ "$backend" == "cpu" ]]; then
     printf "[+] Building with CPU backend\n"
-    make -j llama-server $log
+    make -j jarvis-server $log
 elif [[ "$backend" == "metal" ]]; then
     printf "[+] Building with Metal backend\n"
-    make -j llama-server $log
+    make -j jarvis-server $log
 else
     printf "[-] Unknown backend: %s\n" "$backend"
     exit 1
@@ -413,6 +413,6 @@ if [[ $verbose -eq 1 ]]; then
     args="$args --verbose"
 fi
 
-./llama-server -m "../$wfile" --host 0.0.0.0 --port "$port" -c $n_kv -np "$n_parallel" $args
+./jarvis-server -m "../$wfile" --host 0.0.0.0 --port "$port" -c $n_kv -np "$n_parallel" $args
 
 exit 0

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "llama-impl.h"
+#include "jarvis-impl.h"
 
 #include <string>
 #include <vector>
@@ -10,10 +10,10 @@
 
 struct llm_tokenizer;
 
-struct llama_vocab {
-    using id    = llama_token;
+struct jarvis_vocab {
+    using id    = jarvis_token;
     using token = std::string;
-    using tattr = llama_token_attr;
+    using tattr = jarvis_token_attr;
 
     struct token_data {
         token text;
@@ -23,8 +23,8 @@ struct llama_vocab {
 
     uint32_t n_vocab = 0; // TODO: not great because has to keep in sync with hparams.n_vocab
 
-    enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
-    enum llama_vocab_pre_type type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+    enum jarvis_vocab_type     type     = JARVIS_VOCAB_TYPE_SPM;
+    enum jarvis_vocab_pre_type type_pre = JARVIS_VOCAB_PRE_TYPE_DEFAULT;
 
     int max_token_len = 0; // used for optimizing longest token search
 
@@ -32,31 +32,31 @@ struct llama_vocab {
     std::vector<token_data>       id_to_token;
 
     std::vector<id>    cache_special_tokens;
-    std::vector<token> cache_token_to_piece; // llama_token_to_piece(special = true);
+    std::vector<token> cache_token_to_piece; // jarvis_token_to_piece(special = true);
 
     std::map<std::pair<std::string, std::string>, int> bpe_ranks;
 
     // default LLaMA special tokens
-    // TODO: should we set all of these to LLAMA_TOKEN_NULL?
+    // TODO: should we set all of these to JARVIS_TOKEN_NULL?
     id special_bos_id  = 1;
     id special_eos_id  = 2;
-    id special_eot_id  = LLAMA_TOKEN_NULL;
-    id special_eom_id  = LLAMA_TOKEN_NULL;
+    id special_eot_id  = JARVIS_TOKEN_NULL;
+    id special_eom_id  = JARVIS_TOKEN_NULL;
     id special_unk_id  = 0;
-    id special_sep_id  = LLAMA_TOKEN_NULL;
-    id special_pad_id  = LLAMA_TOKEN_NULL;
-    id special_cls_id  = LLAMA_TOKEN_NULL;
-    id special_mask_id = LLAMA_TOKEN_NULL;
+    id special_sep_id  = JARVIS_TOKEN_NULL;
+    id special_pad_id  = JARVIS_TOKEN_NULL;
+    id special_cls_id  = JARVIS_TOKEN_NULL;
+    id special_mask_id = JARVIS_TOKEN_NULL;
 
     id linefeed_id = 13;
 
     // fim tokens
-    id special_fim_pre_id = LLAMA_TOKEN_NULL;
-    id special_fim_suf_id = LLAMA_TOKEN_NULL;
-    id special_fim_mid_id = LLAMA_TOKEN_NULL;
-    id special_fim_pad_id = LLAMA_TOKEN_NULL;
-    id special_fim_rep_id = LLAMA_TOKEN_NULL; // repo
-    id special_fim_sep_id = LLAMA_TOKEN_NULL; // file separator
+    id special_fim_pre_id = JARVIS_TOKEN_NULL;
+    id special_fim_suf_id = JARVIS_TOKEN_NULL;
+    id special_fim_mid_id = JARVIS_TOKEN_NULL;
+    id special_fim_pad_id = JARVIS_TOKEN_NULL;
+    id special_fim_rep_id = JARVIS_TOKEN_NULL; // repo
+    id special_fim_sep_id = JARVIS_TOKEN_NULL; // file separator
 
     // set of all tokens that cause "end of generation"
     std::set<id> special_eog_ids;
@@ -75,8 +75,8 @@ struct llama_vocab {
 
     llm_tokenizer * tokenizer = nullptr;
 
-    llama_vocab() = default;
-    ~llama_vocab();
+    jarvis_vocab() = default;
+    ~jarvis_vocab();
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
 
@@ -87,84 +87,84 @@ struct llama_vocab {
 // internal API
 //
 
-// TODO: rename to llama_tokenize_impl
-// TODO: This should probably be in llama.h
-std::vector<llama_vocab::id> llama_tokenize_internal(
-        const llama_vocab & vocab,
+// TODO: rename to jarvis_tokenize_impl
+// TODO: This should probably be in jarvis.h
+std::vector<jarvis_vocab::id> jarvis_tokenize_internal(
+        const jarvis_vocab & vocab,
         std::string raw_text,
         bool add_special,
         bool parse_special = false);
 
-// TODO: move the API below as member functions of llama_vocab
-llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch);
+// TODO: move the API below as member functions of jarvis_vocab
+jarvis_token jarvis_byte_to_token_impl(const jarvis_vocab & vocab, uint8_t ch);
 
-const char * llama_token_get_text_impl(const struct llama_vocab & vocab, llama_token token);
+const char * jarvis_token_get_text_impl(const struct jarvis_vocab & vocab, jarvis_token token);
 
-float llama_token_get_score_impl(const struct llama_vocab & vocab, llama_token token);
+float jarvis_token_get_score_impl(const struct jarvis_vocab & vocab, jarvis_token token);
 
-llama_token_attr llama_token_get_attr_impl(const struct llama_vocab & vocab, llama_token token);
+jarvis_token_attr jarvis_token_get_attr_impl(const struct jarvis_vocab & vocab, jarvis_token token);
 
-bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token);
+bool jarvis_token_is_eog_impl(const struct jarvis_vocab & vocab, jarvis_token token);
 
-bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token token);
+bool jarvis_token_is_control_impl(const struct jarvis_vocab & vocab, jarvis_token token);
 
-llama_token llama_token_bos_impl(const struct llama_vocab & vocab);
-llama_token llama_token_eos_impl(const struct llama_vocab & vocab);
-llama_token llama_token_eot_impl(const struct llama_vocab & vocab);
-llama_token llama_token_eom_impl(const struct llama_vocab & vocab);
-llama_token llama_token_cls_impl(const struct llama_vocab & vocab);
-llama_token llama_token_sep_impl(const struct llama_vocab & vocab);
-llama_token llama_token_nl_impl (const struct llama_vocab & vocab);
-llama_token llama_token_pad_impl(const struct llama_vocab & vocab);
+jarvis_token jarvis_token_bos_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_eos_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_eot_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_eom_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_cls_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_sep_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_nl_impl (const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_pad_impl(const struct jarvis_vocab & vocab);
 
-llama_token llama_token_prefix_impl(const struct llama_vocab & vocab);
-llama_token llama_token_middle_impl(const struct llama_vocab & vocab);
-llama_token llama_token_suffix_impl(const struct llama_vocab & vocab);
+jarvis_token jarvis_token_prefix_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_middle_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_suffix_impl(const struct jarvis_vocab & vocab);
 
-llama_token llama_token_fim_pre_impl(const struct llama_vocab & vocab);
-llama_token llama_token_fim_suf_impl(const struct llama_vocab & vocab);
-llama_token llama_token_fim_mid_impl(const struct llama_vocab & vocab);
-llama_token llama_token_fim_pad_impl(const struct llama_vocab & vocab);
-llama_token llama_token_fim_rep_impl(const struct llama_vocab & vocab);
-llama_token llama_token_fim_sep_impl(const struct llama_vocab & vocab);
+jarvis_token jarvis_token_fim_pre_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_fim_suf_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_fim_mid_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_fim_pad_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_fim_rep_impl(const struct jarvis_vocab & vocab);
+jarvis_token jarvis_token_fim_sep_impl(const struct jarvis_vocab & vocab);
 
-bool llama_add_bos_token_impl(const struct llama_vocab & vocab);
-bool llama_add_eos_token_impl(const struct llama_vocab & vocab);
+bool jarvis_add_bos_token_impl(const struct jarvis_vocab & vocab);
+bool jarvis_add_eos_token_impl(const struct jarvis_vocab & vocab);
 
-int32_t llama_tokenize_impl(
-        const struct llama_vocab & vocab,
+int32_t jarvis_tokenize_impl(
+        const struct jarvis_vocab & vocab,
                       const char * text,
                          int32_t   text_len,
-                     llama_token * tokens,
+                     jarvis_token * tokens,
                          int32_t   n_tokens_max,
                             bool   add_special,
                             bool   parse_special);
 
 // does not write null-terminator to buf
-int32_t llama_token_to_piece_impl(
-        const struct llama_vocab & vocab,
-                     llama_token   token,
+int32_t jarvis_token_to_piece_impl(
+        const struct jarvis_vocab & vocab,
+                     jarvis_token   token,
                             char * buf,
                          int32_t   length,
                          int32_t   lstrip,
                             bool   special);
 
 // check if token0 is contained as a prefix in token1
-bool llama_token_is_prefix_impl(
-        const struct llama_vocab & vocab,
-                     llama_token   token0,
-                     llama_token   token1);
+bool jarvis_token_is_prefix_impl(
+        const struct jarvis_vocab & vocab,
+                     jarvis_token   token0,
+                     jarvis_token   token1);
 
-int32_t llama_detokenize_impl(
-        const struct llama_vocab & vocab,
-               const llama_token * tokens,
+int32_t jarvis_detokenize_impl(
+        const struct jarvis_vocab & vocab,
+               const jarvis_token * tokens,
                          int32_t   n_tokens,
                             char * text,
                          int32_t   text_len_max,
                             bool   remove_special,
                             bool   unparse_special);
 
-std::string llama_detokenize(
-        const struct llama_vocab & vocab,
-  const std::vector<llama_token> & tokens,
+std::string jarvis_detokenize(
+        const struct jarvis_vocab & vocab,
+  const std::vector<jarvis_token> & tokens,
                             bool   special);

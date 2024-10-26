@@ -22,11 +22,11 @@ def sha256sum(file):
     return file_hash.hexdigest()
 
 
-# Define the path to the llama directory (parent folder of script directory)
-llama_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+# Define the path to the jarvis directory (parent folder of script directory)
+jarvis_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 # Define the file with the list of hashes and filenames
-hash_list_file = os.path.join(llama_path, "SHA256SUMS")
+hash_list_file = os.path.join(jarvis_path, "SHA256SUMS")
 
 # Check if the hash list file exists
 if not os.path.exists(hash_list_file):
@@ -45,8 +45,8 @@ for line in hash_list:
     # Split the line into hash and filename
     hash_value, filename = line.split("  ")
 
-    # Get the full path of the file by joining the llama path and the filename
-    file_path = os.path.join(llama_path, filename)
+    # Get the full path of the file by joining the jarvis path and the filename
+    file_path = os.path.join(jarvis_path, filename)
 
     # Informing user of the progress of the integrity check
     logger.info(f"Verifying the checksum of {file_path}")

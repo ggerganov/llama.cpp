@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "llama.h"
+#include "jarvis.h"
 
 #include <string>
 #include <vector>
@@ -18,8 +18,8 @@
 #define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
 
 #define print_build_info() do {                                                                     \
-    fprintf(stderr, "%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);      \
-    fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
+    fprintf(stderr, "%s: build = %d (%s)\n",      __func__, JARVIS_BUILD_NUMBER, JARVIS_COMMIT);      \
+    fprintf(stderr, "%s: built with %s for %s\n", __func__, JARVIS_COMPILER, JARVIS_BUILD_TARGET);    \
 } while(0)
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
@@ -30,14 +30,14 @@ struct common_lora_adapter_info {
 };
 
 struct common_lora_adapter_container : common_lora_adapter_info {
-    struct llama_lora_adapter * adapter;
+    struct jarvis_lora_adapter * adapter;
 };
 
 // build info
-extern int LLAMA_BUILD_NUMBER;
-extern char const * LLAMA_COMMIT;
-extern char const * LLAMA_COMPILER;
-extern char const * LLAMA_BUILD_TARGET;
+extern int JARVIS_BUILD_NUMBER;
+extern char const * JARVIS_COMMIT;
+extern char const * JARVIS_COMPILER;
+extern char const * JARVIS_BUILD_TARGET;
 
 struct common_control_vector_load_info;
 
@@ -61,25 +61,25 @@ int32_t cpu_get_num_math();
 // Common params
 //
 
-enum llama_example {
-    LLAMA_EXAMPLE_COMMON,
-    LLAMA_EXAMPLE_SPECULATIVE,
-    LLAMA_EXAMPLE_MAIN,
-    LLAMA_EXAMPLE_INFILL,
-    LLAMA_EXAMPLE_EMBEDDING,
-    LLAMA_EXAMPLE_PERPLEXITY,
-    LLAMA_EXAMPLE_RETRIEVAL,
-    LLAMA_EXAMPLE_PASSKEY,
-    LLAMA_EXAMPLE_IMATRIX,
-    LLAMA_EXAMPLE_BENCH,
-    LLAMA_EXAMPLE_SERVER,
-    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
-    LLAMA_EXAMPLE_EXPORT_LORA,
-    LLAMA_EXAMPLE_LLAVA,
-    LLAMA_EXAMPLE_LOOKUP,
-    LLAMA_EXAMPLE_PARALLEL,
+enum jarvis_example {
+    JARVIS_EXAMPLE_COMMON,
+    JARVIS_EXAMPLE_SPECULATIVE,
+    JARVIS_EXAMPLE_MAIN,
+    JARVIS_EXAMPLE_INFILL,
+    JARVIS_EXAMPLE_EMBEDDING,
+    JARVIS_EXAMPLE_PERPLEXITY,
+    JARVIS_EXAMPLE_RETRIEVAL,
+    JARVIS_EXAMPLE_PASSKEY,
+    JARVIS_EXAMPLE_IMATRIX,
+    JARVIS_EXAMPLE_BENCH,
+    JARVIS_EXAMPLE_SERVER,
+    JARVIS_EXAMPLE_CVECTOR_GENERATOR,
+    JARVIS_EXAMPLE_EXPORT_LORA,
+    JARVIS_EXAMPLE_LLAVA,
+    JARVIS_EXAMPLE_LOOKUP,
+    JARVIS_EXAMPLE_PARALLEL,
 
-    LLAMA_EXAMPLE_COUNT,
+    JARVIS_EXAMPLE_COUNT,
 };
 
 enum common_sampler_type {
@@ -103,7 +103,7 @@ enum dimre_method {
 
 // sampler parameters
 struct common_sampler_params {
-    uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
+    uint32_t seed = JARVIS_DEFAULT_SEED; // the seed used to initialize jarvis_sampler
 
     int32_t n_prev             = 64;    // number of previous tokens to remember
     int32_t n_probs            = 0;     // if greater than 0, output the probabilities of top n_probs tokens.
@@ -149,7 +149,7 @@ struct common_sampler_params {
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
 
-    std::vector<llama_logit_bias> logit_bias; // logit biases to apply
+    std::vector<jarvis_logit_bias> logit_bias; // logit biases to apply
 
     // print the parameters into a string
     std::string print() const;
@@ -192,10 +192,10 @@ struct common_params {
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
-    enum llama_split_mode        split_mode        = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
-    enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
-    enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
-    enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
+    enum jarvis_split_mode        split_mode        = JARVIS_SPLIT_MODE_LAYER; // how to split the model across GPUs
+    enum jarvis_rope_scaling_type rope_scaling_type = JARVIS_ROPE_SCALING_TYPE_UNSPECIFIED;
+    enum jarvis_pooling_type      pooling_type      = JARVIS_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
+    enum jarvis_attention_type    attention_type    = JARVIS_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
     struct common_sampler_params sparams;
 
@@ -219,9 +219,9 @@ struct common_params {
 
     std::vector<std::string> in_files;   // all input files
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
-    std::vector<llama_model_kv_override> kv_overrides;
+    std::vector<jarvis_model_kv_override> kv_overrides;
 
-    bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_lora_adapter_apply)
+    bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using jarvis_lora_adapter_apply)
     std::vector<common_lora_adapter_info> lora_adapters; // lora adapter path with user defined scale
 
     std::vector<common_control_vector_load_info> control_vectors; // control vector with user defined scale
@@ -377,15 +377,15 @@ bool set_process_priority(enum ggml_sched_priority prio);
 
 #ifdef __GNUC__
 #ifdef __MINGW32__
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#define JARVIS_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
 #else
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#define JARVIS_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
 #endif
 #else
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
+#define JARVIS_COMMON_ATTRIBUTE_FORMAT(...)
 #endif
 
-LLAMA_COMMON_ATTRIBUTE_FORMAT(1, 2)
+JARVIS_COMMON_ATTRIBUTE_FORMAT(1, 2)
 std::string string_format(const char * fmt, ...);
 
 std::string string_strip(const std::string & str);
@@ -424,13 +424,13 @@ std::vector<std::string> string_split<std::string>(const std::string & input, ch
     return parts;
 }
 
-bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
+bool string_parse_kv_override(const char * data, std::vector<jarvis_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);
 
 std::string string_from(bool value);
 std::string string_from(const std::vector<int> & values);
-std::string string_from(const struct llama_context * ctx, const std::vector<llama_token> & tokens);
-std::string string_from(const struct llama_context * ctx, const struct llama_batch & batch);
+std::string string_from(const struct jarvis_context * ctx, const std::vector<jarvis_token> & tokens);
+std::string string_from(const struct jarvis_context * ctx, const struct jarvis_batch & batch);
 
 //
 // Filesystem utils
@@ -447,32 +447,32 @@ std::string fs_get_cache_file(const std::string & filename);
 //
 
 struct common_init_result {
-    struct llama_model   * model   = nullptr;
-    struct llama_context * context = nullptr;
+    struct jarvis_model   * model   = nullptr;
+    struct jarvis_context * context = nullptr;
     std::vector<common_lora_adapter_container> lora_adapters;
 };
 
 struct common_init_result     common_init_from_params(common_params & params);
 
-struct llama_model_params     common_model_params_to_llama  (const common_params & params);
-struct llama_context_params   common_context_params_to_llama(const common_params & params);
+struct jarvis_model_params     common_model_params_to_jarvis  (const common_params & params);
+struct jarvis_context_params   common_context_params_to_jarvis(const common_params & params);
 struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
 
-struct llama_model * common_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
-struct llama_model * common_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct jarvis_model * common_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct jarvis_model_params & params);
+struct jarvis_model * common_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct jarvis_model_params & params);
 
 // clear LoRA adapters from context, then apply new list of adapters
-void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters);
+void common_lora_adapters_apply(struct jarvis_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters);
 
 // Batch utils
 
-void common_batch_clear(struct llama_batch & batch);
+void common_batch_clear(struct jarvis_batch & batch);
 
 void common_batch_add(
-                 struct llama_batch & batch,
-                        llama_token   id,
-                          llama_pos   pos,
-    const std::vector<llama_seq_id> & seq_ids,
+                 struct jarvis_batch & batch,
+                        jarvis_token   id,
+                          jarvis_pos   pos,
+    const std::vector<jarvis_seq_id> & seq_ids,
                                bool   logits);
 
 //
@@ -481,14 +481,14 @@ void common_batch_add(
 
 // tokenizes a string into a vector of tokens
 // should work similar to Python's `tokenizer.encode`
-std::vector<llama_token> common_tokenize(
-  const struct llama_context * ctx,
+std::vector<jarvis_token> common_tokenize(
+  const struct jarvis_context * ctx,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);
 
-std::vector<llama_token> common_tokenize(
-    const struct llama_model * model,
+std::vector<jarvis_token> common_tokenize(
+    const struct jarvis_model * model,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);
@@ -496,23 +496,23 @@ std::vector<llama_token> common_tokenize(
 // tokenizes a token into a piece, optionally renders special/control tokens
 // should work similar to Python's `tokenizer.id_to_piece`
 std::string common_token_to_piece(
-        const struct llama_context * ctx,
-                       llama_token   token,
+        const struct jarvis_context * ctx,
+                       jarvis_token   token,
                        bool          special = true);
 
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
 // optionally renders special/control tokens
 std::string common_detokenize(
-                         llama_context * ctx,
-        const std::vector<llama_token> & tokens,
+                         jarvis_context * ctx,
+        const std::vector<jarvis_token> & tokens,
                                   bool   special = true);
 
 //
 // Chat template utils
 //
 
-// same with llama_chat_message, but uses std::string
+// same with jarvis_chat_message, but uses std::string
 struct common_chat_msg {
     std::string role;
     std::string content;
@@ -521,23 +521,23 @@ struct common_chat_msg {
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool common_chat_verify_template(const std::string & tmpl);
 
-// CPP wrapper for llama_chat_apply_template
+// CPP wrapper for jarvis_chat_apply_template
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
-std::string common_chat_apply_template(const struct llama_model * model,
+std::string common_chat_apply_template(const struct jarvis_model * model,
         const std::string & tmpl,
         const std::vector<common_chat_msg> & chat,
         bool add_ass);
 
 // Format single message, while taking into account the position of that message in chat history
-std::string common_chat_format_single(const struct llama_model * model,
+std::string common_chat_format_single(const struct jarvis_model * model,
         const std::string & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass);
 
 // Returns an example of formatted chat
-std::string common_chat_format_example(const struct llama_model * model,
+std::string common_chat_format_example(const struct jarvis_model * model,
         const std::string & tmpl);
 
 //
@@ -545,10 +545,10 @@ std::string common_chat_format_example(const struct llama_model * model,
 //
 
 // Dump the KV cache view with the number of sequences per cell.
-void common_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size = 80);
+void common_kv_cache_dump_view(const jarvis_kv_cache_view & view, int row_size = 80);
 
 // Dump the KV cache view showing individual sequences in each cell (long output).
-void common_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
+void common_kv_cache_dump_view_seqs(const jarvis_kv_cache_view & view, int row_size = 40);
 
 //
 // Embedding utils
@@ -596,5 +596,5 @@ void yaml_dump_vector_int      (FILE * stream, const char * prop_name, const std
 void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const char * data);
 
 void yaml_dump_non_result_info(
-    FILE * stream, const common_params & params, const llama_context * lctx,
+    FILE * stream, const common_params & params, const jarvis_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);

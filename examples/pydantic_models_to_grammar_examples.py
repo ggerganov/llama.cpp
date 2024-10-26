@@ -20,10 +20,10 @@ from pydantic_models_to_grammar import (add_run_method_to_dynamic_model, convert
 
 
 def create_completion(host, prompt, gbnf_grammar):
-    """Calls the /completion API on llama-server.
+    """Calls the /completion API on jarvis-server.
 
     See
-    https://github.com/ggerganov/llama.cpp/tree/HEAD/examples/server#api-endpoints
+    https://github.com/ggerganov/jarvis.cpp/tree/HEAD/examples/server#api-endpoints
     """
     print(f"  Request:\n    Grammar:\n{textwrap.indent(gbnf_grammar, '      ')}\n    Prompt:\n{textwrap.indent(prompt.rstrip(), '      ')}")
     headers = {"Content-Type": "application/json"}
@@ -295,7 +295,7 @@ def example_concurrent(host):
 
 def main():
     parser = argparse.ArgumentParser(description=sys.modules[__name__].__doc__)
-    parser.add_argument("--host", default="localhost:8080", help="llama.cpp server")
+    parser.add_argument("--host", default="localhost:8080", help="jarvis.cpp server")
     parser.add_argument("-v", "--verbose", action="store_true", help="enables logging")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO if args.verbose else logging.ERROR)

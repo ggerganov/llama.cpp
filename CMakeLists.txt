@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
-project("llama.cpp" C CXX)
+project("jarvis.cpp" C CXX)
 include(CheckIncludeFileCXX)
 
 #set(CMAKE_WARN_DEPRECATED YES)
@@ -18,20 +18,20 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    set(LLAMA_STANDALONE ON)
+    set(JARVIS_STANDALONE ON)
 
     include(git-vars)
 
     # configure project version
     # TODO
 else()
-    set(LLAMA_STANDALONE OFF)
+    set(JARVIS_STANDALONE OFF)
 endif()
 
 if (EMSCRIPTEN)
     set(BUILD_SHARED_LIBS_DEFAULT OFF)
 
-    option(LLAMA_WASM_SINGLE_FILE "llama: embed WASM inside the generated llama.js" ON)
+    option(JARVIS_WASM_SINGLE_FILE "jarvis: embed WASM inside the generated jarvis.js" ON)
 else()
     if (MINGW)
         set(BUILD_SHARED_LIBS_DEFAULT OFF)
@@ -51,41 +51,41 @@ endif()
 #
 
 # debug
-option(LLAMA_ALL_WARNINGS           "llama: enable all compiler warnings"                   ON)
-option(LLAMA_ALL_WARNINGS_3RD_PARTY "llama: enable all compiler warnings in 3rd party libs" OFF)
+option(JARVIS_ALL_WARNINGS           "jarvis: enable all compiler warnings"                   ON)
+option(JARVIS_ALL_WARNINGS_3RD_PARTY "jarvis: enable all compiler warnings in 3rd party libs" OFF)
 
 # build
-option(LLAMA_FATAL_WARNINGS "llama: enable -Werror flag" OFF)
+option(JARVIS_FATAL_WARNINGS "jarvis: enable -Werror flag" OFF)
 
 # sanitizers
-option(LLAMA_SANITIZE_THREAD    "llama: enable thread sanitizer"    OFF)
-option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
-option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
+option(JARVIS_SANITIZE_THREAD    "jarvis: enable thread sanitizer"    OFF)
+option(JARVIS_SANITIZE_ADDRESS   "jarvis: enable address sanitizer"   OFF)
+option(JARVIS_SANITIZE_UNDEFINED "jarvis: enable undefined sanitizer" OFF)
 
 # utils
-option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
+option(JARVIS_BUILD_COMMON "jarvis: build common utils library" ${JARVIS_STANDALONE})
 
 # extra artifacts
-option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES "llama: build examples"       ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_SERVER   "llama: build server example" ${LLAMA_STANDALONE})
+option(JARVIS_BUILD_TESTS    "jarvis: build tests"          ${JARVIS_STANDALONE})
+option(JARVIS_BUILD_EXAMPLES "jarvis: build examples"       ${JARVIS_STANDALONE})
+option(JARVIS_BUILD_SERVER   "jarvis: build server example" ${JARVIS_STANDALONE})
 
 # 3rd party libs
-option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
+option(JARVIS_CURL "jarvis: use libcurl to download model from an URL" OFF)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
 
 # override ggml options
-set(GGML_SANITIZE_THREAD    ${LLAMA_SANITIZE_THREAD})
-set(GGML_SANITIZE_ADDRESS   ${LLAMA_SANITIZE_ADDRESS})
-set(GGML_SANITIZE_UNDEFINED ${LLAMA_SANITIZE_UNDEFINED})
-set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
-set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
+set(GGML_SANITIZE_THREAD    ${JARVIS_SANITIZE_THREAD})
+set(GGML_SANITIZE_ADDRESS   ${JARVIS_SANITIZE_ADDRESS})
+set(GGML_SANITIZE_UNDEFINED ${JARVIS_SANITIZE_UNDEFINED})
+set(GGML_ALL_WARNINGS       ${JARVIS_ALL_WARNINGS})
+set(GGML_FATAL_WARNINGS     ${JARVIS_FATAL_WARNINGS})
 
 # change the default for these ggml options
-if (NOT DEFINED GGML_LLAMAFILE)
-    set(GGML_LLAMAFILE_DEFAULT ON)
+if (NOT DEFINED GGML_JARVISFILE)
+    set(GGML_JARVISFILE_DEFAULT ON)
 endif()
 
 if (NOT DEFINED GGML_AMX)
@@ -97,23 +97,23 @@ if (NOT DEFINED GGML_CUDA_GRAPHS)
 endif()
 
 # transition helpers
-function (llama_option_depr TYPE OLD NEW)
+function (jarvis_option_depr TYPE OLD NEW)
     if (${OLD})
         message(${TYPE} "${OLD} is deprecated and will be removed in the future.\nUse ${NEW} instead\n")
         set(${NEW} ON PARENT_SCOPE)
     endif()
 endfunction()
 
-llama_option_depr(FATAL_ERROR LLAMA_CUBLAS              GGML_CUDA)
-llama_option_depr(WARNING     LLAMA_CUDA                GGML_CUDA)
-llama_option_depr(WARNING     LLAMA_KOMPUTE             GGML_KOMPUTE)
-llama_option_depr(WARNING     LLAMA_METAL               GGML_METAL)
-llama_option_depr(WARNING     LLAMA_METAL_EMBED_LIBRARY GGML_METAL_EMBED_LIBRARY)
-llama_option_depr(WARNING     LLAMA_NATIVE              GGML_NATIVE)
-llama_option_depr(WARNING     LLAMA_RPC                 GGML_RPC)
-llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
-llama_option_depr(WARNING     LLAMA_SYCL_F16            GGML_SYCL_F16)
-llama_option_depr(WARNING     LLAMA_CANN                GGML_CANN)
+jarvis_option_depr(FATAL_ERROR JARVIS_CUBLAS              GGML_CUDA)
+jarvis_option_depr(WARNING     JARVIS_CUDA                GGML_CUDA)
+jarvis_option_depr(WARNING     JARVIS_KOMPUTE             GGML_KOMPUTE)
+jarvis_option_depr(WARNING     JARVIS_METAL               GGML_METAL)
+jarvis_option_depr(WARNING     JARVIS_METAL_EMBED_LIBRARY GGML_METAL_EMBED_LIBRARY)
+jarvis_option_depr(WARNING     JARVIS_NATIVE              GGML_NATIVE)
+jarvis_option_depr(WARNING     JARVIS_RPC                 GGML_RPC)
+jarvis_option_depr(WARNING     JARVIS_SYCL                GGML_SYCL)
+jarvis_option_depr(WARNING     JARVIS_SYCL_F16            GGML_SYCL_F16)
+jarvis_option_depr(WARNING     JARVIS_CANN                GGML_CANN)
 
 #
 # build the library
@@ -132,18 +132,18 @@ add_subdirectory(src)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-set(LLAMA_BUILD_NUMBER        ${BUILD_NUMBER})
-set(LLAMA_BUILD_COMMIT        ${BUILD_COMMIT})
-set(LLAMA_INSTALL_VERSION 0.0.${BUILD_NUMBER})
+set(JARVIS_BUILD_NUMBER        ${BUILD_NUMBER})
+set(JARVIS_BUILD_COMMIT        ${BUILD_COMMIT})
+set(JARVIS_INSTALL_VERSION 0.0.${BUILD_NUMBER})
 
-set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header  files")
-set(LLAMA_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
-set(LLAMA_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
+set(JARVIS_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header  files")
+set(JARVIS_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
+set(JARVIS_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
 
 
 # At the moment some compile definitions are placed within the ggml/src
 # directory but not exported on the `ggml` target. This could be improved by
-# determining _precisely_ which defines are necessary for the llama-config
+# determining _precisely_ which defines are necessary for the jarvis-config
 # package.
 #
 set(GGML_TRANSIENT_DEFINES)
@@ -158,25 +158,25 @@ if (GGML_TARGET_DEFINES)
 endif()
 get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
 
-set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h)
-install(TARGETS llama LIBRARY PUBLIC_HEADER)
+set_target_properties(jarvis PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/jarvis.h)
+install(TARGETS jarvis LIBRARY PUBLIC_HEADER)
 
 configure_package_config_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/llama-config.cmake.in
-        ${CMAKE_CURRENT_BINARY_DIR}/llama-config.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/llama
-    PATH_VARS LLAMA_INCLUDE_INSTALL_DIR
-              LLAMA_LIB_INSTALL_DIR
-              LLAMA_BIN_INSTALL_DIR )
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/jarvis-config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/jarvis-config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/jarvis
+    PATH_VARS JARVIS_INCLUDE_INSTALL_DIR
+              JARVIS_LIB_INSTALL_DIR
+              JARVIS_BIN_INSTALL_DIR )
 
 write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/llama-version.cmake
-    VERSION ${LLAMA_INSTALL_VERSION}
+        ${CMAKE_CURRENT_BINARY_DIR}/jarvis-version.cmake
+    VERSION ${JARVIS_INSTALL_VERSION}
     COMPATIBILITY SameMajorVersion)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/llama-config.cmake
-              ${CMAKE_CURRENT_BINARY_DIR}/llama-version.cmake
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/llama)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/jarvis-config.cmake
+              ${CMAKE_CURRENT_BINARY_DIR}/jarvis-version.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/jarvis)
 
 install(
     FILES convert_hf_to_gguf.py
@@ -190,27 +190,27 @@ install(
         WORLD_EXECUTE
     DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-configure_file(cmake/llama.pc.in
-        "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
+configure_file(cmake/jarvis.pc.in
+        "${CMAKE_CURRENT_BINARY_DIR}/jarvis.pc"
         @ONLY)
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/jarvis.pc"
         DESTINATION lib/pkgconfig)
 
 #
 # utils, programs, examples and tests
 #
 
-if (LLAMA_BUILD_COMMON)
+if (JARVIS_BUILD_COMMON)
     add_subdirectory(common)
 endif()
 
-if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+if (JARVIS_BUILD_COMMON AND JARVIS_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
     add_subdirectory(tests)
 endif()
 
-if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
+if (JARVIS_BUILD_COMMON AND JARVIS_BUILD_EXAMPLES)
     add_subdirectory(examples)
     add_subdirectory(pocs)
 endif()

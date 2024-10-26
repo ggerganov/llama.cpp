@@ -21,10 +21,10 @@ on:
     paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
 
 env:
-  LLAMA_LOG_COLORS: 1
-  LLAMA_LOG_PREFIX: 1
-  LLAMA_LOG_TIMESTAMPS: 1
-  LLAMA_LOG_VERBOSITY: 10
+  JARVIS_LOG_COLORS: 1
+  JARVIS_LOG_PREFIX: 1
+  JARVIS_LOG_TIMESTAMPS: 1
+  JARVIS_LOG_VERBOSITY: 10
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}
@@ -41,7 +41,7 @@ jobs:
         include:
           - build_type: Release
             sanitizer: ""
-      fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
+      fail-fast: false # While -DJARVIS_SANITIZE_THREAD=ON is broken
 
     steps:
       - name: Dependencies
@@ -99,12 +99,12 @@ jobs:
         run: |
           cmake -B build \
               -DGGML_NATIVE=OFF \
-              -DLLAMA_BUILD_SERVER=ON \
-              -DLLAMA_CURL=ON \
+              -DJARVIS_BUILD_SERVER=ON \
+              -DJARVIS_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON \
+              -DJARVIS_SANITIZE_${{ matrix.sanitizer }}=ON \
               -DGGML_OPENMP=OFF ;
-          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target llama-server
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target jarvis-server
 
       - name: Build
         id: cmake_build
@@ -112,11 +112,11 @@ jobs:
         run: |
           cmake -B build \
               -DGGML_NATIVE=OFF \
-              -DLLAMA_BUILD_SERVER=ON \
-              -DLLAMA_CURL=ON \
+              -DJARVIS_BUILD_SERVER=ON \
+              -DJARVIS_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
-          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target llama-server
+              -DJARVIS_SANITIZE_${{ matrix.sanitizer }}=ON ;
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target jarvis-server
 
       - name: Tests
         id: server_integration_tests
@@ -155,8 +155,8 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
-          cmake -B build -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
-          cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS} --target llama-server
+          cmake -B build -DJARVIS_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
+          cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS} --target jarvis-server
 
       - name: Python setup
         id: setup_python
@@ -180,7 +180,7 @@ jobs:
         run: |
           cd examples/server/tests
           $env:PYTHONIOENCODING = ":replace"
-          behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
+          behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags jarvis.cpp
 
       - name: Slow tests
         id: server_integration_tests_slow

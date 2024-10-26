@@ -1,4 +1,4 @@
-package com.example.llama
+package com.example.jarvis
 
 import android.app.ActivityManager
 import android.app.DownloadManager
@@ -30,7 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
-import com.example.llama.ui.theme.LlamaAndroidTheme
+import com.example.jarvis.ui.theme.JarvisAndroidTheme
 import java.io.File
 
 class MainActivity(
@@ -77,9 +77,9 @@ class MainActivity(
                 File(extFilesDir, "phi-2-q4_0.gguf"),
             ),
             Downloadable(
-                "TinyLlama 1.1B (f16, 2.2 GiB)",
-                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true"),
-                File(extFilesDir, "tinyllama-1.1-f16.gguf"),
+                "TinyJarvis 1.1B (f16, 2.2 GiB)",
+                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/tinyjarvis-1.1b/ggml-model-f16.gguf?download=true"),
+                File(extFilesDir, "tinyjarvis-1.1-f16.gguf"),
             ),
             Downloadable(
                 "Phi 2 DPO (Q3_K_M, 1.48 GiB)",
@@ -89,7 +89,7 @@ class MainActivity(
         )
 
         setContent {
-            LlamaAndroidTheme {
+            JarvisAndroidTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),

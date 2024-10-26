@@ -390,7 +390,7 @@ class SchemaConverter:
             Transforms a regular expression pattern into a GBNF rule.
 
             Input: https://json-schema.org/understanding-json-schema/reference/regular_expressions
-            Output: https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md
+            Output: https://github.com/ggerganov/jarvis.cpp/blob/master/grammars/README.md
 
             Unsupported features: negative/positive lookaheads, greedy/non-greedy modifiers.
 
@@ -751,7 +751,7 @@ class SchemaConverter:
 def main(args_in = None):
     parser = argparse.ArgumentParser(
         description='''
-            Generates a grammar (suitable for use in ./llama-cli) that produces JSON conforming to a
+            Generates a grammar (suitable for use in ./jarvis-cli) that produces JSON conforming to a
             given JSON schema. Only a subset of JSON schema features are supported; more may be
             added in the future.
         ''',

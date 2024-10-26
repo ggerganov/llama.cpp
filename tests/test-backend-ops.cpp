@@ -2873,7 +2873,7 @@ enum llm_norm_type {
     LLM_NORM_RMS,
 };
 
-struct llama_hparams {
+struct jarvis_hparams {
     uint32_t n_vocab;
     uint32_t n_embd;
     uint32_t n_head;
@@ -2904,10 +2904,10 @@ struct llama_hparams {
 
 // LLM base class
 struct test_llm : public test_case {
-    llama_hparams hp;
+    jarvis_hparams hp;
 
 protected:
-    test_llm(llama_hparams hp)
+    test_llm(jarvis_hparams hp)
         : hp(std::move(hp)) {
     }
 
@@ -3006,8 +3006,8 @@ public:
     }
 };
 
-// Llama
-struct test_llama : public test_llm {
+// Jarvis
+struct test_jarvis : public test_llm {
     static constexpr float freq_base = 10000.0f;
     static constexpr float freq_scale = 1.0f;
     static constexpr float ext_factor = 0.0f;
@@ -3017,7 +3017,7 @@ struct test_llama : public test_llm {
 
     std::string op_desc(ggml_tensor * t) override {
         GGML_UNUSED(t);
-        return "LLAMA";
+        return "JARVIS";
     }
 
     std::string vars() override {
@@ -3029,7 +3029,7 @@ struct test_llama : public test_llm {
         return 2e-3;
     }
 
-    test_llama(int n_tokens = 1)
+    test_jarvis(int n_tokens = 1)
         : test_llm({
             /*n_vocab        =*/ 32000,
             /*n_embd         =*/ 3200,
@@ -3683,12 +3683,12 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
                     for (float af : { 1.0f, 1.4245f }) {
                         for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
                             for (bool ff : {false, true}) { // freq_factors
-                                test_cases.emplace_back(new test_rope(type, {128,  32, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 7B
+                                test_cases.emplace_back(new test_rope(type, {128,  32, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // jarvis 7B
 
                                 if (all) {
-                                    test_cases.emplace_back(new test_rope(type, {128,  40, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 13B
-                                    test_cases.emplace_back(new test_rope(type, {128,  52, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 30B
-                                    test_cases.emplace_back(new test_rope(type, {128,  64, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 65B
+                                    test_cases.emplace_back(new test_rope(type, {128,  40, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // jarvis 13B
+                                    test_cases.emplace_back(new test_rope(type, {128,  52, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // jarvis 30B
+                                    test_cases.emplace_back(new test_rope(type, {128,  64, 2, 1}, 128, 0, 512, fs, ef, af, ff, v)); // jarvis 65B
                                 }
 
                                 if (all) {
@@ -3762,8 +3762,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
 
     // these tests are disabled to save execution time, but they can be handy for debugging
 #if 0
-    test_cases.emplace_back(new test_llama(1));
-    test_cases.emplace_back(new test_llama(2));
+    test_cases.emplace_back(new test_jarvis(1));
+    test_cases.emplace_back(new test_jarvis(2));
     test_cases.emplace_back(new test_falcon(1));
     test_cases.emplace_back(new test_falcon(2));
 #endif

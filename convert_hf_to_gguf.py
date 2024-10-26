@@ -49,7 +49,7 @@ class Model:
     _model_classes: dict[str, type[Model]] = {}
 
     dir_model: Path
-    ftype: gguf.LlamaFileType
+    ftype: gguf.JarvisFileType
     fname_out: Path
     is_big_endian: bool
     endianess: gguf.GGUFEndian
@@ -69,7 +69,7 @@ class Model:
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool = False,
+    def __init__(self, dir_model: Path, ftype: gguf.JarvisFileType, fname_out: Path, is_big_endian: bool = False,
                  use_temp_file: bool = False, eager: bool = False,
                  metadata_override: Path | None = None, model_name: str | None = None,
                  split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
@@ -96,15 +96,15 @@ class Model:
         self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
-        if self.ftype == gguf.LlamaFileType.GUESSED:
+        if self.ftype == gguf.JarvisFileType.GUESSED:
             # NOTE: can't use field "torch_dtype" in config.json, because some finetunes lie.
             _, first_tensor = next(self.get_tensors())
             if first_tensor.dtype == torch.float16:
                 logger.info(f"choosing --outtype f16 from first tensor type ({first_tensor.dtype})")
-                self.ftype = gguf.LlamaFileType.MOSTLY_F16
+                self.ftype = gguf.JarvisFileType.MOSTLY_F16
             else:
                 logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
-                self.ftype = gguf.LlamaFileType.MOSTLY_BF16
+                self.ftype = gguf.JarvisFileType.MOSTLY_BF16
 
         # Configure GGUF Writer
         self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
@@ -308,7 +308,7 @@ class Model:
                 if n_dims <= 1 or new_name.endswith("_norm.weight"):
                     data_qtype = gguf.GGMLQuantizationType.F32
 
-                # Conditions should closely match those in llama_model_quantize_internal in llama.cpp
+                # Conditions should closely match those in jarvis_model_quantize_internal in jarvis.cpp
                 # Some tensor types are always in float32
                 if data_qtype is False and (
                     any(
@@ -337,25 +337,25 @@ class Model:
                     )
                 ):
                     if self.ftype in (
-                        gguf.LlamaFileType.MOSTLY_TQ1_0,
-                        gguf.LlamaFileType.MOSTLY_TQ2_0,
+                        gguf.JarvisFileType.MOSTLY_TQ1_0,
+                        gguf.JarvisFileType.MOSTLY_TQ2_0,
                     ):
                         # TODO: use Q4_K and Q6_K
                         data_qtype = gguf.GGMLQuantizationType.F16
 
                 # No override (data_qtype is False), or wants to be quantized (data_qtype is True)
                 if isinstance(data_qtype, bool):
-                    if self.ftype == gguf.LlamaFileType.ALL_F32:
+                    if self.ftype == gguf.JarvisFileType.ALL_F32:
                         data_qtype = gguf.GGMLQuantizationType.F32
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_F16:
+                    elif self.ftype == gguf.JarvisFileType.MOSTLY_F16:
                         data_qtype = gguf.GGMLQuantizationType.F16
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
+                    elif self.ftype == gguf.JarvisFileType.MOSTLY_BF16:
                         data_qtype = gguf.GGMLQuantizationType.BF16
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0:
+                    elif self.ftype == gguf.JarvisFileType.MOSTLY_Q8_0:
                         data_qtype = gguf.GGMLQuantizationType.Q8_0
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_TQ1_0:
+                    elif self.ftype == gguf.JarvisFileType.MOSTLY_TQ1_0:
                         data_qtype = gguf.GGMLQuantizationType.TQ1_0
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_TQ2_0:
+                    elif self.ftype == gguf.JarvisFileType.MOSTLY_TQ2_0:
                         data_qtype = gguf.GGMLQuantizationType.TQ2_0
                     else:
                         raise ValueError(f"Unknown file type: {self.ftype.name}")
@@ -394,7 +394,7 @@ class Model:
         if self.metadata.size_label is None and total_params > 0:
             self.metadata.size_label = gguf.size_label(total_params, shared_params, expert_params, expert_count)
 
-        # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
+        # Extract the encoding scheme from the file type name. e.g. 'gguf.JarvisFileType.MOSTLY_Q8_0' --> 'Q8_0'
         output_type: str = self.ftype.name.partition("_")[2]
 
         # Filename Output
@@ -537,13 +537,13 @@ class Model:
 
     # NOTE: this function is generated by convert_hf_to_gguf_update.py
     #       do not modify it manually!
-    # ref:  https://github.com/ggerganov/llama.cpp/pull/6920
+    # ref:  https://github.com/ggerganov/jarvis.cpp/pull/6920
     # Marker: Start get_vocab_base_pre
     def get_vocab_base_pre(self, tokenizer) -> str:
         # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that
         # is specific for the BPE pre-tokenizer used by the model
         # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
-        # use in llama.cpp to implement the same pre-tokenizer
+        # use in jarvis.cpp to implement the same pre-tokenizer
 
         chktxt = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶\u200d🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български \'\'\'\'\'\'```````""""......!!!!!!?????? I\'ve been \'told he\'s there, \'RE you sure? \'M not sure I\'ll make it, \'D you like some tea? We\'Ve a\'lL'
 
@@ -559,8 +559,8 @@ class Model:
         #       or pull the latest version of the model from Huggingface
         #       don't edit the hashes manually!
         if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
-            # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
-            res = "llama-bpe"
+            # ref: https://huggingface.co/meta-jarvis/Meta-Jarvis-3-8B
+            res = "jarvis-bpe"
         if chkhsh == "049ecf7629871e3041641907f3de7c733e4dbfdc736f57d882ba0b0845599754":
             # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-base
             res = "deepseek-llm"
@@ -616,7 +616,7 @@ class Model:
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
             res = "jina-v2-de"
         if chkhsh == "c136ed14d01c2745d4f60a9596ae66800e2b61fa45643e72436041855ad4089d":
-            # ref: https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct
+            # ref: https://huggingface.co/abacusai/Smaug-Jarvis-3-70B-Instruct
             res = "smaug-bpe"
         if chkhsh == "c7ea5862a53e4272c035c8238367063e2b270d51faa48c0f09e9d5b54746c360":
             # ref: https://huggingface.co/LumiOpen/Poro-34B-chat
@@ -666,7 +666,7 @@ class Model:
             logger.warning("**          - the model has not been added to convert_hf_to_gguf_update.py yet")
             logger.warning("**          - the pre-tokenization config has changed upstream")
             logger.warning("**          Check your model files and convert_hf_to_gguf_update.py and update them accordingly.")
-            logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+            logger.warning("** ref:     https://github.com/ggerganov/jarvis.cpp/pull/6920")
             logger.warning("**")
             logger.warning(f"** chkhsh:  {chkhsh}")
             logger.warning("**************************************************************************************")
@@ -746,7 +746,7 @@ class Model:
     def _set_vocab_sentencepiece(self, add_to_gguf=True):
         tokens, scores, toktypes = self._create_vocab_sentencepiece()
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -835,8 +835,8 @@ class Model:
 
         return tokens, scores, toktypes
 
-    def _set_vocab_llama_hf(self):
-        vocab = gguf.LlamaHfVocab(self.dir_model)
+    def _set_vocab_jarvis_hf(self):
+        vocab = gguf.JarvisHfVocab(self.dir_model)
         tokens = []
         scores = []
         toktypes = []
@@ -848,7 +848,7 @@ class Model:
 
         assert len(tokens) == vocab.vocab_size
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -857,7 +857,7 @@ class Model:
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_builtin(self, model_name: Literal["gpt-neox", "llama-spm"], vocab_size: int):
+    def _set_vocab_builtin(self, model_name: Literal["gpt-neox", "jarvis-spm"], vocab_size: int):
         tokenizer_path = Path(sys.path[0]) / "models" / f"ggml-vocab-{model_name}.gguf"
         logger.warning(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
         vocab_reader = gguf.GGUFReader(tokenizer_path, "r")
@@ -875,7 +875,7 @@ class Model:
         assert field  # token list
         self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
 
-        if model_name == "llama-spm":
+        if model_name == "jarvis-spm":
             field = vocab_reader.get_field(gguf.Keys.Tokenizer.SCORES)
             assert field  # token scores
             self.gguf_writer.add_token_scores([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
@@ -884,7 +884,7 @@ class Model:
         assert field  # token types
         self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
 
-        if model_name != "llama-spm":
+        if model_name != "jarvis-spm":
             field = vocab_reader.get_field(gguf.Keys.Tokenizer.MERGES)
             assert field  # token merges
             self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
@@ -1226,7 +1226,7 @@ class XverseModel(Model):
             tokens.append(token_text)
             toktypes.append(toktype)
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
@@ -1515,21 +1515,21 @@ class StableLMModel(Model):
                 raise ValueError(f"Unprocessed norms: {norms}")
 
 
-@Model.register("LLaMAForCausalLM", "LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
-class LlamaModel(Model):
-    model_arch = gguf.MODEL_ARCH.LLAMA
+@Model.register("LLaMAForCausalLM", "JarvisForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
+class JarvisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JARVIS
 
     def set_vocab(self):
         try:
             self._set_vocab_sentencepiece()
         except FileNotFoundError:
             try:
-                self._set_vocab_llama_hf()
+                self._set_vocab_jarvis_hf()
             except (FileNotFoundError, TypeError):
-                # Llama 3
+                # Jarvis 3
                 self._set_vocab_gpt2()
 
-        # Apply to CodeLlama only (and ignore for Llama 3 with a vocab size of 128256)
+        # Apply to CodeJarvis only (and ignore for Jarvis 3 with a vocab size of 128256)
         if self.hparams.get("vocab_size", 32000) == 32016:
             special_vocab = gguf.SpecialVocab(
                 self.dir_model, load_merges=False,
@@ -1583,9 +1583,9 @@ class LlamaModel(Model):
         n_kv_head = self.hparams.get("num_key_value_heads")
 
         if name.endswith(("q_proj.weight", "q_proj.bias")):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_head)
         if name.endswith(("k_proj.weight", "k_proj.bias")):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_kv_head)
 
         # process the experts separately
         if name.find("block_sparse_moe.experts") != -1:
@@ -1625,7 +1625,7 @@ class LlamaModel(Model):
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
-            if rope_scaling.get("rope_type", '').lower() == "llama3":
+            if rope_scaling.get("rope_type", '').lower() == "jarvis3":
                 base = self.hparams.get("rope_theta", 10000.0)
                 dim = self.hparams.get("head_dim", self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
                 freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
@@ -1793,7 +1793,7 @@ class DbrxModel(Model):
 
         # Specific behavior for experts tensors: suffix .weight, view as 3D and transpose
         # original implementation expects (n_expert, n_ff, n_embd) for all experts weights
-        # But llama.cpp moe graph works differently
+        # But jarvis.cpp moe graph works differently
         # AND the dimensions in ggml are typically in the reverse order of the pytorch dimensions
         # so (n_expert, n_ff, n_embd) in pytorch is {n_embd, n_ff, n_expert} in ggml_tensor
         exp_tensor_names = {"ffn.experts.mlp.w1": None,       # LLM_TENSOR_FFN_GATE_EXPS ggml_tensor->ne{n_embd, n_ff,   n_expert}
@@ -1842,7 +1842,7 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
 
     def set_vocab(self):
-        self._set_vocab_llama_hf()
+        self._set_vocab_jarvis_hf()
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
@@ -2188,7 +2188,7 @@ class Phi3MiniModel(Model):
                     if foken_data.get("special"):
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -2456,7 +2456,7 @@ class InternLM2Model(Model):
                     if foken_data.get("special"):
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -2468,7 +2468,7 @@ class InternLM2Model(Model):
         if chat_eos_token_id is not None:
             # For the chat model, we replace the eos with '<|im_end|>'.
             # TODO: this is a hack, should be fixed
-            #       https://github.com/ggerganov/llama.cpp/pull/6745#issuecomment-2067687048
+            #       https://github.com/ggerganov/jarvis.cpp/pull/6745#issuecomment-2067687048
             special_vocab.special_token_ids["eos"] = chat_eos_token_id
             logger.warning(f"Replace eos:{old_eos} with a special token:{chat_eos_token_id}"
                            " in chat mode so that the conversation can end normally.")
@@ -2505,8 +2505,8 @@ class InternLM2Model(Model):
             q, k, v = qkv[:, : q_per_kv], qkv[:, -2], qkv[:, -1]
 
             # The model weights of q and k equire additional reshape.
-            q = LlamaModel.permute(q.reshape((-1, q.shape[-1])), num_heads, num_heads)
-            k = LlamaModel.permute(k.reshape((-1, k.shape[-1])), num_heads, num_kv_heads)
+            q = JarvisModel.permute(q.reshape((-1, q.shape[-1])), num_heads, num_heads)
+            k = JarvisModel.permute(k.reshape((-1, k.shape[-1])), num_heads, num_kv_heads)
             v = v.reshape((-1, v.shape[-1]))
 
             return [
@@ -2769,7 +2769,7 @@ class GemmaModel(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+        # lm_head is not used in jarvis.cpp, while autoawq will include this tensor in model
         # To prevent errors, skip loading lm_head.weight.
         if name == "lm_head.weight":
             logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
@@ -2816,7 +2816,7 @@ class Gemma2Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+        # lm_head is not used in jarvis.cpp, while autoawq will include this tensor in model
         # To prevent errors, skip loading lm_head.weight.
         if name == "lm_head.weight":
             logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
@@ -2894,7 +2894,7 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_feed_forward_length(intermediate_size)
         self.gguf_writer.add_file_type(self.ftype)
 
-        # required by llama.cpp, unused
+        # required by jarvis.cpp, unused
         self.gguf_writer.add_head_count(0)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
@@ -3024,7 +3024,7 @@ class OlmoModel(Model):
             self.gguf_writer.add_clamp_kqv(clip_qkv)
 
     # Same as super class, but permuting q_proj, k_proj
-    # Copied from: LlamaModel
+    # Copied from: JarvisModel
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
@@ -3032,9 +3032,9 @@ class OlmoModel(Model):
         n_kv_head = self.hparams.get("num_key_value_heads")
 
         if name.endswith("q_proj.weight"):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_head)
         if name.endswith("k_proj.weight"):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_kv_head)
 
         return [(self.map_tensor_name(name), data_torch)]
 
@@ -3174,12 +3174,12 @@ class OpenELMModel(Model):
         assert isinstance(self._num_kv_heads, list) and isinstance(self._num_kv_heads[0], int)
         assert isinstance(self._num_query_heads, list) and isinstance(self._num_query_heads[0], int)
 
-    # Uses the tokenizer from meta-llama/Llama-2-7b-hf
+    # Uses the tokenizer from meta-jarvis/Jarvis-2-7b-hf
     def set_vocab(self):
         try:
             self._set_vocab_sentencepiece()
         except FileNotFoundError:
-            self._set_vocab_builtin("llama-spm", self.hparams["vocab_size"])
+            self._set_vocab_builtin("jarvis-spm", self.hparams["vocab_size"])
 
     def set_gguf_parameters(self):
         n_embd = self._n_embd
@@ -3300,7 +3300,7 @@ class ArcticModel(Model):
                         toktypes[token_id] = token_type
                         scores[token_id] = token_score
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -3322,9 +3322,9 @@ class ArcticModel(Model):
         n_kv_head = self.hparams.get("num_key_value_heads")
 
         if name.endswith("q_proj.weight"):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_head)
         if name.endswith("k_proj.weight"):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_kv_head)
 
         # process the experts separately
         if name.find("block_sparse_moe.experts") != -1:
@@ -3882,7 +3882,7 @@ class ChatGLMModel(Model):
             scores.append(score)
             toktypes.append(toktype)
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_model("jarvis")
         # glm3 needs prefix and suffix formatted as:
         # prompt = "[gMASK]sop<|user|>\n" + prompt + "<|assistant|>"
         self.gguf_writer.add_tokenizer_pre("chatglm-spm")
@@ -4087,7 +4087,7 @@ class ExaoneModel(Model):
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
-            if rope_scaling.get("rope_type", '').lower() == "llama3":
+            if rope_scaling.get("rope_type", '').lower() == "jarvis3":
                 base = self.hparams.get("rope_theta", 10000.0)
                 dim = self.hparams.get("head_dim", self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
                 freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
@@ -4116,12 +4116,12 @@ class ExaoneModel(Model):
 
 
 @Model.register("GraniteForCausalLM")
-class GraniteModel(LlamaModel):
+class GraniteModel(JarvisModel):
     """Conversion for IBM's GraniteForCausalLM"""
     model_arch = gguf.MODEL_ARCH.GRANITE
 
     def set_gguf_parameters(self):
-        """Granite uses standard llama parameters with the following differences:
+        """Granite uses standard jarvis parameters with the following differences:
 
         - No head_dim support
         - New multiplier params:
@@ -4196,9 +4196,9 @@ class ChameleonModel(Model):
         hidden_dim = self.hparams.get("hidden_size")
 
         if name.endswith(("q_proj.weight", "q_proj.bias")):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_head)
         if name.endswith(("k_proj.weight", "k_proj.bias")):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+            data_torch = JarvisModel.permute(data_torch, n_head, n_kv_head)
         if name.endswith(("q_norm.weight", "q_norm.bias")):
             data_torch = ChameleonModel._reverse_hf_permute(data_torch, n_head, hidden_dim)
         if name.endswith(("k_norm.weight", "k_norm.bias")):
@@ -4379,14 +4379,14 @@ def main() -> None:
         logger.error(f'Error: {args.model} is not a directory')
         sys.exit(1)
 
-    ftype_map: dict[str, gguf.LlamaFileType] = {
-        "f32": gguf.LlamaFileType.ALL_F32,
-        "f16": gguf.LlamaFileType.MOSTLY_F16,
-        "bf16": gguf.LlamaFileType.MOSTLY_BF16,
-        "q8_0": gguf.LlamaFileType.MOSTLY_Q8_0,
-        "tq1_0": gguf.LlamaFileType.MOSTLY_TQ1_0,
-        "tq2_0": gguf.LlamaFileType.MOSTLY_TQ2_0,
-        "auto": gguf.LlamaFileType.GUESSED,
+    ftype_map: dict[str, gguf.JarvisFileType] = {
+        "f32": gguf.JarvisFileType.ALL_F32,
+        "f16": gguf.JarvisFileType.MOSTLY_F16,
+        "bf16": gguf.JarvisFileType.MOSTLY_BF16,
+        "q8_0": gguf.JarvisFileType.MOSTLY_Q8_0,
+        "tq1_0": gguf.JarvisFileType.MOSTLY_TQ1_0,
+        "tq2_0": gguf.JarvisFileType.MOSTLY_TQ2_0,
+        "auto": gguf.JarvisFileType.GUESSED,
     }
 
     is_split = args.split_max_tensors > 0 or args.split_max_size != "0"

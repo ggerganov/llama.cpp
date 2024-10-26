@@ -5,7 +5,7 @@
 #
 # Usage:
 #
-#   cd llama.cpp
+#   cd jarvis.cpp
 #   make -j
 #
 #   ./examples/base-translate.sh <model-base> "<text>" [extra-main-args]
@@ -21,7 +21,7 @@ if [ $# -gt 2 ]; then
   eargs="${@:3}"
 fi
 
-ftmp="__llama.cpp_example_tmp__.txt"
+ftmp="__jarvis.cpp_example_tmp__.txt"
 trap "rm -f $ftmp" EXIT
 
 echo "Translate from English to French:
@@ -58,4 +58,4 @@ echo "$2
 model=$1
 
 # generate the most likely continuation until the string "===" is found
-./llama-cli -m $model -f $ftmp -n 64 --temp 0 --repeat-penalty 1.0 --no-penalize-nl -r "===" $eargs
+./jarvis-cli -m $model -f $ftmp -n 64 --temp 0 --repeat-penalty 1.0 --no-penalize-nl -r "===" $eargs

@@ -1,5 +1,5 @@
 #include "ggml.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #ifdef NDEBUG
 #undef NDEBUG
@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-extern struct llama_sampler * llama_sampler_init_dry_testing(int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<llama_token>>& seq_breakers);
+extern struct jarvis_sampler * jarvis_sampler_init_dry_testing(int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<jarvis_token>>& seq_breakers);
 
-static void dump(const llama_token_data_array * cur_p) {
+static void dump(const jarvis_token_data_array * cur_p) {
     for (size_t i = 0; i < cur_p->size; i++) {
         printf("%d: %f (%f)\n", cur_p->data[i].id, cur_p->data[i].p, cur_p->data[i].logit);
     }
@@ -23,27 +23,27 @@ static void dump(const llama_token_data_array * cur_p) {
 struct sampler_tester {
     sampler_tester(size_t n_vocab) {
         cur.reserve(n_vocab);
-        for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        for (jarvis_token token_id = 0; token_id < (jarvis_token)n_vocab; token_id++) {
             const float logit = logf(token_id);
-            cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
+            cur.emplace_back(jarvis_token_data{token_id, logit, 0.0f});
         }
 
-        cur_p = llama_token_data_array { cur.data(), cur.size(), -1, false };
+        cur_p = jarvis_token_data_array { cur.data(), cur.size(), -1, false };
     }
 
     sampler_tester(const std::vector<float> & probs, const std::vector<float> & probs_expected) : probs_expected(probs_expected) {
         cur.reserve(probs.size());
-        for (llama_token token_id = 0; token_id < (llama_token)probs.size(); token_id++) {
+        for (jarvis_token token_id = 0; token_id < (jarvis_token)probs.size(); token_id++) {
             const float logit = logf(probs[token_id]);
-            cur.emplace_back(llama_token_data{token_id, logit, probs[token_id]});
+            cur.emplace_back(jarvis_token_data{token_id, logit, probs[token_id]});
         }
 
-        cur_p = llama_token_data_array { cur.data(), cur.size(), -1, false };
+        cur_p = jarvis_token_data_array { cur.data(), cur.size(), -1, false };
     }
 
-    void apply(llama_sampler * sampler) {
-        llama_sampler_apply(sampler, &cur_p);
-        llama_sampler_free(sampler);
+    void apply(jarvis_sampler * sampler) {
+        jarvis_sampler_apply(sampler, &cur_p);
+        jarvis_sampler_free(sampler);
     }
 
     void check() {
@@ -53,20 +53,20 @@ struct sampler_tester {
         }
     }
 
-    llama_token_data_array cur_p;
+    jarvis_token_data_array cur_p;
 
 private:
     const std::vector<float> probs_expected;
 
-    std::vector<llama_token_data> cur;
+    std::vector<jarvis_token_data> cur;
 };
 
 static void test_temp(const std::vector<float> & probs, const std::vector<float> & probs_expected, float temp) {
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_temp(temp));
-    tester.apply(llama_sampler_init_dist(0));
+    tester.apply(jarvis_sampler_init_temp(temp));
+    tester.apply(jarvis_sampler_init_dist(0));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -76,8 +76,8 @@ static void test_temp_ext(const std::vector<float> & probs, const std::vector<fl
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_temp_ext(temp, delta, exponent));
-    tester.apply(llama_sampler_init_dist (0));
+    tester.apply(jarvis_sampler_init_temp_ext(temp, delta, exponent));
+    tester.apply(jarvis_sampler_init_dist (0));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -87,8 +87,8 @@ static void test_top_k(const std::vector<float> & probs, const std::vector<float
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_top_k(k));
-    tester.apply(llama_sampler_init_dist (0));
+    tester.apply(jarvis_sampler_init_top_k(k));
+    tester.apply(jarvis_sampler_init_dist (0));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -98,8 +98,8 @@ static void test_top_p(const std::vector<float> & probs, const std::vector<float
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_top_p(p, 1));
-    tester.apply(llama_sampler_init_dist (0));
+    tester.apply(jarvis_sampler_init_top_p(p, 1));
+    tester.apply(jarvis_sampler_init_dist (0));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -109,7 +109,7 @@ static void test_tfs(const std::vector<float> & probs, const std::vector<float> 
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_tail_free(z, 1));
+    tester.apply(jarvis_sampler_init_tail_free(z, 1));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -119,8 +119,8 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_min_p(p, 1));
-    tester.apply(llama_sampler_init_dist (0));
+    tester.apply(jarvis_sampler_init_min_p(p, 1));
+    tester.apply(jarvis_sampler_init_dist (0));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -130,7 +130,7 @@ static void test_xtc(const std::vector<float> & probs, const std::vector<float> 
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_xtc(p, t, 0, 0));
+    tester.apply(jarvis_sampler_init_xtc(p, t, 0, 0));
     DUMP(&tester.cur_p);
 
     tester.check();
@@ -140,14 +140,14 @@ static void test_typical(const std::vector<float> & probs, const std::vector<flo
     sampler_tester tester(probs, probs_expected);
 
     DUMP(&tester.cur_p);
-    tester.apply(llama_sampler_init_typical(p, 1));
+    tester.apply(jarvis_sampler_init_typical(p, 1));
     DUMP(&tester.cur_p);
 
     tester.check();
 }
 
 static void test_penalties(
-    const std::vector<float> & probs, const std::vector<llama_token> & last_tokens,
+    const std::vector<float> & probs, const std::vector<jarvis_token> & last_tokens,
     const std::vector<float> & probs_expected, float repeat_penalty, float alpha_frequency, float alpha_presence
 ) {
     GGML_ASSERT(probs.size() == probs_expected.size());
@@ -155,39 +155,39 @@ static void test_penalties(
     sampler_tester tester(probs, probs_expected);
 
     const size_t n_vocab = probs.size();
-    auto * sampler = llama_sampler_init_penalties(n_vocab, LLAMA_TOKEN_NULL, LLAMA_TOKEN_NULL, last_tokens.size(), repeat_penalty, alpha_frequency, alpha_presence, false, false);
+    auto * sampler = jarvis_sampler_init_penalties(n_vocab, JARVIS_TOKEN_NULL, JARVIS_TOKEN_NULL, last_tokens.size(), repeat_penalty, alpha_frequency, alpha_presence, false, false);
 
     for (size_t i = 0; i < last_tokens.size(); i++) {
-        llama_sampler_accept(sampler, last_tokens[i]);
+        jarvis_sampler_accept(sampler, last_tokens[i]);
     }
 
     DUMP(&tester.cur_p);
     tester.apply(sampler);
-    tester.apply(llama_sampler_init_dist(0));
+    tester.apply(jarvis_sampler_init_dist(0));
     DUMP(&tester.cur_p);
 
     tester.check();
 }
 
 static void test_dry(
-    const std::vector<float> & probs, const std::vector<llama_token> & last_tokens,
+    const std::vector<float> & probs, const std::vector<jarvis_token> & last_tokens,
     const std::vector<float> & expected_probs, float dry_multiplier, float dry_base,
     int dry_allowed_length, int dry_penalty_last_n,
-    const std::vector<std::vector<llama_token>> & seq_breakers
+    const std::vector<std::vector<jarvis_token>> & seq_breakers
 ) {
     GGML_ASSERT(probs.size() == expected_probs.size());
 
     sampler_tester tester(probs, expected_probs);
 
-    auto * sampler = llama_sampler_init_dry_testing(1024, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers);
+    auto * sampler = jarvis_sampler_init_dry_testing(1024, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers);
 
     for (size_t i = 0; i < last_tokens.size(); i++) {
-        llama_sampler_accept(sampler, last_tokens[i]);
+        jarvis_sampler_accept(sampler, last_tokens[i]);
     }
 
     DUMP(&tester.cur_p);
     tester.apply(sampler);
-    tester.apply(llama_sampler_init_dist(0));
+    tester.apply(jarvis_sampler_init_dist(0));
     DUMP(&tester.cur_p);
     tester.check();
 }
@@ -196,21 +196,21 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
 ) {
     sampler_tester tester(n_vocab);
 
-          llama_token min_token_id = 0;
-    const llama_token max_token_id = n_vocab-1;
+          jarvis_token min_token_id = 0;
+    const jarvis_token max_token_id = n_vocab-1;
 
     for (auto s : samplers_sequence) {
         switch (s){
-            case 'k': tester.apply(llama_sampler_init_top_k(top_k)); break;
+            case 'k': tester.apply(jarvis_sampler_init_top_k(top_k)); break;
             case 'f': GGML_ABORT("tail_free test not implemented");
             case 'y': GGML_ABORT("typical test not implemented");
-            case 'p': tester.apply(llama_sampler_init_top_p(top_p, 1)); break;
-            case 'm': tester.apply(llama_sampler_init_min_p(min_p, 1)); break;
+            case 'p': tester.apply(jarvis_sampler_init_top_p(top_p, 1)); break;
+            case 'm': tester.apply(jarvis_sampler_init_min_p(min_p, 1)); break;
             case 't': GGML_ABORT("temperature test not implemented");
             default : GGML_ABORT("Unknown sampler");
         }
 
-        tester.apply(llama_sampler_init_dist(0));
+        tester.apply(jarvis_sampler_init_dist(0));
 
         auto & cur_p = tester.cur_p;
 
@@ -218,7 +218,7 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
 
         if (s == 'k') {
             const int expected_size = std::min(size, top_k);
-            min_token_id = std::max(min_token_id, (llama_token)(n_vocab - top_k));
+            min_token_id = std::max(min_token_id, (jarvis_token)(n_vocab - top_k));
 
             GGML_ASSERT(size == expected_size);
             GGML_ASSERT(cur_p.data[0].id == max_token_id);
@@ -253,8 +253,8 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
 
             min_token_id = floorf(min_p * n_vocab);
             min_token_id = std::max(min_token_id, 1);
-            min_token_id = std::max(min_token_id, (llama_token)(n_vocab - size));
-            min_token_id = std::min(min_token_id, (llama_token)(n_vocab - 1));
+            min_token_id = std::max(min_token_id, (jarvis_token)(n_vocab - size));
+            min_token_id = std::min(min_token_id, (jarvis_token)(n_vocab - 1));
 
             GGML_ASSERT(size == expected_size);
             GGML_ASSERT(cur_p.data[0].id == max_token_id);
@@ -268,21 +268,21 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
            samplers_sequence.c_str(), n_vocab, top_k, top_p, min_p);
 }
 
-static void bench(llama_sampler * cnstr, const char * cnstr_name, const std::vector<llama_token_data> & data, int n_iter) {
-    std::vector<llama_token_data> cur(data.size());
+static void bench(jarvis_sampler * cnstr, const char * cnstr_name, const std::vector<jarvis_token_data> & data, int n_iter) {
+    std::vector<jarvis_token_data> cur(data.size());
     std::copy(data.begin(), data.end(), cur.begin());
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-    llama_sampler_apply(cnstr, &cur_p);
-    llama_sampler_reset(cnstr);
+    jarvis_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+    jarvis_sampler_apply(cnstr, &cur_p);
+    jarvis_sampler_reset(cnstr);
     const int64_t t_start = ggml_time_us();
     for (int i = 0; i < n_iter; i++) {
         std::copy(data.begin(), data.end(), cur.begin());
-        llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-        llama_sampler_apply(cnstr, &cur_p);
-        llama_sampler_reset(cnstr);
+        jarvis_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+        jarvis_sampler_apply(cnstr, &cur_p);
+        jarvis_sampler_reset(cnstr);
     }
     const int64_t t_end = ggml_time_us();
-    llama_sampler_free(cnstr);
+    jarvis_sampler_free(cnstr);
     printf("%-43s: %8.3f us/iter\n", cnstr_name, (t_end - t_start) / (float)n_iter);
 }
 
@@ -291,20 +291,20 @@ static void bench(llama_sampler * cnstr, const char * cnstr_name, const std::vec
 static void test_perf() {
     const int n_vocab = 1 << 17;
 
-    std::vector<llama_token_data> data;
+    std::vector<jarvis_token_data> data;
 
     data.reserve(n_vocab);
     for (int i = 0; i < n_vocab; i++) {
         const float logit = 2.0f*((float)(rand())/RAND_MAX - 0.5f);
-        data.emplace_back(llama_token_data{i, logit, 0.0f});
+        data.emplace_back(jarvis_token_data{i, logit, 0.0f});
     }
 
-    BENCH(llama_sampler_init_top_k    (40),                     data, 32);
-    BENCH(llama_sampler_init_top_p    (0.8f, 1),                data, 32);
-    BENCH(llama_sampler_init_min_p    (0.2f, 1),                data, 32);
-    BENCH(llama_sampler_init_tail_free(0.5f, 1),                data, 32);
-    BENCH(llama_sampler_init_typical  (0.5f, 1),                data, 32);
-    BENCH(llama_sampler_init_xtc      (1.0f, 0.1f, 1, 1),       data, 32);
+    BENCH(jarvis_sampler_init_top_k    (40),                     data, 32);
+    BENCH(jarvis_sampler_init_top_p    (0.8f, 1),                data, 32);
+    BENCH(jarvis_sampler_init_min_p    (0.2f, 1),                data, 32);
+    BENCH(jarvis_sampler_init_tail_free(0.5f, 1),                data, 32);
+    BENCH(jarvis_sampler_init_typical  (0.5f, 1),                data, 32);
+    BENCH(jarvis_sampler_init_xtc      (1.0f, 0.1f, 1, 1),       data, 32);
 }
 
 int main(void) {

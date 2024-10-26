@@ -1,5 +1,5 @@
 name: Medium Severity Bug
-description: Used to report medium severity bugs in llama.cpp (e.g. Malfunctioning Features but generally still useable)
+description: Used to report medium severity bugs in jarvis.cpp (e.g. Malfunctioning Features but generally still useable)
 title: "Bug: "
 labels: ["bug-unconfirmed", "medium severity"]
 body:
@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to fill out this bug report!
         Please include information about your system, the steps to reproduce the bug,
-        and the version of llama.cpp that you are using.
+        and the version of jarvis.cpp that you are using.
         If possible, please provide a minimal code example that reproduces the bug.
   - type: textarea
     id: what-happened
@@ -24,7 +24,7 @@ body:
       label: Name and Version
       description: Which executable and which version of our software are you running? (use `--version` to get a version string)
       placeholder: |
-        $./llama-cli --version
+        $./jarvis-cli --version
         version: 2999 (42b4109e)
         built with cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0 for x86_64-linux-gnu
     validations:

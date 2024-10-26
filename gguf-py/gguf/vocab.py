@@ -127,7 +127,7 @@ class SpecialVocab:
                         self.merges = merges
                     elif isinstance(merges[0], list) and len(merges[0]) == 2 and isinstance(merges[0][0], str):
                         # New format since transformers 4.45 to support spaces in merges
-                        # ref: https://github.com/ggerganov/llama.cpp/issues/9692
+                        # ref: https://github.com/ggerganov/jarvis.cpp/issues/9692
                         # TODO: internally store as the new format instead of converting to old
                         if any(' ' in s for pair in merges for s in pair):
                             logger.warning(f'Spaces in merges detected, encoding as {chr(ord(" ") + 256)!r}')
@@ -293,7 +293,7 @@ class BpeVocab(Vocab):
 
 
 class SentencePieceVocab(Vocab):
-    tokenizer_model = "llama"
+    tokenizer_model = "jarvis"
     name = "spm"
 
     def __init__(self, base_path: Path):
@@ -364,8 +364,8 @@ class SentencePieceVocab(Vocab):
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
-class LlamaHfVocab(Vocab):
-    tokenizer_model = "llama"
+class JarvisHfVocab(Vocab):
+    tokenizer_model = "jarvis"
     name = "hfft"
 
     def __init__(self, base_path: Path):
@@ -376,24 +376,24 @@ class LlamaHfVocab(Vocab):
 
         # pre-check so we know if we need transformers
         tokenizer_model: dict[str, Any] = tokenizer_json['model']
-        is_llama3 = (
+        is_jarvis3 = (
             tokenizer_model['type'] == 'BPE' and tokenizer_model.get('ignore_merges', False)
             and not tokenizer_model.get('byte_fallback', True)
         )
-        if is_llama3:
-            raise TypeError('Llama 3 must be converted with BpeVocab')
+        if is_jarvis3:
+            raise TypeError('Jarvis 3 must be converted with BpeVocab')
 
-        if not is_llama3 and (
+        if not is_jarvis3 and (
             tokenizer_model['type'] != 'BPE' or not tokenizer_model.get('byte_fallback', False)
             or tokenizer_json['decoder']['type'] != 'Sequence'
         ):
-            raise FileNotFoundError('Cannot find Llama BPE tokenizer')
+            raise FileNotFoundError('Cannot find Jarvis BPE tokenizer')
 
         try:
             from transformers import AutoTokenizer
         except ImportError as e:
             raise ImportError(
-                "To use LlamaHfVocab, please install the `transformers` package. "
+                "To use JarvisHfVocab, please install the `transformers` package. "
                 "You can install it with `pip install transformers`."
             ) from e
 
@@ -484,4 +484,4 @@ class LlamaHfVocab(Vocab):
         yield from self.added_tokens()
 
     def __repr__(self) -> str:
-        return f"<LlamaHfVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+        return f"<JarvisHfVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"

@@ -5,7 +5,7 @@
 #include "common.h"
 #include "sampling.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <cmath>
 #include <cstdio>
@@ -41,7 +41,7 @@ User:)";
 
 static std::vector<std::string> k_prompts = {
     "What is the meaning of life?",
-    "Tell me an interesting fact about llamas.",
+    "Tell me an interesting fact about jarviss.",
     "What is the best way to cook a steak?",
     "Are you familiar with the Special Theory of Relativity and can you explain it to me?",
     "Recommend some interesting books to read.",
@@ -60,9 +60,9 @@ struct client {
 
     int32_t id = 0;
 
-    llama_seq_id seq_id = -1;
+    jarvis_seq_id seq_id = -1;
 
-    llama_token sampled;
+    jarvis_token sampled;
 
     int64_t t_start_prompt;
     int64_t t_start_gen;
@@ -105,7 +105,7 @@ int main(int argc, char ** argv) {
 
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PARALLEL)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_PARALLEL)) {
         return 1;
     }
 
@@ -125,15 +125,15 @@ int main(int argc, char ** argv) {
 
     const bool dump_kv_cache = params.dump_kv_cache;
 
-    // init llama.cpp
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    // init jarvis.cpp
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the target model
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
 
     // load the prompts from an external file if there are any
     if (params.prompt.empty()) {
@@ -154,7 +154,7 @@ int main(int argc, char ** argv) {
 
     LOG_INF("\n\n");
 
-    const int n_ctx = llama_n_ctx(ctx);
+    const int n_ctx = jarvis_n_ctx(ctx);
 
     std::vector<client> clients(n_clients);
     for (size_t i = 0; i < clients.size(); ++i) {
@@ -163,21 +163,21 @@ int main(int argc, char ** argv) {
         client.smpl = common_sampler_init(model, params.sparams);
     }
 
-    std::vector<llama_token> tokens_system;
+    std::vector<jarvis_token> tokens_system;
     tokens_system = common_tokenize(ctx, k_system, true);
     const int32_t n_tokens_system = tokens_system.size();
 
-    llama_seq_id g_seq_id = 0;
+    jarvis_seq_id g_seq_id = 0;
 
     // the max batch size is as large as the context to handle cases where we get very long input prompt from multiple
     // users. regardless of the size, the main loop will chunk the batch into a maximum of params.n_batch tokens at a time
-    llama_batch batch = llama_batch_init(n_ctx, 0, 1);
+    jarvis_batch batch = jarvis_batch_init(n_ctx, 0, 1);
 
     int32_t n_total_prompt = 0;
     int32_t n_total_gen    = 0;
     int32_t n_cache_miss   = 0;
 
-    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, n_clients);
+    struct jarvis_kv_cache_view kvc_view = jarvis_kv_cache_view_init(ctx, n_clients);
 
     const auto t_main_start = ggml_time_us();
 
@@ -192,14 +192,14 @@ int main(int argc, char ** argv) {
             common_batch_add(batch, tokens_system[i], i, { 0 }, false);
         }
 
-        if (llama_decode(ctx, batch) != 0) {
-            LOG_ERR("%s: llama_decode() failed\n", __func__);
+        if (jarvis_decode(ctx, batch) != 0) {
+            LOG_ERR("%s: jarvis_decode() failed\n", __func__);
             return 1;
         }
 
         // assign the system KV cache to all parallel sequences
         for (int32_t i = 1; i <= n_clients; ++i) {
-            llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
+            jarvis_kv_cache_seq_cp(ctx, 0, i, -1, -1);
         }
 
         LOG_INF("\n");
@@ -209,7 +209,7 @@ int main(int argc, char ** argv) {
 
     while (true) {
         if (dump_kv_cache) {
-            llama_kv_cache_view_update(ctx, &kvc_view);
+            jarvis_kv_cache_view_update(ctx, &kvc_view);
             common_kv_cache_dump_view_seqs(kvc_view, 40);
         }
 
@@ -231,9 +231,9 @@ int main(int argc, char ** argv) {
         if (batch.n_tokens == 0) {
             // all sequences have ended - clear the entire KV cache
             for (int i = 1; i <= n_clients; ++i) {
-                llama_kv_cache_seq_rm(ctx, i, -1, -1);
+                jarvis_kv_cache_seq_rm(ctx, i, -1, -1);
                 // but keep the system prompt
-                llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
+                jarvis_kv_cache_seq_cp(ctx, 0, i, -1, -1);
             }
 
             LOG_INF("%s: clearing the KV cache\n", __func__);
@@ -255,7 +255,7 @@ int main(int argc, char ** argv) {
                     common_sampler_reset(client.smpl);
 
                     // do not prepend BOS because we have a system prompt!
-                    std::vector<llama_token> tokens_prompt;
+                    std::vector<jarvis_token> tokens_prompt;
                     tokens_prompt = common_tokenize(ctx, client.prompt, false);
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
@@ -300,7 +300,7 @@ int main(int argc, char ** argv) {
 
             const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
 
-            llama_batch batch_view = {
+            jarvis_batch batch_view = {
                 n_tokens,
                 batch.token    + i,
                 nullptr,
@@ -310,7 +310,7 @@ int main(int argc, char ** argv) {
                 batch.logits   + i,
             };
 
-            const int ret = llama_decode(ctx, batch_view);
+            const int ret = jarvis_decode(ctx, batch_view);
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
@@ -339,7 +339,7 @@ int main(int argc, char ** argv) {
                 //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
-                const llama_token id = common_sampler_sample(client.smpl, ctx, client.i_batch - i);
+                const jarvis_token id = common_sampler_sample(client.smpl, ctx, client.i_batch - i);
 
                 common_sampler_accept(client.smpl, id, true);
 
@@ -358,7 +358,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, id, client.n_decoded, client.i_batch, token_str.c_str());
 
                 if (client.n_decoded > 2 &&
-                        (llama_token_is_eog(model, id) ||
+                        (jarvis_token_is_eog(model, id) ||
                          (params.n_predict > 0 && client.n_decoded + client.n_prompt >= params.n_predict) ||
                          client.response.find("User:") != std::string::npos ||
                          client.response.find('\n') != std::string::npos)) {
@@ -369,8 +369,8 @@ int main(int argc, char ** argv) {
                     }
 
                     // delete only the generated part of the sequence, i.e. keep the system prompt in the cache
-                    llama_kv_cache_seq_rm(ctx,    client.id + 1, -1, -1);
-                    llama_kv_cache_seq_cp(ctx, 0, client.id + 1, -1, -1);
+                    jarvis_kv_cache_seq_rm(ctx,    client.id + 1, -1, -1);
+                    jarvis_kv_cache_seq_cp(ctx, 0, client.id + 1, -1, -1);
 
                     const auto t_main_end = ggml_time_us();
 
@@ -412,14 +412,14 @@ int main(int argc, char ** argv) {
     LOG_INF("\n");
 
     // TODO: print sampling/grammar timings for all clients
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     LOG("\n\n");
 

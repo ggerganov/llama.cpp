@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct InputButton: View {
-    @ObservedObject var llamaState: LlamaState
+    @ObservedObject var jarvisState: JarvisState
     @State private var inputLink: String = ""
     @State private var status: String = "download"
     @State private var filename: String = ""
@@ -55,10 +55,10 @@ struct InputButton: View {
                     try FileManager.default.copyItem(at: temporaryURL, to: fileURL)
                     print("Writing to \(filename) completed")
 
-                    llamaState.cacheCleared = false
+                    jarvisState.cacheCleared = false
 
                     let model = Model(name: modelName, url: self.inputLink, filename: filename, status: "downloaded")
-                    llamaState.downloadedModels.append(model)
+                    jarvisState.downloadedModels.append(model)
                     status = "downloaded"
                 }
             } catch let err {
@@ -106,7 +106,7 @@ struct InputButton: View {
                         return
                     }
                     do {
-                        try llamaState.loadModel(modelUrl: fileURL)
+                        try jarvisState.loadModel(modelUrl: fileURL)
                     } catch let err {
                         print("Error: \(err.localizedDescription)")
                     }
@@ -120,7 +120,7 @@ struct InputButton: View {
         .onDisappear() {
             downloadTask?.cancel()
         }
-        .onChange(of: llamaState.cacheCleared) { newValue in
+        .onChange(of: jarvisState.cacheCleared) { newValue in
             if newValue {
                 downloadTask?.cancel()
                 let fileURL = InputButton.getFileURL(filename: self.filename)

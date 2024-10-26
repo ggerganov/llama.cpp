@@ -7,7 +7,7 @@ by Humans for All.
 
 To run from the build dir
 
-bin/llama-server -m path/model.gguf --path ../examples/server/public_simplechat
+bin/jarvis-server -m path/model.gguf --path ../examples/server/public_simplechat
 
 Continue reading for the details.
 
@@ -53,12 +53,12 @@ http module.
 
 ### running using examples/server
 
-./llama-server -m path/model.gguf --path examples/server/public_simplechat [--port PORT]
+./jarvis-server -m path/model.gguf --path examples/server/public_simplechat [--port PORT]
 
 ### running using python3's server module
 
 first run examples/server
-* ./llama-server -m path/model.gguf
+* ./jarvis-server -m path/model.gguf
 
 next run this web front end in examples/server/public_simplechat
 * cd ../examples/server/public_simplechat

@@ -176,7 +176,7 @@ static __global__ void flash_attn_vec_ext_f16(
         // Calculate KQ tile and keep track of new maximum KQ values:
 
         // For unknown reasons using a half array of size 1 for kqmax_new causes a performance regression,
-        // see https://github.com/ggerganov/llama.cpp/pull/7061 .
+        // see https://github.com/ggerganov/jarvis.cpp/pull/7061 .
         // Therefore this variable is defined twice but only used once (so that the compiler can optimize out the unused variable).
         half kqmax_new = kqmax[0];
         half kqmax_new_arr[ncols];

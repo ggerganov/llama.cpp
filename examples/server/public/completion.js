@@ -12,14 +12,14 @@ let generation_settings = null;
 //
 // Example:
 //
-//    import { llama } from '/completion.js'
+//    import { jarvis } from '/completion.js'
 //
-//    const request = llama("Tell me a joke", {n_predict: 800})
+//    const request = jarvis("Tell me a joke", {n_predict: 800})
 //    for await (const chunk of request) {
 //      document.write(chunk.data.content)
 //    }
 //
-export async function* llama(prompt, params = {}, config = {}) {
+export async function* jarvis(prompt, params = {}, config = {}) {
   let controller = config.controller;
   const api_url = config.api_url?.replace(/\/+$/, '') || "";
 
@@ -79,7 +79,7 @@ export async function* llama(prompt, params = {}, config = {}) {
         const match = regex.exec(line);
         if (match) {
           result[match[1]] = match[2]
-          // since we know this is llama.cpp, let's just decode the json in data
+          // since we know this is jarvis.cpp, let's just decode the json in data
           if (result.data) {
             result.data = JSON.parse(result.data);
             content += result.data.content;
@@ -103,10 +103,10 @@ export async function* llama(prompt, params = {}, config = {}) {
                 // Throw an error to be caught by upstream callers
                 throw new Error('slot unavailable');
               } else {
-                console.error(`llama.cpp error [${result.error.code} - ${result.error.type}]: ${result.error.message}`);
+                console.error(`jarvis.cpp error [${result.error.code} - ${result.error.type}]: ${result.error.message}`);
               }
             } catch(e) {
-              console.error(`llama.cpp error ${result.error}`)
+              console.error(`jarvis.cpp error ${result.error}`)
             }
           }
         }
@@ -114,7 +114,7 @@ export async function* llama(prompt, params = {}, config = {}) {
     }
   } catch (e) {
     if (e.name !== 'AbortError') {
-      console.error("llama error: ", e);
+      console.error("jarvis error: ", e);
     }
     throw e;
   }
@@ -125,22 +125,22 @@ export async function* llama(prompt, params = {}, config = {}) {
   return content;
 }
 
-// Call llama, return an event target that you can subscribe to
+// Call jarvis, return an event target that you can subscribe to
 //
 // Example:
 //
-//    import { llamaEventTarget } from '/completion.js'
+//    import { jarvisEventTarget } from '/completion.js'
 //
-//    const conn = llamaEventTarget(prompt)
+//    const conn = jarvisEventTarget(prompt)
 //    conn.addEventListener("message", (chunk) => {
 //      document.write(chunk.detail.content)
 //    })
 //
-export const llamaEventTarget = (prompt, params = {}, config = {}) => {
+export const jarvisEventTarget = (prompt, params = {}, config = {}) => {
   const eventTarget = new EventTarget();
   (async () => {
     let content = "";
-    for await (const chunk of llama(prompt, params, config)) {
+    for await (const chunk of jarvis(prompt, params, config)) {
       if (chunk.data) {
         content += chunk.data.content;
         eventTarget.dispatchEvent(new CustomEvent("message", { detail: chunk.data }));
@@ -157,24 +157,24 @@ export const llamaEventTarget = (prompt, params = {}, config = {}) => {
   return eventTarget;
 }
 
-// Call llama, return a promise that resolves to the completed text. This does not support streaming
+// Call jarvis, return a promise that resolves to the completed text. This does not support streaming
 //
 // Example:
 //
-//     llamaPromise(prompt).then((content) => {
+//     jarvisPromise(prompt).then((content) => {
 //       document.write(content)
 //     })
 //
 //     or
 //
-//     const content = await llamaPromise(prompt)
+//     const content = await jarvisPromise(prompt)
 //     document.write(content)
 //
-export const llamaPromise = (prompt, params = {}, config = {}) => {
+export const jarvisPromise = (prompt, params = {}, config = {}) => {
   return new Promise(async (resolve, reject) => {
     let content = "";
     try {
-      for await (const chunk of llama(prompt, params, config)) {
+      for await (const chunk of jarvis(prompt, params, config)) {
         content += chunk.data.content;
       }
       resolve(content);
@@ -187,14 +187,14 @@ export const llamaPromise = (prompt, params = {}, config = {}) => {
 /**
  * (deprecated)
  */
-export const llamaComplete = async (params, controller, callback) => {
-  for await (const chunk of llama(params.prompt, params, { controller })) {
+export const jarvisComplete = async (params, controller, callback) => {
+  for await (const chunk of jarvis(params.prompt, params, { controller })) {
     callback(chunk);
   }
 }
 
 // Get the model info from the server. This is useful for getting the context window and so on.
-export const llamaModelInfo = async (config = {}) => {
+export const jarvisModelInfo = async (config = {}) => {
   if (!generation_settings) {
     const api_url = config.api_url?.replace(/\/+$/, '') || "";
     const props = await fetch(`${api_url}/props`).then(r => r.json());

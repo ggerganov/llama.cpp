@@ -2,7 +2,7 @@
 #include "common.h"
 #include "sampling.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -23,8 +23,8 @@ struct seq_draft {
     int i_batch_dft = 0;
     std::vector<int> i_batch_tgt;
 
-    std::vector<llama_token> tokens;
-    std::vector<std::vector<llama_token_data>> dists;
+    std::vector<jarvis_token> tokens;
+    std::vector<std::vector<jarvis_token_data>> dists;
 
     struct common_sampler * smpl = nullptr;
 };
@@ -35,7 +35,7 @@ int main(int argc, char ** argv) {
     // needed to get candidate probs even for temp <= 0.0
     params.sparams.n_probs = 128;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_SPECULATIVE)) {
         return 1;
     }
 
@@ -57,23 +57,23 @@ int main(int argc, char ** argv) {
     // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
     const float p_split  = params.p_split;
 
-    std::default_random_engine rng(params.sparams.seed == LLAMA_DEFAULT_SEED ? std::random_device()() : params.sparams.seed);
+    std::default_random_engine rng(params.sparams.seed == JARVIS_DEFAULT_SEED ? std::random_device()() : params.sparams.seed);
     std::uniform_real_distribution<> u_dist;
 
-    // init llama.cpp
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    // init jarvis.cpp
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
-    llama_model * model_tgt = NULL;
-    llama_model * model_dft = NULL;
+    jarvis_model * model_tgt = NULL;
+    jarvis_model * model_dft = NULL;
 
-    llama_context * ctx_tgt = NULL;
-    llama_context * ctx_dft = NULL;
+    jarvis_context * ctx_tgt = NULL;
+    jarvis_context * ctx_dft = NULL;
 
     // load the target model
-    common_init_result llama_init_tgt = common_init_from_params(params);
-    model_tgt = llama_init_tgt.model;
-    ctx_tgt = llama_init_tgt.context;
+    common_init_result jarvis_init_tgt = common_init_from_params(params);
+    model_tgt = jarvis_init_tgt.model;
+    ctx_tgt = jarvis_init_tgt.context;
 
     // load the draft model
     params.model = params.model_draft;
@@ -83,14 +83,14 @@ int main(int argc, char ** argv) {
     }
 
     params.cpuparams_batch.n_threads = params.draft_cpuparams_batch.n_threads;
-    common_init_result llama_init_dft = common_init_from_params(params);
-    model_dft = llama_init_dft.model;
-    ctx_dft = llama_init_dft.context;
+    common_init_result jarvis_init_dft = common_init_from_params(params);
+    model_dft = jarvis_init_dft.model;
+    ctx_dft = jarvis_init_dft.context;
 
-    const bool vocab_type_tgt = llama_vocab_type(model_tgt);
+    const bool vocab_type_tgt = jarvis_vocab_type(model_tgt);
     LOG_DBG("vocab_type tgt: %d\n", vocab_type_tgt);
 
-    const bool vocab_type_dft = llama_vocab_type(model_dft);
+    const bool vocab_type_dft = jarvis_vocab_type(model_dft);
     LOG_DBG("vocab_type dft: %d\n", vocab_type_dft);
 
     if (vocab_type_tgt != vocab_type_dft) {
@@ -100,18 +100,18 @@ int main(int argc, char ** argv) {
     }
 
     if (
-        llama_add_bos_token(model_tgt) != llama_add_bos_token(model_dft) ||
-        llama_add_eos_token(model_tgt) != llama_add_eos_token(model_dft) ||
-        llama_token_bos(model_tgt) != llama_token_bos(model_dft) ||
-        llama_token_eos(model_tgt) != llama_token_eos(model_dft)
+        jarvis_add_bos_token(model_tgt) != jarvis_add_bos_token(model_dft) ||
+        jarvis_add_eos_token(model_tgt) != jarvis_add_eos_token(model_dft) ||
+        jarvis_token_bos(model_tgt) != jarvis_token_bos(model_dft) ||
+        jarvis_token_eos(model_tgt) != jarvis_token_eos(model_dft)
     ) {
         LOG_ERR("%s: draft model special tokens must match target model to use speculation\n", __func__);
         return 1;
     }
 
     {
-        const int n_vocab_tgt = llama_n_vocab(model_tgt);
-        const int n_vocab_dft = llama_n_vocab(model_dft);
+        const int n_vocab_tgt = jarvis_n_vocab(model_tgt);
+        const int n_vocab_dft = jarvis_n_vocab(model_dft);
         const int vocab_diff  = n_vocab_tgt > n_vocab_dft
             ? n_vocab_tgt - n_vocab_dft
             : n_vocab_dft - n_vocab_tgt;
@@ -119,13 +119,13 @@ int main(int argc, char ** argv) {
         if (vocab_diff > SPEC_VOCAB_MAX_SIZE_DIFFERENCE) {
             LOG_ERR("%s: draft model vocab must closely match target model to use speculation but ", __func__);
             LOG_ERR("target vocab size %d does not match draft vocab size %d - difference %d, max allowed %d\n",
-                    n_vocab_tgt, llama_n_vocab(model_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
+                    n_vocab_tgt, jarvis_n_vocab(model_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
             return 1;
         }
 
         for (int i = SPEC_VOCAB_CHECK_START_TOKEN_ID; i < std::min(n_vocab_tgt, n_vocab_dft); ++i) {
-            const char * token_text_tgt = llama_token_get_text(model_tgt, i);
-            const char * token_text_dft = llama_token_get_text(model_dft, i);
+            const char * token_text_tgt = jarvis_token_get_text(model_tgt, i);
+            const char * token_text_dft = jarvis_token_get_text(model_dft, i);
             if (std::strcmp(token_text_tgt, token_text_dft) != 0) {
                 LOG_ERR("%s: draft model vocab must match target model to use speculation but ", __func__);
                 LOG_ERR("token %d content differs - target '%s', draft '%s'\n", i,
@@ -138,10 +138,10 @@ int main(int argc, char ** argv) {
 
 
     // Tokenize the prompt
-    std::vector<llama_token> inp;
+    std::vector<jarvis_token> inp;
     inp = common_tokenize(ctx_tgt, params.prompt, true, true);
 
-    const int max_context_size     = llama_n_ctx(ctx_tgt);
+    const int max_context_size     = jarvis_n_ctx(ctx_tgt);
     const int max_tokens_list_size = max_context_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
@@ -160,14 +160,14 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt with both models
-    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1));
-    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1));
-    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input));
+    jarvis_decode(ctx_tgt, jarvis_batch_get_one( inp.data(), n_input - 1));
+    jarvis_decode(ctx_tgt, jarvis_batch_get_one(&inp.back(),           1));
+    jarvis_decode(ctx_dft, jarvis_batch_get_one( inp.data(), n_input));
 
     const auto t_enc_end = ggml_time_us();
 
     // the 2 models should have the same vocab
-    //GGML_ASSERT(n_vocab == llama_n_vocab(model_dft));
+    //GGML_ASSERT(n_vocab == jarvis_n_vocab(model_dft));
 
     // how many tokens to draft each time
     int n_draft = params.n_draft;
@@ -182,19 +182,19 @@ int main(int argc, char ** argv) {
     // used to determine end of generation
     bool has_eos = false;
 
-    // target model sampling context (reuse the llama_context's sampling instance)
+    // target model sampling context (reuse the jarvis_context's sampling instance)
     struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
 
     for (int s = 0; s < n_seq_dft; ++s) {
-        // allocate llama_sampler for each draft sequence
+        // allocate jarvis_sampler for each draft sequence
         drafts[s].smpl = common_sampler_init(model_dft, params.sparams);
     }
 
-    llama_batch batch_dft = llama_batch_init(llama_n_batch(ctx_dft), 0, 1);
-    llama_batch batch_tgt = llama_batch_init(llama_n_batch(ctx_tgt), 0, n_seq_dft);
+    jarvis_batch batch_dft = jarvis_batch_init(jarvis_n_batch(ctx_dft), 0, 1);
+    jarvis_batch batch_tgt = jarvis_batch_init(jarvis_n_batch(ctx_tgt), 0, n_seq_dft);
 
     const auto t_dec_start = ggml_time_us();
 
@@ -220,7 +220,7 @@ int main(int argc, char ** argv) {
         int i_dft  = 0;
         int s_keep = 0;
 
-        llama_token token_id;
+        jarvis_token token_id;
         std::string token_str;
 
         // loop until we fail to accept a drafted token or we run out of drafted tokens
@@ -259,7 +259,7 @@ int main(int argc, char ** argv) {
 
                         LOG_DBG("verifying sequence #%d at pos #%d from %d active sequence(s)\n", s, i_dft, (int) active_seqs.size());
                         float r = u_dist(rng);
-                        llama_token_data_array dist_dft = { drafts[s].dists[i_dft].data() , drafts[s].dists[i_dft].size(), LLAMA_TOKEN_NULL, true };
+                        jarvis_token_data_array dist_dft = { drafts[s].dists[i_dft].data() , drafts[s].dists[i_dft].size(), JARVIS_TOKEN_NULL, true };
 
                         //GGML_ASSERT(dist_tgt.size <= dist_dft.size);
 
@@ -294,10 +294,10 @@ int main(int argc, char ** argv) {
                             GGML_ASSERT(dist_dft.sorted);
 
                             // sort dist by id
-                            std::sort(dist_tgt.data, dist_tgt.data + dist_tgt.size, [](const llama_token_data &a, const llama_token_data &b) {
+                            std::sort(dist_tgt.data, dist_tgt.data + dist_tgt.size, [](const jarvis_token_data &a, const jarvis_token_data &b) {
                                 return a.id < b.id;
                             });
-                            std::sort(dist_dft.data, dist_dft.data + dist_dft.size, [](const llama_token_data &a, const llama_token_data &b) {
+                            std::sort(dist_dft.data, dist_dft.data + dist_dft.size, [](const jarvis_token_data &a, const jarvis_token_data &b) {
                                 return a.id < b.id;
                             });
 
@@ -318,7 +318,7 @@ int main(int argc, char ** argv) {
                             }
 
                             // sort dist_tgt by p desc
-                            std::sort(dist_tgt.data, dist_tgt.data + dist_tgt.size, [](const llama_token_data &a, const llama_token_data &b) {
+                            std::sort(dist_tgt.data, dist_tgt.data + dist_tgt.size, [](const jarvis_token_data &a, const jarvis_token_data &b) {
                                 return a.p > b.p;
                             });
                         }
@@ -382,7 +382,7 @@ int main(int argc, char ** argv) {
                     }
                 }
 
-                if (llama_token_is_eog(model_tgt, token_id)) {
+                if (jarvis_token_is_eog(model_tgt, token_id)) {
                     has_eos = true;
                 }
                 ++n_predict;
@@ -413,14 +413,14 @@ int main(int argc, char ** argv) {
             {
                 LOG_DBG("keeping sequence %d, n_past_tgt = %d, n_past_dft = %d\n", s_keep, n_past_tgt, n_past_dft);
 
-                llama_kv_cache_seq_keep(ctx_dft, s_keep);
-                llama_kv_cache_seq_cp  (ctx_dft, s_keep, 0, -1, -1);
-                llama_kv_cache_seq_keep(ctx_dft, 0);
+                jarvis_kv_cache_seq_keep(ctx_dft, s_keep);
+                jarvis_kv_cache_seq_cp  (ctx_dft, s_keep, 0, -1, -1);
+                jarvis_kv_cache_seq_keep(ctx_dft, 0);
 
-                llama_kv_cache_seq_rm  (ctx_tgt, s_keep, n_past_tgt, -1);
-                llama_kv_cache_seq_keep(ctx_tgt, s_keep);
-                llama_kv_cache_seq_cp  (ctx_tgt, s_keep, 0, -1, -1);
-                llama_kv_cache_seq_keep(ctx_tgt, 0);
+                jarvis_kv_cache_seq_rm  (ctx_tgt, s_keep, n_past_tgt, -1);
+                jarvis_kv_cache_seq_keep(ctx_tgt, s_keep);
+                jarvis_kv_cache_seq_cp  (ctx_tgt, s_keep, 0, -1, -1);
+                jarvis_kv_cache_seq_keep(ctx_tgt, 0);
             }
 
             for (int s = 0; s < n_seq_dft; ++s) {
@@ -431,15 +431,15 @@ int main(int argc, char ** argv) {
             }
             // note: will be erased after the speculation phase
             drafts[0].tokens.push_back(token_id);
-            drafts[0].dists.push_back(std::vector<llama_token_data>());
+            drafts[0].dists.push_back(std::vector<jarvis_token_data>());
             drafts[0].i_batch_tgt.push_back(0);
 
             common_batch_clear(batch_dft);
             common_batch_add  (batch_dft, token_id, n_past_dft, { 0 }, true);
 
-            llama_kv_cache_seq_rm(ctx_dft, 0, n_past_dft, -1);
+            jarvis_kv_cache_seq_rm(ctx_dft, 0, n_past_dft, -1);
             // LOG_DBG("dft batch: %s\n", LOG_BATCH_TOSTR_PRETTY(ctx_dft, batch_dft).c_str());
-            llama_decode(ctx_dft, batch_dft);
+            jarvis_decode(ctx_dft, batch_dft);
 
             ++n_past_dft;
         }
@@ -496,8 +496,8 @@ int main(int argc, char ** argv) {
                     if (n_seq_cur < n_seq_dft && cur_p->data[f].p > p_split) {
                         LOG_DBG("splitting seq %3d into %3d\n", s, n_seq_cur);
 
-                        llama_kv_cache_seq_rm(ctx_dft,    n_seq_cur, -1, -1);
-                        llama_kv_cache_seq_cp(ctx_dft, s, n_seq_cur, -1, -1);
+                        jarvis_kv_cache_seq_rm(ctx_dft,    n_seq_cur, -1, -1);
+                        jarvis_kv_cache_seq_cp(ctx_dft, s, n_seq_cur, -1, -1);
 
                         // all previous tokens from this branch are now also part of the new branch
                         for (int t = 0; t < batch_tgt.n_tokens; ++t) {
@@ -535,7 +535,7 @@ int main(int argc, char ** argv) {
 
                 // add drafted token for each sequence
                 for (int is = 0; is < (int) sa.size(); ++is) {
-                    const llama_token id = cur_p->data[is].id;
+                    const jarvis_token id = cur_p->data[is].id;
 
                     const int s = sa[is];
 
@@ -567,7 +567,7 @@ int main(int argc, char ** argv) {
             }
 
             // evaluate the drafted tokens on the draft model
-            llama_decode(ctx_dft, batch_dft);
+            jarvis_decode(ctx_dft, batch_dft);
             ++n_past_cur;
             ++n_drafted;
 
@@ -578,13 +578,13 @@ int main(int argc, char ** argv) {
 
         // evaluate the target model on the drafted tokens
         {
-            llama_kv_cache_seq_keep(ctx_tgt, 0);
+            jarvis_kv_cache_seq_keep(ctx_tgt, 0);
             for (int s = 1; s < n_seq_dft; ++s) {
-                llama_kv_cache_seq_cp(ctx_tgt, 0, s, -1, -1);
+                jarvis_kv_cache_seq_cp(ctx_tgt, 0, s, -1, -1);
             }
 
             // LOG_DBG("target batch: %s\n", LOG_BATCH_TOSTR_PRETTY(ctx_tgt, batch_tgt).c_str());
-            llama_decode(ctx_tgt, batch_tgt);
+            jarvis_decode(ctx_tgt, batch_tgt);
             ++n_past_tgt;
         }
 
@@ -616,7 +616,7 @@ int main(int argc, char ** argv) {
     LOG_INF("\n");
     LOG_INF("draft:\n\n");
     // TODO: print sampling/grammar timings for all drafts
-    llama_perf_context_print(ctx_dft);
+    jarvis_perf_context_print(ctx_dft);
 
     LOG_INF("\n");
     LOG_INF("target:\n\n");
@@ -627,15 +627,15 @@ int main(int argc, char ** argv) {
         common_sampler_free(drafts[s].smpl);
     }
 
-    llama_batch_free(batch_dft);
+    jarvis_batch_free(batch_dft);
 
-    llama_free(ctx_tgt);
-    llama_free_model(model_tgt);
+    jarvis_free(ctx_tgt);
+    jarvis_free_model(model_tgt);
 
-    llama_free(ctx_dft);
-    llama_free_model(model_dft);
+    jarvis_free(ctx_dft);
+    jarvis_free_model(model_dft);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     LOG("\n\n");
 

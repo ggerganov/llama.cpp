@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "android.llama.cpp"
+    namespace = "android.jarvis.cpp"
     compileSdk = 34
 
     defaultConfig {
@@ -18,7 +18,7 @@ android {
         }
         externalNativeBuild {
             cmake {
-                arguments += "-DLLAMA_BUILD_COMMON=ON"
+                arguments += "-DJARVIS_BUILD_COMMON=ON"
                 arguments += "-DCMAKE_BUILD_TYPE=Release"
                 cppFlags += listOf()
                 arguments += listOf()

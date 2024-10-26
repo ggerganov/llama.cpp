@@ -67,7 +67,7 @@ script:
 android:
     - changed-files:
         - any-glob-to-any-file:
-            - examples/llama.android/**
+            - examples/jarvis.android/**
 server:
     - changed-files:
         - any-glob-to-any-file:

@@ -3,7 +3,7 @@
 # Built and maintained by John Boero - boeroboy@gmail.com
 # In honor of Seth Vidal https://www.redhat.com/it/blog/thank-you-seth-vidal
 
-# Notes for llama.cpp:
+# Notes for jarvis.cpp:
 # 1. Tags are currently based on hash - which will not sort asciibetically.
 #    We need to declare standard versioning if people want to sort latest releases.
 # 2. Builds for CUDA/OpenCL support are separate, with different depenedencies.
@@ -12,44 +12,44 @@
 # 4. OpenCL/CLBLAST support simply requires the ICD loader and basic opencl libraries.
 #    It is up to the user to install the correct vendor-specific support.
 
-Name:           llama.cpp-cuda
+Name:           jarvis.cpp-cuda
 Version:        %( date "+%%Y%%m%%d" )
 Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
 License:        MIT
-Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
+Source0:        https://github.com/ggerganov/jarvis.cpp/archive/refs/heads/master.tar.gz
 BuildRequires:  coreutils make gcc-c++ git cuda-toolkit
 Requires:       cuda-toolkit
-URL:            https://github.com/ggerganov/llama.cpp
+URL:            https://github.com/ggerganov/jarvis.cpp
 
 %define debug_package %{nil}
 %define source_date_epoch_from_changelog 0
 
 %description
-CPU inference for Meta's Lllama2 models using default options.
+CPU inference for Meta's Ljarvis2 models using default options.
 
 %prep
-%setup -n llama.cpp-master
+%setup -n jarvis.cpp-master
 
 %build
 make -j GGML_CUDA=1
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p llama-cli %{buildroot}%{_bindir}/llama-cuda-cli
-cp -p llama-server %{buildroot}%{_bindir}/llama-cuda-server
-cp -p llama-simple %{buildroot}%{_bindir}/llama-cuda-simple
+cp -p jarvis-cli %{buildroot}%{_bindir}/jarvis-cuda-cli
+cp -p jarvis-server %{buildroot}%{_bindir}/jarvis-cuda-server
+cp -p jarvis-simple %{buildroot}%{_bindir}/jarvis-cuda-simple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system
-%{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llamacuda.service
+%{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/jarviscuda.service
 [Unit]
-Description=Llama.cpp server, CPU only (no GPU support in this build).
+Description=Jarvis.cpp server, CPU only (no GPU support in this build).
 After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/sysconfig/llama
-ExecStart=/usr/bin/llama-cuda-server $LLAMA_ARGS
+EnvironmentFile=/etc/sysconfig/jarvis
+ExecStart=/usr/bin/jarvis-cuda-server $JARVIS_ARGS
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=never
 
@@ -58,8 +58,8 @@ WantedBy=default.target
 EOF
 
 mkdir -p %{buildroot}/etc/sysconfig
-%{__cat} <<EOF  > %{buildroot}/etc/sysconfig/llama
-LLAMA_ARGS="-m /opt/llama2/ggml-model-f32.bin"
+%{__cat} <<EOF  > %{buildroot}/etc/sysconfig/jarvis
+JARVIS_ARGS="-m /opt/jarvis2/ggml-model-f32.bin"
 EOF
 
 %clean
@@ -67,11 +67,11 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/llama-cuda-cli
-%{_bindir}/llama-cuda-server
-%{_bindir}/llama-cuda-simple
-/usr/lib/systemd/system/llamacuda.service
-%config /etc/sysconfig/llama
+%{_bindir}/jarvis-cuda-cli
+%{_bindir}/jarvis-cuda-server
+%{_bindir}/jarvis-cuda-simple
+/usr/lib/systemd/system/jarviscuda.service
+%config /etc/sysconfig/jarvis
 
 %pre
 

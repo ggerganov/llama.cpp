@@ -5,10 +5,10 @@ Perplexity measures how well the model can predict the next token with lower val
 Note that perplexity is **not** directly comparable between models, especially if they use different tokenizers.
 Also note that finetunes typically result in a higher perplexity value even though the human-rated quality of outputs increases.
 
-Within llama.cpp the perplexity of base models is used primarily to judge the quality loss from e.g. quantized models vs. FP16.
+Within jarvis.cpp the perplexity of base models is used primarily to judge the quality loss from e.g. quantized models vs. FP16.
 The convention among contributors is to use the Wikitext-2 test set for testing unless noted otherwise (can be obtained with `scripts/get-wikitext-2.sh`).
 When numbers are listed all command line arguments and compilation options are left at their defaults unless noted otherwise.
-llama.cpp numbers are **not** directly comparable to those of other projects because the exact values depend strongly on the implementation details.
+jarvis.cpp numbers are **not** directly comparable to those of other projects because the exact values depend strongly on the implementation details.
 
 By default only the mean perplexity value and the corresponding uncertainty is calculated.
 The uncertainty is determined empirically by assuming a Gaussian distribution of the "correct" logits per and then applying error propagation.
@@ -29,7 +29,7 @@ In addition to the KL divergence the following statistics are calculated with `-
 * Mean change in "correct" token probability. Positive values mean the model gets better at prediction, negative values mean it gets worse.
 * Pearson correlation coefficient of the "correct" token probabilites between models.
 * Percentiles of change in "correct" token probability. Positive values mean the model gets better at prediction, negative values mean it gets worse. Can be used to judge noise vs. quality loss from quantization. If the percentiles are symmetric then the quantization is essentially just adding noise. If the negative values are significantly larger than the positive values then this indicates that the model is actually becoming worse from the quantization.
-* The root mean square of the change in token probabilities. If you were to assume that the quantization simply causes Gaussian noise on the token probabilities then this would be the standard deviation of said noise. The uncertainty on the value is calculated that the change in token probabilities follows a Gaussian distribution. Related discussion: https://github.com/ggerganov/llama.cpp/discussions/2875 .
+* The root mean square of the change in token probabilities. If you were to assume that the quantization simply causes Gaussian noise on the token probabilities then this would be the standard deviation of said noise. The uncertainty on the value is calculated that the change in token probabilities follows a Gaussian distribution. Related discussion: https://github.com/ggerganov/jarvis.cpp/discussions/2875 .
 * Same top p: Percentage of how often the token was assigned the highest probabilites by both models. The uncertainty is calculated from the Gaussian approximation of the binomial distribution.
 
 ## LLaMA 3 8b Scoreboard
@@ -41,7 +41,7 @@ In addition to the KL divergence the following statistics are calculated with `-
 | GPU      | 1x NVIDIA RTX 4090 |
 
 Results were generated using the CUDA backend and are sorted by Kullback-Leibler divergence relative to FP16.
-The "WT" importance matrices were created using varying numbers of Wikitext tokens and can be found [here](https://huggingface.co/JohannesGaessler/llama.cpp_importance_matrices/blob/main/imatrix-llama_3-8b-f16-2.7m_tokens.dat).
+The "WT" importance matrices were created using varying numbers of Wikitext tokens and can be found [here](https://huggingface.co/JohannesGaessler/jarvis.cpp_importance_matrices/blob/main/imatrix-jarvis_3-8b-f16-2.7m_tokens.dat).
 Note: the FP16 logits used for the calculation of all metrics other than perplexity are stored in a binary file between runs.
 In order to save space this file does **not** contain the exact same FP32 logits but instead casts them to 16 bit unsigned integers (with some scaling).
 So the "f16" results are to be understood as the difference resulting only from this downcast.
@@ -172,7 +172,7 @@ Results were calculated with LLaMA 3 8b BF16 as `--kl-divergence-base` and LLaMA
 ## Old Numbers
 
 <details>
-<summary>Llama 2 70B Scoreboard</summary>
+<summary>Jarvis 2 70B Scoreboard</summary>
 
 | Quantization | Model size (GiB) | Perplexity | Delta to fp16 |
 |--------------|------------------|------------|---------------|

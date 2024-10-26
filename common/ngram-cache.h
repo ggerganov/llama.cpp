@@ -1,34 +1,34 @@
 #pragma once
 
-#include "llama.h"
+#include "jarvis.h"
 
 #include <unordered_map>
 #include <string>
 #include <vector>
 
-#define LLAMA_NGRAM_MIN    1
-#define LLAMA_NGRAM_MAX    4
-#define LLAMA_NGRAM_STATIC 2
+#define JARVIS_NGRAM_MIN    1
+#define JARVIS_NGRAM_MAX    4
+#define JARVIS_NGRAM_STATIC 2
 
 // Data structures to map n-grams to empirical token probabilities:
 
 struct common_ngram {
-    llama_token tokens[LLAMA_NGRAM_MAX];
+    jarvis_token tokens[JARVIS_NGRAM_MAX];
 
     common_ngram() {
-        for (int i = 0; i < LLAMA_NGRAM_MAX; ++i) {
+        for (int i = 0; i < JARVIS_NGRAM_MAX; ++i) {
             tokens[i] = -1;
         }
     }
 
-    common_ngram(const llama_token * input, const int ngram_size) {
-        for (int i = 0; i < LLAMA_NGRAM_MAX; ++i) {
+    common_ngram(const jarvis_token * input, const int ngram_size) {
+        for (int i = 0; i < JARVIS_NGRAM_MAX; ++i) {
             tokens[i] = i < ngram_size ? input[i] : -1;
         }
     }
 
     bool operator==(const common_ngram & other) const {
-        for (int i = 0; i < LLAMA_NGRAM_MAX; ++i) {
+        for (int i = 0; i < JARVIS_NGRAM_MAX; ++i) {
             if (tokens[i] != other.tokens[i]) {
                 return false;
             }
@@ -38,7 +38,7 @@ struct common_ngram {
 };
 
 struct common_token_hash_function {
-    size_t operator()(const llama_token token) const {
+    size_t operator()(const jarvis_token token) const {
         // see https://probablydance.com/2018/06/16/fibonacci-hashing-the-optimization-that-the-world-forgot-or-a-better-alternative-to-integer-modulo/
         return token * 11400714819323198485llu;
     }
@@ -47,7 +47,7 @@ struct common_token_hash_function {
 struct common_ngram_hash_function {
     size_t operator()(const common_ngram & ngram) const {
         size_t hash = common_token_hash_function{}(ngram.tokens[0]);
-        for (int i = 1; i < LLAMA_NGRAM_MAX; ++i) {
+        for (int i = 1; i < JARVIS_NGRAM_MAX; ++i) {
             hash ^= common_token_hash_function{}(ngram.tokens[i]);
         }
         return hash;
@@ -55,7 +55,7 @@ struct common_ngram_hash_function {
 };
 
 // token -> number of times token has been seen
-typedef std::unordered_map<llama_token, int32_t> common_ngram_cache_part;
+typedef std::unordered_map<jarvis_token, int32_t> common_ngram_cache_part;
 
 // n-gram -> empirical distribution of following tokens
 typedef std::unordered_map<common_ngram, common_ngram_cache_part, common_ngram_hash_function> common_ngram_cache;
@@ -71,7 +71,7 @@ typedef std::unordered_map<common_ngram, common_ngram_cache_part, common_ngram_h
 // In order to get correct results inp_data can ONLY BE APPENDED TO.
 // Changes in the middle need a complete rebuild.
 void common_ngram_cache_update(
-    common_ngram_cache & ngram_cache, int ngram_min, int ngram_max, std::vector<llama_token> & inp_data, int nnew, bool print_progress);
+    common_ngram_cache & ngram_cache, int ngram_min, int ngram_max, std::vector<jarvis_token> & inp_data, int nnew, bool print_progress);
 
 // Try to draft tokens from ngram caches.
 // inp:                the tokens generated so far.
@@ -82,7 +82,7 @@ void common_ngram_cache_update(
 // nc_dynamic:         ngram cache based on previous user generations.
 // nc_static:          ngram cache generated from a large text corpus, used for validation.
 void common_ngram_cache_draft(
-    std::vector<llama_token> & inp, std::vector<llama_token> & draft, int n_draft, int ngram_min, int ngram_max,
+    std::vector<jarvis_token> & inp, std::vector<jarvis_token> & draft, int n_draft, int ngram_min, int ngram_max,
     common_ngram_cache & nc_context, common_ngram_cache & nc_dynamic, common_ngram_cache & nc_static);
 
 // Save an ngram cache to a file.

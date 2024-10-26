@@ -36,11 +36,11 @@
 #endif
 
 #if defined(__ARM_FEATURE_SVE) || defined(__ARM_FEATURE_MATMUL_INT8)
-#undef GGML_USE_LLAMAFILE
+#undef GGML_USE_JARVISFILE
 #endif
 
-#ifdef GGML_USE_LLAMAFILE
-#include <llamafile/sgemm.h>
+#ifdef GGML_USE_JARVISFILE
+#include <jarvisfile/sgemm.h>
 #endif
 
 #if defined(_MSC_VER)
@@ -2640,7 +2640,7 @@ inline static float ggml_silu_f32(float x) {
 
 #if __FINITE_MATH_ONLY__
 #error "some routines in ggml.c require non-finite math arithmetics -- pass -fno-finite-math-only to the compiler to fix"
-#error "ref: https://github.com/ggerganov/llama.cpp/pull/7154#issuecomment-2143844461"
+#error "ref: https://github.com/ggerganov/jarvis.cpp/pull/7154#issuecomment-2143844461"
 #endif
 
 #if defined(__ARM_NEON) && defined(__aarch64__)
@@ -12502,7 +12502,7 @@ static void ggml_compute_forward_mul_mat(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-#if GGML_USE_LLAMAFILE
+#if GGML_USE_JARVISFILE
     // broadcast factors
     const int64_t r2 = ne12 / ne02;
     const int64_t r3 = ne13 / ne03;
@@ -12512,7 +12512,7 @@ static void ggml_compute_forward_mul_mat(
     if (src1_cont) {
         for (int64_t i13 = 0; i13 < ne13; i13++)
             for (int64_t i12 = 0; i12 < ne12; i12++)
-                if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
+                if (!jarvisfile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
                                      (const char *)src0->data + i12/r2*nb02 + i13/r3*nb03,
                                      nb01/ggml_type_size(src0->type),
                                      (const char *)src1->data + i12*nb12 + i13*nb13,
@@ -12566,14 +12566,14 @@ UseGgmlGemm1:;
 
     ggml_barrier(params->threadpool);
 
-#if GGML_USE_LLAMAFILE
+#if GGML_USE_JARVISFILE
     if (src1->type != vec_dot_type) {
         const void* wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
         const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
         for (int64_t i13 = 0; i13 < ne13; i13++)
             for (int64_t i12 = 0; i12 < ne12; i12++)
-                if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
+                if (!jarvisfile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
                                      (const char *)src0->data + i12/r2*nb02 + i13/r3*nb03,
                                      nb01/ggml_type_size(src0->type),
                                      (const char *)wdata + (i12*ne11 + i13*ne12*ne11)*row_size,
@@ -12619,7 +12619,7 @@ UseGgmlGemm2:;
     int64_t nchunk1 = (nr1 + chunk_size - 1) / chunk_size;
 
     // If the chunking is poor for the number of threads on this setup, scrap the whole plan.  Re-chunk it by thread.
-    //   Also, chunking by thread was measured to have perform better on NUMA systems.  See https://github.com/ggerganov/llama.cpp/pull/6915
+    //   Also, chunking by thread was measured to have perform better on NUMA systems.  See https://github.com/ggerganov/jarvis.cpp/pull/6915
     //   In theory, chunking should be just as useful on NUMA and non NUMA systems, but testing disagreed with that.
     if (nchunk0 * nchunk1 < nth * 4 || ggml_is_numa()) {
         // distribute the thread work across the inner or outer loop based on which one is larger
@@ -14188,7 +14188,7 @@ static float rope_yarn_ramp(const float low, const float high, const int i0) {
     return 1 - MIN(1, MAX(0, y));
 }
 
-// YaRN algorithm based on LlamaYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
+// YaRN algorithm based on JarvisYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
 static void rope_yarn(
     float theta_extrap, float freq_scale, float corr_dims[2], int64_t i0, float ext_factor, float mscale,
@@ -14216,7 +14216,7 @@ static float ggml_rope_yarn_corr_dim(int n_dims, int n_ctx_orig, float n_rot, fl
 static void ggml_rope_cache_init(
      float theta_base, float freq_scale, const float * freq_factors, float corr_dims[2], int64_t ne0, float ext_factor, float mscale,
      float * cache, float sin_sign, float theta_scale) {
-    // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/LlamaYaRNScaledRotaryEmbedding.py
+    // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/JarvisYaRNScaledRotaryEmbedding.py
     float theta = theta_base;
     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
         const float ff = freq_factors ? freq_factors[i0/2] : 1.0f;
@@ -18074,7 +18074,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             }
         case GGML_OP_REPEAT:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     src0->grad = ggml_add_or_set(ctx,
                             src0->grad,
@@ -18106,7 +18106,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             }
         case GGML_OP_RMS_NORM:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     float eps;
                     memcpy(&eps, tensor->op_params, sizeof(float));
@@ -18142,7 +18142,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 // src0.shape   [n,m,q1,r1]
                 // src1.shape   [n,p,qq,rr]
 
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     struct ggml_tensor * s1_tg =
                         ggml_out_prod(ctx, // [n,m,qq,rr]
@@ -18173,7 +18173,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                                 //         ggml_transpose(ctx, src0)), // [m,n,q1,r1]
                                 //     tensor->grad),                  // [m,p,qq,rr]
 
-                                // // when src0 is bigger than tensor->grad (this is mostly the case in llama),
+                                // // when src0 is bigger than tensor->grad (this is mostly the case in jarvis),
                                 // // avoid transpose of src0, rather transpose smaller tensor->grad
                                 // // and then use ggml_out_prod
                                 ggml_out_prod(ctx,                  // [n,p,qq,rr]
@@ -18193,7 +18193,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             }
         case GGML_OP_SCALE:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     float s;
                     memcpy(&s, tensor->op_params, sizeof(float));
@@ -18246,7 +18246,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_CPY:
             {
-                // necessary for llama
+                // necessary for jarvis
                 // cpy overwrites value of src1 by src0 and returns view(src1)
                 // the overwriting is mathematically equivalent to:
                 // tensor = src0 * 1 + src1 * 0
@@ -18269,7 +18269,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_RESHAPE:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
@@ -18283,7 +18283,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_VIEW:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     size_t offset;
 
@@ -18312,7 +18312,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_PERMUTE:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     int32_t * axes = (int32_t *) tensor->op_params;
                     int axis0 = axes[0] & 0x3;
@@ -18337,7 +18337,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_TRANSPOSE:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
@@ -18347,7 +18347,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_GET_ROWS:
             {
-                // necessary for llama (only for tokenizer)
+                // necessary for jarvis (only for tokenizer)
                 if (src0->grad) {
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
@@ -18370,20 +18370,20 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             }
         case GGML_OP_DIAG_MASK_INF:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     const int n_past = ((int32_t *) tensor->op_params)[0];
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
                             /* ggml_diag_mask_inf_impl() shouldn't be here */
-                            /* ref:  https://github.com/ggerganov/llama.cpp/pull/4203#discussion_r1412377992 */
+                            /* ref:  https://github.com/ggerganov/jarvis.cpp/pull/4203#discussion_r1412377992 */
                             ggml_diag_mask_zero_impl(ctx, tensor->grad, n_past, false),
                         zero_table, acc_table);
                 }
             } break;
         case GGML_OP_DIAG_MASK_ZERO:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     const int n_past = ((int32_t *) tensor->op_params)[0];
                     src0->grad =
@@ -18394,7 +18394,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_SOFT_MAX:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
@@ -18409,7 +18409,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             }
         case GGML_OP_ROPE:
             {
-                // necessary for llama
+                // necessary for jarvis
                 if (src0->grad) {
                     //const int n_past = ((int32_t *) tensor->op_params)[0];
                     const int n_dims     = ((int32_t *) tensor->op_params)[1];
@@ -18693,7 +18693,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                         }
                     case GGML_UNARY_OP_SILU:
                         {
-                            // necessary for llama
+                            // necessary for jarvis
                             if (src0->grad) {
                                 src0->grad = ggml_add_or_set(ctx,
                                         src0->grad,
@@ -23388,8 +23388,8 @@ int ggml_cpu_has_cann(void) {
 #endif
 }
 
-int ggml_cpu_has_llamafile(void) {
-#if defined(GGML_USE_LLAMAFILE)
+int ggml_cpu_has_jarvisfile(void) {
+#if defined(GGML_USE_JARVISFILE)
     return 1;
 #else
     return 0;

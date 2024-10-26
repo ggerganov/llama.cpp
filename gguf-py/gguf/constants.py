@@ -196,7 +196,7 @@ class GGUFType:
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA        = auto()
+    JARVIS        = auto()
     FALCON       = auto()
     BAICHUAN     = auto()
     GROK         = auto()
@@ -357,7 +357,7 @@ class MODEL_TENSOR(IntEnum):
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
-    MODEL_ARCH.LLAMA:          "llama",
+    MODEL_ARCH.JARVIS:          "jarvis",
     MODEL_ARCH.FALCON:         "falcon",
     MODEL_ARCH.BAICHUAN:       "baichuan",
     MODEL_ARCH.GROK:           "grok",
@@ -518,7 +518,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
-    MODEL_ARCH.LLAMA: [
+    MODEL_ARCH.JARVIS: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
         MODEL_TENSOR.OUTPUT,
@@ -1302,7 +1302,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
 
 # tensors that will not be serialized
 MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
-    MODEL_ARCH.LLAMA: [
+    MODEL_ARCH.JARVIS: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
@@ -1409,9 +1409,9 @@ class GGMLQuantizationType(IntEnum):
 # TODO: add GGMLFileType from ggml_ftype in ggml.h
 
 
-# from llama_ftype in llama.h
+# from jarvis_ftype in jarvis.h
 # ALL VALUES SHOULD BE THE SAME HERE AS THEY ARE OVER THERE.
-class LlamaFileType(IntEnum):
+class JarvisFileType(IntEnum):
     ALL_F32              = 0
     MOSTLY_F16           = 1   # except 1d tensors
     MOSTLY_Q4_0          = 2   # except 1d tensors

@@ -9,7 +9,7 @@ ARG BASE_ROCM_DEV_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-co
 FROM ${BASE_ROCM_DEV_CONTAINER} AS build
 
 # Unless otherwise specified, we make a fat build.
-# List from https://github.com/ggerganov/llama.cpp/pull/1087#issuecomment-1682807878
+# List from https://github.com/ggerganov/jarvis.cpp/pull/1087#issuecomment-1682807878
 # This is mostly tied to rocBLAS supported archs.
 ARG ROCM_DOCKER_ARCH="\
     gfx803 \
@@ -40,15 +40,15 @@ ENV GGML_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 # Must be set to 0.0.0.0 so it can listen to requests from host machine
-ENV LLAMA_ARG_HOST=0.0.0.0
+ENV JARVIS_ARG_HOST=0.0.0.0
 
 # Enable cURL
-ENV LLAMA_CURL=1
+ENV JARVIS_CURL=1
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev curl
 
-RUN make -j$(nproc) llama-server
+RUN make -j$(nproc) jarvis-server
 
 HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
-ENTRYPOINT [ "/app/llama-server" ]
+ENTRYPOINT [ "/app/jarvis-server" ]

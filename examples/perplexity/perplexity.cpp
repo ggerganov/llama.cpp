@@ -1,7 +1,7 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <algorithm>
 #include <array>
@@ -22,7 +22,7 @@
 #endif
 
 struct results_perplexity {
-    std::vector<llama_token> tokens;
+    std::vector<jarvis_token> tokens;
     double                   ppl_value;
     std::vector<float>       logits;
     std::vector<float>       probs;
@@ -35,7 +35,7 @@ struct results_log_softmax {
 };
 
 static void write_logfile(
-    const llama_context * ctx, const common_params & params, const llama_model * model,
+    const jarvis_context * ctx, const common_params & params, const jarvis_model * model,
     const struct results_perplexity & results
 ) {
     if (params.logdir.empty()) {
@@ -66,7 +66,7 @@ static void write_logfile(
 
     fprintf(logfile, "binary: main\n");
     char model_desc[128];
-    llama_model_desc(model, model_desc, sizeof(model_desc));
+    jarvis_model_desc(model, model_desc, sizeof(model_desc));
     yaml_dump_non_result_info(logfile, params, ctx, timestamp, results.tokens, model_desc);
 
     fprintf(logfile, "\n");
@@ -79,7 +79,7 @@ static void write_logfile(
     fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
     yaml_dump_vector_float(logfile, "probs", results.probs);
 
-    llama_perf_dump_yaml(logfile, ctx);
+    jarvis_perf_dump_yaml(logfile, ctx);
     fclose(logfile);
 }
 
@@ -339,20 +339,20 @@ static void process_logits(int n_vocab, const float * logits, const int * tokens
     }
 }
 
-static results_perplexity perplexity_v2(llama_context * ctx, const common_params & params) {
+static results_perplexity perplexity_v2(jarvis_context * ctx, const common_params & params) {
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
+    const bool add_bos = jarvis_add_bos_token(jarvis_get_model(ctx));
+    GGML_ASSERT(!jarvis_add_eos_token(jarvis_get_model(ctx)));
 
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, true);
+    std::vector<jarvis_token> tokens = common_tokenize(ctx, params.prompt, true);
 
-    const int n_ctx = llama_n_ctx(ctx);
+    const int n_ctx = jarvis_n_ctx(ctx);
 
     if (int(tokens.size()) < 2*n_ctx) {
         LOG_ERR("%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*n_ctx,
@@ -387,7 +387,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
     int count = 0;
     double nll = 0.0;
@@ -406,9 +406,9 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
         const auto t_start = std::chrono::high_resolution_clock::now();
 
         // clear the KV cache
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
-        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+        jarvis_batch batch = jarvis_batch_init(n_batch, 0, 1);
 
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
@@ -420,9 +420,9 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
             }
 
             //LOG_DBG("    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
-            if (llama_decode(ctx, batch)) {
+            if (jarvis_decode(ctx, batch)) {
                 //LOG_ERR("%s : failed to eval\n", __func__);
-                llama_batch_free(batch);
+                jarvis_batch_free(batch);
                 return {tokens, -1, logit_history, prob_history};
             }
 
@@ -431,10 +431,10 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
+                tokens[batch_start] = jarvis_token_bos(jarvis_get_model(ctx));
             }
 
-            const auto * batch_logits = llama_get_logits(ctx);
+            const auto * batch_logits = jarvis_get_logits(ctx);
             logits.insert(logits.end(), batch_logits, batch_logits + size_t(batch_size) * n_vocab);
 
             if (j == 0) {
@@ -442,7 +442,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
             }
         }
 
-        llama_batch_free(batch);
+        jarvis_batch_free(batch);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
@@ -483,18 +483,18 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     return {tokens, std::exp(nll / count), logit_history, prob_history};
 }
 
-static results_perplexity perplexity(llama_context * ctx, const common_params & params, const int32_t n_ctx) {
+static results_perplexity perplexity(jarvis_context * ctx, const common_params & params, const int32_t n_ctx) {
     if (params.ppl_stride > 0) {
         return perplexity_v2(ctx, params);
     }
 
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-    // Run `./llama-perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Run `./jarvis-perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
+    const bool add_bos = jarvis_add_bos_token(jarvis_get_model(ctx));
+    GGML_ASSERT(!jarvis_add_eos_token(jarvis_get_model(ctx)));
 
     std::ofstream logits_stream;
     if (!params.logits_file.empty()) {
@@ -511,7 +511,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, true);
+    std::vector<jarvis_token> tokens = common_tokenize(ctx, params.prompt, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
@@ -534,7 +534,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
     int count = 0;
     double nll = 0.0;
@@ -546,7 +546,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     GGML_ASSERT(n_batch < n_ctx || n_batch % n_ctx == 0);
     GGML_ASSERT(params.n_ctx == n_seq * n_ctx);
 
-    llama_batch batch = llama_batch_init(std::min(n_batch, n_ctx*n_seq), 0, 1);
+    jarvis_batch batch = jarvis_batch_init(std::min(n_batch, n_ctx*n_seq), 0, 1);
 
     std::vector<float> logits;
     if (num_batches > 1) {
@@ -567,7 +567,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     }
 
     // We get the logits for all the tokens in the context window (params.n_ctx)
-    // from llama_eval above.  Now, based on https://huggingface.co/docs/transformers/perplexity,
+    // from jarvis_eval above.  Now, based on https://huggingface.co/docs/transformers/perplexity,
     // calculate the perplexity over the last half of the window (so the model always has
     // some context to predict the token).
     //
@@ -589,7 +589,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
         const auto t_start = std::chrono::high_resolution_clock::now();
 
         // clear the KV cache
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
@@ -606,7 +606,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
 
                 // add BOS token for the first batch of each chunk
                 if (add_bos && j == 0) {
-                    tokens[seq_start] = llama_token_bos(llama_get_model(ctx));
+                    tokens[seq_start] = jarvis_token_bos(jarvis_get_model(ctx));
                 }
 
                 for (int k = 0; k < batch_size; ++k) {
@@ -625,20 +625,20 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
                 tokens[seq_start] = token_org;
             }
 
-            if (llama_decode(ctx, batch)) {
+            if (jarvis_decode(ctx, batch)) {
                 LOG_INF("%s : failed to eval\n", __func__);
                 return {tokens, -1, logit_history, prob_history};
             }
 
             if (num_batches > 1 && n_outputs > 0) {
-                const auto * batch_logits = llama_get_logits(ctx);
+                const auto * batch_logits = jarvis_get_logits(ctx);
                 logits.insert(logits.end(), batch_logits, batch_logits + size_t(n_outputs) * n_vocab);
             }
         }
 
 
         if (i == 0) {
-            llama_synchronize(ctx);
+            jarvis_synchronize(ctx);
             const auto t_end = std::chrono::high_resolution_clock::now();
             const float t_total = std::chrono::duration<float>(t_end - t_start).count();
             LOG_INF("%s: %.2f seconds per pass - ETA ", __func__, t_total);
@@ -651,9 +651,9 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
         }
 
         for (int seq = 0; seq < n_seq_batch; seq++) {
-            const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits_ith(ctx, seq*n_ctx + first);
+            const float * all_logits = num_batches > 1 ? logits.data() : jarvis_get_logits_ith(ctx, seq*n_ctx + first);
 
-            llama_token * tokens_data = tokens.data() + start + seq*n_ctx + first;
+            jarvis_token * tokens_data = tokens.data() + start + seq*n_ctx + first;
             if (!params.logits_file.empty()) {
                 process_logits(logits_stream, n_vocab, all_logits,
                         tokens_data, n_ctx - 1 - first,
@@ -695,17 +695,17 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
         LOG_ERR("Unexpected negative standard deviation of log(prob)\n");
     }
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
     return {tokens, ppl, logit_history, prob_history};
 }
 
-static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<float> & batch_logits, int n_batch, int n_vocab) {
+static bool decode_helper(jarvis_context * ctx, jarvis_batch & batch, std::vector<float> & batch_logits, int n_batch, int n_vocab) {
     int prev_outputs = 0;
     for (int i = 0; i < (int) batch.n_tokens; i += n_batch) {
         const int n_tokens = std::min<int>(n_batch, batch.n_tokens - i);
 
-        llama_batch batch_view = {
+        jarvis_batch batch_view = {
             n_tokens,
             batch.token    + i,
             nullptr,
@@ -715,7 +715,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
             batch.logits   + i,
         };
 
-        const int ret = llama_decode(ctx, batch_view);
+        const int ret = jarvis_decode(ctx, batch_view);
         if (ret != 0) {
             LOG_ERR("failed to decode the batch, n_batch = %d, ret = %d\n", n_batch, ret);
             return false;
@@ -726,7 +726,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
             n_outputs += batch_view.logits[i] != 0;
         }
 
-        memcpy(batch_logits.data() + size_t(prev_outputs)*n_vocab, llama_get_logits(ctx), size_t(n_outputs)*n_vocab*sizeof(float));
+        memcpy(batch_logits.data() + size_t(prev_outputs)*n_vocab, jarvis_get_logits(ctx), size_t(n_outputs)*n_vocab*sizeof(float));
 
         prev_outputs += n_outputs;
     }
@@ -737,7 +737,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
 #define K_TOKEN_CHUNK 4
 
 static void compute_logprobs(const float * batch_logits, int n_vocab, std::vector<std::thread>& workers,
-        const std::vector<std::pair<size_t, llama_token>>& eval_pairs, std::vector<float>& eval_results) {
+        const std::vector<std::pair<size_t, jarvis_token>>& eval_pairs, std::vector<float>& eval_results) {
     if (eval_results.size() != eval_pairs.size()) {
         eval_results.resize(eval_pairs.size());
     }
@@ -780,7 +780,7 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
     }
 }
 
-static void hellaswag_score(llama_context * ctx, const common_params & params) {
+static void hellaswag_score(jarvis_context * ctx, const common_params & params) {
     // Calculates hellaswag score (acc_norm) from prompt
     //
     // Data extracted from the HellaSwag validation dataset (MIT license) https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
@@ -814,7 +814,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
     size_t hs_task_count = prompt_lines.size()/6;
     LOG_INF("%s : loaded %zu tasks from prompt.\n", __func__, hs_task_count);
 
-    const bool is_spm = llama_vocab_type(llama_get_model(ctx)) == LLAMA_VOCAB_TYPE_SPM;
+    const bool is_spm = jarvis_vocab_type(jarvis_get_model(ctx)) == JARVIS_VOCAB_TYPE_SPM;
     LOG_INF("================================= is_spm = %d\n", is_spm);
 
     // The tasks should be randomized so the score stabilizes quickly.
@@ -836,10 +836,10 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
         size_t ending_logprob_count[4];
         double ending_logprob[4];
 
-        size_t i_logits;        // starting index of logits in the llama_batch
+        size_t i_logits;        // starting index of logits in the jarvis_batch
         size_t common_prefix;   // max number of initial tokens that are the same in all sentences
         size_t required_tokens; // needed number of tokens to evaluate all 4 endings
-        std::vector<llama_token> seq_tokens[4];
+        std::vector<jarvis_token> seq_tokens[4];
     };
 
     LOG_INF("%s : selecting %zu %s tasks.\n", __func__, hs_task_count, (randomize_tasks?"randomized":"the first")  );
@@ -880,7 +880,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
             hs_cur.seq_tokens[2].size() - hs_cur.common_prefix +
             hs_cur.seq_tokens[3].size() - hs_cur.common_prefix;
 
-        //GGML_ASSERT(hs_cur.common_prefix >= ::llama_tokenize(ctx, hs_cur.context, true).size());
+        //GGML_ASSERT(hs_cur.common_prefix >= ::jarvis_tokenize(ctx, hs_cur.context, true).size());
 
         // Delete the selected random example from the prompt
         if (randomize_tasks) {
@@ -894,21 +894,21 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
 
     double acc = 0.0f;
 
-    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_ctx   = jarvis_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
     const int max_tasks_per_batch = 32;
-    const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
+    const int max_seq = std::min(4*max_tasks_per_batch, (int) jarvis_n_seq_max(ctx));
 
-    llama_batch batch = llama_batch_init(n_ctx, 0, 4);
+    jarvis_batch batch = jarvis_batch_init(n_ctx, 0, 4);
 
     std::vector<float> tok_logits(n_vocab);
     // TODO: this could be made smaller; it's currently the worst-case size
     std::vector<float> batch_logits(size_t(n_ctx)*n_vocab);
 
-    std::vector<std::pair<size_t, llama_token>> eval_pairs;
+    std::vector<std::pair<size_t, jarvis_token>> eval_pairs;
     std::vector<float> eval_results;
     std::vector<std::thread> workers(std::thread::hardware_concurrency());
 
@@ -963,11 +963,11 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
             return;
         }
 
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
         // decode all tasks [i0, i1)
         if (!decode_helper(ctx, batch, batch_logits, n_batch, n_vocab)) {
-            LOG_ERR("%s: llama_decode() failed\n", __func__);
+            LOG_ERR("%s: jarvis_decode() failed\n", __func__);
             return;
         }
 
@@ -1031,7 +1031,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
         i0 = i1 - 1;
     }
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
     LOG("\n");
 }
@@ -1047,7 +1047,7 @@ struct winogrande_entry {
     size_t required_tokens;
     size_t n_base1; // number of tokens for context + choice 1
     size_t n_base2; // number of tokens for context + choice 2
-    std::vector<llama_token> seq_tokens[2];
+    std::vector<jarvis_token> seq_tokens[2];
 };
 
 static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string & prompt) {
@@ -1114,13 +1114,13 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string 
 /*
  * Evaluates the Winogrande score.
  * Uses a CSV containing task index, dentence, choice 1, choice 2, answer (1 or 2)
- * You can get one such dataset from e.g. https://huggingface.co/datasets/ikawrakow/winogrande-eval-for-llama.cpp
+ * You can get one such dataset from e.g. https://huggingface.co/datasets/ikawrakow/winogrande-eval-for-jarvis.cpp
  * As an example, the 1st row in the above dataset is
  *
  *    0,Sarah was a much better surgeon than Maria so _ always got the easier cases.,Sarah,Maria,2
  *
  */
-static void winogrande_score(llama_context * ctx, const common_params & params) {
+static void winogrande_score(jarvis_context * ctx, const common_params & params) {
 
     constexpr int k_min_trailing_ctx = 3;
 
@@ -1176,21 +1176,21 @@ static void winogrande_score(llama_context * ctx, const common_params & params) 
 
     LOG_INF("%s : calculating winogrande score over selected tasks.\n", __func__);
 
-    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_ctx   = jarvis_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
     const int max_tasks_per_batch = 128;
-    const int max_seq = std::min(2*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
+    const int max_seq = std::min(2*max_tasks_per_batch, (int) jarvis_n_seq_max(ctx));
 
-    llama_batch batch = llama_batch_init(n_ctx, 0, 2);
+    jarvis_batch batch = jarvis_batch_init(n_ctx, 0, 2);
 
     std::vector<float> tok_logits(n_vocab);
     // TODO: this could be made smaller; it's currently the worst-case size
     std::vector<float> batch_logits(size_t(n_ctx)*n_vocab);
 
-    std::vector<std::pair<size_t, llama_token>> eval_pairs;
+    std::vector<std::pair<size_t, jarvis_token>> eval_pairs;
     std::vector<float> eval_results;
     std::vector<std::thread> workers(std::thread::hardware_concurrency());
 
@@ -1240,11 +1240,11 @@ static void winogrande_score(llama_context * ctx, const common_params & params) 
             return;
         }
 
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
         // decode all tasks [i0, i1)
         if (!decode_helper(ctx, batch, batch_logits, n_batch, n_vocab)) {
-            LOG_ERR("%s: llama_decode() failed\n", __func__);
+            LOG_ERR("%s: jarvis_decode() failed\n", __func__);
             return;
         }
 
@@ -1356,14 +1356,14 @@ struct multiple_choice_task {
     }
 
     // For evaluation
-    size_t i_logits;        // starting index of logits in the llama_batch
+    size_t i_logits;        // starting index of logits in the jarvis_batch
     size_t common_prefix;   // max number of initial tokens that are the same in all sentences
     size_t required_tokens; // needed number of tokens to evaluate all answers
-    std::vector<std::vector<llama_token>> seq_tokens;
+    std::vector<std::vector<jarvis_token>> seq_tokens;
     std::vector<float> log_probs;
 };
 
-static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choice_task& task, bool log_error) {
+static bool multiple_choice_prepare_one_task(jarvis_context * ctx, multiple_choice_task& task, bool log_error) {
     if (task.question.empty() || task.mc1.answers.empty()) {
         if (log_error) {
             LOG_ERR("%s: found bad task with empty question and/or answers\n", __func__);
@@ -1415,14 +1415,14 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choic
 //   * TruthfulQA
 //
 // Validation datasets for these 4 tests can be found at
-//     https://huggingface.co/datasets/ikawrakow/validation-datasets-for-llama.cpp
+//     https://huggingface.co/datasets/ikawrakow/validation-datasets-for-jarvis.cpp
 // The data for these datasets was extracted from
 //     git@hf.co:datasets/allenai/ai2_arc
 //     https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
 //     git@hf.co:datasets/Stevross/mmlu
 //     https://huggingface.co/datasets/truthful_qa
 //
-static void multiple_choice_score(llama_context * ctx, const common_params & params) {
+static void multiple_choice_score(jarvis_context * ctx, const common_params & params) {
 
     std::istringstream strstream(params.prompt);
     uint32_t n_task;
@@ -1528,20 +1528,20 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
 
     LOG("\ntask\tacc_norm\n");
 
-    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_ctx   = jarvis_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = jarvis_n_vocab(jarvis_get_model(ctx));
 
     const int max_tasks_per_batch = 32;
-    const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
+    const int max_seq = std::min(4*max_tasks_per_batch, (int) jarvis_n_seq_max(ctx));
 
-    llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
+    jarvis_batch batch = jarvis_batch_init(n_ctx, 0, max_seq);
 
     std::vector<float> tok_logits(n_vocab);
     std::vector<float> batch_logits(size_t(n_ctx)*n_vocab);
 
-    std::vector<std::pair<size_t, llama_token>> eval_pairs;
+    std::vector<std::pair<size_t, jarvis_token>> eval_pairs;
     std::vector<float> eval_results;
     std::vector<std::thread> workers(std::thread::hardware_concurrency());
     std::vector<int> batch_indeces;
@@ -1578,7 +1578,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
             for (int s = 0; s < num_answers; ++s) batch_indeces[s] = s0 + s;
 
             for (size_t i = 0; i < cur_task.common_prefix; ++i) {
-                //llama_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
+                //jarvis_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
                 common_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
             }
             batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
@@ -1610,11 +1610,11 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
             return;
         }
 
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
         // decode all tasks [i0, i1)
         if (!decode_helper(ctx, batch, batch_logits, n_batch, n_vocab)) {
-            LOG_ERR("%s: llama_decode() failed\n", __func__);
+            LOG_ERR("%s: jarvis_decode() failed\n", __func__);
             return;
         }
 
@@ -1688,7 +1688,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
         i0 = i1 - 1;
     }
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
     if (n_done < 100 && (params.multiple_choice_tasks != 0 && params.multiple_choice_tasks < (size_t)n_task)) return;
 
@@ -1703,7 +1703,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
     LOG_INF("\n");
 }
 
-static void kl_divergence(llama_context * ctx, const common_params & params) {
+static void kl_divergence(jarvis_context * ctx, const common_params & params) {
     if (params.logits_file.empty()) {
         LOG_ERR("%s: you must provide a name of a file containing the log probabilities of the base model\n", __func__);
         return;
@@ -1724,7 +1724,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
     uint32_t n_ctx;
     in.read((char *)&n_ctx, sizeof(n_ctx));
-    if (n_ctx > llama_n_ctx(ctx)) {
+    if (n_ctx > jarvis_n_ctx(ctx)) {
         LOG_ERR("%s: %s has been computed with %u, while the current context is %d. Increase it with -c and retry\n",
                 __func__, params.logits_file.c_str(), n_ctx, params.n_ctx);
     }
@@ -1737,11 +1737,11 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
         LOG_ERR("%s: failed reading n_vocab, n_chunk from %s\n", __func__, params.logits_file.c_str());
         return;
     }
-    if (n_vocab != llama_n_vocab(llama_get_model(ctx))) {
-        LOG_ERR("%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, llama_n_vocab(llama_get_model(ctx)));
+    if (n_vocab != jarvis_n_vocab(jarvis_get_model(ctx))) {
+        LOG_ERR("%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, jarvis_n_vocab(jarvis_get_model(ctx)));
     }
 
-    std::vector<llama_token> tokens(size_t(n_ctx) * n_chunk);
+    std::vector<jarvis_token> tokens(size_t(n_ctx) * n_chunk);
     if (in.read((char *)tokens.data(), tokens.size()*sizeof(tokens[0])).fail()) {
         LOG_ERR("%s: failed reading evaluation tokens from %s\n", __func__, params.logits_file.c_str());
         return;
@@ -1750,8 +1750,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
     const int n_batch = params.n_batch;
     const int num_batches = (n_ctx + n_batch - 1)/n_batch;
     const int nv = 2*((n_vocab + 1)/2) + 4;
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
+    const bool add_bos = jarvis_add_bos_token(jarvis_get_model(ctx));
+    GGML_ASSERT(!jarvis_add_eos_token(jarvis_get_model(ctx)));
 
     std::vector<uint16_t> log_probs_uint16(size_t(n_ctx - 1 - n_ctx/2) * nv);
     std::vector<float>    kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
@@ -1797,9 +1797,9 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
         }
 
         // clear the KV cache
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
 
-        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+        jarvis_batch batch = jarvis_batch_init(n_batch, 0, 1);
 
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
@@ -1810,7 +1810,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
+                tokens[batch_start] = jarvis_token_bos(jarvis_get_model(ctx));
             }
 
             common_batch_clear(batch);
@@ -1818,9 +1818,9 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
                 common_batch_add(batch, tokens[batch_start + i], j*n_batch + i, {0}, true);
             }
 
-            if (llama_decode(ctx, batch)) {
+            if (jarvis_decode(ctx, batch)) {
                 LOG_ERR("%s : failed to eval\n", __func__);
-                llama_batch_free(batch);
+                jarvis_batch_free(batch);
                 return;
             }
 
@@ -1828,12 +1828,12 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
             tokens[batch_start] = token_org;
 
             if (num_batches > 1) {
-                const auto * batch_logits = llama_get_logits(ctx);
+                const auto * batch_logits = jarvis_get_logits(ctx);
                 logits.insert(logits.end(), batch_logits, batch_logits + size_t(batch_size) * n_vocab);
             }
         }
 
-        llama_batch_free(batch);
+        jarvis_batch_free(batch);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
@@ -1851,7 +1851,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
         LOG("chunk             PPL               ln(PPL(Q)/PPL(base))          KL Divergence              Δp RMS            Same top p\n");
 
         const int first = n_ctx/2;
-        const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
+        const float * all_logits = num_batches > 1 ? logits.data() : jarvis_get_logits(ctx);
         process_logits(n_vocab, all_logits + size_t(first)*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
                 workers, log_probs_uint16, kld, kld_ptr, p_diff_ptr);
         p_diff_ptr += n_ctx - 1 - first;
@@ -1991,7 +1991,7 @@ int main(int argc, char ** argv) {
     params.logits_all = true;
     params.escape = false;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_PERPLEXITY)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_PERPLEXITY)) {
         return 1;
     }
 
@@ -2030,20 +2030,20 @@ int main(int argc, char ** argv) {
         params.n_ctx += params.ppl_stride/2;
     }
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the model and apply lora adapter, if any
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
     if (model == NULL) {
         LOG_ERR("%s: unable to load model\n", __func__);
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = jarvis_n_ctx_train(model);
 
     if (params.n_ctx > n_ctx_train) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n",
@@ -2070,14 +2070,14 @@ int main(int argc, char ** argv) {
     }
 
     LOG("\n");
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
     write_logfile(ctx, params, model, results);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

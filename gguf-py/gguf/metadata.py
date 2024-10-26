@@ -60,7 +60,7 @@ class Metadata:
         metadata = Metadata.apply_metadata_heuristic(metadata, model_card, hf_params, model_path, total_params)
 
         # Metadata Override File Provided
-        # This is based on LLM_KV_NAMES mapping in llama.cpp
+        # This is based on LLM_KV_NAMES mapping in jarvis.cpp
         metadata_override = Metadata.load_metadata_override(metadata_override_path)
 
         metadata.name            = metadata_override.get(Keys.General.NAME,            metadata.name)
@@ -305,7 +305,7 @@ class Metadata:
 
                 setattr(metadata, metadata_key, current_value)
 
-            # LLAMA.cpp's direct internal convention
+            # JARVIS.cpp's direct internal convention
             # (Definitely not part of hugging face formal/informal standard)
             #########################################
             use_model_card_metadata("name", "name")
@@ -321,7 +321,7 @@ class Metadata:
             use_model_card_metadata("source_uuid", "uuid")
             use_model_card_metadata("source_repo_url", "repo_url")
 
-            # LLAMA.cpp's huggingface style convention
+            # JARVIS.cpp's huggingface style convention
             # (Definitely not part of hugging face formal/informal standard... but with model_ appended to match their style)
             ###########################################
             use_model_card_metadata("name", "model_name")
@@ -397,7 +397,7 @@ class Metadata:
             hf_name_or_path = hf_params.get("_name_or_path")
             if hf_name_or_path is not None and hf_name_or_path.count('/') <= 1:
                 # Use _name_or_path only if its actually a model name and not some computer path
-                # e.g. 'meta-llama/Llama-2-7b-hf'
+                # e.g. 'meta-jarvis/Jarvis-2-7b-hf'
                 model_id = hf_name_or_path
                 model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id, total_params)
                 if metadata.name is None and model_full_name_component is not None:

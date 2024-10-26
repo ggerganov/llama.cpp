@@ -1,11 +1,11 @@
-# llama.cpp/example/infill
+# jarvis.cpp/example/infill
 
-This example shows how to use the infill mode with Code Llama models supporting infill mode.
+This example shows how to use the infill mode with Code Jarvis models supporting infill mode.
 Currently the 7B and 13B models support infill mode.
 
 Infill supports most of the options available in the main example.
 
-For further information have a look at the main README.md in llama.cpp/example/main/README.md
+For further information have a look at the main README.md in jarvis.cpp/example/main/README.md
 
 ## Common Options
 
@@ -37,11 +37,11 @@ The `infill` program offers a seamless way to interact with LLaMA models, allowi
 
 ### Example
 
-Download a model that supports infill, for example CodeLlama:
+Download a model that supports infill, for example CodeJarvis:
 ```console
-scripts/hf.sh --repo TheBloke/CodeLlama-13B-GGUF --file codellama-13b.Q5_K_S.gguf --outdir models
+scripts/hf.sh --repo TheBloke/CodeJarvis-13B-GGUF --file codejarvis-13b.Q5_K_S.gguf --outdir models
 ```
 
 ```bash
-./llama-infill -t 10 -ngl 0 -m models/codellama-13b.Q5_K_S.gguf -c 4096 --temp 0.7 --repeat_penalty 1.1 -n 20 --in-prefix "def helloworld():\n    print(\"hell" --in-suffix "\n   print(\"goodbye world\")\n    "
+./jarvis-infill -t 10 -ngl 0 -m models/codejarvis-13b.Q5_K_S.gguf -c 4096 --temp 0.7 --repeat_penalty 1.1 -n 20 --in-prefix "def helloworld():\n    print(\"hell" --in-suffix "\n   print(\"goodbye world\")\n    "
 ```

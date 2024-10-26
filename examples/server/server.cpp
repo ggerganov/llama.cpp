@@ -5,7 +5,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "json-schema-to-grammar.h"
-#include "llama.h"
+#include "jarvis.h"
 
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
@@ -50,7 +50,7 @@ enum stop_type {
     STOP_TYPE_PARTIAL,
 };
 
-// state diagram: https://github.com/ggerganov/llama.cpp/pull/9283
+// state diagram: https://github.com/ggerganov/jarvis.cpp/pull/9283
 enum slot_state {
     SLOT_STATE_IDLE,
     SLOT_STATE_STARTED, // TODO: this state is only used for setting up the initial prompt processing; maybe merge it with launch_slot_with_task in the future
@@ -86,7 +86,7 @@ struct server_task {
     int id        = -1; // to be filled by server_queue
     int id_target = -1; // used by SERVER_TASK_TYPE_CANCEL
 
-    llama_tokens prompt_tokens;
+    jarvis_tokens prompt_tokens;
     server_task_type type;
     json data;
 
@@ -153,12 +153,12 @@ struct server_slot {
     int32_t n_prompt_tokens_processed = 0;
 
     // input prompt tokens
-    llama_tokens prompt_tokens;
+    jarvis_tokens prompt_tokens;
 
     size_t last_nl_pos = 0;
 
     std::string generated_text;
-    llama_tokens cache_tokens;
+    jarvis_tokens cache_tokens;
     std::vector<completion_token_output> generated_token_probs;
 
     server_task_inf_type inf_type = SERVER_TASK_INF_TYPE_COMPLETION;
@@ -181,7 +181,7 @@ struct server_slot {
     struct common_sampler_params sparams;
     struct common_sampler * smpl = nullptr;
 
-    llama_token sampled;
+    jarvis_token sampled;
 
     // stats
     size_t n_sent_text        = 0; // number of sent text character
@@ -593,13 +593,13 @@ struct server_response {
 };
 
 struct server_context {
-    llama_model * model = nullptr;
-    llama_context * ctx = nullptr;
+    jarvis_model * model = nullptr;
+    jarvis_context * ctx = nullptr;
     std::vector<common_lora_adapter_container> loras;
 
     common_params params;
 
-    llama_batch batch = {};
+    jarvis_batch batch = {};
 
     bool clean_kv_cache = true;
     bool add_bos_token  = true;
@@ -621,12 +621,12 @@ struct server_context {
 
     ~server_context() {
         if (ctx) {
-            llama_free(ctx);
+            jarvis_free(ctx);
             ctx = nullptr;
         }
 
         if (model) {
-            llama_free_model(model);
+            jarvis_free_model(model);
             model = nullptr;
         }
 
@@ -637,7 +637,7 @@ struct server_context {
             }
         }
 
-        llama_batch_free(batch);
+        jarvis_batch_free(batch);
     }
 
     bool load_model(const common_params & params_) {
@@ -646,11 +646,11 @@ struct server_context {
         // reserve one extra sequence (seq_id == 0) for extra features
         params.n_parallel += 1;
 
-        common_init_result llama_init = common_init_from_params(params);
+        common_init_result jarvis_init = common_init_from_params(params);
 
-        model = llama_init.model;
-        ctx   = llama_init.context;
-        loras = llama_init.lora_adapters;
+        model = jarvis_init.model;
+        ctx   = jarvis_init.context;
+        loras = jarvis_init.lora_adapters;
 
         params.n_parallel -= 1; // but be sneaky about it
 
@@ -659,18 +659,18 @@ struct server_context {
             return false;
         }
 
-        n_ctx = llama_n_ctx(ctx);
+        n_ctx = jarvis_n_ctx(ctx);
 
-        add_bos_token = llama_add_bos_token(model);
-        has_eos_token = !llama_add_eos_token(model);
+        add_bos_token = jarvis_add_bos_token(model);
+        has_eos_token = !jarvis_add_eos_token(model);
 
         return true;
     }
 
     bool validate_model_chat_template() const {
-        llama_chat_message chat[] = {{"user", "test"}};
+        jarvis_chat_message chat[] = {{"user", "test"}};
 
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        const int res = jarvis_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
 
         return res > 0;
     }
@@ -706,10 +706,10 @@ struct server_context {
         // the update_slots() logic will always submit a maximum of n_batch or n_parallel tokens
         // note that n_batch can be > n_ctx (e.g. for non-causal attention models such as BERT where the KV cache is not used)
         {
-            const int32_t n_batch = llama_n_batch(ctx);
+            const int32_t n_batch = jarvis_n_batch(ctx);
 
             // only a single seq_id per token is needed
-            batch = llama_batch_init(std::max(n_batch, params.n_parallel), 0, 1);
+            batch = jarvis_batch_init(std::max(n_batch, params.n_parallel), 0, 1);
         }
 
         metrics.init();
@@ -880,12 +880,12 @@ struct server_context {
             slot.sparams.logit_bias.clear();
 
             if (json_value(data, "ignore_eos", false) && has_eos_token) {
-                slot.sparams.logit_bias.push_back({llama_token_eos(model), -INFINITY});
+                slot.sparams.logit_bias.push_back({jarvis_token_eos(model), -INFINITY});
             }
 
             const auto & logit_bias = data.find("logit_bias");
             if (logit_bias != data.end() && logit_bias->is_array()) {
-                const int n_vocab = llama_n_vocab(model);
+                const int n_vocab = jarvis_n_vocab(model);
                 for (const auto & el : *logit_bias) {
                     // TODO: we may want to throw errors here, in case "el" is incorrect
                     if (el.is_array() && el.size() == 2) {
@@ -899,7 +899,7 @@ struct server_context {
                         }
 
                         if (el[0].is_number_integer()) {
-                            llama_token tok = el[0].get<llama_token>();
+                            jarvis_token tok = el[0].get<jarvis_token>();
                             if (tok >= 0 && tok < n_vocab) {
                                 slot.sparams.logit_bias.push_back({tok, bias});
                             }
@@ -966,7 +966,7 @@ struct server_context {
         SRV_DBG("%s", "clearing KV cache\n");
 
         // clear the entire KV cache
-        llama_kv_cache_clear(ctx);
+        jarvis_kv_cache_clear(ctx);
         clean_kv_cache = false;
     }
 
@@ -1103,14 +1103,14 @@ struct server_context {
                     slot.n_decoded, slot.n_prompt_tokens, slot.n_past, slot.n_ctx);
         }
 
-        if (llama_token_is_eog(model, result.tok)) {
+        if (jarvis_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
             SLT_DBG(slot, "%s", "stopped by EOS\n");
         }
 
-        const auto n_ctx_train = llama_n_ctx_train(model);
+        const auto n_ctx_train = jarvis_n_ctx_train(model);
 
         if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
             slot.truncated      = true;
@@ -1212,7 +1212,7 @@ struct server_context {
         };
 
         if (slot.sparams.n_probs > 0) {
-            const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
+            const jarvis_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
             const size_t probs_pos      = std::min(slot.n_sent_token_probs,                       slot.generated_token_probs.size());
             const size_t probs_stop_pos = std::min(slot.n_sent_token_probs + to_send_toks.size(), slot.generated_token_probs.size());
 
@@ -1263,7 +1263,7 @@ struct server_context {
         if (slot.sparams.n_probs > 0) {
             std::vector<completion_token_output> probs;
             if (!slot.params.stream && slot.stopped_word) {
-                const llama_tokens stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
+                const jarvis_tokens stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
 
                 size_t safe_offset = std::min(slot.generated_token_probs.size(), stop_word_toks.size());
                 probs = std::vector<completion_token_output>(
@@ -1286,13 +1286,13 @@ struct server_context {
         queue_results.send(res);
     }
 
-    void send_embedding(const server_slot & slot, const llama_batch & batch) {
+    void send_embedding(const server_slot & slot, const jarvis_batch & batch) {
         server_task_result res;
         res.id       = slot.id_task;
         res.error    = false;
         res.stop     = true;
 
-        const int n_embd = llama_n_embd(model);
+        const int n_embd = jarvis_n_embd(model);
 
         std::vector<float> embd_res(n_embd, 0.0f);
 
@@ -1301,9 +1301,9 @@ struct server_context {
                 continue;
             }
 
-            const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+            const float * embd = jarvis_get_embeddings_seq(ctx, batch.seq_id[i][0]);
             if (embd == NULL) {
-                embd = llama_get_embeddings_ith(ctx, i);
+                embd = jarvis_get_embeddings_ith(ctx, i);
             }
 
             if (embd == NULL) {
@@ -1330,7 +1330,7 @@ struct server_context {
         queue_results.send(res);
     }
 
-    void send_rerank(const server_slot & slot, const llama_batch & batch) {
+    void send_rerank(const server_slot & slot, const jarvis_batch & batch) {
         server_task_result res;
         res.id       = slot.id_task;
         res.error    = false;
@@ -1341,9 +1341,9 @@ struct server_context {
                 continue;
             }
 
-            const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+            const float * embd = jarvis_get_embeddings_seq(ctx, batch.seq_id[i][0]);
             if (embd == NULL) {
-                embd = llama_get_embeddings_ith(ctx, i);
+                embd = jarvis_get_embeddings_ith(ctx, i);
             }
 
             if (embd == NULL) {
@@ -1375,7 +1375,7 @@ struct server_context {
     // break the input "prompt" into multiple tasks if needed, then format and tokenize the input prompt(s)
     std::vector<server_task> create_tasks_inference(json data, server_task_inf_type inf_type) {
         std::vector<server_task> tasks;
-        auto create_task = [&](json & task_data, llama_tokens & prompt_tokens) {
+        auto create_task = [&](json & task_data, jarvis_tokens & prompt_tokens) {
             SRV_DBG("create task, n_tokens = %d\n", (int) prompt_tokens.size());
             server_task task;
             task.id            = queue_tasks.get_new_id();
@@ -1391,9 +1391,9 @@ struct server_context {
             throw std::runtime_error(error_msg);
         }
 
-        // because llama_tokenize api is thread-safe, we can tokenize the prompt from HTTP thread
+        // because jarvis_tokenize api is thread-safe, we can tokenize the prompt from HTTP thread
         bool add_special = inf_type != SERVER_TASK_INF_TYPE_RERANK && inf_type != SERVER_TASK_INF_TYPE_INFILL;
-        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx, data.at("prompt"), add_special, true);
+        std::vector<jarvis_tokens> tokenized_prompts = tokenize_input_prompts(ctx, data.at("prompt"), add_special, true);
         switch (inf_type) {
             case SERVER_TASK_INF_TYPE_RERANK:
                 {
@@ -1625,8 +1625,8 @@ struct server_context {
                         { "n_decode_total",                  metrics.n_decode_total},
                         { "n_busy_slots_total",              metrics.n_busy_slots_total},
 
-                        { "kv_cache_tokens_count",           llama_get_kv_cache_token_count(ctx)},
-                        { "kv_cache_used_cells",             llama_get_kv_cache_used_cells(ctx)},
+                        { "kv_cache_tokens_count",           jarvis_get_kv_cache_token_count(ctx)},
+                        { "kv_cache_used_cells",             jarvis_get_kv_cache_used_cells(ctx)},
 
                         { "slots",                           slots_data },
                     };
@@ -1657,7 +1657,7 @@ struct server_context {
                     std::string filename = task.data.at("filename");
                     std::string filepath = task.data.at("filepath");
 
-                    const size_t nwrite = llama_state_seq_save_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), token_count);
+                    const size_t nwrite = jarvis_state_seq_save_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), token_count);
 
                     const int64_t t_end = ggml_time_us();
                     const double t_save_ms = (t_end - t_start) / 1000.0;
@@ -1699,7 +1699,7 @@ struct server_context {
 
                     slot->cache_tokens.resize(slot->n_ctx);
                     size_t token_count = 0;
-                    size_t nread = llama_state_seq_load_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), slot->cache_tokens.size(), &token_count);
+                    size_t nread = jarvis_state_seq_load_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), slot->cache_tokens.size(), &token_count);
                     if (nread == 0) {
                         slot->cache_tokens.resize(0);
                         send_error(task, "Unable to restore slot, no available space in KV cache or invalid slot save file", ERROR_TYPE_INVALID_REQUEST);
@@ -1742,7 +1742,7 @@ struct server_context {
 
                     // Erase token cache
                     const size_t n_erased = slot->cache_tokens.size();
-                    llama_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1);
+                    jarvis_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1);
                     slot->cache_tokens.clear();
 
                     server_task_result result;
@@ -1819,8 +1819,8 @@ struct server_context {
 
                 SLT_WRN(slot, "slot context shift, n_keep = %d, n_left = %d, n_discard = %d\n", n_keep, n_left, n_discard);
 
-                llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
-                llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, slot.n_past,        -n_discard);
+                jarvis_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
+                jarvis_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, slot.n_past,        -n_discard);
 
                 if (slot.params.cache_prompt) {
                     for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++) {
@@ -1860,8 +1860,8 @@ struct server_context {
         }
 
         // process in chunks of params.n_batch
-        int32_t n_batch  = llama_n_batch(ctx);
-        int32_t n_ubatch = llama_n_ubatch(ctx);
+        int32_t n_batch  = jarvis_n_batch(ctx);
+        int32_t n_ubatch = jarvis_n_ubatch(ctx);
 
         // track if this is an embedding or non-embedding batch
         // if we've added sampled tokens above, we are in non-embedding mode
@@ -1944,7 +1944,7 @@ struct server_context {
                                 const int n_block_size = n_left / 2;
                                 const int erased_blocks = (slot.n_prompt_tokens - slot.params.n_keep - n_block_size) / n_block_size;
 
-                                llama_tokens new_tokens(
+                                jarvis_tokens new_tokens(
                                         prompt_tokens.begin(),
                                         prompt_tokens.begin() + slot.params.n_keep);
 
@@ -1993,8 +1993,8 @@ struct server_context {
 
                                             const int64_t kv_shift = (int64_t) head_p - (int64_t) head_c;
 
-                                            llama_kv_cache_seq_rm (ctx, slot.id + 1, head_p, head_c);
-                                            llama_kv_cache_seq_add(ctx, slot.id + 1, head_c, -1,     kv_shift);
+                                            jarvis_kv_cache_seq_rm (ctx, slot.id + 1, head_p, head_c);
+                                            jarvis_kv_cache_seq_add(ctx, slot.id + 1, head_c, -1,     kv_shift);
 
                                             for (size_t i = 0; i < n_match; i++) {
                                                 slot.cache_tokens[head_p + i] = slot.cache_tokens[head_c + i];
@@ -2043,9 +2043,9 @@ struct server_context {
                     }
 
                     // keep only the common part
-                    if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, slot.n_past, -1)) {
+                    if (!jarvis_kv_cache_seq_rm(ctx, slot.id + 1, slot.n_past, -1)) {
                         // could not partially delete (likely using a non-Transformer model)
-                        llama_kv_cache_seq_rm(ctx, slot.id + 1, -1, -1);
+                        jarvis_kv_cache_seq_rm(ctx, slot.id + 1, -1, -1);
 
                         // there is no common part left
                         slot.n_past = 0;
@@ -2107,13 +2107,13 @@ struct server_context {
         SRV_DBG("decoding batch, n_tokens = %d\n", batch.n_tokens);
 
         // make sure we're in the right embedding mode
-        llama_set_embeddings(ctx, batch_type == 1);
+        jarvis_set_embeddings(ctx, batch_type == 1);
 
         // process the created batch of tokens
         for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
             const int32_t n_tokens = std::min(n_batch, batch.n_tokens - i);
 
-            llama_batch batch_view = {
+            jarvis_batch batch_view = {
                 n_tokens,
                 batch.token    + i,
                 nullptr,
@@ -2123,7 +2123,7 @@ struct server_context {
                 batch.logits   + i,
             };
 
-            const int ret = llama_decode(ctx, batch_view);
+            const int ret = jarvis_decode(ctx, batch_view);
             metrics.on_decoded(slots);
 
             if (ret != 0) {
@@ -2174,7 +2174,7 @@ struct server_context {
                 }
 
                 completion_token_output result;
-                const llama_token id = common_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
+                const jarvis_token id = common_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
 
                 common_sampler_accept(slot.smpl, id, true);
 
@@ -2213,12 +2213,12 @@ struct server_context {
 
     json model_meta() const {
         return json {
-            {"vocab_type",  llama_vocab_type    (model)},
-            {"n_vocab",     llama_n_vocab       (model)},
-            {"n_ctx_train", llama_n_ctx_train   (model)},
-            {"n_embd",      llama_n_embd        (model)},
-            {"n_params",    llama_model_n_params(model)},
-            {"size",        llama_model_size    (model)},
+            {"vocab_type",  jarvis_vocab_type    (model)},
+            {"n_vocab",     jarvis_n_vocab       (model)},
+            {"n_ctx_train", jarvis_n_ctx_train   (model)},
+            {"n_embd",      jarvis_n_embd        (model)},
+            {"n_params",    jarvis_model_n_params(model)},
+            {"size",        jarvis_model_size    (model)},
         };
     }
 };
@@ -2253,7 +2253,7 @@ int main(int argc, char ** argv) {
     // own arguments required by this example
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_SERVER)) {
         return 1;
     }
 
@@ -2263,15 +2263,15 @@ int main(int argc, char ** argv) {
     // see format_final_response_oaicompat()
     const bool verbose = params.verbosity > 9;
 
-    // struct that contains llama context and inference
+    // struct that contains jarvis context and inference
     server_context ctx_server;
 
     if (params.model_alias == "unknown") {
         params.model_alias = params.model;
     }
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     LOG_INF("system info: n_threads = %d, n_threads_batch = %d, total_threads = %d\n", params.cpuparams.n_threads, params.cpuparams_batch.n_threads, std::thread::hardware_concurrency());
     LOG_INF("\n");
@@ -2299,7 +2299,7 @@ int main(int argc, char ** argv) {
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
-    svr->set_default_headers({{"Server", "llama.cpp"}});
+    svr->set_default_headers({{"Server", "jarvis.cpp"}});
 
     // CORS preflight
     svr->Options(R"(.*)", [](const httplib::Request &, httplib::Response & res) {
@@ -2524,11 +2524,11 @@ int main(int argc, char ** argv) {
                     {"value",  (uint64_t) data.at("t_tokens_generation_total") / 1.e3}
             }, {
                     {"name",  "n_decode_total"},
-                    {"help",  "Total number of llama_decode() calls"},
+                    {"help",  "Total number of jarvis_decode() calls"},
                     {"value",  n_decode_total}
             }, {
                     {"name",  "n_busy_slots_per_decode"},
-                    {"help",  "Average number of busy slots per llama_decode() call"},
+                    {"help",  "Average number of busy slots per jarvis_decode() call"},
                     {"value",  (float) n_busy_slots_total / (float) n_decode_total}
             }}},
             {"gauge", {{
@@ -2569,9 +2569,9 @@ int main(int argc, char ** argv) {
                 const std::string help = metric_def.at("help");
 
                 auto value = json_value(metric_def, "value", 0.);
-                prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
-                            << "# TYPE llamacpp:" << name << " " << type  << "\n"
-                            << "llamacpp:"        << name << " " << value << "\n";
+                prometheus << "# HELP jarviscpp:" << name << " " << help  << "\n"
+                            << "# TYPE jarviscpp:" << name << " " << type  << "\n"
+                            << "jarviscpp:"        << name << " " << value << "\n";
             }
         }
 
@@ -2695,7 +2695,7 @@ int main(int argc, char ** argv) {
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
-            { "chat_template",               llama_get_chat_template(ctx_server.model) },
+            { "chat_template",               jarvis_get_chat_template(ctx_server.model) },
         };
 
         res_ok(res, data);
@@ -2772,13 +2772,13 @@ int main(int argc, char ** argv) {
     const auto handle_infill = [&ctx_server, &res_error, &handle_completions_generic](const httplib::Request & req, httplib::Response & res) {
         // check model compatibility
         std::string err;
-        if (llama_token_fim_pre(ctx_server.model) == LLAMA_TOKEN_NULL) {
+        if (jarvis_token_fim_pre(ctx_server.model) == JARVIS_TOKEN_NULL) {
             err += "prefix token is missing. ";
         }
-        if (llama_token_fim_suf(ctx_server.model) == LLAMA_TOKEN_NULL) {
+        if (jarvis_token_fim_suf(ctx_server.model) == JARVIS_TOKEN_NULL) {
             err += "suffix token is missing. ";
         }
-        if (llama_token_fim_mid(ctx_server.model) == LLAMA_TOKEN_NULL) {
+        if (jarvis_token_fim_mid(ctx_server.model) == JARVIS_TOKEN_NULL) {
             err += "middle token is missing. ";
         }
         if (!err.empty()) {
@@ -2884,7 +2884,7 @@ int main(int argc, char ** argv) {
                     {"id",       params.model_alias},
                     {"object",   "model"},
                     {"created",  std::time(0)},
-                    {"owned_by", "llamacpp"},
+                    {"owned_by", "jarviscpp"},
                     {"meta",     ctx_server.model_meta()}
                 },
              }}
@@ -2901,7 +2901,7 @@ int main(int argc, char ** argv) {
             const bool add_special = json_value(body, "add_special", false);
             const bool with_pieces = json_value(body, "with_pieces", false);
 
-            llama_tokens tokens = tokenize_mixed(ctx_server.ctx, body.at("content"), add_special, true);
+            jarvis_tokens tokens = tokenize_mixed(ctx_server.ctx, body.at("content"), add_special, true);
 
             if (with_pieces) {
                 for (const auto& token : tokens) {
@@ -2938,7 +2938,7 @@ int main(int argc, char ** argv) {
 
         std::string content;
         if (body.count("tokens") != 0) {
-            const llama_tokens tokens = body.at("tokens");
+            const jarvis_tokens tokens = body.at("tokens");
             content = tokens_to_str(ctx_server.ctx, tokens.cbegin(), tokens.cend());
         }
 
@@ -3206,7 +3206,7 @@ int main(int argc, char ** argv) {
     // clean up function, to be called before exit
     auto clean_up = [&svr]() {
         svr->stop();
-        llama_backend_free();
+        jarvis_backend_free();
     };
 
     // bind HTTP listen port, run the HTTP server in a thread

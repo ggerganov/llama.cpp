@@ -1,4 +1,4 @@
-package android.llama.cpp
+package android.jarvis.cpp
 
 import org.junit.Test
 

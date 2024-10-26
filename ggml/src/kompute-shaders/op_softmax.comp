@@ -1,4 +1,4 @@
-// TODO: implement multi-simd softmax (llama.cpp commit e16b9fa4)
+// TODO: implement multi-simd softmax (jarvis.cpp commit e16b9fa4)
 
 #version 450
 

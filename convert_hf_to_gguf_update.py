@@ -5,10 +5,10 @@
 # generates the get_vocab_base_pre() function for convert_hf_to_gguf.py
 #
 # This is necessary in order to analyze the type of pre-tokenizer used by the model and
-# provide the necessary information to llama.cpp via the GGUF header in order to implement
+# provide the necessary information to jarvis.cpp via the GGUF header in order to implement
 # the same pre-tokenizer.
 #
-# ref: https://github.com/ggerganov/llama.cpp/pull/6920
+# ref: https://github.com/ggerganov/jarvis.cpp/pull/6920
 #
 # Instructions:
 #
@@ -18,9 +18,9 @@
 #   python3 convert_hf_to_gguf_update.py <huggingface_token>
 #
 # - Copy-paste the generated get_vocab_base_pre() function into convert_hf_to_gguf.py
-# - Update llama.cpp with the new pre-tokenizer if necessary
+# - Update jarvis.cpp with the new pre-tokenizer if necessary
 #
-# TODO: generate tokenizer tests for llama.cpp
+# TODO: generate tokenizer tests for jarvis.cpp
 #
 
 import logging
@@ -65,8 +65,8 @@ else:
 
 # TODO: add models here, base models preferred
 models = [
-    {"name": "llama-spm",      "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/meta-llama/Llama-2-7b-hf", },
-    {"name": "llama-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/meta-llama/Meta-Llama-3-8B", },
+    {"name": "jarvis-spm",      "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/meta-jarvis/Jarvis-2-7b-hf", },
+    {"name": "jarvis-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/meta-jarvis/Meta-Jarvis-3-8B", },
     {"name": "phi-3",          "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct", },
     {"name": "deepseek-llm",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-llm-7b-base", },
     {"name": "deepseek-coder", "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-base", },
@@ -86,7 +86,7 @@ models = [
     {"name": "jina-v2-en",     "tokt": TOKENIZER_TYPE.WPM, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-en", }, # WPM!
     {"name": "jina-v2-es",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-es", },
     {"name": "jina-v2-de",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-de", },
-    {"name": "smaug-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct", },
+    {"name": "smaug-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/abacusai/Smaug-Jarvis-3-70B-Instruct", },
     {"name": "poro-chat",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Poro-34B-chat", },
     {"name": "jina-v2-code",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-code", },
     {"name": "viking",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Viking-7B", }, # Also used for Viking 13B and 33B
@@ -215,7 +215,7 @@ src_func = f"""
         # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that
         # is specific for the BPE pre-tokenizer used by the model
         # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
-        # use in llama.cpp to implement the same pre-tokenizer
+        # use in jarvis.cpp to implement the same pre-tokenizer
 
         chktxt = {repr(CHK_TXT)}
 
@@ -239,7 +239,7 @@ src_func = f"""
             logger.warning("**          - the model has not been added to convert_hf_to_gguf_update.py yet")
             logger.warning("**          - the pre-tokenization config has changed upstream")
             logger.warning("**          Check your model files and convert_hf_to_gguf_update.py and update them accordingly.")
-            logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+            logger.warning("** ref:     https://github.com/ggerganov/jarvis.cpp/pull/6920")
             logger.warning("**")
             logger.warning(f"** chkhsh:  {{chkhsh}}")
             logger.warning("**************************************************************************************")
@@ -311,7 +311,7 @@ tests = [
     "3333333",
     "33333333",
     "333333333",
-    "Cửa Việt", # llama-bpe fails on this
+    "Cửa Việt", # jarvis-bpe fails on this
     " discards",
     CHK_TXT,
 ]

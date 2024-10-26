@@ -11,12 +11,12 @@ For llava-1.6 a variety of prepared gguf models are available as well [7b-34b](h
 After API is confirmed, more models will be supported / uploaded.
 
 ## Usage
-Build with cmake or run `make llama-llava-cli` to build it.
+Build with cmake or run `make jarvis-llava-cli` to build it.
 
-After building, run: `./llama-llava-cli` to see the usage. For example:
+After building, run: `./jarvis-llava-cli` to see the usage. For example:
 
 ```sh
-./llama-llava-cli -m ../llava-v1.5-7b/ggml-model-f16.gguf --mmproj ../llava-v1.5-7b/mmproj-model-f16.gguf --image path/to/an/image.jpg
+./jarvis-llava-cli -m ../llava-v1.5-7b/ggml-model-f16.gguf --mmproj ../llava-v1.5-7b/mmproj-model-f16.gguf --image path/to/an/image.jpg
 ```
 
 **note**: A lower temperature like 0.1 is recommended for better quality. add `--temp 0.1` to the command to do so.
@@ -50,10 +50,10 @@ python ./examples/llava/llava_surgery.py -m ../llava-v1.5-7b
 python ./examples/llava/convert_image_encoder_to_gguf.py -m ../clip-vit-large-patch14-336 --llava-projector ../llava-v1.5-7b/llava.projector --output-dir ../llava-v1.5-7b
 ```
 
-5. Use `examples/convert_legacy_llama.py` to convert the LLaMA part of LLaVA to GGUF:
+5. Use `examples/convert_legacy_jarvis.py` to convert the LLaMA part of LLaVA to GGUF:
 
 ```sh
-python ./examples/convert_legacy_llama.py ../llava-v1.5-7b --skip-unknown
+python ./examples/convert_legacy_jarvis.py ../llava-v1.5-7b --skip-unknown
 ```
 
 Now both the LLaMA part and the image encoder are in the `llava-v1.5-7b` directory.
@@ -92,12 +92,12 @@ python ./examples/llava/convert_image_encoder_to_gguf.py -m vit --llava-projecto
 
 6) Then convert the model to gguf format:
 ```console
-python ./examples/convert_legacy_llama.py ../llava-v1.6-vicuna-7b/ --skip-unknown
+python ./examples/convert_legacy_jarvis.py ../llava-v1.6-vicuna-7b/ --skip-unknown
 ```
 
 7) And finally we can run the llava cli using the 1.6 model version:
 ```console
-./llama-llava-cli -m ../llava-v1.6-vicuna-7b/ggml-model-f16.gguf --mmproj vit/mmproj-model-f16.gguf --image some-image.jpg -c 4096
+./jarvis-llava-cli -m ../llava-v1.6-vicuna-7b/ggml-model-f16.gguf --mmproj vit/mmproj-model-f16.gguf --image some-image.jpg -c 4096
 ```
 
 **note** llava-1.6 needs more context than llava-1.5, at least 3000 is needed (just run it at -c 4096)

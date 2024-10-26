@@ -34,7 +34,7 @@ struct train_state  * init_train_state() {
     state->opt = new struct ggml_opt_context;
     state->opt->ctx = NULL;
     state->opt->params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
-    state->opt->params.graph_size = LLAMA_TRAIN_MAX_NODES;
+    state->opt->params.graph_size = JARVIS_TRAIN_MAX_NODES;
     state->opt->loss_after = 0.0f;
 
     return state;
@@ -213,7 +213,7 @@ void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int6
 }
 
 int64_t get_example_targets_batch(
-    struct llama_context * lctx,
+    struct jarvis_context * lctx,
     struct ggml_tensor   * tokens_input,
     struct ggml_tensor   * target_probs,
     int64_t                example_id,
@@ -221,7 +221,7 @@ int64_t get_example_targets_batch(
     const size_t         * samples_begin,
     const size_t         * samples_size,
           size_t           samples_count,
-    const llama_token    * train_data,
+    const jarvis_token    * train_data,
     size_t                 n_train_data,
     bool                   separate_with_eos,
     bool                   separate_with_bos,
@@ -241,8 +241,8 @@ int64_t get_example_targets_batch(
     int64_t used_samples = 0;
 
     ggml_set_f32(target_probs, 0.0f);
-    llama_token bos = llama_token_bos(llama_get_model(lctx));
-    llama_token eos = llama_token_eos(llama_get_model(lctx));
+    jarvis_token bos = jarvis_token_bos(jarvis_get_model(lctx));
+    jarvis_token eos = jarvis_token_eos(jarvis_get_model(lctx));
     // printf("%s: example_id=%d n_batch=%d n_train_samples=%zu\n", __func__, example_id, n_batch, n_train_samples);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
@@ -259,7 +259,7 @@ int64_t get_example_targets_batch(
         bool sample_separation_eos = !separate_with_eos;
         bool sample_separation_bos = !separate_with_bos;
         for (int64_t i=0; i<n_tokens; ++i) {
-            llama_token token = eos;
+            jarvis_token token = eos;
             if (sample_offs >= sample_size && fill_with_next_samples) {
                 if (!sample_separation_eos) {
                     // insert eos token to separate samples
@@ -281,7 +281,7 @@ int64_t get_example_targets_batch(
             }
             // note: no else-if here
             if (sample_offs < sample_size) {
-                token = clamp(train_data[sample_begin+sample_offs], 0, (llama_token) (n_vocab - 1));
+                token = clamp(train_data[sample_begin+sample_offs], 0, (jarvis_token) (n_vocab - 1));
                 ++sample_offs;
             }
             ggml_set_f32_nd(target_probs,  token, (int) i, (int) k, 0, +1.0f);
@@ -712,12 +712,12 @@ void save_train_state_gguf(struct gguf_context * fctx, struct train_state * trai
 }
 
 
-struct llama_file {
+struct jarvis_file {
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
 
-    llama_file(const char * fname, const char * mode) {
+    jarvis_file(const char * fname, const char * mode) {
         fp = std::fopen(fname, mode);
         if (fp == NULL) {
             size = 0;
@@ -788,7 +788,7 @@ struct llama_file {
         write_raw(&val, sizeof(val));
     }
 
-    ~llama_file() {
+    ~jarvis_file() {
         if (fp) {
             std::fclose(fp);
         }
@@ -823,16 +823,16 @@ static size_t mark_utf8_units(const char* bytes, int * utf8_units, int * utf8_nu
 }
 
 size_t tokenize_file(
-        struct llama_context     * lctx,
+        struct jarvis_context     * lctx,
         const char               * filename,
         const std::string        & sample_start,
         bool                       include_sample_start,
         bool                       overlapping_samples,
         unsigned                   context_length,
-        std::vector<llama_token> & out_tokens,
+        std::vector<jarvis_token> & out_tokens,
         std::vector<size_t>      & out_samples_begin,
         std::vector<size_t>      & out_samples_size) {
-    struct llama_file f(filename, "rb");
+    struct jarvis_file f(filename, "rb");
 
     if (f.size == 0) {
         out_tokens.clear();
@@ -844,7 +844,7 @@ size_t tokenize_file(
     }
 
     // account for possible leading whitespace that will be added by tokenizer
-    // e.g. '\t' will be tokenized by llama spm tokenizer to [29871, 12]
+    // e.g. '\t' will be tokenized by jarvis spm tokenizer to [29871, 12]
     const int n_max_tokens_overhead = 1;
 
     std::vector<char> buf;
@@ -862,8 +862,8 @@ size_t tokenize_file(
         // tokenize all data at once
         out_tokens.resize(buf.size() + n_max_tokens_overhead);
 
-        int n_tokens = llama_tokenize(
-            llama_get_model(lctx),
+        int n_tokens = jarvis_tokenize(
+            jarvis_get_model(lctx),
             buf.data(),
             (int) buf.size(),
             out_tokens.data(),
@@ -871,8 +871,8 @@ size_t tokenize_file(
             false, false);
         if (n_tokens < 0) {
             out_tokens.resize(-n_tokens);
-            n_tokens = llama_tokenize(
-                llama_get_model(lctx),
+            n_tokens = jarvis_tokenize(
+                jarvis_get_model(lctx),
                 buf.data(),
                 (int) buf.size(),
                 out_tokens.data(),
@@ -915,7 +915,7 @@ size_t tokenize_file(
         out_samples_size.resize(out_samples_begin.size(), 0);
 
         std::vector<char>        buf_sample;
-        std::vector<llama_token> tok_sample;
+        std::vector<jarvis_token> tok_sample;
 
         const size_t sample_begin_offset = (include_sample_start ? 0 : sample_start.size());
         size_t found_too_big_sample   = 0;
@@ -925,11 +925,11 @@ size_t tokenize_file(
         size_t found_max_sample_size  = 0;
 
         size_t max_token_text_size = 0;
-        int n_vocab = llama_n_vocab(llama_get_model(lctx));
-        for (llama_token token=0; token < n_vocab; ++token) {
+        int n_vocab = jarvis_n_vocab(jarvis_get_model(lctx));
+        for (jarvis_token token=0; token < n_vocab; ++token) {
             max_token_text_size = std::max(
                 max_token_text_size,
-                strlen(llama_token_get_text(llama_get_model(lctx), token)));
+                strlen(jarvis_token_get_text(jarvis_get_model(lctx), token)));
         }
 
         // upper bound of context byte length.
@@ -957,7 +957,7 @@ size_t tokenize_file(
             }
 
             if (sample_size > 0) {
-                // llama_tokenize expects zero terminated string,
+                // jarvis_tokenize expects zero terminated string,
                 // copy sample into buffer and zero terminate it.
                 buf_sample.resize(sample_size);
                 memcpy(buf_sample.data(), data_str.data() + sample_begin, sample_size);
@@ -966,7 +966,7 @@ size_t tokenize_file(
 
                 // tokenize the sample
                 tok_sample.resize(buf_sample.size() + n_max_tokens_overhead);
-                int n_tokens = llama_tokenize(llama_get_model(lctx),
+                int n_tokens = jarvis_tokenize(jarvis_get_model(lctx),
                     buf_sample.data(),
                     (int) buf_sample.size(),
                     tok_sample.data(),
@@ -974,7 +974,7 @@ size_t tokenize_file(
                     false, false);
                 if (n_tokens < 0) {
                     tok_sample.resize(-n_tokens);
-                    n_tokens = llama_tokenize(llama_get_model(lctx),
+                    n_tokens = jarvis_tokenize(jarvis_get_model(lctx),
                         buf_sample.data(),
                         (int) buf_sample.size(),
                         tok_sample.data(),
@@ -1365,7 +1365,7 @@ bool consume_common_train_arg(
                 *invalid_param = true;
                 return true;
             }
-            if (llama_supports_gpu_offload()) {
+            if (jarvis_supports_gpu_offload()) {
                 params->n_gpu_layers = std::stoi(argv[i]);
             } else {
                 fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");

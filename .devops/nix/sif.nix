@@ -1,7 +1,7 @@
 {
   lib,
   singularity-tools,
-  llama-cpp,
+  jarvis-cpp,
   bashInteractive,
   interactive ? false,
 }:
@@ -10,8 +10,8 @@ let
   optionalInt = cond: x: if cond then x else 0;
 in
 singularity-tools.buildImage rec {
-  inherit (llama-cpp) name;
-  contents = [ llama-cpp ] ++ lib.optionals interactive [ bashInteractive ];
+  inherit (jarvis-cpp) name;
+  contents = [ jarvis-cpp ] ++ lib.optionals interactive [ bashInteractive ];
 
   # These are excessive (but safe) for most variants. Building singularity
   # images requires superuser privileges, so we build them inside a VM in a
@@ -22,6 +22,6 @@ singularity-tools.buildImage rec {
   # Expected image sizes:
   # - cpu/blas: 150M,
   # - cuda, all gencodes: 560M,
-  diskSize = 4096 + optionalInt llama-cpp.useRocm 16384;
+  diskSize = 4096 + optionalInt jarvis-cpp.useRocm 16384;
   memSize = diskSize;
 }

@@ -1,6 +1,6 @@
-@llama.cpp
+@jarvis.cpp
 @embeddings
-Feature: llama.cpp server
+Feature: jarvis.cpp server
 
   Background: Server startup
     Given a server listening on localhost:8080

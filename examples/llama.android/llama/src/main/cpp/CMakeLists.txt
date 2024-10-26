@@ -9,17 +9,17 @@ cmake_minimum_required(VERSION 3.22.1)
 # Since this is the top level CMakeLists.txt, the project name is also accessible
 # with ${CMAKE_PROJECT_NAME} (both CMake variables are in-sync within the top level
 # build script scope).
-project("llama-android")
+project("jarvis-android")
 
 #include(FetchContent)
 #FetchContent_Declare(
-#        llama
-#        GIT_REPOSITORY https://github.com/ggerganov/llama.cpp
+#        jarvis
+#        GIT_REPOSITORY https://github.com/ggerganov/jarvis.cpp
 #        GIT_TAG        master
 #)
 
 # Also provides "common"
-#FetchContent_MakeAvailable(llama)
+#FetchContent_MakeAvailable(jarvis)
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
@@ -31,8 +31,8 @@ project("llama-android")
 # is preferred for the same purpose.
 #
 
-#load local llama.cpp
-add_subdirectory(../../../../../../ build-llama)
+#load local jarvis.cpp
+add_subdirectory(../../../../../../ build-jarvis)
 
 # In order to load a library into your app from Java/Kotlin, you must call
 # System.loadLibrary() and pass the name of the library defined here;
@@ -40,14 +40,14 @@ add_subdirectory(../../../../../../ build-llama)
 # used in the AndroidManifest.xml file.
 add_library(${CMAKE_PROJECT_NAME} SHARED
         # List C/C++ source files with relative paths to this CMakeLists.txt.
-        llama-android.cpp)
+        jarvis-android.cpp)
 
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.
 target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
-        llama
+        jarvis
         common
         android
         log)

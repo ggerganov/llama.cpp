@@ -2,7 +2,7 @@
   lib,
   newScope,
   python3,
-  llamaVersion ? "0.0.0",
+  jarvisVersion ? "0.0.0",
 }:
 
 let
@@ -21,7 +21,7 @@ in
 # Cf. https://noogle.dev/f/lib/makeScope
 
 lib.makeScope newScope (self: {
-  inherit llamaVersion;
+  inherit jarvisVersion;
   gguf-py = self.callPackage ./package-gguf-py.nix {
     inherit
       buildPythonPackage
@@ -34,7 +34,7 @@ lib.makeScope newScope (self: {
       ;
   };
   python-scripts = self.callPackage ./python-scripts.nix { inherit buildPythonPackage poetry-core; };
-  llama-cpp = self.callPackage ./package.nix { };
+  jarvis-cpp = self.callPackage ./package.nix { };
   docker = self.callPackage ./docker.nix { };
   docker-min = self.callPackage ./docker.nix { interactive = false; };
   sif = self.callPackage ./sif.nix { };

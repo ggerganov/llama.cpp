@@ -1,7 +1,7 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <ctime>
 
@@ -25,30 +25,30 @@ static std::vector<std::string> split_lines(const std::string & s, const std::st
     return lines;
 }
 
-static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, llama_seq_id seq_id) {
+static void batch_add_seq(jarvis_batch & batch, const std::vector<int32_t> & tokens, jarvis_seq_id seq_id) {
     size_t n_tokens = tokens.size();
     for (size_t i = 0; i < n_tokens; i++) {
         common_batch_add(batch, tokens[i], i, { seq_id }, true);
     }
 }
 
-static void batch_decode(llama_context * ctx, llama_batch & batch, float * output, int n_seq, int n_embd, int embd_norm) {
-    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
-    const struct llama_model * model = llama_get_model(ctx);
+static void batch_decode(jarvis_context * ctx, jarvis_batch & batch, float * output, int n_seq, int n_embd, int embd_norm) {
+    const enum jarvis_pooling_type pooling_type = jarvis_pooling_type(ctx);
+    const struct jarvis_model * model = jarvis_get_model(ctx);
 
     // clear previous kv_cache values (irrelevant for embeddings)
-    llama_kv_cache_clear(ctx);
+    jarvis_kv_cache_clear(ctx);
 
     // run model
     LOG_INF("%s: n_tokens = %d, n_seq = %d\n", __func__, batch.n_tokens, n_seq);
-    if (llama_model_has_encoder(model) && !llama_model_has_decoder(model)) {
+    if (jarvis_model_has_encoder(model) && !jarvis_model_has_decoder(model)) {
         // encoder-only model
-        if (llama_encode(ctx, batch) < 0) {
+        if (jarvis_encode(ctx, batch) < 0) {
             LOG_ERR("%s : failed to encode\n", __func__);
         }
-    } else if (!llama_model_has_encoder(model) && llama_model_has_decoder(model)) {
+    } else if (!jarvis_model_has_encoder(model) && jarvis_model_has_decoder(model)) {
         // decoder-only model
-        if (llama_decode(ctx, batch) < 0) {
+        if (jarvis_decode(ctx, batch) < 0) {
             LOG_ERR("%s : failed to decode\n", __func__);
         }
     }
@@ -61,14 +61,14 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         const float * embd = nullptr;
         int embd_pos = 0;
 
-        if (pooling_type == LLAMA_POOLING_TYPE_NONE) {
+        if (pooling_type == JARVIS_POOLING_TYPE_NONE) {
             // try to get token embeddings
-            embd = llama_get_embeddings_ith(ctx, i);
+            embd = jarvis_get_embeddings_ith(ctx, i);
             embd_pos = i;
             GGML_ASSERT(embd != NULL && "failed to get token embeddings");
         } else {
             // try to get sequence embeddings - supported only when pooling_type is not NONE
-            embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+            embd = jarvis_get_embeddings_seq(ctx, batch.seq_id[i][0]);
             embd_pos = batch.seq_id[i][0];
             GGML_ASSERT(embd != NULL && "failed to get sequence embeddings");
         }
@@ -81,7 +81,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 int main(int argc, char ** argv) {
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_EMBEDDING)) {
         return 1;
     }
 
@@ -91,25 +91,25 @@ int main(int argc, char ** argv) {
     // For non-causal models, batch size must be equal to ubatch size
     params.n_ubatch = params.n_batch;
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the model
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
     if (model == NULL) {
         LOG_ERR("%s: unable to load model\n", __func__);
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
-    const int n_ctx = llama_n_ctx(ctx);
+    const int n_ctx_train = jarvis_n_ctx_train(model);
+    const int n_ctx = jarvis_n_ctx(ctx);
 
-    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
+    const enum jarvis_pooling_type pooling_type = jarvis_pooling_type(ctx);
 
-    if (llama_model_has_encoder(model) && llama_model_has_decoder(model)) {
+    if (jarvis_model_has_encoder(model) && jarvis_model_has_decoder(model)) {
         LOG_ERR("%s: computing embeddings in encoder-decoder models is not supported\n", __func__);
         return 1;
     }
@@ -147,7 +147,7 @@ int main(int argc, char ** argv) {
     // check if the last token is SEP
     // it should be automatically added by the tokenizer when 'tokenizer.ggml.add_eos_token' is set to 'true'
     for (auto & inp : inputs) {
-        if (inp.empty() || inp.back() != llama_token_sep(model)) {
+        if (inp.empty() || inp.back() != jarvis_token_sep(model)) {
             LOG_WRN("%s: last token in the prompt is not SEP\n", __func__);
             LOG_WRN("%s: 'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header\n", __func__);
         }
@@ -167,11 +167,11 @@ int main(int argc, char ** argv) {
 
     // initialize batch
     const int n_prompts = prompts.size();
-    struct llama_batch batch = llama_batch_init(n_batch, 0, 1);
+    struct jarvis_batch batch = jarvis_batch_init(n_batch, 0, 1);
 
     // count number of embeddings
     int n_embd_count = 0;
-    if (pooling_type == LLAMA_POOLING_TYPE_NONE) {
+    if (pooling_type == JARVIS_POOLING_TYPE_NONE) {
         for (int k = 0; k < n_prompts; k++) {
             n_embd_count += inputs[k].size();
         }
@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
     }
 
     // allocate output
-    const int n_embd = llama_n_embd(model);
+    const int n_embd = jarvis_n_embd(model);
     std::vector<float> embeddings(n_embd_count * n_embd, 0);
     float * emb = embeddings.data();
 
@@ -197,7 +197,7 @@ int main(int argc, char ** argv) {
         if (batch.n_tokens + n_toks > n_batch) {
             float * out = emb + e * n_embd;
             batch_decode(ctx, batch, out, s, n_embd, params.embd_normalize);
-            e += pooling_type == LLAMA_POOLING_TYPE_NONE ? batch.n_tokens : s;
+            e += pooling_type == JARVIS_POOLING_TYPE_NONE ? batch.n_tokens : s;
             s = 0;
             common_batch_clear(batch);
         }
@@ -214,7 +214,7 @@ int main(int argc, char ** argv) {
     if (params.embd_out.empty()) {
         LOG("\n");
 
-        if (pooling_type == LLAMA_POOLING_TYPE_NONE) {
+        if (pooling_type == JARVIS_POOLING_TYPE_NONE) {
             for (int j = 0; j < n_embd_count; j++) {
                 LOG("embedding %d: ", j);
                 for (int i = 0; i < std::min(3, n_embd); i++) {
@@ -234,7 +234,7 @@ int main(int argc, char ** argv) {
                 }
                 LOG("\n");
             }
-        } else if (pooling_type == LLAMA_POOLING_TYPE_RANK) {
+        } else if (pooling_type == JARVIS_POOLING_TYPE_RANK) {
             for (int j = 0; j < n_embd_count; j++) {
                 // NOTE: if you change this log - update the tests in ci/run.sh
                 LOG("rerank score %d: %8.3f\n", j, emb[j * n_embd]);
@@ -312,13 +312,13 @@ int main(int argc, char ** argv) {
     }
 
     LOG("\n");
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
     // clean up
-    llama_batch_free(batch);
-    llama_free(ctx);
-    llama_free_model(model);
-    llama_backend_free();
+    jarvis_batch_free(batch);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
+    jarvis_backend_free();
 
     return 0;
 }

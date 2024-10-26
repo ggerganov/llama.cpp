@@ -27,8 +27,8 @@ def after_scenario(context, scenario):
         if scenario.status == "failed":
             if 'GITHUB_ACTIONS' in os.environ:
                 print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n")
-                if os.path.isfile('llama.log'):
-                    with closing(open('llama.log', 'r')) as f:
+                if os.path.isfile('jarvis.log'):
+                    with closing(open('jarvis.log', 'r')) as f:
                         for line in f:
                             print(line)
             if not is_server_listening(context.server_fqdn, context.server_port):

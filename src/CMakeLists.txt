@@ -9,25 +9,25 @@ endif()
 # libraries
 #
 
-# llama
+# jarvis
 
-add_library(llama
-            ../include/llama.h
-            llama.cpp
-            llama-vocab.cpp
-            llama-grammar.cpp
-            llama-sampling.cpp
+add_library(jarvis
+            ../include/jarvis.h
+            jarvis.cpp
+            jarvis-vocab.cpp
+            jarvis-grammar.cpp
+            jarvis-sampling.cpp
             unicode.h
             unicode.cpp
             unicode-data.cpp
             )
 
-target_include_directories(llama PUBLIC . ../include)
-target_compile_features   (llama PUBLIC cxx_std_11) # don't bump
+target_include_directories(jarvis PUBLIC . ../include)
+target_compile_features   (jarvis PUBLIC cxx_std_11) # don't bump
 
-target_link_libraries(llama PUBLIC ggml)
+target_link_libraries(jarvis PUBLIC ggml)
 
 if (BUILD_SHARED_LIBS)
-    set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_compile_definitions(llama PRIVATE LLAMA_SHARED LLAMA_BUILD)
+    set_target_properties(jarvis PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_definitions(jarvis PRIVATE JARVIS_SHARED JARVIS_BUILD)
 endif()

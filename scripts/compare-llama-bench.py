@@ -15,7 +15,7 @@ except ImportError as e:
     print("the following Python libraries are required: GitPython, tabulate.") # noqa: NP100
     raise e
 
-logger = logging.getLogger("compare-llama-bench")
+logger = logging.getLogger("compare-jarvis-bench")
 
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
@@ -42,17 +42,17 @@ DEFAULT_HIDE = ["model_filename"]  # Always hide these properties by default.
 GPU_NAME_STRIP = ["NVIDIA GeForce ", "Tesla ", "AMD Radeon "]  # Strip prefixes for smaller tables.
 MODEL_SUFFIX_REPLACE = {" - Small": "_S", " - Medium": "_M", " - Large": "_L"}
 
-DESCRIPTION = """Creates tables from llama-bench data written to an SQLite database. Example usage (Linux):
+DESCRIPTION = """Creates tables from jarvis-bench data written to an SQLite database. Example usage (Linux):
 
 $ git checkout master
-$ make clean && make llama-bench
-$ ./llama-bench -o sql | sqlite3 llama-bench.sqlite
+$ make clean && make jarvis-bench
+$ ./jarvis-bench -o sql | sqlite3 jarvis-bench.sqlite
 $ git checkout some_branch
-$ make clean && make llama-bench
-$ ./llama-bench -o sql | sqlite3 llama-bench.sqlite
-$ ./scripts/compare-llama-bench.py
+$ make clean && make jarvis-bench
+$ ./jarvis-bench -o sql | sqlite3 jarvis-bench.sqlite
+$ ./scripts/compare-jarvis-bench.py
 
-Performance numbers from multiple runs per commit are averaged WITHOUT being weighted by the --repetitions parameter of llama-bench.
+Performance numbers from multiple runs per commit are averaged WITHOUT being weighted by the --repetitions parameter of jarvis-bench.
 """
 
 parser = argparse.ArgumentParser(
@@ -66,12 +66,12 @@ parser.add_argument("-b", "--baseline", help=help_b)
 help_c = (
     "The commit whose performance is to be compared to the baseline. "
     "Accepts either a branch name, tag name, or commit hash. "
-    "Defaults to the non-master commit for which llama-bench was run most recently."
+    "Defaults to the non-master commit for which jarvis-bench was run most recently."
 )
 parser.add_argument("-c", "--compare", help=help_c)
 help_i = (
     "Input SQLite file for comparing commits. "
-    "Defaults to 'llama-bench.sqlite' in the current working directory. "
+    "Defaults to 'jarvis-bench.sqlite' in the current working directory. "
     "If no such file is found and there is exactly one .sqlite file in the current directory, "
     "that file is instead used as input."
 )
@@ -90,7 +90,7 @@ help_s = (
     "Defaults to model name (model_type) and CPU and/or GPU name (cpu_info, gpu_info) "
     "plus any column where not all data points are the same. "
     "If the columns are manually specified, then the results for each unique combination of the "
-    "specified values are averaged WITHOUT weighing by the --repetitions parameter of llama-bench."
+    "specified values are averaged WITHOUT weighing by the --repetitions parameter of jarvis-bench."
 )
 parser.add_argument("--check", action="store_true", help="check if all required Python libraries are installed")
 parser.add_argument("-s", "--show", help=help_s)
@@ -110,8 +110,8 @@ if unknown_args:
     sys.exit(1)
 
 input_file = known_args.input
-if input_file is None and os.path.exists("./llama-bench.sqlite"):
-    input_file = "llama-bench.sqlite"
+if input_file is None and os.path.exists("./jarvis-bench.sqlite"):
+    input_file = "jarvis-bench.sqlite"
 if input_file is None:
     sqlite_files = glob("*.sqlite")
     if len(sqlite_files) == 1:
@@ -234,7 +234,7 @@ if known_args.compare is not None:
     if hexsha8_compare is None:
         logger.error(f"cannot find data for compare={known_args.compare}.")
         sys.exit(1)
-# Otherwise, search for the commit for llama-bench was most recently run
+# Otherwise, search for the commit for jarvis-bench was most recently run
 # and that is not a parent of master:
 elif repo is not None:
     hexsha8s_master = get_all_parent_hexsha8s(repo.heads.master.commit)

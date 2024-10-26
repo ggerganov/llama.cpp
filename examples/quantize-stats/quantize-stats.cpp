@@ -1,7 +1,7 @@
 #include "common.h"
 #include "ggml.h"
-#include "llama.h"
-#include "llama-impl.h"
+#include "jarvis.h"
+#include "jarvis-impl.h"
 
 #include <algorithm>
 #include <cassert>
@@ -304,33 +304,33 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "Loading model\n");
 
     const int64_t t_main_start_us = ggml_time_us();
-    llama_model * model;
-    llama_context * ctx;
+    jarvis_model * model;
+    jarvis_context * ctx;
 
     {
-        auto mparams = llama_model_default_params();
+        auto mparams = jarvis_model_default_params();
         mparams.use_mlock  = false;
 
-        model = llama_load_model_from_file(params.model.c_str(), mparams);
+        model = jarvis_load_model_from_file(params.model.c_str(), mparams);
 
         if (model == NULL) {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
             return 1;
         }
 
-        auto cparams = llama_context_default_params();
+        auto cparams = jarvis_context_default_params();
         cparams.n_ctx = 256;
 
-        ctx = llama_new_context_with_model(model, cparams);
+        ctx = jarvis_new_context_with_model(model, cparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
-            llama_free_model(model);
+            jarvis_free_model(model);
             return 1;
         }
     }
 
-    const auto &tensors = llama_internal_get_tensor_map(ctx);
+    const auto &tensors = jarvis_internal_get_tensor_map(ctx);
 
     // check layer tensors
     int included_layers = 0;
@@ -348,8 +348,8 @@ int main(int argc, char ** argv) {
         } else if (kv_tensor.second->type != GGML_TYPE_F32) {
             fprintf(stderr, "%s: error: Quantization should be tested with a float model, "
                 "this model contains already quantized layers (%s is type %d)\n", __func__, kv_tensor.first.c_str(), kv_tensor.second->type);
-            llama_free(ctx);
-            llama_free_model(model);
+            jarvis_free(ctx);
+            jarvis_free_model(model);
             return 1;
         }
         included_layers++;
@@ -409,8 +409,8 @@ int main(int argc, char ** argv) {
     }
 
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
     // report timing
     {
         const int64_t t_main_end_us = ggml_time_us();

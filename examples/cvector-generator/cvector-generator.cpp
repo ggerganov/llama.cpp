@@ -1,6 +1,6 @@
 #include "arg.h"
 #include "common.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "ggml.h"
 #include "pca.hpp"
 #include "mean.hpp"
@@ -28,7 +28,7 @@
 // utils
 
 template <class Iter>
-static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
+static std::string tokens_to_str(jarvis_context * ctx, Iter begin, Iter end) {
     std::string ret;
     for (; begin != end; ++begin) {
         ret += common_token_to_piece(ctx, *begin);
@@ -39,10 +39,10 @@ static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
 
 static void print_usage(int, char ** argv) {
     printf("\nexample usage:\n");
-    printf("\n    CPU only:   %s -m ./llama-3.Q4_K_M.gguf\n", argv[0]);
-    printf("\n    with GPU:   %s -m ./llama-3.Q4_K_M.gguf -ngl 99\n", argv[0]);
-    printf("\n    advanced:   %s -m ./llama-3.Q4_K_M.gguf -ngl 99 --pca-iter 2000 --pca-batch 100\n", argv[0]);
-    printf("\n    using mean: %s -m ./llama-3.Q4_K_M.gguf --method mean\n", argv[0]);
+    printf("\n    CPU only:   %s -m ./jarvis-3.Q4_K_M.gguf\n", argv[0]);
+    printf("\n    with GPU:   %s -m ./jarvis-3.Q4_K_M.gguf -ngl 99\n", argv[0]);
+    printf("\n    advanced:   %s -m ./jarvis-3.Q4_K_M.gguf -ngl 99 --pca-iter 2000 --pca-batch 100\n", argv[0]);
+    printf("\n    using mean: %s -m ./jarvis-3.Q4_K_M.gguf --method mean\n", argv[0]);
     printf("\n");
 }
 
@@ -266,12 +266,12 @@ struct train_context {
 };
 
 struct tokenized_prompt {
-    std::vector<llama_token> tokens_pos;
-    std::vector<llama_token> tokens_neg;
+    std::vector<jarvis_token> tokens_pos;
+    std::vector<jarvis_token> tokens_neg;
     size_t max_seq_len;
 
-    tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
-        const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
+    tokenized_prompt(jarvis_context * ctx, std::string pos, std::string neg) {
+        const bool add_bos = jarvis_add_bos_token(jarvis_get_model(ctx));
         tokens_pos = common_tokenize(ctx, pos, add_bos, true);
         tokens_neg = common_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
@@ -279,10 +279,10 @@ struct tokenized_prompt {
         padding_seq(ctx, tokens_neg, max_seq_len);
     }
 
-    void padding_seq(llama_context * ctx, std::vector<llama_token> & tokens, size_t len) {
+    void padding_seq(jarvis_context * ctx, std::vector<jarvis_token> & tokens, size_t len) {
         // TODO: customize padding token
-        std::vector<llama_token> pad_tokens = common_tokenize(ctx, " ", false);
-        llama_token pad_tok = pad_tokens.back();
+        std::vector<jarvis_token> pad_tokens = common_tokenize(ctx, " ", false);
+        jarvis_token pad_tok = pad_tokens.back();
         while (tokens.size() < len) {
             tokens.push_back(pad_tok);
         }
@@ -337,9 +337,9 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
     return true;
 }
 
-static bool get_hidden_layers(llama_context * ctx, std::vector<llama_token> & tokens) {
-    llama_kv_cache_clear(ctx);
-    if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size()))) {
+static bool get_hidden_layers(jarvis_context * ctx, std::vector<jarvis_token> & tokens) {
+    jarvis_kv_cache_clear(ctx);
+    if (jarvis_decode(ctx, jarvis_batch_get_one(tokens.data(), tokens.size()))) {
         fprintf(stderr, "%s : failed to eval\n", __func__);
         return false;
     }
@@ -390,7 +390,7 @@ static int prepare_entries(common_params & params, train_context & ctx_train) {
 int main(int argc, char ** argv) {
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
         return 1;
     }
 
@@ -409,21 +409,21 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     print_build_info();
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // load the model to get hparams
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
 
-    // int n_ctx = llama_n_ctx(ctx);
-    int n_layers = llama_n_layer(model);
-    int n_embd = llama_n_embd(model);
+    // int n_ctx = jarvis_n_ctx(ctx);
+    int n_layers = jarvis_n_layer(model);
+    int n_embd = jarvis_n_embd(model);
     // get model hint param (a.k.a model arch name)
     char model_hint[128];
-    llama_model_meta_val_str(model, "general.architecture", model_hint, 128);
+    jarvis_model_meta_val_str(model, "general.architecture", model_hint, 128);
 
     // init train_context
     train_context ctx_train(n_embd, n_layers);
@@ -474,8 +474,8 @@ int main(int argc, char ** argv) {
 
     // done with the model, we can now free it to make gain some memory
     printf("Done evaluate prompts, unload model...\n");
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
     bool use_pca = params.cvector_dimre_method == DIMRE_METHOD_PCA;
 
@@ -497,7 +497,7 @@ int main(int argc, char ** argv) {
     // write output vectors to gguf
     export_gguf(ctx_train.v_final, params.cvector_outfile, model_hint);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

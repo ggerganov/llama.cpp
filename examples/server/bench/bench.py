@@ -104,7 +104,7 @@ def main(args_in: list[str] | None = None) -> None:
         while is_server_listening(args.host, args.port):
             time.sleep(0.1)
 
-    title = (f"llama.cpp {args.name} on {args.runner_label}\n "
+    title = (f"jarvis.cpp {args.name} on {args.runner_label}\n "
              f"duration={args.duration} {iterations} iterations")
     xlabel = (f"{args.hf_repo}/{args.hf_file}\n"
               f"parallel={args.parallel} ctx-size={args.ctx_size} ngl={args.n_gpu_layers} batch-size={args.batch_size} ubatch-size={args.ubatch_size} pp={args.max_prompt_tokens} pp+tg={args.max_tokens}\n"
@@ -119,7 +119,7 @@ def main(args_in: list[str] | None = None) -> None:
 
         for metric in metrics:
             resp = requests.get(f"http://localhost:9090/api/v1/query_range",
-                                params={'query': 'llamacpp:' + metric, 'start': start_time, 'end': end_time, 'step': 2})
+                                params={'query': 'jarviscpp:' + metric, 'start': start_time, 'end': end_time, 'step': 2})
 
             with open(f"{metric}.json", 'w') as metric_json:
                 metric_json.write(resp.text)
@@ -138,7 +138,7 @@ def main(args_in: list[str] | None = None) -> None:
                 plt.xticks(rotation=0, fontsize=14, horizontalalignment='center', alpha=.7)
                 plt.yticks(fontsize=12, alpha=.7)
 
-                ylabel = f"llamacpp:{metric}"
+                ylabel = f"jarviscpp:{metric}"
                 plt.title(title,
                           fontsize=14, wrap=True)
                 plt.grid(axis='both', alpha=.3)
@@ -173,8 +173,8 @@ config:
 ---
 xychart-beta
     title "{title}"
-    y-axis "llamacpp:{metric}"
-    x-axis "llamacpp:{metric}" {int(min(timestamps))} --> {int(max(timestamps))}
+    y-axis "jarviscpp:{metric}"
+    x-axis "jarviscpp:{metric}" {int(min(timestamps))} --> {int(max(timestamps))}
     line [{', '.join([str(round(float(value), 2)) for value in metric_values])}]
                     """)
                     mermaid_f.write(mermaid)
@@ -187,13 +187,13 @@ xychart-beta
             "avg": round(data['metrics']["http_req_duration"]["avg"], 2),
         },
         "pp": {
-            "p95": round(data['metrics']["llamacpp_prompt_processing_second"]["p(95)"], 2),
-            "avg": round(data['metrics']["llamacpp_prompt_processing_second"]["avg"], 2),
+            "p95": round(data['metrics']["jarviscpp_prompt_processing_second"]["p(95)"], 2),
+            "avg": round(data['metrics']["jarviscpp_prompt_processing_second"]["avg"], 2),
             "0": round(mean(prometheus_metrics['prompt_tokens_seconds']), 2),
         },
         "tg": {
-            "p95": round(data['metrics']["llamacpp_tokens_second"]["p(95)"], 2),
-            "avg": round(data['metrics']["llamacpp_tokens_second"]["avg"], 2),
+            "p95": round(data['metrics']["jarviscpp_tokens_second"]["p(95)"], 2),
+            "avg": round(data['metrics']["jarviscpp_tokens_second"]["avg"], 2),
             "0": round(mean(prometheus_metrics['predicted_tokens_seconds']), 2),
         },
     }
@@ -248,9 +248,9 @@ def start_server(args):
 
 def start_server_background(args):
     # Start the server
-    server_path = '../../../build/bin/llama-server'
-    if 'LLAMA_SERVER_BIN_PATH' in os.environ:
-        server_path = os.environ['LLAMA_SERVER_BIN_PATH']
+    server_path = '../../../build/bin/jarvis-server'
+    if 'JARVIS_SERVER_BIN_PATH' in os.environ:
+        server_path = os.environ['JARVIS_SERVER_BIN_PATH']
     server_args = [
         '--host', args.host,
         '--port', args.port,

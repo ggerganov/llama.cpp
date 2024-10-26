@@ -1,4 +1,4 @@
-package android.llama.cpp
+package android.jarvis.cpp
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
-class LLamaAndroid {
+class JarvisAndroid {
     private val tag: String? = this::class.simpleName
 
     private val threadLocalState: ThreadLocal<State> = ThreadLocal.withInitial { State.Idle }
@@ -20,9 +20,9 @@ class LLamaAndroid {
             Log.d(tag, "Dedicated thread for native code: ${Thread.currentThread().name}")
 
             // No-op if called more than once.
-            System.loadLibrary("llama-android")
+            System.loadLibrary("jarvis-android")
 
-            // Set llama log handler to Android
+            // Set jarvis log handler to Android
             log_to_android()
             backend_init(false)
 
@@ -172,8 +172,8 @@ class LLamaAndroid {
         }
 
         // Enforce only one instance of Llm.
-        private val _instance: LLamaAndroid = LLamaAndroid()
+        private val _instance: JarvisAndroid = JarvisAndroid()
 
-        fun instance(): LLamaAndroid = _instance
+        fun instance(): JarvisAndroid = _instance
     }
 }

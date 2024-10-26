@@ -1,13 +1,13 @@
-# The flake interface to llama.cpp's Nix expressions. The flake is used as a
+# The flake interface to jarvis.cpp's Nix expressions. The flake is used as a
 # more discoverable entry-point, as well as a way to pin the dependencies and
 # expose default outputs, including the outputs built by the CI.
 
 # For more serious applications involving some kind of customization  you may
-# want to consider consuming the overlay, or instantiating `llamaPackages`
+# want to consider consuming the overlay, or instantiating `jarvisPackages`
 # directly:
 #
 # ```nix
-# pkgs.callPackage ${llama-cpp-root}/.devops/nix/scope.nix { }`
+# pkgs.callPackage ${jarvis-cpp-root}/.devops/nix/scope.nix { }`
 # ```
 
 # Cf. https://jade.fyi/blog/flakes-arent-real/ for a more detailed exposition
@@ -36,8 +36,8 @@
   # ```
   # nixConfig = {
   #   extra-substituters = [
-  #     # Populated by the CI in ggerganov/llama.cpp
-  #     "https://llama-cpp.cachix.org"
+  #     # Populated by the CI in ggerganov/jarvis.cpp
+  #     "https://jarvis-cpp.cachix.org"
   #
   #     # A development cache for nixpkgs imported with `config.cudaSupport = true`.
   #     # Populated by https://hercules-ci.com/github/SomeoneSerge/nixpkgs-cuda-ci.
@@ -47,34 +47,34 @@
   #   ];
   #
   #   # Verify these are the same keys as published on
-  #   # - https://app.cachix.org/cache/llama-cpp
+  #   # - https://app.cachix.org/cache/jarvis-cpp
   #   # - https://app.cachix.org/cache/cuda-maintainers
   #   extra-trusted-public-keys = [
-  #     "llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc="
+  #     "jarvis-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc="
   #     "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
   #   ];
   # };
   # ```
 
-  # For inspection, use `nix flake show github:ggerganov/llama.cpp` or the nix repl:
+  # For inspection, use `nix flake show github:ggerganov/jarvis.cpp` or the nix repl:
   #
   # ```bash
   # ❯ nix repl
-  # nix-repl> :lf github:ggerganov/llama.cpp
+  # nix-repl> :lf github:ggerganov/jarvis.cpp
   # Added 13 variables.
   # nix-repl> outputs.apps.x86_64-linux.quantize
-  # { program = "/nix/store/00000000000000000000000000000000-llama.cpp/bin/llama-quantize"; type = "app"; }
+  # { program = "/nix/store/00000000000000000000000000000000-jarvis.cpp/bin/jarvis-quantize"; type = "app"; }
   # ```
   outputs =
     { self, flake-parts, ... }@inputs:
     let
       # We could include the git revisions in the package names but those would
       # needlessly trigger rebuilds:
-      # llamaVersion = self.dirtyShortRev or self.shortRev;
+      # jarvisVersion = self.dirtyShortRev or self.shortRev;
 
       # Nix already uses cryptographic hashes for versioning, so we'll just fix
       # the fake semver for now:
-      llamaVersion = "0.0.0";
+      jarvisVersion = "0.0.0";
     in
     flake-parts.lib.mkFlake { inherit inputs; }
 
@@ -87,30 +87,30 @@
           .devops/nix/jetson-support.nix
         ];
 
-        # An overlay can be used to have a more granular control over llama-cpp's
+        # An overlay can be used to have a more granular control over jarvis-cpp's
         # dependencies and configuration, than that offered by the `.override`
         # mechanism. Cf. https://nixos.org/manual/nixpkgs/stable/#chap-overlays.
         #
         # E.g. in a flake:
         # ```
-        # { nixpkgs, llama-cpp, ... }:
+        # { nixpkgs, jarvis-cpp, ... }:
         # let pkgs = import nixpkgs {
-        #     overlays = [ (llama-cpp.overlays.default) ];
+        #     overlays = [ (jarvis-cpp.overlays.default) ];
         #     system = "aarch64-linux";
         #     config.allowUnfree = true;
         #     config.cudaSupport = true;
         #     config.cudaCapabilities = [ "7.2" ];
         #     config.cudaEnableForwardCompat = false;
         # }; in {
-        #     packages.aarch64-linux.llamaJetsonXavier = pkgs.llamaPackages.llama-cpp;
+        #     packages.aarch64-linux.jarvisJetsonXavier = pkgs.jarvisPackages.jarvis-cpp;
         # }
         # ```
         #
         # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
         flake.overlays.default = (
           final: prev: {
-            llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
-            inherit (final.llamaPackages) llama-cpp;
+            jarvisPackages = final.callPackage .devops/nix/scope.nix { inherit jarvisVersion; };
+            inherit (final.jarvisPackages) jarvis-cpp;
           }
         );
 
@@ -141,34 +141,34 @@
             # show` either.
             #
             # You can add arbitrary scripts to `.devops/nix/scope.nix` and
-            # access them as `nix build .#llamaPackages.${scriptName}` using
+            # access them as `nix build .#jarvisPackages.${scriptName}` using
             # the same path you would with an overlay.
             legacyPackages = {
-              llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
-              llamaPackagesWindows = pkgs.pkgsCross.mingwW64.callPackage .devops/nix/scope.nix {
-                inherit llamaVersion;
+              jarvisPackages = pkgs.callPackage .devops/nix/scope.nix { inherit jarvisVersion; };
+              jarvisPackagesWindows = pkgs.pkgsCross.mingwW64.callPackage .devops/nix/scope.nix {
+                inherit jarvisVersion;
               };
-              llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
-              llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              jarvisPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit jarvisVersion; };
+              jarvisPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit jarvisVersion; };
             };
 
             # We don't use the overlay here so as to avoid making too many instances of nixpkgs,
             # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
             packages =
               {
-                default = config.legacyPackages.llamaPackages.llama-cpp;
+                default = config.legacyPackages.jarvisPackages.jarvis-cpp;
                 vulkan = config.packages.default.override { useVulkan = true; };
-                windows = config.legacyPackages.llamaPackagesWindows.llama-cpp;
-                python-scripts = config.legacyPackages.llamaPackages.python-scripts;
+                windows = config.legacyPackages.jarvisPackagesWindows.jarvis-cpp;
+                python-scripts = config.legacyPackages.jarvisPackages.python-scripts;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
-                cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
+                cuda = config.legacyPackages.jarvisPackagesCuda.jarvis-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
                 mpi-cuda = config.packages.default.override { useMpi = true; };
               }
               // lib.optionalAttrs (system == "x86_64-linux") {
-                rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
+                rocm = config.legacyPackages.jarvisPackagesRocm.jarvis-cpp;
               };
 
             # Packages exposed in `.#checks` will be built by the CI and by
@@ -176,7 +176,7 @@
             #
             # We could test all outputs e.g. as `checks = confg.packages`.
             #
-            # TODO: Build more once https://github.com/ggerganov/llama.cpp/issues/6346 has been addressed
+            # TODO: Build more once https://github.com/ggerganov/jarvis.cpp/issues/6346 has been addressed
             checks = {
               inherit (config.packages) default vulkan;
             };

@@ -10,7 +10,7 @@ import yaml
 
 logger = logging.getLogger("run-with-preset")
 
-CLI_ARGS_LLAMA_CLI_PERPLEXITY = [
+CLI_ARGS_JARVIS_CLI_PERPLEXITY = [
     "batch-size", "cfg-negative-prompt", "cfg-scale", "chunks", "color", "ctx-size", "escape",
     "export", "file", "frequency-penalty", "grammar", "grammar-file", "hellaswag",
     "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix",
@@ -24,26 +24,26 @@ CLI_ARGS_LLAMA_CLI_PERPLEXITY = [
     "verbose-prompt"
 ]
 
-CLI_ARGS_LLAMA_BENCH = [
+CLI_ARGS_JARVIS_BENCH = [
     "batch-size", "low-vram", "model", "mul-mat-q", "n-gen", "n-gpu-layers",
     "n-prompt", "output", "repetitions", "tensor-split", "threads", "verbose"
 ]
 
-CLI_ARGS_LLAMA_SERVER = [
+CLI_ARGS_JARVIS_SERVER = [
     "alias", "batch-size", "ctx-size", "embedding", "host", "lora", "lora-base",
     "low-vram", "main-gpu", "mlock", "model", "n-gpu-layers", "n-probs", "no-mmap", "no-mul-mat-q",
     "numa", "path", "port", "rope-freq-base", "timeout", "rope-freq-scale", "tensor-split",
     "threads", "verbose"
 ]
 
-description = """Run llama.cpp binaries with presets from YAML file(s).
-To specify which binary should be run, specify the "binary" property (llama-cli, llama-perplexity, llama-bench, and llama-server are supported).
-To get a preset file template, run a llama.cpp binary with the "--logdir" CLI argument.
+description = """Run jarvis.cpp binaries with presets from YAML file(s).
+To specify which binary should be run, specify the "binary" property (jarvis-cli, jarvis-perplexity, jarvis-bench, and jarvis-server are supported).
+To get a preset file template, run a jarvis.cpp binary with the "--logdir" CLI argument.
 
 Formatting considerations:
 - The YAML property names are the same as the CLI argument names of the corresponding binary.
-- Properties must use the long name of their corresponding llama.cpp CLI arguments.
-- Like the llama.cpp binaries the property names do not differentiate between hyphens and underscores.
+- Properties must use the long name of their corresponding jarvis.cpp CLI arguments.
+- Like the jarvis.cpp binaries the property names do not differentiate between hyphens and underscores.
 - Flags must be defined as "<PROPERTY_NAME>: true" to be effective.
 - To define the logit_bias property, the expected format is "<TOKEN_ID>: <BIAS>" in the "logit_bias" namespace.
 - To define multiple "reverse_prompt" properties simultaneously the expected format is a list of strings.
@@ -77,19 +77,19 @@ for yaml_file in known_args.yaml_files:
 
 props = {prop.replace("_", "-"): val for prop, val in props.items()}
 
-binary = props.pop("binary", "llama-cli")
+binary = props.pop("binary", "jarvis-cli")
 if known_args.binary:
     binary = known_args.binary
 
 if os.path.exists(f"./{binary}"):
     binary = f"./{binary}"
 
-if binary.lower().endswith("llama-cli") or binary.lower().endswith("llama-perplexity"):
-    cli_args = CLI_ARGS_LLAMA_CLI_PERPLEXITY
-elif binary.lower().endswith("llama-bench"):
-    cli_args = CLI_ARGS_LLAMA_BENCH
-elif binary.lower().endswith("llama-server"):
-    cli_args = CLI_ARGS_LLAMA_SERVER
+if binary.lower().endswith("jarvis-cli") or binary.lower().endswith("jarvis-perplexity"):
+    cli_args = CLI_ARGS_JARVIS_CLI_PERPLEXITY
+elif binary.lower().endswith("jarvis-bench"):
+    cli_args = CLI_ARGS_JARVIS_BENCH
+elif binary.lower().endswith("jarvis-server"):
+    cli_args = CLI_ARGS_JARVIS_SERVER
 else:
     logger.error(f"Unknown binary: {binary}")
     sys.exit(1)

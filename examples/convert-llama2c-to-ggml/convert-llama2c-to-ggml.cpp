@@ -1,5 +1,5 @@
 #include "ggml.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "common.h"
 #include "log.h"
 
@@ -33,14 +33,14 @@
 #define KV_TOKENIZER_PAD_ID              "tokenizer.ggml.padding_token_id"
 #define KV_TOKENIZER_HF_JSON             "tokenizer.huggingface.json"
 
-#define KV_CONTEXT_LENGTH                "llama.context_length"
-#define KV_EMBEDDING_LENGTH              "llama.embedding_length"
-#define KV_BLOCK_COUNT                   "llama.block_count"
-#define KV_FEED_FORWARD_LENGTH           "llama.feed_forward_length"
-#define KV_ATTENTION_HEAD_COUNT          "llama.attention.head_count"
-#define KV_ATTENTION_HEAD_COUNT_KV       "llama.attention.head_count_kv"
-#define KV_ATTENTION_LAYERNORM_RMS_EPS   "llama.attention.layer_norm_rms_epsilon"
-#define KV_ROPE_DIMENSION_COUNT          "llama.rope.dimension_count"
+#define KV_CONTEXT_LENGTH                "jarvis.context_length"
+#define KV_EMBEDDING_LENGTH              "jarvis.embedding_length"
+#define KV_BLOCK_COUNT                   "jarvis.block_count"
+#define KV_FEED_FORWARD_LENGTH           "jarvis.feed_forward_length"
+#define KV_ATTENTION_HEAD_COUNT          "jarvis.attention.head_count"
+#define KV_ATTENTION_HEAD_COUNT_KV       "jarvis.attention.head_count_kv"
+#define KV_ATTENTION_LAYERNORM_RMS_EPS   "jarvis.attention.layer_norm_rms_epsilon"
+#define KV_ROPE_DIMENSION_COUNT          "jarvis.rope.dimension_count"
 
 #define TN_TOKEN_EMBD  "token_embd.weight"
 #define TN_OUTPUT_NORM "output_norm.weight"
@@ -59,15 +59,15 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
-#define LLAMA_FILE_VERSION_GGJT_V3   3
+#define JARVIS_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
+#define JARVIS_FILE_VERSION_GGJT_V3   3
 
-#define TOKENIZER_NAME "llama"
+#define TOKENIZER_NAME "jarvis"
 #define UNKNOWN_TOKEN_ID 0
 #define BOS_TOKEN_ID 1
 #define EOS_TOKEN_ID 2
 
-//////////////////////////////////////// llama2.c model structs and functions to load models, alloc memory etc.
+//////////////////////////////////////// jarvis2.c model structs and functions to load models, alloc memory etc.
 typedef struct {
     int dim; // transformer dimension
     int hidden_dim; // for ffn layers
@@ -201,10 +201,10 @@ static void print_sample_weights(TransformerWeights *w){
 
 //////////////////////////////////////// ggml structs and functions required to load models, configs and save the model.
 
-struct my_llama_vocab {
+struct my_jarvis_vocab {
     using id    = int32_t;
     using token = std::string;
-    using ttype = llama_token_type;
+    using ttype = jarvis_token_type;
 
     struct token_data {
         token text;
@@ -216,7 +216,7 @@ struct my_llama_vocab {
     std::vector<token_data> id_to_token;
 };
 
-struct my_llama_hparams {
+struct my_jarvis_hparams {
     uint32_t n_vocab   = 32000;
     uint32_t n_ctx     = 512;   // this is provided as user input?
     uint32_t n_embd    = 4096;
@@ -227,12 +227,12 @@ struct my_llama_hparams {
     uint32_t n_layer   = 32;
     uint32_t n_rot     = 64;
 
-    bool operator!=(const my_llama_hparams& other) const {
-        return memcmp(this, &other, sizeof(my_llama_hparams));
+    bool operator!=(const my_jarvis_hparams& other) const {
+        return memcmp(this, &other, sizeof(my_jarvis_hparams));
     }
 };
 
-struct my_llama_layer {
+struct my_jarvis_layer {
     // normalization
     struct ggml_tensor * attention_norm;
 
@@ -251,19 +251,19 @@ struct my_llama_layer {
     struct ggml_tensor * w3;
 };
 
-struct my_llama_model {
+struct my_jarvis_model {
     struct ggml_context * ctx = NULL;
 
     std::string name;
 
-    my_llama_hparams hparams;
+    my_jarvis_hparams hparams;
 
     struct ggml_tensor * tok_embeddings;
 
     struct ggml_tensor * norm;
     struct ggml_tensor * output;
 
-    std::vector<my_llama_layer> layers;
+    std::vector<my_jarvis_layer> layers;
 
     uint32_t train_its = 0;
     uint32_t train_samples = 0;
@@ -272,8 +272,8 @@ struct my_llama_model {
 
 struct train_params {
     const char * fn_vocab_model;
-    const char * fn_llama2c_model;
-    const char * fn_llama2c_output_model;
+    const char * fn_jarvis2c_model;
+    const char * fn_jarvis2c_output_model;
     const char * fn_train_data;
     const char * fn_checkpoint_in;
     const char * fn_checkpoint_out;
@@ -318,7 +318,7 @@ struct train_params {
     int mem_compute1_gb;
 };
 
-static void print_params(struct my_llama_hparams * params) {
+static void print_params(struct my_jarvis_hparams * params) {
     LOG_INF("%s: n_vocab:   %u\n", __func__, params->n_vocab);
     LOG_INF("%s: n_ctx:     %u\n", __func__, params->n_ctx);
     LOG_INF("%s: n_embd:    %u\n", __func__, params->n_embd);
@@ -345,7 +345,7 @@ static void print_tensor_info(const struct ggml_context * ctx) {
     }
 }
 
-static void init_model(struct my_llama_model * model) {
+static void init_model(struct my_jarvis_model * model) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_embd  = hparams.n_embd;
@@ -434,12 +434,12 @@ static void print_matrix(struct ggml_tensor * probs) {
     }
 }
 
-struct llama_file {
+struct jarvis_file {
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
 
-    llama_file(const char * fname, const char * mode) {
+    jarvis_file(const char * fname, const char * mode) {
         fp = std::fopen(fname, mode);
         if (fp == NULL) {
             size = 0;
@@ -500,7 +500,7 @@ struct llama_file {
         return std::string(chars.data(), len);
     }
 
-    ~llama_file() {
+    ~jarvis_file() {
         if (fp) {
             std::fclose(fp);
         }
@@ -508,7 +508,7 @@ struct llama_file {
 };
 
 static bool is_ggml_file(const char * filename) {
-    llama_file file(filename, "rb");
+    jarvis_file file(filename, "rb");
     if (file.size < 4) {
         return false;
     }
@@ -516,7 +516,7 @@ static bool is_ggml_file(const char * filename) {
     return magic == GGUF_MAGIC;
 }
 
-static std::string llama_escape_whitespaces(const std::string & text) {
+static std::string jarvis_escape_whitespaces(const std::string & text) {
     std::ostringstream out;
     for (char c : text) {
         if (c == ' ') out << "\xe2\x96\x81";
@@ -525,7 +525,7 @@ static std::string llama_escape_whitespaces(const std::string & text) {
     return out.str();
 }
 
-static void load_vocab(const char * filename, const Config * config, struct my_llama_vocab * vocab) {
+static void load_vocab(const char * filename, const Config * config, struct my_jarvis_vocab * vocab) {
     if (is_ggml_file(filename)) {
         LOG_INF("%s: Loading vocabulary from gguf file %s\n", __func__, filename);
         struct ggml_context * ctx_data = NULL;
@@ -556,7 +556,7 @@ static void load_vocab(const char * filename, const Config * config, struct my_l
 
         const uint32_t n_vocab = gguf_get_arr_n(ctx, token_idx);
         if (n_vocab != static_cast<uint32_t>(config->vocab_size)) {
-            die_fmt("vocab size mismatch: (gguf) %u != (llama2c) %d", n_vocab, config->vocab_size);
+            die_fmt("vocab size mismatch: (gguf) %u != (jarvis2c) %d", n_vocab, config->vocab_size);
         }
 
         vocab->id_to_token.resize(n_vocab);
@@ -569,45 +569,45 @@ static void load_vocab(const char * filename, const Config * config, struct my_l
             auto & token_data = vocab->id_to_token[i];
             token_data.text  = std::move(word);
             token_data.score = scores[i];
-            token_data.type  = (llama_token_type) toktypes[i];
+            token_data.type  = (jarvis_token_type) toktypes[i];
         }
         ggml_free(ctx_data);
         gguf_free(ctx);
     } else {
-        // assume llama2.c vocabulary
-        LOG_INF("%s: Assuming llama2.c vocabulary since %s is not a gguf file\n", __func__, filename);
-        llama_file file(filename, "rb");
+        // assume jarvis2.c vocabulary
+        LOG_INF("%s: Assuming jarvis2.c vocabulary since %s is not a gguf file\n", __func__, filename);
+        jarvis_file file(filename, "rb");
         if (!file.fp) {
             die_fmt("%s: %s", strerror(errno), filename);
         }
         const int  n_vocab = config->vocab_size;
         /* uint32_t max_token_length =  */ file.read_u32(); // unused
         vocab->id_to_token.resize(n_vocab);
-        for (my_llama_vocab::id id=0; id<n_vocab; ++id) {
+        for (my_jarvis_vocab::id id=0; id<n_vocab; ++id) {
             float_t score = file.read_f32();
             uint32_t len = file.read_u32();
             std::string text = file.read_string(len);
 
             unsigned char byte_val;
-            my_llama_vocab::ttype type = LLAMA_TOKEN_TYPE_NORMAL;
+            my_jarvis_vocab::ttype type = JARVIS_TOKEN_TYPE_NORMAL;
             if (id == UNKNOWN_TOKEN_ID) {
                 text = "<unk>";
-                type = LLAMA_TOKEN_TYPE_UNKNOWN;
+                type = JARVIS_TOKEN_TYPE_UNKNOWN;
             } else if (id == BOS_TOKEN_ID) {
                 text = "<s>";
-                type = LLAMA_TOKEN_TYPE_CONTROL;
+                type = JARVIS_TOKEN_TYPE_CONTROL;
             } else if (id == EOS_TOKEN_ID) {
                 text = "</s>";
-                type = LLAMA_TOKEN_TYPE_CONTROL;
+                type = JARVIS_TOKEN_TYPE_CONTROL;
             } else if (text.empty()) {
-                type = LLAMA_TOKEN_TYPE_CONTROL;
+                type = JARVIS_TOKEN_TYPE_CONTROL;
             } else if (sscanf(text.c_str(), "<0x%02hhX>", &byte_val) == 1) {
                 // Text of byte tokens is already in the expected format.
-                type = LLAMA_TOKEN_TYPE_BYTE;
+                type = JARVIS_TOKEN_TYPE_BYTE;
             } else {
-                type = LLAMA_TOKEN_TYPE_NORMAL;
+                type = JARVIS_TOKEN_TYPE_NORMAL;
             }
-            text = llama_escape_whitespaces(text);
+            text = jarvis_escape_whitespaces(text);
 
             vocab->id_to_token[id].text = text;
             vocab->id_to_token[id].score = score;
@@ -630,8 +630,8 @@ static void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const floa
     }
 }
 
-static void save_as_llama_model(
-    struct my_llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename
+static void save_as_jarvis_model(
+    struct my_jarvis_vocab * vocab, struct my_jarvis_model * model, TransformerWeights* w, const char * filename
 ) {
     // convert AK weights into GG weights one by one.
     // w->token_embedding_table -> model->tok_embeddings
@@ -670,8 +670,8 @@ static void save_as_llama_model(
 
     std::vector<const char*> tokens;
     std::vector<float> scores;
-    std::vector<llama_token_type> token_types;
-    for (const my_llama_vocab::token_data & token_data : vocab->id_to_token) {
+    std::vector<jarvis_token_type> token_types;
+    for (const my_jarvis_vocab::token_data & token_data : vocab->id_to_token) {
         tokens.push_back(token_data.text.c_str());
         scores.push_back(token_data.score);
         token_types.push_back(token_data.type);
@@ -682,8 +682,8 @@ static void save_as_llama_model(
 
     gguf_set_val_str(ctx, KV_TOKENIZER_MODEL, TOKENIZER_NAME);
 
-    gguf_set_val_str(ctx, KV_GENERAL_ARCHITECTURE, "llama");
-    gguf_set_val_str(ctx, KV_GENERAL_NAME, "llama");
+    gguf_set_val_str(ctx, KV_GENERAL_ARCHITECTURE, "jarvis");
+    gguf_set_val_str(ctx, KV_GENERAL_NAME, "jarvis");
 
     // special tokens
     gguf_set_val_u32(ctx, KV_TOKENIZER_UNK_ID, UNKNOWN_TOKEN_ID);
@@ -750,7 +750,7 @@ static void save_as_llama_model(
 static struct train_params get_default_train_params() {
     struct train_params params;
     params.fn_vocab_model          = "models/7B/ggml-model-f16.gguf";
-    params.fn_llama2c_output_model = "ak_llama_model.bin";
+    params.fn_jarvis2c_output_model = "ak_jarvis_model.bin";
     params.fn_train_data           = "shakespeare.txt";
     params.fn_checkpoint_in        = "checkpoint.bin";
     params.fn_checkpoint_out       = "checkpoint.bin";
@@ -802,9 +802,9 @@ static void print_usage(int /*argc*/, char ** argv, const struct train_params * 
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help                       show this help message and exit\n");
-    fprintf(stderr, "  --copy-vocab-from-model FNAME    path of gguf llama model or llama2.c vocabulary from which to copy vocab (default '%s')\n", params->fn_vocab_model);
-    fprintf(stderr, "  --llama2c-model FNAME            [REQUIRED] model path from which to load Karpathy's llama2.c model\n");
-    fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);
+    fprintf(stderr, "  --copy-vocab-from-model FNAME    path of gguf jarvis model or jarvis2.c vocabulary from which to copy vocab (default '%s')\n", params->fn_vocab_model);
+    fprintf(stderr, "  --jarvis2c-model FNAME            [REQUIRED] model path from which to load Karpathy's jarvis2.c model\n");
+    fprintf(stderr, "  --jarvis2c-output-model FNAME     model path to save the converted jarvis2.c model (default %s')\n", params->fn_jarvis2c_output_model);
     fprintf(stderr, "\n");
 }
 
@@ -827,19 +827,19 @@ static bool params_parse(int argc, char ** argv, struct train_params * params) {
                 break;
             }
             params->fn_vocab_model = argv[i];
-        } else if (arg == "--llama2c-model") {
+        } else if (arg == "--jarvis2c-model") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             reqd_param_found = true;
-            params->fn_llama2c_model = argv[i];
-        } else if (arg == "--llama2c-output-model") {
+            params->fn_jarvis2c_model = argv[i];
+        } else if (arg == "--jarvis2c-output-model") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params->fn_llama2c_output_model = argv[i];
+            params->fn_jarvis2c_output_model = argv[i];
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argc, argv, &default_params);
             exit(0);
@@ -855,7 +855,7 @@ static bool params_parse(int argc, char ** argv, struct train_params * params) {
         exit(1);
     }
     if (!reqd_param_found){
-        fprintf(stderr, "error: please specify a llama2.c .bin file to be converted with argument --llama2c-model\n");
+        fprintf(stderr, "error: please specify a jarvis2.c .bin file to be converted with argument --jarvis2c-model\n");
         print_usage(argc, argv, &default_params);
         exit(1);
     }
@@ -882,15 +882,15 @@ int main(int argc, char ** argv) {
     Config config;
     TransformerWeights weights = {};
     {
-        LOG_INF("%s: Loading llama2c model from %s\n", __func__, params.fn_llama2c_model);
-        FILE * file = fopen(params.fn_llama2c_model, "rb");
+        LOG_INF("%s: Loading jarvis2c model from %s\n", __func__, params.fn_jarvis2c_model);
+        FILE * file = fopen(params.fn_jarvis2c_model, "rb");
         if (!file) {
-            LOG_ERR("%s: Unable to open the checkpoint file %s!\n", __func__, params.fn_llama2c_model);
+            LOG_ERR("%s: Unable to open the checkpoint file %s!\n", __func__, params.fn_jarvis2c_model);
             return 1;
         }
         // read in the config header
         if (fread(&config, sizeof(Config), 1, file) != 1) {
-            LOG_ERR("%s: Unable to read llama2c config from %s!\n",__func__,params.fn_llama2c_model);
+            LOG_ERR("%s: Unable to read jarvis2c config from %s!\n",__func__,params.fn_jarvis2c_model);
             return 1;
         }
         auto shared_weights = config.vocab_size > 0;
@@ -899,17 +899,17 @@ int main(int argc, char ** argv) {
         // read in the Transformer weights
         alloc_weights(&weights, &config, shared_weights);
         if (checkpoint_init_weights(&weights, &config, file, shared_weights)) {
-            LOG_ERR("%s: Unable to initialize transformer weights from %s!",__func__,params.fn_llama2c_model);
+            LOG_ERR("%s: Unable to initialize transformer weights from %s!",__func__,params.fn_jarvis2c_model);
             return 1;
         }
         fclose(file);
     }
 
-    struct my_llama_vocab vocab;
+    struct my_jarvis_vocab vocab;
     load_vocab(params.fn_vocab_model, &config, &vocab);
 
-    struct my_llama_model model;
-    model.hparams.n_vocab   = config.vocab_size; //llama_n_vocab(lctx);
+    struct my_jarvis_model model;
+    model.hparams.n_vocab   = config.vocab_size; //jarvis_n_vocab(lctx);
     model.hparams.n_ctx     = params.n_ctx;
     model.hparams.n_embd    = config.dim; //params.n_embd;
     model.hparams.n_ff      = config.hidden_dim;
@@ -929,10 +929,10 @@ int main(int argc, char ** argv) {
     model.ctx = ggml_init(lcparams);
 
     init_model(&model);
-    model.name = basename(params.fn_llama2c_model);
-    save_as_llama_model(&vocab, &model, &weights, params.fn_llama2c_output_model);
+    model.name = basename(params.fn_jarvis2c_model);
+    save_as_jarvis_model(&vocab, &model, &weights, params.fn_jarvis2c_output_model);
 
-    LOG_INF("%s: Saving llama.c model file %s in ggml format at %s\n", __func__, params.fn_llama2c_model, params.fn_llama2c_output_model);
+    LOG_INF("%s: Saving jarvis.c model file %s in ggml format at %s\n", __func__, params.fn_jarvis2c_model, params.fn_jarvis2c_output_model);
 
     ggml_free(model.ctx);
     return 0;

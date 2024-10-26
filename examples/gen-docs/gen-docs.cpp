@@ -47,7 +47,7 @@ static void write_table(std::ofstream & file, std::vector<common_arg *> & opts) 
     }
 }
 
-static void export_md(std::string fname, llama_example ex) {
+static void export_md(std::string fname, jarvis_example ex) {
     std::ofstream file(fname, std::ofstream::out | std::ofstream::trunc);
 
     common_params params;
@@ -57,7 +57,7 @@ static void export_md(std::string fname, llama_example ex) {
     std::vector<common_arg *> sparam_options;
     std::vector<common_arg *> specific_options;
     for (auto & opt : ctx_arg.options) {
-        // in case multiple LLAMA_EXAMPLE_* are set, we prioritize the LLAMA_EXAMPLE_* matching current example
+        // in case multiple JARVIS_EXAMPLE_* are set, we prioritize the JARVIS_EXAMPLE_* matching current example
         if (opt.is_sparam) {
             sparam_options.push_back(&opt);
         } else if (opt.in_example(ctx_arg.ex)) {
@@ -76,8 +76,8 @@ static void export_md(std::string fname, llama_example ex) {
 }
 
 int main(int, char **) {
-    export_md("autogen-main.md", LLAMA_EXAMPLE_MAIN);
-    export_md("autogen-server.md", LLAMA_EXAMPLE_SERVER);
+    export_md("autogen-main.md", JARVIS_EXAMPLE_MAIN);
+    export_md("autogen-server.md", JARVIS_EXAMPLE_SERVER);
 
     return 0;
 }

@@ -258,13 +258,13 @@ if (GGML_BLAS)
     endif()
 endif()
 
-if (GGML_LLAMAFILE)
-    message(STATUS "Using llamafile")
+if (GGML_JARVISFILE)
+    message(STATUS "Using jarvisfile")
 
-    add_compile_definitions(GGML_USE_LLAMAFILE)
+    add_compile_definitions(GGML_USE_JARVISFILE)
 
-    set(GGML_HEADERS_LLAMAFILE llamafile/sgemm.h)
-    set(GGML_SOURCES_LLAMAFILE llamafile/sgemm.cpp)
+    set(GGML_HEADERS_JARVISFILE jarvisfile/sgemm.h)
+    set(GGML_SOURCES_JARVISFILE jarvisfile/sgemm.cpp)
 endif()
 
 if (GGML_AMX)
@@ -1380,7 +1380,7 @@ add_library(ggml
             ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
-            ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ${GGML_SOURCES_JARVISFILE} ${GGML_HEADERS_JARVISFILE}
             ${GGML_SOURCES_AMX}       ${GGML_HEADERS_AMX}
             ${GGML_SOURCES_CANN}      ${GGML_HEADERS_CANN}
             ggml-aarch64.c            ggml-aarch64.h

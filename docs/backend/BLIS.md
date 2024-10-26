@@ -25,13 +25,13 @@ sudo make install
 
 We recommend using openmp since it's easier to modify the cores being used.
 
-### llama.cpp compilation
+### jarvis.cpp compilation
 
 Makefile:
 
 ```bash
 make GGML_BLIS=1 -j
-# make GGML_BLIS=1 llama-benchmark-matmult
+# make GGML_BLIS=1 jarvis-benchmark-matmult
 ```
 
 CMake:
@@ -43,7 +43,7 @@ cmake -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=FLAME ..
 make -j
 ```
 
-### llama.cpp execution
+### jarvis.cpp execution
 
 According to the BLIS documentation, we could set the following
 environment variables to modify the behavior of openmp:

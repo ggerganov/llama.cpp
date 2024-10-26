@@ -4,17 +4,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "llama-batched-swift",
+    name: "jarvis-batched-swift",
     platforms: [.macOS(.v12)],
     dependencies: [
-        .package(name: "llama", path: "../../"),
+        .package(name: "jarvis", path: "../../"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .executableTarget(
-            name: "llama-batched-swift",
-            dependencies: ["llama"],
+            name: "jarvis-batched-swift",
+            dependencies: ["jarvis"],
             path: "Sources",
             linkerSettings: [.linkedFramework("Foundation"), .linkedFramework("AppKit")]
         ),

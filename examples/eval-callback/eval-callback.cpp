@@ -1,7 +1,7 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
-#include "llama.h"
+#include "jarvis.h"
 #include "ggml.h"
 
 #include <cstdio>
@@ -126,12 +126,12 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
     return true;
 }
 
-static bool run(llama_context * ctx, const common_params & params) {
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
+static bool run(jarvis_context * ctx, const common_params & params) {
+    const bool add_bos = jarvis_add_bos_token(jarvis_get_model(ctx));
 
-    std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, add_bos);
+    std::vector<jarvis_token> tokens = common_tokenize(ctx, params.prompt, add_bos);
 
-    if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size()))) {
+    if (jarvis_decode(ctx, jarvis_batch_get_one(tokens.data(), tokens.size()))) {
         LOG_ERR("%s : failed to eval\n", __func__);
         return false;
     }
@@ -144,14 +144,14 @@ int main(int argc, char ** argv) {
 
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_COMMON)) {
         return 1;
     }
 
     common_init();
 
-    llama_backend_init();
-    llama_numa_init(params.numa);
+    jarvis_backend_init();
+    jarvis_numa_init(params.numa);
 
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
@@ -160,10 +160,10 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    common_init_result llama_init = common_init_from_params(params);
+    common_init_result jarvis_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    jarvis_model * model = jarvis_init.model;
+    jarvis_context * ctx = jarvis_init.context;
     if (model == nullptr || ctx == nullptr) {
         LOG_ERR("%s : failed to init\n", __func__);
         return 1;
@@ -182,12 +182,12 @@ int main(int argc, char ** argv) {
     }
 
     LOG("\n");
-    llama_perf_context_print(ctx);
+    jarvis_perf_context_print(ctx);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
 
-    llama_backend_free();
+    jarvis_backend_free();
 
     return 0;
 }

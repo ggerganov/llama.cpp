@@ -15,7 +15,7 @@ WORKDIR /app
 
 COPY . .
 
-ENV LLAMA_CURL=1
+ENV JARVIS_CURL=1
 
 
 RUN make -j$(nproc)

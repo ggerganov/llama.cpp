@@ -4,9 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef LLAMA_SHARED
+#ifdef JARVIS_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
-#        ifdef LLAMA_BUILD
+#        ifdef JARVIS_BUILD
 #            define CLIP_API __declspec(dllexport)
 #        else
 #            define CLIP_API __declspec(dllimport)

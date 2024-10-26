@@ -7,16 +7,16 @@ node('x86_runner1'){            // Running on x86 runner containing latest vecto
             checkout scm        // Clone the repo on Runner
         }
     }
-    stage('Compiling llama.cpp'){
+    stage('Compiling jarvis.cpp'){
         sh'''#!/bin/bash
-            make RISCV=1 RISCV_CROSS_COMPILE=1 # Compiling llama for RISC-V
+            make RISCV=1 RISCV_CROSS_COMPILE=1 # Compiling jarvis for RISC-V
         '''
     }
-    stage('Running llama.cpp'){
+    stage('Running jarvis.cpp'){
         sh'''#!/bin/bash
             module load gnu-bin2/0.1            # loading latest versions of vector qemu and vector gcc
-            qemu-riscv64 -L /softwares/gnu-bin2/sysroot  -cpu rv64,v=true,vlen=256,elen=64,vext_spec=v1.0 ./llama-cli -m /home/alitariq/codellama-7b.Q4_K_M.gguf -p "Anything" -n 9 > llama_log.txt            # Running llama.cpp on vector qemu-riscv64
-            cat llama_log.txt                   # Printing results
+            qemu-riscv64 -L /softwares/gnu-bin2/sysroot  -cpu rv64,v=true,vlen=256,elen=64,vext_spec=v1.0 ./jarvis-cli -m /home/alitariq/codejarvis-7b.Q4_K_M.gguf -p "Anything" -n 9 > jarvis_log.txt            # Running jarvis.cpp on vector qemu-riscv64
+            cat jarvis_log.txt                   # Printing results
         '''
     }
 }

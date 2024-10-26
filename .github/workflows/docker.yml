@@ -37,21 +37,21 @@ jobs:
     strategy:
       matrix:
         config:
-          - { tag: "light", dockerfile: ".devops/llama-cli.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "server", dockerfile: ".devops/llama-server.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "light", dockerfile: ".devops/jarvis-cli.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "server", dockerfile: ".devops/jarvis-server.Dockerfile", platforms: "linux/amd64,linux/arm64" }
           - { tag: "full", dockerfile: ".devops/full.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "light-cuda", dockerfile: ".devops/llama-cli-cuda.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "server-cuda", dockerfile: ".devops/llama-server-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "light-cuda", dockerfile: ".devops/jarvis-cli-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-cuda", dockerfile: ".devops/jarvis-server-cuda.Dockerfile", platforms: "linux/amd64" }
           - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "light-musa", dockerfile: ".devops/llama-cli-musa.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "server-musa", dockerfile: ".devops/llama-server-musa.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "light-musa", dockerfile: ".devops/jarvis-cli-musa.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-musa", dockerfile: ".devops/jarvis-server-musa.Dockerfile", platforms: "linux/amd64" }
           - { tag: "full-musa", dockerfile: ".devops/full-musa.Dockerfile", platforms: "linux/amd64" }
           # Note: the rocm images are failing due to a compiler error and are disabled until this is fixed to allow the workflow to complete
-          #- { tag: "light-rocm", dockerfile: ".devops/llama-cli-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          #- { tag: "server-rocm", dockerfile: ".devops/llama-server-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          #- { tag: "light-rocm", dockerfile: ".devops/jarvis-cli-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          #- { tag: "server-rocm", dockerfile: ".devops/jarvis-server-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
           #- { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "light-intel", dockerfile: ".devops/llama-cli-intel.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "server-intel", dockerfile: ".devops/llama-server-intel.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "light-intel", dockerfile: ".devops/jarvis-cli-intel.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-intel", dockerfile: ".devops/jarvis-server-intel.Dockerfile", platforms: "linux/amd64" }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4

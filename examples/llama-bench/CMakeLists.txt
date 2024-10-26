@@ -1,5 +1,5 @@
-set(TARGET llama-bench)
-add_executable(${TARGET} llama-bench.cpp)
+set(TARGET jarvis-bench)
+add_executable(${TARGET} jarvis-bench.cpp)
 install(TARGETS ${TARGET} RUNTIME)
-target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${TARGET} PRIVATE common jarvis ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)

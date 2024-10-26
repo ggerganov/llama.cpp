@@ -1,13 +1,13 @@
 #pragma once
 
-#include "llama.h"
+#include "jarvis.h"
 
 #include "common.h"
 
 #include <string>
 #include <vector>
 
-// common_sampler extends llama_sampler with additional functionality:
+// common_sampler extends jarvis_sampler with additional functionality:
 //
 //  - grammar support
 //  - custom sampler logic based on the parameters
@@ -24,7 +24,7 @@
 // grammar constraints are applied to the full vocabulary and the token is resampled.
 //
 // The common_sampler also maintains a container with the last accepted tokens. In the future, this can
-// be moved into the core llama library.
+// be moved into the core jarvis library.
 //
 // For convenience, the common_sampler also maintains a container with the current candidate tokens.
 // This can be used to access the probabilities of the rest of the non-sampled tokens.
@@ -34,19 +34,19 @@
 
 struct common_sampler;
 
-// llama_sampler API overloads
+// jarvis_sampler API overloads
 
-struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_sampler_params & params);
+struct common_sampler * common_sampler_init(const struct jarvis_model * model, const struct common_sampler_params & params);
 
 void common_sampler_free(struct common_sampler * gsmpl);
 
 // if accept_grammar is true, the token is accepted both by the sampling chain and the grammar
-void                    common_sampler_accept(struct common_sampler * gsmpl, llama_token token, bool accept_grammar);
+void                    common_sampler_accept(struct common_sampler * gsmpl, jarvis_token token, bool accept_grammar);
 void                    common_sampler_reset (struct common_sampler * gsmpl);
 struct common_sampler * common_sampler_clone (struct common_sampler * gsmpl);
 
 // arguments can be nullptr to skip printing
-void common_perf_print(const struct llama_context * ctx, const struct common_sampler * gsmpl);
+void common_perf_print(const struct jarvis_context * ctx, const struct common_sampler * gsmpl);
 
 // extended sampling implementation:
 //
@@ -58,23 +58,23 @@ void common_perf_print(const struct llama_context * ctx, const struct common_sam
 // if grammar_first is true, the grammar is applied before the samplers (slower)
 // useful in cases where all the resulting candidates (not just the sampled one) must fit the grammar
 //
-llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first = false);
+jarvis_token common_sampler_sample(struct common_sampler * gsmpl, struct jarvis_context * ctx, int idx, bool grammar_first = false);
 
 uint32_t common_sampler_get_seed(const struct common_sampler * gsmpl);
 
 // helpers
 
 // access the internal list of current candidate tokens
-llama_token_data_array * common_sampler_get_candidates(struct common_sampler * gsmpl);
+jarvis_token_data_array * common_sampler_get_candidates(struct common_sampler * gsmpl);
 
 // get the last accepted token
-llama_token common_sampler_last(const struct common_sampler * gsmpl);
+jarvis_token common_sampler_last(const struct common_sampler * gsmpl);
 
 // print the sampler chain into a string
 std::string common_sampler_print(const struct common_sampler * gsmpl);
 
 // get a string representation of the last accepted tokens
-std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx, int n);
+std::string common_sampler_prev_str(common_sampler * gsmpl, jarvis_context * ctx, int n);
 
 char        common_sampler_type_to_chr(enum common_sampler_type cnstr);
 std::string common_sampler_type_to_str(enum common_sampler_type cnstr);

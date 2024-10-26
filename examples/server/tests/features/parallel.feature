@@ -1,10 +1,10 @@
-@llama.cpp
+@jarvis.cpp
 @parallel
 Feature: Parallel
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/split/stories15M-00001-of-00003.gguf from HF repo ggml-org/models
+    And   a model file tinyjarviss/split/stories15M-00001-of-00003.gguf from HF repo ggml-org/models
     And   a model file test-model-00001-of-00003.gguf
     And   42 as server seed
     And   128 as batch size
@@ -35,7 +35,7 @@ Feature: Parallel
 
   Scenario Outline: Multi users OAI completions compatibility
     Given a system prompt You are a writer.
-    And   a model tinyllama-2
+    And   a model tinyjarvis-2
     Given a prompt:
       """
       Write a very long book.
@@ -57,7 +57,7 @@ Feature: Parallel
 
   Scenario Outline: Multi users OAI completions compatibility no v1
     Given a system prompt You are a writer.
-    And   a model tinyllama-2
+    And   a model tinyjarvis-2
     Given a prompt:
       """
       Write a very long book.
@@ -79,7 +79,7 @@ Feature: Parallel
 
   Scenario Outline: Multi users with number of prompts exceeding number of slots
     Given a system prompt You are a writer.
-    And   a model tinyllama-2
+    And   a model tinyjarvis-2
     Given a prompt:
       """
       Write a very long book.

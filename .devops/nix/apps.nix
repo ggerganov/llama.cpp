@@ -6,10 +6,10 @@
         let
           inherit (config.packages) default;
           binaries = [
-            "llama-cli"
-            "llama-embedding"
-            "llama-server"
-            "llama-quantize"
+            "jarvis-cli"
+            "jarvis-embedding"
+            "jarvis-server"
+            "jarvis-quantize"
           ];
           mkApp = name: {
             type = "app";

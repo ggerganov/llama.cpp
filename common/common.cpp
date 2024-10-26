@@ -8,7 +8,7 @@
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -48,7 +48,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
-#if defined(LLAMA_USE_CURL)
+#if defined(JARVIS_USE_CURL)
 #include <curl/curl.h>
 #include <curl/easy.h>
 #include <future>
@@ -58,7 +58,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#if defined(LLAMA_USE_CURL)
+#if defined(JARVIS_USE_CURL)
 #ifdef __linux__
 #include <linux/limits.h>
 #elif defined(_WIN32)
@@ -66,8 +66,8 @@
 #else
 #include <sys/syslimits.h>
 #endif
-#define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
-#endif // LLAMA_USE_CURL
+#define JARVIS_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
+#endif // JARVIS_USE_CURL
 
 using json = nlohmann::ordered_json;
 
@@ -364,8 +364,8 @@ bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_MAX_N_THREAD
 }
 
 void common_init() {
-    llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= common_log_verbosity_thold) {
+    jarvis_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
+        if (LOG_DEFAULT_JARVIS <= common_log_verbosity_thold) {
             common_log_add(common_log_main(), level, "%s", text);
         }
     }, NULL);
@@ -376,7 +376,7 @@ void common_init() {
     const char * build_type = " (debug)";
 #endif
 
-    LOG_INF("build: %d (%s) with %s for %s%s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET, build_type);
+    LOG_INF("build: %d (%s) with %s for %s%s\n", JARVIS_BUILD_NUMBER, JARVIS_COMMIT, JARVIS_COMPILER, JARVIS_BUILD_TARGET, build_type);
 }
 
 std::string common_params_get_system_info(const common_params & params) {
@@ -389,9 +389,9 @@ std::string common_params_get_system_info(const common_params & params) {
 #if defined(_WIN32) && (_WIN32_WINNT >= 0x0601) && !defined(__MINGW64__) // windows 7 and later
     // TODO: windows + arm64 + mingw64
     DWORD logicalProcessorCount = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
-    os << " / " << logicalProcessorCount << " | " << llama_print_system_info();
+    os << " / " << logicalProcessorCount << " | " << jarvis_print_system_info();
 #else
-    os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
+    os << " / " << std::thread::hardware_concurrency() << " | " << jarvis_print_system_info();
 #endif
 
     return os.str();
@@ -483,7 +483,7 @@ std::string string_from(const std::vector<int> & values) {
     return buf.str();
 }
 
-std::string string_from(const struct llama_context * ctx, const std::vector<llama_token> & tokens) {
+std::string string_from(const struct jarvis_context * ctx, const std::vector<jarvis_token> & tokens) {
     std::stringstream buf;
 
     buf << "[ ";
@@ -514,7 +514,7 @@ std::string string_from(const struct llama_context * ctx, const std::vector<llam
     return buf.str();
 }
 
-std::string string_from(const struct llama_context * ctx, const struct llama_batch & batch) {
+std::string string_from(const struct jarvis_context * ctx, const struct jarvis_batch & batch) {
     std::stringstream buf;
 
     buf << "[ ";
@@ -586,27 +586,27 @@ void string_process_escapes(std::string & input) {
     input.resize(output_idx);
 }
 
-bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
+bool string_parse_kv_override(const char * data, std::vector<jarvis_model_kv_override> & overrides) {
     const char * sep = strchr(data, '=');
     if (sep == nullptr || sep - data >= 128) {
         LOG_ERR("%s: malformed KV override '%s'\n", __func__, data);
         return false;
     }
-    llama_model_kv_override kvo;
+    jarvis_model_kv_override kvo;
     std::strncpy(kvo.key, data, sep - data);
     kvo.key[sep - data] = 0;
     sep++;
     if (strncmp(sep, "int:", 4) == 0) {
         sep += 4;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+        kvo.tag = JARVIS_KV_OVERRIDE_TYPE_INT;
         kvo.val_i64 = std::atol(sep);
     } else if (strncmp(sep, "float:", 6) == 0) {
         sep += 6;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
+        kvo.tag = JARVIS_KV_OVERRIDE_TYPE_FLOAT;
         kvo.val_f64 = std::atof(sep);
     } else if (strncmp(sep, "bool:", 5) == 0) {
         sep += 5;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
+        kvo.tag = JARVIS_KV_OVERRIDE_TYPE_BOOL;
         if (std::strcmp(sep, "true") == 0) {
             kvo.val_bool = true;
         } else if (std::strcmp(sep, "false") == 0) {
@@ -617,7 +617,7 @@ bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_over
         }
     } else if (strncmp(sep, "str:", 4) == 0) {
         sep += 4;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+        kvo.tag = JARVIS_KV_OVERRIDE_TYPE_STR;
         if (strlen(sep) > 127) {
             LOG_ERR("%s: malformed KV override '%s', value cannot exceed 127 chars\n", __func__, data);
             return false;
@@ -788,8 +788,8 @@ std::string fs_get_cache_directory() {
         }
         return p;
     };
-    if (getenv("LLAMA_CACHE")) {
-        cache_directory = std::getenv("LLAMA_CACHE");
+    if (getenv("JARVIS_CACHE")) {
+        cache_directory = std::getenv("JARVIS_CACHE");
     } else {
 #ifdef __linux__
         if (std::getenv("XDG_CACHE_HOME")) {
@@ -803,7 +803,7 @@ std::string fs_get_cache_directory() {
         cache_directory = std::getenv("LOCALAPPDATA");
 #endif // __linux__
         cache_directory = ensure_trailing_slash(cache_directory);
-        cache_directory += "llama.cpp";
+        cache_directory += "jarvis.cpp";
     }
     return ensure_trailing_slash(cache_directory);
 }
@@ -824,16 +824,16 @@ std::string fs_get_cache_file(const std::string & filename) {
 //
 struct common_init_result common_init_from_params(common_params & params) {
     common_init_result iparams;
-    auto mparams = common_model_params_to_llama(params);
+    auto mparams = common_model_params_to_jarvis(params);
 
-    llama_model * model = nullptr;
+    jarvis_model * model = nullptr;
 
     if (!params.hf_repo.empty() && !params.hf_file.empty()) {
         model = common_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
     } else if (!params.model_url.empty()) {
         model = common_load_model_from_url(params.model_url.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
     } else {
-        model = llama_load_model_from_file(params.model.c_str(), mparams);
+        model = jarvis_load_model_from_file(params.model.c_str(), mparams);
     }
 
     if (model == NULL) {
@@ -844,58 +844,58 @@ struct common_init_result common_init_from_params(common_params & params) {
     if (params.reranking) {
         bool ok = true;
 
-        if (llama_token_bos(model) == LLAMA_TOKEN_NULL) {
+        if (jarvis_token_bos(model) == JARVIS_TOKEN_NULL) {
             LOG_WRN("%s: warning: model does not have a  BOS token, reranking will not work\n", __func__);
             ok = false;
         }
 
-        if (llama_token_eos(model) == LLAMA_TOKEN_NULL) {
+        if (jarvis_token_eos(model) == JARVIS_TOKEN_NULL) {
             LOG_WRN("%s: warning: model does not have an EOS token, reranking will not work\n", __func__);
             ok = false;
         }
 
-        if (llama_token_sep(model) == LLAMA_TOKEN_NULL) {
+        if (jarvis_token_sep(model) == JARVIS_TOKEN_NULL) {
             LOG_WRN("%s: warning: model does not have a  SEP token, reranking will not work\n", __func__);
             ok = false;
         }
 
         if (!ok) {
-            llama_free_model(model);
+            jarvis_free_model(model);
 
             return iparams;
         }
     }
 
-    auto cparams = common_context_params_to_llama(params);
+    auto cparams = common_context_params_to_jarvis(params);
 
-    llama_context * lctx = llama_new_context_with_model(model, cparams);
+    jarvis_context * lctx = jarvis_new_context_with_model(model, cparams);
     if (lctx == NULL) {
         LOG_ERR("%s: failed to create context with model '%s'\n", __func__, params.model.c_str());
-        llama_free_model(model);
+        jarvis_free_model(model);
         return iparams;
     }
 
     if (!params.control_vectors.empty()) {
         if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
-        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = jarvis_n_layer(model);
 
         const auto cvec = common_control_vector_load(params.control_vectors);
         if (cvec.n_embd == -1) {
-            llama_free(lctx);
-            llama_free_model(model);
+            jarvis_free(lctx);
+            jarvis_free_model(model);
 
             return iparams;
         }
 
-        int err = llama_control_vector_apply(lctx,
+        int err = jarvis_control_vector_apply(lctx,
                                              cvec.data.data(),
                                              cvec.data.size(),
                                              cvec.n_embd,
                                              params.control_vector_layer_start,
                                              params.control_vector_layer_end);
         if (err) {
-            llama_free(lctx);
-            llama_free_model(model);
+            jarvis_free(lctx);
+            jarvis_free_model(model);
 
             return iparams;
         }
@@ -906,11 +906,11 @@ struct common_init_result common_init_from_params(common_params & params) {
         common_lora_adapter_container loaded_la;
         loaded_la.path = la.path;
         loaded_la.scale = la.scale;
-        loaded_la.adapter = llama_lora_adapter_init(model, la.path.c_str());
+        loaded_la.adapter = jarvis_lora_adapter_init(model, la.path.c_str());
         if (loaded_la.adapter == nullptr) {
             LOG_ERR("%s: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
-            llama_free(lctx);
-            llama_free_model(model);
+            jarvis_free(lctx);
+            jarvis_free_model(model);
             return iparams;
         }
         iparams.lora_adapters.push_back(loaded_la); // copy to list of loaded adapters
@@ -919,7 +919,7 @@ struct common_init_result common_init_from_params(common_params & params) {
         common_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
-    if (params.sparams.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
+    if (params.sparams.ignore_eos && jarvis_token_eos(model) == JARVIS_TOKEN_NULL) {
         LOG_WRN("%s: warning: model does not have an EOS token, ignoring --ignore-eos\n", __func__);
         params.sparams.ignore_eos = false;
     }
@@ -927,35 +927,35 @@ struct common_init_result common_init_from_params(common_params & params) {
     if (params.warmup) {
         LOG_WRN("%s: warming up the model with an empty run - please wait ... (--no-warmup to disable)\n", __func__);
 
-        std::vector<llama_token> tmp;
-        llama_token bos = llama_token_bos(model);
-        llama_token eos = llama_token_eos(model);
+        std::vector<jarvis_token> tmp;
+        jarvis_token bos = jarvis_token_bos(model);
+        jarvis_token eos = jarvis_token_eos(model);
         // some models (e.g. T5) don't have a BOS token
-        if (bos != LLAMA_TOKEN_NULL) {
+        if (bos != JARVIS_TOKEN_NULL) {
             tmp.push_back(bos);
         }
-        if (eos != LLAMA_TOKEN_NULL) {
+        if (eos != JARVIS_TOKEN_NULL) {
             tmp.push_back(eos);
         }
         if (tmp.empty()) {
             tmp.push_back(0);
         }
 
-        if (llama_model_has_encoder(model)) {
-            llama_encode(lctx, llama_batch_get_one(tmp.data(), tmp.size()));
-            llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
+        if (jarvis_model_has_encoder(model)) {
+            jarvis_encode(lctx, jarvis_batch_get_one(tmp.data(), tmp.size()));
+            jarvis_token decoder_start_token_id = jarvis_model_decoder_start_token(model);
             if (decoder_start_token_id == -1) {
                 decoder_start_token_id = bos;
             }
             tmp.clear();
             tmp.push_back(decoder_start_token_id);
         }
-        if (llama_model_has_decoder(model)) {
-            llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch)));
+        if (jarvis_model_has_decoder(model)) {
+            jarvis_decode(lctx, jarvis_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch)));
         }
-        llama_kv_cache_clear(lctx);
-        llama_synchronize(lctx);
-        llama_perf_context_reset(lctx);
+        jarvis_kv_cache_clear(lctx);
+        jarvis_synchronize(lctx);
+        jarvis_perf_context_reset(lctx);
     }
 
     iparams.model   = model;
@@ -964,17 +964,17 @@ struct common_init_result common_init_from_params(common_params & params) {
     return iparams;
 }
 
-void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters) {
-    llama_lora_adapter_clear(ctx);
+void common_lora_adapters_apply(struct jarvis_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters) {
+    jarvis_lora_adapter_clear(ctx);
     for (auto & la : lora_adapters) {
         if (la.scale != 0.0f) {
-            llama_lora_adapter_set(ctx, la.adapter, la.scale);
+            jarvis_lora_adapter_set(ctx, la.adapter, la.scale);
         }
     }
 }
 
-struct llama_model_params common_model_params_to_llama(const common_params & params) {
-    auto mparams = llama_model_default_params();
+struct jarvis_model_params common_model_params_to_jarvis(const common_params & params) {
+    auto mparams = jarvis_model_default_params();
 
     if (params.n_gpu_layers != -1) {
         mparams.n_gpu_layers = params.n_gpu_layers;
@@ -1025,8 +1025,8 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
     throw std::runtime_error("Unsupported cache type: " + s);
 }
 
-struct llama_context_params common_context_params_to_llama(const common_params & params) {
-    auto cparams = llama_context_default_params();
+struct jarvis_context_params common_context_params_to_jarvis(const common_params & params) {
+    auto cparams = jarvis_context_default_params();
 
     cparams.n_ctx             = params.n_ctx;
     cparams.n_seq_max         = params.n_parallel;
@@ -1056,7 +1056,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
 
     if (params.reranking) {
         cparams.embeddings    = true;
-        cparams.pooling_type  = LLAMA_POOLING_TYPE_RANK;
+        cparams.pooling_type  = JARVIS_POOLING_TYPE_RANK;
     }
 
     cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
@@ -1081,7 +1081,7 @@ struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_p
     return tpp;
 }
 
-#ifdef LLAMA_USE_CURL
+#ifdef JARVIS_USE_CURL
 
 #define CURL_MAX_RETRY 3
 #define CURL_RETRY_DELAY_SECONDS 2
@@ -1279,7 +1279,7 @@ static bool common_download_file(const std::string & url, const std::string & pa
         curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
 
         // helper function to hide password in URL
-        auto llama_download_hide_password_in_url = [](const std::string & url) -> std::string {
+        auto jarvis_download_hide_password_in_url = [](const std::string & url) -> std::string {
             std::size_t protocol_pos = url.find("://");
             if (protocol_pos == std::string::npos) {
                 return url;  // Malformed URL
@@ -1295,7 +1295,7 @@ static bool common_download_file(const std::string & url, const std::string & pa
 
         // start the download
         LOG_INF("%s: trying to download model from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
-            llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
+            jarvis_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
         bool was_perform_successful = curl_perform_with_retry(url, curl.get(), CURL_MAX_RETRY, CURL_RETRY_DELAY_SECONDS);
         if (!was_perform_successful) {
             return false;
@@ -1329,11 +1329,11 @@ static bool common_download_file(const std::string & url, const std::string & pa
     return true;
 }
 
-struct llama_model * common_load_model_from_url(
+struct jarvis_model * common_load_model_from_url(
         const char * model_url,
         const char * path_model,
         const char * hf_token,
-        const struct llama_model_params & params) {
+        const struct jarvis_model_params & params) {
     // Basic validation of the model_url
     if (!model_url || strlen(model_url) == 0) {
         LOG_ERR("%s: invalid model_url\n", __func__);
@@ -1367,17 +1367,17 @@ struct llama_model * common_load_model_from_url(
 
     if (n_split > 1) {
         char split_prefix[PATH_MAX] = {0};
-        char split_url_prefix[LLAMA_CURL_MAX_URL_LENGTH] = {0};
+        char split_url_prefix[JARVIS_CURL_MAX_URL_LENGTH] = {0};
 
         // Verify the first split file format
         // and extract split URL and PATH prefixes
         {
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), path_model, 0, n_split)) {
+            if (!jarvis_split_prefix(split_prefix, sizeof(split_prefix), path_model, 0, n_split)) {
                 LOG_ERR("\n%s: unexpected model file name: %s n_split=%d\n", __func__, path_model, n_split);
                 return NULL;
             }
 
-            if (!llama_split_prefix(split_url_prefix, sizeof(split_url_prefix), model_url, 0, n_split)) {
+            if (!jarvis_split_prefix(split_url_prefix, sizeof(split_url_prefix), model_url, 0, n_split)) {
                 LOG_ERR("\n%s: unexpected model url: %s n_split=%d\n", __func__, model_url, n_split);
                 return NULL;
             }
@@ -1388,10 +1388,10 @@ struct llama_model * common_load_model_from_url(
         for (int idx = 1; idx < n_split; idx++) {
             futures_download.push_back(std::async(std::launch::async, [&split_prefix, &split_url_prefix, &n_split, hf_token](int download_idx) -> bool {
                 char split_path[PATH_MAX] = {0};
-                llama_split_path(split_path, sizeof(split_path), split_prefix, download_idx, n_split);
+                jarvis_split_path(split_path, sizeof(split_path), split_prefix, download_idx, n_split);
 
-                char split_url[LLAMA_CURL_MAX_URL_LENGTH] = {0};
-                llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
+                char split_url[JARVIS_CURL_MAX_URL_LENGTH] = {0};
+                jarvis_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
                 return common_download_file(split_url, split_path, hf_token);
             }, idx));
@@ -1405,19 +1405,19 @@ struct llama_model * common_load_model_from_url(
         }
     }
 
-    return llama_load_model_from_file(path_model, params);
+    return jarvis_load_model_from_file(path_model, params);
 }
 
-struct llama_model * common_load_model_from_hf(
+struct jarvis_model * common_load_model_from_hf(
         const char * repo,
         const char * model,
         const char * path_model,
         const char * hf_token,
-        const struct llama_model_params & params) {
+        const struct jarvis_model_params & params) {
     // construct hugging face model url:
     //
-    //  --repo ggml-org/models --file tinyllama-1.1b/ggml-model-f16.gguf
-    //    https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf
+    //  --repo ggml-org/models --file tinyjarvis-1.1b/ggml-model-f16.gguf
+    //    https://huggingface.co/ggml-org/models/resolve/main/tinyjarvis-1.1b/ggml-model-f16.gguf
     //
     //  --repo TheBloke/Mixtral-8x7B-v0.1-GGUF --file mixtral-8x7b-v0.1.Q4_K_M.gguf
     //    https://huggingface.co/TheBloke/Mixtral-8x7B-v0.1-GGUF/resolve/main/mixtral-8x7b-v0.1.Q4_K_M.gguf
@@ -1433,42 +1433,42 @@ struct llama_model * common_load_model_from_hf(
 
 #else
 
-struct llama_model * common_load_model_from_url(
+struct jarvis_model * common_load_model_from_url(
         const char * /*model_url*/,
         const char * /*path_model*/,
         const char * /*hf_token*/,
-        const struct llama_model_params & /*params*/) {
-    LOG_WRN("%s: llama.cpp built without libcurl, downloading from an url not supported.\n", __func__);
+        const struct jarvis_model_params & /*params*/) {
+    LOG_WRN("%s: jarvis.cpp built without libcurl, downloading from an url not supported.\n", __func__);
     return nullptr;
 }
 
-struct llama_model * common_load_model_from_hf(
+struct jarvis_model * common_load_model_from_hf(
         const char * /*repo*/,
         const char * /*model*/,
         const char * /*path_model*/,
         const char * /*hf_token*/,
-        const struct llama_model_params & /*params*/) {
-    LOG_WRN("%s: llama.cpp built without libcurl, downloading from Hugging Face not supported.\n", __func__);
+        const struct jarvis_model_params & /*params*/) {
+    LOG_WRN("%s: jarvis.cpp built without libcurl, downloading from Hugging Face not supported.\n", __func__);
     return nullptr;
 }
 
-#endif // LLAMA_USE_CURL
+#endif // JARVIS_USE_CURL
 
 //
 // Batch utils
 //
 
-void common_batch_clear(struct llama_batch & batch) {
+void common_batch_clear(struct jarvis_batch & batch) {
     batch.n_tokens = 0;
 }
 
 void common_batch_add(
-                 struct llama_batch & batch,
-                        llama_token   id,
-                          llama_pos   pos,
-    const std::vector<llama_seq_id> & seq_ids,
+                 struct jarvis_batch & batch,
+                        jarvis_token   id,
+                          jarvis_pos   pos,
+    const std::vector<jarvis_seq_id> & seq_ids,
                                bool   logits) {
-    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "llama_batch size exceeded");
+    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "jarvis_batch size exceeded");
 
     batch.token   [batch.n_tokens] = id;
     batch.pos     [batch.n_tokens] = pos;
@@ -1485,26 +1485,26 @@ void common_batch_add(
 // Vocab utils
 //
 
-std::vector<llama_token> common_tokenize(
-  const struct llama_context * ctx,
+std::vector<jarvis_token> common_tokenize(
+  const struct jarvis_context * ctx,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special) {
-    return common_tokenize(llama_get_model(ctx), text, add_special, parse_special);
+    return common_tokenize(jarvis_get_model(ctx), text, add_special, parse_special);
 }
 
-std::vector<llama_token> common_tokenize(
-    const struct llama_model * model,
+std::vector<jarvis_token> common_tokenize(
+    const struct jarvis_model * model,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + 2 * add_special;
-    std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
+    std::vector<jarvis_token> result(n_tokens);
+    n_tokens = jarvis_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
+        int check = jarvis_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -1512,13 +1512,13 @@ std::vector<llama_token> common_tokenize(
     return result;
 }
 
-std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+std::string common_token_to_piece(const struct jarvis_context * ctx, jarvis_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+    const int n_chars = jarvis_token_to_piece(jarvis_get_model(ctx), token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+        int check = jarvis_token_to_piece(jarvis_get_model(ctx), token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -1528,13 +1528,13 @@ std::string common_token_to_piece(const struct llama_context * ctx, llama_token 
     return piece;
 }
 
-std::string common_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
+std::string common_detokenize(jarvis_context * ctx, const std::vector<jarvis_token> & tokens, bool special) {
     std::string text;
     text.resize(std::max(text.capacity(), tokens.size()));
-    int32_t n_chars = llama_detokenize(llama_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+    int32_t n_chars = jarvis_detokenize(jarvis_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
     if (n_chars < 0) {
         text.resize(-n_chars);
-        n_chars = llama_detokenize(llama_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+        n_chars = jarvis_detokenize(jarvis_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
         GGML_ASSERT(n_chars <= (int32_t)text.size());  // whitespace trimming is performed after per-token detokenization
     }
 
@@ -1549,18 +1549,18 @@ std::string common_detokenize(llama_context * ctx, const std::vector<llama_token
 //
 
 bool common_chat_verify_template(const std::string & tmpl) {
-    llama_chat_message chat[] = {{"user", "test"}};
-    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
+    jarvis_chat_message chat[] = {{"user", "test"}};
+    int res = jarvis_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
 }
 
-std::string common_chat_apply_template(const struct llama_model * model,
+std::string common_chat_apply_template(const struct jarvis_model * model,
         const std::string & tmpl,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass) {
     int alloc_size = 0;
     bool fallback = false; // indicate if we must fallback to default chatml
-    std::vector<llama_chat_message> chat;
+    std::vector<jarvis_chat_message> chat;
     for (auto & msg : msgs) {
         chat.push_back({msg.role.c_str(), msg.content.c_str()});
         alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
@@ -1570,17 +1570,17 @@ std::string common_chat_apply_template(const struct llama_model * model,
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    int32_t res = jarvis_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
 
     // error: chat template is not supported
     if (res < 0) {
         if (ptr_tmpl != nullptr) {
             // if the custom "tmpl" is not supported, we throw an error
-            // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
+            // this is a bit redundant (for good), since we're not sure if user validated the custom template with jarvis_chat_verify_template()
             throw std::runtime_error("this custom template is not supported");
         } else {
             // If the built-in template is not supported, we default to chatml
-            res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+            res = jarvis_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
             fallback = true;
         }
     }
@@ -1588,7 +1588,7 @@ std::string common_chat_apply_template(const struct llama_model * model,
     // if it turns out that our buffer is too small, we resize it
     if ((size_t) res > buf.size()) {
         buf.resize(res);
-        res = llama_chat_apply_template(
+        res = jarvis_chat_apply_template(
             fallback ? nullptr : model,
             fallback ? "chatml" : ptr_tmpl,
             chat.data(), chat.size(), add_ass, buf.data(), buf.size());
@@ -1598,7 +1598,7 @@ std::string common_chat_apply_template(const struct llama_model * model,
     return formatted_chat;
 }
 
-std::string common_chat_format_single(const struct llama_model * model,
+std::string common_chat_format_single(const struct jarvis_model * model,
         const std::string & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
@@ -1618,7 +1618,7 @@ std::string common_chat_format_single(const struct llama_model * model,
     return ss.str();
 }
 
-std::string common_chat_format_example(const struct llama_model * model,
+std::string common_chat_format_example(const struct jarvis_model * model,
         const std::string & tmpl) {
     std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant"},
@@ -1633,14 +1633,14 @@ std::string common_chat_format_example(const struct llama_model * model,
 // KV cache utils
 //
 
-void common_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size) {
+void common_kv_cache_dump_view(const jarvis_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = ".123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d",
         view.n_cells, view.n_seq_max, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
 
-    llama_kv_cache_view_cell * c_curr = view.cells;
-    llama_seq_id * cs_curr = view.cells_sequences;
+    jarvis_kv_cache_view_cell * c_curr = view.cells;
+    jarvis_seq_id * cs_curr = view.cells_sequences;
 
     for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_seq_max) {
         if (i % row_size == 0) {
@@ -1656,15 +1656,15 @@ void common_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size) {
     printf("\n=== Done dumping\n");
 }
 
-void common_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size) {
+void common_kv_cache_dump_view_seqs(const jarvis_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d\n",
         view.n_cells, view.n_seq_max, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
 
-    std::unordered_map<llama_seq_id, size_t> seqs;
-    llama_kv_cache_view_cell * c_curr = view.cells;
-    llama_seq_id * cs_curr = view.cells_sequences;
+    std::unordered_map<jarvis_seq_id, size_t> seqs;
+    jarvis_kv_cache_view_cell * c_curr = view.cells;
+    jarvis_seq_id * cs_curr = view.cells_sequences;
 
     for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_seq_max) {
         for (int j = 0; j < view.n_seq_max; j++) {
@@ -1949,12 +1949,12 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
     }
 }
 
-void yaml_dump_non_result_info(FILE * stream, const common_params & params, const llama_context * lctx,
+void yaml_dump_non_result_info(FILE * stream, const common_params & params, const jarvis_context * lctx,
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
     const auto & sparams = params.sparams;
 
-    fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
-    fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
+    fprintf(stream, "build_commit: %s\n",        JARVIS_COMMIT);
+    fprintf(stream, "build_number: %d\n",        JARVIS_BUILD_NUMBER);
     fprintf(stream, "cpu_has_arm_fma: %s\n",     ggml_cpu_has_arm_fma()     ? "true" : "false");
     fprintf(stream, "cpu_has_avx: %s\n",         ggml_cpu_has_avx()         ? "true" : "false");
     fprintf(stream, "cpu_has_avx_vnni: %s\n",    ggml_cpu_has_avx_vnni()    ? "true" : "false");
@@ -1985,7 +1985,7 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
 #endif // NDEBUG
 
     fprintf(stream, "model_desc: %s\n", model_desc);
-    fprintf(stream, "n_vocab: %d  # output size of the final layer, 32001 for some models\n", llama_n_vocab(llama_get_model(lctx)));
+    fprintf(stream, "n_vocab: %d  # output size of the final layer, 32001 for some models\n", jarvis_n_vocab(jarvis_get_model(lctx)));
 
 #ifdef __OPTIMIZE__
     fprintf(stream, "optimize: true\n");
@@ -2087,7 +2087,7 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
     fprintf(stream, "flash_attn: %s # default: false\n", params.flash_attn ? "true" : "false");
     fprintf(stream, "temp: %f # default: 0.8\n", sparams.temp);
 
-    const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + llama_max_devices());
+    const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + jarvis_max_devices());
     yaml_dump_vector_float(stream, "tensor_split", tensor_split_vector);
 
     fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);

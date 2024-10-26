@@ -1,39 +1,39 @@
 #include "arg.h"
 #include "common.h"
-#include "llama.h"
+#include "jarvis.h"
 
 #include <string>
 #include <vector>
 
 // #define GRIT_DEBUG
 
-static std::vector<std::vector<float>> encode(llama_context * ctx, const std::vector<std::string> & sentences, const std::string & instruction) {
+static std::vector<std::vector<float>> encode(jarvis_context * ctx, const std::vector<std::string> & sentences, const std::string & instruction) {
     std::vector<std::vector<float>> result;
 
-    const llama_model * model = llama_get_model(ctx);
+    const jarvis_model * model = jarvis_get_model(ctx);
 
-    llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
+    jarvis_batch batch = jarvis_batch_init(jarvis_n_batch(ctx), 0, 1);
 
     for (uint64_t i = 0; i < sentences.size(); i++) {
         common_batch_clear(batch);
 
         const std::string input_string = instruction + sentences[i];
 
-        std::vector<llama_token> inputs = common_tokenize(model, input_string, true, false);
+        std::vector<jarvis_token> inputs = common_tokenize(model, input_string, true, false);
 
         const int32_t n_toks = inputs.size();
 
         // GritLM seems to have EOS = ""
         // https://github.com/ContextualAI/gritlm/blob/92025b16534712b31b3c4aaaf069350e222bd5f8/gritlm/gritlm.py#L18
-        // inputs.push_back(llama_token_eos(model));
+        // inputs.push_back(jarvis_token_eos(model));
 
         // we want to ignore instruction tokens for mean pooling
         const int32_t n_inst = common_tokenize(model, instruction, true, false).size();
 
 #ifdef GRIT_DEBUG
         // debug tokens - should be matching as referenced in the GritLM sample
-        std::for_each(inputs.begin(), inputs.end(), [&ctx](llama_token t) {
-            std::printf("[%u:%s]", t, llama_token_to_piece(ctx, t).c_str());
+        std::for_each(inputs.begin(), inputs.end(), [&ctx](jarvis_token t) {
+            std::printf("[%u:%s]", t, jarvis_token_to_piece(ctx, t).c_str());
         });
         std::printf("\n");
 #endif
@@ -44,22 +44,22 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         }
 
         // clear previous kv_cache values (irrelevant for embeddings)
-        llama_kv_cache_clear(ctx);
-        llama_set_embeddings(ctx, true);
-        llama_set_causal_attn(ctx, false);
+        jarvis_kv_cache_clear(ctx);
+        jarvis_set_embeddings(ctx, true);
+        jarvis_set_causal_attn(ctx, false);
 
         // run model
-        llama_decode(ctx, batch);
+        jarvis_decode(ctx, batch);
 
         // get embedding dimensions
-        uint64_t n_embd = llama_n_embd(model);
+        uint64_t n_embd = jarvis_n_embd(model);
 
         // allocate embedding output
         std::vector<float> emb_unorm(n_embd, 0.0f);
 
         // sum up all token embeddings
         for (int32_t k = n_inst; k < n_toks; k++) {
-            float * emb = llama_get_embeddings_ith(ctx, k);
+            float * emb = jarvis_get_embeddings_ith(ctx, k);
             for (uint64_t j = 0; j < n_embd; j++) {
                 emb_unorm[j] += emb[j];
             }
@@ -88,24 +88,24 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
 #endif
     }
 
-    llama_batch_free(batch);
+    jarvis_batch_free(batch);
 
     return result;
 }
 
-static std::string generate(llama_context * ctx, llama_sampler * smpl, const std::string & prompt, bool stream) {
+static std::string generate(jarvis_context * ctx, jarvis_sampler * smpl, const std::string & prompt, bool stream) {
     std::string result;
 
-    const llama_model * model = llama_get_model(ctx);
-    llama_token eos_token = llama_token_eos(model);
+    const jarvis_model * model = jarvis_get_model(ctx);
+    jarvis_token eos_token = jarvis_token_eos(model);
 
-    llama_kv_cache_clear(ctx);
-    llama_set_embeddings(ctx, false);
-    llama_set_causal_attn(ctx, true);
+    jarvis_kv_cache_clear(ctx);
+    jarvis_set_embeddings(ctx, false);
+    jarvis_set_causal_attn(ctx, true);
 
-    llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
+    jarvis_batch bat = jarvis_batch_init(jarvis_n_batch(ctx), 0, 1);
 
-    std::vector<llama_token> inputs = common_tokenize(model, prompt, false, true);
+    std::vector<jarvis_token> inputs = common_tokenize(model, prompt, false, true);
     int32_t i_current_token = 0;
 
     while (true) {
@@ -119,9 +119,9 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
         }
         inputs.clear();
 
-        llama_decode(ctx, bat);
+        jarvis_decode(ctx, bat);
 
-        llama_token token = llama_sampler_sample(smpl, ctx, bat.n_tokens - 1);
+        jarvis_token token = jarvis_sampler_sample(smpl, ctx, bat.n_tokens - 1);
 
         if (token == eos_token) {
             break;
@@ -142,7 +142,7 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
         std::printf("\n");
     }
 
-    llama_batch_free(bat);
+    jarvis_batch_free(bat);
 
     return result;
 }
@@ -154,29 +154,29 @@ static std::string gritlm_instruction(const std::string & instruction) {
 int main(int argc, char * argv[]) {
     common_params params;
 
-    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
+    if (!common_params_parse(argc, argv, params, JARVIS_EXAMPLE_COMMON)) {
         return 1;
     }
 
     common_init();
 
-    llama_model_params mparams = common_model_params_to_llama(params);
-    llama_context_params cparams = common_context_params_to_llama(params);
+    jarvis_model_params mparams = common_model_params_to_jarvis(params);
+    jarvis_context_params cparams = common_context_params_to_jarvis(params);
 
-    llama_backend_init();
+    jarvis_backend_init();
 
-    llama_model * model = llama_load_model_from_file(params.model.c_str(), mparams);
+    jarvis_model * model = jarvis_load_model_from_file(params.model.c_str(), mparams);
 
     // create generation context
-    llama_context * ctx = llama_new_context_with_model(model, cparams);
+    jarvis_context * ctx = jarvis_new_context_with_model(model, cparams);
 
-    auto sparams = llama_sampler_chain_default_params();
+    auto sparams = jarvis_sampler_chain_default_params();
 
     sparams.no_perf = false;
 
-    llama_sampler * smpl = llama_sampler_chain_init(sparams);
+    jarvis_sampler * smpl = jarvis_sampler_chain_init(sparams);
 
-    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    jarvis_sampler_chain_add(smpl, jarvis_sampler_init_greedy());
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
@@ -197,7 +197,7 @@ int main(int argc, char * argv[]) {
         const std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
         const std::vector<std::vector<float>> q_rep = encode(ctx, queries,   gritlm_instruction(instruction));
 
-        const int n_embd = llama_n_embd(model);
+        const int n_embd = jarvis_n_embd(model);
 
         const float cosine_sim_q0_d0 = common_embd_similarity_cos(q_rep[0].data(), d_rep[0].data(), n_embd);
         const float cosine_sim_q0_d1 = common_embd_similarity_cos(q_rep[0].data(), d_rep[1].data(), n_embd);
@@ -217,10 +217,10 @@ int main(int argc, char * argv[]) {
         std::string response = generate(ctx, smpl, prompt, true);
     }
 
-    llama_sampler_free(smpl);
-    llama_free(ctx);
-    llama_free_model(model);
-    llama_backend_free();
+    jarvis_sampler_free(smpl);
+    jarvis_free(ctx);
+    jarvis_free_model(model);
+    jarvis_backend_free();
 
     return 0;
 }

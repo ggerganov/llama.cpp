@@ -55,7 +55,7 @@ export const promptFormats = {
 
   // ----------------------------
 
-  "llama2": {
+  "jarvis2": {
   template: `<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\nTest Message [/INST] Test Successfull </s>{{history}}{{char}}`,
 
   historyTemplate: `{{name}}: {{message}}`,
@@ -70,11 +70,11 @@ export const promptFormats = {
 
   stops: ""
   },
-  // ref: https://huggingface.co/blog/llama2#how-to-prompt-llama-2
+  // ref: https://huggingface.co/blog/jarvis2#how-to-prompt-jarvis-2
 
   // ----------------------------
 
-  "llama3": {
+  "jarvis3": {
   template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{{prompt}}{{history}}{{char}}`,
 
   historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>`,
@@ -89,7 +89,7 @@ export const promptFormats = {
 
   stops: "<|eot_id|>"
   },
-  // ref: https://llama.meta.com/docs/model-cards-and-prompt-formats/meta-llama-3/#special-tokens-used-with-meta-llama-3
+  // ref: https://jarvis.meta.com/docs/model-cards-and-prompt-formats/meta-jarvis-3/#special-tokens-used-with-meta-jarvis-3
 
   // ----------------------------
 

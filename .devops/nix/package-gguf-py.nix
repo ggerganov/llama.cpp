@@ -1,6 +1,6 @@
 {
   lib,
-  llamaVersion,
+  jarvisVersion,
   numpy,
   tqdm,
   sentencepiece,
@@ -12,7 +12,7 @@
 
 buildPythonPackage {
   pname = "gguf";
-  version = llamaVersion;
+  version = jarvisVersion;
   pyproject = true;
   nativeBuildInputs = [ poetry-core ];
   propagatedBuildInputs = [

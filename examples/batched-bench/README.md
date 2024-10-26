@@ -1,6 +1,6 @@
-# llama.cpp/example/batched-bench
+# jarvis.cpp/example/batched-bench
 
-Benchmark the batched decoding performance of `llama.cpp`
+Benchmark the batched decoding performance of `jarvis.cpp`
 
 ## Usage
 
@@ -10,16 +10,16 @@ There are 2 modes of operation:
 - `prompt is shared` - there is a common prompt of size `PP` used by all batches (i.e. `N_KV = PP + B*TG`)
 
 ```bash
-./llama-batched-bench -m model.gguf -c 2048 -b 2048 -ub 512 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32 [-pps]
+./jarvis-batched-bench -m model.gguf -c 2048 -b 2048 -ub 512 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32 [-pps]
 
 # LLaMA 7B, F16, N_KV_MAX = 16384 (8GB), prompt not shared
-./llama-batched-bench -m ./models/llama-7b/ggml-model-f16.gguf -c 16384 -b 2048 -ub 512 -ngl 99
+./jarvis-batched-bench -m ./models/jarvis-7b/ggml-model-f16.gguf -c 16384 -b 2048 -ub 512 -ngl 99
 
 # LLaMA 7B, Q8_0, N_KV_MAX = 16384 (8GB), prompt is shared
-./llama-batched-bench -m ./models/llama-7b/ggml-model-q8_0.gguf -c 16384 -b 2048 -ub 512 -ngl 99 -pps
+./jarvis-batched-bench -m ./models/jarvis-7b/ggml-model-q8_0.gguf -c 16384 -b 2048 -ub 512 -ngl 99 -pps
 
 # custom set of batches
-./llama-batched-bench -m ./models/llama-7b/ggml-model-q8_0.gguf -c 2048 -b 512 -ub 512 -ngl 999 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32
+./jarvis-batched-bench -m ./models/jarvis-7b/ggml-model-q8_0.gguf -c 2048 -b 512 -ub 512 -ngl 999 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32
 ```
 
 ## Sample results

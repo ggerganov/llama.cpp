@@ -51,7 +51,7 @@ rm -rf build-ci-debug && mkdir build-ci-debug && cd build-ci-debug
 Setup and trigger a build under debug mode. You may adapt the arguments as needed, but in this case these are sane defaults.
 
 ```bash
-cmake -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON ..
+cmake -DCMAKE_BUILD_TYPE=Debug -DJARVIS_CUDA=1 -DJARVIS_FATAL_WARNINGS=ON ..
 make -j
 ```
 
@@ -71,12 +71,12 @@ This may return output similar to below (focusing on key lines to pay attention 
 
 ```bash
 ...
-1: Test command: ~/llama.cpp/build-ci-debug/bin/test-tokenizer-0 "~/llama.cpp/tests/../models/ggml-vocab-llama-spm.gguf"
+1: Test command: ~/jarvis.cpp/build-ci-debug/bin/test-tokenizer-0 "~/jarvis.cpp/tests/../models/ggml-vocab-jarvis-spm.gguf"
 1: Working Directory: .
 Labels: main
-  Test  #1: test-tokenizer-0-llama-spm
+  Test  #1: test-tokenizer-0-jarvis-spm
 ...
-4: Test command: ~/llama.cpp/build-ci-debug/bin/test-tokenizer-0 "~/llama.cpp/tests/../models/ggml-vocab-falcon.gguf"
+4: Test command: ~/jarvis.cpp/build-ci-debug/bin/test-tokenizer-0 "~/jarvis.cpp/tests/../models/ggml-vocab-falcon.gguf"
 4: Working Directory: .
 Labels: main
   Test  #4: test-tokenizer-0-falcon
@@ -86,8 +86,8 @@ Labels: main
 #### Step 4: Identify Test Command for Debugging
 
 So for test #1 above we can tell these two pieces of relevant information:
-* Test Binary: `~/llama.cpp/build-ci-debug/bin/test-tokenizer-0`
-* Test GGUF Model: `~/llama.cpp/tests/../models/ggml-vocab-llama-spm.gguf`
+* Test Binary: `~/jarvis.cpp/build-ci-debug/bin/test-tokenizer-0`
+* Test GGUF Model: `~/jarvis.cpp/tests/../models/ggml-vocab-jarvis-spm.gguf`
 
 #### Step 5: Run GDB on test command
 
@@ -100,5 +100,5 @@ gdb --args ${Test Binary} ${Test GGUF Model}
 Example:
 
 ```bash
-gdb --args ~/llama.cpp/build-ci-debug/bin/test-tokenizer-0 "~/llama.cpp/tests/../models/ggml-vocab-llama-spm.gguf"
+gdb --args ~/jarvis.cpp/build-ci-debug/bin/test-tokenizer-0 "~/jarvis.cpp/tests/../models/ggml-vocab-jarvis-spm.gguf"
 ```

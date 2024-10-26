@@ -9,21 +9,21 @@ WORKDIR /app
 
 COPY . .
 
-ENV LLAMA_CURL=1
+ENV JARVIS_CURL=1
 
-RUN make -j$(nproc) llama-server
+RUN make -j$(nproc) jarvis-server
 
 FROM ubuntu:$UBUNTU_VERSION AS runtime
 
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev libgomp1 curl
 
-COPY --from=build /app/llama-server /llama-server
+COPY --from=build /app/jarvis-server /jarvis-server
 
 ENV LC_ALL=C.utf8
 # Must be set to 0.0.0.0 so it can listen to requests from host machine
-ENV LLAMA_ARG_HOST=0.0.0.0
+ENV JARVIS_ARG_HOST=0.0.0.0
 
 HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
-ENTRYPOINT [ "/llama-server" ]
+ENTRYPOINT [ "/jarvis-server" ]

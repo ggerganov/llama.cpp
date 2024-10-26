@@ -1,6 +1,6 @@
-package com.example.llama
+package com.example.jarvis
 
-import android.llama.cpp.LLamaAndroid
+import android.jarvis.cpp.JarvisAndroid
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -10,7 +10,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
-class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instance()): ViewModel() {
+class MainViewModel(private val jarvisAndroid: JarvisAndroid = JarvisAndroid.instance()): ViewModel() {
     companion object {
         @JvmStatic
         private val NanosPerSecond = 1_000_000_000.0
@@ -29,7 +29,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
 
         viewModelScope.launch {
             try {
-                llamaAndroid.unload()
+                jarvisAndroid.unload()
             } catch (exc: IllegalStateException) {
                 messages += exc.message!!
             }
@@ -45,7 +45,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         messages += ""
 
         viewModelScope.launch {
-            llamaAndroid.send(text)
+            jarvisAndroid.send(text)
                 .catch {
                     Log.e(tag, "send() failed", it)
                     messages += it.message!!
@@ -58,7 +58,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         viewModelScope.launch {
             try {
                 val start = System.nanoTime()
-                val warmupResult = llamaAndroid.bench(pp, tg, pl, nr)
+                val warmupResult = jarvisAndroid.bench(pp, tg, pl, nr)
                 val end = System.nanoTime()
 
                 messages += warmupResult
@@ -71,7 +71,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
                     return@launch
                 }
 
-                messages += llamaAndroid.bench(512, 128, 1, 3)
+                messages += jarvisAndroid.bench(512, 128, 1, 3)
             } catch (exc: IllegalStateException) {
                 Log.e(tag, "bench() failed", exc)
                 messages += exc.message!!
@@ -82,7 +82,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
     fun load(pathToModel: String) {
         viewModelScope.launch {
             try {
-                llamaAndroid.load(pathToModel)
+                jarvisAndroid.load(pathToModel)
                 messages += "Loaded $pathToModel"
             } catch (exc: IllegalStateException) {
                 Log.e(tag, "load() failed", exc)
