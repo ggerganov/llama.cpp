@@ -17,6 +17,8 @@ GGML_API bool ggml_backend_is_blas(ggml_backend_t backend);
 // for openblas and blis, this will also set the number of threads used for blas operations
 GGML_API void ggml_backend_blas_set_n_threads(ggml_backend_t backend_blas, int n_threads);
 
+GGML_API ggml_backend_reg_t ggml_backend_blas_reg(void);
+
 
 #ifdef  __cplusplus
 }

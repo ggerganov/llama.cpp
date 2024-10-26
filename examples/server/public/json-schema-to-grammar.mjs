@@ -529,7 +529,7 @@ export class SchemaConverter {
       return joinSeq();
     };
 
-    return this._addRule(name, "\"\\\"\" " + toRule(transform()) + " \"\\\"\" space")
+    return this._addRule(name, "\"\\\"\" (" + toRule(transform()) + ") \"\\\"\" space")
   }
 
   _notStrings(strings) {
