@@ -45,8 +45,8 @@ static void print_usage(int argc, char ** argv) {
     (void) argc;
 
     LOG("\nexample usage:\n");
-    LOG("\n  text generation:     %s -m your_model.gguf -p \"I believe the meaning of life is\" -n 128\n", argv[0]);
-    LOG("\n  chat (conversation): %s -m your_model.gguf -p \"You are a helpful assistant\" -cnv\n", argv[0]);
+    LOG("\n  text generation:      -m your_model.gguf -p \"I believe the meaning of life is\" -n 128\n", argv[0]);
+    LOG("\n  chat (conversation):  -m your_model.gguf -p \"You are a helpful assistant\" -cnv\n", argv[0]);
     LOG("\n");
 }
 
