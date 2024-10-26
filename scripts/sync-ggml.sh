@@ -8,6 +8,8 @@ cp -rpv ../ggml/src/ggml.c              ./ggml/src/ggml.c
 cp -rpv ../ggml/src/ggml-aarch64.c      ./ggml/src/ggml-aarch64.c
 cp -rpv ../ggml/src/ggml-aarch64.h      ./ggml/src/ggml-aarch64.h
 cp -rpv ../ggml/src/ggml-alloc.c        ./ggml/src/ggml-alloc.c
+cp -rpv ../ggml/src/ggml-amx/*          ./ggml/src/ggml-amx/
+cp -rpv ../ggml/src/ggml-amx.cpp        ./ggml/src/ggml-amx.cpp
 cp -rpv ../ggml/src/ggml-backend-impl.h ./ggml/src/ggml-backend-impl.h
 cp -rpv ../ggml/src/ggml-backend.cpp    ./ggml/src/ggml-backend.cpp
 cp -rpv ../ggml/src/ggml-cann/*         ./ggml/src/ggml-cann/
@@ -29,6 +31,7 @@ cp -rpv ../ggml/src/vulkan-shaders/*    ./ggml/src/vulkan-shaders/
 
 cp -rpv ../ggml/include/ggml.h         ./ggml/include/ggml.h
 cp -rpv ../ggml/include/ggml-alloc.h   ./ggml/include/ggml-alloc.h
+cp -rpv ../ggml/include/ggml-amx.h     ./ggml/include/ggml-amx.h
 cp -rpv ../ggml/include/ggml-backend.h ./ggml/include/ggml-backend.h
 cp -rpv ../ggml/include/ggml-blas.h    ./ggml/include/ggml-blas.h
 cp -rpv ../ggml/include/ggml-cann.h    ./ggml/include/ggml-cann.h
