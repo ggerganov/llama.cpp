@@ -76,6 +76,7 @@ while read c; do
         src/ggml*.m \
         src/ggml*.metal \
         src/ggml*.cu \
+        src/ggml-amx/* \
         src/ggml-cann/* \
         src/ggml-cuda/* \
         src/ggml-sycl/* \
@@ -121,6 +122,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-aarch64.c      -> ggml/src/ggml-aarch64.c
     # src/ggml-aarch64.h      -> ggml/src/ggml-aarch64.h
     # src/ggml-alloc.c        -> ggml/src/ggml-alloc.c
+    # src/ggml-amx/*          -> ggml/src/ggml-amx/
+    # src/ggml-amx.cpp        -> ggml/src/ggml-amx.cpp
     # src/ggml-backend-impl.h -> ggml/src/ggml-backend-impl.h
     # src/ggml-backend.cpp    -> ggml/src/ggml-backend.cpp
     # src/ggml-cann/*         -> ggml/src/ggml-cann/
@@ -141,6 +144,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     #
     # include/ggml.h         -> ggml/include/ggml.h
     # include/ggml-alloc.h   -> ggml/include/ggml-alloc.h
+    # include/ggml-amx.h     -> ggml/include/ggml-amx.h
     # include/ggml-backend.h -> ggml/include/ggml-backend.h
     # include/ggml-blas.h    -> ggml/include/ggml-blas.h
     # include/ggml-cann.h    -> ggml/include/ggml-cann.h
@@ -168,6 +172,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml-aarch64\.c/\1ggml\/src\/ggml-aarch64.c/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-aarch64\.h/\1ggml\/src\/ggml-aarch64.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-alloc\.c/\1ggml\/src\/ggml-alloc.c/g' \
+        -e 's/([[:space:]]|[ab]\/)src\/ggml-amx\//\1ggml\/src\/ggml-amx\//g' \
+        -e 's/([[:space:]]|[ab]\/)src\/ggml-amx\.cpp/\1ggml\/src\/ggml-amx.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-backend-impl\.h/\1ggml\/src\/ggml-backend-impl.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-backend\.cpp/\1ggml\/src\/ggml-backend.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\//\1ggml\/src\/ggml-cann\//g' \
@@ -187,6 +193,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/vulkan-shaders\//\1ggml\/src\/vulkan-shaders\//g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml\.h/\1ggml\/include\/ggml.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-alloc\.h/\1ggml\/include\/ggml-alloc.h/g' \
+        -e 's/([[:space:]]|[ab]\/)include\/ggml-amx\.h/\1ggml\/include\/ggml-amx.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-backend\.h/\1ggml\/include\/ggml-backend.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-blas\.h/\1ggml\/include\/ggml-blas.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-cann\.h/\1ggml\/include\/ggml-cann.h/g' \
