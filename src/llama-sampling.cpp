@@ -1202,7 +1202,9 @@ static const char * llama_sampler_k_shift_name(const struct llama_sampler * /*sm
 static void llama_sampler_k_shift_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     auto * ctx = (llama_sampler_k_shift *) smpl->ctx;
 
-    if (ctx->k <= 0 || ctx->k_set == true) {
+    if (ctx->k_set == true
+        || ctx->k <= 0
+        || ctx->k >= (int) cur_p->size) {
         return;
     }
 
