@@ -812,6 +812,7 @@ struct server_context {
         slot.sparams.tfs_z              = json_value(data, "tfs_z",              default_sparams.tfs_z);
         slot.sparams.typ_p              = json_value(data, "typical_p",          default_sparams.typ_p);
         slot.sparams.temp               = json_value(data, "temperature",        default_sparams.temp);
+        slot.sparams.temp_adaptive      = json_value(data, "temp_adaptive",      default_sparams.temp_adaptive);
         slot.sparams.dynatemp_range     = json_value(data, "dynatemp_range",     default_sparams.dynatemp_range);
         slot.sparams.dynatemp_exponent  = json_value(data, "dynatemp_exponent",  default_sparams.dynatemp_exponent);
         slot.sparams.penalty_last_n     = json_value(data, "repeat_last_n",      default_sparams.penalty_last_n);
@@ -1142,6 +1143,7 @@ struct server_context {
             {"seed",                      slot.sparams.seed},
             {"seed_cur",                  slot.smpl ? common_sampler_get_seed(slot.smpl) : 0},
             {"temperature",               slot.sparams.temp},
+            {"temp_adaptive",             slot.sparams.temp_adaptive},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
             {"top_k",                     slot.sparams.top_k},

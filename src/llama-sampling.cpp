@@ -1082,6 +1082,55 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
     };
 }
 
+// temp-adaptive
+
+static const char * llama_sampler_temp_adaptive_name(const struct llama_sampler * /*smpl*/) {
+    return "temp-adaptive";
+}
+
+static void llama_sampler_temp_adaptive_apply(struct llama_sampler * /*smpl*/, llama_token_data_array * cur_p) {
+    llama_sampler_softmax_impl(cur_p);
+
+    // calculate entropy
+    float entropy = 0.0f;
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        entropy += -cur_p->data[i].p * logf(cur_p->data[i].p + 1e-9);
+    }
+
+    // calculate beta
+    float beta = 0.0f;
+    if (entropy > 0.5) { // don't overcorrect low-entropy heads
+        beta = -0.037 * powf(entropy, 4)
+             +  0.481 * powf(entropy, 3)
+             + -2.3   * powf(entropy, 2)
+             +  4.917 *      entropy
+             + -1.791;
+        // never increase entropy
+        beta = (beta < 1.0) ? 1.0 : beta;
+    } else {
+        beta = 1.0;
+    }
+
+    // beta = 1 / temp
+    llama_sampler_temp_impl(cur_p, 1.0f / beta);
+}
+
+static struct llama_sampler_i llama_sampler_temp_adaptive_i = {
+    /* .name   = */ llama_sampler_temp_adaptive_name,
+    /* .accept = */ nullptr,
+    /* .apply  = */ llama_sampler_temp_adaptive_apply,
+    /* .reset  = */ nullptr,
+    /* .clone  = */ nullptr,
+    /* .free   = */ nullptr,
+};
+
+struct llama_sampler * llama_sampler_init_temp_adaptive() {
+    return new llama_sampler {
+        /* .iface = */ &llama_sampler_temp_adaptive_i,
+        /* .ctx   = */ nullptr,
+    };
+}
+
 // xtc
 
 struct llama_sampler_xtc {

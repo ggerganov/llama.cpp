@@ -131,11 +131,11 @@ std::string common_sampler_params::print() const {
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
             "\tdry_multiplier = %.3f, dry_base = %.3f, dry_allowed_length = %d, dry_penalty_last_n = %d\n"
-            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, temp = %.3f\n"
+            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, temp = %.3f, temp_adaptive = %d\n"
             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
             penalty_last_n, penalty_repeat, penalty_freq, penalty_present,
             dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n,
-            top_k, tfs_z, top_p, min_p, xtc_probability, xtc_threshold, typ_p, temp,
+            top_k, tfs_z, top_p, min_p, xtc_probability, xtc_threshold, typ_p, temp, temp_adaptive,
             mirostat, mirostat_eta, mirostat_tau);
 
     return std::string(result);
@@ -188,28 +188,34 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     }
                         break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k            (params.top_k));
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p            (params.top_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_MIN_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p            (params.min_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_XTC:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc              (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
                     break;
                 case COMMON_SAMPLER_TYPE_TFS_Z:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free        (params.tfs_z, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_TYPICAL_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical          (params.typ_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                {
+                    if (!params.temp_adaptive) {
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext     (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    } else {
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_adaptive());
+                    }
+                }
                     break;
                 case COMMON_SAMPLER_TYPE_INFILL:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill           (model));
                     break;
                 default:
                     GGML_ASSERT(false && "unknown sampler type");

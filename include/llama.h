@@ -1099,6 +1099,9 @@ extern "C" {
     /// @details Dynamic temperature implementation (a.k.a. entropy) described in the paper https://arxiv.org/abs/2309.02772.
     LLAMA_API struct llama_sampler * llama_sampler_init_temp_ext   (float   t, float   delta, float exponent);
 
+    /// @details Adaptive temperature implementation described in the paper https://arxiv.org/abs/2410.01104.
+    LLAMA_API struct llama_sampler * llama_sampler_init_temp_adaptive   (void);
+
     /// @details XTC sampler as described in https://github.com/oobabooga/text-generation-webui/pull/6335
     LLAMA_API struct llama_sampler * llama_sampler_init_xtc        (float   p, float   t,     size_t min_keep, uint32_t seed);
 

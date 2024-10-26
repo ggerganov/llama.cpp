@@ -1073,6 +1073,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
+        {"--temp-adaptive"},
+        "ignore arguments for temp and dynatemp, and automatically set temperature based on entropy",
+        [](common_params & params) {
+            params.sparams.temp_adaptive = true;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
         {"--mirostat"}, "N",
         string_format("use Mirostat sampling.\nTop K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n"
         "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sparams.mirostat),

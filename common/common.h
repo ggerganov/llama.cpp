@@ -132,6 +132,7 @@ struct common_sampler_params {
     bool    penalize_nl        = false; // consider newlines as a repeatable token
     bool    ignore_eos         = false;
     bool    no_perf            = false; // disable performance metrics
+    bool    temp_adaptive      = false; // enables automatic adaptive setting of temperature
 
     std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
 
