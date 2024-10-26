@@ -1099,16 +1099,16 @@ static void llama_sampler_temp_adaptive_apply(struct llama_sampler * /*smpl*/, l
 
     // calculate beta
     float beta = 0.0f;
-    if (entropy > 0.5) { // don't overcorrect low-entropy heads
-        beta = -0.037 * powf(entropy, 4)
-             +  0.481 * powf(entropy, 3)
-             + -2.3   * powf(entropy, 2)
-             +  4.917 *      entropy
-             + -1.791;
+    if (entropy > 0.5f) { // don't overcorrect low-entropy heads
+        beta = -0.037f * powf(entropy, 4)
+             +  0.481f * powf(entropy, 3)
+             + -2.300f * powf(entropy, 2)
+             +  4.917f *      entropy
+             + -1.791f;
         // never increase entropy
-        beta = (beta < 1.0) ? 1.0 : beta;
+        beta = (beta < 1.0f) ? 1.0f : beta;
     } else {
-        beta = 1.0;
+        beta = 1.0f;
     }
 
     // beta = 1 / temp
