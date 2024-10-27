@@ -267,26 +267,31 @@ static llama_tool_calls parse_generic_tool_calls(const std::string& input) {
 static llama_tool_calls parse_mistral_nemo_tool_calls(const std::string& input) {
     auto content_end = input.find("[TOOL_CALLS]");
     size_t tc_start = std::string::npos;
+
+    llama_tool_calls result;
+    const auto process_tool_calls = [&](const json & tool_calls) {
+        for (const auto & tool_call : tool_calls) {
+            const auto & arguments = tool_call["arguments"];
+            result.tool_calls.push_back({
+                tool_call["name"],
+                arguments.is_string() ? arguments.get<std::string>() : arguments.dump(),
+                tool_call["id"],
+            });
+        }
+    };
     if (content_end != std::string::npos) {
         tc_start = content_end + 12;
+        result.content = input.substr(0, content_end);
+        auto tool_calls = json::parse(input.substr(tc_start));
+        process_tool_calls(tool_calls);
     } else {
         // Somehow not getting [TOOL_CALLS] in the output. Oh well, just do without it.
-        content_end = input.find("[{\"");
-        if (content_end == std::string::npos || content_end > 0) {
-            return {input, {}};
+        try {
+            auto tool_calls = json::parse(input);
+            process_tool_calls(tool_calls);
+        } catch (const json::exception & e) {
+            throw std::runtime_error("Failed to parse tool calls: " + std::string(e.what()) + ":\n" + input);
         }
-        tc_start = content_end;
-    }
-    llama_tool_calls result;
-    result.content = input.substr(0, content_end);
-    auto tool_calls = json::parse(input.substr(tc_start));
-    for (const auto & tool_call : tool_calls) {
-        const auto & arguments = tool_call["arguments"];
-        result.tool_calls.push_back({
-            tool_call["name"],
-            arguments.is_string() ? arguments.get<std::string>() : arguments.dump(),
-            tool_call["id"],
-        });
     }
     return result;
 }
@@ -403,7 +408,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     }
                     : tool_call;
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
-                builder.add_schema("", schema);
+                builder.add_schema("root", schema);
             });
             // TODO: add schema to system prompt.
             auto tweaked_messages = add_system(
@@ -450,11 +455,12 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 if (!parallel) {
                     schema["maxItems"] = 1;
                 }
-                builder.add_schema("", schema);
+                builder.add_schema("root", schema);
             });
             if (allow_content) {
                 handler.grammar_trigger_words.push_back("[TOOL_CALLS]");
                 handler.grammar_trigger_words.push_back("[{\"");
+                handler.grammar_trigger_words.push_back("[ { \"");
             }
             auto tweaked_messages = add_system(messages, "Prefix any tool calls with [TOOL_CALLS]");
             handler.prompt = tmpl.apply(tweaked_messages, tools, /* add_generation_prompt= */ true);

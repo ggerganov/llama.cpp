@@ -1047,7 +1047,7 @@ std::string build_grammar(const std::function<void(const llama_grammar_builder &
             return converter.add_rule(name, rule);
         },
         /* .add_schema = */ [&](const std::string & name, const nlohmann::ordered_json & schema) {
-            return converter.visit(schema, name);
+            return converter.visit(schema, name == "root" ? "" : name);
         },
         /* .resolve_refs = */ [&](nlohmann::ordered_json & schema) {
             converter.resolve_refs(schema, "");

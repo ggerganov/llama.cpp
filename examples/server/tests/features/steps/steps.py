@@ -78,6 +78,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.response_format = None
     context.tools = None
     context.tool_choice = None
+    context.parallel_tool_calls = None
     context.temperature = None
     context.lora_file = None
     context.disable_ctx_shift = False
@@ -393,6 +394,17 @@ def step_tools(context, tools):
 def step_tool_choice(context, tool_choice):
     context.tool_choice = tool_choice
 
+@step('parallel tool calls is {enable_parallel_tool_calls}')
+def step_parallel_tool_calls(context, enable_parallel_tool_calls):
+    if enable_parallel_tool_calls == 'enabled':
+        context.parallel_tool_calls = True
+    elif enable_parallel_tool_calls == 'disabled':
+        context.parallel_tool_calls = False
+    elif enable_parallel_tool_calls == '':
+        context.parallel_tool_calls = None
+    else:
+        raise ValueError(f"invalid value for enable_parallel_tool_calls: {enable_parallel_tool_calls}")
+
 @step('{temperature:f} temperature')
 def step_temperature(context, temperature):
     context.temperature = temperature
@@ -541,6 +553,7 @@ async def step_oai_chat_completions(context, api_error):
                                             if hasattr(context, 'tools') else None,
 
                                             tool_choice=context.tool_choice,
+                                            parallel_tool_calls=context.parallel_tool_calls,
 
                                             user_api_key=context.user_api_key
                                             if hasattr(context, 'user_api_key') else None,
@@ -615,6 +628,7 @@ async def step_oai_chat_completions(context):
                               tools=context.tools
                               if hasattr(context, 'tools') else None,
                               tool_choice=context.tool_choice,
+                              parallel_tool_calls=context.parallel_tool_calls,
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
 
@@ -638,6 +652,7 @@ async def step_oai_chat_completions(context):
                             #   if hasattr(context, 'response_format') else None,
                               tools=context.tools,# if hasattr(context, 'tools') else None,
                               tool_choice=context.tool_choice, # if hasattr(context, 'tool_choice') else None,
+                              parallel_tool_calls=context.parallel_tool_calls,
                               user_api_key=context.user_api_key)
                             #   if hasattr(context, 'user_api_key') else None)
 
@@ -1099,6 +1114,7 @@ async def oai_chat_completions(user_prompt,
                                response_format=None,
                                tools=None,
                                tool_choice=None,
+                               parallel_tool_calls=None,
                                user_api_key=None,
                                expect_api_error=None) -> int | dict[str, Any]:
     if debug:
@@ -1133,6 +1149,8 @@ async def oai_chat_completions(user_prompt,
         payload['tools'] = tools
     if tool_choice is not None:
         payload['tool_choice'] = tool_choice
+    if parallel_tool_calls is not None:
+        payload['parallel_tool_calls'] = parallel_tool_calls
     completion_response = {
         'content': '',
         'timings': {
@@ -1199,6 +1217,7 @@ async def oai_chat_completions(user_prompt,
                 response_format=payload.get('response_format') or openai.NOT_GIVEN,
                 tools=payload.get('tools') or openai.NOT_GIVEN,
                 tool_choice=payload.get('tool_choice') or openai.NOT_GIVEN,
+                parallel_tool_calls=payload.get('parallel_tool_calls', openai.NOT_GIVEN),
                 seed=seed,
                 temperature=payload['temperature']
             )

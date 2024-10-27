@@ -16,7 +16,7 @@ Feature: llama.cpp server
     And   jinja templates are enabled
 
 
-  Scenario Outline: OAI Compatibility w/ tools and required tool_choice
+  Scenario Outline: OAI Compatibility w/ tools and required tool_choice (<template_name> template, <tool_name> tool)
     Given a chat template file ../../../tests/chat/templates/<template_name>.jinja
     And   the server is starting
     And   the server is healthy
@@ -25,22 +25,25 @@ Feature: llama.cpp server
     And   a user prompt write a hello world in python
     And   a tool choice required
     And   tools <tools>
+    And   parallel tool calls is <parallel_tool_calls>
     And   an OAI compatible chat completions request with no api error
     Then  tool <tool_name> is called with arguments <tool_arguments>
 
     Examples: Prompts
-      | template_name                         | n_predict | tool_name | tool_arguments         | tools |
-      | meetkai-functionary-medium-v3.1       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "Yes, you can."} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
-      | meetkai-functionary-medium-v3.2       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | ipython   | {"code": "it and realed at the otter. Asked Dave Dasty, Daisy is a big, shiny blue. As"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
-      | meta-llama-Llama-3.2-3B-Instruct      | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       |
-      | meta-llama-Llama-3.2-3B-Instruct      | 64        | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] |
+      | template_name                         | n_predict | tool_name | tool_arguments         | tools | parallel_tool_calls |
+      | meetkai-functionary-medium-v3.1       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
+      | meetkai-functionary-medium-v3.1       | 128       | ipython   | {"code": "Yes, you can."} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | meetkai-functionary-medium-v3.2       | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
+      | meetkai-functionary-medium-v3.2       | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct | 64        | ipython   | {"code": "it and realed at the otter. Asked Dave Dasty, Daisy is a big, shiny blue. As"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | meta-llama-Llama-3.2-3B-Instruct      | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
+      | meta-llama-Llama-3.2-3B-Instruct      | 64        | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | mistralai-Mistral-Nemo-Instruct-2407  | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
+      | mistralai-Mistral-Nemo-Instruct-2407  | 128       | ipython   | {"code": "It's a small cable."}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
 
 
-  Scenario Outline: OAI Compatibility w/ tools and auto tool_choice
+  Scenario Outline: OAI Compatibility w/ tools and auto tool_choice (<template_name> template)
     Given a chat template file ../../../tests/chat/templates/<template_name>.jinja
     And   the server is starting
     And   the server is healthy
