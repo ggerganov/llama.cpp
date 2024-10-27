@@ -253,7 +253,7 @@ static void test_parsing() {
     };
     auto special_function_call_with_id = json::parse(special_function_call.dump());
     special_function_call_with_id["id"] = "123456789";
-    
+
     auto no_function_call = json::array();
 
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,

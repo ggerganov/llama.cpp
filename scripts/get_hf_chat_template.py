@@ -52,7 +52,9 @@ def main(args):
             ct['name']: ct['template']
             for ct in chat_template
         }
-        format_variants = lambda: ', '.join(f'"{v}"' for v in variants.keys())
+
+        def format_variants():
+            return ', '.join(f'"{v}"' for v in variants.keys())
 
         if variant is None:
             if 'default' not in variants:

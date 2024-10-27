@@ -33,17 +33,22 @@ import shutil
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
+
 def raise_exception(message: str):
     raise ValueError(message)
+
 
 def tojson(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False):
     return json.dumps(x, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
 
+
 TEST_DATE = os.environ.get('TEST_DATE', '2024-07-26')
+
 
 def strftime_now(format):
     now = datetime.datetime.strptime(TEST_DATE, "%Y-%m-%d")
     return now.strftime(format)
+
 
 def handle_chat_template(output_folder, model_id, variant, template_src):
     model_name = model_id.replace("/", "-")
@@ -111,6 +116,7 @@ def handle_chat_template(output_folder, model_id, variant, template_src):
         # Output the line of arguments for the C++ test binary
         print(f"{template_file} {context_file} {output_file}")
 
+
 def main():
     parser = argparse.ArgumentParser(description="Generate chat templates and output test arguments.")
     parser.add_argument("output_folder", help="Folder to store all output files")
@@ -143,6 +149,7 @@ def main():
                     handle_chat_template(output_folder, model_id, ct['name'], ct['template'])
         except Exception as e:
             logger.error(f"Error processing model {model_id}: {e}")
+
 
 if __name__ == '__main__':
     main()
