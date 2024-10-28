@@ -92,7 +92,7 @@ Feature: llama.cpp server
       | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
       | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
       | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q8_0.gguf       | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
-      | ipython   | {"code": "print('Hello, World!')\n"} | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q8_0.gguf    | mistralai-Mistral-Nemo-Instruct-2407          |
+      | ipython   | {"code": "print('Hello, World!')"} | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q8_0.gguf    | mistralai-Mistral-Nemo-Instruct-2407          |
       | ipython   | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q6_K.gguf         | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf  |                                               |
@@ -102,9 +102,8 @@ Feature: llama.cpp server
 
 
   @slow
-  Scenario Outline: Python hello world w/ <hf_repo> + no tool yields no tool call
+  Scenario Outline: Python hello world w/o tools yields no tool call
     Given a model file Phi-3.5-mini-instruct-Q4_K_M.gguf from HF repo bartowski/Phi-3.5-mini-instruct-GGUF
-    And   a test chat template file named <template_override>
     And   no warmup
     And   the server is starting
     And   the server is healthy
