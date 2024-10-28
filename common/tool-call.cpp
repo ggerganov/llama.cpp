@@ -314,7 +314,7 @@ llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tool
         case llama_tool_call_style::Hermes2Pro:
             return parse_hermes_tool_calls(input);
         case llama_tool_call_style::MistralNemo:
-            return parse_mistral_nemo_tool_calls(input);   
+            return parse_mistral_nemo_tool_calls(input);
         default:
             throw std::runtime_error("Unsupported tool call style");
     }
@@ -390,7 +390,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         }},
                         {"required", json::array({"tool_call"})},
                     };
-            const auto schema = 
+            const auto schema =
                 allow_content
                     ? json {
                         {"anyOf", json::array({
@@ -412,7 +412,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             });
             // TODO: add schema to system prompt.
             auto tweaked_messages = add_system(
-                messages, 
+                messages,
                 "Respond in JSON format, either with a request to call tools or with a response to the user's request. Here is the schema for all responses:\n\n```json\n" + schema.dump(2) + "\n```");
             handler.prompt = tmpl.apply(tweaked_messages, tools, /* add_generation_prompt= */ true);
             break;
