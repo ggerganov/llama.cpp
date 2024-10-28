@@ -62,3 +62,10 @@ After changing logic in `steps.py`, ensure that `@bug` and `@wrong_usage` scenar
 ```shell
 ./tests.sh --no-skipped --tags bug,wrong_usage || echo "should failed but compile"
 ```
+
+Some tests (especially `@slow` ones) require model downloads. Since this can time out the tests, you can pre-download them in the cache ahead of time with:
+
+```shell
+pip install -r examples/server/tests/requirements.txt
+python scripts/fetch_server_test_models.py
+```

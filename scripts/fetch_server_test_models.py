@@ -9,12 +9,13 @@
         python scripts/fetch_server_test_models.py
         ( cd examples/server/tests && ./tests.sh --tags=slow )
 '''
-import os
 from behave.parser import Parser
 import glob
-import re
+import os
 from pydantic import BaseModel
+import re
 import subprocess
+import sys
 
 
 class HuggingFaceModel(BaseModel):
@@ -60,8 +61,18 @@ cli_path = os.environ.get(
         os.path.dirname(__file__),
         '../build/bin/Release/llama-cli.exe' if os.name == 'nt' else '../build/bin/llama-cli'))
 
-for m in models:
+for m in sorted(list(models), key=lambda m: m.hf_repo):
     if '<' in m.hf_repo or '<' in m.hf_file:
         continue
+    if '-of-' in m.hf_file:
+        print(f'# Skipping model at {m.hf_repo} / {m.hf_file} because it is a split file', file=sys.stderr)
+        continue
     print(f'# Ensuring model at {m.hf_repo} / {m.hf_file} is fetched')
-    subprocess.check_call([cli_path, '-hfr', m.hf_repo, '-hff', m.hf_file, '-fa', '-n', '1', '-p', 'Hey', '--no-warmup'])
+    cmd = [cli_path, '-hfr', m.hf_repo, '-hff', m.hf_file, '-n', '1', '-p', 'Hey', '--no-warmup', '--log-disable']
+    if m.hf_file != 'tinyllamas/stories260K.gguf':
+        cmd.append('-fa')
+    try:
+        subprocess.check_call(cmd)
+    except subprocess.CalledProcessError:
+        print(f'# Failed to fetch model at {m.hf_repo} / {m.hf_file} with command:\n  {" ".join(cmd)}', file=sys.stderr)
+        exit(1)
