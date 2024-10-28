@@ -13,7 +13,7 @@
 # Cf. https://jade.fyi/blog/flakes-arent-real/ for a more detailed exposition
 # of the relation between Nix and the Nix Flakes.
 {
-  description = "Port of Facebook's LLaMA model in C/C++";
+  description = "Port of Facebook's JARVIS model in C/C++";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

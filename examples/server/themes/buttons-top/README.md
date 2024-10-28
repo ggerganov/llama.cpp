@@ -1,4 +1,4 @@
-# LLaMA.cpp Server Buttons Top Theme
+# JARVIS.cpp Server Buttons Top Theme
 
 Simple tweaks to the UI. Chat buttons at the top of the page instead of bottom so you can hit Stop instead of chasing it down the page.
 

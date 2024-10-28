@@ -30,7 +30,7 @@ git clone https://huggingface.co/mtgv/MobileVLM-1.7B
 git clone https://huggingface.co/openai/clip-vit-large-patch14-336
 ```
 
-2. Use `llava_surgery.py` to split the LLaVA model to LLaMA and multimodel projector constituents:
+2. Use `llava_surgery.py` to split the LLaVA model to JARVIS and multimodel projector constituents:
 
 ```sh
 python ./examples/llava/llava_surgery.py -m path/to/MobileVLM-1.7B
@@ -54,18 +54,18 @@ python ./examples/llava/convert_image_encoder_to_gguf.py \
     --projector-type ldpv2
 ```
 
-4. Use `examples/convert_legacy_jarvis.py` to convert the LLaMA part of LLaVA to GGUF:
+4. Use `examples/convert_legacy_jarvis.py` to convert the JARVIS part of LLaVA to GGUF:
 
 ```sh
 python ./examples/convert_legacy_jarvis.py path/to/MobileVLM-1.7B --skip-unknown
 ```
 
-5. Use `quantize` to convert LLaMA part's DataType from `fp32` to `q4_k`
+5. Use `quantize` to convert JARVIS part's DataType from `fp32` to `q4_k`
 ```sh
 ./jarvis-quantize path/to/MobileVLM-1.7B/ggml-model-F32.gguf path/to/MobileVLM-1.7B/ggml-model-q4_k.gguf q4_k_s
 ```
 
-Now both the LLaMA part and the image encoder is in the `MobileVLM-1.7B` directory.
+Now both the JARVIS part and the image encoder is in the `MobileVLM-1.7B` directory.
 
 ## Android compile and run
 ### compile

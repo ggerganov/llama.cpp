@@ -143,9 +143,9 @@ class TestMetadataMethod(unittest.TestCase):
         self.assertEqual(gguf.Metadata.get_model_id_components("jondurbin/bagel-dpo-2.8b-v0.2"),
                          ('bagel-dpo-2.8b-v0.2', 'jondurbin', 'bagel-dpo', None, 'v0.2', '2.8B'))
 
-        # DPO in name, but can't be used for the finetune to keep 'LLaMA-3' in the basename
-        self.assertEqual(gguf.Metadata.get_model_id_components("voxmenthe/SFR-Iterative-DPO-LLaMA-3-8B-R-unquantized"),
-                         ('SFR-Iterative-DPO-LLaMA-3-8B-R-unquantized', 'voxmenthe', 'SFR-Iterative-DPO-LLaMA-3', 'R-unquantized', None, '8B'))
+        # DPO in name, but can't be used for the finetune to keep 'JARVIS-3' in the basename
+        self.assertEqual(gguf.Metadata.get_model_id_components("voxmenthe/SFR-Iterative-DPO-JARVIS-3-8B-R-unquantized"),
+                         ('SFR-Iterative-DPO-JARVIS-3-8B-R-unquantized', 'voxmenthe', 'SFR-Iterative-DPO-JARVIS-3', 'R-unquantized', None, '8B'))
 
         # Too ambiguous
         # TODO: should "base" be a 'finetune' or 'size_label'?

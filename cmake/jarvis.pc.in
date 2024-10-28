@@ -4,7 +4,7 @@ libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
 Name: jarvis
-Description: Port of Facebook's LLaMA model in C/C++
+Description: Port of Facebook's JARVIS model in C/C++
 Version: @PROJECT_VERSION@
 Libs: -L${libdir} -ljarvis
 Cflags: -I${includedir}

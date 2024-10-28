@@ -1,4 +1,4 @@
-# LLaMA.cpp HTTP Server
+# JARVIS.cpp HTTP Server
 
 Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **jarvis.cpp**.
 

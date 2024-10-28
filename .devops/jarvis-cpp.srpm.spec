@@ -16,7 +16,7 @@
 Name:           jarvis.cpp
 Version:        %( date "+%%Y%%m%%d" )
 Release:        1%{?dist}
-Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
+Summary:        CPU Inference of JARVIS model in pure C/C++ (no CUDA/OpenCL)
 License:        MIT
 Source0:        https://github.com/ggerganov/jarvis.cpp/archive/refs/heads/master.tar.gz
 BuildRequires:  coreutils make gcc-c++ git libstdc++-devel

@@ -38,7 +38,7 @@ git clone https://huggingface.co/openai/clip-vit-large-patch14-336
 pip install -r examples/llava/requirements.txt
 ```
 
-3. Use `llava_surgery.py` to split the LLaVA model to LLaMA and multimodel projector constituents:
+3. Use `llava_surgery.py` to split the LLaVA model to JARVIS and multimodel projector constituents:
 
 ```sh
 python ./examples/llava/llava_surgery.py -m ../llava-v1.5-7b
@@ -50,13 +50,13 @@ python ./examples/llava/llava_surgery.py -m ../llava-v1.5-7b
 python ./examples/llava/convert_image_encoder_to_gguf.py -m ../clip-vit-large-patch14-336 --llava-projector ../llava-v1.5-7b/llava.projector --output-dir ../llava-v1.5-7b
 ```
 
-5. Use `examples/convert_legacy_jarvis.py` to convert the LLaMA part of LLaVA to GGUF:
+5. Use `examples/convert_legacy_jarvis.py` to convert the JARVIS part of LLaVA to GGUF:
 
 ```sh
 python ./examples/convert_legacy_jarvis.py ../llava-v1.5-7b --skip-unknown
 ```
 
-Now both the LLaMA part and the image encoder are in the `llava-v1.5-7b` directory.
+Now both the JARVIS part and the image encoder are in the `llava-v1.5-7b` directory.
 
 ## LLaVA 1.6 gguf conversion
 1) First clone a LLaVA 1.6 model:

@@ -36,7 +36,7 @@ struct jarvis_vocab {
 
     std::map<std::pair<std::string, std::string>, int> bpe_ranks;
 
-    // default LLaMA special tokens
+    // default JARVIS special tokens
     // TODO: should we set all of these to JARVIS_TOKEN_NULL?
     id special_bos_id  = 1;
     id special_eos_id  = 2;

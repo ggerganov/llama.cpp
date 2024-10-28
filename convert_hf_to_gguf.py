@@ -1515,7 +1515,7 @@ class StableLMModel(Model):
                 raise ValueError(f"Unprocessed norms: {norms}")
 
 
-@Model.register("LLaMAForCausalLM", "JarvisForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
+@Model.register("JARVISForCausalLM", "JarvisForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
 class JarvisModel(Model):
     model_arch = gguf.MODEL_ARCH.JARVIS
 

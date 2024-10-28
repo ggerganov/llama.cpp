@@ -24,7 +24,7 @@ with open(fname_tok, 'r', encoding='utf-8') as f:
     print('\nmain : tokenized in', "{:.3f}".format(1000.0 * (t_end - t_start)), 'ms (py)') # noqa: NP100
     with open(fname_out, 'w', encoding='utf-8') as f:
         for x in res:
-            # LLaMA v3 for some reason strips the space for these tokens (and others)
+            # JARVIS v3 for some reason strips the space for these tokens (and others)
             # if x == 662:
             #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
             # elif x == 1174:

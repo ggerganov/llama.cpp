@@ -3127,7 +3127,7 @@ static enum ggml_status ggml_metal_graph_compute(
     // while these nodes are processing, we start n_cb threads to enqueue the rest of the nodes
     // each thread creates it's own command buffer and enqueues the ops in parallel
     //
-    // tests on M1 Pro and M2 Ultra using LLaMA models, show that optimal values for n_cb are 1 or 2
+    // tests on M1 Pro and M2 Ultra using JARVIS models, show that optimal values for n_cb are 1 or 2
 
     @autoreleasepool {
         ctx->gf = gf;

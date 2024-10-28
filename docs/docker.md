@@ -7,7 +7,7 @@
 ## Images
 We have three Docker images available for this project:
 
-1. `ghcr.io/ggerganov/jarvis.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization. (platforms: `linux/amd64`, `linux/arm64`)
+1. `ghcr.io/ggerganov/jarvis.cpp:full`: This image includes both the main executable file and the tools to convert JARVIS models into ggml and convert into 4-bit quantization. (platforms: `linux/amd64`, `linux/arm64`)
 2. `ghcr.io/ggerganov/jarvis.cpp:light`: This image only includes the main executable file. (platforms: `linux/amd64`, `linux/arm64`)
 3. `ghcr.io/ggerganov/jarvis.cpp:server`: This image only includes the server executable file. (platforms: `linux/amd64`, `linux/arm64`)
 
@@ -74,7 +74,7 @@ The defaults are:
 
 The resulting images, are essentially the same as the non-CUDA images:
 
-1. `local/jarvis.cpp:full-cuda`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+1. `local/jarvis.cpp:full-cuda`: This image includes both the main executable file and the tools to convert JARVIS models into ggml and convert into 4-bit quantization.
 2. `local/jarvis.cpp:light-cuda`: This image only includes the main executable file.
 3. `local/jarvis.cpp:server-cuda`: This image only includes the server executable file.
 
@@ -108,7 +108,7 @@ The defaults are:
 
 The resulting images, are essentially the same as the non-MUSA images:
 
-1. `local/jarvis.cpp:full-musa`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
+1. `local/jarvis.cpp:full-musa`: This image includes both the main executable file and the tools to convert JARVIS models into ggml and convert into 4-bit quantization.
 2. `local/jarvis.cpp:light-musa`: This image only includes the main executable file.
 3. `local/jarvis.cpp:server-musa`: This image only includes the server executable file.
 

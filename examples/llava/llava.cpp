@@ -372,7 +372,7 @@ bool llava_validate_embed_size(const jarvis_context * ctx_jarvis, const clip_ctx
     int n_jarvis_embd = jarvis_n_embd(jarvis_get_model(ctx_jarvis));
     auto n_image_embd = clip_n_mmproj_embd(ctx_clip);
     if (n_image_embd != n_jarvis_embd) {
-        LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_jarvis_embd);
+        LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of JARVIS (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_jarvis_embd);
         return false;
     }
     return true;

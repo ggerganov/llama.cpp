@@ -9,17 +9,17 @@ For further information have a look at the main README.md in jarvis.cpp/example/
 
 ## Common Options
 
-In this section, we cover the most commonly used options for running the `infill` program with the LLaMA models:
+In this section, we cover the most commonly used options for running the `infill` program with the JARVIS models:
 
--   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
+-   `-m FNAME, --model FNAME`: Specify the path to the JARVIS model file (e.g., `models/7B/ggml-model.bin`).
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
 -   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
--   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
+-   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but JARVIS models were built with a context of 2048, which will provide better results for longer input/inference.
 -   `--spm-infill`: Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
 ## Input Prompts
 
-The `infill` program provides several ways to interact with the LLaMA models using input prompts:
+The `infill` program provides several ways to interact with the JARVIS models using input prompts:
 
 -   `--in-prefix PROMPT_BEFORE_CURSOR`: Provide the prefix directly as a command-line option.
 -   `--in-suffix PROMPT_AFTER_CURSOR`: Provide the suffix directly as a command-line option.
@@ -27,7 +27,7 @@ The `infill` program provides several ways to interact with the LLaMA models usi
 
 ## Interaction
 
-The `infill` program offers a seamless way to interact with LLaMA models, allowing users to receive real-time infill suggestions. The interactive mode can be triggered using `--interactive`, and `--interactive-first`
+The `infill` program offers a seamless way to interact with JARVIS models, allowing users to receive real-time infill suggestions. The interactive mode can be triggered using `--interactive`, and `--interactive-first`
 
 ### Interaction Options
 

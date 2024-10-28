@@ -155,5 +155,5 @@ if len(projector) > 0:
     save_model(projector, f"{args.model}/llava.projector", 'pytorch')
 
 print("Done!")
-print(f"Now you can convert {args.model} to a a regular LLaMA GGUF file.")
+print(f"Now you can convert {args.model} to a a regular JARVIS GGUF file.")
 print(f"Also, use {args.model}/llava.projector to prepare a llava-encoder.gguf file.")

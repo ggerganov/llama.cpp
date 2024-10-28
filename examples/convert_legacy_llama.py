@@ -276,7 +276,7 @@ class Params:
             rope_finetuned    = rope_finetuned,
         )
 
-    # LLaMA v2 70B params.json
+    # JARVIS v2 70B params.json
     # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
@@ -288,7 +288,7 @@ class Params:
         f_rope_freq_base = None
         n_ff = None
 
-        # hack to determine LLaMA v1 vs v2 vs CodeJarvis
+        # hack to determine JARVIS v1 vs v2 vs CodeJarvis
         if config.get("moe"):
             # Mixtral
             n_ctx = 32768
@@ -296,10 +296,10 @@ class Params:
             # CodeJarvis
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
-            # LLaMA v2
+            # JARVIS v2
             n_ctx = 4096
         else:
-            # LLaMA v1
+            # JARVIS v1
             n_ctx = 2048
 
         if "layers.0.feed_forward.w1.weight" in model:
@@ -467,7 +467,7 @@ class ModelPlus:
 
 
 def merge_sharded(models: list[LazyModel]) -> LazyModel:
-    # Original LLaMA models have each file contain one part of each tensor.
+    # Original JARVIS models have each file contain one part of each tensor.
     # Use a dict instead of a set to preserve order.
     names = {name: None for model in models for name in model}
 
@@ -772,14 +772,14 @@ class OutputFile:
 
     def add_meta_model(self, params: Params, metadata: gguf.Metadata | None) -> None:
         # Metadata About The Model And Its Provenence
-        name = "LLaMA"
+        name = "JARVIS"
         if metadata is not None and metadata.name is not None:
             name = metadata.name
         elif params.path_model is not None:
             name = params.path_model.name
         elif params.n_ctx == 4096:
-            # Heuristic detection of LLaMA v2 model
-            name = "LLaMA v2"
+            # Heuristic detection of JARVIS v2 model
+            name = "JARVIS v2"
 
         self.gguf.add_name(name)
 
@@ -1289,7 +1289,7 @@ def main(args_in: list[str] | None = None) -> None:
     if np.uint32(1) == np.uint32(1).newbyteorder("<"):
         # We currently only support Q8_0 output on little endian systems.
         output_choices.append("q8_0")
-    parser = argparse.ArgumentParser(description="Convert a LLaMA model to a GGML compatible file")
+    parser = argparse.ArgumentParser(description="Convert a JARVIS model to a GGML compatible file")
     parser.add_argument("--dump",         action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single",  action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",   action="store_true",    help="extract only the vocab")
@@ -1366,8 +1366,8 @@ def main(args_in: list[str] | None = None) -> None:
                 msg = """\
                     The model doesn't have a context size, and you didn't specify one with --ctx
                     Please specify one with --ctx:
-                     - LLaMA v1: --ctx 2048
-                     - LLaMA v2: --ctx 4096"""
+                     - JARVIS v1: --ctx 2048
+                     - JARVIS v2: --ctx 4096"""
                 parser.error(textwrap.dedent(msg))
             params.n_ctx = args.ctx
 

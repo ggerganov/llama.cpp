@@ -12,10 +12,10 @@ There are 2 modes of operation:
 ```bash
 ./jarvis-batched-bench -m model.gguf -c 2048 -b 2048 -ub 512 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32 [-pps]
 
-# LLaMA 7B, F16, N_KV_MAX = 16384 (8GB), prompt not shared
+# JARVIS 7B, F16, N_KV_MAX = 16384 (8GB), prompt not shared
 ./jarvis-batched-bench -m ./models/jarvis-7b/ggml-model-f16.gguf -c 16384 -b 2048 -ub 512 -ngl 99
 
-# LLaMA 7B, Q8_0, N_KV_MAX = 16384 (8GB), prompt is shared
+# JARVIS 7B, Q8_0, N_KV_MAX = 16384 (8GB), prompt is shared
 ./jarvis-batched-bench -m ./models/jarvis-7b/ggml-model-q8_0.gguf -c 16384 -b 2048 -ub 512 -ngl 99 -pps
 
 # custom set of batches

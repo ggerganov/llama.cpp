@@ -218,7 +218,7 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     # overridden by importing Nixpkgs with `allowBroken = true`.
     broken = (useMetalKit && !effectiveStdenv.isDarwin);
 
-    description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
+    description = "Inference of JARVIS model in pure C/C++${descriptionSuffix}";
     homepage = "https://github.com/ggerganov/jarvis.cpp/";
     license = lib.licenses.mit;
 

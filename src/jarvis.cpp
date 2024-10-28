@@ -5242,7 +5242,7 @@ bool jarvis_model_loader::get_key(const enum llm_kv kid, enum jarvis_pooling_typ
 
 
 //
-// load LLaMA models
+// load JARVIS models
 //
 
 static const char * jarvis_model_arch_name(llm_arch arch) {
@@ -6489,7 +6489,7 @@ static void llm_load_vocab(
 
     vocab.init_tokenizer();
 
-    // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
+    // determine the newline token: JARVIS "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == JARVIS_VOCAB_TYPE_SPM) {
         try {
             vocab.linefeed_id = jarvis_byte_to_token_impl(vocab, '\n');

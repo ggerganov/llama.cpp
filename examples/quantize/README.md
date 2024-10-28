@@ -7,7 +7,7 @@ Note: It is synced from jarvis.cpp `main` every 6 hours.
 Example usage:
 
 ```bash
-# obtain the official LLaMA model weights and place them in ./models
+# obtain the official JARVIS model weights and place them in ./models
 ls ./models
 jarvis-2-7b tokenizer_checklist.chk tokenizer.model
 # [Optional] for models using BPE tokenizers

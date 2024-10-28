@@ -1,6 +1,6 @@
 # jarvis.cpp/examples/main
 
-This example program allows you to use various LLaMA language models easily and efficiently. It is specifically designed to work with the [jarvis.cpp](https://github.com/ggerganov/jarvis.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with LLaMA models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
+This example program allows you to use various JARVIS language models easily and efficiently. It is specifically designed to work with the [jarvis.cpp](https://github.com/ggerganov/jarvis.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with JARVIS models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
 
 ## Table of Contents
 
@@ -60,20 +60,20 @@ jarvis-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 
 ## Common Options
 
-In this section, we cover the most commonly used options for running the `jarvis-cli` program with the LLaMA models:
+In this section, we cover the most commonly used options for running the `jarvis-cli` program with the JARVIS models:
 
--   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/gemma-1.1-7b-it.Q4_K_M.gguf`; inferred from `--model-url` if set).
+-   `-m FNAME, --model FNAME`: Specify the path to the JARVIS model file (e.g., `models/gemma-1.1-7b-it.Q4_K_M.gguf`; inferred from `--model-url` if set).
 -   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g [https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true)).
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
 -   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
--   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
+-   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but JARVIS models were built with a context of 2048, which will provide better results for longer input/inference.
 -   `-mli, --multiline-input`: Allows you to write or paste multiple lines without ending each in '\'
 -   `-t N, --threads N`: Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has.
 -   `-ngl N, --n-gpu-layers N`: When compiled with GPU support, this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 
 ## Input Prompts
 
-The `jarvis-cli` program provides several ways to interact with the LLaMA models using input prompts:
+The `jarvis-cli` program provides several ways to interact with the JARVIS models using input prompts:
 
 -   `--prompt PROMPT`: Provide a prompt directly as a command-line option.
 -   `--file FNAME`: Provide a file containing a prompt or multiple prompts.
@@ -81,9 +81,9 @@ The `jarvis-cli` program provides several ways to interact with the LLaMA models
 
 ## Interaction
 
-The `jarvis-cli` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.
+The `jarvis-cli` program offers a seamless way to interact with JARVIS models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.
 
-In interactive mode, users can participate in text generation by injecting their input during the process. Users can press `Ctrl+C` at any time to interject and type their input, followed by pressing `Return` to submit it to the LLaMA model. To submit additional lines without finalizing input, users can end the current line with a backslash (`\`) and continue typing.
+In interactive mode, users can participate in text generation by injecting their input during the process. Users can press `Ctrl+C` at any time to interject and type their input, followed by pressing `Return` to submit it to the JARVIS model. To submit additional lines without finalizing input, users can end the current line with a backslash (`\`) and continue typing.
 
 ### Interaction Options
 
@@ -92,11 +92,11 @@ In interactive mode, users can participate in text generation by injecting their
 -   `-cnv,  --conversation`:  Run the program in conversation mode (does not print special tokens and suffix/prefix, use default chat template) (default: false)
 -   `--color`: Enable colorized output to differentiate visually distinguishing between prompts, user input, and generated text.
 
-By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the LLaMA models, tailoring the text generation process to your specific needs.
+By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the JARVIS models, tailoring the text generation process to your specific needs.
 
 ### Reverse Prompts
 
-Reverse prompts are a powerful way to create a chat-like experience with a LLaMA model by pausing the text generation when specific text strings are encountered:
+Reverse prompts are a powerful way to create a chat-like experience with a JARVIS model by pausing the text generation when specific text strings are encountered:
 
 -   `-r PROMPT, --reverse-prompt PROMPT`: Specify one or multiple reverse prompts to pause text generation and switch to interactive mode. For example, `-r "User:"` can be used to jump back into the conversation whenever it's the user's turn to speak. This helps create a more interactive and conversational experience. However, the reverse prompt doesn't work when it ends with a space.
 
@@ -127,11 +127,11 @@ When --in-prefix or --in-suffix options are enabled the chat template ( --chat-t
 
 ## Context Management
 
-During text generation, LLaMA models have a limited context size, which means they can only consider a certain number of tokens from the input and generated text. When the context fills up, the model resets internally, potentially losing some information from the beginning of the conversation or instructions. Context management options help maintain continuity and coherence in these situations.
+During text generation, JARVIS models have a limited context size, which means they can only consider a certain number of tokens from the input and generated text. When the context fills up, the model resets internally, potentially losing some information from the beginning of the conversation or instructions. Context management options help maintain continuity and coherence in these situations.
 
 ### Context Size
 
-- `-c N, --ctx-size N`: Set the size of the prompt context (default: 0, 0 = loaded from model). The LLaMA models were built with a context of 2048-8192, which will yield the best results on longer input/inference.
+- `-c N, --ctx-size N`: Set the size of the prompt context (default: 0, 0 = loaded from model). The JARVIS models were built with a context of 2048-8192, which will yield the best results on longer input/inference.
 
 ### Extended Context Size
 
@@ -145,7 +145,7 @@ The `--keep` option allows users to retain the original prompt when the model ru
 
 -   `--keep N`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
 
-By utilizing context management options like `--ctx-size` and `--keep`, you can maintain a more coherent and consistent interaction with the LLaMA models, ensuring that the generated text remains relevant to the original prompt or conversation.
+By utilizing context management options like `--ctx-size` and `--keep`, you can maintain a more coherent and consistent interaction with the JARVIS models, ensuring that the generated text remains relevant to the original prompt or conversation.
 
 ## Generation Flags
 
@@ -286,7 +286,7 @@ The logit bias option allows you to manually adjust the likelihood of specific t
 
 For example, use `--logit-bias 15043+1` to increase the likelihood of the token 'Hello', or `--logit-bias 15043-1` to decrease its likelihood. Using a value of negative infinity, `--logit-bias 15043-inf` ensures that the token `Hello` is never produced.
 
-A more practical use case might be to prevent the generation of `\code{begin}` and `\code{end}` by setting the `\` token (29905) to negative infinity with `-l 29905-inf`. (This is due to the prevalence of LaTeX codes that show up in LLaMA model inference.)
+A more practical use case might be to prevent the generation of `\code{begin}` and `\code{end}` by setting the `\` token (29905) to negative infinity with `-l 29905-inf`. (This is due to the prevalence of LaTeX codes that show up in JARVIS model inference.)
 
 Example usage: `--logit-bias 29905-inf`
 
@@ -298,7 +298,7 @@ The RNG seed is used to initialize the random number generator that influences t
 
 ## Performance Tuning and Memory Options
 
-These options help improve the performance and memory usage of the LLaMA models. By adjusting these settings, you can fine-tune the model's behavior to better suit your system's capabilities and achieve optimal performance for your specific use case.
+These options help improve the performance and memory usage of the JARVIS models. By adjusting these settings, you can fine-tune the model's behavior to better suit your system's capabilities and achieve optimal performance for your specific use case.
 
 ### Number of Threads
 
@@ -343,7 +343,7 @@ For information about 4-bit quantization, which can significantly improve perfor
 
 ## Additional Options
 
-These options provide extra functionality and customization when running the LLaMA models:
+These options provide extra functionality and customization when running the JARVIS models:
 
 -   `-h, --help`: Display a help message showing all available options and their default values. This is particularly useful for checking the latest options and default values, as they can change frequently, and the information in this document may become outdated.
 -   `--verbose-prompt`: Print the prompt before generating text.

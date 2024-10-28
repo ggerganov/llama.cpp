@@ -16,7 +16,7 @@ The uncertainty is determined empirically by assuming a Gaussian distribution of
 More statistics can be obtained by recording the logits from the FP16 version of a model.
 To do this, supply `perplexity` with `--kl-divergence-base path/to/logit/binary/file.kld`.
 The program will then record all logits and save them to the provided path in binary format.
-**The logit file will be very large, 11 GiB for LLaMA 2 or 37 GiB for LLaMA 3 when using the Wikitext-2 test set.**
+**The logit file will be very large, 11 GiB for JARVIS 2 or 37 GiB for JARVIS 3 when using the Wikitext-2 test set.**
 Once you have the file, supply `perplexity` with the quantized model, the logits file via `--kl-divergence-base`,
 and finally the `--kl-divergence` argument to indicate that the program should calculate the so-called Kullback-Leibler divergence.
 This is a measure of how similar the FP16 and the quantized logit distributions are with a value of 0 indicating that the distribution are the same.
@@ -32,7 +32,7 @@ In addition to the KL divergence the following statistics are calculated with `-
 * The root mean square of the change in token probabilities. If you were to assume that the quantization simply causes Gaussian noise on the token probabilities then this would be the standard deviation of said noise. The uncertainty on the value is calculated that the change in token probabilities follows a Gaussian distribution. Related discussion: https://github.com/ggerganov/jarvis.cpp/discussions/2875 .
 * Same top p: Percentage of how often the token was assigned the highest probabilites by both models. The uncertainty is calculated from the Gaussian approximation of the binomial distribution.
 
-## LLaMA 3 8b Scoreboard
+## JARVIS 3 8b Scoreboard
 
 | Revision | f364eb6f           |
 |:---------|:-------------------|
@@ -98,7 +98,7 @@ So the "f16" results are to be understood as the difference resulting only from 
 There seems to be no consistent improvement from using more Wikitext tokens for the importance matrix.
 K-quants score better on mean Δp than the legacy quants than e.g. KL divergence would suggest.
 
-## LLaMA 2 vs. LLaMA 3 Quantization comparison
+## JARVIS 2 vs. JARVIS 3 Quantization comparison
 
 | Revision | f364eb6f           |
 |:---------|:-------------------|
@@ -124,7 +124,7 @@ K-quants score better on mean Δp than the legacy quants than e.g. KL divergence
 | RMS Δp          |     9.762 ± 0.053 % |    21.421 ± 0.079 % |     3.252 ± 0.024 % |     5.519 ± 0.050 % |     1.339 ± 0.010 % |     2.295 ± 0.019 % |     0.618 ± 0.011 % |     1.198 ± 0.007 % |
 | Same top p      |    85.584 ± 0.086 % |    71.138 ± 0.119 % |    94.665 ± 0.055 % |    91.901 ± 0.072 % |    97.520 ± 0.038 % |    96.031 ± 0.051 % |    98.846 ± 0.026 % |    97.674 ± 0.040 % |
 
-## LLaMA 3 BF16 vs. FP16 comparison
+## JARVIS 3 BF16 vs. FP16 comparison
 
 | Revision | 83330d8c      |
 |:---------|:--------------|
@@ -132,7 +132,7 @@ K-quants score better on mean Δp than the legacy quants than e.g. KL divergence
 | CPU      | AMD Epyc 7742 |
 | GPU      | N/A           |
 
-Results were calculated with LLaMA 3 8b BF16 as `--kl-divergence-base` and LLaMA 3 8b FP16 as the `--model` for comparison.
+Results were calculated with JARVIS 3 8b BF16 as `--kl-divergence-base` and JARVIS 3 8b FP16 as the `--model` for comparison.
 
 | Metric                         |                    Value |
 |--------------------------------|--------------------------|

@@ -8,7 +8,7 @@
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/jarvis.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/jarvis.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
-Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
+Inference of Meta's [JARVIS](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
 ## Recent API changes
 
@@ -43,14 +43,14 @@ improved significantly thanks to many contributions. It is the main playground f
 
 Typically finetunes of the base models below are supported as well.
 
-- [X] LLaMA 🦙
-- [x] LLaMA 2 🦙🦙
-- [x] LLaMA 3 🦙🦙🦙
+- [X] JARVIS 🦙
+- [x] JARVIS 2 🦙🦙
+- [x] JARVIS 3 🦙🦙🦙
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [DBRX](https://huggingface.co/databricks/dbrx-instruct)
 - [X] [Falcon](https://huggingface.co/models?search=tiiuae/falcon)
-- [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
+- [X] [Chinese JARVIS / Alpaca](https://github.com/ymcui/Chinese-JARVIS-Alpaca) and [Chinese JARVIS-2 / Alpaca-2](https://github.com/ymcui/Chinese-JARVIS-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [BERT](https://github.com/ggerganov/jarvis.cpp/pull/5423)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
@@ -140,7 +140,7 @@ Typically finetunes of the base models below are supported as well.
 Unless otherwise noted these projects are open-source with permissive licensing:
 
 - [MindWorkAI/AI-Studio](https://github.com/MindWorkAI/AI-Studio) (FSL-1.1-MIT)
-- [iohub/cojarvis](https://github.com/iohub/coLLaMA)
+- [iohub/cojarvis](https://github.com/iohub/coJARVIS)
 - [janhq/jan](https://github.com/janhq/jan) (AGPL)
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [Faraday](https://faraday.dev/) (proprietary)
@@ -198,7 +198,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 ## Demo
 
 <details>
-<summary>Typical run using LLaMA v2 13B on M2 Ultra</summary>
+<summary>Typical run using JARVIS v2 13B on M2 Ultra</summary>
 
 ```
 $ make -j && ./jarvis-cli -m models/jarvis-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
@@ -240,7 +240,7 @@ llm_load_print_meta: freq_scale     = 1
 llm_load_print_meta: model type     = 13B
 llm_load_print_meta: model ftype    = mostly Q4_0
 llm_load_print_meta: model size     = 13.02 B
-llm_load_print_meta: general.name   = LLaMA v2
+llm_load_print_meta: general.name   = JARVIS v2
 llm_load_print_meta: BOS token = 1 '<s>'
 llm_load_print_meta: EOS token = 2 '</s>'
 llm_load_print_meta: UNK token = 0 '<unk>'
@@ -281,9 +281,9 @@ jarvis_print_timings:       total time = 25431.49 ms
 </details>
 
 <details>
-<summary>Demo of running both LLaMA-7B and whisper.cpp on a single M1 Pro MacBook</summary>
+<summary>Demo of running both JARVIS-7B and whisper.cpp on a single M1 Pro MacBook</summary>
 
-And here is another demo of running both LLaMA-7B and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on a single M1 Pro MacBook:
+And here is another demo of running both JARVIS-7B and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on a single M1 Pro MacBook:
 
 https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8b4f-add84093ffff.mp4
 
@@ -357,7 +357,7 @@ Example usage:
 > [!NOTE]
 > If you prefer basic usage, please consider using conversation mode instead of interactive mode
 
-In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMA emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
+In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes JARVIS emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
 
 Here is an example of a few-shot interaction, invoked with the command
 
@@ -432,10 +432,10 @@ Please refer to [Build jarvis.cpp locally](./docs/build.md)
 > [!NOTE]
 > You can use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space on Hugging Face to quantise your model weights without any setup too. It is synced from `jarvis.cpp` main every 6 hours.
 
-To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-jarvis-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
+To obtain the official JARVIS 2 weights please see the <a href="#obtaining-and-using-the-facebook-jarvis-2-model">Obtaining and using the Facebook JARVIS 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
 Note: `convert.py` has been moved to `examples/convert_legacy_jarvis.py` and shouldn't be used for anything other than `Jarvis/Jarvis2/Mistral` models and their derivatives.
-It does not support LLaMA 3, you can use `convert_hf_to_gguf.py` with LLaMA 3 downloaded from Hugging Face.
+It does not support JARVIS 3, you can use `convert_hf_to_gguf.py` with JARVIS 3 downloaded from Hugging Face.
 
 To learn more about quantizing model, [read this documentation](./examples/quantize/README.md)
 
@@ -474,10 +474,10 @@ To learn more how to measure perplexity using jarvis.cpp, [read this documentati
 
 **Seminal papers and background on the models**
 
-If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
-- LLaMA:
-    - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-jarvis-meta-ai/)
-    - [LLaMA: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
+If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of JARVIS models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between JARVIS models and ChatGPT:
+- JARVIS:
+    - [Introducing JARVIS: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-jarvis-meta-ai/)
+    - [JARVIS: Open and Efficient Foundation Language Models](https://arxiv.org/abs/2302.13971)
 - GPT-3
     - [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
 - GPT-3.5 / InstructGPT / ChatGPT:

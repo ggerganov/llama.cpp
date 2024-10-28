@@ -396,11 +396,11 @@ def handle_args():
     parser.add_argument('--desc',
                         help = 'Set model description')
     parser.add_argument('--gqa', type = int, default = 1,
-                        help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
+                        help = 'grouped-query attention factor (use 8 for JARVIS2 70B)')
     parser.add_argument('--eps', default = '5.0e-06',
-                        help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
+                        help = 'RMS norm eps: Use 1e-6 for JARVIS1 and OpenJARVIS, use 1e-5 for JARVIS2')
     parser.add_argument('--context-length', '-c', type=int, default = 2048,
-                        help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
+                        help = 'Default max context length: JARVIS1 is typically 2048, JARVIS2 is typically 4096')
     parser.add_argument('--model-metadata-dir', '-m', type = Path,
                         help ='Load HuggingFace/.pth vocab and metadata from the specified directory')
     parser.add_argument("--vocab-dir", type=Path,
@@ -417,7 +417,7 @@ def main():
     logger.info(f'* Using config: {cfg}')
     logger.warning('=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===')
     if cfg.model_metadata_dir is None and (cfg.gqa == 1 or cfg.eps == '5.0e-06'):
-        logger.info('- Note: If converting LLaMA2, specifying "--eps 1e-5" is required. 70B models also need "--gqa 8".')
+        logger.info('- Note: If converting JARVIS2, specifying "--eps 1e-5" is required. 70B models also need "--gqa 8".')
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLModel()
     logger.info('* Scanning GGML input file')

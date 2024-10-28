@@ -390,7 +390,7 @@ function gg_run_open_jarvis_7b_v2 {
 function gg_sum_open_jarvis_7b_v2 {
     gg_printf '### %s\n\n' "${ci}"
 
-    gg_printf 'OpenLLaMA 7B-v2:\n'
+    gg_printf 'OpenJARVIS 7B-v2:\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
     gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"

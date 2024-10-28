@@ -26,7 +26,7 @@ For maximum security when handling untrusted inputs, you may need to employ the 
 
 * Sandboxing: Isolate the environment where the inference happens.
 * Pre-analysis: Check how the model performs by default when exposed to prompt injection (e.g. using [fuzzing for prompt injection](https://github.com/FonduAI/awesome-prompt-injection?tab=readme-ov-file#tools)). This will give you leads on how hard you will have to work on the next topics.
-* Updates: Keep both LLaMA C++ and your libraries updated with the latest security patches.
+* Updates: Keep both JARVIS C++ and your libraries updated with the latest security patches.
 * Input Sanitation: Before feeding data to the model, sanitize inputs rigorously. This involves techniques such as:
     * Validation: Enforce strict rules on allowed characters and data types.
     * Filtering: Remove potentially malicious scripts or code fragments.
@@ -57,7 +57,7 @@ If you intend to run multiple models in parallel with shared memory, it is your 
 
 ## Reporting a vulnerability
 
-Beware that none of the topics under [Using jarvis.cpp securely](#using-jarviscpp-securely) are considered vulnerabilities of LLaMA C++.
+Beware that none of the topics under [Using jarvis.cpp securely](#using-jarviscpp-securely) are considered vulnerabilities of JARVIS C++.
 
 <!-- normal version -->
 However, If you have discovered a security vulnerability in this project, please report it privately. **Do not disclose it as a public issue.** This gives us time to work with you to fix the issue before public exposure, reducing the chance that the exploit will be used before a patch is released.
