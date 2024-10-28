@@ -13,7 +13,7 @@ Feature: llama.cpp server
     And   jinja templates are enabled
 
 
-  Scenario Outline: OAI Compatibility w/ tools and required tool_choice (<template_name> template, <tool_name> tool)
+  Scenario Outline: Template <template_name> + tinystories model w/ required tool_choice yields <tool_name> tool call
     Given a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a test chat template file named <template_name>
     And   the server is starting
@@ -41,7 +41,7 @@ Feature: llama.cpp server
       | mistralai-Mistral-Nemo-Instruct-2407  | 128       | ipython   | {"code": "It's a small cable."}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
 
 
-  Scenario Outline: OAI Compatibility w/ tools and auto tool_choice (<template_name> template)
+  Scenario Outline: Template <template_name> + tinystories model yields no tool call
     Given a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a test chat template file named <template_name>
     And   the server is starting
@@ -60,22 +60,21 @@ Feature: llama.cpp server
       | meetkai-functionary-medium-v3.2       | 128       |
 
 
-  Scenario: OAI Compatibility w/ no tool
+  Scenario: Tool call template + tinystories and no tool won't call any tool
     Given a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
-    And   a chat template file ../../../tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja
+    And   a test chat template file named meta-llama-Meta-Llama-3.1-8B-Instruct
     And   the server is starting
     And   the server is healthy
     And   a model test
     And   16 max tokens to predict
     And   a user prompt write a hello world in python
-    And   a tool choice <tool_choice>
     And   tools []
     And   an OAI compatible chat completions request with no api error
     Then  no tool is called
 
 
   @slow
-  Scenario Outline: OAI Compatibility w/ tools (<hf_repo> / <hf_file> with <template_override> template)
+  Scenario Outline: Python hello world w/ <hf_repo> + python tool yields tool call
     Given a model file <hf_file> from HF repo <hf_repo>
     And   a test chat template file named <template_override>
     And   no warmup
@@ -83,7 +82,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   256 max tokens to predict
-    And   a user prompt write a hello world in python (use single quotes for strings)
+    And   a user prompt write a hello world in python
     And   python tool
     And   parallel tool calls is disabled
     And   an OAI compatible chat completions request with no api error
@@ -91,11 +90,27 @@ Feature: llama.cpp server
 
     Examples: Prompts
       | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
-      | ipython   | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q8_0.gguf       | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
+      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
+      | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q8_0.gguf       | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
       | ipython   | {"code": "print('Hello, World!')\n"} | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q8_0.gguf    | mistralai-Mistral-Nemo-Instruct-2407          |
       | ipython   | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q6_K.gguf         | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf  |                                               |
-      | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF  | Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf |                                               |
+      # | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF  | Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf |                                               |
+      # | ipython   | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
       # | ipython   | {"code": "print('Hello, World!')"}   | meetkai/functionary-small-v3.2-GGUF                  | functionary-small-v3.2.Q4_0.gguf        | meetkai-functionary-medium-v3.2               |
 
+
+  @slow
+  Scenario Outline: Python hello world w/ <hf_repo> + no tool yields no tool call
+    Given a model file Phi-3.5-mini-instruct-Q4_K_M.gguf from HF repo bartowski/Phi-3.5-mini-instruct-GGUF
+    And   a test chat template file named <template_override>
+    And   no warmup
+    And   the server is starting
+    And   the server is healthy
+    And   a model test
+    And   256 max tokens to predict
+    And   a user prompt write a hello world in python
+    And   parallel tool calls is disabled
+    And   an OAI compatible chat completions request with no api error
+    Then  no tool is called

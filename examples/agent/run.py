@@ -80,7 +80,7 @@ async def main(
     tool_map, tools = await discover_tools(tools or [], verbose)
 
     sys.stdout.write(f'🛠️  Tools: {", ".join(tool_map.keys()) if tool_map else "<none>"}\n')
-    
+
     try:
 
         messages = []
@@ -171,7 +171,7 @@ async def main(
                 role='user',
                 content=input('💬 ')
             ))
-            
+
     except aiohttp.ClientResponseError as e:
         sys.stdout.write(f'💥 {e}\n')
         sys.exit(1)

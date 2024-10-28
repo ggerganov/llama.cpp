@@ -4,13 +4,14 @@
 import asyncio
 import json
 import os
+import parse
 import re
+import requests
 import socket
 import subprocess
 import sys
 import threading
 import time
-import requests
 from collections.abc import Sequence
 from contextlib import closing
 from re import RegexFlag
@@ -1617,7 +1618,10 @@ def start_server_background(context):
 
     def server_log(in_stream, out_stream):
         for line in iter(in_stream.readline, b''):
-            print(line.decode('utf-8'), end='', file=out_stream)
+            try:
+                print(line.decode('utf-8'), end='', file=out_stream)
+            except UnicodeDecodeError:
+                print(line, end='', file=out_stream)
 
     thread_stdout = threading.Thread(target=server_log, args=(context.server_process.stdout, sys.stdout))
     thread_stdout.start()

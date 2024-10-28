@@ -462,8 +462,8 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 handler.grammar_trigger_words.push_back("[{\"");
                 handler.grammar_trigger_words.push_back("[ { \"");
             }
-            auto tweaked_messages = add_system(messages, "Prefix any tool calls with [TOOL_CALLS]");
-            handler.prompt = tmpl.apply(tweaked_messages, tools, /* add_generation_prompt= */ true);
+            // auto tweaked_messages = add_system(messages, "You are a helpful AI with tool calling capabilities. Prefix any tool calls with [TOOL_CALLS]");
+            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             break;
         }
         case llama_tool_call_style::Llama31:
