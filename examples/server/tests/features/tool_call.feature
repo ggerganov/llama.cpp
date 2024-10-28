@@ -91,14 +91,14 @@ Feature: llama.cpp server
     Examples: Prompts
       | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
       | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
-      | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q8_0.gguf       | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
-      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q8_0.gguf    | mistralai-Mistral-Nemo-Instruct-2407          |
+      | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
+      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  | mistralai-Mistral-Nemo-Instruct-2407          |
       | ipython   | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
-      | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q6_K.gguf         | meta-llama-Llama-3.2-3B-Instruct              |
-      | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf  |                                               |
+      | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
+      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q4_K_M.gguf      | meetkai-functionary-medium-v3.2               |
       # | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF  | Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf |                                               |
       # | ipython   | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
-      # | ipython   | {"code": "print('Hello, World!')"}   | meetkai/functionary-small-v3.2-GGUF                  | functionary-small-v3.2.Q4_0.gguf        | meetkai-functionary-medium-v3.2               |
 
 
   @slow
@@ -133,7 +133,7 @@ Feature: llama.cpp server
 
   @slow
   Scenario: Parallel tool calls
-    Given a model file Mistral-Nemo-Instruct-2407-Q8_0.gguf from HF repo bartowski/Mistral-Nemo-Instruct-2407-GGUF
+    Given a model file Mistral-Nemo-Instruct-2407-Q4_K_M.gguf from HF repo bartowski/Mistral-Nemo-Instruct-2407-GGUF
     And   a test chat template file named mistralai-Mistral-Nemo-Instruct-2407
     And   no warmup
     And   the server is starting

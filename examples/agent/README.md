@@ -34,7 +34,7 @@
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-1B-Instruct-GGUF -hff Llama-3.2-1B-Instruct-Q4_K_M.gguf \
     --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
-  
+
   # Mistral NeMo
   ./llama-server --jinja -fa --verbose \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \

@@ -73,7 +73,7 @@ async def main(
 ):
     if not tools:
         tools = ["http://localhost:8088"]
-    
+
     provider_info = _PROVIDERS[provider]
     if endpoint is None:
         endpoint = provider_info['endpoint']
