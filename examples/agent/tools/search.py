@@ -9,17 +9,12 @@ import requests
 
 
 def _extract_values(keys, obj):
-    values = {}
-    for k in keys:
-        v = obj.get(k)
-        if v is not None:
-            values[k] = v
-    return values
+    return dict((k, v) for k in keys if (v := obj.get(k)) is not None)
 
 
 # Let's keep this tool aligned w/ llama_stack.providers.impls.meta_reference.agents.tools.builtin.BraveSearch
 # (see https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/impls/meta_reference/agents/tools/builtin.py)
-_result_keys_by_type = {
+_brave_search_result_keys_by_type = {
     'web':       ('type', 'title', 'url', 'description', 'date', 'extra_snippets'),
     'videos':    ('type', 'title', 'url', 'description', 'date'),
     'news':      ('type', 'title', 'url', 'description'),
@@ -54,7 +49,7 @@ async def brave_search(*, query: str) -> List[Dict]:
         # print("SEARCH RESPONSE: " + json.dumps(search_response, indent=2))
         for m in search_response['mixed']['main']:
             result_type = m['type']
-            keys = _result_keys_by_type.get(result_type)
+            keys = _brave_search_result_keys_by_type.get(result_type)
             if keys is None:
                 logging.warning(f'[brave_search] Unknown result type: %s', result_type)
                 continue

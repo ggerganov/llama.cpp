@@ -7,11 +7,6 @@
   ```bash
   make -j LLAMA_CURL=1 llama-server
 
-  # Mistral NeMo
-  ./llama-server --jinja -fa --verbose \
-    -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )"
-
   # Nous Hermes 2 Pro Llama 3 8B
   ./llama-server --jinja -fa --verbose \
     -hfr NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF -hff Hermes-2-Pro-Llama-3-8B-Q8_0.gguf \
@@ -39,6 +34,11 @@
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-1B-Instruct-GGUF -hff Llama-3.2-1B-Instruct-Q4_K_M.gguf \
     --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
+  
+  # Mistral NeMo
+  ./llama-server --jinja -fa --verbose \
+    -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
+    --chat-template "$( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )"
   ```
 
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container for *some* level of isolation (+ sneaky logging of outgoing http and https traffic: you wanna watch over those agents' shoulders for the time being 🧐). Check http://localhost:8088/docs to see the tools exposed.
@@ -54,8 +54,7 @@
 - Run the agent with some goal
 
   ```bash
-  uv run examples/agent/run.py --tools http://localhost:8088 \
-    "What is the sum of 2535 squared and 32222000403?"
+  uv run examples/agent/run.py "What is the sum of 2535 squared and 32222000403?"
   ```
 
   <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
@@ -70,8 +69,7 @@
   </details>
 
   ```bash
-  uv run examples/agent/run.py --tools http://localhost:8088 \
-    "What is the best BBQ joint in Laguna Beach?"
+  uv run examples/agent/run.py "What is the best BBQ joint in Laguna Beach?"
   ```
 
   <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
@@ -86,8 +84,7 @@
   </details>
 
   ```bash
-  uv run examples/agent/run.py --tools http://localhost:8088 \
-    "Search for, fetch and summarize the homepage of llama.cpp"
+  uv run examples/agent/run.py "Search for, fetch and summarize the homepage of llama.cpp"
   ```
 
   <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
@@ -109,9 +106,7 @@
   export OPENAI_API_KEY=...     # for --provider=openai    https://platform.openai.com/api-keys
   export TOGETHER_API_KEY=...   # for --provider=together  https://api.together.ai/settings/api-keys
   export GROQ_API_KEY=...       # for --provider=groq      https://console.groq.com/keys
-  uv run examples/agent/run.py --tools http://localhost:8088 \
-    "Search for, fetch and summarize the homepage of llama.cpp" \
-    --provider=openai
+  uv run examples/agent/run.py "Search for, fetch and summarize the homepage of llama.cpp" --provider=openai
   ```
 
 ## TODO

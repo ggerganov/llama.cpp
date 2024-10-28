@@ -15,7 +15,7 @@ def _strip_ansi_codes(text):
 
 def python(code: str) -> str:
     '''
-    Execute Python code in a siloed environment using IPython and returns the output.
+    Execute Python code in a siloed environment using IPython and return the output.
 
     Parameters:
         code (str): The Python code to execute.
