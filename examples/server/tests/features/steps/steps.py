@@ -20,13 +20,20 @@ import aiohttp
 import numpy as np
 import openai
 from openai.types.chat import ChatCompletionChunk
-from behave import step  # pyright: ignore[reportAttributeAccessIssue]
+from behave import register_type, step  # pyright: ignore[reportAttributeAccessIssue]
 from behave.api.async_step import async_run_until_complete
 from prometheus_client import parser
 
 # pyright: reportRedeclaration=false
 
 DEFAULT_TIMEOUT_SECONDS = aiohttp.ClientTimeout(total=600)
+
+@parse.with_pattern(r".*")
+def parse_maybe_empty_string(text):
+     return text.strip()
+
+register_type(MaybeEmptyString=parse_maybe_empty_string)
+
 
 @step("a server listening on {server_fqdn}:{server_port}")
 def step_server_config(context, server_fqdn: str, server_port: str):
@@ -82,6 +89,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.temperature = None
     context.lora_file = None
     context.disable_ctx_shift = False
+    context.warmup = True
     context.use_jinja = False
     context.chat_template_file = None
 
@@ -98,7 +106,6 @@ def step_server_config(context, server_fqdn: str, server_port: str):
 def step_download_hf_model(context, hf_file: str, hf_repo: str):
     context.model_hf_repo = hf_repo
     context.model_hf_file = hf_file
-    context.model_file = os.path.basename(hf_file)
 
 @step('a lora adapter file from {lora_file_url}')
 def step_download_lora_file(context, lora_file_url: str):
@@ -172,9 +179,21 @@ def step_use_jinja(context):
     context.use_jinja = True
 
 
+@step('no warmup')
+def step_no_warmup(context):
+    context.warmup = False
+
+
 @step('a chat template file {file}')
-def step_use_jinja(context, file):
+def step_chat_template_file(context, file):
     context.chat_template_file = file
+
+
+@step('a test chat template file named {name:MaybeEmptyString}')
+def step_test_chat_template_file_named(context, name):
+    name = name.strip()
+    if name:
+        context.chat_template_file = f'../../../tests/chat/templates/{name}.jinja'
 
 
 @step('using slot id {id_slot:d}')
@@ -389,6 +408,29 @@ def step_response_format(context, response_format):
 @step('tools {tools}')
 def step_tools(context, tools):
     context.tools = json.loads(tools)
+
+
+@step('python tool')
+def step_python_tool(context):
+    if not context.tools:
+        context.tools = []
+    context.tools.append({
+        "type": "function",
+        "function": {
+            "name": "ipython",
+            "description": "",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": ""
+                    }
+                },
+                "required": ["code"]
+            }
+        }
+    })
 
 @step('a tool choice {tool_choice}')
 def step_tool_choice(context, tool_choice):
@@ -1552,6 +1594,8 @@ def start_server_background(context):
         server_args.extend(['--lora', context.lora_file])
     if context.disable_ctx_shift:
         server_args.extend(['--no-context-shift'])
+    if not context.warmup:
+        server_args.extend(['--no-warmup'])
 
     args = [str(arg) for arg in [context.server_path, *server_args]]
     print(f"bench: starting server with: {' '.join(args)}")
