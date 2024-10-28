@@ -114,11 +114,12 @@ extern "C" {
     //
 
     enum ggml_backend_dev_type {
+        // CPU device using system memory
         GGML_BACKEND_DEVICE_TYPE_CPU,
+        // GPU device using dedicated memory
         GGML_BACKEND_DEVICE_TYPE_GPU,
-        // devices with full capabilities (excludes backends such as BLAS that only support matrix multiplication)
-        GGML_BACKEND_DEVICE_TYPE_CPU_FULL,
-        GGML_BACKEND_DEVICE_TYPE_GPU_FULL
+        // accelerator devices intended to be used together with the CPU backend (e.g. BLAS or AMX)
+        GGML_BACKEND_DEVICE_TYPE_ACCEL
     };
 
     // functionality supported by the device
@@ -168,9 +169,10 @@ extern "C" {
     GGML_API void *             ggml_backend_reg_get_proc_address(ggml_backend_reg_t reg, const char * name);
 
 
-    // Functions that may be obtained using ggml_backend_reg_get_proc_address
-    typedef ggml_backend_buffer_type_t (*ggml_backend_split_buffer_type_t)(const float *);
-    typedef void (*ggml_backend_set_n_threads_t)(ggml_backend_t, int);
+    // Common functions that may be obtained using ggml_backend_reg_get_proc_address
+    typedef ggml_backend_buffer_type_t   (*ggml_backend_split_buffer_type_t)(int main_device, const float * tensor_split);
+    typedef void                         (*ggml_backend_set_n_threads_t)(ggml_backend_t backend, int n_threads);
+    typedef ggml_backend_buffer_type_t * (*ggml_backend_dev_get_extra_bufts_t)(ggml_backend_dev_t device);
 
     //
     // Backend registry
@@ -192,7 +194,7 @@ extern "C" {
     GGML_API ggml_backend_t ggml_backend_init_by_name(const char * name, const char * params);
     // = ggml_backend_dev_init(ggml_backend_dev_by_type(type), params)
     GGML_API ggml_backend_t ggml_backend_init_by_type(enum ggml_backend_dev_type type, const char * params);
-    // = ggml_backend_dev_init(ggml_backend_dev_by_type(GPU_FULL) OR ggml_backend_dev_by_type(CPU_FULL), NULL)
+    // = ggml_backend_dev_init(ggml_backend_dev_by_type(GPU) OR ggml_backend_dev_by_type(CPU), NULL)
     GGML_API ggml_backend_t ggml_backend_init_best(void);
 
     //
