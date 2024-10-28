@@ -113,7 +113,7 @@ static void llama_sampler_softmax_impl(llama_token_data_array * cur_p) {
 }
 
 static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) {
-    // TODO: move bucket sort to separate function so that top_p/tail_free/typical/softmax first is equally fast
+    // TODO: move bucket sort to separate function so that top_p/typical/softmax first is equally fast
     // if (k >= (int32_t)cur_p->size) {
     //     return;
     // }
@@ -729,101 +729,6 @@ struct llama_sampler * llama_sampler_init_min_p(float p, size_t min_keep) {
         /* .ctx   = */ new llama_sampler_min_p {
             /* .p        = */ p,
             /* .min_keep = */ min_keep,
-        },
-    };
-}
-
-// tail-free
-
-struct llama_sampler_tail_free {
-    const float  z;
-    const size_t min_keep;
-};
-
-static const char * llama_sampler_tail_free_name(const struct llama_sampler * /*smpl*/) {
-    return "tail-free";
-}
-
-static void llama_sampler_tail_free_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    const auto * ctx = (llama_sampler_tail_free *) smpl->ctx;
-
-    if (ctx->z >= 1.0f || cur_p->size <= 2) {
-        return;
-    }
-
-    llama_sampler_softmax_impl(cur_p);
-
-    // Compute the first and second derivatives
-    std::vector<float> first_derivatives(cur_p->size - 1);
-    std::vector<float> second_derivatives(cur_p->size - 2);
-
-    for (size_t i = 0; i < first_derivatives.size(); ++i) {
-        first_derivatives[i] = cur_p->data[i].p - cur_p->data[i + 1].p;
-    }
-    for (size_t i = 0; i < second_derivatives.size(); ++i) {
-        second_derivatives[i] = first_derivatives[i] - first_derivatives[i + 1];
-    }
-
-    // Calculate absolute value of second derivatives
-    for (size_t i = 0; i < second_derivatives.size(); ++i) {
-        second_derivatives[i] = std::abs(second_derivatives[i]);
-    }
-
-    // Normalize the second derivatives
-    {
-        const float second_derivatives_sum = std::accumulate(second_derivatives.begin(), second_derivatives.end(), 0.0f);
-
-        if (second_derivatives_sum > 1e-6f) {
-            for (float & value : second_derivatives) {
-                value /= second_derivatives_sum;
-            }
-        } else {
-            for (float & value : second_derivatives) {
-                value = 1.0f / second_derivatives.size();
-            }
-        }
-    }
-
-    float cum_sum = 0.0f;
-    size_t last_idx = cur_p->size;
-    for (size_t i = 0; i < second_derivatives.size(); ++i) {
-        cum_sum += second_derivatives[i];
-
-        // Check if the running sum is greater than z or if we have kept at least min_keep tokens
-        if (cum_sum > ctx->z && i >= ctx->min_keep) {
-            last_idx = i;
-            break;
-        }
-    }
-
-    // Resize the output vector to keep only the tokens above the tail location
-    cur_p->size = last_idx;
-}
-
-static struct llama_sampler * llama_sampler_tail_free_clone(const struct llama_sampler * smpl) {
-    const auto * ctx = (const llama_sampler_tail_free *) smpl->ctx;
-    return llama_sampler_init_tail_free(ctx->z, ctx->min_keep);
-}
-
-static void llama_sampler_tail_free_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_tail_free *) smpl->ctx;
-}
-
-static struct llama_sampler_i llama_sampler_tail_free_i = {
-    /* .name   = */ llama_sampler_tail_free_name,
-    /* .accept = */ nullptr,
-    /* .apply  = */ llama_sampler_tail_free_apply,
-    /* .reset  = */ nullptr,
-    /* .clone  = */ llama_sampler_tail_free_clone,
-    /* .free   = */ llama_sampler_tail_free_free,
-};
-
-struct llama_sampler * llama_sampler_init_tail_free(float z, size_t min_keep) {
-    return new llama_sampler {
-        /* .iface = */ &llama_sampler_tail_free_i,
-        /* .ctx   = */ new llama_sampler_tail_free {
-            /* .z        = */ z,
-            /*. min_keep = */ min_keep,
         },
     };
 }
