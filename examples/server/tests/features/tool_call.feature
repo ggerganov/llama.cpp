@@ -92,7 +92,7 @@ Feature: llama.cpp server
       | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
       | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
       | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q8_0.gguf       | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
-      | ipython   | {"code": "print('Hello, World!')"} | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q8_0.gguf    | mistralai-Mistral-Nemo-Instruct-2407          |
+      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q8_0.gguf    | mistralai-Mistral-Nemo-Instruct-2407          |
       | ipython   | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q6_K.gguf         | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf  |                                               |
@@ -113,3 +113,35 @@ Feature: llama.cpp server
     And   parallel tool calls is disabled
     And   an OAI compatible chat completions request with no api error
     Then  no tool is called
+
+
+  @slow
+  Scenario Outline: Python hello world w/o none tool_choice yields no tool call
+    Given a model file Phi-3.5-mini-instruct-Q4_K_M.gguf from HF repo bartowski/Phi-3.5-mini-instruct-GGUF
+    And   no warmup
+    And   the server is starting
+    And   the server is healthy
+    And   a model test
+    And   256 max tokens to predict
+    And   a user prompt write a hello world in python
+    And   a tool choice none
+    And   python tool
+    And   parallel tool calls is disabled
+    And   an OAI compatible chat completions request with no api error
+    Then  no tool is called
+
+
+  @slow
+  Scenario: Parallel tool calls
+    Given a model file Mistral-Nemo-Instruct-2407-Q8_0.gguf from HF repo bartowski/Mistral-Nemo-Instruct-2407-GGUF
+    And   a test chat template file named mistralai-Mistral-Nemo-Instruct-2407
+    And   no warmup
+    And   the server is starting
+    And   the server is healthy
+    And   a model test
+    And   256 max tokens to predict
+    And   a user prompt get the weather in paris and search for llama.cpp's latest commits
+    And   python tool
+    And   parallel tool calls is enabled
+    And   an OAI compatible chat completions request with no api error
+    Then  receiving the following tool calls: [{"arguments": {"code": "import requests\nresponse = requests.get('https://api.openweathermap.org/data/2.9/weather?q=Paris&appid=YOUR_API_KEY')\nprint(response.json())"}, "name": "ipython" , "id": "123456789"}, {"arguments": {"code": "!git log --oneline --after 2024-01-01 --before 2024-12-31 llama.cpp" }, "name": "ipython" , "id": "987654321"}]

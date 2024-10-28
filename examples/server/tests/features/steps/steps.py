@@ -746,6 +746,23 @@ async def step_tool_called(context, expected_name, expected_arguments):
         assert_n_tokens_predicted(result, tool_calls_check=check)
     assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
 
+
+@step('receiving the following tool calls: {expected_tool_calls}')
+async def step_receiving_tool_calls(context, expected_tool_calls):
+    tool_caexpected_tool_callslls = json.loads(expected_tool_calls)
+    n_completions = await gather_tasks_results(context)
+    assert n_completions > 0
+
+    for i in range(n_completions):
+        result = context.tasks_result.pop()
+
+        def check(tool_calls):
+            assert json.dumps(expected_tool_calls) == json.dumps(tool_calls), f"tool calls: {tool_calls}, expected: {expected_tool_calls}, result = {result}"
+
+        assert_n_tokens_predicted(result, tool_calls_check=check)
+    assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
+
+
 @step('no tool is called')
 @async_run_until_complete
 async def step_tool_called(context):

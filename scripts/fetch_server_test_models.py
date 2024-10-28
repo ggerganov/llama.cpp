@@ -1,10 +1,10 @@
 '''
     This script fetches all the models used in the server tests.
-    
+
     This is useful for slow tests that use larger models, to avoid them timing out on the model downloads.
-    
+
     It is meant to be run from the root of the repository.
-    
+
     Example:
         python scripts/fetch_server_test_models.py
         ( cd examples/server/tests && ./tests.sh --tags=slow )
