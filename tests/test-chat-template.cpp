@@ -73,7 +73,7 @@ static void test_jinja_templates() {
         return "tests/chat/goldens/" + golden_name + ".txt";
     };
     auto fail_with_golden_instructions = [&]() {
-        throw std::runtime_error("To fetch templates and generate golden files, run `python update_templates_and_goldens.py`");
+        throw std::runtime_error("To fetch templates and generate golden files, run `python scripts/update_jinja_goldens.py`");
     };
     if (jinja_template_files.empty()) {
         std::cerr << "No Jinja templates found in tests/chat/templates" << std::endl;
