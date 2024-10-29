@@ -607,7 +607,7 @@ static json oaicompat_completion_params_parse(
     }
 
     // Copy remaining properties to llama_params
-    // This allows user to use llama.cpp-specific params like "mirostat", "tfs_z",... via OAI endpoint.
+    // This allows user to use llama.cpp-specific params like "mirostat", ... via OAI endpoint.
     // See "launch_slot_with_task()" for a complete list of params supported by llama.cpp
     for (const auto & item : body.items()) {
         // Exception: if "n_predict" is present, we overwrite the value specified earlier by "max_tokens"

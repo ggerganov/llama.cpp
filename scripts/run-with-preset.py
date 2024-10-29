@@ -20,7 +20,7 @@ CLI_ARGS_LLAMA_CLI_PERPLEXITY = [
     "np-penalize-nl", "numa", "ppl-output-type", "ppl-stride", "presence-penalty", "prompt",
     "prompt-cache", "prompt-cache-all", "prompt-cache-ro", "repeat-last-n",
     "repeat-penalty", "reverse-prompt", "rope-freq-base", "rope-freq-scale", "rope-scale", "seed",
-    "simple-io", "tensor-split", "threads", "temp", "tfs", "top-k", "top-p", "typical",
+    "simple-io", "tensor-split", "threads", "temp", "top-k", "top-p", "typical",
     "verbose-prompt"
 ]
 

@@ -1087,9 +1087,6 @@ extern "C" {
     /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
     LLAMA_API struct llama_sampler * llama_sampler_init_min_p      (float   p, size_t min_keep);
 
-    /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
-    LLAMA_API struct llama_sampler * llama_sampler_init_tail_free  (float   z, size_t min_keep);
-
     /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
     LLAMA_API struct llama_sampler * llama_sampler_init_typical    (float   p, size_t min_keep);
 
