@@ -7,7 +7,7 @@
 
   Examples:
     python ./scripts/get_hf_chat_template.py NousResearch/Meta-Llama-3-8B-Instruct
-    python ./scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-70B tool_use
+    python ./scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use
     python ./scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct
 '''
 

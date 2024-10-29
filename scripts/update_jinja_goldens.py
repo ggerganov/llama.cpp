@@ -47,7 +47,7 @@ model_ids = [
     "CohereForAI/c4ai-command-r-plus",
     "NousResearch/Hermes-2-Pro-Llama-3-8B",
     "NousResearch/Hermes-2-Pro-Mistral-7B",
-    "NousResearch/Hermes-3-Llama-3.1-70B",
+    "NousResearch/Hermes-3-Llama-3.1-8B",
     "openchat/openchat-3.5-0106",
     "OrionStarAI/Orion-14B-Chat",
     "Qwen/Qwen2-7B-Instruct",
