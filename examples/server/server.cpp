@@ -1062,11 +1062,12 @@ struct server_context {
     }
 
     bool process_token(completion_token_output & result, server_slot & slot) {
+        auto match = slot.antiprompts.findSingleTokenMatch(result.tok);
+
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = common_token_to_piece(ctx, result.tok, params.special);
+        const std::string token_str = common_token_to_piece(ctx, result.tok, params.special || (match.pos != std::string::npos && match.is_grammar_trigger));
         slot.sampled = result.tok;
 
-        auto match = slot.antiprompts.findSingleTokenMatch(result.tok);
         if (match.pos != std::string::npos && !match.is_partial) {
             if (match.is_grammar_trigger) {
                 common_sampler_trigger_grammar(model, slot.smpl, common_token_to_piece(ctx, result.tok, params.special));
