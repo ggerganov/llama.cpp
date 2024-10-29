@@ -3423,8 +3423,8 @@ static bool buft_supported(ggml_backend_buffer_type_t buft, ggml_backend_dev_t d
 }
 
 template<typename F>
-static ggml_backend_buffer_type_t select_buft(const llama_model::buft_list_t * buft_list, const F & fn) {
-    for (const auto & cur : *buft_list) {
+static ggml_backend_buffer_type_t select_buft(const llama_model::buft_list_t & buft_list, const F & fn) {
+    for (const auto & cur : buft_list) {
         ggml_backend_dev_t cur_dev = cur.first;
         ggml_backend_buffer_type_t cur_buft = cur.second;
         if (buft_supported(cur_buft, cur_dev, fn)) {
@@ -3499,7 +3499,7 @@ static bool llama_kv_cache_init(
         } else {
             buft_list = &model.cpu_buft_list;
         }
-        ggml_backend_buffer_type_t buft = select_buft(buft_list,
+        ggml_backend_buffer_type_t buft = select_buft(*buft_list,
             [&](ggml_context * ctx) {
                 ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k_gqa*kv_size);
                 if (hparams.rope_type == LLAMA_ROPE_TYPE_NONE) {
@@ -6955,7 +6955,6 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     }
 }
 
-//////// TODO: move elsewhere, maybe
 enum llm_tensor_layer {
     LLM_TENSOR_LAYER_INPUT,
     LLM_TENSOR_LAYER_REPEATING,
@@ -7093,7 +7092,7 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
-static bool weight_buft_supported(ggml_tensor * w, ggml_op op, ggml_backend_buffer_type_t buft, ggml_backend_dev_t dev) {
+static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w, ggml_op op, ggml_backend_buffer_type_t buft, ggml_backend_dev_t dev) {
     GGML_ASSERT(w != nullptr);
 
     if (op == GGML_OP_NONE) {
@@ -7125,7 +7124,7 @@ static bool weight_buft_supported(ggml_tensor * w, ggml_op op, ggml_backend_buff
             } break;
         case GGML_OP_MUL_MAT_ID:
             {
-                int n_expert_used = 2; // TODO: from model
+                int n_expert_used = hparams.n_expert_used;
                 ggml_tensor * b = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, w->ne[0], n_expert_used, 512);
                 ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_expert_used, 512);
                 op_tensor = ggml_mul_mat_id(ctx, w, b, ids);
@@ -7147,8 +7146,8 @@ static bool weight_buft_supported(ggml_tensor * w, ggml_op op, ggml_backend_buff
             } break;
         case GGML_OP_ROPE:
             {
-                int n_embd_head = 64; // TODO: from model
-                int n_head = 16;
+                int n_embd_head = hparams.n_embd_head_v;
+                int n_head = hparams.n_head();
                 ggml_tensor * a = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, n_embd_head, n_head, 512);
                 ggml_tensor * b = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 512);
                 op_tensor = ggml_rope_ext(
@@ -7190,12 +7189,12 @@ static bool weight_buft_supported(ggml_tensor * w, ggml_op op, ggml_backend_buff
 }
 
 // find the first buffer type in the list that can use the tensor
-static ggml_backend_buffer_type_t select_weight_buft(ggml_tensor * tensor, ggml_op op, llama_model::buft_list_t * buft_list) {
-    GGML_ASSERT(!buft_list->empty());
-    for (auto & cur : *buft_list) {
+static ggml_backend_buffer_type_t select_weight_buft(const llama_model & model, ggml_tensor * tensor, ggml_op op, const llama_model::buft_list_t & buft_list) {
+    GGML_ASSERT(!buft_list.empty());
+    for (const auto & cur : buft_list) {
         ggml_backend_dev_t cur_dev = cur.first;
         ggml_backend_buffer_type_t cur_buft = cur.second;
-        if (weight_buft_supported(tensor, op, cur_buft, cur_dev)) {
+        if (weight_buft_supported(model.hparams, tensor, op, cur_buft, cur_dev)) {
             return cur_buft;
         }
     }
@@ -7420,8 +7419,6 @@ static bool llm_load_tensors(
         ggml_backend_buffer_type_t first_moved_from_buft = nullptr;
         ggml_backend_buffer_type_t first_moved_to_buft = nullptr;
 
-
-        constexpr auto * func = __func__;
         auto create_tensor = [&](const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne, int flags) -> ggml_tensor * {
             ggml_tensor * t_meta = ml.get_tensor_meta(tn.str().c_str());
 
@@ -7482,7 +7479,7 @@ static bool llm_load_tensors(
                     GGML_ABORT("invalid layer %d for tensor %s", info.layer, tn.str().c_str());
             }
 
-            ggml_backend_buffer_type_t buft = select_weight_buft(t_meta, op, buft_list);
+            ggml_backend_buffer_type_t buft = select_weight_buft(model, t_meta, op, *buft_list);
             if (!buft) {
                 throw std::runtime_error(format("failed to find a compatible buffer type for tensor %s", tn.str().c_str()));
             }
@@ -7512,8 +7509,7 @@ static bool llm_load_tensors(
                     return t;
                 }
             }
-            ggml_tensor * t = ml.create_tensor(ctx, tn, ne, flags);
-            return t;
+            return ml.create_tensor(ctx, tn, ne, flags);
         };
 
         model.layers.resize(n_layer);
@@ -9064,11 +9060,10 @@ static bool llm_load_tensors(
         }
 
         if (n_moved_tensors > 0) {
-            LLAMA_LOG_WARN("%s: tensor '%s' (%s) (and %d others) cannot be used with preferred buffer type %s, using %s instead\n",
-            func, first_moved_tensor->name, ggml_type_name(first_moved_tensor->type), n_moved_tensors - 1,
-            ggml_backend_buft_name(first_moved_from_buft), ggml_backend_buft_name(first_moved_to_buft));
+            LLAMA_LOG_DEBUG("%s: tensor '%s' (%s) (and %d others) cannot be used with preferred buffer type %s, using %s instead\n",
+                __func__, first_moved_tensor->name, ggml_type_name(first_moved_tensor->type), n_moved_tensors - 1,
+                ggml_backend_buft_name(first_moved_from_buft), ggml_backend_buft_name(first_moved_to_buft));
         }
-
     }
 
     ml.done_getting_tensors();
@@ -9146,7 +9141,7 @@ static bool llm_load_tensors(
 
         for (auto & buf : bufs) {
             // indicate that this buffer contains weights
-            // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
+            // this is used by ggml_backend_sched to improve op scheduling: ops that use a weight are preferably scheduled to the backend that contains the weight
             ggml_backend_buffer_set_usage(buf.second, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
         }
 
@@ -19517,7 +19512,7 @@ struct llama_context * llama_new_context_with_model(
     GGML_ASSERT(hparams.n_embd_head_v % ggml_blck_size(type_v) == 0);
 
     if (!hparams.vocab_only) {
-        // initialize backends
+        // GPU backends
         for (auto * dev : model->devices) {
             ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
             if (backend == nullptr) {
@@ -19528,7 +19523,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 
-        // add other backends (such as BLAS)
+        // add ACCEL backends (such as BLAS)
         for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
             ggml_backend_dev_t dev = ggml_backend_dev_get(i);
             if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
@@ -19542,6 +19537,7 @@ struct llama_context * llama_new_context_with_model(
             }
         }
 
+        // add CPU backend
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
             LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
@@ -19638,11 +19634,6 @@ struct llama_context * llama_new_context_with_model(
                         continue;
                     }
                     auto * dev = ggml_backend_get_device(backend);
-                    if (!dev) {
-                        // backend is using old interface, not supported
-                        pipeline_parallel = false;
-                        break;
-                    }
                     ggml_backend_dev_props props;
                     ggml_backend_dev_get_props(dev, &props);
                     if (!props.caps.async || !props.caps.events) {
@@ -19667,17 +19658,19 @@ struct llama_context * llama_new_context_with_model(
             llama_ubatch ubatch_pp = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
             ggml_cgraph * gf_pp = llama_build_graph(*ctx, ubatch_pp, true);
 
+            // reserve pp graph first so that buffers are only allocated once
             ggml_backend_sched_reserve(ctx->sched, gf_pp);
             int n_splits_pp = ggml_backend_sched_get_n_splits(ctx->sched);
             int n_nodes_pp = ggml_graph_n_nodes(gf_pp);
 
+            // reserve with tg graph to get the number of splits and nodes
             llama_ubatch ubatch_tg = { true, 1, 1, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
             ggml_cgraph * gf_tg = llama_build_graph(*ctx, ubatch_tg, true);
             ggml_backend_sched_reserve(ctx->sched, gf_tg);
             int n_splits_tg = ggml_backend_sched_get_n_splits(ctx->sched);
             int n_nodes_tg = ggml_graph_n_nodes(gf_tg);
 
-            // restore
+            // reserve again with pp graph to avoid ggml-alloc reallocations during inference
             gf_pp = llama_build_graph(*ctx, ubatch_pp, false);
             if (!ggml_backend_sched_reserve(ctx->sched, gf_pp)) {
                 LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
@@ -19989,7 +19982,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
     cvec.tensors.reserve(model.hparams.n_layer);
     cvec.tensors.push_back(nullptr); // there's never a tensor for layer 0
     for (size_t il = 1; il < model.hparams.n_layer; il++) {
-        ggml_backend_buffer_type_t buft = select_buft(model.dev_layer.at(il).buft_list,
+        ggml_backend_buffer_type_t buft = select_buft(*model.dev_layer.at(il).buft_list,
             [&](ggml_context * ctx) {
                 ggml_tensor * cur = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);
                 ggml_tensor * layer_dir = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);

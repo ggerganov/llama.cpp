@@ -76,15 +76,15 @@ static T stdev(const std::vector<T> & v) {
 }
 
 static std::string get_cpu_info() {
-    std::vector<std::string> gpu_list;
+    std::vector<std::string> cpu_list;
     for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
         auto * dev = ggml_backend_dev_get(i);
         auto dev_type = ggml_backend_dev_type(dev);
         if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU || dev_type == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
-            gpu_list.push_back(ggml_backend_dev_description(dev));
+            cpu_list.push_back(ggml_backend_dev_description(dev));
         }
     }
-    return join(gpu_list, ", ");
+    return join(cpu_list, ", ");
 }
 
 static std::string get_gpu_info() {

@@ -3168,7 +3168,6 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
 }
 
 static bool ggml_backend_cuda_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
-    GGML_ASSERT(buft != nullptr);
     return (ggml_backend_buft_is_cuda(buft) || ggml_backend_buft_is_cuda_split(buft)) && buft->device == dev;
 }
 

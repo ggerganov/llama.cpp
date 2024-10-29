@@ -95,8 +95,8 @@ extern "C" {
         // (optional) complete all pending operations (required if the backend supports async operations)
         void (*synchronize)(ggml_backend_t backend);
 
-        // (optional) graph plans
-        // compute graph with a plan (not used currently)
+        // (optional) graph plans (not used currently)
+        // compute graph with a plan
         ggml_backend_graph_plan_t (*graph_plan_create) (ggml_backend_t backend, const struct ggml_cgraph * cgraph);
         void                      (*graph_plan_free)   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
         // update the plan with a new graph - this should be faster than creating a new plan when the graph has the same topology

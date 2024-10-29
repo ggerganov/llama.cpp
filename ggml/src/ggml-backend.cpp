@@ -1503,7 +1503,7 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, co
     return -1;
 }
 
-#if 0
+#if 1
 #define GGML_SCHED_MAX_SPLITS_DEBUG 4096
 static char causes[GGML_DEFAULT_GRAPH_SIZE*16 + GGML_SCHED_MAX_SPLITS_DEBUG*GGML_SCHED_MAX_SPLIT_INPUTS][128]; // debug only
 #define SET_CAUSE(node, ...) sprintf(causes[hash_id(node)], __VA_ARGS__)
@@ -1906,11 +1906,11 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
                     if (src == NULL) {
                         continue;
                     }
-                    // check if a weight is on a different backend
+                    // check if a weight is on a different and incompatible backend
                     // by starting a new split, the memory of the previously offloaded weights can be reused
                     if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
                         int src_backend_id = tensor_backend_id(src);
-                        if (src_backend_id != cur_backend_id) {
+                        if (src_backend_id != cur_backend_id && !ggml_backend_sched_buffer_supported(sched, src, cur_backend_id)) {
                             need_new_split = true;
                             break;
                         }
@@ -1922,7 +1922,6 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
                         int src_backend_id = sched->hv_tensor_backend_ids[id];
                         bool supported = ggml_backend_sched_buffer_supported(sched, src, cur_backend_id);
                         if (src_backend_id != cur_backend_id && tensor_id_copy(id, cur_backend_id, 0) == NULL && !supported) {
-                            //printf("starting new split because of too many inputs: node %s, input %s\n", node->name, src->name);
                             need_new_split = true;
                             break;
                         }
