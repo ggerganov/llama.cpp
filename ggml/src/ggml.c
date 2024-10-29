@@ -2720,7 +2720,6 @@ inline static __m256 ggml_v_expf(__m256 x) {
     x = _mm256_min_ps(x, h_lim);
 
     return _mm256_castsi256_ps(_mm256_cvttps_epi32(_mm256_fmadd_ps(log2e, x, bias)));
-    return x;
 }
 
 // computes silu x/(1+exp(-x)) in single precision vector
