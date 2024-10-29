@@ -2090,7 +2090,6 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
     const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + llama_max_devices());
     yaml_dump_vector_float(stream, "tensor_split", tensor_split_vector);
 
-    fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
     fprintf(stream, "threads: %d # default: %u\n", params.cpuparams.n_threads, std::thread::hardware_concurrency());
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);

@@ -235,14 +235,6 @@ The Min-P sampling method was designed as an alternative to Top-P, and aims to e
 
 Example usage: `--min-p 0.05`
 
-### Tail-Free Sampling (TFS)
-
--   `--tfs N`: Enable tail free sampling with parameter z (default: 1.0, 1.0 = disabled).
-
-Tail-free sampling (TFS) is a text generation technique that aims to reduce the impact of less likely tokens, which may be less relevant, less coherent, or nonsensical, on the output. Similar to Top-P it tries to determine the bulk of the most likely tokens dynamically. But TFS filters out logits based on the second derivative of their probabilities. Adding tokens is stopped after the sum of the second derivatives reaches the parameter z. In short: TFS looks at how quickly the probabilities of the tokens decrease and cuts off the tail of unlikely tokens using the parameter z. Typical values for z are in the range of 0.9 to 0.95. A value of 1.0 would include all tokens and thus disables the effect of TFS.
-
-Example usage: `--tfs 0.95`
-
 ### Locally Typical Sampling
 
 -   `--typical N`: Enable locally typical sampling with parameter p (default: 1.0, 1.0 = disabled).

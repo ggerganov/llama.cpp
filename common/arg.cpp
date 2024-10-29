@@ -944,13 +944,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"--tfs"}, "N",
-        string_format("tail free sampling, parameter z (default: %.1f, 1.0 = disabled)", (double)params.sparams.tfs_z),
-        [](common_params & params, const std::string & value) {
-            params.sparams.tfs_z = std::stof(value);
-        }
-    ).set_sparam());
-    add_opt(common_arg(
         {"--xtc-probability"}, "N",
         string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_probability),
         [](common_params & params, const std::string & value) {
@@ -1074,7 +1067,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat"}, "N",
-        string_format("use Mirostat sampling.\nTop K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n"
+        string_format("use Mirostat sampling.\nTop K, Nucleus and Locally Typical samplers are ignored if used.\n"
         "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sparams.mirostat),
         [](common_params & params, int value) {
             params.sparams.mirostat = value;
