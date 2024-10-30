@@ -3247,12 +3247,6 @@ static enum ggml_status ggml_metal_graph_compute(
 
 // backend interface
 
-static const char * ggml_backend_metal_buffer_get_name(ggml_backend_buffer_t buffer) {
-    return "Metal";
-
-    UNUSED(buffer);
-}
-
 static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
 
@@ -3307,7 +3301,6 @@ static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_
 }
 
 static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
-    /* .get_name        = */ ggml_backend_metal_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_metal_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_metal_buffer_get_base,
     /* .init_tensor     = */ NULL,
@@ -3432,6 +3425,29 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
     return &ggml_backend_buffer_type_metal;
 }
 
+static const char * ggml_backend_metal_buffer_from_ptr_type_get_name(ggml_backend_buffer_type_t buft) {
+    return "Metal_Mapped";
+
+    UNUSED(buft);
+}
+
+static ggml_backend_buffer_type_t ggml_backend_metal_buffer_from_ptr_type(void) {
+    static struct ggml_backend_buffer_type ggml_backend_buffer_from_ptr_type_metal = {
+        /* .iface = */ {
+            /* .get_name         = */ ggml_backend_metal_buffer_from_ptr_type_get_name,
+            /* .alloc_buffer     = */ ggml_backend_metal_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
+            /* .get_max_size     = */ ggml_backend_metal_buffer_type_get_max_size,
+            /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
+            /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,
+        },
+        /* .device  = */ &g_ggml_backend_metal_device,
+        /* .context = */ NULL,
+    };
+
+    return &ggml_backend_buffer_from_ptr_type_metal;
+}
+
 // TODO: obsoleted by ggml_backend_metal_device_buffer_from_ptr
 ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size) {
     struct ggml_backend_metal_buffer_context * ctx = calloc(1, sizeof(struct ggml_backend_metal_buffer_context));
@@ -3508,7 +3524,7 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
         }
     }
 
-    return ggml_backend_buffer_init(ggml_backend_metal_buffer_type(), ggml_backend_metal_buffer_i, ctx, size);
+    return ggml_backend_buffer_init(ggml_backend_metal_buffer_from_ptr_type(), ggml_backend_metal_buffer_i, ctx, size);
 }
 
 // backend
@@ -3527,12 +3543,6 @@ static void ggml_backend_metal_free(ggml_backend_t backend) {
     ggml_metal_free(ctx);
 
     free(backend);
-}
-
-static ggml_backend_buffer_type_t ggml_backend_metal_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_metal_buffer_type();
-
-    UNUSED(backend);
 }
 
 static enum ggml_status ggml_backend_metal_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
@@ -3601,7 +3611,6 @@ static void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
 static struct ggml_backend_i ggml_backend_metal_i = {
     /* .get_name                = */ ggml_backend_metal_name,
     /* .free                    = */ ggml_backend_metal_free,
-    /* .get_default_buffer_type = */ ggml_backend_metal_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -3611,9 +3620,6 @@ static struct ggml_backend_i ggml_backend_metal_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_metal_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };
@@ -3708,7 +3714,7 @@ static void ggml_backend_metal_device_get_memory(ggml_backend_dev_t dev, size_t 
 }
 
 static enum ggml_backend_dev_type ggml_backend_metal_device_get_type(ggml_backend_dev_t dev) {
-    return GGML_BACKEND_DEVICE_TYPE_GPU_FULL;
+    return GGML_BACKEND_DEVICE_TYPE_GPU;
 
     GGML_UNUSED(dev);
 }
