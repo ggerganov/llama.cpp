@@ -1,21 +1,28 @@
-// swift-tools-version:5.5
-
+// swift-tools-version:5.9
+import CompilerPluginSupport
 import PackageDescription
 
-var sources = [
+var cppSources = [
     "src/llama.cpp",
     "src/llama-vocab.cpp",
     "src/llama-grammar.cpp",
     "src/llama-sampling.cpp",
     "src/unicode.cpp",
     "src/unicode-data.cpp",
-    "ggml/src/ggml.c",
-    "ggml/src/ggml-alloc.c",
-    "ggml/src/ggml-backend.c",
-    "ggml/src/ggml-quants.c",
-    "ggml/src/ggml-aarch64.c",
+    "common/sampling.cpp",
+    "common/common.cpp",
+    "common/json-schema-to-grammar.cpp",
+    "common/log.cpp",
+    "common/console.cpp"
 ]
 
+var ggmlSources = [
+    "src/ggml.c",
+    "src/ggml-alloc.c",
+    "src/ggml-backend.c",
+    "src/ggml-quants.c",
+    "src/ggml-aarch64.c"
+]
 var resources: [Resource] = []
 var linkerSettings: [LinkerSetting] = []
 var cSettings: [CSetting] =  [
@@ -24,13 +31,13 @@ var cSettings: [CSetting] =  [
     // NOTE: NEW_LAPACK will required iOS version 16.4+
     // We should consider add this in the future when we drop support for iOS 14
     // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
-    // .define("ACCELERATE_NEW_LAPACK"),
-    // .define("ACCELERATE_LAPACK_ILP64")
+     .define("ACCELERATE_NEW_LAPACK"),
+     .define("ACCELERATE_LAPACK_ILP64")
 ]
 
 #if canImport(Darwin)
-sources.append("ggml/src/ggml-metal.m")
-resources.append(.process("ggml/src/ggml-metal.metal"))
+ggmlSources.append("src/ggml-metal.m")
+resources.append(.process("src/ggml-metal.metal"))
 linkerSettings.append(.linkedFramework("Accelerate"))
 cSettings.append(
     contentsOf: [
@@ -47,33 +54,84 @@ cSettings.append(
 let package = Package(
     name: "llama",
     platforms: [
-        .macOS(.v12),
+        .macOS(.v13),
         .iOS(.v14),
         .watchOS(.v4),
         .tvOS(.v14)
     ],
     products: [
         .library(name: "llama", targets: ["llama"]),
+        .executable(name: "LlamaKitMain", targets: ["LlamaKitMain"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-syntax.git", branch: "main")
     ],
     targets: [
+        .target(name: "llama_cpp",
+                path: ".",
+                exclude: [
+                   "cmake",
+                   "examples",
+                   "scripts",
+                   "models",
+                   "tests",
+                   "CMakeLists.txt",
+                   "Makefile"
+                ],
+                sources: cppSources,
+                publicHeadersPath: "spm-headers"),
         .target(
             name: "llama",
-            path: ".",
-            exclude: [
-               "cmake",
-               "examples",
-               "scripts",
-               "models",
-               "tests",
-               "CMakeLists.txt",
-               "Makefile"
-            ],
-            sources: sources,
+            dependencies: ["llama_cpp"],
+            path: "ggml",
+            sources: ggmlSources,
             resources: resources,
-            publicHeadersPath: "spm-headers",
             cSettings: cSettings,
-            linkerSettings: linkerSettings
-        )
+            linkerSettings: linkerSettings),
+        .target(name: "LlamaObjC",
+                dependencies: ["llama"],
+                path: "objc",
+                sources: [
+                    "GPTParams.mm",
+                    "GPTSampler.mm",
+                    "LlamaBatch.mm",
+                    "LlamaObjC.mm",
+                    "LlamaModel.mm",
+                    "LlamaContext.mm",
+                    "LlamaSession.mm",
+                ],
+                publicHeadersPath: "include",
+                cSettings: cSettings,
+                linkerSettings: linkerSettings),
+        .macro(
+            name: "JSONSchemaMacros",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            ], 
+            path: "swift/JSONSchemaMacros"
+        ),
+        .target(
+            name: "JSONSchema",
+            dependencies: ["JSONSchemaMacros"],
+            path: "swift/JSONSchema"
+        ),
+        .target(
+            name: "LlamaKit",
+            dependencies: ["JSONSchema", "LlamaObjC"],
+            path: "swift/LlamaKit"
+        ),
+        .testTarget(name: "LlamaKitTests",
+                    dependencies: ["LlamaKit", "JSONSchema", "JSONSchemaMacros"],
+                    path: "swift/test",
+                    linkerSettings: [
+                        .linkedFramework("XCTest"),
+                        .linkedFramework("Testing")]),
+        .executableTarget(name: "LlamaKitMain",
+                          dependencies: ["LlamaKit"],
+                          path: "swift/main",
+                          resources: [.process("Llama-3.2-3B-Instruct-Q4_0.gguf")]),
     ],
-    cxxLanguageStandard: .cxx11
+    cxxLanguageStandard: .cxx17
 )
