@@ -7577,13 +7577,14 @@ UseGgmlGemm1:;
 
         int64_t dr0 = chunk_size0;
         int64_t dr1 = chunk_size1;
-
+#if defined(TMAC_RECHUNK)
         // Rechunk
         if ((nchunk1 == 1) && (nchunk0 > nth * 4)) {
             // dr0 should be divisible by chunk_size0
             dr0 = (ne0 / (nth * 4) / chunk_size0) * chunk_size0;
             nchunk0 = (nr0 + dr0 - 1) / dr0;
         }
+#endif
 
         int current_chunk = ith;
 
