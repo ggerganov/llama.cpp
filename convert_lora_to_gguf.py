@@ -230,7 +230,7 @@ def get_base_tensor_name(lora_tensor_name: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert a huggingface PEFT LoRA adapter to a GGML compatible file")
+        description="Convert a Hugging Face PEFT LoRA adapter to a GGUF file")
     parser.add_argument(
         "--outfile", type=Path,
         help="path to write to; default: based on input. {ftype} will be replaced by the outtype.",
@@ -257,11 +257,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--base", type=Path, required=True,
-        help="directory containing base model file",
+        help="directory containing Hugging Face model config files (config.json, tokenizer.json) for the base model that the adapter is based on - only config is needed, actual model weights are not required",
     )
     parser.add_argument(
         "lora_path", type=Path,
-        help="directory containing LoRA adapter file",
+        help="directory containing Hugging Face PEFT LoRA config (adapter_model.json) and weights (adapter_model.safetensors or adapter_model.bin)",
     )
 
     return parser.parse_args()
