@@ -761,7 +761,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             if (ctx->has_qwen2vl_merger) {
                 Q = ggml_mrope_ext(
                     ctx0, Q, positions, nullptr, 
-                    d_head/2, mrope_sections, 2 /*LLAMA_ROPE_TYPE_NEOX8*/, 32768, 10000, 1, 0, 1, 32, 1);
+                    d_head/2, mrope_sections, GGML_ROPE_TYPE_VISION, 32768, 10000, 1, 0, 1, 32, 1);
             }
             Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
             Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3));
@@ -774,7 +774,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             if (ctx->has_qwen2vl_merger) {
                 K = ggml_mrope_ext(
                     ctx0, K, positions, nullptr, 
-                    d_head/2, mrope_sections, 2 /*LLAMA_ROPE_TYPE_NEOX8*/, 32768, 10000, 1, 0, 1, 32, 1);
+                    d_head/2, mrope_sections, GGML_ROPE_TYPE_VISION, 32768, 10000, 1, 0, 1, 32, 1);
             }
             K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3));
             K = ggml_reshape_3d(ctx0, K, d_head, num_positions, n_head * batch_size);
@@ -1301,8 +1301,12 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         idx = get_key_idx(ctx, KEY_USE_GELU);
         new_clip->use_gelu = gguf_get_val_bool(ctx, idx);
         
-        idx = get_key_idx(ctx, KEY_USE_SILU);
-        new_clip->use_silu = gguf_get_val_bool(ctx, idx);
+        try {
+            idx = get_key_idx(ctx, KEY_USE_SILU);
+            new_clip->use_silu = gguf_get_val_bool(ctx, idx);
+        } catch (std::runtime_error & /*e*/) {
+            new_clip->use_silu = false;
+        }
 
         if (verbosity >= 1) {
             LOG_INF("%s: text_encoder:   %d\n", __func__, new_clip->has_text_encoder);

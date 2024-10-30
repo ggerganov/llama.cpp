@@ -20237,7 +20237,6 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_BITNET:
         case LLM_ARCH_QWEN:
         case LLM_ARCH_QWEN2:
-        case LLM_ARCH_QWEN2VL:
         case LLM_ARCH_QWEN2MOE:
         case LLM_ARCH_OLMO2:
         case LLM_ARCH_OLMOE:
@@ -20253,6 +20252,9 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_EXAONE:
         case LLM_ARCH_MINICPM3:
             return LLAMA_ROPE_TYPE_NEOX;
+        
+        case LLM_ARCH_QWEN2VL:
+            return LLAMA_ROPE_TYPE_MROPE;
 
         // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:

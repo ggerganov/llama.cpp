@@ -11359,8 +11359,12 @@ static void ggml_compute_forward_rope_f32(
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
     const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
-    const bool is_mrope = sections[0] > 0 || sections[1] > 0 || sections[2] > 0;
-    const bool is_vision = is_mrope && sections[3] > 0;
+    const bool is_mrope = mode & GGML_ROPE_TYPE_MROPE;
+    const bool is_vision = mode == GGML_ROPE_TYPE_VISION;
+
+    if (is_mrope) {
+        GGML_ASSERT(sections[0] > 0 || sections[1] > 0 || sections[2] > 0);
+    }
 
     if (is_vision) {
         GGML_ASSERT(n_dims == ne0/2);
@@ -11539,8 +11543,12 @@ static void ggml_compute_forward_rope_f16(
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
     const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
-    const bool is_mrope = sections[0] > 0 || sections[1] > 0 || sections[2] > 0;
-    const bool is_vision = is_mrope && sections[3] > 0;
+    const bool is_mrope = mode & GGML_ROPE_TYPE_MROPE;
+    const bool is_vision = mode == GGML_ROPE_TYPE_VISION;
+
+    if (is_mrope) {
+        GGML_ASSERT(sections[0] > 0 || sections[1] > 0 || sections[2] > 0);
+    }
 
     if (is_vision) {
         GGML_ASSERT(n_dims == ne0/2);
@@ -11562,7 +11570,6 @@ static void ggml_compute_forward_rope_f16(
 
     for (int64_t i3 = 0; i3 < ne3; i3++) {
         for (int64_t i2 = 0; i2 < ne2; i2++) {
-            const int64_t p = pos[i2];
 
             float * cache = (float *) params->wdata + (ne0 + CACHE_LINE_SIZE_F32)*ith;
             if (!is_mrope) {

@@ -414,11 +414,15 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     memcpy(&attn_factor, (int32_t *) dst->op_params +  8, sizeof(float));
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
-    memcpy(&sections.v,    (int32_t *) dst->op_params + 11, sizeof(int)*4);
+    memcpy(&sections.v,  (int32_t *) dst->op_params + 11, sizeof(int)*4);
 
-    const bool is_mrope = sections.v[0] > 0 || sections.v[1] > 0 || sections.v[2] > 0;
-    const bool is_vision = is_mrope && sections.v[3] > 0;
-    const bool is_neox = (mode & GGML_ROPE_TYPE_NEOX) & !(is_mrope || is_vision); // TODO: fix this with new rope type
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
+    const bool is_mrope = mode & GGML_ROPE_TYPE_MROPE;
+    const bool is_vision = mode == GGML_ROPE_TYPE_VISION;
+
+    if (is_mrope) {
+        GGML_ASSERT(sections.v[0] > 0 || sections.v[1] > 0 || sections.v[2] > 0);
+    }
 
     if (is_vision) {
         GGML_ASSERT(n_dims == ne00/2);
