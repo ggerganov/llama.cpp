@@ -1798,8 +1798,8 @@ class BitnetModel(Model):
         ]):
             # transform weight into 1/0/-1 (in fp32)
             data_torch = self.weight_quant(data_torch)
-            if self.enable_t_mac:
-                # transform weight into T-MAC I2 format
+            if self.enable_t_mac and self.ftype == gguf.LlamaFileType.MOSTLY_INT_N:
+                # transform weight into T-MAC INT_N format
                 from t_mac.model_utils import preprocess_for_t_mac
                 data = LazyTorchTensor.to_eager(data_torch).numpy()
                 scale = np.max(np.abs(data))
