@@ -33,6 +33,8 @@ def after_scenario(context, scenario):
                             print(line)
             if not is_server_listening(context.server_fqdn, context.server_port):
                 print("\x1b[33;101mERROR: Server stopped listening\x1b[0m")
+            if 'slow' in set(str(t) for t in scenario.tags):
+                print("\x1b[33;101mERROR: Make sure to precache models before running slow scenarios:\n  python scripts/fetch_server_test_models.py\x1b[0m")
 
         if context.server_process.poll() is not None:
             assert False, f"Server not running pid={context.server_process.pid} ..."
