@@ -1719,12 +1719,21 @@ static std::string _llama_model_meta_val_str(const struct llama_model * model, c
 
 minja::chat_template llama_chat_template_from_model(
     const struct llama_model * model,
-    const char * chat_template_override)
+    const std::string & chat_template_override,
+    bool prefer_tool_use)
 {
     // TODO: handle "chatml"?
-    std::string chat_template = chat_template_override
-        ? chat_template_override
-        : _llama_model_meta_val_str(model, "tokenizer.chat_template");
+    std::string chat_template = chat_template_override;
+    if (chat_template.empty()) {
+        if (prefer_tool_use) {
+            chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template.tool_use");
+            fprintf(stderr, "# tokenizer.chat_template.tool_use: %s\n", chat_template.c_str());
+        }
+        if (chat_template.empty()) {
+            chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template");
+            fprintf(stderr, "# tokenizer.chat_template: %s\n", chat_template.c_str());
+        }
+    }
     auto bos_token = _common_token_to_piece(model, llama_token_bos(model), true);
     auto eos_token = _common_token_to_piece(model, llama_token_eos(model), true);
     return {std::move(chat_template), bos_token, eos_token};

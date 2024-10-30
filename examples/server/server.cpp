@@ -2923,13 +2923,20 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
+        auto chat_template = llama_chat_template_from_model(ctx_server.model, ctx_server.params.chat_template, /* prefer_tool_use= */ false);
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
             { "bos_token",                   common_token_to_piece(ctx_server.ctx, llama_token_bos(ctx_server.model), true) },
             { "eos_token",                   common_token_to_piece(ctx_server.ctx, llama_token_eos(ctx_server.model), true) },
-            { "chat_template",               llama_get_chat_template(ctx_server.model) },
+            { "chat_template",               chat_template.source()},
         };
+        if (ctx_server.params.use_jinja) {
+            auto tool_use_chat_template = llama_chat_template_from_model(ctx_server.model, ctx_server.params.chat_template, /* prefer_tool_use= */ true);
+            if (tool_use_chat_template.source() != chat_template.source()) {
+                data["chat_template_tool_use"] = tool_use_chat_template.source();
+            }
+        }
 
         res_ok(res, data);
     };
@@ -3030,13 +3037,14 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        static auto chat_template = llama_chat_template_from_model(ctx_server.model, params.chat_template.empty() ? nullptr : params.chat_template.c_str());
-        static auto tool_call_style = llama_tool_call_style_detect(chat_template);
+        auto body = json::parse(req.body);
+        auto chat_template = llama_chat_template_from_model(ctx_server.model, params.chat_template, /* prefer_tool_use= */ body.contains("tools"));
+        auto tool_call_style = llama_tool_call_style_detect(chat_template);
         LOG_INF("Tool call style: %s\n", llama_tool_call_style_name(tool_call_style).c_str());
 
         json data;
         try {
-            data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), chat_template, tool_call_style, params.use_jinja);
+            data = oaicompat_completion_params_parse(ctx_server.model, body, chat_template, tool_call_style, params.use_jinja);
         } catch (const std::exception & e) {
             res_error(res, format_error_response(e.what(), ERROR_TYPE_NOT_SUPPORTED));
             return;

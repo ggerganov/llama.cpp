@@ -529,7 +529,8 @@ std::string common_chat_format_example(const struct llama_model * model,
 
 minja::chat_template llama_chat_template_from_model(
         const struct llama_model * model,
-        const char * chat_template_override = nullptr);
+        const std::string & chat_template_override = "",
+        bool prefer_tool_use = false);
 
 //
 // KV cache utils
