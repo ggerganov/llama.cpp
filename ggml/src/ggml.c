@@ -22329,10 +22329,16 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     }
                                 } break;
                             case GGUF_TYPE_ARRAY:
-                            default: GGML_ABORT("invalid type");
+                            default:
+                                fprintf(stderr, "%s: invalid array type %d\n", __func__, kv->value.arr.type);
+                                ok = false;
+                                break;
                         }
                     } break;
-                default: GGML_ABORT("invalid type");
+                default:
+                    fprintf(stderr, "%s: invalid type %d\n", __func__, kv->type);
+                    ok = false;
+                    break;
             }
 
             ctx->header.n_kv++;
