@@ -37,7 +37,7 @@ def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
     vision_model = qwen2vl.visual
     tensor_map = {}
     for name, ten in vision_model.state_dict().items():
-        ten = ten.numpy().astype(dtype)
+        ten = ten.numpy()
         if 'qkv' in name:
             if ten.ndim == 2: # weight
                 c3, _ = ten.shape
@@ -68,18 +68,23 @@ def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
             tensor_map["v.patch_embd.weight.1"] = ten[:, :, 1, ...]
         else:
             tensor_map[to_gguf_name(f"vision_model.{name}")] = ten
-        
-    tensor_map["v.position_embd.weight"] = np.zeros([10, 10], dtype=dtype)  # dummy tensor, just here as a placeholder
+    
+    for new_name, ten in tensor_map.items():
+        if ten.ndim <= 1 or new_name.endswith("_norm.weight"):
+            tensor_map[new_name] = ten.astype(np.float32)
+        else:
+            tensor_map[new_name] = ten.astype(dtype)
+    tensor_map["v.position_embd.weight"] = np.zeros([10, 10], dtype=np.float32)  # dummy tensor, just here as a placeholder
     return tensor_map
 
 
-def main(args, data_type='fp32'):
-    if data_type == 'fp32':
+def main(args):
+    if args.data_type == 'fp32':
         dtype = torch.float32
         np_dtype = np.float32
         ftype = 0
-    elif data_type == 'fp16':
-        dtype = torch.float16
+    elif args.data_type == 'fp16':
+        dtype = torch.float32
         np_dtype = np.float16
         ftype = 1
     else:
@@ -144,5 +149,6 @@ def main(args, data_type='fp32'):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", nargs='?', default="Qwen/Qwen2-VL-2B-Instruct")
+    parser.add_argument("--data_type", nargs='?', choices=['fp32', 'fp16'], default="fp32")
     args = parser.parse_args()
     main(args)

@@ -181,15 +181,6 @@ static __global__ void rope_vision(
 
     const int row = blockDim.x*blockIdx.x + threadIdx.x;
 
-    // if (i0 >= n_dims) {
-    //     const int i = row*ne0 + i0;
-
-    //     dst[i + 0] = x[i + 0];
-    //     dst[i + 1] = x[i + 1];
-
-    //     return;
-    // }
-
     const int i  = row*ne0 + i0/2;
     const int i2 = row/p_delta_rows; // i2-th tokens
 
@@ -348,12 +339,28 @@ static void rope_neox_cuda_f32(
     rope_neox_cuda<float>(x, dst, ne0, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, stream);
 }
 
+static void rope_mrope_cuda_f16(
+    const half * x, half * dst, int ne0, int ne2, int n_dims, int nr, const int32_t * pos, float freq_scale, int p_delta_rows,
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, mrope_sections sections, cudaStream_t stream
+) {
+
+    rope_mrope_cuda<half>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
+}
+
 static void rope_mrope_cuda_f32(
     const float * x, float * dst, int ne0, int ne2, int n_dims, int nr, const int32_t * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, mrope_sections sections, cudaStream_t stream
 ) {
 
     rope_mrope_cuda<float>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
+}
+
+static void rope_vision_cuda_f16(
+    const half * x, half * dst, int ne0, int ne2, int n_dims, int nr, const int32_t * pos, float freq_scale, int p_delta_rows,
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, mrope_sections sections, cudaStream_t stream
+) {
+
+    rope_vision_cuda<half>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
 }
 
 static void rope_vision_cuda_f32(
@@ -448,11 +455,11 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
                 (const float *)src0_d, (float *)dst_d, ne00, ne02, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
                 attn_factor, corr_dims, freq_factors, sections, stream
             );
-        } else if (src0->type == GGML_TYPE_F16 && false) {
-            // rope_mrope_cuda_f16(
-            //     (const half *)src0_d, (half *)dst_d, ne00, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
-            //     attn_factor, corr_dims, freq_factors, stream
-            // );
+        } else if (src0->type == GGML_TYPE_F16) {
+            rope_mrope_cuda_f16(
+                (const half *)src0_d, (half *)dst_d, ne00, ne02, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
+                attn_factor, corr_dims, freq_factors, sections, stream
+            );
         } else {
             GGML_ABORT("fatal error");
         }
@@ -462,11 +469,11 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
                 (const float *)src0_d, (float *)dst_d, ne00, ne02, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
                 attn_factor, corr_dims, freq_factors, sections, stream
             );
-        } else if (src0->type == GGML_TYPE_F16 && false) {
-            // rope_vision_cuda_f16(
-            //     (const half *)src0_d, (half *)dst_d, ne00, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
-            //     attn_factor, corr_dims, freq_factors, stream
-            // );
+        } else if (src0->type == GGML_TYPE_F16) {
+            rope_vision_cuda_f16(
+                (const half *)src0_d, (half *)dst_d, ne00, ne02, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
+                attn_factor, corr_dims, freq_factors, sections, stream
+            );
         } else {
             GGML_ABORT("fatal error");
         }
