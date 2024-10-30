@@ -207,8 +207,13 @@ static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::
         std::smatch match;
         if (std::regex_search(input, match, python_tag_regex)) {
             return {
-                match.prefix().str(), {
-                    {"ipython", (json {{"code", match[1].str()}}).dump()},
+                /* .content = */ match.prefix().str(),
+                /* .tool_calls = */ {
+                    {
+                        /* .name = */ "ipython",
+                        /* .arguments = */ (json {{"code", match[1].str()}}).dump(),
+                        /* .id = */ "",
+                    },
                 }
             };
         }
@@ -224,8 +229,13 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & t
     std::smatch match;
     if (std::regex_search(input, match, python_tag_regex)) {
         return {
-            match.prefix().str(), {
-                {"ipython", (json {{"code", match[1].str()}}).dump()},
+            /* .content = */ match.prefix().str(),
+            /* .tool_calls = */ {
+                {
+                    /* .name = */ "ipython",
+                    /* .arguments = */ (json {{"code", match[1].str()}}).dump(),
+                    /* .id = */ "",
+                },
             }
         };
     }
