@@ -22335,11 +22335,11 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 default: GGML_ABORT("invalid type");
             }
 
+            ctx->header.n_kv++;
+
             if (!ok) {
                 break;
             }
-
-            ctx->header.n_kv++;
         }
 
         if (!ok) {
