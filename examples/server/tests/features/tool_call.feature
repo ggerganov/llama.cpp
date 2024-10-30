@@ -30,7 +30,7 @@ Feature: llama.cpp server
     Examples: Prompts
       | template_name                                 | n_predict | tool_name | tool_arguments         | tools | parallel_tool_calls |
       | meetkai-functionary-medium-v3.1               | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | meetkai-functionary-medium-v3.1               | 128       | ipython   | {"code": "Yes, you can."} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | meetkai-functionary-medium-v3.1               | 128       | ipython   | {"code": "it and said, \"I'm sorry, Lily. It's a spectork.\" said, \"I'm sorry, Lily.\"\nThen, a little girl named Lily came to the park and saw a big, shiny flower. She was so happy and said, \"I'm sorry, Lily. It's a spectork.\"\nThey did"} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
       | meetkai-functionary-medium-v3.2               | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
       | meetkai-functionary-medium-v3.2               | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
       | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
@@ -94,6 +94,7 @@ Feature: llama.cpp server
 
     Examples: Prompts
       | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
+      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
       | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
       | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
       | ipython   | {"code": "print('Hello World!')"}    | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
