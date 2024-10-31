@@ -9124,7 +9124,8 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         __m128i sumi_0 = _mm_setzero_si128();
         __m128i sumi_1 = _mm_setzero_si128();
 
-        __m128i shuffle = _mm_set_epi64x(0x0101010101010101, 0x0000000000000000);
+        int is = 0;
+
         for (int j = 0; j < QK_K/128; ++j) {
 
             const __m128i q4bitsH_0 = _mm_loadu_si128((const __m128i*)qh); qh += 16;
@@ -9171,14 +9172,11 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             __m128i p16_6 = mul_add_epi8_sse(q4_6, q8_6);
             __m128i p16_7 = mul_add_epi8_sse(q4_7, q8_7);
 
-            const __m128i scale_0 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-            const __m128i scale_1 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-            const __m128i scale_2 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-            const __m128i scale_3 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
+            const __m128i scale_0 = _mm_shuffle_epi8(scales, get_scale_shuffle(is + 0));
+            const __m128i scale_1 = _mm_shuffle_epi8(scales, get_scale_shuffle(is + 1));
+            const __m128i scale_2 = _mm_shuffle_epi8(scales, get_scale_shuffle(is + 2));
+            const __m128i scale_3 = _mm_shuffle_epi8(scales, get_scale_shuffle(is + 3));
+            is += 4;
 
             p16_0 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_0), p16_0);
             p16_1 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_0, scale_0)), p16_1);
@@ -9197,7 +9195,7 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         }
 
         __m256i sumi = MM256_SET_M128I(sumi_1, sumi_0);
-        acc = _mm256_add_ps(_mm256_mul_ps(_mm256_broadcast_ss(&d), _mm256_cvtepi32_ps(sumi)), acc);
+        acc = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(sumi)), acc);
     }
 
     *s = hsum_float_8(acc);
