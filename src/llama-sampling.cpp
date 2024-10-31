@@ -1930,6 +1930,7 @@ static void llama_sampler_dry_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_dry_i = {
     /* .name   = */ llama_sampler_dry_name,
     /* .accept = */ llama_sampler_dry_accept,
+    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_dry_apply,
     /* .reset  = */ llama_sampler_dry_reset,
     /* .clone  = */ llama_sampler_dry_clone,
