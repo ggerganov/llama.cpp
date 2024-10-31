@@ -317,7 +317,12 @@ if __name__ == '__main__':
         if "base_model_name_or_path" in lparams:
             model_id = lparams["base_model_name_or_path"]
             logger.info(f"Loading base model from Hugging Face: {model_id}")
-            hparams = load_hparams_from_hf(model_id)
+            try:
+                hparams = load_hparams_from_hf(model_id)
+            except OSError as e:
+                logger.error(f"Failed to load base model config: {e}")
+                logger.error("Please try downloading the base model and add its path to --base")
+                sys.exit(1)
         else:
             logger.error("'base_model_name_or_path' is not found in adapter_config.json")
             logger.error("Base model config is required. Please download the base model and add its path to --base")
