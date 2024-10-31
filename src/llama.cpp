@@ -4273,8 +4273,11 @@ struct llama_model_loader {
 
         llama_tensor_weight(const llama_file * file, uint16_t idx, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx,  ggml_get_name(tensor));
-            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
+            if (tensor_idx < 0) {
+                throw std::runtime_error(format("tensor '%s' not found in the model", ggml_get_name(tensor)));
+            }
 
+            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", ggml_get_name(tensor)));
             }
@@ -4412,8 +4415,8 @@ struct llama_model_loader {
             uint32_t n_type_max = 0;
             enum ggml_type type_max = GGML_TYPE_F32;
 
-            for (auto it = weights_map.begin(); it != weights_map.end(); it++) {
-                const llama_tensor_weight & w = it->second;
+            for (const auto & it : weights_map) {
+                const llama_tensor_weight & w = it.second;
                 const ggml_tensor * tensor = w.tensor;
 
                 enum ggml_type type = tensor->type;
@@ -4692,9 +4695,7 @@ struct llama_model_loader {
     }
 
     const llama_tensor_weight * get_weight(const char * name) const {
-        std::string tensor_name(name);
-
-        auto pos = weights_map.find(tensor_name);
+        auto pos = weights_map.find(name);
         if (pos != weights_map.end()) {
             return &pos->second;
         }
@@ -4832,8 +4833,8 @@ struct llama_model_loader {
         }
 
         // compute the total size of all tensors for progress reporting
-        for (auto it = weights_map.begin(); it != weights_map.end(); it++) {
-            size_data += ggml_nbytes(it->second.tensor);
+        for (const auto & it : weights_map) {
+            size_data += ggml_nbytes(it.second.tensor);
         }
     }
 
@@ -7419,7 +7420,7 @@ static bool llm_load_tensors(
                 if (flags & llama_model_loader::TENSOR_NOT_REQUIRED) {
                     return nullptr;
                 }
-                throw std::runtime_error(format("missing tensor %s", tn.str().c_str()));
+                throw std::runtime_error(format("missing tensor '%s'", tn.str().c_str()));
             }
 
             // some models use the token embedding tensor as the output, but since these are used in different layers and with different ops
@@ -18588,8 +18589,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
     }
 
-    for (auto it = ml.weights_map.begin(); it != ml.weights_map.end(); ++it) {
-        const struct ggml_tensor * tensor = it->second.tensor;
+    for (const auto & it : ml.weights_map) {
+        const struct ggml_tensor * tensor = it.second.tensor;
 
         const std::string name = ggml_get_name(tensor);
 
@@ -18633,8 +18634,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     // Assume split index is continuous
     if (params->keep_split) {
-        for (auto it = weights_map.begin(); it != weights_map.end(); ++it) {
-            n_split = std::max(uint16_t(it->second.idx+1), n_split);
+        for (const auto & it : weights_map) {
+            n_split = std::max(uint16_t(it.second.idx + 1), n_split);
         }
 
     }
@@ -18642,9 +18643,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     ctx_outs[0] = ctx_out;
 
     // populate the original tensors so we get an initial meta data
-    for (auto it = weights_map.begin(); it != weights_map.end(); ++it) {
-        uint16_t i_split = params->keep_split ? it->second.idx : 0;
-        struct ggml_tensor * tensor = it->second.tensor;
+    for (const auto & it : weights_map) {
+        uint16_t i_split = params->keep_split ? it.second.idx : 0;
+        struct ggml_tensor * tensor = it.second.tensor;
         if (ctx_outs[i_split] == NULL) {
             ctx_outs[i_split] = gguf_init_empty();
         }
@@ -18691,8 +18692,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     const auto tn = LLM_TN(model.arch);
     new_ofstream(0);
-    for (auto it = weights_map.begin(); it != weights_map.end(); ++it) {
-        auto weight = it->second;
+    for (const auto & it : weights_map) {
+        const auto & weight = it.second;
         struct ggml_tensor * tensor = weight.tensor;
         if (weight.idx != cur_split && params->keep_split) {
             close_ofstream();

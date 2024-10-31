@@ -15,6 +15,7 @@
 #define TWOPI_F 6.283185307179586f
 
 #define QK_K 256
+#define K_SCALE_SIZE 12
 
 #define u8BufToU16(buf, idx) (((uint16_t(buf[idx + 1]) << 8)) | buf[idx])
 #define u8BufToFloat16(buf, idx) uint16BitsToHalf u8BufToU16(buf, idx)
@@ -63,6 +64,14 @@ mat4 dequantize_q4_1(const block_q4_1 xb, uint il) {
     }
     return reg;
 }
+
+#define sizeof_block_q4_k 144
+struct block_q4_k {
+    float16_t d;
+    float16_t dmin;
+    uint8_t scales[K_SCALE_SIZE];
+    uint8_t qs[QK_K/2];
+};
 
 #define sizeof_block_q6_k 210
 struct block_q6_k {
