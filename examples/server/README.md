@@ -99,7 +99,7 @@ The project is under active development, and we are [looking for feedback and co
 
 | Argument | Explanation |
 | -------- | ----------- |
-| `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;tfs_z;typ_p;top_p;min_p;temperature) |
+| `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;typ_p;top_p;min_p;temperature) |
 | `-s, --seed SEED` | RNG seed (default: -1, use random seed for -1) |
 | `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: kfypmt) |
 | `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
@@ -108,15 +108,19 @@ The project is under active development, and we are [looking for feedback and co
 | `--top-k N` | top-k sampling (default: 40, 0 = disabled) |
 | `--top-p N` | top-p sampling (default: 0.9, 1.0 = disabled) |
 | `--min-p N` | min-p sampling (default: 0.1, 0.0 = disabled) |
-| `--tfs N` | tail free sampling, parameter z (default: 1.0, 1.0 = disabled) |
 | `--typical N` | locally typical sampling, parameter p (default: 1.0, 1.0 = disabled) |
 | `--repeat-last-n N` | last n tokens to consider for penalize (default: 64, 0 = disabled, -1 = ctx_size) |
 | `--repeat-penalty N` | penalize repeat sequence of tokens (default: 1.0, 1.0 = disabled) |
 | `--presence-penalty N` | repeat alpha presence penalty (default: 0.0, 0.0 = disabled) |
 | `--frequency-penalty N` | repeat alpha frequency penalty (default: 0.0, 0.0 = disabled) |
+| `--dry-multiplier N` | DRY sampling multiplier (default: 0.0, 0.0 = disabled) |
+| `--dry-base N` | DRY sampling base value (default: 1.75) |
+| `--dry-allowed-length N` | allowed length for DRY sampling (default: 2) |
+| `--dry-penalty-last-n N` | DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size) |
+| `--dry-sequence-breaker STRING` | add sequence breaker for DRY sampling, clearing out default breakers (`['\n', ':', '"', '*']`) in the process; use `"none"` to not use any sequence breakers
 | `--dynatemp-range N` | dynamic temperature range (default: 0.0, 0.0 = disabled) |
 | `--dynatemp-exp N` | dynamic temperature exponent (default: 1.0) |
-| `--mirostat N` | use Mirostat sampling.<br/>Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.<br/>(default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0) |
+| `--mirostat N` | use Mirostat sampling.<br/>Top K, Nucleus and Locally Typical samplers are ignored if used.<br/>(default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0) |
 | `--mirostat-lr N` | Mirostat learning rate, parameter eta (default: 0.1) |
 | `--mirostat-ent N` | Mirostat target entropy, parameter tau (default: 5.0) |
 | `-l, --logit-bias TOKEN_ID(+/-)BIAS` | modifies the likelihood of token appearing in the completion,<br/>i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',<br/>or `--logit-bias 15043-1` to decrease likelihood of token ' Hello' |
@@ -319,6 +323,18 @@ node index.js
       - The prompt is a string or an array with the first element given as a string
       - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
 
+    These input shapes and data type are allowed for `prompt`:
+
+      - Single string: `"string"`
+      - Single sequence of tokens: `[12, 34, 56]`
+      - Mixed tokens and strings: `[12, 34, "string", 56, 78]`
+
+    Multiple prompts are also supported. In this case, the completion result will be an array.
+
+      - Only strings: `["string1", "string2"]`
+      - Strings and sequences of tokens: `["string1", [12, 34, 56]]`
+      - Mixed types: `[[12, 34, "string", 56, 78], [12, 34, 56], "string"]`
+
     `temperature`: Adjust the randomness of the generated text. Default: `0.8`
 
     `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` Default: `0.0`, which is disabled.
@@ -343,8 +359,6 @@ node index.js
     `stop`: Specify a JSON array of stopping strings.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
 
-    `tfs_z`: Enable tail free sampling with parameter z. Default: `1.0`, which is disabled.
-
     `typical_p`: Enable locally typical sampling with parameter p. Default: `1.0`, which is disabled.
 
     `repeat_penalty`: Control the repetition of token sequences in the generated text. Default: `1.1`
@@ -356,6 +370,16 @@ node index.js
     `presence_penalty`: Repeat alpha presence penalty. Default: `0.0`, which is disabled.
 
     `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
+
+    `dry_multiplier`: Set the DRY (Don't Repeat Yourself) repetition penalty multiplier. Default: `0.0`, which is disabled.
+
+    `dry_base`: Set the DRY repetition penalty base value. Default: `1.75`
+
+    `dry_allowed_length`: Tokens that extend repetition beyond this receive exponentially increasing penalty: multiplier * base ^ (length of repeating sequence before token - allowed length). Default: `2`
+
+    `dry_penalty_last_n`: How many tokens to scan for repetitions. Default: `-1`, where `0` is disabled and `-1` is context size.
+
+    `dry_sequence_breakers`: Specify an array of sequence breakers for DRY sampling. Only a JSON array of strings is accepted. Default: `['\n', ':', '"', '*']`
 
     `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
 
@@ -385,7 +409,7 @@ node index.js
 
     `cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `false`
 
-    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["top_k", "tfs_z", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values.
+    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["top_k", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values.
 
 **Response format**
 
@@ -790,7 +814,6 @@ Example:
         "repeat_penalty": 1.100000023841858,
         "samplers": [
             "top_k",
-            "tfs_z",
             "typical_p",
             "top_p",
             "min_p",
@@ -804,7 +827,6 @@ Example:
         "stream": false,
         "task_id": 0,
         "temperature": 0.0,
-        "tfs_z": 1.0,
         "top_k": 40,
         "top_p": 0.949999988079071,
         "typical_p": 1.0

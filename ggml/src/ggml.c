@@ -3464,7 +3464,7 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
 
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     size_t nbytes;
-    size_t blck_size = ggml_blck_size(tensor->type);
+    const size_t blck_size = ggml_blck_size(tensor->type);
     if (blck_size == 1) {
         nbytes = ggml_type_size(tensor->type);
         for (int i = 0; i < GGML_MAX_DIMS; ++i) {
@@ -3852,10 +3852,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
                 },
             };
 
-            for (int i = 0; i < GGML_MAX_CONTEXTS; ++i) {
-                g_state.contexts[i].used = false;
-            }
-
             const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
 
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
@@ -4032,7 +4028,9 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
     if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
         GGML_LOG_WARN("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
                 __func__, cur_end + size_needed + GGML_OBJECT_SIZE, ctx->mem_size);
-        assert(false);
+#ifndef NDEBUG
+        GGML_ABORT("not enough space in the context's memory pool");
+#endif
         return NULL;
     }
 
@@ -22138,7 +22136,11 @@ static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
         return false;
     }
 
-    p->data = GGML_CALLOC(p->n + 1, 1);
+    p->data = calloc(p->n + 1, 1);
+    if (!p->data) {
+        fprintf(stderr, "%s: failed to allocate memory for string of length %" PRIu64 "\n", __func__, p->n);
+        return false;
+    }
 
     ok = ok && gguf_fread_el(file,  p->data, p->n, offset);
 
@@ -22172,7 +22174,11 @@ static void gguf_free_kv(struct gguf_kv * kv) {
 }
 
 struct gguf_context * gguf_init_empty(void) {
-    struct gguf_context * ctx = GGML_CALLOC(1, sizeof(struct gguf_context));
+    struct gguf_context * ctx = calloc(1, sizeof(struct gguf_context));
+    if (!ctx) {
+        fprintf(stderr, "%s: failed to allocate memory for context\n", __func__);
+        return NULL;
+    }
 
     memcpy(ctx->header.magic, GGUF_MAGIC, sizeof(ctx->header.magic));
     ctx->header.version   = GGUF_VERSION;
@@ -22218,7 +22224,12 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     bool ok = true;
 
-    struct gguf_context * ctx = GGML_CALLOC(1, sizeof(struct gguf_context));
+    struct gguf_context * ctx = calloc(1, sizeof(struct gguf_context));
+    if (!ctx) {
+        fprintf(stderr, "%s: failed to allocate memory for context\n", __func__);
+        fclose(file);
+        return NULL;
+    }
 
     // read the header
     {
@@ -22257,9 +22268,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     {
         const uint64_t n_kv = ctx->header.n_kv;
 
-        // header.n_kv will hold the actual value of pairs that were successfully read in the loop below
-        ctx->header.n_kv = 0;
-        ctx->kv = GGML_CALLOC(n_kv, sizeof(struct gguf_kv));
+        ctx->kv = calloc(n_kv, sizeof(struct gguf_kv));
+        if (!ctx->kv) {
+            fprintf(stderr, "%s: failed to allocate memory for kv pairs\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
 
         for (uint64_t i = 0; i < n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
@@ -22310,7 +22325,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                         return NULL;
                                     }
 
-                                    kv->value.arr.data = GGML_CALLOC(kv->value.arr.n, gguf_type_size(kv->value.arr.type));
+                                    kv->value.arr.data = calloc(kv->value.arr.n, gguf_type_size(kv->value.arr.type));
+                                    if (!kv->value.arr.data) {
+                                        fprintf(stderr, "%s: failed to allocate memory for array\n", __func__);
+                                        fclose(file);
+                                        gguf_free(ctx);
+                                        return NULL;
+                                    }
 
                                     ok = ok && gguf_fread_el(file, kv->value.arr.data, kv->value.arr.n * gguf_type_size(kv->value.arr.type), &offset);
                                 } break;
@@ -22324,24 +22345,36 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                         return NULL;
                                     }
 
-                                    kv->value.arr.data = GGML_CALLOC(kv->value.arr.n, sizeof(struct gguf_str));
+                                    kv->value.arr.data = calloc(kv->value.arr.n, sizeof(struct gguf_str));
+                                    if (!kv->value.arr.data) {
+                                        fprintf(stderr, "%s: failed to allocate memory for array\n", __func__);
+                                        fclose(file);
+                                        gguf_free(ctx);
+                                        return NULL;
+                                    }
 
                                     for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
                                         ok = ok && gguf_fread_str(file, &((struct gguf_str *) kv->value.arr.data)[j], &offset);
                                     }
                                 } break;
                             case GGUF_TYPE_ARRAY:
-                            default: GGML_ABORT("invalid type");
+                            default:
+                                {
+                                    fprintf(stderr, "%s: invalid array type %d\n", __func__, kv->value.arr.type);
+                                    ok = false;
+                                } break;
                         }
                     } break;
-                default: GGML_ABORT("invalid type");
+                default:
+                    {
+                        fprintf(stderr, "%s: invalid type %d\n", __func__, kv->type);
+                        ok = false;
+                    } break;
             }
 
             if (!ok) {
                 break;
             }
-
-            ctx->header.n_kv++;
         }
 
         if (!ok) {
@@ -22354,7 +22387,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the tensor infos
     if (ctx->header.n_tensors > 0) {
-        ctx->infos = GGML_CALLOC(ctx->header.n_tensors, sizeof(struct gguf_tensor_info));
+        ctx->infos = calloc(ctx->header.n_tensors, sizeof(struct gguf_tensor_info));
+        if (!ctx->infos) {
+            fprintf(stderr, "%s: failed to allocate memory for tensor infos\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
 
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
