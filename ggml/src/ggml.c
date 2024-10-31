@@ -22102,18 +22102,46 @@ static size_t gguf_type_size(enum gguf_type type) {
     return GGUF_TYPE_SIZE[type];
 }
 
-static void gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {
-    GGML_ASSERT(info->n_dims <= GGML_MAX_DIMS);
-    GGML_ASSERT(0 <= info->type && info->type < GGML_TYPE_COUNT);
+static bool gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {
+    if (info->n_dims > GGML_MAX_DIMS) {
+        fprintf(stderr, "%s: invalid number of dimensions (%" PRIu32 ")\n", __func__, info->n_dims);
+        return false;
+    }
+
+    if (info->type < 0 || info->type >= GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid type (%d)\n", __func__, info->type);
+        return false;
+    }
+
+    if (strlen(info->name.data) >= GGML_MAX_NAME) {
+        fprintf(stderr, "%s: tensor '%s' name is too long\n", __func__, info->name.data);
+        return false;
+    }
 
     for (uint32_t i = 0; i < info->n_dims; ++i) {
-        GGML_ASSERT(info->ne[i] > 0);
+        if (info->ne[i] <= 0) {
+            fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[i]);
+            return false;
+        }
     }
 
     // prevent overflow for total number of elements
-    GGML_ASSERT(INT64_MAX/info->ne[1] > info->ne[0]);
-    GGML_ASSERT(INT64_MAX/info->ne[2] > info->ne[0]*info->ne[1]);
-    GGML_ASSERT(INT64_MAX/info->ne[3] > info->ne[0]*info->ne[1]*info->ne[2]);
+    if (INT64_MAX/info->ne[1] <= info->ne[0]) {
+        fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[1]);
+        return false;
+    }
+
+    if (INT64_MAX/info->ne[2] <= info->ne[0]*info->ne[1]) {
+        fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[2]);
+        return false;
+    }
+
+    if (INT64_MAX/info->ne[3] <= info->ne[0]*info->ne[1]*info->ne[2]) {
+        fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[3]);
+        return false;
+    }
+
+    return true;
 }
 
 static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset) {
@@ -22414,8 +22442,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);
             ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);
 
-            // TODO: return an error instead of crashing with GGML_ASSERT
-            gguf_tensor_info_sanitize(info);
+            ok = ok && gguf_tensor_info_sanitize(info);
 
             // make sure there is no duplicated tensor names
             for (uint64_t j = 0; j < i && ok; ++j) {

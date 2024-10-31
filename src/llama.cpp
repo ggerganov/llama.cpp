@@ -4273,8 +4273,11 @@ struct llama_model_loader {
 
         llama_tensor_weight(const llama_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
-            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
+            if (tensor_idx < 0) {
+                throw std::runtime_error(format("tensor '%s' not found in the model", name));
+            }
 
+            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", name));
             }
@@ -7426,7 +7429,7 @@ static bool llm_load_tensors(
                 if (flags & llama_model_loader::TENSOR_NOT_REQUIRED) {
                     return nullptr;
                 }
-                throw std::runtime_error(format("missing tensor %s", tn.str().c_str()));
+                throw std::runtime_error(format("missing tensor '%s'", tn.str().c_str()));
             }
 
             // some models use the token embedding tensor as the output, but since these are used in different layers and with different ops
