@@ -17162,18 +17162,10 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
 
         auto * buft = ggml_backend_cpu_buffer_type();
         // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
-        ggml_tensor * output_tensor = lctx.model.output;
-        if (!output_tensor) {
-            // bert models don't have an output tensor, use the last layer
-            output_tensor = lctx.model.layers.back().layer_out_norm;
-        }
-        if (output_tensor) {
-            auto * output_buft = ggml_backend_buffer_get_type(output_tensor->buffer);
-            auto * output_dev = ggml_backend_buft_get_device(output_buft);
-            auto * output_dev_host_buft = ggml_backend_dev_host_buffer_type(output_dev);
-            if (output_dev_host_buft) {
-                buft = output_dev_host_buft;
-            }
+        auto * output_dev = lctx.model.dev_output.dev;
+        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
+        if (output_dev_host_buft) {
+            buft = output_dev_host_buft;
         }
         lctx.buf_output = ggml_backend_buft_alloc_buffer(buft, new_size);
         if (lctx.buf_output == nullptr) {
