@@ -2,13 +2,6 @@ import LlamaKit
 import WeatherKit
 import CoreLocation
 
-@llamaActor actor MyLlama {
-    /// Get the current date.
-    public static func getCurrentDate() -> String {
-        Date.now.formatted(date: .long, time: .complete)
-    }
-}
-
 func downloadFile() async throws -> String {
     let fm = FileManager.default
     let tmpDir = fm.temporaryDirectory
@@ -34,6 +27,14 @@ func downloadFile() async throws -> String {
     try fm.moveItem(at: tempURL, to: destinationURL)
     print("File downloaded to: \(destinationURL.path())")
     return destinationURL.path()
+}
+
+
+@llamaActor actor MyLlama {
+    /// Get the current date.
+    @Tool public static func getCurrentDate() -> String {
+        Date.now.formatted(date: .long, time: .complete)
+    }
 }
 
 let params = GPTParams()

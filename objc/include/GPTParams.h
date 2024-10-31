@@ -256,8 +256,6 @@ typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
 @property (nonatomic, assign) BOOL inputPrefixBOS; // prefix BOS to user inputs, preceding input_prefix
 @property (nonatomic, assign) BOOL ctxShift; // context shift on inifinite text generation
 @property (nonatomic, assign) BOOL displayPrompt; // print prompt before generation
-- (LlamaModelParams *)llamaModelParams;
-- (LlamaContextParams *)llamaContextParams;
 
 @end
 

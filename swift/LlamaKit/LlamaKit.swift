@@ -122,7 +122,7 @@ public actor LlamaToolSession {
         {"name": <function-name>,"arguments": <args-dict>}
         </tool_call>
 
-        Here are the available tools:
+        The first call you will be asked to warm up is to get the user's IP address. Here are the available tools:
         <tools> \(String(data: encoded, encoding: .utf8)!) </tools><|eot_id|>
         """
         params.prompt = prompt
@@ -185,5 +185,9 @@ public extension LlamaActor {
 
 @attached(member, names: arbitrary)
 @attached(extension, conformances: LlamaActor, names: arbitrary)
-public macro llamaActor() = #externalMacro(module: "JSONSchemaMacros",
+public macro llamaActor() = #externalMacro(module: "LlamaKitMacros",
                                            type: "LlamaActorMacro")
+
+@attached(body)
+public macro Tool() = #externalMacro(module: "LlamaKitMacros",
+                                     type: "ToolMacro")

@@ -716,11 +716,4 @@
     gpt_params.input_suffix = [inputSuffix cStringUsingEncoding:NSUTF8StringEncoding];
 }
 
-
-- (LlamaContextParams *)llamaContextParams {
-}
-
-- (LlamaModelParams *)llamaModelParams {
-}
-
 @end

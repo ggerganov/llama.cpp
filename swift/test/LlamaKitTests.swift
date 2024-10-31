@@ -78,24 +78,6 @@ struct LlamaGrammarSessionSuite {
 import WeatherKit
 import CoreLocation
 
-@llamaActor actor MyLlama {
-    struct CurrentWeather: Codable {
-        let temperature: Double
-        let condition: WeatherCondition
-    }
-    
-    /// Get the current weather in a given location.
-    /// - parameter location: The city and state, e.g. San Francisco, CA
-    /// - parameter unit: The unit of temperature
-    public static func getCurrentWeather(location: String, unit: String) async throws -> CurrentWeather {
-        let weather = try await WeatherService().weather(for: CLGeocoder().geocodeAddressString(location)[0].location!)
-        var temperature = weather.currentWeather.temperature
-        temperature.convert(to: .fahrenheit)
-        return CurrentWeather(temperature: temperature.value,
-                              condition: weather.currentWeather.condition)
-    }
-}
-
 func downloadFile() async throws -> String {
     let fm = FileManager.default
     let tmpDir = fm.temporaryDirectory
@@ -121,6 +103,25 @@ func downloadFile() async throws -> String {
     try fm.moveItem(at: tempURL, to: destinationURL)
     print("File downloaded to: \(destinationURL.path())")
     return destinationURL.path()
+}
+
+
+@llamaActor actor MyLlama {
+    struct CurrentWeather: Codable {
+        let temperature: Double
+        let condition: WeatherCondition
+    }
+    
+    /// Get the current weather in a given location.
+    /// - parameter location: The city and state, e.g. San Francisco, CA
+    /// - parameter unit: The unit of temperature
+    @Tool public static func getCurrentWeather(location: String, unit: String) async throws -> CurrentWeather {
+        let weather = try await WeatherService().weather(for: CLGeocoder().geocodeAddressString(location)[0].location!)
+        var temperature = weather.currentWeather.temperature
+        temperature.convert(to: .fahrenheit)
+        return CurrentWeather(temperature: temperature.value,
+                              condition: weather.currentWeather.condition)
+    }
 }
 
 @Test func llamaToolSession() async throws {

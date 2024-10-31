@@ -1,5 +1,4 @@
 import Foundation
-//import SwiftSyntaxMacros
 
 public struct JSONSchema : Codable {
     public struct Items : Codable {
@@ -71,7 +70,7 @@ public struct _JSONFunctionSchema: Codable {
     public struct Parameters: Codable {
         public let properties: [String: Property]
         public let required: [String]
-        public let type = "object"
+        public var type = "object"
         
         public init(properties: [String : Property], required: [String]) {
             self.properties = properties

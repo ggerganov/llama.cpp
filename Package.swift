@@ -31,8 +31,8 @@ var cSettings: [CSetting] =  [
     // NOTE: NEW_LAPACK will required iOS version 16.4+
     // We should consider add this in the future when we drop support for iOS 14
     // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
-     .define("ACCELERATE_NEW_LAPACK"),
-     .define("ACCELERATE_LAPACK_ILP64"),
+    .define("ACCELERATE_NEW_LAPACK"),
+    .define("ACCELERATE_LAPACK_ILP64")
 ]
 
 #if canImport(Darwin)
@@ -114,6 +114,15 @@ let package = Package(
             ], 
             path: "swift/JSONSchemaMacros"
         ),
+        .macro(
+            name: "LlamaKitMacros",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            ],
+            path: "swift/LlamaKitMacros"
+        ),
         .target(
             name: "JSONSchema",
             dependencies: ["JSONSchemaMacros"],
@@ -121,7 +130,7 @@ let package = Package(
         ),
         .target(
             name: "LlamaKit",
-            dependencies: ["JSONSchema", "LlamaObjC"],
+            dependencies: ["JSONSchema", "LlamaObjC", "LlamaKitMacros"],
             path: "swift/LlamaKit"
         ),
         .testTarget(name: "LlamaKitTests",

@@ -34,10 +34,10 @@ struct common_lora_adapter_container : common_lora_adapter_info {
 };
 
 // build info
-static int LLAMA_BUILD_NUMBER = 0;
-static char const * LLAMA_COMMIT = "";
-static char const * LLAMA_COMPILER = "";
-static char const * LLAMA_BUILD_TARGET = "";
+extern int LLAMA_BUILD_NUMBER;
+extern char const * LLAMA_COMMIT;
+extern char const * LLAMA_COMPILER;
+extern char const * LLAMA_BUILD_TARGET;
 
 struct common_control_vector_load_info;
 

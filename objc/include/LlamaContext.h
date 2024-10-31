@@ -10,10 +10,10 @@ typedef int32_t LlamaToken;
 
 @interface LlamaContext : NSObject
 
+- (NSUInteger)nCtx;
+
 - (void)attachThreadpool:(GGMLThreadpool *)threadpool
          threadpoolBatch:(GGMLThreadpool *)threadpoolBatch;
-
-- (NSUInteger)nCtx;
 
 // Positive return values does not mean a fatal error, but rather a warning.
 //   0 - success
