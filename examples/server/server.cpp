@@ -3259,7 +3259,7 @@ int main(int argc, char ** argv) {
         ctx_server.queue_tasks.terminate();
     };
 
-    LOG_INF("%s: server is listening on %s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
+    LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
 
     ctx_server.queue_tasks.start_loop();
 
