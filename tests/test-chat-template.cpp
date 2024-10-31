@@ -117,7 +117,11 @@ static void test_jinja_templates() {
             } catch (const std::runtime_error & e) {
                 actual = "ERROR: " + std::string(e.what());
             }
-            assert_equals(expected, actual);
+            if (getenv("LLAMA_UPDATE_GOLDENS")) {
+                std::ofstream(golden_file) << actual;
+            } else {
+                assert_equals(expected, actual);
+            }
         }
 
         if (!found_goldens) {
