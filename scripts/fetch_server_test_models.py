@@ -69,7 +69,7 @@ for m in sorted(list(models), key=lambda m: m.hf_repo):
         continue
     print(f'# Ensuring model at {m.hf_repo} / {m.hf_file} is fetched')
     cmd = [cli_path, '-hfr', m.hf_repo, '-hff', m.hf_file, '-n', '1', '-p', 'Hey', '--no-warmup', '--log-disable']
-    if m.hf_file != 'tinyllamas/stories260K.gguf':
+    if m.hf_file != 'tinyllamas/stories260K.gguf' and not m.hf_file.startswith('Mistral-Nemo'):
         cmd.append('-fa')
     try:
         subprocess.check_call(cmd)
