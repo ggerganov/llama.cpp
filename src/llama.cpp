@@ -19694,7 +19694,7 @@ struct llama_context * llama_new_context_with_model(
             int n_nodes_tg = ggml_graph_n_nodes(gf_tg);
 
             // reserve again with pp graph to avoid ggml-alloc reallocations during inference
-            gf_pp = llama_build_graph(*ctx, ubatch_pp, false);
+            gf_pp = llama_build_graph(*ctx, ubatch_pp, true);
             if (!ggml_backend_sched_reserve(ctx->sched, gf_pp)) {
                 LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
                 llama_free(ctx);
