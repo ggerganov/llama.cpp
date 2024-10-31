@@ -79,7 +79,7 @@ Feature: llama.cpp server
 
 
   @slow
-  Scenario Outline: Python hello world w/ <hf_repo> + python tool yields tool call
+  Scenario Outline: Python hello world w/ <hf_repo> + <tool> tool yields ipython call
     Given a model file <hf_file> from HF repo <hf_repo>
     And   a test chat template file named <template_override>
     And   no warmup
@@ -88,23 +88,23 @@ Feature: llama.cpp server
     And   a model test
     And   256 max tokens to predict
     And   a user prompt say hello world with python
-    And   python tool
+    And   <tool> tool
     And   parallel tool calls is disabled
     And   an OAI compatible chat completions request with no api error
-    Then  tool <tool_name> is called with arguments <tool_arguments>
+    Then  tool ipython is called with arguments <tool_arguments>
 
     Examples: Prompts
-      | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
-      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  | mistralai-Mistral-Nemo-Instruct-2407          |
-      | ipython   | {"code": "print(\"Hello World\")"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
-      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
-      | ipython   | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
-      | ipython   | {"code": "print('hello world')"}    | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
-      | ipython   | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
-      | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
-      | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
-      # | ipython   | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
-      # | ipython   | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
+      | tool             | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
+      | python           | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  |                                               |
+      | python           | {"code": "print(\"Hello World\")"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
+      | python           | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
+      | python           | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     |                                               |
+      | python           | {"code": "print('hello world')"}     | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
+      | python           | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | python           | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | python           | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
+      # | python           | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
+      # | python           | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
 
 
   @slow
@@ -145,8 +145,8 @@ Feature: llama.cpp server
     And   the server is starting
     And   the server is healthy
     And   a model test
-    And   256 max tokens to predict
-    And   a user prompt get the weather in paris and search for llama.cpp's latest commits
+    And   512 max tokens to predict
+    And   a user prompt get the weather in paris and search for llama.cpp's latest commits (don't write comments in the code)
     And   python tool
     And   parallel tool calls is enabled
     And   an OAI compatible chat completions request with no api error
