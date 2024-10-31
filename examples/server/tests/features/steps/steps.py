@@ -93,6 +93,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.warmup = True
     context.use_jinja = False
     context.chat_template_file = None
+    context.greedy_sampling = False
 
     # infill
     context.infill_input_extra = None
@@ -188,6 +189,11 @@ def step_use_jinja(context):
 @step('no warmup')
 def step_no_warmup(context):
     context.warmup = False
+
+
+@step('greedy sampling')
+def step_greedy_sampling(context):
+    context.greedy_sampling = True
 
 
 @step('a chat template file {file}')
@@ -446,13 +452,13 @@ def step_python_tool(context):
         "type": "function",
         "function": {
             "name": "ipython",
-            "description": "",
+            "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "code": {
                         "type": "string",
-                        "description": ""
+                        "description": "The code to run in the ipython interpreter."
                     }
                 },
                 "required": ["code"]
@@ -1658,6 +1664,8 @@ def start_server_background(context):
         server_args.extend(['--lora', context.lora_file])
     if context.disable_ctx_shift:
         server_args.extend(['--no-context-shift'])
+    if context.greedy_sampling:
+        server_args.extend(['--samplers', 'top-k', '--top-k', '1'])
     if not context.warmup:
         server_args.extend(['--no-warmup'])
 

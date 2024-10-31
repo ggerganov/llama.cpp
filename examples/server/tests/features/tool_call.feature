@@ -6,6 +6,7 @@ Feature: llama.cpp server
     Given a server listening on localhost:8080
     And   BOS token is 1
     And   42 as server seed
+    And   greedy sampling
     And   8192 KV cache size
     And   32 as batch size
     And   1 slots
@@ -20,7 +21,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   <n_predict> max tokens to predict
-    And   a user prompt write a hello world in python
+    And   a user prompt say hello world with python
     And   a tool choice required
     And   tools <tools>
     And   parallel tool calls is <parallel_tool_calls>
@@ -38,11 +39,11 @@ Feature: llama.cpp server
       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   | 128       | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
       | meta-llama-Meta-Llama-3.1-8B-Instruct         | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct         | 64        | ipython   | {"code": "it and realed at the otter. Asked Dave Dasty, Daisy is a big, shiny blue. As"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct         | 64        | ipython   | {"code": "it and realed at the otter. Asked Dave Daisy, Daisy is a big, shiny blue. As"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
       | meta-llama-Llama-3.2-3B-Instruct              | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
       | meta-llama-Llama-3.2-3B-Instruct              | 64        | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
       | mistralai-Mistral-Nemo-Instruct-2407          | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | mistralai-Mistral-Nemo-Instruct-2407          | 128       | ipython   | {"code": "It's a small cat."}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | mistralai-Mistral-Nemo-Instruct-2407          | 128       | ipython   | {"code": "It's a spector."}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
 
 
   Scenario Outline: Template <template_name> + tinystories model yields no tool call
@@ -52,7 +53,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   <n_predict> max tokens to predict
-    And   a user prompt write a hello world in python
+    And   a user prompt say hello world with python
     And   tools [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]
     And   an OAI compatible chat completions request with no api error
     Then  no tool is called
@@ -71,7 +72,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   16 max tokens to predict
-    And   a user prompt write a hello world in python
+    And   a user prompt say hello world with python
     And   tools []
     And   an OAI compatible chat completions request with no api error
     Then  no tool is called
@@ -86,7 +87,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   256 max tokens to predict
-    And   a user prompt write a hello world in python
+    And   a user prompt say hello world with python
     And   python tool
     And   parallel tool calls is disabled
     And   an OAI compatible chat completions request with no api error
@@ -94,16 +95,16 @@ Feature: llama.cpp server
 
     Examples: Prompts
       | tool_name | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
-      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
-      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
-      | ipython   | {"code": "print('Hello, World!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
-      | ipython   | {"code": "print('Hello World!')"}    | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
       | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  | mistralai-Mistral-Nemo-Instruct-2407          |
+      | ipython   | {"code": "print(\"Hello World\")"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
+      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
+      | ipython   | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
+      | ipython   | {"code": "print('hello world')"}    | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
       | ipython   | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | ipython   | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
-      | ipython   | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
       # | ipython   | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
+      # | ipython   | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
 
 
   @slow
@@ -114,7 +115,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   256 max tokens to predict
-    And   a user prompt write a hello world in python
+    And   a user prompt say hello world with python
     And   parallel tool calls is disabled
     And   an OAI compatible chat completions request with no api error
     Then  no tool is called
@@ -128,7 +129,7 @@ Feature: llama.cpp server
     And   the server is healthy
     And   a model test
     And   256 max tokens to predict
-    And   a user prompt write a hello world in python
+    And   a user prompt say hello world with python
     And   a tool choice none
     And   python tool
     And   parallel tool calls is disabled
