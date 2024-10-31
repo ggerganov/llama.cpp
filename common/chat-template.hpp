@@ -89,7 +89,7 @@ class chat_template {
 
         if (_requires_object_arguments || !_supports_system_role || !_supports_tools) {
             actual_messages = json::array();
-            
+
             std::string pending_system;
             auto flush_sys = [&]() {
                 if (!pending_system.empty()) {
@@ -154,7 +154,7 @@ class chat_template {
                     };
                     if (message.contains("tool_call_id")) {
                         obj["tool_response"]["tool_call_id"] = message.at("tool_call_id");
-                    }       
+                    }
                     message["content"] = obj.dump(2);
                     message.erase("name");
                 }

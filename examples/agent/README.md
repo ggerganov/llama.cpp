@@ -24,12 +24,12 @@ Here's how to run an agent w/ local tool call:
 
   ./llama-server --jinja -fa --verbose \
     -hfr bartowski/gemma-2-2b-it-GGUF -hff gemma-2-2b-it-Q4_K_M.gguf               |                                               |
-  
+
   # Native support for Mistral Nemo, Qwen 2.5, Hermes 3, Functionary 3.x
   # Note that some of these GGUFs lack the right template, so we override it
   # (otherwise they'd use the generic tool call support, which may be less efficient
   # and consume more tokens)
-  
+
   ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
     -hfr bartowski/Qwen2.5-7B-Instruct-GGUF -hff Qwen2.5-7B-Instruct-Q4_K_M.gguf
 
