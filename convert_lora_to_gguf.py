@@ -326,7 +326,6 @@ if __name__ == '__main__':
         logger.info(f"Loading base model: {dir_base_model.name}")
         hparams = Model.load_hparams(dir_base_model)
 
-
     with torch.inference_mode():
         try:
             model_class = Model.from_model_architecture(hparams["architectures"][0])
