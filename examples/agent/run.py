@@ -158,6 +158,7 @@ async def main(
                         messages.append(dict(
                             tool_call_id=tool_call.get('id'),
                             role='tool',
+                            name=name,
                             content=tool_result_str,
                         ))
                 else:
