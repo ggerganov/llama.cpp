@@ -9104,10 +9104,10 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
 #elif defined __AVX__
 
-    const __m128i m4 = _mm_set1_epi8(0xF);
-    const __m128i m3 = _mm_set1_epi8(3);
-    const __m128i m32s = _mm_set1_epi8(32);
     const __m128i m2 = _mm_set1_epi8(2);
+    const __m128i m3 = _mm_set1_epi8(3);
+    const __m128i m15 = _mm_set1_epi8(15);
+    const __m128i m32 = _mm_set1_epi8(32);
 
     __m256 acc = _mm256_setzero_ps();
 
@@ -9133,26 +9133,26 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
             const __m128i q4h_0 = _mm_slli_epi16(_mm_and_si128(q4bitsH_0, m3), 4);
             const __m128i q4h_1 = _mm_slli_epi16(_mm_and_si128(q4bitsH_1, m3), 4);
-            const __m128i q4h_2 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 2), m3), 4);
-            const __m128i q4h_3 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 2), m3), 4);
-            const __m128i q4h_4 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 4), m3), 4);
-            const __m128i q4h_5 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 4), m3), 4);
-            const __m128i q4h_6 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 6), m3), 4);
-            const __m128i q4h_7 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 6), m3), 4);
+            const __m128i q4h_2 = _mm_slli_epi16(_mm_and_si128(q4bitsH_0, _mm_set1_epi8(0x0C)), 2);
+            const __m128i q4h_3 = _mm_slli_epi16(_mm_and_si128(q4bitsH_1, _mm_set1_epi8(0x0C)), 2);
+            const __m128i q4h_4 = _mm_and_si128(q4bitsH_0, _mm_set1_epi8(0x30));
+            const __m128i q4h_5 = _mm_and_si128(q4bitsH_1, _mm_set1_epi8(0x30));
+            const __m128i q4h_6 = _mm_srli_epi16(_mm_and_si128(q4bitsH_0, _mm_set1_epi8(0xC0)), 2);
+            const __m128i q4h_7 = _mm_srli_epi16(_mm_and_si128(q4bitsH_1, _mm_set1_epi8(0xC0)), 2);
 
             const __m128i q4bits1_0 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
             const __m128i q4bits1_1 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
             const __m128i q4bits2_0 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
             const __m128i q4bits2_1 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
 
-            const __m128i q4_0 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits1_0, m4), q4h_0), m32s);
-            const __m128i q4_1 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits1_1, m4), q4h_1), m32s);
-            const __m128i q4_2 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits2_0, m4), q4h_2), m32s);
-            const __m128i q4_3 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits2_1, m4), q4h_3), m32s);
-            const __m128i q4_4 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits1_0, 4), m4), q4h_4), m32s);
-            const __m128i q4_5 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits1_1, 4), m4), q4h_5), m32s);
-            const __m128i q4_6 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits2_0, 4), m4), q4h_6), m32s);
-            const __m128i q4_7 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits2_1, 4), m4), q4h_7), m32s);
+            const __m128i q4_0 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits1_0, m15), q4h_0), m32);
+            const __m128i q4_1 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits1_1, m15), q4h_1), m32);
+            const __m128i q4_2 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits2_0, m15), q4h_2), m32);
+            const __m128i q4_3 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(q4bits2_1, m15), q4h_3), m32);
+            const __m128i q4_4 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits1_0, 4), m15), q4h_4), m32);
+            const __m128i q4_5 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits1_1, 4), m15), q4h_5), m32);
+            const __m128i q4_6 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits2_0, 4), m15), q4h_6), m32);
+            const __m128i q4_7 = _mm_sub_epi8(_mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits2_1, 4), m15), q4h_7), m32);
 
             const __m128i q8_0 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
             const __m128i q8_1 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
