@@ -123,10 +123,10 @@
 @end
 
 @implementation GPTSamplerParams {
-    gpt_sampler_params *gpt_sampler_params;
+    common_sampler_params *gpt_sampler_params;
 }
 
-- (instancetype)initWithParams:(gpt_sampler_params&)params {
+- (instancetype)initWithParams:(common_sampler_params&)params {
     self = [super init];
     if (self) {
         gpt_sampler_params = &params;
@@ -192,13 +192,13 @@
     gpt_sampler_params->min_p = minP;
 }
 
-- (float)tfsZ {
-    return gpt_sampler_params->tfs_z;
-}
-
-- (void)setTfsZ:(float)tfsZ {
-    gpt_sampler_params->tfs_z = tfsZ;
-}
+//- (float)tfsZ {
+//    return gpt_sampler_params->tfs_z;
+//}
+//
+//- (void)setTfsZ:(float)tfsZ {
+//    gpt_sampler_params->tfs_z = tfsZ;
+//}
 
 - (float)typP {
     return gpt_sampler_params->typ_p;
@@ -324,7 +324,7 @@
 - (void)setSamplers:(NSArray<NSNumber *> *)samplers {
     gpt_sampler_params->samplers.clear();
     for (NSNumber *sampler in samplers) {
-        gpt_sampler_params->samplers.push_back(static_cast<gpt_sampler_type>(sampler.intValue));
+        gpt_sampler_params->samplers.push_back(static_cast<common_sampler_type>(sampler.intValue));
     }
 }
 
@@ -397,14 +397,14 @@
     return [output copy];
 }
 
-- (gpt_sampler_params&)cParams {
+- (common_sampler_params&)cParams {
     return *gpt_sampler_params;
 }
 
 @end
 
 @implementation GPTParams {
-    gpt_params gpt_params;
+    common_params gpt_params;
 }
 
 - (NSArray<NSString *> *)antiPrompts {
@@ -415,7 +415,7 @@
     return antiprompts;
 }
 
-- (gpt_params&)params {
+- (common_params&)params {
     return gpt_params;
 }
 

@@ -5,7 +5,6 @@ BUILD_TARGETS = \
 	llama-batched \
 	llama-batched-bench \
 	llama-bench \
-	llama-benchmark-matmult \
 	llama-cli \
 	llama-convert-llama2c-to-ggml \
 	llama-embedding \
@@ -68,7 +67,7 @@ TEST_TARGETS = \
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
 LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
-	retrieval speculative infill tokenize benchmark-matmult parallel export-lora lookahead lookup passkey gritlm
+	retrieval speculative infill tokenize parallel export-lora lookahead lookup passkey gritlm
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
 #  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
@@ -91,11 +90,6 @@ endif
 
 ifdef LLAMA_METAL
 GGML_METAL := 1
-DEPRECATE_WARNING := 1
-endif
-
-ifdef LLAMA_OPENMP
-GGML_OPENMP := 1
 DEPRECATE_WARNING := 1
 endif
 
@@ -585,6 +579,11 @@ ifndef GGML_NO_LLAMAFILE
 	OBJ_GGML    += ggml/src/llamafile/sgemm.o
 endif
 
+ifndef GGML_NO_AMX
+	MK_CPPFLAGS += -DGGML_USE_AMX
+	OBJ_GGML    += ggml/src/ggml-amx.o ggml/src/ggml-amx/mmq.o
+endif
+
 ifdef GGML_RPC
 	MK_CPPFLAGS += -DGGML_USE_RPC
 	OBJ_GGML    += ggml/src/ggml-rpc.o
@@ -611,7 +610,7 @@ ifdef GGML_CUDA
 
 		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include
 		MK_LDFLAGS   += -lmusa -lmublas -lmusart -lpthread -ldl -lrt -L$(CUDA_PATH)/lib -L/usr/lib64
-		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_22
+		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22
 	else
 		ifneq ('', '$(wildcard /opt/cuda)')
 			CUDA_PATH ?= /opt/cuda
@@ -1055,10 +1054,11 @@ ggml/src/ggml-alloc.o: \
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
 ggml/src/ggml-backend.o: \
-	ggml/src/ggml-backend.c \
+	ggml/src/ggml-backend.cpp \
+	ggml/src/ggml-backend-impl.h \
 	ggml/include/ggml.h \
 	ggml/include/ggml-backend.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 ggml/src/ggml-quants.o: \
 	ggml/src/ggml-quants.c \
@@ -1086,6 +1086,19 @@ ggml/src/llamafile/sgemm.o: \
 	ggml/include/ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif # GGML_NO_LLAMAFILE
+
+ifndef GGML_NO_AMX
+ggml/src/ggml-amx.o: \
+	ggml/src/ggml-amx.cpp \
+	ggml/include/ggml-amx.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+ggml/src/ggml-amx/mmq.o: \
+	ggml/src/ggml-amx/mmq.cpp \
+	ggml/src/ggml-amx/mmq.h \
+	ggml/include/ggml.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+endif
 
 ifdef GGML_RPC
 ggml/src/ggml-rpc.o: \
@@ -1238,6 +1251,7 @@ clean:
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
+	rm -vrf ggml/src/ggml-amx/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
 	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
@@ -1522,16 +1536,6 @@ common/build-info.o: common/build-info.cpp
 #
 
 tests: $(TEST_TARGETS)
-
-llama-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp \
-	$(OBJ_GGML) common/build-info.o
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-run-benchmark-matmult: llama-benchmark-matmult
-	./$@
-
-.PHONY: run-benchmark-matmult swift
 
 tests/test-arg-parser: tests/test-arg-parser.cpp \
 	$(OBJ_ALL)

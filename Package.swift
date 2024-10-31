@@ -19,7 +19,7 @@ var cppSources = [
 var ggmlSources = [
     "src/ggml.c",
     "src/ggml-alloc.c",
-    "src/ggml-backend.c",
+    "src/ggml-backend.cpp",
     "src/ggml-quants.c",
     "src/ggml-aarch64.c"
 ]
@@ -32,7 +32,7 @@ var cSettings: [CSetting] =  [
     // We should consider add this in the future when we drop support for iOS 14
     // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
      .define("ACCELERATE_NEW_LAPACK"),
-     .define("ACCELERATE_LAPACK_ILP64")
+     .define("ACCELERATE_LAPACK_ILP64"),
 ]
 
 #if canImport(Darwin)
@@ -60,7 +60,7 @@ let package = Package(
         .tvOS(.v14)
     ],
     products: [
-        .library(name: "llama", targets: ["llama"]),
+        .library(name: "LlamaKit", targets: ["LlamaKit"]),
         .executable(name: "LlamaKitMain", targets: ["LlamaKitMain"])
     ],
     dependencies: [
@@ -76,7 +76,8 @@ let package = Package(
                    "models",
                    "tests",
                    "CMakeLists.txt",
-                   "Makefile"
+                   "Makefile",
+                   "ggml"
                 ],
                 sources: cppSources,
                 publicHeadersPath: "spm-headers"),
@@ -86,6 +87,7 @@ let package = Package(
             path: "ggml",
             sources: ggmlSources,
             resources: resources,
+            publicHeadersPath: "include",
             cSettings: cSettings,
             linkerSettings: linkerSettings),
         .target(name: "LlamaObjC",
@@ -131,7 +133,7 @@ let package = Package(
         .executableTarget(name: "LlamaKitMain",
                           dependencies: ["LlamaKit"],
                           path: "swift/main",
-                          resources: [.process("Llama-3.2-3B-Instruct-Q4_0.gguf")]),
+                          cSettings: cSettings),
     ],
     cxxLanguageStandard: .cxx17
 )

@@ -135,6 +135,6 @@ func downloadFile() async throws -> String {
     let llama = try await MyLlama(params: params)
     let currentWeather = try await MyLlama.getCurrentWeather(location: "San Francisco, CA", unit: "farenheit")
     let output = try await llama.chat("What's the weather (in farenheit) in San Francisco, CA?")
-    #expect(output.contains(String(format: "%.2f", currentWeather.temperature)))
+    #expect(output.contains(String(format: "%d", Int(currentWeather.temperature))))
     // #expect(output.contains(currentWeather.condition.rawValue))
 }

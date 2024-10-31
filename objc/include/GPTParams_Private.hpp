@@ -13,13 +13,13 @@
 
 @interface GPTParams()
 
-- (gpt_params&)params;
+- (common_params&)params;
 
 @end
 
 @interface GPTSamplerParams()
 
-- (gpt_sampler_params&)cParams;
+- (common_sampler_params&)cParams;
 
 @end
 #endif /* GPTParams_Private_hpp */

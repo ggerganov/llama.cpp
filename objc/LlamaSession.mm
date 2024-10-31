@@ -74,7 +74,7 @@
 
 @implementation LlamaSession {
     std::vector<llama_token> embd_inp;
-    std::vector<llama_chat_msg> chat_msgs;
+    std::vector<common_chat_msg> chat_msgs;
     GPTParams *params;
     GPTSampler *smpl;
     BOOL isInteracting;
@@ -107,9 +107,9 @@
     int n_ctx;
 }
 
-- (NSString *)chat_add_and_format:(std::vector<llama_chat_msg> &) chat_msgs role:(const std::string &) role content:(const std::string &) content {
-    llama_chat_msg new_msg{role, content};
-    auto formatted = llama_chat_format_single([self.model cModel], [params params].chat_template, chat_msgs, new_msg, role == "user");
+- (NSString *)chat_add_and_format:(std::vector<common_chat_msg> &) chat_msgs role:(const std::string &) role content:(const std::string &) content {
+    common_chat_msg new_msg{role, content};
+    auto formatted = common_chat_format_single([self.model cModel], [params params].chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
     os_log_debug(OS_LOG_DEFAULT, "formatted: '%s'\n", formatted.c_str());
     return [NSString stringWithCString:formatted.c_str() encoding:NSUTF8StringEncoding];
@@ -168,7 +168,7 @@ static BOOL file_is_empty(NSString *path) {
 
     llama_backend_init();
     llama_numa_init(ggml_numa_strategy(params.numaStrategy));
-    auto llama_init = llama_init_from_gpt_params([params params]);
+    auto llama_init = common_init_from_params([params params]);
     
     auto tpp_batch = params.cpuParamsBatch.ggmlThreadpoolParams;
     auto tpp = params.cpuParams.ggmlThreadpoolParams;
@@ -214,7 +214,7 @@ static BOOL file_is_empty(NSString *path) {
     }
     // print system information
     @autoreleasepool {
-        NSLog(@"%s", gpt_params_get_system_info([params params]).c_str());
+        NSLog(@"%s", common_params_get_system_info([params params]).c_str());
     }
     
     pathSession = [[NSMutableString alloc] initWithString:params.pathPromptCache];
@@ -471,7 +471,7 @@ static BOOL file_is_empty(NSString *path) {
         int enc_input_size = embd_inp.size();
         llama_token * enc_input_buf = embd_inp.data();
         
-        if ([_ctx encode:llama_batch_get_one(enc_input_buf, enc_input_size, 0, 0)]) {
+        if ([_ctx encode:llama_batch_get_one(enc_input_buf, enc_input_size)]) {
             [NSException raise:@"EvalFailure" format:@"failed to eval"];
         }
         
@@ -594,7 +594,7 @@ static BOOL file_is_empty(NSString *path) {
                 os_log_debug(OS_LOG_DEFAULT, "eval: %s\n", [self.ctx convertTokensToString:embd].c_str());
 
                 
-                if ([self.ctx decode:[[LlamaBatch alloc] initWithBatch:llama_batch_get_one(&embd[i], n_eval, n_past, 0)] ]) {
+                if ([self.ctx decode:[[LlamaBatch alloc] initWithBatch:llama_batch_get_one(&embd[i], n_eval)] ]) {
                     [NSException raise:@"EvalFailure" format:@"failed to eval"];
                 }
 

@@ -42,7 +42,8 @@
 - (std::vector<llama_token>)tokenize:(NSString *)text
 addSpecial:(BOOL)addSpecial
 parseSpecial:(BOOL)parseSpecial {
-    return llama_tokenize(ctx, [text cStringUsingEncoding:NSUTF8StringEncoding], addSpecial, parseSpecial);
+    
+    return common_tokenize(ctx, [text cStringUsingEncoding:NSUTF8StringEncoding], addSpecial, parseSpecial);
 }
 
 - (std::string)convertTokensToString:(const std::vector<llama_token>&)tokens {
@@ -76,7 +77,7 @@ parseSpecial:(BOOL)parseSpecial {
 }
 
 - (NSString *)tokenToPiece:(LlamaToken)token special:(BOOL)special {
-    return [[NSString alloc] initWithCString:llama_token_to_piece(ctx, token, special).c_str() encoding:NSUTF8StringEncoding];
+    return [[NSString alloc] initWithCString:common_token_to_piece(ctx, token, special).c_str() encoding:NSUTF8StringEncoding];
 }
 
 - (NSInteger)decode:(LlamaBatch *)batch {

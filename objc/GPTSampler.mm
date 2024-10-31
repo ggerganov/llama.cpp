@@ -6,20 +6,20 @@
 #import "../../common/sampling.h"
 
 @implementation GPTSampler {
-    gpt_sampler *sampler;
+    common_sampler *sampler;
 }
 
 - (instancetype)init:(LlamaModel *)model gptSamplerParams:(GPTSamplerParams *)gptSamplerParams
 {
     self = [super init];
     if (self) {
-        self->sampler = gpt_sampler_init([model cModel], [gptSamplerParams cParams]);
+        self->sampler = common_sampler_init([model cModel], [gptSamplerParams cParams]);
     }
     return self;
 }
 
 - (uint32_t)seed {
-    return gpt_sampler_get_seed(sampler);
+    return common_sampler_get_seed(sampler);
 }
 
 - (LlamaToken)sample:(LlamaContext *)context index:(NSInteger)index {
@@ -27,23 +27,23 @@
 }
 
 - (LlamaToken)sample:(LlamaContext *)context index:(NSInteger)index grammarFirst:(BOOL)grammarFirst {
-    return gpt_sampler_sample(sampler, [context cContext], index, grammarFirst);
+    return common_sampler_sample(sampler, [context cContext], index, grammarFirst);
 }
 
 - (void)accept:(LlamaToken)token acceptGrammar:(BOOL)acceptGrammar {
-    gpt_sampler_accept(sampler, token, acceptGrammar);
+    common_sampler_accept(sampler, token, acceptGrammar);
 }
 
 - (NSString *)previousString:(LlamaContext *)context n:(NSInteger)n {
-    return [[NSString alloc] initWithCString:gpt_sampler_prev_str(sampler, [context cContext], n).data() encoding:NSUTF8StringEncoding];
+    return [[NSString alloc] initWithCString:common_sampler_prev_str(sampler, [context cContext], n).data() encoding:NSUTF8StringEncoding];
 }
 
 - (LlamaToken)last {
-    return gpt_sampler_last(sampler);
+    return common_sampler_last(sampler);
 }
 
 - (void)reset {
-    gpt_sampler_reset(sampler);
+    common_sampler_reset(sampler);
 }
 
 @end

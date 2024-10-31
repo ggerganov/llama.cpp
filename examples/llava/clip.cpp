@@ -2444,12 +2444,6 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         ggml_backend_cpu_set_n_threads(ctx->backend, n_threads);
     }
 
-#ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(ctx->backend)) {
-        ggml_backend_metal_set_n_cb(ctx->backend, n_threads);
-    }
-#endif
-
     ggml_backend_graph_compute(ctx->backend, gf);
 
     // the last node is the embedding tensor

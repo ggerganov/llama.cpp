@@ -62,6 +62,9 @@ option(LLAMA_SANITIZE_THREAD    "llama: enable thread sanitizer"    OFF)
 option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
 option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 
+# utils
+option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
+
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES "llama: build examples"       ${LLAMA_STANDALONE})
@@ -83,6 +86,10 @@ set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
 # change the default for these ggml options
 if (NOT DEFINED GGML_LLAMAFILE)
     set(GGML_LLAMAFILE_DEFAULT ON)
+endif()
+
+if (NOT DEFINED GGML_AMX)
+    set(GGML_AMX ON)
 endif()
 
 if (NOT DEFINED GGML_CUDA_GRAPHS)
@@ -191,17 +198,19 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
         DESTINATION lib/pkgconfig)
 
 #
-# programs, examples and tests
+# utils, programs, examples and tests
 #
 
-add_subdirectory(common)
+if (LLAMA_BUILD_COMMON)
+    add_subdirectory(common)
+endif()
 
-if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
     add_subdirectory(tests)
-endif ()
+endif()
 
-if (LLAMA_BUILD_EXAMPLES)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
     add_subdirectory(pocs)
 endif()

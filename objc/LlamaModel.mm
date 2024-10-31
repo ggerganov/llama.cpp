@@ -43,7 +43,7 @@
 }
 
 - (NSString *)formatExample:(NSString *)tmpl {
-    return [[NSString alloc] initWithCString:llama_chat_format_example(model, [tmpl cStringUsingEncoding:NSUTF8StringEncoding]).c_str()
+    return [[NSString alloc] initWithCString:common_chat_format_example(model, [tmpl cStringUsingEncoding:NSUTF8StringEncoding]).c_str()
                                     encoding:NSUTF8StringEncoding];
 }
 

@@ -3,20 +3,9 @@ import WeatherKit
 import CoreLocation
 
 @llamaActor actor MyLlama {
-    struct CurrentWeather: Codable {
-        let temperature: Double
-        let condition: WeatherCondition
-    }
-    
-    /// Get the current weather in a given location.
-    /// - parameter location: The city and state, e.g. San Francisco, CA
-    /// - parameter unit: The unit of temperature
-    public static func getCurrentWeather(location: String, unit: String) async throws -> CurrentWeather {
-        let weather = try await WeatherService().weather(for: CLGeocoder().geocodeAddressString(location)[0].location!)
-        var temperature = weather.currentWeather.temperature
-        temperature.convert(to: .fahrenheit)
-        return CurrentWeather(temperature: temperature.value,
-                              condition: weather.currentWeather.condition)
+    /// Get the current date.
+    public static func getCurrentDate() -> String {
+        Date.now.formatted(date: .long, time: .complete)
     }
 }
 

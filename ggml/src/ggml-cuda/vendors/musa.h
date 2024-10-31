@@ -26,6 +26,7 @@
 #define cublasSetStream mublasSetStream
 #define cublasSgemm mublasSgemm
 #define cublasStatus_t mublasStatus_t
+#define cublasOperation_t mublasOperation_t
 #define cublasGetStatusString mublasStatus_to_string
 #define cudaDataType_t musaDataType_t
 #define cudaDeviceCanAccessPeer musaDeviceCanAccessPeer
@@ -56,6 +57,7 @@
 #define cudaLaunchHostFunc musaLaunchHostFunc
 #define cudaMalloc musaMalloc
 #define cudaMallocHost musaMallocHost
+#define cudaMallocManaged musaMallocManaged
 #define cudaMemcpy musaMemcpy
 #define cudaMemcpyAsync musaMemcpyAsync
 #define cudaMemcpyPeerAsync musaMemcpyPeerAsync

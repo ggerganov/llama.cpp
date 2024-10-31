@@ -21,12 +21,6 @@
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
-#include "ggml-cuda.h"
-#include "ggml-sycl.h"
-
-#ifdef GGML_USE_CANN
-#include "ggml-cann.h"
-#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -82,95 +76,27 @@ static T stdev(const std::vector<T> & v) {
 }
 
 static std::string get_cpu_info() {
-    std::string id;
-#ifdef __linux__
-    FILE * f = fopen("/proc/cpuinfo", "r");
-    if (f) {
-        char buf[1024];
-        while (fgets(buf, sizeof(buf), f)) {
-            if (strncmp(buf, "model name", 10) == 0) {
-                char * p = strchr(buf, ':');
-                if (p) {
-                    p++;
-                    while (std::isspace(*p)) {
-                        p++;
-                    }
-                    while (std::isspace(p[strlen(p) - 1])) {
-                        p[strlen(p) - 1] = '\0';
-                    }
-                    id = p;
-                    break;
-                }
-            }
-        }
-        fclose(f);
-    }
-#elif defined(_WIN32)
-    HKEY hKey;
-    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
-                     TEXT("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"),
-                     0,
-                     KEY_READ,
-                     &hKey) != ERROR_SUCCESS) {
-        // fail to open registry key
-        return "";
-    }
-    char cpu_brand[256];
-    DWORD cpu_brand_size = sizeof(cpu_brand);
-    if (RegQueryValueExA(hKey,
-                        TEXT("ProcessorNameString"),
-                        NULL,
-                        NULL,
-                        (LPBYTE)cpu_brand,
-                        &cpu_brand_size) == ERROR_SUCCESS) {
-        id.assign(cpu_brand, cpu_brand_size);
-        if (id.find('\0') != std::string::npos) {
-            id.resize(id.find('\0'));
+    std::vector<std::string> cpu_list;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto * dev = ggml_backend_dev_get(i);
+        auto dev_type = ggml_backend_dev_type(dev);
+        if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU || dev_type == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
+            cpu_list.push_back(ggml_backend_dev_description(dev));
         }
     }
-    RegCloseKey(hKey);
-#endif
-    // TODO: other platforms
-    return id;
+    return join(cpu_list, ", ");
 }
 
 static std::string get_gpu_info() {
-    std::string id;
-#ifdef GGML_USE_CUDA
-    int count = ggml_backend_cuda_get_device_count();
-    for (int i = 0; i < count; i++) {
-        char buf[128];
-        ggml_backend_cuda_get_device_description(i, buf, sizeof(buf));
-        id += buf;
-        if (i < count - 1) {
-            id += "/";
+    std::vector<std::string> gpu_list;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto * dev = ggml_backend_dev_get(i);
+        auto dev_type = ggml_backend_dev_type(dev);
+        if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) {
+            gpu_list.push_back(ggml_backend_dev_description(dev));
         }
     }
-#endif
-#ifdef GGML_USE_SYCL
-    int count = ggml_backend_sycl_get_device_count();
-    for (int i = 0; i < count; i++) {
-        char buf[128];
-        ggml_sycl_get_device_description(i, buf, sizeof(buf));
-        id += buf;
-        if (i < count - 1) {
-            id += "/";
-        }
-    }
-#endif
-#ifdef GGML_USE_CANN
-    uint32_t count = ggml_backend_cann_get_device_count();
-    for (uint32_t i = 0; i < count; i++) {
-        char buf[128];
-        ggml_backend_cann_get_device_description(i, buf, sizeof(buf));
-        id += buf;
-        if (i < count - 1) {
-            id += "/";
-        }
-    }
-#endif
-    // TODO: other backends
-    return id;
+    return join(gpu_list, ", ");
 }
 
 // command line params
@@ -304,9 +230,9 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  --cpu-strict <0|1>                        (default: %s)\n", join(cmd_params_defaults.cpu_strict, ",").c_str());
     printf("  --poll <0...100>                          (default: %s)\n", join(cmd_params_defaults.poll, ",").c_str());
     printf("  -ngl, --n-gpu-layers <n>                  (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
-#ifdef GGML_USE_RPC
-    printf("  -rpc, --rpc <rpc_servers>                 (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
-#endif
+    if (llama_supports_rpc()) {
+        printf("  -rpc, --rpc <rpc_servers>                 (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
+    }
     printf("  -sm, --split-mode <none|layer|row>        (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                       (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>              (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
@@ -497,14 +423,12 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<int>(argv[i], split_delim);
             params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
-#ifdef GGML_USE_RPC
-        } else if (arg == "-rpc" || arg == "--rpc") {
+        } else if (llama_supports_rpc() && (arg == "-rpc" || arg == "--rpc")) {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rpc_servers.push_back(argv[i]);
-#endif
         } else if (arg == "-sm" || arg == "--split-mode") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -940,29 +864,15 @@ struct test {
     }
 
     static std::string get_backend() {
-        if (cuda) {
-            return GGML_CUDA_NAME;
+        std::vector<std::string> backends;
+        for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
+            auto * reg = ggml_backend_reg_get(i);
+            std::string name = ggml_backend_reg_name(reg);
+            if (name != "CPU") {
+                backends.push_back(ggml_backend_reg_name(reg));
+            }
         }
-        if (vulkan) {
-            return "Vulkan";
-        }
-        if (kompute) {
-            return "Kompute";
-        }
-        if (metal) {
-            return "Metal";
-        }
-        if (sycl) {
-            return GGML_SYCL_NAME;
-        }
-        if (gpu_blas) {
-            return "GPU BLAS";
-        }
-        if (blas) {
-            return "BLAS";
-        }
-
-        return "CPU";
+        return backends.empty() ? "CPU" : join(backends, ",");
     }
 
     static const std::vector<std::string> & get_fields() {
@@ -1430,7 +1340,7 @@ struct sql_printer : public printer {
     }
 };
 
-static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
+static void test_prompt(llama_context * ctx, int n_prompt, int n_batch, int n_threads) {
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     const llama_model * model = llama_get_model(ctx);
@@ -1446,14 +1356,14 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_bat
         for (int i = 1; i < n_tokens; i++) {
             tokens[i] = std::rand() % n_vocab;
         }
-        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens, n_past + n_processed, 0));
+        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens));
         n_processed += n_tokens;
     }
 
     llama_synchronize(ctx);
 }
 
-static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
+static void test_gen(llama_context * ctx, int n_gen, int n_threads) {
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     const llama_model * model = llama_get_model(ctx);
@@ -1462,7 +1372,7 @@ static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) 
     llama_token token = llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
 
     for (int i = 0; i < n_gen; i++) {
-        llama_decode(ctx, llama_batch_get_one(&token, 1, n_past + i, 0));
+        llama_decode(ctx, llama_batch_get_one(&token, 1));
         llama_synchronize(ctx);
         token = std::rand() % n_vocab;
     }
@@ -1598,13 +1508,13 @@ int main(int argc, char ** argv) {
                 fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup prompt run\n", params_idx, params_count);
             }
             //test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
-            test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
+            test_prompt(ctx, t.n_prompt, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
             if (params.progress) {
                 fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup generation run\n", params_idx, params_count);
             }
-            test_gen(ctx, 1, 0, t.n_threads);
+            test_gen(ctx, 1, t.n_threads);
         }
 
         for (int i = 0; i < params.reps; i++) {
@@ -1616,13 +1526,13 @@ int main(int argc, char ** argv) {
                 if (params.progress) {
                     fprintf(stderr, "llama-bench: benchmark %d/%ld: prompt run %d/%d\n", params_idx, params_count, i + 1, params.reps);
                 }
-                test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
+                test_prompt(ctx, t.n_prompt, t.n_batch, t.n_threads);
             }
             if (t.n_gen > 0) {
                 if (params.progress) {
                     fprintf(stderr, "llama-bench: benchmark %d/%ld: generation run %d/%d\n", params_idx, params_count, i + 1, params.reps);
                 }
-                test_gen(ctx, t.n_gen, t.n_prompt, t.n_threads);
+                test_gen(ctx, t.n_gen, t.n_threads);
             }
 
             uint64_t t_ns = get_time_ns() - t_start;
