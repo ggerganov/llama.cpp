@@ -1641,7 +1641,7 @@ tests/test-chat-template: tests/test-chat-template.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-cli: tests/test-cli.cpp \
-	$(OBJ_ALL)
+	$(OBJ_ALL) | llama-cli
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

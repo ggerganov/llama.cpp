@@ -54,7 +54,8 @@ int main(int argc, char ** argv) {
     std::string cli_bin = argc == 2 ? argv[1] : "./llama-cli";
 
     try {
-        std::system("mkdir out/");
+        if (std::system("mkdir -p out/") != 0)
+            throw std::runtime_error("Failed to create out/ directory.");
 
         {
             auto p = run(cli_bin + " --help");
@@ -74,6 +75,8 @@ int main(int argc, char ** argv) {
             assert_equals(" hello was a big, red ball. He", p.out);
             assert_equals("", p.err);
         }
+
+        return 0;
     } catch (const std::exception & ex) {
         std::cerr << "[test-cli] Error: " << ex.what() << std::endl;
         return 1;
