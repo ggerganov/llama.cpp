@@ -7,38 +7,37 @@
   ```bash
   make -j LLAMA_CURL=1 llama-server
 
-  # Nous Hermes 2 Pro Llama 3 8B
   ./llama-server --jinja -fa --verbose \
-    -hfr NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF -hff Hermes-2-Pro-Llama-3-8B-Q8_0.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B tool_use )"
+    -hfr bartowski/Qwen2.5-7B-Instruct-GGUF -hff Qwen2.5-7B-Instruct-Q4_K_M.gguf
 
-  # Llama 3.1 8B
+  # Nous Hermes 3 Pro Llama 3.1 8B
   ./llama-server --jinja -fa --verbose \
-    -hfr lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF -hff Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+    -hfr NousResearch/Hermes-3-Llama-3.1-8B-GGUF -hff Hermes-3-Llama-3.1-8B.Q4_K_M.gguf \
+    --chat-template-file <( python scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
 
-  # Llama 3.1 70B
+  # Phi-3.5 mini (generic support)
   ./llama-server --jinja -fa --verbose \
-    -hfr lmstudio-community/Meta-Llama-3.1-70B-Instruct-GGUF -hff Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf
+    -hfr bartowski/Phi-3.5-mini-instruct-GGUF -hff Phi-3.5-mini-instruct-Q4_K_M.gguf
 
   # functionary-small-v3
   ./llama-server --jinja -fa --verbose \
-    -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q4_0.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )"
+    -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q8_0.gguf \
+    --chat-template-file <( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )
 
   # Llama 3.2 3B (poor adherence)
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
+    --chat-template-file <( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )
 
   # Llama 3.2 1B (very poor adherence)
   ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-1B-Instruct-GGUF -hff Llama-3.2-1B-Instruct-Q4_K_M.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )"
+    --chat-template-file <( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )
 
   # Mistral NeMo
   ./llama-server --jinja -fa --verbose \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
-    --chat-template "$( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )"
+    --chat-template-file <( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )
   ```
 
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container for *some* level of isolation (+ sneaky logging of outgoing http and https traffic: you wanna watch over those agents' shoulders for the time being 🧐). Check http://localhost:8088/docs to see the tools exposed.

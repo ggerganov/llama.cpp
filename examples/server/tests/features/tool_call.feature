@@ -104,6 +104,7 @@ Feature: llama.cpp server
       | python           | {"code": "print('Hello, World!'}"}   | bartowski/Llama-3.2-1B-Instruct-GGUF                 | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | python           | {"code": "print("}                   | bartowski/Llama-3.2-3B-Instruct-GGUF                 | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | python           | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
+      | python           | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
       | code_interpreter | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
       | code_interpreter | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  | mistralai-Mistral-Nemo-Instruct-2407          |
       | code_interpreter | {"code": "print(\"Hello World\")"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
@@ -113,8 +114,7 @@ Feature: llama.cpp server
       | code_interpreter | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | code_interpreter | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | code_interpreter | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
-      # | python           | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
-      # | code_interpreter | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
+      | code_interpreter | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
 
 
   @slow
