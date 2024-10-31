@@ -1,6 +1,6 @@
 # Agents / Tool Calling w/ llama.cpp
 
-While *any model* should work (using some generic support), we support the native call style of a few models:
+While *any model* should work (using some generic support), we only support the native call style of a few models:
 - Llama 3.x
 - Functionary 3.x
 - Hermes 2/3, Qwen 2.5
@@ -16,14 +16,6 @@ Here's how to run an agent w/ local tool call:
 
   ```bash
   make -j LLAMA_CURL=1 llama-server
-
-  # Generic support, e.g. Phi 3.5, Gemma 2b
-
-  ./llama-server --jinja -fa --verbose \
-    -hfr bartowski/Phi-3.5-mini-instruct-GGUF -hff Phi-3.5-mini-instruct-Q4_K_M.gguf
-
-  ./llama-server --jinja -fa --verbose \
-    -hfr bartowski/gemma-2-2b-it-GGUF -hff gemma-2-2b-it-Q4_K_M.gguf               |                                               |
 
   # Native support for Mistral Nemo, Qwen 2.5, Hermes 3, Functionary 3.x
   # Note that some of these GGUFs lack the right template, so we override it
@@ -41,15 +33,21 @@ Here's how to run an agent w/ local tool call:
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q8_0.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )
 
-  # Llama 3.2 3B (poor adherence)
   ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )
 
-  # Mistral NeMo
   ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )
+
+  # Generic support, e.g. Phi 3.5, Gemma 2b, but really anything goes
+
+  ./llama-server --jinja -fa --verbose \
+    -hfr bartowski/Phi-3.5-mini-instruct-GGUF -hff Phi-3.5-mini-instruct-Q4_K_M.gguf
+
+  ./llama-server --jinja -fa --verbose \
+    -hfr bartowski/gemma-2-2b-it-GGUF -hff gemma-2-2b-it-Q4_K_M.gguf
   ```
 
 - Run the tools in [examples/agent/tools](./examples/agent/tools) inside a docker container for *some* level of isolation (+ sneaky logging of outgoing http and https traffic: you wanna watch over those agents' shoulders for the time being 🧐). Check http://localhost:8088/docs to see the tools exposed.
@@ -108,7 +106,6 @@ Here's how to run an agent w/ local tool call:
   ```
 
   </details>
-
 
 - To compare the above results w/ a cloud provider's tool usage behaviour, just set the `--provider` flag (accepts `openai`, `together`, `groq`) and/or use `--endpoint`, `--api-key`, and `--model`
 
