@@ -42,11 +42,13 @@ struct Out {
 static Out run(const std::string & cmd) {
     auto full_cmd = cmd + " > out/out.txt 2> out/err.txt";
     std::cerr << "Running: " << full_cmd << std::endl;
+    auto out = read("out/out.txt");
+    auto err = read("out/err.txt");
     if (std::system(full_cmd.c_str()) != 0)
-        throw std::runtime_error("llama-cli binary failed to run.");
+        throw std::runtime_error("llama-cli binary failed to run.\nstdout: " + out + "\nstderr: " + err);
     return {
-        /* .out = */ read("out/out.txt"),
-        /* .err = */ read("out/err.txt"),
+        /* .out = */ out,
+        /* .err = */ err,
     };
 }
 
