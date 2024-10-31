@@ -53,24 +53,29 @@ static Out run(const std::string & cmd) {
 int main(int argc, char ** argv) {
     std::string cli_bin = argc == 2 ? argv[1] : "./llama-cli";
 
-    std::system("mkdir out/");
+    try {
+        std::system("mkdir out/");
 
-    {
-        auto p = run(cli_bin + " --help");
-        if (!p.err.empty())
-            throw std::runtime_error("llama-cli --help should not have any stderr.");
-        assert_contains("example usage", p.out);
-    }
+        {
+            auto p = run(cli_bin + " --help");
+            if (!p.err.empty())
+                throw std::runtime_error("llama-cli --help should not have any stderr.");
+            assert_contains("example usage", p.out);
+        }
 
-    {
-        auto p = run(cli_bin + " -hfr ggml-org/models -hff tinyllamas/stories260K.gguf --prompt hello --seed 42 -ngl 0 -n 10");
-        assert_equals(" hello Joe and Joe we", p.out);
-        assert_contains("system_info:", p.err);
-    }
+        {
+            auto p = run(cli_bin + " -hfr ggml-org/models -hff tinyllamas/stories260K.gguf --prompt hello --seed 42 --samplers top-k --top-k 1 -ngl 0 -n 10");
+            assert_equals(" hello was a big, red ball. He", p.out);
+            assert_contains("system_info:", p.err);
+        }
 
-    {
-        auto p = run(cli_bin + " -hfr ggml-org/models -hff tinyllamas/stories260K.gguf --prompt hello --seed 42 -ngl 0 -n 10 --log-disable");
-        assert_equals(" hello Joe and Joe we", p.out);
-        assert_equals("", p.err);
+        {
+            auto p = run(cli_bin + " -hfr ggml-org/models -hff tinyllamas/stories260K.gguf --prompt hello --seed 42 --samplers top-k --top-k 1 -ngl 0 -n 10 --log-disable");
+            assert_equals(" hello was a big, red ball. He", p.out);
+            assert_equals("", p.err);
+        }
+    } catch (const std::exception & ex) {
+        std::cerr << "[test-cli] Error: " << ex.what() << std::endl;
+        return 1;
     }
 }
