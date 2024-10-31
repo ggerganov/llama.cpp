@@ -1,41 +1,53 @@
 # Agents / Tool Calling w/ llama.cpp
 
+While *any model* should work (using some generic support), we support the native call style of a few models:
+- Llama 3.x
+- Functionary 3.x
+- Hermes 2/3, Qwen 2.5
+- Mistral Nemo.
+
+For natively supported models, it's important to have the right template (it might not be in the GGUF; note that we prefer the `tool_use` variant of the Jinja template if it's present in the GGUF metadata). You can check which template is defined by inspecting `http://localhost:8080/props`, and inspect the logs for `Tool call style: `.
+
+Here's how to run an agent w/ local tool call:
+
 - Install prerequisite: [uv](https://docs.astral.sh/uv/) (used to simplify python deps)
 
-- Run `llama-server` w/ jinja templates. Note that most models need a template override (the HF to GGUF conversion only retains a single `chat_template`, but sometimes the models only support tool calls in an alternative chat template).
+- Run `llama-server` w/ any model:
 
   ```bash
   make -j LLAMA_CURL=1 llama-server
 
-  ./llama-server --jinja -fa --verbose \
-    -hfr bartowski/Qwen2.5-7B-Instruct-GGUF -hff Qwen2.5-7B-Instruct-Q4_K_M.gguf
+  # Generic support, e.g. Phi 3.5, Gemma 2b
 
-  # Nous Hermes 3 Pro Llama 3.1 8B
-  ./llama-server --jinja -fa --verbose \
-    -hfr NousResearch/Hermes-3-Llama-3.1-8B-GGUF -hff Hermes-3-Llama-3.1-8B.Q4_K_M.gguf \
-    --chat-template-file <( python scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
-
-  # Phi-3.5 mini (generic support)
   ./llama-server --jinja -fa --verbose \
     -hfr bartowski/Phi-3.5-mini-instruct-GGUF -hff Phi-3.5-mini-instruct-Q4_K_M.gguf
 
-  # functionary-small-v3
   ./llama-server --jinja -fa --verbose \
+    -hfr bartowski/gemma-2-2b-it-GGUF -hff gemma-2-2b-it-Q4_K_M.gguf               |                                               |
+  
+  # Native support for Mistral Nemo, Qwen 2.5, Hermes 3, Functionary 3.x
+  # Note that some of these GGUFs lack the right template, so we override it
+  # (otherwise they'd use the generic tool call support, which may be less efficient
+  # and consume more tokens)
+  
+  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+    -hfr bartowski/Qwen2.5-7B-Instruct-GGUF -hff Qwen2.5-7B-Instruct-Q4_K_M.gguf
+
+  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+    -hfr NousResearch/Hermes-3-Llama-3.1-8B-GGUF -hff Hermes-3-Llama-3.1-8B.Q4_K_M.gguf \
+    --chat-template-file <( python scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
+
+  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q8_0.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )
 
   # Llama 3.2 3B (poor adherence)
-  ./llama-server --jinja -fa --verbose \
+  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )
 
-  # Llama 3.2 1B (very poor adherence)
-  ./llama-server --jinja -fa --verbose \
-    -hfr lmstudio-community/Llama-3.2-1B-Instruct-GGUF -hff Llama-3.2-1B-Instruct-Q4_K_M.gguf \
-    --chat-template-file <( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )
-
   # Mistral NeMo
-  ./llama-server --jinja -fa --verbose \
+  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )
   ```
