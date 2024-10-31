@@ -9107,9 +9107,9 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     const __m128i m4 = _mm_set1_epi8(0xF);
     const __m128i m3 = _mm_set1_epi8(3);
     const __m128i m32s = _mm_set1_epi8(32);
-    const __m128i m2 = _mm_set1_epi8(2);
 
-    __m256 acc = _mm256_setzero_ps();
+    __m256 acc1 = _mm256_setzero_ps();
+    __m256 acc2 = _mm256_setzero_ps();
 
     for (int i = 0; i < nb; ++i) {
 
@@ -9123,6 +9123,8 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
         __m128i sumi_0 = _mm_setzero_si128();
         __m128i sumi_1 = _mm_setzero_si128();
+        __m128i sumi_2 = _mm_setzero_si128();
+        __m128i sumi_3 = _mm_setzero_si128();
 
         __m128i shuffle = _mm_set_epi64x(0x0101010101010101, 0x0000000000000000);
         for (int j = 0; j < QK_K/128; ++j) {
@@ -9132,93 +9134,90 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
             const __m128i q4h_0 = _mm_slli_epi16(_mm_and_si128(q4bitsH_0, m3), 4);
             const __m128i q4h_1 = _mm_slli_epi16(_mm_and_si128(q4bitsH_1, m3), 4);
-            const __m128i q4h_2 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 2), m3), 4);
-            const __m128i q4h_3 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 2), m3), 4);
             const __m128i q4h_4 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 4), m3), 4);
             const __m128i q4h_5 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 4), m3), 4);
-            const __m128i q4h_6 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 6), m3), 4);
-            const __m128i q4h_7 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 6), m3), 4);
 
             const __m128i q4bits1_0 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
             const __m128i q4bits1_1 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
-            const __m128i q4bits2_0 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
-            const __m128i q4bits2_1 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
 
             const __m128i q4_0 = _mm_or_si128(_mm_and_si128(q4bits1_0, m4), q4h_0);
             const __m128i q4_1 = _mm_or_si128(_mm_and_si128(q4bits1_1, m4), q4h_1);
-            const __m128i q4_2 = _mm_or_si128(_mm_and_si128(q4bits2_0, m4), q4h_2);
-            const __m128i q4_3 = _mm_or_si128(_mm_and_si128(q4bits2_1, m4), q4h_3);
             const __m128i q4_4 = _mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits1_0, 4), m4), q4h_4);
             const __m128i q4_5 = _mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits1_1, 4), m4), q4h_5);
+            const __m128i q8_0 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
+            const __m128i q8_1 = _mm_loadu_si128((const __m128i*)q8); q8 += 48;
+            const __m128i q8_4 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
+            const __m128i q8_5 = _mm_loadu_si128((const __m128i*)q8); q8 -= 48;
+            __m128i q8s_0 = _mm_maddubs_epi16(m32s, q8_0);
+            __m128i q8s_1 = _mm_maddubs_epi16(m32s, q8_1);
+            __m128i q8s_4 = _mm_maddubs_epi16(m32s, q8_4);
+            __m128i q8s_5 = _mm_maddubs_epi16(m32s, q8_5);
+            __m128i p16_0 = _mm_maddubs_epi16(q4_0, q8_0);
+            __m128i p16_1 = _mm_maddubs_epi16(q4_1, q8_1);
+            __m128i p16_4 = _mm_maddubs_epi16(q4_4, q8_4);
+            __m128i p16_5 = _mm_maddubs_epi16(q4_5, q8_5);
+            p16_0 = _mm_sub_epi16(p16_0, q8s_0);
+            p16_1 = _mm_sub_epi16(p16_1, q8s_1);
+            p16_4 = _mm_sub_epi16(p16_4, q8s_4);
+            p16_5 = _mm_sub_epi16(p16_5, q8s_5);
+
+            const __m128i scale_0 = _mm_shuffle_epi8(scales, shuffle);
+            const __m128i scale_2 = _mm_shuffle_epi8(scales, _mm_add_epi8(shuffle, _mm_set1_epi8(4)));
+            p16_0 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_0), p16_0);
+            p16_1 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_0, scale_0)), p16_1);
+            p16_4 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_2), p16_4);
+            p16_5 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_2, scale_2)), p16_5);
+
+            sumi_0 = _mm_add_epi32(sumi_0, _mm_add_epi32(p16_0, p16_1));
+            sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_4, p16_5));
+
+            const __m128i q4bits2_0 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
+            const __m128i q4bits2_1 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
+            const __m128i q4h_2 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 2), m3), 4);
+            const __m128i q4h_3 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 2), m3), 4);
+            const __m128i q4h_6 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_0, 6), m3), 4);
+            const __m128i q4h_7 = _mm_slli_epi16(_mm_and_si128(_mm_srli_epi16(q4bitsH_1, 6), m3), 4);
+            const __m128i q4_2 = _mm_or_si128(_mm_and_si128(q4bits2_0, m4), q4h_2);
+            const __m128i q4_3 = _mm_or_si128(_mm_and_si128(q4bits2_1, m4), q4h_3);
             const __m128i q4_6 = _mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits2_0, 4), m4), q4h_6);
             const __m128i q4_7 = _mm_or_si128(_mm_and_si128(_mm_srli_epi16(q4bits2_1, 4), m4), q4h_7);
 
-            const __m128i q8_0 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
-            const __m128i q8_1 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
             const __m128i q8_2 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
-            const __m128i q8_3 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
-            const __m128i q8_4 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
-            const __m128i q8_5 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
+            const __m128i q8_3 = _mm_loadu_si128((const __m128i*)q8); q8 += 48;
             const __m128i q8_6 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
-            const __m128i q8_7 = _mm_loadu_si128((const __m128i*)q8); q8 += 16;
-
-            __m128i q8s_0 = _mm_maddubs_epi16(m32s, q8_0);
-            __m128i q8s_1 = _mm_maddubs_epi16(m32s, q8_1);
+            const __m128i q8_7 = _mm_loadu_si128((const __m128i*)q8); q8 += 16 ;
             __m128i q8s_2 = _mm_maddubs_epi16(m32s, q8_2);
             __m128i q8s_3 = _mm_maddubs_epi16(m32s, q8_3);
-            __m128i q8s_4 = _mm_maddubs_epi16(m32s, q8_4);
-            __m128i q8s_5 = _mm_maddubs_epi16(m32s, q8_5);
             __m128i q8s_6 = _mm_maddubs_epi16(m32s, q8_6);
             __m128i q8s_7 = _mm_maddubs_epi16(m32s, q8_7);
-
-            __m128i p16_0 = _mm_maddubs_epi16(q4_0, q8_0);
-            __m128i p16_1 = _mm_maddubs_epi16(q4_1, q8_1);
             __m128i p16_2 = _mm_maddubs_epi16(q4_2, q8_2);
             __m128i p16_3 = _mm_maddubs_epi16(q4_3, q8_3);
-            __m128i p16_4 = _mm_maddubs_epi16(q4_4, q8_4);
-            __m128i p16_5 = _mm_maddubs_epi16(q4_5, q8_5);
             __m128i p16_6 = _mm_maddubs_epi16(q4_6, q8_6);
             __m128i p16_7 = _mm_maddubs_epi16(q4_7, q8_7);
-
-            p16_0 = _mm_sub_epi16(p16_0, q8s_0);
-            p16_1 = _mm_sub_epi16(p16_1, q8s_1);
             p16_2 = _mm_sub_epi16(p16_2, q8s_2);
             p16_3 = _mm_sub_epi16(p16_3, q8s_3);
-            p16_4 = _mm_sub_epi16(p16_4, q8s_4);
-            p16_5 = _mm_sub_epi16(p16_5, q8s_5);
             p16_6 = _mm_sub_epi16(p16_6, q8s_6);
             p16_7 = _mm_sub_epi16(p16_7, q8s_7);
 
-            const __m128i scale_0 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-            const __m128i scale_1 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-            const __m128i scale_2 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-            const __m128i scale_3 = _mm_shuffle_epi8(scales, shuffle);
-            shuffle = _mm_add_epi8(shuffle, m2);
-
-            p16_0 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_0), p16_0);
-            p16_1 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_0, scale_0)), p16_1);
+            const __m128i scale_1 = _mm_shuffle_epi8(scales, _mm_add_epi8(shuffle, _mm_set1_epi8(2)));
+            const __m128i scale_3 = _mm_shuffle_epi8(scales, _mm_add_epi8(shuffle, _mm_set1_epi8(6)));
             p16_2 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_1), p16_2);
             p16_3 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_1, scale_1)), p16_3);
-            p16_4 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_2), p16_4);
-            p16_5 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_2, scale_2)), p16_5);
             p16_6 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_3), p16_6);
             p16_7 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_3, scale_3)), p16_7);
 
-            sumi_0 = _mm_add_epi32(sumi_0, _mm_add_epi32(p16_0, p16_2));
-            sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_1, p16_3));
-            sumi_0 = _mm_add_epi32(sumi_0, _mm_add_epi32(p16_4, p16_6));
-            sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_5, p16_7));
+            sumi_2 = _mm_add_epi32(sumi_2, _mm_add_epi32(p16_2, p16_3));
+            sumi_3 = _mm_add_epi32(sumi_3, _mm_add_epi32(p16_6, p16_7));
 
         }
 
-        __m256i sumi = MM256_SET_M128I(sumi_1, sumi_0);
-        acc = _mm256_add_ps(_mm256_mul_ps(_mm256_broadcast_ss(&d), _mm256_cvtepi32_ps(sumi)), acc);
+        __m256i sumi1 = MM256_SET_M128I(sumi_0, sumi_1);
+        __m256i sumi2 = MM256_SET_M128I(sumi_2, sumi_3);
+        acc1 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(sumi1)), acc1);
+        acc2 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(sumi2)), acc2);
     }
 
-    *s = hsum_float_8(acc);
+    *s = hsum_float_8(_mm256_add_ps(acc1, acc2));
 
 #elif defined __riscv_v_intrinsic
 
