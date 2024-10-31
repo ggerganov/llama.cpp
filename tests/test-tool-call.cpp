@@ -118,7 +118,7 @@ const json tools = json::parse(R"([
   {
     "type": "function",
     "function": {
-      "name": "ipython",
+      "name": "python",
       "description": "a python interpreter",
       "parameters": {
         "type": "object",
@@ -164,12 +164,12 @@ static void test_parsing() {
       json::array({fooBarCall}));
 
     test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
-      ">>>ipython\n{\"code\": \"print('Hello, world!')\"}",
+      ">>>python\n{\"code\": \"print('Hello, world!')\"}",
       "",
       json {{
         {"type", "function"},
         {"function", {
-          {"name", "ipython"},
+          {"name", "python"},
           {"arguments", dump({
             {"code", "print('Hello, world!')"}
           })}
@@ -228,7 +228,7 @@ static void test_parsing() {
       json {{
         {"type", "function"},
         {"function", {
-          {"name", "ipython"},
+          {"name", "python"},
           {"arguments", dump({
             {"code", "this could be anything"}
           })}
@@ -240,7 +240,7 @@ static void test_parsing() {
       json {{
         {"type", "function"},
         {"function", {
-          {"name", "ipython"},
+          {"name", "python"},
           {"arguments", dump({{"code", ""}})}
         }}
       }});
@@ -256,6 +256,16 @@ static void test_parsing() {
 
     auto no_function_call = json::array();
 
+    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+      "{\"name\": \"python\", \"parameters\": {\"code\": \"print('Hey')\"}}",
+      "",
+      json::array({{
+        {"type", "function"},
+        {"function", {
+          {"arguments", dump({{"code", "print('Hey')"}})},
+          {"name", "python"},
+        }}
+      }}));
     test_parse_tool_call(llama_tool_call_style::Llama31, tools,
       "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
@@ -404,6 +414,8 @@ static void test_grammars() {
   test_template("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
+  test_template("tests/chat/templates/google-gemma-2-2b-it.jinja", "<s>", "</s>", { "<end_of_turn>" }, tool_call_message_with_id, tools);
+  test_template("tests/chat/templates/microsoft-Phi-3.5-mini-instruct.jinja", "<s>", "</s>", { "<|end|>" }, tool_call_message_with_id, tools);
 }
 
 int main() {
@@ -411,6 +423,6 @@ int main() {
     test_parsing();
     test_grammars();
 
-    std::cout << "[tool-call] All tests passed!" << std::endl;
+    std::cout << "\n[tool-call] All tests passed!" << std::endl;
     return 0;
 }

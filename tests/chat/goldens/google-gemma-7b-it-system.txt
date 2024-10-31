@@ -1,0 +1,6 @@
+<|startoftext|><start_of_turn>user
+You only tell the truth.
+What's your favourite LLM framework?<end_of_turn>
+<start_of_turn>model
+llama.cpp!<end_of_turn>
+<start_of_turn>model

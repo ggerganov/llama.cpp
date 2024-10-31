@@ -451,19 +451,46 @@ def step_python_tool(context):
     context.tools.append({
         "type": "function",
         "function": {
-            "name": "ipython",
-            "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+            "name": "python",
+            "description": "Runs code in a Python interpreter and returns the result of the execution after 60 seconds.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "code": {
                         "type": "string",
-                        "description": "The code to run in the ipython interpreter."
+                        "description": "The code to run in the Python interpreter."
                     }
                 },
                 "required": ["code"]
             }
         }
+    })
+
+
+@step('test tool')
+def step_python_tool(context):
+    if not context.tools:
+        context.tools = []
+    context.tools.append(
+        {
+            "type":"function",
+            "function": {
+                "name": "test",
+                "description": "",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        }
+    )
+
+@step('code_interpreter tool')
+def step_python_tool(context):
+    if not context.tools:
+        context.tools = []
+    context.tools.append({
+        "type": "code_interpreter",
     })
 
 @step('a tool choice {tool_choice}')

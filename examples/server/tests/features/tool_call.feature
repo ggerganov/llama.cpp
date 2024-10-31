@@ -23,27 +23,27 @@ Feature: llama.cpp server
     And   <n_predict> max tokens to predict
     And   a user prompt say hello world with python
     And   a tool choice required
-    And   tools <tools>
+    And   <tool_name> tool
     And   parallel tool calls is <parallel_tool_calls>
     And   an OAI compatible chat completions request with no api error
     Then  tool <tool_name> is called with arguments <tool_arguments>
 
     Examples: Prompts
-      | template_name                                 | n_predict | tool_name | tool_arguments         | tools | parallel_tool_calls |
-      | meetkai-functionary-medium-v3.1               | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | meetkai-functionary-medium-v3.1               | 128       | ipython   | {"code": "it and said, \"I'm sorry, Lily. It's a spectork.\" said, \"I'm sorry, Lily.\"\nThen, a little girl named Lily came to the park and saw a big, shiny flower. She was so happy and said, \"I'm sorry, Lily. It's a spectork.\"\nThey did"} | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
-      | meetkai-functionary-medium-v3.2               | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | meetkai-functionary-medium-v3.2               | 128       | ipython   | {"code": "Yes,"}       | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
-      | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use | 128       | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
-      | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   | 128       | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct         | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | meta-llama-Meta-Llama-3.1-8B-Instruct         | 64        | ipython   | {"code": "it and realed at the otter. Asked Dave Daisy, Daisy is a big, shiny blue. As"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
-      | meta-llama-Llama-3.2-3B-Instruct              | 64        | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | meta-llama-Llama-3.2-3B-Instruct              | 64        | ipython   | {"code": "Yes,"}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
-      | mistralai-Mistral-Nemo-Instruct-2407          | 128       | test      | {}                     | [{"type":"function", "function": {"name": "test", "description": "", "parameters": {"type": "object", "properties": {}}}}]                                                                       | disabled |
-      | mistralai-Mistral-Nemo-Instruct-2407          | 128       | ipython   | {"code": "It's a spector."}    | [{"type":"function", "function": {"name": "ipython", "description": "", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": ""}}, "required": ["code"]}}}] | disabled |
+      | template_name                                 | n_predict | tool_name | tool_arguments                                           | parallel_tool_calls |
+      | meetkai-functionary-medium-v3.1               | 32        | test      | {}                                                       | disabled            |
+      | meetkai-functionary-medium-v3.1               | 32        | python    | {"code": ". She was so excited to go to the park and s"} | disabled            |
+      | meetkai-functionary-medium-v3.2               | 32        | test      | {}                                                       | disabled            |
+      | meetkai-functionary-medium-v3.2               | 32        | python    | {"code": "Yes,"}                                         | disabled            |
+      | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use | 128       | test      | {}                                                       | disabled            |
+      | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use | 128       | python    | {"code": "Yes,"}                                         | disabled            |
+      | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   | 128       | test      | {}                                                       | disabled            |
+      | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   | 128       | python    | {"code": "Yes,"}                                         | disabled            |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct         | 128       | test      | {}                                                       | disabled            |
+      | meta-llama-Meta-Llama-3.1-8B-Instruct         | 128       | python    | {"code": "It's a shark."}                                | disabled            |
+      | meta-llama-Llama-3.2-3B-Instruct              | 128       | test      | {}                                                       | disabled            |
+      | meta-llama-Llama-3.2-3B-Instruct              | 128       | python    | {"code": "It's a shark."}                                | disabled            |
+      | mistralai-Mistral-Nemo-Instruct-2407          | 128       | test      | {}                                                       | disabled            |
+      | mistralai-Mistral-Nemo-Instruct-2407          | 128       | python    | {"code": "It's a small cost."}                           | disabled            |
 
 
   Scenario Outline: Template <template_name> + tinystories model yields no tool call
@@ -79,7 +79,7 @@ Feature: llama.cpp server
 
 
   @slow
-  Scenario Outline: Python hello world w/ <hf_repo> + <tool> tool yields ipython call
+  Scenario Outline: Python hello world w/ <hf_repo> + <tool> tool yields python call
     Given a model file <hf_file> from HF repo <hf_repo>
     And   a test chat template file named <template_override>
     And   no warmup
@@ -91,20 +91,30 @@ Feature: llama.cpp server
     And   <tool> tool
     And   parallel tool calls is disabled
     And   an OAI compatible chat completions request with no api error
-    Then  tool ipython is called with arguments <tool_arguments>
+    Then  tool python is called with arguments <tool_arguments>
 
     Examples: Prompts
       | tool             | tool_arguments                       | hf_repo                                              | hf_file                                 | template_override                             |
+      | python           | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
       | python           | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  |                                               |
       | python           | {"code": "print(\"Hello World\")"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
       | python           | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
-      | python           | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     |                                               |
+      | python           | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
       | python           | {"code": "print('hello world')"}     | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
-      | python           | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
-      | python           | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | python           | {"code": "print('Hello, World!'}"}   | bartowski/Llama-3.2-1B-Instruct-GGUF                 | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | python           | {"code": "print("}                   | bartowski/Llama-3.2-3B-Instruct-GGUF                 | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
       | python           | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
-      # | python           | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
+      | code_interpreter | {"code": "print('Hello, world!')"}   | bartowski/gemma-2-2b-it-GGUF                         | gemma-2-2b-it-Q4_K_M.gguf               |                                               |
+      | code_interpreter | {"code": "print('Hello, World!')"}   | bartowski/Mistral-Nemo-Instruct-2407-GGUF            | Mistral-Nemo-Instruct-2407-Q4_K_M.gguf  | mistralai-Mistral-Nemo-Instruct-2407          |
+      | code_interpreter | {"code": "print(\"Hello World\")"}   | bartowski/Qwen2.5-7B-Instruct-GGUF                   | Qwen2.5-7B-Instruct-Q4_K_M.gguf         |                                               |
+      | code_interpreter | {"code": "print('Hello, World!')"}   | bartowski/Phi-3.5-mini-instruct-GGUF                 | Phi-3.5-mini-instruct-Q4_K_M.gguf       |                                               |
+      | code_interpreter | {"code": "print('Hello, world!')"}   | NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF            | Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf     | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use |
+      | code_interpreter | {"code": "print('hello world')"}     | NousResearch/Hermes-3-Llama-3.1-8B-GGUF              | Hermes-3-Llama-3.1-8B.Q4_K_M.gguf       | NousResearch-Hermes-3-Llama-3.1-8B-tool_use   |
+      | code_interpreter | {"code": "print('Hello, World!'}"}   | lmstudio-community/Llama-3.2-1B-Instruct-GGUF        | Llama-3.2-1B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | code_interpreter | {"code": "print("}                   | lmstudio-community/Llama-3.2-3B-Instruct-GGUF        | Llama-3.2-3B-Instruct-Q4_K_M.gguf       | meta-llama-Llama-3.2-3B-Instruct              |
+      | code_interpreter | {"code": "print("}                   | lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF   | Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf  |                                               |
       # | python           | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
+      # | code_interpreter | {"code": "print('Hello, World!')"}   | bartowski/functionary-small-v3.2-GGUF                | functionary-small-v3.2-Q8_0.gguf        | meetkai-functionary-medium-v3.2               |
 
 
   @slow

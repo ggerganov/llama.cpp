@@ -12,6 +12,41 @@
 
 using json = nlohmann::ordered_json;
 
+static json normalize_tools(const json & tools) {
+    static const auto python_tool = json::parse(R"({
+        "type": "function",
+        "function": {
+            "name": "python",
+            "description": "Runs code in an Python interpreter and returns the result of the execution after 60 seconds.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "The code to run in the Python interpreter."
+                    }
+                },
+                "required": ["code"]
+            }
+        }
+    })");
+
+    auto results = json::array();
+    for (const auto & tool : tools) {
+        if (!tool.contains("type")) {
+            continue;
+        }
+        if (tool["type"] == "code_interpreter") {
+            results.push_back(python_tool);
+        } else if (tool["type"] == "function") {
+            results.push_back(tool);
+        } else {
+            continue;
+        }
+    }
+    return results;
+}
+
 std::string llama_tool_call_style_name(llama_tool_call_style style) {
     switch (style) {
         case llama_tool_call_style::None:
@@ -121,8 +156,14 @@ static llama_tool_calls parse_json_tool_calls(const json & tools, const std::str
     std::unordered_set<std::string> tool_names;
     if (check_names) {
         for (const auto & tool : tools) {
-            if (tool.contains("type") && tool["type"] == "function") {
+            if (!tool.contains("type")) {
+                continue;
+            }
+            std::string type = tool.at("type");
+            if (type == "function") {
                 tool_names.insert(tool["function"]["name"]);
+            } else if (type == "code_interpreter") {
+                tool_names.insert("python");
             }
         }
     }
@@ -210,7 +251,7 @@ static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::
                 /* .content = */ match.prefix().str(),
                 /* .tool_calls = */ {
                     {
-                        /* .name = */ "ipython",
+                        /* .name = */ "python",
                         /* .arguments = */ (json {{"code", match[1].str()}}).dump(),
                         /* .id = */ "",
                     },
@@ -232,7 +273,7 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & t
             /* .content = */ match.prefix().str(),
             /* .tool_calls = */ {
                 {
-                    /* .name = */ "ipython",
+                    /* .name = */ "python",
                     /* .arguments = */ (json {{"code", match[1].str()}}).dump(),
                     /* .id = */ "",
                 },
@@ -258,7 +299,7 @@ static llama_tool_calls parse_generic_tool_calls(const std::string& input) {
             result.tool_calls.push_back({
                 tool_call["name"],
                 tool_call["arguments"].dump(),
-                /* id= */ "",
+                tool_call.contains("id") ? tool_call["id"] : "",
             });
         }
     } else if (data.contains("tool_call")) {
@@ -307,7 +348,7 @@ static llama_tool_calls parse_mistral_nemo_tool_calls(const std::string& input) 
 }
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tools, const std::string& input) {
-    // fprintf(stderr, "# parse_tool_calls:\n\n%s\n\n", input.c_str());
+    // fprintf(stderr, "# parse_tool_calls(%s):\n\n%s\n\n", llama_tool_call_style_name(style).c_str(), input.c_str());
     switch (style) {
         case llama_tool_call_style::None:
             return {input, {}};
@@ -361,15 +402,13 @@ llama_tool_call_handler llama_tool_call_handler_init(
             handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             break;
         case llama_tool_call_style::Generic: {
+            auto actual_tools = normalize_tools(tools);
             auto tool_call_schemas = json::array();
-            for (const auto & tool : tools) {
-                if (tool["type"] != "function") {
-                    continue;
-                }
+            for (const auto & tool : actual_tools) {
                 const auto & function = tool["function"];
                 std::string name = function["name"];
                 auto parameters = function["parameters"];
-                tool_call_schemas.emplace_back(json {
+                auto tool_schema = json {
                     {"type", "object"},
                     {"properties", {
                         {"name", {
@@ -379,7 +418,18 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         {"arguments", parameters},
                     }},
                     {"required", json::array({"name", "arguments"})},
-                });
+                };
+                if (function.contains("description")) {
+                    tool_schema["description"] = function["description"];
+                }
+                if (parallel) {
+                    tool_schema["properties"]["id"] = {
+                        {"type", "string"},
+                        {"minLength", 4},
+                    };
+                    tool_schema["required"].push_back("id");
+                }
+                tool_call_schemas.emplace_back(tool_schema);
             }
             const auto tool_call =
                 parallel
@@ -424,16 +474,14 @@ llama_tool_call_handler llama_tool_call_handler_init(
             auto tweaked_messages = add_system(
                 messages,
                 "Respond in JSON format, either with a request to call tools or with a response to the user's request. Here is the schema for all responses:\n\n```json\n" + schema.dump(2) + "\n```");
-            handler.prompt = tmpl.apply(tweaked_messages, tools, /* add_generation_prompt= */ true);
+            handler.prompt = tmpl.apply(tweaked_messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
         case llama_tool_call_style::MistralNemo: {
+            auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 auto schemas = json::array();
-                for (const auto & tool : tools) {
-                    if (tool["type"] != "function") {
-                        continue;
-                    }
+                for (const auto & tool : actual_tools) {
                     const auto & function = tool["function"];
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
@@ -472,12 +520,22 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 handler.grammar_trigger_words.push_back("[{\"arguments\":");
             }
             // auto tweaked_messages = add_system(messages, "You are a helpful AI with tool calling capabilities. Prefix any tool calls with [TOOL_CALLS]");
-            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
+            handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
         case llama_tool_call_style::Llama31:
         case llama_tool_call_style::Llama32: {
-            static auto builtin_tools = json {"wolfram_alpha", "brave_search", "code_interpreter"};
+            auto builtin_tools = json {"wolfram_alpha", "brave_search"};
+            for (const auto & tool : tools) {
+                if (!tool.contains("type")) {
+                    continue;
+                }
+                if (tool["type"] == "code_interpreter") {
+                    builtin_tools.push_back("code_interpreter");
+                    break;
+                }
+            }
+            auto actual_tools = normalize_tools(tools);
 
             auto uses_python_tag = style == llama_tool_call_style::Llama31;
 
@@ -490,7 +548,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;
 
-                for (const auto & tool : tools) {
+                for (const auto & tool : actual_tools) {
                     const auto & function = tool["function"];
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
@@ -531,7 +589,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
             });
             handler.additional_stop_words.push_back("<|eom_id|>");
-            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true, {
+            handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true, {
                 {"builtin_tools", builtin_tools},
             });
             break;
@@ -539,20 +597,20 @@ llama_tool_call_handler llama_tool_call_handler_init(
         case llama_tool_call_style::FunctionaryV3Llama3: {
             // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
             // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
+            auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> first_tool_rules;
                 std::vector<std::string> subsequent_tool_rules;
-                for (size_t i = 0, n = tools.size(); i < n; i++) {
-                    auto & tool = tools[i];
+                for (const auto & tool : actual_tools) {
                     const auto & function = tool["function"];
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
                     auto args_rule = builder.add_schema(name + "-args", parameters);
                     first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
-                    subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
+                    subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\"\\n>>>" + name + "\\n\" " + args_rule));
                     if (allow_content) {
                         handler.grammar_trigger_words.push_back(name + "\n");
-                        handler.grammar_trigger_words.push_back(">>>" + name + "\n");
+                        handler.grammar_trigger_words.push_back("\n>>>" + name + "\n");
                     }
                 }
                 auto first_rule = builder.add_rule("first_tool_call", join(first_tool_rules.begin(), first_tool_rules.end(), " | ")) + " space";
@@ -563,7 +621,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     builder.add_rule("root", first_rule);
                 }
             });
-            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
+            handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
@@ -571,10 +629,10 @@ llama_tool_call_handler llama_tool_call_handler_init(
             // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
             // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
             // TODO: handle tool {type: code_interpreter} as python
+            auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;
-                for (size_t i = 0, n = tools.size(); i < n; i++) {
-                    auto & tool = tools[i];
+                for (const auto & tool : actual_tools) {
                     const auto & function = tool["function"];
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
@@ -593,16 +651,17 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     handler.grammar_trigger_words.push_back("<function=");
                 }
             });
-            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
+            handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
         case llama_tool_call_style::Hermes2Pro: {
             // NousResearchHermesPro_2
             // (content)?(<tool_call>{"name": "foo", "arguments": {"a": 1}}</tool_call>)*
+            auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;
-                for (const auto & tool : tools) {
+                for (const auto & tool : actual_tools) {
                     const auto & function = tool["function"];
                     std::string name = function["name"];
                     auto parameters = function["parameters"];
@@ -623,7 +682,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     handler.grammar_trigger_words.push_back("<tool_call>");
                 }
             });
-            handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
+            handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
         default:

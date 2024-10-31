@@ -108,9 +108,6 @@ def handle_chat_template(model_id, variant, template_src):
     env.globals['raise_exception'] = raise_exception
     env.globals['strftime_now'] = strftime_now
 
-    template_handles_tools = 'tools' in template_src
-    template_hates_the_system = 'System role not supported' in template_src
-
     template = env.from_string(template_src)
 
     context_files = glob.glob('tests/chat/contexts/*.json')
@@ -118,12 +115,6 @@ def handle_chat_template(model_id, variant, template_src):
         context_name = context_file.split("/")[-1].replace(".json", "")
         with open(context_file, 'r') as f:
             context = json.load(f)
-
-        if not template_handles_tools and 'tools' in context:
-            continue
-
-        if template_hates_the_system and any(m['role'] == 'system' for m in context['messages']):
-            continue
 
         output_file = f'tests/chat/goldens/{base_name}-{context_name}.txt'
         logger.info(f"- {output_file}")

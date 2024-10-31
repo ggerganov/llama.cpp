@@ -1,0 +1,53 @@
+<|startoftext|>[INST] <<SYS>>
+Vous êtes Vigogne, un assistant IA créé par Zaion Lab. Vous suivez extrêmement bien les instructions. Aidez autant que vous le pouvez.
+<</SYS>>
+
+Print a hello world message with python. [/INST] {
+  "tool_calls": [
+    {
+      "name": "ipython",
+      "arguments": {
+        "code": "print('Hello, World!')"
+      },
+      "id": "call_1___"
+    }
+  ]
+} <|endoftext|>[INST] {
+  "tool_response": {
+    "tool": "ipython",
+    "content": "{\"stdout\": \"Hello, World!\"}",
+    "tool_call_id": "call_1___"
+  }
+} [/INST] Anything else? <|endoftext|>[INST] Test a tautology. [/INST] {
+  "tool_calls": [
+    {
+      "name": "test",
+      "arguments": {
+        "condition": true
+      },
+      "id": "call_2___"
+    }
+  ]
+} <|endoftext|>[INST] {
+  "tool_response": {
+    "tool": "test",
+    "content": "true",
+    "tool_call_id": "call_2___"
+  }
+} [/INST] Truth is definitely true. <|endoftext|>[INST] Check it on the web. [/INST] {
+  "tool_calls": [
+    {
+      "name": "brave_search",
+      "arguments": {
+        "query": "what is truth anyway am I right?"
+      },
+      "id": "call_3___"
+    }
+  ]
+} <|endoftext|>[INST] {
+  "tool_response": {
+    "tool": "brave_search",
+    "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}",
+    "tool_call_id": "call_3___"
+  }
+} [/INST] I don't need the web to answer you but I did check, as you asked. What now? <|endoftext|>

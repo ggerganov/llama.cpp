@@ -1,0 +1,49 @@
+<|startoftext|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Print a hello world message with python.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>{
+  "tool_calls": [
+    {
+      "name": "ipython",
+      "arguments": {
+        "code": "print('Hello, World!')"
+      },
+      "id": "call_1___"
+    }
+  ]
+}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{
+  "tool_response": {
+    "tool": "ipython",
+    "content": "{\"stdout\": \"Hello, World!\"}",
+    "tool_call_id": "call_1___"
+  }
+}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>Anything else?<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Test a tautology.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>{
+  "tool_calls": [
+    {
+      "name": "test",
+      "arguments": {
+        "condition": true
+      },
+      "id": "call_2___"
+    }
+  ]
+}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{
+  "tool_response": {
+    "tool": "test",
+    "content": "true",
+    "tool_call_id": "call_2___"
+  }
+}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>Truth is definitely true.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Check it on the web.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>{
+  "tool_calls": [
+    {
+      "name": "brave_search",
+      "arguments": {
+        "query": "what is truth anyway am I right?"
+      },
+      "id": "call_3___"
+    }
+  ]
+}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{
+  "tool_response": {
+    "tool": "brave_search",
+    "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}",
+    "tool_call_id": "call_3___"
+  }
+}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>I don't need the web to answer you but I did check, as you asked. What now?<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>

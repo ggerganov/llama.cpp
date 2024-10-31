@@ -1,0 +1,75 @@
+<|startoftext|><|im_start|>system
+You are a helpful assistant.<|im_end|>
+<|im_start|>user
+Print a hello world message with python.<|im_end|>
+<|im_start|>assistant
+{
+  "tool_calls": [
+    {
+      "name": "ipython",
+      "arguments": {
+        "code": "print('Hello, World!')"
+      },
+      "id": "call_1___"
+    }
+  ]
+}<|im_end|>
+<|im_start|>user
+{
+  "tool_response": {
+    "tool": "ipython",
+    "content": "{\"stdout\": \"Hello, World!\"}",
+    "tool_call_id": "call_1___"
+  }
+}<|im_end|>
+<|im_start|>assistant
+Anything else?<|im_end|>
+<|im_start|>user
+Test a tautology.<|im_end|>
+<|im_start|>assistant
+{
+  "tool_calls": [
+    {
+      "name": "test",
+      "arguments": {
+        "condition": true
+      },
+      "id": "call_2___"
+    }
+  ]
+}<|im_end|>
+<|im_start|>user
+{
+  "tool_response": {
+    "tool": "test",
+    "content": "true",
+    "tool_call_id": "call_2___"
+  }
+}<|im_end|>
+<|im_start|>assistant
+Truth is definitely true.<|im_end|>
+<|im_start|>user
+Check it on the web.<|im_end|>
+<|im_start|>assistant
+{
+  "tool_calls": [
+    {
+      "name": "brave_search",
+      "arguments": {
+        "query": "what is truth anyway am I right?"
+      },
+      "id": "call_3___"
+    }
+  ]
+}<|im_end|>
+<|im_start|>user
+{
+  "tool_response": {
+    "tool": "brave_search",
+    "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}",
+    "tool_call_id": "call_3___"
+  }
+}<|im_end|>
+<|im_start|>assistant
+I don't need the web to answer you but I did check, as you asked. What now?<|im_end|>
+<|im_start|>assistant

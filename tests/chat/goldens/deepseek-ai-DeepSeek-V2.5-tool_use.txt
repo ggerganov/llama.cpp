@@ -1,0 +1,49 @@
+<|startoftext|><｜User｜>Print a hello world message with python.<｜Assistant｜>{
+  "tool_calls": [
+    {
+      "name": "ipython",
+      "arguments": {
+        "code": "print('Hello, World!')"
+      },
+      "id": "call_1___"
+    }
+  ]
+}<｜end▁of▁sentence｜><｜User｜>{
+  "tool_response": {
+    "tool": "ipython",
+    "content": "{\"stdout\": \"Hello, World!\"}",
+    "tool_call_id": "call_1___"
+  }
+}<｜Assistant｜>Anything else?<｜end▁of▁sentence｜><｜User｜>Test a tautology.<｜Assistant｜>{
+  "tool_calls": [
+    {
+      "name": "test",
+      "arguments": {
+        "condition": true
+      },
+      "id": "call_2___"
+    }
+  ]
+}<｜end▁of▁sentence｜><｜User｜>{
+  "tool_response": {
+    "tool": "test",
+    "content": "true",
+    "tool_call_id": "call_2___"
+  }
+}<｜Assistant｜>Truth is definitely true.<｜end▁of▁sentence｜><｜User｜>Check it on the web.<｜Assistant｜>{
+  "tool_calls": [
+    {
+      "name": "brave_search",
+      "arguments": {
+        "query": "what is truth anyway am I right?"
+      },
+      "id": "call_3___"
+    }
+  ]
+}<｜end▁of▁sentence｜><｜User｜>{
+  "tool_response": {
+    "tool": "brave_search",
+    "content": "{\"title\":\"Truth: don't ask the web, ask an LLM instead!\",\"url\":\"https://en.wikipedia.org/wiki/Truth\"}",
+    "tool_call_id": "call_3___"
+  }
+}<｜Assistant｜>I don't need the web to answer you but I did check, as you asked. What now?<｜end▁of▁sentence｜><｜Assistant｜>
