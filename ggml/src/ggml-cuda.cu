@@ -36,7 +36,7 @@
 #include "ggml-cuda/tsembd.cuh"
 #include "ggml-cuda/unary.cuh"
 #include "ggml-cuda/upscale.cuh"
-#include "ggml-cuda/rwkv-wkv.cuh"
+#include "ggml-cuda/wkv6.cuh"
 
 #include <algorithm>
 #include <array>
