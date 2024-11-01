@@ -2313,8 +2313,8 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
         case GGML_OP_CROSS_ENTROPY_LOSS:
             ggml_cuda_cross_entropy_loss(ctx, dst);
             break;
-        case GGML_OP_RWKV_WKV:
-            ggml_cuda_op_rwkv_wkv(ctx, dst);
+        case GGML_OP_RWKV_WKV6:
+            ggml_cuda_op_rwkv_wkv6(ctx, dst);
             break;
         case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
             ggml_cuda_cross_entropy_loss_back(ctx, dst);
@@ -3147,7 +3147,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_ARANGE:
         case GGML_OP_TIMESTEP_EMBEDDING:
         case GGML_OP_LEAKY_RELU:
-        case GGML_OP_RWKV_WKV:
+        case GGML_OP_RWKV_WKV6:
             return true;
         case GGML_OP_FLASH_ATTN_EXT: {
 #ifndef FLASH_ATTN_AVAILABLE

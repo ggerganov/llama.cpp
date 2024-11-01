@@ -3169,7 +3169,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "win_unpart(x)",
     "get_rel_pos(x)",
     "add_rel_pos(x)",
-    "rwkv_wkv(k, v, r, tf, td, s)",
+    "rwkv_wkv6(k, v, r, tf, td, s)",
 
     "unary(x)",
 
@@ -7361,9 +7361,9 @@ struct ggml_tensor * ggml_add_rel_pos_inplace(
     return ggml_add_rel_pos_impl(ctx, a, pw, ph, true);
 }
 
-// ggml_rwkv_wkv
+// ggml_rwkv_wkv6
 
-struct ggml_tensor * ggml_rwkv_wkv(
+struct ggml_tensor * ggml_rwkv_wkv6(
         struct ggml_context * ctx,
         struct ggml_tensor  * k,
         struct ggml_tensor  * v,
@@ -7395,7 +7395,7 @@ struct ggml_tensor * ggml_rwkv_wkv(
     const int64_t ne[4] = { S * H, n_tokens + S * n_seqs, 1, 1 };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
-    result->op     = GGML_OP_RWKV_WKV;
+    result->op     = GGML_OP_RWKV_WKV6;
     result->src[0] = k;
     result->src[1] = v;
     result->src[2] = r;
@@ -16604,15 +16604,16 @@ static void ggml_compute_forward_add_rel_pos(
     }
 }
 
-// ggml_compute_forward_rwkv_wkv
+// ggml_compute_forward_rwkv_wkv6
 
-static void ggml_compute_forward_rwkv_wkv_f32(
+static void ggml_compute_forward_rwkv_wkv6_f32(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst) {
     const size_t T = dst->src[1]->ne[3];
     const size_t C = dst->ne[0];
     const size_t H = dst->src[1]->ne[2];
     const size_t n_seqs = dst->src[5]->ne[1];
+    const size_t head_size = C / H;
 
     float * dst_data = (float *) dst->data;
     float * state = ((float *) dst->data) + C * T;
@@ -16629,10 +16630,10 @@ static void ggml_compute_forward_rwkv_wkv_f32(
     float * time_faaaa = (float *) dst->src[3]->data;
     float * time_decay = (float *) dst->src[4]->data;
 
-    size_t t_stride = H * (C / H);
+    size_t t_stride = H * head_size;
 
     size_t h_stride = C / H;
-    size_t h_stride_2d = (C / H) * (C / H);
+    size_t h_stride_2d = head_size * head_size;
 
     // basically fused operations:
     // dst = r @ (time_faaaa * (k @ v) + state),
@@ -16640,7 +16641,7 @@ static void ggml_compute_forward_rwkv_wkv_f32(
     // recursive through each token
     for (size_t t = 0; t < T; t++) {
         size_t t_offset = t * t_stride;
-        size_t state_offset = (C / H) * C * (t / (T / n_seqs));
+        size_t state_offset = head_size * C * (t / (T / n_seqs));
         float * state_cur = state + state_offset;
         float * state_prev = t % (T / n_seqs) ? state_cur : (float*)dst->src[5]->data + state_offset;
 
@@ -16649,7 +16650,7 @@ static void ggml_compute_forward_rwkv_wkv_f32(
             size_t t_h_offset = t_offset + h_offset;
             size_t h_2d_offset = h * h_stride_2d;
 
-            for (size_t i = 0; i < C / H; i++) {
+            for (size_t i = 0; i < head_size; i++) {
                 size_t t_h_i_offset = t_h_offset + i;
                 size_t h_i_offset = h_offset + i;
                 size_t h_2d_i_offset = h_2d_offset + i * h_stride;
@@ -16660,7 +16661,7 @@ static void ggml_compute_forward_rwkv_wkv_f32(
                 // RWKV v6: different time_decay for each token.
                 float time_decay_val = time_decay[t_h_i_offset];
 
-                for (size_t j = 0; j < C / H; j ++) {
+                for (size_t j = 0; j < head_size; j ++) {
                     size_t t_h_j_offset = t_h_offset + j;
                     size_t h_2d_i_j_offset = h_2d_i_offset + j;
 
@@ -16676,7 +16677,8 @@ static void ggml_compute_forward_rwkv_wkv_f32(
     }
 }
 
-static void ggml_compute_forward_rwkv_wkv(
+
+static void ggml_compute_forward_rwkv_wkv6(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst) {
 
@@ -16685,7 +16687,7 @@ static void ggml_compute_forward_rwkv_wkv(
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_rwkv_wkv_f32(params, dst);
+                ggml_compute_forward_rwkv_wkv6_f32(params, dst);
             } break;
         default:
             {
@@ -17437,9 +17439,9 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_add_rel_pos(params, tensor);
             } break;
-        case GGML_OP_RWKV_WKV:
+        case GGML_OP_RWKV_WKV6:
             {
-                ggml_compute_forward_rwkv_wkv(params, tensor);
+                ggml_compute_forward_rwkv_wkv6(params, tensor);
             } break;
         case GGML_OP_MAP_UNARY:
             {
@@ -18628,7 +18630,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_GET_REL_POS:
         case GGML_OP_ADD_REL_POS:
-        case GGML_OP_RWKV_WKV:
+        case GGML_OP_RWKV_WKV6:
         case GGML_OP_MAP_UNARY:
         case GGML_OP_MAP_BINARY:
         case GGML_OP_MAP_CUSTOM1_F32:
@@ -19278,7 +19280,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_WIN_PART:
         case GGML_OP_WIN_UNPART:
         case GGML_OP_GET_REL_POS:
-        case GGML_OP_RWKV_WKV:
+        case GGML_OP_RWKV_WKV6:
         case GGML_OP_MAP_UNARY:
         case GGML_OP_MAP_BINARY:
         case GGML_OP_MAP_CUSTOM1_F32:

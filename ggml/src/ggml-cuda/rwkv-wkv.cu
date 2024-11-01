@@ -64,7 +64,7 @@ static __global__ void rwkv_wkv_f32(const int B, const int T, const int C, const
     }
 }
 
-void ggml_cuda_op_rwkv_wkv(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+void ggml_cuda_op_rwkv_wkv6(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const float * k_d  = (const float *)dst->src[0]->data;
     const float * v_d  = (const float *)dst->src[1]->data;
     const float * r_d  = (const float *)dst->src[2]->data;
