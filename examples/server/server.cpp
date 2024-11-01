@@ -247,6 +247,7 @@ struct server_slot {
         if (is_processing()) {
             SLT_INF(*this, "stop processing: n_past = %d, truncated = %d\n", n_past, truncated);
 
+            t_last_used = ggml_time_us();
             t_token_generation = (ggml_time_us() - t_start_generation) / 1e3;
             state = SLOT_STATE_IDLE;
             callback_on_release(id);
