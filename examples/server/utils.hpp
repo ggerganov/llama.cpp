@@ -439,14 +439,14 @@ static std::string gen_chatcmplid() {
 // other common utils
 //
 
-static size_t longest_common_prefix(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
+static size_t longest_common_prefix(const llama_tokens & a, const llama_tokens & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
     return i;
 }
 
-static size_t longest_common_subsequence(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
+static size_t longest_common_subsequence(const llama_tokens & a, const llama_tokens & b) {
     // check for empty sequences
     if (a.empty() || b.empty()) {
         return 0;
