@@ -217,7 +217,6 @@
 
 #define GGML_MAX_DIMS           4
 #define GGML_MAX_PARAMS         2048
-#define GGML_MAX_CONTEXTS       64
 #define GGML_MAX_SRC            10
 #define GGML_MAX_N_THREADS      512
 #define GGML_MAX_OP_PARAMS      64
@@ -656,13 +655,6 @@ extern "C" {
         void *              abort_callback_data;
     };
 
-    // scratch buffer
-    struct ggml_scratch {
-        size_t offs;
-        size_t size;
-        void * data;
-    };
-
     struct ggml_init_params {
         // memory pool
         size_t mem_size;   // bytes
@@ -760,12 +752,12 @@ extern "C" {
 
     // main
 
-    GGML_API struct ggml_context * ggml_init(struct ggml_init_params params);
-    GGML_API void                  ggml_free(struct ggml_context * ctx);
+    GGML_API struct ggml_context * ggml_init (struct ggml_init_params params);
+    GGML_API void                  ggml_reset(struct ggml_context * ctx);
+    GGML_API void                  ggml_free (struct ggml_context * ctx);
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
-    GGML_API size_t  ggml_set_scratch (struct ggml_context * ctx, struct ggml_scratch scratch);
     GGML_API bool    ggml_get_no_alloc(struct ggml_context * ctx);
     GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
 
@@ -2490,6 +2482,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_avx512_vbmi(void);
     GGML_API int ggml_cpu_has_avx512_vnni(void);
     GGML_API int ggml_cpu_has_avx512_bf16(void);
+    GGML_API int ggml_cpu_has_amx_int8   (void);
     GGML_API int ggml_cpu_has_fma        (void);
     GGML_API int ggml_cpu_has_neon       (void);
     GGML_API int ggml_cpu_has_sve        (void);

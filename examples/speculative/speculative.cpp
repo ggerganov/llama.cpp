@@ -39,6 +39,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (params.n_predict < -1) {
+        LOG_ERR("%s: --n-predict must be >= -1\n", __func__);
+        return 1;
+    }
+
     common_init();
 
     if (params.model_draft.empty()) {
@@ -155,9 +160,9 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt with both models
-    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1, 0,           0));
-    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0));
-    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input,     0,           0));
+    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1));
+    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1));
+    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input));
 
     const auto t_enc_end = ggml_time_us();
 
@@ -180,8 +185,6 @@ int main(int argc, char ** argv) {
     // target model sampling context (reuse the llama_context's sampling instance)
     struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
 
-    struct llama_sampler * softmax = llama_sampler_init_softmax();
-
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
 
@@ -190,8 +193,8 @@ int main(int argc, char ** argv) {
         drafts[s].smpl = common_sampler_init(model_dft, params.sparams);
     }
 
-    llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
-    llama_batch batch_tgt = llama_batch_init(params.n_ctx, 0, n_seq_dft);
+    llama_batch batch_dft = llama_batch_init(llama_n_batch(ctx_dft), 0, 1);
+    llama_batch batch_tgt = llama_batch_init(llama_n_batch(ctx_tgt), 0, n_seq_dft);
 
     const auto t_dec_start = ggml_time_us();
 
@@ -441,7 +444,7 @@ int main(int argc, char ** argv) {
             ++n_past_dft;
         }
 
-        if (n_predict > params.n_predict || has_eos) {
+        if ((params.n_predict >= 0 && n_predict > params.n_predict) || has_eos) {
             break;
         }
 
@@ -624,7 +627,6 @@ int main(int argc, char ** argv) {
         common_sampler_free(drafts[s].smpl);
     }
 
-    llama_sampler_free(softmax);
     llama_batch_free(batch_dft);
 
     llama_free(ctx_tgt);

@@ -20,6 +20,7 @@
 #include "shaderop_mul_mat_q8_0.h"
 #include "shaderop_mul_mat_q4_0.h"
 #include "shaderop_mul_mat_q4_1.h"
+#include "shaderop_mul_mat_q4_k.h"
 #include "shaderop_mul_mat_q6_k.h"
 #include "shaderop_mul_mat_mat_f32.h"
 #include "shaderop_getrows_f32.h"
@@ -42,6 +43,7 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -273,18 +275,9 @@ static std::vector<ggml_vk_device> ggml_vk_available_devices_internal(size_t mem
     return results;
 }
 
-// public API returns a C-style array
-ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count) {
-    auto devices = ggml_vk_available_devices_internal(memoryRequired);
-    *count = devices.size();
-    if (devices.empty()) {
-        return nullptr;
-    }
-
-    size_t nbytes = sizeof (ggml_vk_device) * (devices.size());
-    auto * arr = static_cast<ggml_vk_device *>(malloc(nbytes));
-    memcpy(arr, devices.data(), nbytes);
-    return arr;
+static std::vector<ggml_vk_device>& ggml_vk_available_devices() {
+    static std::vector<ggml_vk_device> devices = ggml_vk_available_devices_internal(0);
+    return devices;
 }
 
 static void ggml_vk_filterByVendor(std::vector<ggml_vk_device>& devices, const std::string& targetVendor) {
@@ -341,7 +334,7 @@ ggml_vk_device ggml_vk_current_device() {
     if (!komputeManager()->hasDevice())
         return ggml_vk_device();
 
-    auto devices = ggml_vk_available_devices_internal(0);
+    auto devices = ggml_vk_available_devices();
     ggml_vk_filterByName(devices, komputeManager()->physicalDevice()->getProperties().deviceName.data());
     GGML_ASSERT(!devices.empty());
     return devices.front();
@@ -1075,6 +1068,40 @@ static void ggml_vk_mul_mat_q8_0(Args&&... args) {
     ggml_vk_mul_mat_impl(spirv, "q8_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
+static void ggml_vk_mul_mat_q4_k(
+    kp::Sequence& seq,
+    const std::shared_ptr<kp::Tensor>& inA,
+    const std::shared_ptr<kp::Tensor>& inB,
+    const std::shared_ptr<kp::Tensor>& out,
+    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
+    int32_t ne00, int32_t ne01, int32_t ne02, int32_t ne10,
+    int32_t ne11, int32_t ne12, int32_t ne13, int32_t ne0,
+    int32_t ne1, int32_t r2, int32_t r3
+) {
+    const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_k_comp_spv,
+        kp::shader_data::op_mul_mat_q4_k_comp_spv_len);
+
+    struct PushConstants {
+        uint32_t inAOff, inBOff, outOff;
+        int32_t ne00, ne10, ne0, ne1, ne01, ne02, ne12, r2, r3;
+    } pushConsts {
+        0, 0, 0,
+        ne00, ne10, ne0, ne1, ne01, ne02, ne12, r2, r3
+    };
+
+    std::shared_ptr<kp::Algorithm> s_algo = nullptr;
+    if (!komputeManager()->hasAlgorithm(__func__)) {
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 3)/4), unsigned(ne11), unsigned(ne12) * unsigned(ne13)}, {}, {pushConsts});
+    } else {
+        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo->setTensors({inA, inB, out});
+        s_algo->setWorkgroup({unsigned((ne01 + 3)/4), unsigned(ne11), unsigned(ne12) * unsigned(ne13)});
+        s_algo->setPushConstants<PushConstants>({pushConsts});
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
+    }
+    seq.record<kp::OpAlgoDispatch>(s_algo);
+}
+
 static void ggml_vk_mul_mat_q6_k(
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
@@ -1323,17 +1350,7 @@ static void ggml_vk_cpy_f16_f32(Args&&... args) {
     ggml_vk_cpy(spirv, 2, 4, std::forward<Args>(args)...);
 }
 
-static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
-    switch (op->type) {
-        case GGML_TYPE_F16:
-        case GGML_TYPE_F32:
-        case GGML_TYPE_Q4_0:
-        case GGML_TYPE_Q4_1:
-            break;
-        default:
-            return false;
-    }
-
+static bool ggml_backend_kompute_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
     switch (op->op) {
         case GGML_OP_UNARY:
             switch (ggml_get_unary_op(op)) {
@@ -1402,6 +1419,7 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
                 case GGML_TYPE_Q8_0:
                 case GGML_TYPE_Q4_0:
                 case GGML_TYPE_Q4_1:
+                case GGML_TYPE_Q4_K:
                     return true;
                 default:
                     ;
@@ -1410,6 +1428,8 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
             ;
     }
     return false;
+
+    GGML_UNUSED(dev);
 }
 
 static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf) {
@@ -1457,11 +1477,6 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
             }
 
             any_commands_recorded = true;
-
-            if (!ggml_vk_supports_op(dst)) {
-                 fprintf(stderr, "%s: error: unsupported op '%s'\n", __func__, ggml_op_desc(dst));
-                 GGML_ABORT("unsupported op");
-            }
 
             const int32_t ne00 = src0 ? src0->ne[0] : 0;
             const int32_t ne01 = src0 ? src0->ne[1] : 0;
@@ -1656,6 +1671,12 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                                     ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
                                 );
                                 break;
+                            case GGML_TYPE_Q4_K:
+                                ggml_vk_mul_mat_q4_k(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, ne12/ne02, ne13/ne03
+                                );
+                                break;
                             case GGML_TYPE_Q6_K:
                                 ggml_vk_mul_mat_q6_k(
                                     seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
@@ -1820,11 +1841,6 @@ static void ggml_backend_kompute_device_unref(ggml_backend_buffer_type_t buft) {
     }
 }
 
-static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t buffer) {
-    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buffer->buft->context);
-    return ctx->name.c_str();
-}
-
 static void ggml_backend_kompute_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     auto * memory = (ggml_vk_memory *)buffer->context;
     if (ggml_vk_has_device()) {
@@ -1868,7 +1884,6 @@ static void ggml_backend_kompute_buffer_clear(ggml_backend_buffer_t buffer, uint
 }
 
 static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
-    /* .get_name        = */ ggml_backend_kompute_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_kompute_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_kompute_buffer_get_base,
     /* .init_tensor     = */ NULL,
@@ -1913,25 +1928,31 @@ static ggml_backend_buffer_type_i ggml_backend_kompute_buffer_type_interface = {
 };
 
 ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(int device) {
-    static std::vector<ggml_backend_buffer_type> bufts = []() {
-        std::vector<ggml_backend_buffer_type> vec;
-        auto devices = ggml_vk_available_devices_internal(0);
-        vec.reserve(devices.size());
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
 
-        for (const auto & dev : devices) {
-            vec.push_back({
-                /* .iface   = */ ggml_backend_kompute_buffer_type_interface,
-                /* .device  = */ nullptr,
-                /* .context = */ new ggml_backend_kompute_buffer_type_context(dev.index, dev.bufferAlignment, dev.maxAlloc)
-            });
+    auto devices = ggml_vk_available_devices();
+    int32_t device_count = (int32_t) devices.size();
+    GGML_ASSERT(device < device_count);
+    GGML_ASSERT(devices.size() <= GGML_KOMPUTE_MAX_DEVICES);
+
+    static ggml_backend_buffer_type
+        ggml_backend_kompute_buffer_types[GGML_KOMPUTE_MAX_DEVICES];
+
+    static bool ggml_backend_kompute_buffer_type_initialized = false;
+
+    if (!ggml_backend_kompute_buffer_type_initialized) {
+        for (int32_t i = 0; i < device_count; i++) {
+            ggml_backend_kompute_buffer_types[i] = {
+                /* .iface    = */ ggml_backend_kompute_buffer_type_interface,
+                /* .device   = */ ggml_backend_reg_dev_get(ggml_backend_kompute_reg(), i),
+                /* .context  = */ new ggml_backend_kompute_buffer_type_context{ i, devices[i].bufferAlignment, devices[i].maxAlloc },
+            };
         }
-        return vec;
-    }();
+        ggml_backend_kompute_buffer_type_initialized = true;
+    }
 
-    auto it = std::find_if(bufts.begin(), bufts.end(), [device](const ggml_backend_buffer_type & t) {
-        return device == static_cast<ggml_backend_kompute_buffer_type_context *>(t.context)->device;
-    });
-    return it < bufts.end() ? &*it : nullptr;
+    return &ggml_backend_kompute_buffer_types[device];
 }
 
 // backend
@@ -1953,31 +1974,15 @@ static void ggml_backend_kompute_free(ggml_backend_t backend) {
     delete backend;
 }
 
-static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
-    return ggml_backend_kompute_buffer_type(ctx->device);
-}
-
 static ggml_status ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
     ggml_vk_graph_compute(ctx, cgraph);
     return GGML_STATUS_SUCCESS;
 }
 
-static bool ggml_backend_kompute_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    GGML_UNUSED(backend);
-    return ggml_vk_supports_op(op);
-}
-
-static bool ggml_backend_kompute_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
-    GGML_UNUSED(backend);
-    return buft->iface.get_name == ggml_backend_kompute_buffer_type_get_name;
-}
-
 static struct ggml_backend_i kompute_backend_i = {
     /* .get_name                = */ ggml_backend_kompute_name,
     /* .free                    = */ ggml_backend_kompute_free,
-    /* .get_default_buffer_type = */ ggml_backend_kompute_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -1987,9 +1992,6 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
-    /* .supports_op             = */ ggml_backend_kompute_supports_op,
-    /* .supports_buft           = */ ggml_backend_kompute_supports_buft,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };
@@ -2006,7 +2008,7 @@ ggml_backend_t ggml_backend_kompute_init(int device) {
     ggml_backend_t kompute_backend = new ggml_backend {
         /* .guid      = */ ggml_backend_kompute_guid(),
         /* .interface = */ kompute_backend_i,
-        /* .device    = */ nullptr,
+        /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_kompute_reg(), device),
         /* .context   = */ s_kompute_context,
     };
 
@@ -2015,4 +2017,168 @@ ggml_backend_t ggml_backend_kompute_init(int device) {
 
 bool ggml_backend_is_kompute(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_kompute_guid());
+}
+
+static size_t ggml_backend_kompute_get_device_count() {
+    auto devices = ggml_vk_available_devices();
+    return devices.size();
+}
+
+static void ggml_backend_kompute_get_device_description(int device, char * description, size_t description_size) {
+    auto devices = ggml_vk_available_devices();
+    GGML_ASSERT((size_t) device < devices.size());
+    snprintf(description, description_size, "%s", devices[device].name);
+}
+
+static void ggml_backend_kompute_get_device_memory(int device, size_t * free, size_t * total) {
+    auto devices = ggml_vk_available_devices();
+    GGML_ASSERT((size_t) device < devices.size());
+    *total = devices[device].heapSize;
+    *free = devices[device].heapSize;
+}
+
+//////////////////////////
+
+struct ggml_backend_kompute_device_context {
+    int device;
+    std::string name;
+    std::string description;
+};
+
+static const char * ggml_backend_kompute_device_get_name(ggml_backend_dev_t dev) {
+    ggml_backend_kompute_device_context * ctx = (ggml_backend_kompute_device_context *)dev->context;
+    return ctx->name.c_str();
+}
+
+static const char * ggml_backend_kompute_device_get_description(ggml_backend_dev_t dev) {
+    ggml_backend_kompute_device_context * ctx = (ggml_backend_kompute_device_context *)dev->context;
+    return ctx->description.c_str();
+}
+
+static void ggml_backend_kompute_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
+    ggml_backend_kompute_device_context * ctx = (ggml_backend_kompute_device_context *)dev->context;
+    ggml_backend_kompute_get_device_memory(ctx->device, free, total);
+}
+
+static ggml_backend_buffer_type_t ggml_backend_kompute_device_get_buffer_type(ggml_backend_dev_t dev) {
+    ggml_backend_kompute_device_context * ctx = (ggml_backend_kompute_device_context *)dev->context;
+    return ggml_backend_kompute_buffer_type(ctx->device);
+}
+
+static bool ggml_backend_kompute_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
+    if (buft->iface.get_name != ggml_backend_kompute_buffer_type_get_name) {
+        return false;
+    }
+
+    ggml_backend_kompute_device_context * ctx = (ggml_backend_kompute_device_context *)dev->context;
+    ggml_backend_kompute_buffer_type_context * buft_ctx = (ggml_backend_kompute_buffer_type_context *)buft->context;
+
+    return buft_ctx->device == ctx->device;
+}
+
+static enum ggml_backend_dev_type ggml_backend_kompute_device_get_type(ggml_backend_dev_t dev) {
+    GGML_UNUSED(dev);
+    return GGML_BACKEND_DEVICE_TYPE_GPU;
+}
+
+static void ggml_backend_kompute_device_get_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
+    props->name        = ggml_backend_kompute_device_get_name(dev);
+    props->description = ggml_backend_kompute_device_get_description(dev);
+    props->type        = ggml_backend_kompute_device_get_type(dev);
+    ggml_backend_kompute_device_get_memory(dev, &props->memory_free, &props->memory_total);
+    props->caps = {
+        /* async                  = */ false,
+        /* host_buffer            = */ false,
+        /* .buffer_from_host_ptr  = */ false,
+        /* events                 = */ false,
+    };
+}
+
+static ggml_backend_t ggml_backend_kompute_device_init(ggml_backend_dev_t dev, const char * params) {
+    GGML_UNUSED(params);
+    ggml_backend_kompute_device_context * ctx = (ggml_backend_kompute_device_context *)dev->context;
+    return ggml_backend_kompute_init(ctx->device);
+}
+
+static bool ggml_backend_kompute_device_offload_op(ggml_backend_dev_t dev, const ggml_tensor * op) {
+    const int min_batch_size = 32;
+
+    return (op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS) ||
+           (op->ne[2] >= min_batch_size && op->op == GGML_OP_MUL_MAT_ID);
+
+    GGML_UNUSED(dev);
+}
+
+static const struct ggml_backend_device_i ggml_backend_kompute_device_i = {
+    /* .get_name             = */ ggml_backend_kompute_device_get_name,
+    /* .get_description      = */ ggml_backend_kompute_device_get_description,
+    /* .get_memory           = */ ggml_backend_kompute_device_get_memory,
+    /* .get_type             = */ ggml_backend_kompute_device_get_type,
+    /* .get_props            = */ ggml_backend_kompute_device_get_props,
+    /* .init_backend         = */ ggml_backend_kompute_device_init,
+    /* .get_buffer_type      = */ ggml_backend_kompute_device_get_buffer_type,
+    /* .get_host_buffer_type = */ NULL,
+    /* .buffer_from_host_ptr = */ NULL,
+    /* .supports_op          = */ ggml_backend_kompute_device_supports_op,
+    /* .supports_buft        = */ ggml_backend_kompute_device_supports_buft,
+    /* .offload_op           = */ ggml_backend_kompute_device_offload_op,
+    /* .event_new            = */ NULL,
+    /* .event_free           = */ NULL,
+    /* .event_synchronize    = */ NULL,
+};
+
+static const char * ggml_backend_kompute_reg_get_name(ggml_backend_reg_t reg) {
+    GGML_UNUSED(reg);
+    return "Kompute";
+}
+
+static size_t ggml_backend_kompute_reg_get_device_count(ggml_backend_reg_t reg) {
+    GGML_UNUSED(reg);
+    return ggml_backend_kompute_get_device_count();
+}
+
+static ggml_backend_dev_t ggml_backend_kompute_reg_get_device(ggml_backend_reg_t reg, size_t device) {
+    static std::vector<ggml_backend_dev_t> devices;
+
+    static bool initialized = false;
+
+    {
+        static std::mutex mutex;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!initialized) {
+            for (size_t i = 0; i < ggml_backend_kompute_get_device_count(); i++) {
+                ggml_backend_kompute_device_context * ctx = new ggml_backend_kompute_device_context;
+                char desc[256];
+                ggml_backend_kompute_get_device_description(i, desc, sizeof(desc));
+                ctx->device = i;
+                ctx->name = "Kompute" + std::to_string(i);
+                ctx->description = desc;
+                devices.push_back(new ggml_backend_device {
+                    /* .iface   = */ ggml_backend_kompute_device_i,
+                    /* .reg     = */ reg,
+                    /* .context = */ ctx,
+                });
+            }
+            initialized = true;
+        }
+    }
+
+    GGML_ASSERT(device < devices.size());
+    return devices[device];
+}
+
+static const struct ggml_backend_reg_i ggml_backend_kompute_reg_i = {
+    /* .get_name         = */ ggml_backend_kompute_reg_get_name,
+    /* .get_device_count = */ ggml_backend_kompute_reg_get_device_count,
+    /* .get_device       = */ ggml_backend_kompute_reg_get_device,
+    /* .get_proc_address = */ NULL,
+};
+
+ggml_backend_reg_t ggml_backend_kompute_reg() {
+    static ggml_backend_reg reg = {
+        /* .iface   = */ ggml_backend_kompute_reg_i,
+        /* .context = */ nullptr,
+    };
+
+    return &reg;
 }

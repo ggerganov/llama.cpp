@@ -224,12 +224,6 @@ static void ggml_backend_blas_free(ggml_backend_t backend) {
     delete backend;
 }
 
-static ggml_backend_buffer_type_t ggml_backend_blas_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_cpu_buffer_type();
-
-    GGML_UNUSED(backend);
-}
-
 static enum ggml_status ggml_backend_blas_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     ggml_backend_blas_context * ctx = (ggml_backend_blas_context *)backend->context;
 
@@ -265,7 +259,6 @@ static enum ggml_status ggml_backend_blas_graph_compute(ggml_backend_t backend, 
 static struct ggml_backend_i blas_backend_i = {
     /* .get_name                = */ ggml_backend_blas_get_name,
     /* .free                    = */ ggml_backend_blas_free,
-    /* .get_default_buffer_type = */ ggml_backend_blas_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -275,9 +268,6 @@ static struct ggml_backend_i blas_backend_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_blas_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };
@@ -356,7 +346,7 @@ static void ggml_backend_blas_device_get_memory(ggml_backend_dev_t dev, size_t *
 }
 
 static enum ggml_backend_dev_type ggml_backend_blas_device_get_type(ggml_backend_dev_t dev) {
-    return GGML_BACKEND_DEVICE_TYPE_CPU;
+    return GGML_BACKEND_DEVICE_TYPE_ACCEL;
 
     GGML_UNUSED(dev);
 }
@@ -374,7 +364,7 @@ static void ggml_backend_blas_device_get_props(ggml_backend_dev_t dev, struct gg
     };
 }
 
-static ggml_backend_t ggml_backend_blas_device_init(ggml_backend_dev_t dev, const char * params) {
+static ggml_backend_t ggml_backend_blas_device_init_backend(ggml_backend_dev_t dev, const char * params) {
     return ggml_backend_blas_init();
 
     GGML_UNUSED(dev);
@@ -387,7 +377,7 @@ static ggml_backend_buffer_type_t ggml_backend_blas_device_get_buffer_type(ggml_
     GGML_UNUSED(dev);
 }
 
-static ggml_backend_buffer_t ggml_backend_blas_device_buffer_from_ptr(ggml_backend_dev_t dev, void * ptr, size_t size, size_t max_tensor_size) {
+static ggml_backend_buffer_t ggml_backend_blas_device_buffer_from_host_ptr(ggml_backend_dev_t dev, void * ptr, size_t size, size_t max_tensor_size) {
     return ggml_backend_cpu_buffer_from_ptr(ptr, size);
 
     GGML_UNUSED(dev);
@@ -456,10 +446,10 @@ static const struct ggml_backend_device_i ggml_backend_blas_device_i = {
     /* .get_memory           = */ ggml_backend_blas_device_get_memory,
     /* .get_type             = */ ggml_backend_blas_device_get_type,
     /* .get_props            = */ ggml_backend_blas_device_get_props,
-    /* .init_backend         = */ ggml_backend_blas_device_init,
+    /* .init_backend         = */ ggml_backend_blas_device_init_backend,
     /* .get_buffer_type      = */ ggml_backend_blas_device_get_buffer_type,
     /* .get_host_buffer_type = */ NULL,
-    /* .buffer_from_host_ptr = */ ggml_backend_blas_device_buffer_from_ptr,
+    /* .buffer_from_host_ptr = */ ggml_backend_blas_device_buffer_from_host_ptr,
     /* .supports_op          = */ ggml_backend_blas_device_supports_op,
     /* .supports_buft        = */ ggml_backend_blas_device_supports_buft,
     /* .offload_op           = */ NULL,

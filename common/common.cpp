@@ -416,19 +416,6 @@ std::string string_format(const char * fmt, ...) {
     return std::string(buf.data(), size);
 }
 
-std::vector<std::string> string_split(std::string input, char separator) {
-    std::vector<std::string> parts;
-    size_t separator_pos = input.find(separator);
-    while (separator_pos != std::string::npos) {
-        std::string part = input.substr(0, separator_pos);
-        parts.emplace_back(part);
-        input = input.substr(separator_pos + 1);
-        separator_pos = input.find(separator);
-    }
-    parts.emplace_back(input);
-    return parts;
-}
-
 std::string string_strip(const std::string & str) {
     size_t start = 0;
     size_t end = str.size();
@@ -955,7 +942,7 @@ struct common_init_result common_init_from_params(common_params & params) {
         }
 
         if (llama_model_has_encoder(model)) {
-            llama_encode(lctx, llama_batch_get_one(tmp.data(), tmp.size(), 0, 0));
+            llama_encode(lctx, llama_batch_get_one(tmp.data(), tmp.size()));
             llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
             if (decoder_start_token_id == -1) {
                 decoder_start_token_id = bos;
@@ -964,7 +951,7 @@ struct common_init_result common_init_from_params(common_params & params) {
             tmp.push_back(decoder_start_token_id);
         }
         if (llama_model_has_decoder(model)) {
-            llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+            llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch)));
         }
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
@@ -1035,7 +1022,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
         return GGML_TYPE_Q5_1;
     }
 
-    throw std::runtime_error("Invalid cache type: " + s);
+    throw std::runtime_error("Unsupported cache type: " + s);
 }
 
 struct llama_context_params common_context_params_to_llama(const common_params & params) {
@@ -1047,7 +1034,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.n_ubatch          = params.n_ubatch;
     cparams.n_threads         = params.cpuparams.n_threads;
     cparams.n_threads_batch   = params.cpuparams_batch.n_threads == -1 ?
-                                    params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
+                                params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
     cparams.rope_scaling_type = params.rope_scaling_type;
@@ -2019,6 +2006,10 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
     fprintf(stream, "chunks: %d # default: -1 (unlimited)\n", params.n_chunks);
     fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
     fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
+    fprintf(stream, "dry_allowed_length: %d # default: 2\n", sparams.dry_allowed_length);
+    fprintf(stream, "dry_base: %.2f # default: 1.75\n", sparams.dry_base);
+    fprintf(stream, "dry_multiplier: %.1f # default: 0.0\n", sparams.dry_multiplier);
+    fprintf(stream, "dry_penalty_last_n: %d # default: -1 (0 = disable, -1 = context size)\n", sparams.dry_penalty_last_n);
     fprintf(stream, "escape: %s # default: false\n", params.escape ? "true" : "false");
     fprintf(stream, "file: # never logged, see prompt instead. Can still be specified for input.\n");
     fprintf(stream, "frequency_penalty: %f # default: 0.0 \n", sparams.penalty_freq);
@@ -2099,11 +2090,12 @@ void yaml_dump_non_result_info(FILE * stream, const common_params & params, cons
     const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + llama_max_devices());
     yaml_dump_vector_float(stream, "tensor_split", tensor_split_vector);
 
-    fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
     fprintf(stream, "threads: %d # default: %u\n", params.cpuparams.n_threads, std::thread::hardware_concurrency());
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
+    fprintf(stream, "xtc_probability: %f # default: 0.0\n", sparams.xtc_probability);
+    fprintf(stream, "xtc_threshold: %f # default: 0.1\n", sparams.xtc_threshold);
     fprintf(stream, "typ_p: %f # default: 1.0\n", sparams.typ_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");

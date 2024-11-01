@@ -128,13 +128,13 @@ static void common_params_handle_model_default(common_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = fs_get_cache_file(string_split(params.hf_file, '/').back());
+            params.model = fs_get_cache_file(string_split<std::string>(params.hf_file, '/').back());
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
-            auto f = string_split(params.model_url, '#').front();
-            f = string_split(f, '?').front();
-            params.model = fs_get_cache_file(string_split(f, '/').back());
+            auto f = string_split<std::string>(params.model_url, '#').front();
+            f = string_split<std::string>(f, '?').front();
+            params.model = fs_get_cache_file(string_split<std::string>(f, '/').back());
         }
     } else if (params.model.empty()) {
         params.model = DEFAULT_MODEL_PATH;
@@ -250,6 +250,9 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         string_process_escapes(params.input_suffix);
         for (auto & antiprompt : params.antiprompt) {
             string_process_escapes(antiprompt);
+        }
+        for (auto & seq_breaker : params.sparams.dry_sequence_breakers) {
+            string_process_escapes(seq_breaker);
         }
     }
 
@@ -879,7 +882,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--samplers"}, "SAMPLERS",
         string_format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
         [](common_params & params, const std::string & value) {
-            const auto sampler_names = string_split(value, ';');
+            const auto sampler_names = string_split<std::string>(value, ';');
             params.sparams.samplers = common_sampler_types_from_names(sampler_names, true);
         }
     ).set_sparam());
@@ -941,10 +944,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"--tfs"}, "N",
-        string_format("tail free sampling, parameter z (default: %.1f, 1.0 = disabled)", (double)params.sparams.tfs_z),
+        {"--xtc-probability"}, "N",
+        string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_probability),
         [](common_params & params, const std::string & value) {
-            params.sparams.tfs_z = std::stof(value);
+            params.sparams.xtc_probability = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--xtc-threshold"}, "N",
+        string_format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sparams.xtc_threshold),
+        [](common_params & params, const std::string & value) {
+            params.sparams.xtc_threshold = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
@@ -984,6 +994,64 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
+        {"--dry-multiplier"}, "N",
+        string_format("set DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)params.sparams.dry_multiplier),
+        [](common_params & params, const std::string & value) {
+            params.sparams.dry_multiplier = std::stof(value);
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-base"}, "N",
+        string_format("set DRY sampling base value (default: %.2f)", (double)params.sparams.dry_base),
+        [](common_params & params, const std::string & value) {
+            float potential_base = std::stof(value);
+            if (potential_base >= 1.0f)
+            {
+                params.sparams.dry_base = potential_base;
+            }
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-allowed-length"}, "N",
+        string_format("set allowed length for DRY sampling (default: %d)", params.sparams.dry_allowed_length),
+        [](common_params & params, int value) {
+            params.sparams.dry_allowed_length = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-penalty-last-n"}, "N",
+        string_format("set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sparams.dry_penalty_last_n),
+        [](common_params & params, int value) {
+            params.sparams.dry_penalty_last_n = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--dry-sequence-breaker"}, "STRING",
+        string_format("add sequence breaker for DRY sampling, clearing out default breakers (%s) in the process; use \"none\" to not use any sequence breakers\n",
+            params.sparams.dry_sequence_breakers.empty() ? "none" :
+            std::accumulate(std::next(params.sparams.dry_sequence_breakers.begin()),
+                params.sparams.dry_sequence_breakers.end(),
+                std::string("'") + (params.sparams.dry_sequence_breakers[0] == "\n" ? "\\n" : params.sparams.dry_sequence_breakers[0]) + "'",
+                [](const std::string& a, const std::string& b) {
+                    std::string formatted_b = (b == "\n") ? "\\n" : b;
+                    return a + ", '" + formatted_b + "'";
+                }).c_str()),
+        [](common_params & params, const std::string & value) {
+            static bool defaults_cleared = false;
+
+            if (!defaults_cleared) {
+                params.sparams.dry_sequence_breakers.clear();
+                defaults_cleared = true;
+            }
+
+            if (value == "none") {
+                params.sparams.dry_sequence_breakers.clear();
+            } else {
+                params.sparams.dry_sequence_breakers.emplace_back(value);
+            }
+        }
+    ).set_sparam());
+    add_opt(common_arg(
         {"--dynatemp-range"}, "N",
         string_format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sparams.dynatemp_range),
         [](common_params & params, const std::string & value) {
@@ -999,7 +1067,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat"}, "N",
-        string_format("use Mirostat sampling.\nTop K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n"
+        string_format("use Mirostat sampling.\nTop K, Nucleus and Locally Typical samplers are ignored if used.\n"
         "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sparams.mirostat),
         [](common_params & params, int value) {
             params.sparams.mirostat = value;
@@ -1083,7 +1151,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_RETRIEVAL, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_POOLING"));
     add_opt(common_arg(
-        {"--attention"}, "{causal,non,causal}",
+        {"--attention"}, "{causal,non-causal}",
         "attention type for embeddings, use model default if unspecified",
         [](common_params & params, const std::string & value) {
             /**/ if (value == "causal") { params.attention_type = LLAMA_ATTENTION_TYPE_CAUSAL; }
@@ -1681,7 +1749,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
     add_opt(common_arg(
         {"--embd-normalize"}, "N",
-        string_format("normalisation for embendings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
+        string_format("normalisation for embeddings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
         [](common_params & params, int value) {
             params.embd_normalize = value;
         }
@@ -1695,7 +1763,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(common_arg(
         {"--embd-separator"}, "STRING",
-        "separator of embendings (default \\n) for example \"<#sep#>\"",
+        "separator of embeddings (default \\n) for example \"<#sep#>\"",
         [](common_params & params, const std::string & value) {
             params.embd_sep = value;
         }
@@ -1788,6 +1856,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.n_threads_http = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_THREADS_HTTP"));
+    add_opt(common_arg(
+        {"--cache-reuse"}, "N",
+        string_format("min chunk size to attempt reusing from the cache via KV shifting (default: %d)", params.n_cache_reuse),
+        [](common_params & params, int value) {
+            params.n_cache_reuse = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CACHE_REUSE"));
     add_opt(common_arg(
         {"--metrics"},
         string_format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),

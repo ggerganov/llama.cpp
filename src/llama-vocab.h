@@ -48,7 +48,7 @@ struct llama_vocab {
     id special_cls_id  = LLAMA_TOKEN_NULL;
     id special_mask_id = LLAMA_TOKEN_NULL;
 
-    id linefeed_id    = 13;
+    id linefeed_id = 13;
 
     // fim tokens
     id special_fim_pre_id = LLAMA_TOKEN_NULL;
@@ -149,6 +149,12 @@ int32_t llama_token_to_piece_impl(
                          int32_t   lstrip,
                             bool   special);
 
+// check if token0 is contained as a prefix in token1
+bool llama_token_is_prefix_impl(
+        const struct llama_vocab & vocab,
+                     llama_token   token0,
+                     llama_token   token1);
+
 int32_t llama_detokenize_impl(
         const struct llama_vocab & vocab,
                const llama_token * tokens,
@@ -157,3 +163,8 @@ int32_t llama_detokenize_impl(
                          int32_t   text_len_max,
                             bool   remove_special,
                             bool   unparse_special);
+
+std::string llama_detokenize(
+        const struct llama_vocab & vocab,
+  const std::vector<llama_token> & tokens,
+                            bool   special);

@@ -130,10 +130,12 @@ std::string common_sampler_params::print() const {
 
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
-            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, typical_p = %.3f, temp = %.3f\n"
+            "\tdry_multiplier = %.3f, dry_base = %.3f, dry_allowed_length = %d, dry_penalty_last_n = %d\n"
+            "\ttop_k = %d, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, temp = %.3f\n"
             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
             penalty_last_n, penalty_repeat, penalty_freq, penalty_present,
-            top_k, tfs_z, top_p, min_p, typ_p, temp,
+            dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n,
+            top_k, top_p, min_p, xtc_probability, xtc_threshold, typ_p, temp,
             mirostat, mirostat_eta, mirostat_tau);
 
     return std::string(result);
@@ -171,54 +173,54 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.penalize_nl,
                 params.ignore_eos));
 
-    if (params.temp > 0.0f) {
-        if (params.mirostat == 0) {
-            for (const auto & cnstr : params.samplers) {
-                switch (cnstr) {
-                    case COMMON_SAMPLER_TYPE_TOP_K:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
+    if (params.mirostat == 0) {
+        for (const auto & cnstr : params.samplers) {
+            switch (cnstr) {
+                    case COMMON_SAMPLER_TYPE_DRY:
+                    {
+                        std::vector<const char*> c_breakers;
+                        c_breakers.reserve(params.dry_sequence_breakers.size());
+                        for (const auto& str : params.dry_sequence_breakers) {
+                            c_breakers.push_back(str.c_str());
+                        }
+
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                    }
                         break;
-                    case COMMON_SAMPLER_TYPE_TOP_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_MIN_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TFS_Z:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TYPICAL_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
-                        break;
-                    case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
-                        break;
-                    default:
-                        GGML_ASSERT(false && "unknown sampler type");
-                }
+                case COMMON_SAMPLER_TYPE_TOP_K:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
+                    break;
+                case COMMON_SAMPLER_TYPE_TOP_P:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_MIN_P:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_XTC:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                    break;
+                case COMMON_SAMPLER_TYPE_TYPICAL_P:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
+                    break;
+                case COMMON_SAMPLER_TYPE_TEMPERATURE:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    break;
+                case COMMON_SAMPLER_TYPE_INFILL:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                    break;
+                default:
+                    GGML_ASSERT(false && "unknown sampler type");
             }
-            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
-            llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
-        } else if (params.mirostat == 1) {
-            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
-        } else if (params.mirostat == 2) {
-            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
-        } else {
-            GGML_ASSERT(false && "unknown mirostat version");
         }
+        llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
+    } else if (params.mirostat == 1) {
+        llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
+        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+    } else if (params.mirostat == 2) {
+        llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
+        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
     } else {
-        if (params.n_probs > 0) {
-            // some use cases require to sample greedily, but still obtain the probabilities of the top tokens
-            // ref: https://github.com/ggerganov/llama.cpp/pull/9605
-            //
-            // the following will not produce exactly the same probs as applyging softmax to the full vocabulary, but
-            // it is much faster, since we avoid sorting all tokens and should give a good approximation
-            llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.n_probs));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
-        }
-        llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
+        GGML_ASSERT(false && "unknown mirostat version");
     }
 
     return result;
@@ -366,36 +368,42 @@ std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx_
 
 char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
     switch (cnstr) {
+        case COMMON_SAMPLER_TYPE_DRY:         return 'd';
         case COMMON_SAMPLER_TYPE_TOP_K:       return 'k';
-        case COMMON_SAMPLER_TYPE_TFS_Z:       return 'f';
         case COMMON_SAMPLER_TYPE_TYPICAL_P:   return 'y';
         case COMMON_SAMPLER_TYPE_TOP_P:       return 'p';
         case COMMON_SAMPLER_TYPE_MIN_P:       return 'm';
         case COMMON_SAMPLER_TYPE_TEMPERATURE: return 't';
+        case COMMON_SAMPLER_TYPE_XTC:         return 'x';
+        case COMMON_SAMPLER_TYPE_INFILL:      return 'i';
         default : return '?';
     }
 }
 
 std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
     switch (cnstr) {
+        case COMMON_SAMPLER_TYPE_DRY:         return "dry";
         case COMMON_SAMPLER_TYPE_TOP_K:       return "top_k";
-        case COMMON_SAMPLER_TYPE_TFS_Z:       return "tfs_z";
         case COMMON_SAMPLER_TYPE_TYPICAL_P:   return "typ_p";
         case COMMON_SAMPLER_TYPE_TOP_P:       return "top_p";
         case COMMON_SAMPLER_TYPE_MIN_P:       return "min_p";
         case COMMON_SAMPLER_TYPE_TEMPERATURE: return "temperature";
+        case COMMON_SAMPLER_TYPE_XTC:         return "xtc";
+        case COMMON_SAMPLER_TYPE_INFILL:      return "infill";
         default : return "";
     }
 }
 
 std::vector<common_sampler_type> common_sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
     std::unordered_map<std::string, common_sampler_type> sampler_canonical_name_map {
+        { "dry",         COMMON_SAMPLER_TYPE_DRY },
         { "top_k",       COMMON_SAMPLER_TYPE_TOP_K },
         { "top_p",       COMMON_SAMPLER_TYPE_TOP_P },
         { "typ_p",       COMMON_SAMPLER_TYPE_TYPICAL_P },
         { "min_p",       COMMON_SAMPLER_TYPE_MIN_P },
-        { "tfs_z",       COMMON_SAMPLER_TYPE_TFS_Z },
         { "temperature", COMMON_SAMPLER_TYPE_TEMPERATURE },
+        { "xtc",         COMMON_SAMPLER_TYPE_XTC },
+        { "infill",      COMMON_SAMPLER_TYPE_INFILL },
     };
 
     // since samplers names are written multiple ways
@@ -409,8 +417,6 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
         { "typ-p",       COMMON_SAMPLER_TYPE_TYPICAL_P },
         { "typ",         COMMON_SAMPLER_TYPE_TYPICAL_P },
         { "min-p",       COMMON_SAMPLER_TYPE_MIN_P },
-        { "tfs-z",       COMMON_SAMPLER_TYPE_TFS_Z },
-        { "tfs",         COMMON_SAMPLER_TYPE_TFS_Z },
         { "temp",        COMMON_SAMPLER_TYPE_TEMPERATURE },
     };
 
@@ -436,12 +442,14 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
 
 std::vector<common_sampler_type> common_sampler_types_from_chars(const std::string & chars) {
     std::unordered_map<char, common_sampler_type> sampler_name_map = {
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_DRY),         COMMON_SAMPLER_TYPE_DRY },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TOP_K),       COMMON_SAMPLER_TYPE_TOP_K },
-        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TFS_Z),       COMMON_SAMPLER_TYPE_TFS_Z },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TYPICAL_P),   COMMON_SAMPLER_TYPE_TYPICAL_P },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TOP_P),       COMMON_SAMPLER_TYPE_TOP_P },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_MIN_P),       COMMON_SAMPLER_TYPE_MIN_P },
-        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TEMPERATURE), COMMON_SAMPLER_TYPE_TEMPERATURE }
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TEMPERATURE), COMMON_SAMPLER_TYPE_TEMPERATURE },
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_XTC),         COMMON_SAMPLER_TYPE_XTC },
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_INFILL),      COMMON_SAMPLER_TYPE_INFILL },
     };
 
     std::vector<common_sampler_type> samplers;
