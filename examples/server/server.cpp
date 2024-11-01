@@ -740,7 +740,7 @@ struct server_context {
                 }
 
                 // skip the slot if it does not contains cached tokens
-                if (slot.prompt_tokens.empty()) {
+                if (slot.cache_tokens.empty()) {
                     continue;
                 }
 
