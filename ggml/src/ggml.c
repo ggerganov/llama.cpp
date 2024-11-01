@@ -433,7 +433,6 @@ void * ggml_aligned_malloc(size_t size) {
                 break;
         }
         GGML_LOG_ERROR("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
-        GGML_ABORT("fatal error");
         return NULL;
     }
     return aligned_memory;
