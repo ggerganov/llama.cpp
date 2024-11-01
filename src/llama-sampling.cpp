@@ -1127,16 +1127,11 @@ static void llama_sampler_k_shift_free(struct llama_sampler * smpl) {
     delete (llama_sampler_k_shift *) smpl->ctx;
 }
 
-static void llama_sampler_k_shift_reset(struct llama_sampler * smpl) {
-    auto * ctx = (llama_sampler_k_shift *) smpl->ctx;
-    ctx->k_set = false;
-}
-
 static struct llama_sampler_i llama_sampler_k_shift_i = {
     /* .name   = */ llama_sampler_k_shift_name,
     /* .accept = */ nullptr,
     /* .apply  = */ llama_sampler_k_shift_apply,
-    /* .reset  = */ llama_sampler_k_shift_reset,
+    /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_k_shift_clone,
     /* .free   = */ llama_sampler_k_shift_free,
 };
