@@ -1,0 +1,96 @@
+#version 450
+
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform Parameters {
+    uint B;  // Batch size
+    uint T;  // Sequence length
+    uint C;  // Total number of channels
+    uint H;  // Number of heads
+};
+
+layout(set = 0, binding = 0) readonly buffer KBuf { float k[]; };
+layout(set = 0, binding = 1) readonly buffer VBuf { float v[]; };
+layout(set = 0, binding = 2) readonly buffer RBuf { float r[]; };
+layout(set = 0, binding = 3) readonly buffer TimeFBuf { float tf[]; };
+layout(set = 0, binding = 4) readonly buffer TimeDBuf { float td[]; };
+layout(set = 0, binding = 5) readonly buffer StateBuf { float state_in[]; };
+layout(set = 0, binding = 6) buffer DstBuf { float dst[]; };
+
+shared float _k[64], _r[64], _tf[64], _td[64];
+
+void main() {
+    const uint head_size = 64;
+    const uint batch_id = gl_WorkGroupID.x / H;
+    const uint head_id = gl_WorkGroupID.x % H;
+    const uint tid = gl_LocalInvocationID.x;
+    
+    const uint state_size = C * head_size;
+    const uint n_seq_tokens = T / B;
+
+    if (tid >= head_size || batch_id >= B || head_id >= H) {
+        return;
+    }
+    
+    // Load state
+    float state[64];  // Use fixed size matching head_size
+    for (uint i = 0; i < head_size; i++) {
+        state[i] = state_in[batch_id * state_size + head_id * head_size * head_size 
+                          + i * head_size + tid];
+    }
+    
+    _k[tid] = 0.0;
+    _r[tid] = 0.0;
+    _td[tid] = 0.0;
+    barrier();
+    _tf[tid] = tf[head_id * head_size + tid];
+    barrier();
+
+    
+    // Main loop
+    const uint start_t = batch_id * n_seq_tokens * C + head_id * head_size + tid;
+    const uint end_t = (batch_id + 1) * n_seq_tokens * C + head_id * head_size + tid;
+    
+    for (uint t = start_t; t < end_t; t += C) {
+        barrier();
+        _k[tid] = k[t];
+        _r[tid] = r[t];
+        _td[tid] = td[t];
+        barrier();
+        
+        const float v_val = v[t];
+        float y = 0.0;
+        
+        for (uint j = 0; j < head_size; j += 4) {
+            // Load values in blocks of 4
+            vec4 k_vec = vec4(_k[j], _k[j+1], _k[j+2], _k[j+3]);
+            vec4 r_vec = vec4(_r[j], _r[j+1], _r[j+2], _r[j+3]);
+            vec4 tf_vec = vec4(_tf[j], _tf[j+1], _tf[j+2], _tf[j+3]);
+            vec4 td_vec = vec4(_td[j], _td[j+1], _td[j+2], _td[j+3]);
+            vec4 s_vec = vec4(state[j], state[j+1], state[j+2], state[j+3]);
+            
+            // Compute kv products
+            vec4 kv = k_vec * v_val;
+            
+            // Accumulate results
+            vec4 temp = tf_vec * kv + s_vec;
+            y += dot(r_vec, temp);
+            
+            // Update state
+            s_vec = s_vec * td_vec + kv;
+            state[j] = s_vec.x;
+            state[j+1] = s_vec.y;
+            state[j+2] = s_vec.z;
+            state[j+3] = s_vec.w;
+        }
+        
+        dst[t] = y;
+    }
+    
+    // Write back state
+    for (uint i = 0; i < head_size; i++) {
+        dst[T * C + batch_id * state_size + head_id * head_size * head_size 
+            + i * head_size + tid] = state[i];
+    }
+}
