@@ -9196,6 +9196,7 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_1, p16_3));
             sumi_0 = _mm_add_epi32(sumi_0, _mm_add_epi32(p16_4, p16_6));
             sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_5, p16_7));
+
         }
 
         sumi_0 = _mm_sub_epi32(sumi_0, q8sclsub_0);
