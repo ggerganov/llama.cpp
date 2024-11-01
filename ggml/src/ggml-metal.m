@@ -450,7 +450,14 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
                     GGML_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
                     return NULL;
                 }
+
+#if !__has_feature(objc_arc)
+                [options release];
+#endif
             }
+#if GGML_METAL_EMBED_LIBRARY
+            [src release];
+#endif // GGML_METAL_EMBED_LIBRARY
         }
     }
 
