@@ -178,7 +178,7 @@ int main(int argc, char ** argv) {
 
         // add the response to the messages
         messages.push_back({"assistant", strdup(response.c_str())});
-        prev_len = llama_chat_apply_template(model, nullptr, messages.data(), messages.size(), false, formatted.data(), formatted.size());
+        prev_len = llama_chat_apply_template(model, nullptr, messages.data(), messages.size(), false, nullptr, 0);
         if (prev_len < 0) {
             fprintf(stderr, "failed to apply the chat template\n");
             return 1;
