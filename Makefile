@@ -34,6 +34,7 @@ BUILD_TARGETS = \
 	llama-save-load-state \
 	llama-server \
 	llama-simple \
+	llama-simple-chat \
 	llama-speculative \
 	llama-tokenize \
 	llama-vdot \
