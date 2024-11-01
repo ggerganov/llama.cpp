@@ -9118,14 +9118,13 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         const int8_t  * restrict q8 = y[i].qs;
 
         // handle the q6_k -32 offset separately using bsums
-		// TODO: tabs, compiler warnings for earlier code
         const __m128i q8sums_0 = _mm_loadu_si128((const __m128i*)y[i].bsums);
         const __m128i q8sums_1 = _mm_loadu_si128((const __m128i*)y[i].bsums + 1);
         const __m128i scales = _mm_loadu_si128((const __m128i*)x[i].scales);
         const __m128i scales_16_0 = _mm_cvtepi8_epi16(scales);
         const __m128i scales_16_1 = _mm_cvtepi8_epi16(_mm_bsrli_si128(scales, 8));
-        const __m128i q8scld_0 = _mm_mullo_epi32(_mm_madd_epi16(q8sums_0, scales_16_0), _mm_set1_epi32(32));
-        const __m128i q8scld_1 = _mm_mullo_epi32(_mm_madd_epi16(q8sums_1, scales_16_1), _mm_set1_epi32(32));
+        const __m128i q8sclsub_0 = _mm_slli_epi32(_mm_madd_epi16(q8sums_0, scales_16_0), 5);
+        const __m128i q8sclsub_1 = _mm_slli_epi32(_mm_madd_epi16(q8sums_1, scales_16_1), 5);
 
         __m128i sumi_0 = _mm_setzero_si128();
         __m128i sumi_1 = _mm_setzero_si128();
@@ -9139,12 +9138,12 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
             const __m128i q4h_0 = _mm_slli_epi16(_mm_and_si128(q4bitsH_0, m3), 4);
             const __m128i q4h_1 = _mm_slli_epi16(_mm_and_si128(q4bitsH_1, m3), 4);
-            const __m128i q4h_2 = _mm_slli_epi16(_mm_and_si128(q4bitsH_0, _mm_set1_epi8(0x0C)), 2);
-            const __m128i q4h_3 = _mm_slli_epi16(_mm_and_si128(q4bitsH_1, _mm_set1_epi8(0x0C)), 2);
-            const __m128i q4h_4 = _mm_and_si128(q4bitsH_0, _mm_set1_epi8(0x30));
-            const __m128i q4h_5 = _mm_and_si128(q4bitsH_1, _mm_set1_epi8(0x30));
-            const __m128i q4h_6 = _mm_srli_epi16(_mm_and_si128(q4bitsH_0, _mm_set1_epi8(0xC0)), 2);
-            const __m128i q4h_7 = _mm_srli_epi16(_mm_and_si128(q4bitsH_1, _mm_set1_epi8(0xC0)), 2);
+            const __m128i q4h_2 = _mm_slli_epi16(_mm_and_si128(q4bitsH_0, _mm_set1_epi8(12)), 2);
+            const __m128i q4h_3 = _mm_slli_epi16(_mm_and_si128(q4bitsH_1, _mm_set1_epi8(12)), 2);
+            const __m128i q4h_4 = _mm_and_si128(q4bitsH_0, _mm_set1_epi8(48));
+            const __m128i q4h_5 = _mm_and_si128(q4bitsH_1, _mm_set1_epi8(48));
+            const __m128i q4h_6 = _mm_srli_epi16(_mm_and_si128(q4bitsH_0, _mm_set1_epi8(-64)), 2);
+            const __m128i q4h_7 = _mm_srli_epi16(_mm_and_si128(q4bitsH_1, _mm_set1_epi8(-64)), 2);
 
             const __m128i q4bits1_0 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
             const __m128i q4bits1_1 = _mm_loadu_si128((const __m128i*)q4); q4 += 16;
@@ -9185,13 +9184,13 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             is += 4;
 
             p16_0 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_0), p16_0);
-            p16_1 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_0, scale_0)), p16_1);
+            p16_1 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_bsrli_si128(scale_0, 8)), p16_1);
             p16_2 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_1), p16_2);
-            p16_3 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_1, scale_1)), p16_3);
+            p16_3 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_bsrli_si128(scale_1, 8)), p16_3);
             p16_4 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_2), p16_4);
-            p16_5 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_2, scale_2)), p16_5);
+            p16_5 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_bsrli_si128(scale_2, 8)), p16_5);
             p16_6 = _mm_madd_epi16(_mm_cvtepi8_epi16(scale_3), p16_6);
-            p16_7 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_unpackhi_epi64(scale_3, scale_3)), p16_7);
+            p16_7 = _mm_madd_epi16(_mm_cvtepi8_epi16(_mm_bsrli_si128(scale_3, 8)), p16_7);
 
             sumi_0 = _mm_add_epi32(sumi_0, _mm_add_epi32(p16_0, p16_2));
             sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_1, p16_3));
@@ -9199,8 +9198,8 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             sumi_1 = _mm_add_epi32(sumi_1, _mm_add_epi32(p16_5, p16_7));
         }
 
-		sumi_0 = _mm_sub_epi32(sumi_0, q8scld_0);
-		sumi_1 = _mm_sub_epi32(sumi_1, q8scld_1);
+        sumi_0 = _mm_sub_epi32(sumi_0, q8sclsub_0);
+        sumi_1 = _mm_sub_epi32(sumi_1, q8sclsub_1);
         const __m256i sumi = MM256_SET_M128I(sumi_1, sumi_0);
         acc = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(sumi)), acc);
     }
