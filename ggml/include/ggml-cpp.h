@@ -1,14 +1,15 @@
 #pragma once
 
-#include "ggml.h"
-#include "ggml-alloc.h"
-#include "ggml-backend.h"
-
 #ifndef __cplusplus
 #error "This header is for C++ only"
 #endif
 
+#include "ggml.h"
+#include "ggml-alloc.h"
+#include "ggml-backend.h"
 #include <memory>
+
+// Smart pointers for ggml types
 
 // ggml
 
