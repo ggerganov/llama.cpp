@@ -258,7 +258,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--base", type=Path,
-        help="directory containing Hugging Face model config files (config.json, tokenizer.json) for the base model that the adapter is based on - only config is needed, actual model weights are not required",
+        help="directory containing Hugging Face model config files (config.json, tokenizer.json) for the base model that the adapter is based on - only config is needed, actual model weights are not required. If base model is unspecified, it will be loaded from Hugging Face hub based on the adapter config",
     )
     parser.add_argument(
         "lora_path", type=Path,
