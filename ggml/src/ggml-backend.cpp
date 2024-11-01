@@ -798,7 +798,7 @@ static ggml_backend_buffer_t ggml_backend_cpu_buffer_type_alloc_buffer(ggml_back
     void * data = ggml_aligned_malloc(size);
 
     if (data == NULL) {
-        GGML_LOG_ERROR("%s: failed to allocate buffer of size %zu\n", __func__, size);
+        GGML_LOG_ERROR("%s: failed to allocate buffer of size %.2f MiB\n", __func__, size / 1024.0 / 1024.0);
         return NULL;
     }
 

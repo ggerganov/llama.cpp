@@ -19520,6 +19520,7 @@ struct llama_context * llama_new_context_with_model(
 
         if (!llama_kv_cache_init(ctx->kv_self, ctx, type_k, type_v, kv_size, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
+            LLAMA_LOG_ERROR("%s: suggestion: try using a smaller context size (-c command line option or llama_context_params.n_ctx)\n", __func__);
             llama_free(ctx);
             return nullptr;
         }
