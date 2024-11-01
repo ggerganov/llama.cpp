@@ -655,14 +655,6 @@ extern "C" {
         void *              abort_callback_data;
     };
 
-    // scratch buffer
-    // TODO: deprecate and remove
-    struct ggml_scratch {
-        size_t offs;
-        size_t size;
-        void * data;
-    };
-
     struct ggml_init_params {
         // memory pool
         size_t mem_size;   // bytes
@@ -766,7 +758,6 @@ extern "C" {
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
-    GGML_API size_t  ggml_set_scratch (struct ggml_context * ctx, struct ggml_scratch scratch);
     GGML_API bool    ggml_get_no_alloc(struct ggml_context * ctx);
     GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
 
