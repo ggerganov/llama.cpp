@@ -18,6 +18,7 @@ BUILD_TARGETS = \
 	llama-gguf-hash \
 	llama-gguf-split \
 	llama-gritlm \
+	llama-idle \
 	llama-imatrix \
 	llama-infill \
 	llama-llava-cli \
