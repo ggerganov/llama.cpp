@@ -2018,15 +2018,11 @@ struct ggml_context {
     void * mem_buffer;
     bool   mem_buffer_owned;
     bool   no_alloc;
-    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
 
     int    n_objects;
 
     struct ggml_object * objects_begin;
     struct ggml_object * objects_end;
-
-    struct ggml_scratch scratch;
-    struct ggml_scratch scratch_save;
 };
 
 struct ggml_context_container {
@@ -3879,12 +3875,9 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : ggml_aligned_malloc(mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
-        /*.no_alloc_save      =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
-        /*.scratch            =*/ { 0, 0, NULL, },
-        /*.scratch_save       =*/ { 0, 0, NULL, },
     };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
@@ -3904,8 +3897,6 @@ void ggml_reset(struct ggml_context * ctx) {
     ctx->n_objects     = 0;
     ctx->objects_begin = NULL;
     ctx->objects_end   = NULL;
-    ctx->scratch       = (struct ggml_scratch) { 0, 0, NULL, };
-    ctx->scratch_save  = (struct ggml_scratch) { 0, 0, NULL, };
 }
 
 void ggml_free(struct ggml_context * ctx) {
@@ -3922,14 +3913,6 @@ void ggml_free(struct ggml_context * ctx) {
 
 size_t ggml_used_mem(const struct ggml_context * ctx) {
     return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
-}
-
-size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) {
-    const size_t result = ctx->scratch.data ? ctx->scratch.offs : 0;
-
-    ctx->scratch = scratch;
-
-    return result;
 }
 
 bool ggml_get_no_alloc(struct ggml_context * ctx) {
@@ -3957,27 +3940,6 @@ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     }
 
     return max_size;
-}
-
-// IMPORTANT:
-// when creating "opt" tensors, always save and load the scratch buffer
-// this is an error prone process, but it is necessary to support inplace
-// operators when using scratch buffers
-// TODO: implement a better way
-static void ggml_scratch_save(struct ggml_context * ctx) {
-    // this is needed to allow opt tensors to store their data
-    // TODO: again, need to find a better way
-    ctx->no_alloc_save = ctx->no_alloc;
-    ctx->no_alloc      = false;
-
-    ctx->scratch_save = ctx->scratch;
-    ctx->scratch.data = NULL;
-}
-
-static void ggml_scratch_load(struct ggml_context * ctx) {
-    ctx->no_alloc = ctx->no_alloc_save;
-
-    ctx->scratch = ctx->scratch_save;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4060,28 +4022,12 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     size_t obj_alloc_size = 0;
 
     if (view_src == NULL && !ctx->no_alloc) {
-        if (ctx->scratch.data != NULL) {
-            // allocate tensor data in the scratch buffer
-            if (ctx->scratch.offs + data_size > ctx->scratch.size) {
-                GGML_LOG_WARN("%s: not enough space in the scratch memory pool (needed %zu, available %zu)\n",
-                        __func__, ctx->scratch.offs + data_size, ctx->scratch.size);
-                assert(false);
-                return NULL;
-            }
-
-            data = (char * const) ctx->scratch.data + ctx->scratch.offs;
-
-            ctx->scratch.offs += data_size;
-        } else {
-            // allocate tensor data in the context's memory pool
-            obj_alloc_size = data_size;
-        }
+        // allocate tensor data in the context's memory pool
+        obj_alloc_size = data_size;
     }
 
     struct ggml_object * const obj_new = ggml_new_object(ctx, GGML_OBJECT_TYPE_TENSOR, GGML_TENSOR_SIZE + obj_alloc_size);
     GGML_ASSERT(obj_new);
-
-    // TODO: for recoverable errors, we would need to free the data allocated from the scratch buffer here
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);
 
@@ -4178,11 +4124,7 @@ struct ggml_tensor * ggml_new_tensor_4d(
 }
 
 struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
-    ggml_scratch_save(ctx);
-
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1);
-
-    ggml_scratch_load(ctx);
 
     ggml_set_i32(result, value);
 
@@ -4190,11 +4132,7 @@ struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
 }
 
 struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value) {
-    ggml_scratch_save(ctx);
-
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
-
-    ggml_scratch_load(ctx);
 
     ggml_set_f32(result, value);
 
@@ -20263,7 +20201,6 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
     uint64_t size_eval = 0;
 
     // compute size of intermediate results
-    // TODO: does not take into account scratch buffers !!!!
     for (int i = 0; i < cgraph->n_nodes; ++i) {
         size_eval += ggml_nbytes_pad(cgraph->nodes[i]);
     }
