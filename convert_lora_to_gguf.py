@@ -359,7 +359,6 @@ if __name__ == '__main__':
 
             def set_gguf_parameters(self):
                 self.gguf_writer.add_float32(gguf.Keys.Adapter.LORA_ALPHA, self.lora_alpha)
-                super().set_gguf_parameters()
 
             def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
                 # Never add extra tensors (e.g. rope_freqs) for LoRA adapters
