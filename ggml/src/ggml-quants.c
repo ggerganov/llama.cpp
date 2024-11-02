@@ -5744,13 +5744,12 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     }
 
     sumf = vaddvq_f32(sumv0) + vaddvq_f32(sumv1);
-#elif defined(__AVX2__) || defined(__AVX__)
+#elif defined(__AVX2__)
     // Initialize accumulator with zeros
     __m256 acc = _mm256_setzero_ps();
 
     // Main loop
     for (; ib < nb; ++ib) {
-#if defined(__AVX2__)
         // Compute combined scale for the block
         const __m256 d = _mm256_set1_ps(GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d));
         __m256i qx = _mm256_loadu_si256((const __m256i *)x[ib].qs);
@@ -5760,21 +5759,40 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
         // Multiply q with scale and accumulate
         acc = _mm256_fmadd_ps( d, q, acc );
-#else
-        const __m128i qx_0 = _mm_loadu_si128((const __m128i *)x[ib].qs);
-        const __m128i qx_1 = _mm_loadu_si128((const __m128i *)x[ib].qs + 1);
-        const __m128i qy_0 = _mm_loadu_si128((const __m128i *)y[ib].qs);
-        const __m128i qy_1 = _mm_loadu_si128((const __m128i *)y[ib].qs + 1);
-        const __m128i p16_0 = mul_add_epi8_sse(qx_0, qy_0);
-        const __m128i p16_1 = mul_add_epi8_sse(qx_1, qy_1);
-        const __m128i p_0 = _mm_madd_epi16(p16_0, _mm_set1_epi16(1));
-        const __m128i p_1 = _mm_madd_epi16(p16_1, _mm_set1_epi16(1));
-        acc = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d)),
-              _mm256_cvtepi32_ps(MM256_SET_M128I(p_1, p_0))), acc);
-#endif
     }
 
     sumf = hsum_float_8(acc);
+#elif defined(__AVX__)
+    __m256 accum1 = _mm256_setzero_ps();
+    __m256 accum2 = _mm256_setzero_ps();
+    const __m128i mone = _mm_set1_epi16(1);
+
+    for (; ib + 1 < nb; ib += 2) {
+        const __m128i qx_1_0 = _mm_loadu_si128((const __m128i *)x[ib].qs);
+        const __m128i qx_1_1 = _mm_loadu_si128((const __m128i *)x[ib].qs + 1);
+        const __m128i qx_2_0 = _mm_loadu_si128((const __m128i *)x[ib + 1].qs);
+        const __m128i qx_2_1 = _mm_loadu_si128((const __m128i *)x[ib + 1].qs + 1);
+        const __m128i qy_1_0 = _mm_loadu_si128((const __m128i *)y[ib].qs);
+        const __m128i qy_1_1 = _mm_loadu_si128((const __m128i *)y[ib].qs + 1);
+        const __m128i qy_2_0 = _mm_loadu_si128((const __m128i *)y[ib + 1].qs);
+        const __m128i qy_2_1 = _mm_loadu_si128((const __m128i *)y[ib + 1].qs + 1);
+
+        const __m128i p16_1_0 = mul_add_epi8_sse(qx_1_0, qy_1_0);
+        const __m128i p16_1_1 = mul_add_epi8_sse(qx_1_1, qy_1_1);
+        const __m128i p16_2_0 = mul_add_epi8_sse(qx_2_0, qy_2_0);
+        const __m128i p16_2_1 = mul_add_epi8_sse(qx_2_1, qy_2_1);
+        const __m128i p_1_0 = _mm_madd_epi16(p16_1_0, mone);
+        const __m128i p_1_1 = _mm_madd_epi16(p16_1_1, mone);
+        const __m128i p_2_0 = _mm_madd_epi16(p16_2_0, mone);
+        const __m128i p_2_1 = _mm_madd_epi16(p16_2_1, mone);
+
+        accum1 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d)),
+                _mm256_cvtepi32_ps(MM256_SET_M128I(p_1_1, p_1_0))), accum1);
+        accum2 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ib + 1].d)*GGML_FP16_TO_FP32(y[ib + 1].d)),
+                _mm256_cvtepi32_ps(MM256_SET_M128I(p_2_1, p_2_0))), accum2);
+    }
+
+    sumf = hsum_float_8(_mm256_add_ps(accum1, accum2));
 #elif defined(__riscv_v_intrinsic)
     size_t vl = __riscv_vsetvl_e8m1(qk);
 
