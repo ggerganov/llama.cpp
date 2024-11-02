@@ -4236,14 +4236,8 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         __m128i p_2 = _mm_add_epi16(p16_2_0, p16_2_1);
         p_2 = _mm_add_epi32(_mm_cvtepi16_epi32(_mm_bsrli_si128(p_2, 8)), _mm_cvtepi16_epi32(p_2));
 
-		// TODO: if f16c
-		const __m256 del = _mm256_cvtph_ps(_mm_set_epi16(0 , 0, x[ib + 1].d, y[ib + 1].d, 0, 0, x[ib].d, y[ib].d));
-		const __m256 del_mul = _mm256_mul_ps(del, _mm256_permute_ps(del, 0x01)); // x.d*y.d
-		const __m256 deltas = _mm256_permute_ps(del_mul, 0x00);
-
-		// TODO: may be room to optimize here?
-        //const __m256 deltas = _mm256_set_m128(_mm_set1_ps(GGML_FP16_TO_FP32(x[ib + 1].d) * GGML_FP16_TO_FP32(y[ib + 1].d)),
-                              //_mm_set1_ps(GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d)));
+        const __m256 deltas = _mm256_set_m128(_mm_set1_ps(GGML_FP16_TO_FP32(x[ib + 1].d) * GGML_FP16_TO_FP32(y[ib + 1].d)),
+                              _mm_set1_ps(GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d)));
         accum = _mm256_add_ps(_mm256_mul_ps(deltas, _mm256_cvtepi32_ps(MM256_SET_M128I(p_2, p_1))), accum);
     }
 
