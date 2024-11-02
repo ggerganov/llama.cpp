@@ -4803,6 +4803,9 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
         case GGML_OP_TIMESTEP_EMBEDDING:
             func = ggml_sycl_op_timestep_embedding;
             break;
+        case GGML_OP_RWKV_WKV6:
+            func = ggml_sycl_op_rwkv_wkv6;
+            break;
         default:
             return false;
     }
@@ -5251,6 +5254,7 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_PAD:
         case GGML_OP_LEAKY_RELU:
         case GGML_OP_TIMESTEP_EMBEDDING:
+        case GGML_OP_RWKV_WKV6:
             return true;
         default:
             return false;
