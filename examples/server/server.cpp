@@ -247,6 +247,7 @@ struct server_slot {
         if (is_processing()) {
             SLT_INF(*this, "stop processing: n_past = %d, truncated = %d\n", n_past, truncated);
 
+            t_last_used = ggml_time_us();
             t_token_generation = (ggml_time_us() - t_start_generation) / 1e3;
             state = SLOT_STATE_IDLE;
             callback_on_release(id);
@@ -730,7 +731,7 @@ struct server_context {
 
         // find the slot that has at least n% prompt similarity
         if (ret == nullptr && slot_prompt_similarity != 0.0f) {
-            int max_lcs_len = 0;
+            int lcs_len = 0;
             float similarity = 0;
 
             for (server_slot & slot : slots) {
@@ -745,20 +746,21 @@ struct server_context {
                 }
 
                 // length of the Longest Common Subsequence between the current slot's prompt and the input prompt
-                int lcs_len = longest_common_subsequence(slot.cache_tokens, task.prompt_tokens);
+                int cur_lcs_len = longest_common_subsequence(slot.cache_tokens, task.prompt_tokens);
 
                 // fraction of the common subsequence length compared to the current slot's prompt length
-                similarity = static_cast<float>(lcs_len) / static_cast<int>(slot.cache_tokens.size());
+                float cur_similarity = static_cast<float>(cur_lcs_len) / static_cast<int>(slot.cache_tokens.size());
 
                 // select the current slot if the criteria match
-                if (lcs_len > max_lcs_len && similarity > slot_prompt_similarity) {
-                    max_lcs_len = lcs_len;
+                if (cur_lcs_len > lcs_len && cur_similarity > slot_prompt_similarity) {
+                    lcs_len = cur_lcs_len;
+                    similarity = cur_similarity;
                     ret = &slot;
                 }
             }
 
             if (ret != nullptr) {
-                SLT_DBG(*ret, "selected slot by lcs similarity, max_lcs_len = %d, similarity = %f\n", max_lcs_len, similarity);
+                SLT_DBG(*ret, "selected slot by lcs similarity, lcs_len = %d, similarity = %f\n", lcs_len, similarity);
             }
         }
 
