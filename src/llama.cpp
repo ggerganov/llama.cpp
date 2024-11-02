@@ -21475,6 +21475,22 @@ llama_token llama_token_fim_sep(const struct llama_model * model) {
 }
 
 //
+// Custom tokenization
+//
+
+static llama_custom_tokenizer   custom_tokenizer   = NULL;
+static llama_custom_detokenizer custom_detokenizer = NULL;
+
+void llama_set_custom_tokenizer(
+         llama_custom_tokenizer tokenizer,
+       llama_custom_detokenizer detokenizer)
+{
+    custom_tokenizer = tokenizer;
+    custom_detokenizer = detokenizer;
+}
+
+
+//
 // tokenization
 //
 
@@ -21486,6 +21502,10 @@ int32_t llama_tokenize(
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
+    if (custom_tokenizer) {
+        return custom_tokenizer(text, text_len, tokens, n_tokens_max);
+    }
+
     return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
@@ -21507,6 +21527,10 @@ int32_t llama_detokenize(
                      int32_t   text_len_max,
                         bool   remove_special,
                         bool   unparse_special) {
+    if (custom_detokenizer) {
+        return custom_detokenizer(tokens, n_tokens, text, text_len_max);
+    }
+
     return llama_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
 }
 

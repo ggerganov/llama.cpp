@@ -961,6 +961,28 @@ extern "C" {
                             bool   unparse_special);
 
     //
+    // Custom tokenization
+    //
+
+    // Define the custom tokenizer and detokenizer function signatures
+    typedef int32_t (*llama_custom_tokenizer)(
+                        const char * text,
+                           int32_t   text_len,
+                       llama_token * tokens,
+                           int32_t   max_tokens);
+
+    typedef int32_t (*llama_custom_detokenizer)(
+                const llama_token * tokens,
+                          int32_t   n_tokens,
+                             char * text,
+                          int32_t   text_len_max);
+
+    // Function to set a custom tokenizer
+    LLAMA_API void llama_set_custom_tokenizer(
+                llama_custom_tokenizer tokenizer,
+              llama_custom_detokenizer detokenizer);
+
+    //
     // Chat templates
     //
 

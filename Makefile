@@ -37,6 +37,7 @@ BUILD_TARGETS = \
 	llama-simple-chat \
 	llama-speculative \
 	llama-tokenize \
+	llama-tokenize-custom \
 	llama-vdot \
 	llama-cvector-generator \
 	llama-gen-docs \
@@ -1294,6 +1295,11 @@ llama-simple-chat: examples/simple-chat/simple-chat.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-tokenize: examples/tokenize/tokenize.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+llama-tokenize-custom: examples/tokenize-custom/tokenize.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
