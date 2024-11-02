@@ -34,6 +34,7 @@ BUILD_TARGETS = \
 	llama-save-load-state \
 	llama-server \
 	llama-simple \
+	llama-simple-chat \
 	llama-speculative \
 	llama-tokenize \
 	llama-vdot \
@@ -1283,6 +1284,11 @@ llama-infill: examples/infill/infill.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-simple: examples/simple/simple.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+llama-simple-chat: examples/simple-chat/simple-chat.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
