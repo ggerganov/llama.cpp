@@ -5750,6 +5750,7 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
     // Main loop
     for (; ib < nb; ++ib) {
+#if defined(__AVX2__)
         // Compute combined scale for the block
         const __m256 d = _mm256_set1_ps(GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d));
         __m256i qx = _mm256_loadu_si256((const __m256i *)x[ib].qs);
@@ -5758,10 +5759,18 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         const __m256 q = mul_sum_i8_pairs_float(qx, qy);
 
         // Multiply q with scale and accumulate
-#if defined(__AVX2__)
         acc = _mm256_fmadd_ps( d, q, acc );
 #else
-        acc = _mm256_add_ps( _mm256_mul_ps( d, q ), acc );
+        const __m128i qx_0 = _mm_loadu_si128((const __m128i *)x[ib].qs);
+        const __m128i qx_1 = _mm_loadu_si128((const __m128i *)x[ib].qs + 1);
+        const __m128i qy_0 = _mm_loadu_si128((const __m128i *)y[ib].qs);
+        const __m128i qy_1 = _mm_loadu_si128((const __m128i *)y[ib].qs + 1);
+        const __m128i p16_0 = mul_add_epi8_sse(qx_0, qy_0);
+        const __m128i p16_1 = mul_add_epi8_sse(qx_1, qy_1);
+        const __m128i p_0 = _mm_madd_epi16(p16_0, _mm_set1_epi16(1));
+        const __m128i p_1 = _mm_madd_epi16(p16_1, _mm_set1_epi16(1));
+        acc = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d)),
+              _mm256_cvtepi32_ps(MM256_SET_M128I(p_1, p_0))), acc);
 #endif
     }
 
