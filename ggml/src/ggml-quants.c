@@ -4232,9 +4232,9 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         const __m128i p16_2_0 = mul_add_epi8_sse(q4b_2_0, q8b_2_0);
         const __m128i p16_2_1 = mul_add_epi8_sse(q4b_2_1, q8b_2_1);
         __m128i p_1 = _mm_add_epi16(p16_1_0, p16_1_1);
-        p_1 = _mm_add_epi32(_mm_cvtepi16_epi32(_mm_bsrli_si128(p_1, 8)), _mm_cvtepi16_epi32(p_1));
+        p_1 = _mm_madd_epi16(p_1, _mm_set1_epi16(1));
         __m128i p_2 = _mm_add_epi16(p16_2_0, p16_2_1);
-        p_2 = _mm_add_epi32(_mm_cvtepi16_epi32(_mm_bsrli_si128(p_2, 8)), _mm_cvtepi16_epi32(p_2));
+        p_2 = _mm_madd_epi16(p_2, _mm_set1_epi16(1));
 
         const __m256 deltas = _mm256_set_m128(_mm_set1_ps(GGML_FP16_TO_FP32(x[ib + 1].d) * GGML_FP16_TO_FP32(y[ib + 1].d)),
                               _mm_set1_ps(GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d)));
