@@ -23,6 +23,9 @@ FROM intel/oneapi-basekit:$ONEAPI_VERSION AS runtime
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev curl
 
+# Add locale pack
+RUN apt-get update && apt-get install -y locales && locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
+
 COPY --from=build /app/build/bin/llama-server /llama-server
 
 ENV LC_ALL=C.utf8

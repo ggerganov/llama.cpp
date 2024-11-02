@@ -30,6 +30,9 @@ FROM ${BASE_CUDA_RUN_CONTAINER} AS runtime
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev libgomp1 curl
 
+# Adds locale pack
+RUN apt-get update && apt-get install -y locales && locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
+
 COPY --from=build /app/build/ggml/src/libggml.so /libggml.so
 COPY --from=build /app/build/src/libllama.so /libllama.so
 COPY --from=build /app/build/bin/llama-server /llama-server
