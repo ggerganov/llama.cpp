@@ -306,6 +306,7 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 }
 
 #define GGML_DEBUG 0
+
 #define GGML_GELU_FP16
 #define GGML_GELU_QUICK_FP16
 
@@ -2014,18 +2015,14 @@ static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
 
 struct ggml_context {
     size_t mem_size;
-    void* mem_buffer;
+    void * mem_buffer;
     bool   mem_buffer_owned;
     bool   no_alloc;
-    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
 
     int    n_objects;
 
     struct ggml_object * objects_begin;
     struct ggml_object * objects_end;
-
-    struct ggml_scratch scratch;
-    struct ggml_scratch scratch_save;
 };
 
 struct ggml_context_container {
@@ -3267,7 +3264,6 @@ struct ggml_numa_nodes {
 //
 
 struct ggml_state {
-    struct ggml_context_container contexts[GGML_MAX_CONTEXTS];
     struct ggml_numa_nodes numa;
 };
 
@@ -3849,7 +3845,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
 
             g_state = (struct ggml_state) {
-                /*.contexts =*/ { { 0 } },
                 /*.numa =*/ {
                     .n_nodes = 0,
                     .total_cpus = 0,
@@ -3868,26 +3863,9 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         is_first_call = false;
     }
 
-    // find non-used context in g_state
-    struct ggml_context * ctx = NULL;
+    ggml_critical_section_end();
 
-    for (int i = 0; i < GGML_MAX_CONTEXTS; i++) {
-        if (!g_state.contexts[i].used) {
-            g_state.contexts[i].used = true;
-            ctx = &g_state.contexts[i].context;
-
-            GGML_PRINT_DEBUG("%s: found unused context %d\n", __func__, i);
-            break;
-        }
-    }
-
-    if (ctx == NULL) {
-        GGML_PRINT_DEBUG("%s: no unused context found\n", __func__);
-
-        ggml_critical_section_end();
-
-        return NULL;
-    }
+    struct ggml_context * ctx = GGML_MALLOC(sizeof(struct ggml_context));
 
     // allow to call ggml_init with 0 size
     if (params.mem_size == 0) {
@@ -3901,12 +3879,9 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : ggml_aligned_malloc(mem_size),
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
-        /*.no_alloc_save      =*/ params.no_alloc,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
-        /*.scratch            =*/ { 0, 0, NULL, },
-        /*.scratch_save       =*/ { 0, 0, NULL, },
     };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
@@ -3915,9 +3890,17 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     GGML_PRINT_DEBUG("%s: context initialized\n", __func__);
 
-    ggml_critical_section_end();
-
     return ctx;
+}
+
+void ggml_reset(struct ggml_context * ctx) {
+    if (ctx == NULL) {
+        return;
+    }
+
+    ctx->n_objects     = 0;
+    ctx->objects_begin = NULL;
+    ctx->objects_end   = NULL;
 }
 
 void ggml_free(struct ggml_context * ctx) {
@@ -3925,44 +3908,15 @@ void ggml_free(struct ggml_context * ctx) {
         return;
     }
 
-    // make this function thread safe
-    ggml_critical_section_start();
-
-    bool found = false;
-
-    for (int i = 0; i < GGML_MAX_CONTEXTS; i++) {
-        if (&g_state.contexts[i].context == ctx) {
-            g_state.contexts[i].used = false;
-
-            GGML_PRINT_DEBUG("%s: context %d has been freed. memory used = %zu\n",
-                    __func__, i, ggml_used_mem(ctx));
-
-            if (ctx->mem_buffer_owned) {
-                ggml_aligned_free(ctx->mem_buffer, ctx->mem_size);
-            }
-
-            found = true;
-            break;
-        }
+    if (ctx->mem_buffer_owned) {
+        ggml_aligned_free(ctx->mem_buffer, ctx->mem_size);
     }
 
-    if (!found) {
-        GGML_PRINT_DEBUG("%s: context not found\n", __func__);
-    }
-
-    ggml_critical_section_end();
+    GGML_FREE(ctx);
 }
 
 size_t ggml_used_mem(const struct ggml_context * ctx) {
     return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
-}
-
-size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) {
-    const size_t result = ctx->scratch.data ? ctx->scratch.offs : 0;
-
-    ctx->scratch = scratch;
-
-    return result;
 }
 
 bool ggml_get_no_alloc(struct ggml_context * ctx) {
@@ -3990,27 +3944,6 @@ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     }
 
     return max_size;
-}
-
-// IMPORTANT:
-// when creating "opt" tensors, always save and load the scratch buffer
-// this is an error prone process, but it is necessary to support inplace
-// operators when using scratch buffers
-// TODO: implement a better way
-static void ggml_scratch_save(struct ggml_context * ctx) {
-    // this is needed to allow opt tensors to store their data
-    // TODO: again, need to find a better way
-    ctx->no_alloc_save = ctx->no_alloc;
-    ctx->no_alloc      = false;
-
-    ctx->scratch_save = ctx->scratch;
-    ctx->scratch.data = NULL;
-}
-
-static void ggml_scratch_load(struct ggml_context * ctx) {
-    ctx->no_alloc = ctx->no_alloc_save;
-
-    ctx->scratch = ctx->scratch_save;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4093,28 +4026,12 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     size_t obj_alloc_size = 0;
 
     if (view_src == NULL && !ctx->no_alloc) {
-        if (ctx->scratch.data != NULL) {
-            // allocate tensor data in the scratch buffer
-            if (ctx->scratch.offs + data_size > ctx->scratch.size) {
-                GGML_LOG_WARN("%s: not enough space in the scratch memory pool (needed %zu, available %zu)\n",
-                        __func__, ctx->scratch.offs + data_size, ctx->scratch.size);
-                assert(false);
-                return NULL;
-            }
-
-            data = (char * const) ctx->scratch.data + ctx->scratch.offs;
-
-            ctx->scratch.offs += data_size;
-        } else {
-            // allocate tensor data in the context's memory pool
-            obj_alloc_size = data_size;
-        }
+        // allocate tensor data in the context's memory pool
+        obj_alloc_size = data_size;
     }
 
     struct ggml_object * const obj_new = ggml_new_object(ctx, GGML_OBJECT_TYPE_TENSOR, GGML_TENSOR_SIZE + obj_alloc_size);
     GGML_ASSERT(obj_new);
-
-    // TODO: for recoverable errors, we would need to free the data allocated from the scratch buffer here
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);
 
@@ -4211,11 +4128,7 @@ struct ggml_tensor * ggml_new_tensor_4d(
 }
 
 struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
-    ggml_scratch_save(ctx);
-
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1);
-
-    ggml_scratch_load(ctx);
 
     ggml_set_i32(result, value);
 
@@ -4223,11 +4136,7 @@ struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
 }
 
 struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value) {
-    ggml_scratch_save(ctx);
-
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
-
-    ggml_scratch_load(ctx);
 
     ggml_set_f32(result, value);
 
@@ -7276,6 +7185,7 @@ struct ggml_tensor * ggml_ssm_conv(
     const int64_t n_s     = sx->ne[2];
 
     // TODO: maybe support other strides than 1?
+    // FIXME: this is always true?
     GGML_ASSERT(sx->ne[0] == d_conv - 1 + n_t);
     GGML_ASSERT(sx->ne[1] == d_inner);
     GGML_ASSERT(n_t >= 0);
@@ -20295,7 +20205,6 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
     uint64_t size_eval = 0;
 
     // compute size of intermediate results
-    // TODO: does not take into account scratch buffers !!!!
     for (int i = 0; i < cgraph->n_nodes; ++i) {
         size_eval += ggml_nbytes_pad(cgraph->nodes[i]);
     }
@@ -22106,18 +22015,46 @@ static size_t gguf_type_size(enum gguf_type type) {
     return GGUF_TYPE_SIZE[type];
 }
 
-static void gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {
-    GGML_ASSERT(info->n_dims <= GGML_MAX_DIMS);
-    GGML_ASSERT(0 <= info->type && info->type < GGML_TYPE_COUNT);
+static bool gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {
+    if (info->n_dims > GGML_MAX_DIMS) {
+        fprintf(stderr, "%s: invalid number of dimensions (%" PRIu32 ")\n", __func__, info->n_dims);
+        return false;
+    }
+
+    if (info->type < 0 || info->type >= GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid type (%d)\n", __func__, info->type);
+        return false;
+    }
+
+    if (strlen(info->name.data) >= GGML_MAX_NAME) {
+        fprintf(stderr, "%s: tensor '%s' name is too long\n", __func__, info->name.data);
+        return false;
+    }
 
     for (uint32_t i = 0; i < info->n_dims; ++i) {
-        GGML_ASSERT(info->ne[i] > 0);
+        if (info->ne[i] <= 0) {
+            fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[i]);
+            return false;
+        }
     }
 
     // prevent overflow for total number of elements
-    GGML_ASSERT(INT64_MAX/info->ne[1] > info->ne[0]);
-    GGML_ASSERT(INT64_MAX/info->ne[2] > info->ne[0]*info->ne[1]);
-    GGML_ASSERT(INT64_MAX/info->ne[3] > info->ne[0]*info->ne[1]*info->ne[2]);
+    if (INT64_MAX/info->ne[1] <= info->ne[0]) {
+        fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[1]);
+        return false;
+    }
+
+    if (INT64_MAX/info->ne[2] <= info->ne[0]*info->ne[1]) {
+        fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[2]);
+        return false;
+    }
+
+    if (INT64_MAX/info->ne[3] <= info->ne[0]*info->ne[1]*info->ne[2]) {
+        fprintf(stderr, "%s: invalid number of elements (%" PRIu64 ")\n", __func__, info->ne[3]);
+        return false;
+    }
+
+    return true;
 }
 
 static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset) {
@@ -22418,8 +22355,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);
             ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);
 
-            // TODO: return an error instead of crashing with GGML_ASSERT
-            gguf_tensor_info_sanitize(info);
+            ok = ok && gguf_tensor_info_sanitize(info);
 
             // make sure there is no duplicated tensor names
             for (uint64_t j = 0; j < i && ok; ++j) {
