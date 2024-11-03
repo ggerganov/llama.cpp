@@ -41,9 +41,15 @@ if(BUILD_SHARED_LIBS)
 
     add_library(${OMNI_AUDIO_LIB}_shared SHARED $<TARGET_OBJECTS:${OMNI_AUDIO_LIB}>)
     target_link_libraries(${OMNI_AUDIO_LIB}_shared PRIVATE ggml_llama common ${WHISPER_LIB})
+    # NEXA AI : must have below two lines to make Neexa SDK export the shared library to the correct location
     set_target_properties(${OMNI_AUDIO_LIB}_shared PROPERTIES
                             PUBLIC_HEADER omni.h
                             POSITION_INDEPENDENT_CODE ON
+                            OUTPUT_NAME "${OMNI_AUDIO_LIB}"
+    )
+    install(TARGETS ${OMNI_AUDIO_LIB}_shared 
+    LIBRARY
+    PUBLIC_HEADER DESTINATION include
     )
 
     # Add OMNI_AUDIO_SHARED definition when building the shared library
