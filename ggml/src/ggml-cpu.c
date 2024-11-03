@@ -2332,7 +2332,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
     // set numa scheme
     g_state.numa.numa_strategy = numa_flag;
 
-    GGML_LOG_DEBUG("numa strategy %u\n",g_state.numa.numa_strategy);
+    GGML_PRINT_DEBUG("numa strategy %u\n",g_state.numa.numa_strategy);
 
     g_state.numa.cpuset = ggml_get_numa_affinity();
 
@@ -2352,7 +2352,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
         ++g_state.numa.total_cpus;
     }
 
-    GGML_LOG_DEBUG("found %u numa nodes, %u CPUs\n", g_state.numa.n_nodes, g_state.numa.total_cpus);
+    GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", g_state.numa.n_nodes, g_state.numa.total_cpus);
 
     // figure out which node we're on
     uint current_cpu;
@@ -2372,21 +2372,21 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
         return;
     }
 
-    GGML_LOG_DEBUG("found our process on numa node %u, CPU %u\n", g_state.numa.current_node, current_cpu);
+    GGML_PRINT_DEBUG("found our process on numa node %u, CPU %u\n", g_state.numa.current_node, current_cpu);
 
     for (uint32_t n = 0; n < g_state.numa.n_nodes; ++n) {
         struct ggml_numa_node * node = &g_state.numa.nodes[n];
-        GGML_LOG_DEBUG("CPUs on node %u:", n);
+        GGML_PRINT_DEBUG("CPUs on node %u:", n);
         node->n_cpus = 0;
         for (uint32_t c = 0; c < g_state.numa.total_cpus; ++c) {
             rv = snprintf(path, sizeof(path), "/sys/devices/system/node/node%u/cpu%u", n, c);
             GGML_ASSERT(rv > 0 && (unsigned)rv < sizeof(path));
             if (stat(path, &st) == 0) {
                 node->cpus[node->n_cpus++] = c;
-                GGML_LOG_DEBUG(" %u", c);
+                GGML_PRINT_DEBUG(" %u", c);
             }
         }
-        GGML_LOG_DEBUG("\n");
+        GGML_PRINT_DEBUG("\n");
     }
 
     if (ggml_is_numa()) {
@@ -12953,7 +12953,7 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
 
     for (uint32_t i = 0; i < GGML_MAX_N_THREADS; i++) {
         if (mask[i]) {
-            GGML_LOG_DEBUG("Thread %lx: adding %d to cpuset\n", pthread_self(), i);
+            GGML_PRINT_DEBUG("Thread %lx: adding %d to cpuset\n", pthread_self(), i);
             CPU_SET(i, &cpuset);
         }
     }
@@ -13075,13 +13075,13 @@ void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
 #ifndef GGML_USE_OPENMP
 // pause/resume must be called under mutex
 static void ggml_threadpool_pause_locked(struct ggml_threadpool * threadpool) {
-    GGML_LOG_DEBUG("Pausing threadpool\n");
+    GGML_PRINT_DEBUG("Pausing threadpool\n");
     threadpool->pause = true;
     ggml_cond_broadcast(&threadpool->cond);
 }
 
 static void ggml_threadpool_resume_locked(struct ggml_threadpool * threadpool) {
-    GGML_LOG_DEBUG("Resuming threadpool\n");
+    GGML_PRINT_DEBUG("Resuming threadpool\n");
     threadpool->pause = false;
     ggml_cond_broadcast(&threadpool->cond);
 }
@@ -13117,7 +13117,7 @@ struct ggml_cplan ggml_graph_plan(
             struct ggml_threadpool * threadpool) {
 
     if (threadpool == NULL) {
-        //GGML_LOG_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
+        //GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
     }
     if (n_threads <= 0) {
         n_threads = threadpool ? threadpool->n_threads_max : GGML_DEFAULT_N_THREADS;
@@ -13392,7 +13392,7 @@ static inline bool ggml_graph_compute_check_for_work(struct ggml_compute_state *
     ggml_mutex_lock_shared(&threadpool->mutex);
     while (!ggml_graph_compute_thread_ready(state)) {
         // No new work. Wait for the signal.
-        GGML_LOG_DEBUG("thread #%d waiting for work (sleeping)\n", state->ith);
+        GGML_PRINT_DEBUG("thread #%d waiting for work (sleeping)\n", state->ith);
         ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
     }
     ggml_mutex_unlock_shared(&threadpool->mutex);
@@ -13412,12 +13412,12 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
     while (true) {
         // Check if we need to sleep
         while (threadpool->pause) {
-            GGML_LOG_DEBUG("thread #%d inside pause loop\n", state->ith);
+            GGML_PRINT_DEBUG("thread #%d inside pause loop\n", state->ith);
             ggml_mutex_lock_shared(&threadpool->mutex);
             if (threadpool->pause) {
                 ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
             }
-            GGML_LOG_DEBUG("thread #%d resuming after wait\n", state->ith);
+            GGML_PRINT_DEBUG("thread #%d resuming after wait\n", state->ith);
             ggml_mutex_unlock_shared(&threadpool->mutex);
         }
 
@@ -13445,7 +13445,7 @@ static void ggml_graph_compute_kickoff(struct ggml_threadpool * threadpool, int 
 
     ggml_mutex_lock(&threadpool->mutex);
 
-    GGML_LOG_DEBUG("threadpool: n_threads_cur %d n_threads %d\n", threadpool->n_threads_cur, n_threads);
+    GGML_PRINT_DEBUG("threadpool: n_threads_cur %d n_threads %d\n", threadpool->n_threads_cur, n_threads);
 
     // Update the number of active threads
     atomic_store_explicit(&threadpool->n_threads_cur, n_threads, memory_order_relaxed);
@@ -13579,7 +13579,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     bool disposable_threadpool = false;
 
     if (threadpool == NULL) {
-        //GGML_LOG_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
+        //GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
         disposable_threadpool = true;
 
         struct ggml_threadpool_params ttp = ggml_threadpool_params_default(n_threads);
@@ -13701,7 +13701,7 @@ void ggml_cpu_init(void) {
 
             //const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
 
-            //GGML_LOG_DEBUG("%s: GELU, Quick GELU, SILU and EXP tables initialized in %f ms\n", __func__, (t_end - t_start)/1000.0);
+            //GGML_PRINT_DEBUG("%s: GELU, Quick GELU, SILU and EXP tables initialized in %f ms\n", __func__, (t_end - t_start)/1000.0);
         }
 
 #if defined(__ARM_ARCH)

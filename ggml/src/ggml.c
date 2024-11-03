@@ -164,8 +164,6 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
     abort();
 }
 
-#define GGML_DEBUG 0
-
 //
 // logging
 //
@@ -209,24 +207,6 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
     fputs(text, stderr);
     fflush(stderr);
 }
-
-#if (GGML_DEBUG >= 1)
-#define GGML_PRINT_DEBUG(...) GGML_LOG_DEBUG(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG(...)
-#endif
-
-#if (GGML_DEBUG >= 5)
-#define GGML_PRINT_DEBUG_5(...) GGML_LOG_DEBUG(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_5(...)
-#endif
-
-#if (GGML_DEBUG >= 10)
-#define GGML_PRINT_DEBUG_10(...) GGML_LOG_DEBUG(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_10(...)
-#endif
 
 //
 // end of logging block
