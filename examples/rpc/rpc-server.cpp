@@ -1,3 +1,5 @@
+#include "ggml-cpu.h"
+
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
 #endif

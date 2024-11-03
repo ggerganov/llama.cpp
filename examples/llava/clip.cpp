@@ -4,6 +4,7 @@
 // Note: Even when using identical normalized image inputs (see normalize_image_u8_to_f32()) we have a significant difference in resulting embeddings compared to pytorch
 #include "clip.h"
 #include "ggml.h"
+#include "ggml-cpu.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
