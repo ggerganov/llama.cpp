@@ -10,6 +10,7 @@ var sources = [
     "src/unicode.cpp",
     "src/unicode-data.cpp",
     "ggml/src/ggml.c",
+    "ggml/src/ggml-cpu.c",
     "ggml/src/ggml-alloc.c",
     "ggml/src/ggml-backend.cpp",
     "ggml/src/ggml-quants.c",
