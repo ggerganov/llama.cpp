@@ -2857,7 +2857,6 @@ kernel void kernel_flash_attn_ext_vec_f16(
                 // O = diag(ms)*O
 #pragma unroll
                 for (short ii = 0; ii < D4; ii += NW) {
-                    const short i = ii + tiisg;
                     lo[ii/NW] *= ms;
                 }
             }
