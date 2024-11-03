@@ -453,20 +453,20 @@ static size_t longest_common_subsequence(const llama_tokens & a, const llama_tok
     }
 
     // get the lengths of the input sequences
-    int a_len = a.size();
-    int b_len = b.size();
+    size_t a_len = a.size();
+    size_t b_len = b.size();
 
     // initialize the maximum length of the longest common subsequence (LCS)
-    int max_length = 0;
+    size_t max_length = 0;
 
     // use two rows instead of a 2D matrix to optimize space
-    std::vector<int> prev_row(b_len + 1, 0);
-    std::vector<int> curr_row(b_len + 1, 0);
+    std::vector<size_t> prev_row(b_len + 1, 0);
+    std::vector<size_t> curr_row(b_len + 1, 0);
 
     // iterate through the elements of a
-    for (int i = 1; i <= a_len; i++) {
+    for (size_t i = 1; i <= a_len; i++) {
         // iterate through the elements of b
-        for (int j = 1; j <= b_len; j++) {
+        for (size_t j = 1; j <= b_len; j++) {
             // if elements at the current positions match
             if (a[i - 1] == b[j - 1]) {
                 // if it's the first element of either sequences, set LCS length to 1
