@@ -45,7 +45,7 @@ if(BUILD_SHARED_LIBS)
     set_target_properties(${OMNI_AUDIO_LIB}_shared PROPERTIES
                             PUBLIC_HEADER omni.h
                             POSITION_INDEPENDENT_CODE ON
-                            OUTPUT_NAME "${OMNI_AUDIO_LIB}"
+                            OUTPUT_NAME "${OMNI_AUDIO_LIB}_shared"
     )
     install(TARGETS ${OMNI_AUDIO_LIB}_shared 
     LIBRARY

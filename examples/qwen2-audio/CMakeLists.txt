@@ -37,7 +37,7 @@ if(BUILD_SHARED_LIBS)
     set_target_properties(${QWEN2_AUDIO_LIB}_shared PROPERTIES
                             PUBLIC_HEADER qwen2.h
                             POSITION_INDEPENDENT_CODE ON
-                            OUTPUT_NAME "${QWEN2_AUDIO_LIB}"
+                            OUTPUT_NAME "${QWEN2_AUDIO_LIB}_shared"
     )
     install(TARGETS ${QWEN2_AUDIO_LIB}_shared 
     LIBRARY
