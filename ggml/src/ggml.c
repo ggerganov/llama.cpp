@@ -1402,24 +1402,25 @@ static inline bool ggml_can_repeat_rows(const struct ggml_tensor * t0, const str
 ////////////////////////////////////////////////////////////////////////////////
 
 struct ggml_context * ggml_init(struct ggml_init_params params) {
-    static volatile bool is_first_call = false;
-    if (!is_first_call) {
-        ggml_critical_section_start();
-        if (!is_first_call) {
-            // initialize time system (required on Windows)
-            ggml_time_init();
+    static bool is_first_call = false;
 
-            for (int i = 0; i < (1 << 16); ++i) {
-                union {
-                    uint16_t u16;
-                    ggml_fp16_t fp16;
-                } u = {i};
-                ggml_table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(u.fp16);
-            }
-            is_first_call = true;
+    ggml_critical_section_start();
+
+    if (!is_first_call) {
+        // initialize time system (required on Windows)
+        ggml_time_init();
+
+        for (int i = 0; i < (1 << 16); ++i) {
+            union {
+                uint16_t u16;
+                ggml_fp16_t fp16;
+            } u = {i};
+            ggml_table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(u.fp16);
         }
-        ggml_critical_section_end();
+        is_first_call = true;
     }
+
+    ggml_critical_section_end();
 
     struct ggml_context * ctx = GGML_MALLOC(sizeof(struct ggml_context));
 
