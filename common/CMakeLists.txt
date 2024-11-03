@@ -66,6 +66,9 @@ add_library(${TARGET} STATIC
     train.cpp
     ngram-cache.h
     ngram-cache.cpp
+    common-nexa.h
+    common-nexa.cpp
+    dr_wav.h
     )
 
 if (BUILD_SHARED_LIBS)
