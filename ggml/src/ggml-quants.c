@@ -5771,9 +5771,7 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
     sumf = hsum_float_8(acc);
 #elif defined(__AVX__)
-    __m256 accum1 = _mm256_setzero_ps();
-    __m256 accum2 = _mm256_setzero_ps();
-    const __m128i mone = _mm_set1_epi16(1);
+    __m256 accum = _mm256_setzero_ps();
 
     for (; ib + 1 < nb; ib += 2) {
         const __m128i qx_1_0 = _mm_loadu_si128((const __m128i *)x[ib].qs);
@@ -5785,22 +5783,12 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         const __m128i qy_2_0 = _mm_loadu_si128((const __m128i *)y[ib + 1].qs);
         const __m128i qy_2_1 = _mm_loadu_si128((const __m128i *)y[ib + 1].qs + 1);
 
-        const __m128i p16_1_0 = mul_add_epi8_sse(qx_1_0, qy_1_0);
-        const __m128i p16_1_1 = mul_add_epi8_sse(qx_1_1, qy_1_1);
-        const __m128i p16_2_0 = mul_add_epi8_sse(qx_2_0, qy_2_0);
-        const __m128i p16_2_1 = mul_add_epi8_sse(qx_2_1, qy_2_1);
-        const __m128i p_1_0 = _mm_madd_epi16(p16_1_0, mone);
-        const __m128i p_1_1 = _mm_madd_epi16(p16_1_1, mone);
-        const __m128i p_2_0 = _mm_madd_epi16(p16_2_0, mone);
-        const __m128i p_2_1 = _mm_madd_epi16(p16_2_1, mone);
-
-        accum1 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d)),
-                _mm256_cvtepi32_ps(MM256_SET_M128I(p_1_1, p_1_0))), accum1);
-        accum2 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ib + 1].d)*GGML_FP16_TO_FP32(y[ib + 1].d)),
-                _mm256_cvtepi32_ps(MM256_SET_M128I(p_2_1, p_2_0))), accum2);
+        const __m256 p = mul_sum_i8_quad_float(qx_1_0, qx_1_1, qx_2_0, qx_2_1, qy_1_0, qy_1_1, qy_2_0, qy_2_1);
+        const __m256 deltas = quad_fp16_delta_float(x[ib].d, y[ib].d, x[ib + 1].d, y[ib + 1].d);
+        accum = _mm256_add_ps(_mm256_mul_ps(deltas, p), accum);
     }
 
-    sumf = hsum_float_8(_mm256_add_ps(accum1, accum2));
+    sumf = hsum_float_8(accum);
 #elif defined(__riscv_v_intrinsic)
     size_t vl = __riscv_vsetvl_e8m1(qk);
 
@@ -12579,10 +12567,8 @@ void ggml_vec_dot_iq4_nl_q8_0(int n, float * restrict s, size_t bs, const void *
 #elif defined __AVX__
     const __m128i values128 = _mm_loadu_si128((const __m128i*)kvalues_iq4nl);
     const __m128i m4b  = _mm_set1_epi8(0x0f);
-    const __m128i mone = _mm_set1_epi16(1);
 
-    __m256 accum1 = _mm256_setzero_ps();
-    __m256 accum2 = _mm256_setzero_ps();
+    __m256 accum = _mm256_setzero_ps();
     for (; ib + 1 < nb; ib += 2) {
         const __m128i q4bits_1 = _mm_loadu_si128((const __m128i *)x[ib + 0].qs);
         const __m128i q4bits_2 = _mm_loadu_si128((const __m128i *)x[ib + 1].qs);
@@ -12595,21 +12581,13 @@ void ggml_vec_dot_iq4_nl_q8_0(int n, float * restrict s, size_t bs, const void *
         const __m128i q4b_1_1 = _mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_1, 4), m4b));
         const __m128i q4b_2_0 = _mm_shuffle_epi8(values128, _mm_and_si128(q4bits_2, m4b));
         const __m128i q4b_2_1 = _mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_2, 4), m4b));
-        const __m128i p16_1_0 = mul_add_epi8_sse(q4b_1_0, q8b_1_0);
-        const __m128i p16_1_1 = mul_add_epi8_sse(q4b_1_1, q8b_1_1);
-        const __m128i p16_2_0 = mul_add_epi8_sse(q4b_2_0, q8b_2_0);
-        const __m128i p16_2_1 = mul_add_epi8_sse(q4b_2_1, q8b_2_1);
-        const __m128i p_1_0 = _mm_madd_epi16(p16_1_0, mone);
-        const __m128i p_1_1 = _mm_madd_epi16(p16_1_1, mone);
-        const __m128i p_2_0 = _mm_madd_epi16(p16_2_0, mone);
-        const __m128i p_2_1 = _mm_madd_epi16(p16_2_1, mone);
-        accum1 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(y[ib + 0].d)*GGML_FP16_TO_FP32(x[ib + 0].d)),
-                _mm256_cvtepi32_ps(MM256_SET_M128I(p_1_1, p_1_0))), accum1);
-        accum2 = _mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(y[ib + 1].d)*GGML_FP16_TO_FP32(x[ib + 1].d)),
-                _mm256_cvtepi32_ps(MM256_SET_M128I(p_2_1, p_2_0))), accum2);
+
+        const __m256 p = mul_sum_i8_quad_float(q4b_1_0, q4b_1_1, q4b_2_0, q4b_2_1, q8b_1_0, q8b_1_1, q8b_2_0, q8b_2_1);
+        const __m256 deltas = quad_fp16_delta_float(x[ib].d, y[ib].d, x[ib + 1].d, y[ib + 1].d);
+        accum = _mm256_add_ps(_mm256_mul_ps(deltas, p), accum);
     }
 
-    sumf = hsum_float_8(_mm256_add_ps(accum1, accum2));
+    sumf = hsum_float_8(accum);
 
 #elif defined(__POWER9_VECTOR__)
     const vector signed char lowMask = vec_splats((signed char)0xF);
