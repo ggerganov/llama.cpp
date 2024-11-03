@@ -21900,6 +21900,8 @@ int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int 
 }
 
 const char * llama_print_system_info(void) {
+    ggml_cpu_init(); // some ARM features are detected at runtime
+
     static std::string s;
 
     s  = "";
