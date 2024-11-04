@@ -1,5 +1,3 @@
-// Copyright (C) 2024 Zhiyuan Li
-
 #include <sycl/sycl.hpp>
 #include "outprod.hpp"
 
