@@ -2761,8 +2761,8 @@ typedef void (flash_attn_ext_t)(
         ushort sgitg[[simdgroup_index_in_threadgroup]]);
 
 // ref: https://arxiv.org/pdf/2307.08691.pdf
-template<int64_t D, int64_t Q = 8, int64_t C = 32> // head size, queries per threadgroup, cache items per threadgroup
-kernel void kernel_flash_attn_ext_f16(
+template<typename block_q, short nl, void (*dequantize_func)(device const block_q *, short, thread half4x4 &), short D, short Q = 8, short K = 8, short C = 32> // head size, queries per threadgroup, cache items per threadgroup
+kernel void kernel_flash_attn_ext(
         device const  char * q,
         device const  char * k,
         device const  char * v,
@@ -2804,11 +2804,11 @@ kernel void kernel_flash_attn_ext_f16(
     const int iq2 = tgpig[1];
     const int iq1 = tgpig[0]*Q;
 
-    const short D4 = D/4;
-    const short D8 = D/8;
-  //const short Q8 = Q/8;
-    const short NW = N_SIMDWIDTH;
-    const short SH = (C + Q); // shared memory per simdgroup in (half)
+    const short D4  = D/4;
+    const short D8  = D/8;
+    const short D16 = D/16;
+    const short NW  = N_SIMDWIDTH;
+    const short SH  = (C + Q); // shared memory per simdgroup in (half)
 
     const short T  = D + 2*nsg*SH; // shared memory size per query in (half)
     const short TF = T/2;        // shared memory size per query in (float)
@@ -2817,6 +2817,9 @@ kernel void kernel_flash_attn_ext_f16(
     threadgroup half  * sq  = (threadgroup half  *) (shared +              0*D); // holds the query data
     threadgroup half4 * sq4 = (threadgroup half4 *) (shared +              0*D); // same as above but in half4
     threadgroup float * ss  = (threadgroup float *) (shared + 2*sgitg*SH + 1*D); // scratch buffer for attention and diagonal matrix
+
+    threadgroup half    * skv  = (threadgroup half    *) (shared + sgitg*(4*16*K) + Q*T); // scratch buffer to load K and V in shared memory
+    threadgroup half4x4 * skv4 = (threadgroup half4x4 *) (shared + sgitg*(4*16*K) + Q*T); // same as above but in half4x4
 
     // store the result for all queries in local memory in 8x8 matrices (the O matrix from the paper)
     simdgroup_half8x8 lo[D8];
@@ -2906,13 +2909,60 @@ kernel void kernel_flash_attn_ext_f16(
                 for (short cc = 0; cc < C/8; ++cc) {
                     simdgroup_float8x8 mqk = make_filled_simdgroup_matrix<float, 8>(0.h);
 
-                    device const half * pk = (device const half *) ((device const char *) k + ((ic + 8*cc)*nb11 + ik2*nb12 + ik3*nb13));
+                    if (is_same<block_q, half4x4>::value) {
+                        // we can read directly from global memory
+                        device const half * pk = (device const half *) ((device const char *) k + ((ic + 8*cc)*nb11 + ik2*nb12 + ik3*nb13));
 
-                    for (short i = 0; i < D8; ++i) {
-                        simdgroup_half8x8 mk;
-                        simdgroup_load(mk, pk + i*8, nb11/sizeof(half), 0, true); // transpose
+                        for (short i = 0; i < D8; ++i) {
+                            simdgroup_half8x8 mk;
+                            simdgroup_load(mk, pk + i*8, nb11/sizeof(half), 0, true); // transpose
 
-                        simdgroup_multiply_accumulate(mqk, mq[i], mk, mqk);
+                            simdgroup_multiply_accumulate(mqk, mq[i], mk, mqk);
+                        }
+                    } else {
+                        for (short ii = 0; ii < D16; ii += 4) {
+                            const short i = tiisg%4;
+                            const short j = tiisg/4;
+
+                            device const block_q * pk4 = (device const block_q *) ((device const char *) k + ((ic + 8*cc + j)*nb11 + ik2*nb12 + ik3*nb13));
+
+                            if (D16%4 == 0) {
+                                half4x4 tmp;
+                                dequantize_func(pk4 + (ii + i)/nl, (ii + i)%nl, tmp);
+                                skv4[4*j + i] = tmp;
+
+                                simdgroup_barrier(mem_flags::mem_threadgroup);
+
+#pragma unroll
+                                for (short k = 0; k < 4; ++k) {
+                                    simdgroup_half8x8 mk;
+
+                                    simdgroup_load(mk, skv + 16*k + 0*8, 4*16, 0, true); // transpose
+                                    simdgroup_multiply_accumulate(mqk, mq[2*(ii + k) + 0], mk, mqk);
+
+                                    simdgroup_load(mk, skv + 16*k + 1*8, 4*16, 0, true); // transpose
+                                    simdgroup_multiply_accumulate(mqk, mq[2*(ii + k) + 1], mk, mqk);
+                                }
+                            } else {
+                                if (ii + i < D16) {
+                                    half4x4 tmp;
+                                    dequantize_func(pk4 + (ii + i)/nl, (ii + i)%nl, tmp);
+                                    skv4[4*j + i] = tmp;
+                                }
+
+                                simdgroup_barrier(mem_flags::mem_threadgroup);
+
+                                for (short k = 0; k < 4 && ii + k < D16; ++k) {
+                                    simdgroup_half8x8 mk;
+
+                                    simdgroup_load(mk, skv + 16*k + 0*8, 4*16, 0, true); // transpose
+                                    simdgroup_multiply_accumulate(mqk, mq[2*(ii + k) + 0], mk, mqk);
+
+                                    simdgroup_load(mk, skv + 16*k + 1*8, 4*16, 0, true); // transpose
+                                    simdgroup_multiply_accumulate(mqk, mq[2*(ii + k) + 1], mk, mqk);
+                                }
+                            }
+                        }
                     }
 
                     simdgroup_store(mqk, ss + 8*cc, TF, 0, false);
@@ -2977,17 +3027,63 @@ kernel void kernel_flash_attn_ext_f16(
             // O = O + (Q*K^T)*V
             {
                 for (short cc = 0; cc < C/8; ++cc) {
-                    device const half * pv = (device const half *) ((device const char *) v + ((ic + 8*cc)*nb21 + iv2*nb22 + iv3*nb23));
+                    simdgroup_float8x8 ms;
+                    simdgroup_load(ms, ss + 8*cc, TF, 0, false);
 
-                    simdgroup_float8x8 mv;
-                    simdgroup_load(mv, ss + 8*cc, TF, 0, false);
+                    if (is_same<block_q, half4x4>::value) {
+                        // we can read directly from global memory
+                        device const half * pv = (device const half *) ((device const char *) v + ((ic + 8*cc)*nb21 + iv2*nb22 + iv3*nb23));
+#pragma unroll
+                        for (short i = 0; i < D8; ++i) {
+                            simdgroup_half8x8 mv;
+                            simdgroup_load(mv, pv + i*8, nb21/sizeof(half), 0, false);
+
+                            simdgroup_multiply_accumulate(lo[i], ms, mv, lo[i]);
+                        }
+                    } else {
+                        for (short ii = 0; ii < D16; ii += 4) {
+                            const short i = tiisg%4;
+                            const short j = tiisg/4;
+
+                            device const block_q * pv4 = (device const block_q *) ((device const char *) v + ((ic + 8*cc + j)*nb21 + iv2*nb22 + iv3*nb23));
+
+                            if (D16%4 == 0) {
+                                half4x4 tmp;
+                                dequantize_func(pv4 + (ii + i)/nl, (ii + i)%nl, tmp);
+                                skv4[4*j + i] = tmp;
+
+                                simdgroup_barrier(mem_flags::mem_threadgroup);
 
 #pragma unroll
-                    for (short i = 0; i < D8; ++i) {
-                        simdgroup_half8x8 mk;
-                        simdgroup_load(mk, pv + i*8, nb21/sizeof(half), 0, false);
+                                for (short k = 0; k < 4; ++k) {
+                                    simdgroup_half8x8 mv;
 
-                        simdgroup_multiply_accumulate(lo[i], mv, mk, lo[i]);
+                                    simdgroup_load(mv, skv + 16*k + 0*8, 4*16, 0, false);
+                                    simdgroup_multiply_accumulate(lo[2*(ii + k) + 0], ms, mv, lo[2*(ii + k) + 0]);
+
+                                    simdgroup_load(mv, skv + 16*k + 1*8, 4*16, 0, false);
+                                    simdgroup_multiply_accumulate(lo[2*(ii + k) + 1], ms, mv, lo[2*(ii + k) + 1]);
+                                }
+                            } else {
+                                if (ii + i < D16) {
+                                    half4x4 tmp;
+                                    dequantize_func(pv4 + (ii + i)/nl, (ii + i)%nl, tmp);
+                                    skv4[4*j + i] = tmp;
+                                }
+
+                                simdgroup_barrier(mem_flags::mem_threadgroup);
+
+                                for (short k = 0; k < 4 && ii + k < D16; ++k) {
+                                    simdgroup_half8x8 mv;
+
+                                    simdgroup_load(mv, skv + 16*k + 0*8, 4*16, 0, false);
+                                    simdgroup_multiply_accumulate(lo[2*(ii + k) + 0], ms, mv, lo[2*(ii + k) + 0]);
+
+                                    simdgroup_load(mv, skv + 16*k + 1*8, 4*16, 0, false);
+                                    simdgroup_multiply_accumulate(lo[2*(ii + k) + 1], ms, mv, lo[2*(ii + k) + 1]);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -3083,15 +3179,50 @@ kernel void kernel_flash_attn_ext_f16(
     }
 }
 
-template [[host_name("kernel_flash_attn_ext_f16_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext_f16<64>;
-template [[host_name("kernel_flash_attn_ext_f16_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext_f16<80>;
-template [[host_name("kernel_flash_attn_ext_f16_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext_f16<96>;
-template [[host_name("kernel_flash_attn_ext_f16_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext_f16<112>;
-template [[host_name("kernel_flash_attn_ext_f16_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext_f16<128>;
-//template [[host_name("kernel_flash_attn_ext_f16_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext_f16<256>;
+template [[host_name("kernel_flash_attn_ext_f16_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<half4x4, 1, dequantize_f16, 64>;
+template [[host_name("kernel_flash_attn_ext_f16_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<half4x4, 1, dequantize_f16, 80>;
+template [[host_name("kernel_flash_attn_ext_f16_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<half4x4, 1, dequantize_f16, 96>;
+template [[host_name("kernel_flash_attn_ext_f16_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext<half4x4, 1, dequantize_f16, 112>;
+template [[host_name("kernel_flash_attn_ext_f16_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext<half4x4, 1, dequantize_f16, 128>;
+template [[host_name("kernel_flash_attn_ext_f16_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext<half4x4, 1, dequantize_f16, 256>;
+
+template [[host_name("kernel_flash_attn_ext_q4_0_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_0, 2, dequantize_q4_0, 64>;
+template [[host_name("kernel_flash_attn_ext_q4_0_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_0, 2, dequantize_q4_0, 80>;
+template [[host_name("kernel_flash_attn_ext_q4_0_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_0, 2, dequantize_q4_0, 96>;
+template [[host_name("kernel_flash_attn_ext_q4_0_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_0, 2, dequantize_q4_0, 112>;
+template [[host_name("kernel_flash_attn_ext_q4_0_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_0, 2, dequantize_q4_0, 128>;
+template [[host_name("kernel_flash_attn_ext_q4_0_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_0, 2, dequantize_q4_0, 256>;
+
+template [[host_name("kernel_flash_attn_ext_q4_1_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_1, 2, dequantize_q4_1, 64>;
+template [[host_name("kernel_flash_attn_ext_q4_1_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_1, 2, dequantize_q4_1, 80>;
+template [[host_name("kernel_flash_attn_ext_q4_1_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_1, 2, dequantize_q4_1, 96>;
+template [[host_name("kernel_flash_attn_ext_q4_1_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_1, 2, dequantize_q4_1, 112>;
+template [[host_name("kernel_flash_attn_ext_q4_1_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_1, 2, dequantize_q4_1, 128>;
+template [[host_name("kernel_flash_attn_ext_q4_1_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q4_1, 2, dequantize_q4_1, 256>;
+
+template [[host_name("kernel_flash_attn_ext_q5_0_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_0, 2, dequantize_q5_0, 64>;
+template [[host_name("kernel_flash_attn_ext_q5_0_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_0, 2, dequantize_q5_0, 80>;
+template [[host_name("kernel_flash_attn_ext_q5_0_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_0, 2, dequantize_q5_0, 96>;
+template [[host_name("kernel_flash_attn_ext_q5_0_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_0, 2, dequantize_q5_0, 112>;
+template [[host_name("kernel_flash_attn_ext_q5_0_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_0, 2, dequantize_q5_0, 128>;
+template [[host_name("kernel_flash_attn_ext_q5_0_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_0, 2, dequantize_q5_0, 256>;
+
+template [[host_name("kernel_flash_attn_ext_q5_1_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_1, 2, dequantize_q5_1, 64>;
+template [[host_name("kernel_flash_attn_ext_q5_1_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_1, 2, dequantize_q5_1, 80>;
+template [[host_name("kernel_flash_attn_ext_q5_1_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_1, 2, dequantize_q5_1, 96>;
+template [[host_name("kernel_flash_attn_ext_q5_1_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_1, 2, dequantize_q5_1, 112>;
+template [[host_name("kernel_flash_attn_ext_q5_1_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_1, 2, dequantize_q5_1, 128>;
+template [[host_name("kernel_flash_attn_ext_q5_1_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q5_1, 2, dequantize_q5_1, 256>;
+
+template [[host_name("kernel_flash_attn_ext_q8_0_h64" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q8_0, 2, dequantize_q8_0, 64>;
+template [[host_name("kernel_flash_attn_ext_q8_0_h80" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q8_0, 2, dequantize_q8_0, 80>;
+template [[host_name("kernel_flash_attn_ext_q8_0_h96" )]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q8_0, 2, dequantize_q8_0, 96>;
+template [[host_name("kernel_flash_attn_ext_q8_0_h112")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q8_0, 2, dequantize_q8_0, 112>;
+template [[host_name("kernel_flash_attn_ext_q8_0_h128")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q8_0, 2, dequantize_q8_0, 128>;
+template [[host_name("kernel_flash_attn_ext_q8_0_h256")]] kernel flash_attn_ext_t kernel_flash_attn_ext<block_q8_0, 2, dequantize_q8_0, 256>;
 
 // D - head size, Q - queries per threadgroup, C - cache items per threadgroup
-template<typename block_q, short nl, void (*dequantize_func)(device const block_q *, short, thread float4x4 &), int64_t D, int64_t Q = 1, int64_t C = 32>
+template<typename block_q, short nl, void (*dequantize_func)(device const block_q *, short, thread float4x4 &), short D, short Q = 1, short C = 32>
 kernel void flash_attn_ext_vec(
         device const  char * q,
         device const  char * k,
@@ -3158,7 +3289,7 @@ kernel void flash_attn_ext_vec(
     threadgroup half4  * sq4 = (threadgroup half4  *) (shared +              0*D); // same as above but in half4
     threadgroup float  * ss  = (threadgroup float  *) (shared + 2*sgitg*SH + 1*D); // scratch buffer for attention and diagonal matrix
     threadgroup float4 * ss4 = (threadgroup float4 *) (shared + 2*sgitg*SH + 1*D); // same as above but in half4
-    threadgroup half4  * sr4 = (threadgroup half4  *) (shared +   sgitg*D  + 1*T); // scratch buffer for the results
+    threadgroup half4  * sr4 = (threadgroup half4  *) (shared +   sgitg*D  + Q*T); // scratch buffer for the results
 
     // store the result for all queries in local memory in 8x8 matrices (the O matrix from the paper)
     half4x4 lo[D16/NW4];
