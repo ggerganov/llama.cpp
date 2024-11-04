@@ -12,16 +12,7 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, const ggml_tensor* sr
     GGML_ASSERT(ggml_is_contiguous(src0));
     GGML_ASSERT(ggml_is_contiguous(dst));
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-
-    // Get strides
-    const int64_t nb10 = src1->nb[0];
-    const int64_t nb11 = src1->nb[1];
+    GGML_TENSOR_BINARY_OP_LOCALS
 
     // Get SYCL queue
     dpct::queue_ptr stream = ctx.stream();
