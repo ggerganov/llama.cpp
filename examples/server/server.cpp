@@ -247,6 +247,7 @@ struct server_slot {
         if (is_processing()) {
             SLT_INF(*this, "stop processing: n_past = %d, truncated = %d\n", n_past, truncated);
 
+            t_last_used = ggml_time_us();
             t_token_generation = (ggml_time_us() - t_start_generation) / 1e3;
             state = SLOT_STATE_IDLE;
             callback_on_release(id);
@@ -725,12 +726,12 @@ struct server_context {
         return nullptr;
     }
 
-    server_slot * get_available_slot(const std::string & prompt) {
+    server_slot * get_available_slot(const server_task & task) {
         server_slot * ret = nullptr;
 
         // find the slot that has at least n% prompt similarity
-        if (ret == nullptr && slot_prompt_similarity != 0.0f && !prompt.empty()) {
-            int max_lcp_len = 0;
+        if (ret == nullptr && slot_prompt_similarity != 0.0f) {
+            int lcs_len = 0;
             float similarity = 0;
 
             for (server_slot & slot : slots) {
@@ -740,25 +741,26 @@ struct server_context {
                 }
 
                 // skip the slot if it does not contains cached tokens
-                if (slot.prompt_tokens.empty()) {
+                if (slot.cache_tokens.empty()) {
                     continue;
                 }
 
-                // length of the Longest Common Prefix between the current slot's prompt and the input prompt
-                int lcp_len = longest_common_prefix(slot.cache_tokens, slot.prompt_tokens);
+                // length of the Longest Common Subsequence between the current slot's prompt and the input prompt
+                int cur_lcs_len = longest_common_subsequence(slot.cache_tokens, task.prompt_tokens);
 
-                // fraction of the common substring length compared to the current slot's prompt length
-                similarity = static_cast<float>(lcp_len) / static_cast<int>(slot.prompt_tokens.size());
+                // fraction of the common subsequence length compared to the current slot's prompt length
+                float cur_similarity = static_cast<float>(cur_lcs_len) / static_cast<int>(slot.cache_tokens.size());
 
                 // select the current slot if the criteria match
-                if (lcp_len > max_lcp_len && similarity > slot_prompt_similarity) {
-                    max_lcp_len = lcp_len;
+                if (cur_lcs_len > lcs_len && cur_similarity > slot_prompt_similarity) {
+                    lcs_len = cur_lcs_len;
+                    similarity = cur_similarity;
                     ret = &slot;
                 }
             }
 
             if (ret != nullptr) {
-                SLT_DBG(*ret, "selected slot by lcp similarity, max_lcp_len = %d, similarity = %f\n", max_lcp_len, similarity);
+                SLT_DBG(*ret, "selected slot by lcs similarity, lcs_len = %d, similarity = %f\n", lcs_len, similarity);
             }
         }
 
@@ -1514,18 +1516,7 @@ struct server_context {
                 {
                     const int id_slot = json_value(task.data, "id_slot", -1);
 
-                    server_slot * slot;
-
-                    if (id_slot != -1) {
-                        slot = get_slot_by_id(id_slot);
-                    } else {
-                        std::string prompt;
-                        if (task.data.contains("prompt") && task.data.at("prompt").is_string()) {
-                            prompt = json_value(task.data, "prompt", std::string());
-                        }
-
-                        slot = get_available_slot(prompt);
-                    }
+                    server_slot * slot = id_slot != -1 ? get_slot_by_id(id_slot) : get_available_slot(task);
 
                     if (slot == nullptr) {
                         // if no slot is available, we defer this task for processing later
@@ -1575,11 +1566,11 @@ struct server_context {
 
                     for (server_slot & slot : slots) {
                         json slot_data = get_formated_generation(slot);
-                        slot_data["id"]         = slot.id;
-                        slot_data["id_task"]    = slot.id_task;
-                        slot_data["state"]      = slot.state;
-                        slot_data["prompt"]     = common_detokenize(ctx, slot.prompt_tokens);
-                        slot_data["next_token"] = {
+                        slot_data["id"]            = slot.id;
+                        slot_data["id_task"]       = slot.id_task;
+                        slot_data["is_processing"] = slot.is_processing();
+                        slot_data["prompt"]        = common_detokenize(ctx, slot.prompt_tokens);
+                        slot_data["next_token"]    = {
                             {"has_next_token", slot.has_next_token},
                             {"has_new_line",   slot.has_new_line},
                             {"n_remain",       slot.n_remaining},
@@ -1590,10 +1581,10 @@ struct server_context {
                             {"stopping_word",  slot.stopping_word},
                         };
 
-                        if (slot_data["state"] == SLOT_STATE_IDLE) {
-                            n_idle_slots++;
-                        } else {
+                        if (slot.is_processing()) {
                             n_processing_slots++;
+                        } else {
+                            n_idle_slots++;
                         }
 
                         slots_data.push_back(slot_data);
@@ -2714,8 +2705,8 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_completions_generic = [&ctx_server, &res_error, &res_ok](server_task_inf_type inf_type, json & data, httplib::Response & res) {
-        if (ctx_server.params.embedding || ctx_server.params.reranking) {
-            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings` or `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
@@ -2820,8 +2811,8 @@ int main(int argc, char ** argv) {
 
     // TODO: maybe merge this function with "handle_completions_generic"
     const auto handle_chat_completions = [&ctx_server, &params, &res_error, &res_ok, verbose](const httplib::Request & req, httplib::Response & res) {
-        if (ctx_server.params.embedding || ctx_server.params.reranking) {
-            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings` or `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
@@ -2946,11 +2937,6 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
-        // TODO: somehow clean up this checks in the future
-        if (!ctx_server.params.embedding || ctx_server.params.reranking) {
-            res_error(res, format_error_response("This server does not support embeddings. Start it with `--embeddings` and without `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
-            return;
-        }
         const json body = json::parse(req.body);
         bool is_openai = false;
 
@@ -3002,10 +2988,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_rerank = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
-        if (!ctx_server.params.reranking) {
-            res_error(res, format_error_response("This server does not support reranking. Start it with `--reranking`", ERROR_TYPE_NOT_SUPPORTED));
+        if (!ctx_server.params.reranking || ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support reranking. Start it with `--reranking` and without `--embedding`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
+
         const json body = json::parse(req.body);
 
         // TODO: implement
