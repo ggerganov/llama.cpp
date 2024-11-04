@@ -11669,9 +11669,10 @@ static void ggml_compute_forward_rwkv_wkv6_f32(
     float * time_faaaa = (float *) dst->src[3]->data;
     float * time_decay = (float *) dst->src[4]->data;
 
-    size_t t_stride = HEADS * head_size;
+    size_t t_stride = HEADS * head_size; // Same to C
 
     size_t h_stride = C / HEADS;
+    GGML_ASSERT(C % HEADS == 0); // C must be divisible by HEADS
     size_t h_stride_2d = head_size * head_size;
 
     if (params->ith == 0) {
