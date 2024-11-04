@@ -11803,7 +11803,7 @@ static void ggml_compute_forward_rwkv_wkv6_f32(
                     // RWKV v6: different time_decay for each token.
                     float time_decay_val = time_decay[t_h_i_offset];
 
-                    for (int64_t j = 0; j < head_size; j ++) {
+                    for (int64_t j = 0; j < head_size; j++) {
                         size_t t_h_j_offset = t_h_offset + j;
                         size_t h_2d_i_j_offset = h_2d_i_offset + j;
 
