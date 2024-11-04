@@ -203,9 +203,9 @@ class GGUFReader:
         # Handle arrays.
         if gtype == GGUFValueType.ARRAY:
             raw_itype = self._get(offs, np.uint32)
-            offs += int(raw_itype.nbytes)
+            offs = self.data.tell()
             alen = self._get(offs, np.uint64)
-            offs += int(alen.nbytes)
+            offs = self.data.tell()
             aparts: list[npt.NDArray[Any]] = [raw_itype, alen]
             data_idxs: list[int] = []
             for idx in range(alen[0]):
