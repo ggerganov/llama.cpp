@@ -13678,6 +13678,13 @@ int ggml_cpu_get_sve_cnt(void) {
 }
 
 void ggml_cpu_init(void) {
+    // needed to initialize f16 tables
+    {
+        struct ggml_init_params params = { 0, NULL, false };
+        struct ggml_context * ctx = ggml_init(params);
+        ggml_free(ctx);
+    }
+
     ggml_critical_section_start();
 
     static bool is_first_call = true;
@@ -13685,8 +13692,7 @@ void ggml_cpu_init(void) {
     if (is_first_call) {
         // initialize GELU, Quick GELU, SILU and EXP F32 tables
         {
-            // FIXME: this may be called before ggml_init
-            //const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
+            const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
 
             for (int i = 0; i < (1 << 16); ++i) {
                 union {
@@ -13698,9 +13704,9 @@ void ggml_cpu_init(void) {
                 ggml_table_gelu_quick_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_quick_f32(f));
             }
 
-            //const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
+            const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
 
-            //GGML_PRINT_DEBUG("%s: GELU, Quick GELU, SILU and EXP tables initialized in %f ms\n", __func__, (t_end - t_start)/1000.0);
+            GGML_PRINT_DEBUG("%s: GELU, Quick GELU, SILU and EXP tables initialized in %f ms\n", __func__, (t_end - t_start)/1000.0);
         }
 
 #if defined(__ARM_ARCH)
