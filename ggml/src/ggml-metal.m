@@ -3139,7 +3139,6 @@ static void ggml_metal_encode_node(
                 if (!use_vec_kernel) {
                     // half8x8 kernel
                     const int64_t nqptg = 8;  // queries per threadgroup    !! sync with kernel template arguments !!
-                    const int64_t nkpsg = 8;  // keys    per simdgroup
                     const int64_t ncpsg = 32; // cache values per simdgroup !! sync with kernel template arguments !!
 
                     GGML_ASSERT(nqptg <= 32);
@@ -3149,7 +3148,9 @@ static void ggml_metal_encode_node(
                     int64_t nsgmax = 2;
 
                     while (true) {
-                        const size_t smem = (nqptg*(ne00 + 2*nsgmax*(ncpsg + nqptg)) + 4*16*nkpsg*nsgmax)*(sizeof(float)/2);
+                        // 16*32*nsgmax - the shared memory needed for the simdgroups to load the KV cache
+                        //                each thread loads (dequantizes) 16 head elements, there are 32 threads in th SG
+                        const size_t smem = (nqptg*(ne00 + 2*nsgmax*(ncpsg + nqptg)) + 16*32*nsgmax)*(sizeof(float)/2);
                         if (smem > device.maxThreadgroupMemoryLength) {
                             break;
                         }
@@ -3160,12 +3161,12 @@ static void ggml_metal_encode_node(
                     // simdgroups per threadgroup (a.k.a. warps)
                     const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(nsgmax, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32))) : 4;
 
-                    const size_t smem = (nqptg*(ne00 + 2*nsg*(ncpsg + nqptg)) + 4*16*nkpsg*nsg)*(sizeof(float)/2);
+                    const size_t smem = (nqptg*(ne00 + 2*nsg*(ncpsg + nqptg)) + 16*32*nsg)*(sizeof(float)/2);
 
                     //printf("smem: %zu, max: %zu, nsg = %d\n", smem, device.maxThreadgroupMemoryLength, (int) nsg);
                     GGML_ASSERT(smem <= device.maxThreadgroupMemoryLength);
 
-                    [encoder setThreadgroupMemoryLength:GGML_PAD(smem, 128) atIndex:0];
+                    [encoder setThreadgroupMemoryLength:GGML_PAD(smem, 16) atIndex:0];
 
                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nqptg - 1)/nqptg, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
                 } else {
