@@ -1354,8 +1354,8 @@ async def wait_for_slots_status(context,
                 if status_code == 503 and status_code == expected_http_status_code:
                     return
                 if status_code == 200 and status_code == expected_http_status_code:
-                    n_slots_idle = sum(1 if slot["state"] == 0 else 0 for slot in slots)
-                    n_slots_processing = sum(1 if slot["state"] != 0 else 0 for slot in slots)
+                    n_slots_idle = sum(1 if not slot["is_processing"] else 0 for slot in slots)
+                    n_slots_processing = sum(1 if slot["is_processing"] else 0 for slot in slots)
                     if ((slots_idle is None or slots_idle == n_slots_idle)
                         and (slots_processing is None or slots_processing == n_slots_processing)):
                         return

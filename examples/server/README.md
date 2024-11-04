@@ -692,7 +692,10 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 
 ### GET `/slots`: Returns the current slots processing state
 
-This endpoint can be disabled with `--no-slots`
+> [!WARNING]
+> This endpoint is intended for debugging and may be modified in future versions. For security reasons, we strongly advise against enabling it in production environments.
+
+This endpoint is disabled by default and can be enabled with `--slots`
 
 If query param `?fail_on_no_slot=1` is set, this endpoint will respond with status code 503 if there is no available slots.
 
@@ -709,6 +712,7 @@ Example:
         "grammar": "",
         "id": 0,
         "ignore_eos": false,
+        "is_processing": false,
         "logit_bias": [],
         "min_p": 0.05000000074505806,
         "mirostat": 0,
@@ -741,7 +745,6 @@ Example:
             "temperature"
         ],
         "seed": 42,
-        "state": 1,
         "stop": [
             "\n"
         ],
@@ -754,10 +757,6 @@ Example:
     }
 ]
 ```
-
-Possible values for `slot[i].state` are:
-- `0`: SLOT_STATE_IDLE
-- `1`: SLOT_STATE_PROCESSING
 
 ### GET `/metrics`: Prometheus compatible metrics exporter
 
