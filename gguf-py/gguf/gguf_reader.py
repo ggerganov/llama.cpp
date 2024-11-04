@@ -152,10 +152,10 @@ class GGUFReader:
     ) -> npt.NDArray[Any]:
         count = int(count)
         itemsize = np.dtype(dtype).itemsize
-        new_offset = offset + itemsize * count
-        self.data.seek(new_offset)
+        end_offs = offset + itemsize * count
+        self.data.seek(end_offs)
         return (
-            self.mmap[offset:new_offset]
+            self.mmap[offset:end_offs]
             .view(dtype = dtype)[:count]
             .newbyteorder(override_order or self.byte_order)
         )
