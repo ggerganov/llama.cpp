@@ -1,6 +1,3 @@
-// Copyright (C) 2024 Zhiyuan Li
-
-
 #include <sycl/sycl.hpp>
 #include "wkv6.hpp"
 
