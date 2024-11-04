@@ -29,7 +29,7 @@ export async function* llama(prompt, params = {}, config = {}) {
 
   const completionParams = { ...paramDefaults, ...params, prompt };
 
-  const response = await fetch(`${api_url}/completion`, {
+  const response = await fetch(`${api_url}${config.endpoint || '/completion'}`, {
     method: 'POST',
     body: JSON.stringify(completionParams),
     headers: {
@@ -78,7 +78,12 @@ export async function* llama(prompt, params = {}, config = {}) {
       for (const line of lines) {
         const match = regex.exec(line);
         if (match) {
-          result[match[1]] = match[2]
+          result[match[1]] = match[2];
+          if (result.data === '[DONE]') {
+            cont = false;
+            break;
+          }
+
           // since we know this is llama.cpp, let's just decode the json in data
           if (result.data) {
             result.data = JSON.parse(result.data);
