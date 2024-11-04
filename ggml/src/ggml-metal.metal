@@ -805,7 +805,6 @@ kernel void kernel_ssm_scan_f32(
         device const void * src4,
         device const void * src5,
         device const void * src6,
-        device const void * src7,
         device      float * dst,
         constant  int64_t & d_state,
         constant  int64_t & d_inner,
@@ -838,7 +837,6 @@ kernel void kernel_ssm_scan_f32(
     const uint64_t nb00 = sizeof(float);
     const uint64_t nb10 = sizeof(float);
     const uint64_t nb20 = sizeof(float);
-    const uint64_t nb60 = sizeof(float);
 
     const int64_t nc  = d_state;
     const int64_t nr  = d_inner;
@@ -848,7 +846,7 @@ kernel void kernel_ssm_scan_f32(
 
     const int64_t s_off = d_inner * n_head * n_seq_tokens * n_seqs * sizeof(float);
 
-    device const int32_t * ids = (device const int32_t *) src7;
+    device const int32_t * ids = (device const int32_t *) src6;
 
     device const float * s0 = (device const float *) ((device const char *) src0 + ir*nb02 + ids[i3]*nb03);
     device       float * s  = (device       float *) ((device       char *) dst  + ir*nb02 +      i3*nb03 + s_off);
@@ -859,7 +857,6 @@ kernel void kernel_ssm_scan_f32(
         device const float * A  = (device const float *) ((device const char *) src3 + ir*nb31); // {d_state, nh}
         device const float * B  = (device const float *) ((device const char *) src4 + (ir & (ng - 1))*nb41 + i2*nb42 + i3*nb43); // {d_state, ng, nt, ns}
         device const float * C  = (device const float *) ((device const char *) src5 + (ir & (ng - 1))*nb51 + i2*nb52 + i3*nb53); // {d_state, ng, nt, ns}
-        device const float * D  = (device const float *) ((device const char *) src6 + ir*nb60); // {nh}
         device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*nb00); // {dim, nh, nt, ns}
 
         const float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
@@ -873,7 +870,7 @@ kernel void kernel_ssm_scan_f32(
             s[i] = state;
         }
 
-        y[0] = sumf + x[0] * D[0];
+        y[0] = sumf;
 
         // recurse
         s0 = s;
@@ -890,7 +887,6 @@ kernel void kernel_ssm_scan_f32_group(
         device const void * src4,
         device const void * src5,
         device const void * src6,
-        device const void * src7,
         device      float * dst,
         constant  int64_t & d_state,
         constant  int64_t & d_inner,
@@ -923,7 +919,6 @@ kernel void kernel_ssm_scan_f32_group(
     const uint64_t nb00 = sizeof(float);
     const uint64_t nb10 = sizeof(float);
     const uint64_t nb20 = sizeof(float);
-    const uint64_t nb60 = sizeof(float);
 
     const int64_t nc  = d_state;
     const int64_t nr  = d_inner;
@@ -933,7 +928,7 @@ kernel void kernel_ssm_scan_f32_group(
 
     const int64_t s_off = d_inner * n_head * n_seq_tokens * n_seqs * sizeof(float);
 
-    device const int32_t * ids = (device const int32_t *) src7;
+    device const int32_t * ids = (device const int32_t *) src6;
 
     device const float * s0 = (device const float *) ((device const char *) src0 + ir*nb02 + ids[i3]*nb03);
     device       float * s  = (device       float *) ((device       char *) dst  + ir*nb02 +      i3*nb03 + s_off);
@@ -944,7 +939,6 @@ kernel void kernel_ssm_scan_f32_group(
         device const float * A  = (device const float *) ((device const char *) src3 + ir*nb31); // {1, nh}
         device const float * B  = (device const float *) ((device const char *) src4 + (ir & (ng - 1))*nb41 + i2*nb42 + i3*nb43); // {d_state, ng, nt, ns}
         device const float * C  = (device const float *) ((device const char *) src5 + (ir & (ng - 1))*nb51 + i2*nb52 + i3*nb53); // {d_state, ng, nt, ns}
-        device const float * D  = (device const float *) ((device const char *) src6 + ir*nb60); // {nh}
         device       float * y  = (device       float *) ((device       char *) dst  + (i1 + ir*(nr) + i2*(nh*nr) + i3*(n_t*nh*nr))*nb00); // {dim, nh, nt, ns}
 
         const float dt_soft_plus = dt[0] <= 20.0f ? log(1.0f + exp(dt[0])) : dt[0];
@@ -959,7 +953,7 @@ kernel void kernel_ssm_scan_f32_group(
             s[i] = state;
         }
 
-        y[0] = sumf + x[0] * D[0];
+        y[0] = sumf;
 
         // recurse
         s0 = s;

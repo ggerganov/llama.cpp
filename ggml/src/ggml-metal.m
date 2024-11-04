@@ -1649,25 +1649,21 @@ static void ggml_metal_encode_node(
                 struct ggml_tensor * src4 = node->src[4];
                 struct ggml_tensor * src5 = node->src[5];
                 struct ggml_tensor * src6 = node->src[6];
-                struct ggml_tensor * src7 = node->src[7];
 
                 GGML_ASSERT(src3);
                 GGML_ASSERT(src4);
                 GGML_ASSERT(src5);
                 GGML_ASSERT(src6);
-                GGML_ASSERT(src7);
 
                 size_t offs_src3 = 0;
                 size_t offs_src4 = 0;
                 size_t offs_src5 = 0;
                 size_t offs_src6 = 0;
-                size_t offs_src7 = 0;
 
                 id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(src3, &offs_src3) : nil;
                 id<MTLBuffer> id_src4 = src4 ? ggml_metal_get_buffer(src4, &offs_src4) : nil;
                 id<MTLBuffer> id_src5 = src5 ? ggml_metal_get_buffer(src5, &offs_src5) : nil;
                 id<MTLBuffer> id_src6 = src6 ? ggml_metal_get_buffer(src6, &offs_src6) : nil;
-                id<MTLBuffer> id_src7 = src7 ? ggml_metal_get_buffer(src7, &offs_src7) : nil;
 
                 const int64_t  ne30 = src3->ne[0];
                 const int64_t  ne31 = src3->ne[1]; GGML_UNUSED(ne31);
@@ -1699,10 +1695,6 @@ static void ggml_metal_encode_node(
 
                 const uint64_t nb60 = src6->nb[0]; GGML_UNUSED(nb60);
 
-                const int64_t  ne70 = src7->ne[0]; GGML_UNUSED(ne70);
-
-                const uint64_t nb70 = src7->nb[0]; GGML_UNUSED(nb70);
-
                 const int64_t d_state      = ne00;
                 const int64_t d_inner      = ne01;
                 const int64_t n_head       = ne02;
@@ -1727,31 +1719,30 @@ static void ggml_metal_encode_node(
                 [encoder setBuffer:id_src4 offset:offs_src4 atIndex:4];
                 [encoder setBuffer:id_src5 offset:offs_src5 atIndex:5];
                 [encoder setBuffer:id_src6 offset:offs_src6 atIndex:6];
-                [encoder setBuffer:id_src7 offset:offs_src7 atIndex:7];
-                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:8];
+                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:7];
 
-                [encoder setBytes:&d_state      length:sizeof(d_state)      atIndex:9];
-                [encoder setBytes:&d_inner      length:sizeof(d_inner)      atIndex:10];
-                [encoder setBytes:&n_head       length:sizeof(n_head)       atIndex:11];
-                [encoder setBytes:&n_group      length:sizeof(n_group)      atIndex:12];
-                [encoder setBytes:&n_seq_tokens length:sizeof(n_seq_tokens) atIndex:13];
-                [encoder setBytes:&n_seqs       length:sizeof(n_seqs)       atIndex:14];
+                [encoder setBytes:&d_state      length:sizeof(d_state)      atIndex:8];
+                [encoder setBytes:&d_inner      length:sizeof(d_inner)      atIndex:9];
+                [encoder setBytes:&n_head       length:sizeof(n_head)       atIndex:10];
+                [encoder setBytes:&n_group      length:sizeof(n_group)      atIndex:11];
+                [encoder setBytes:&n_seq_tokens length:sizeof(n_seq_tokens) atIndex:12];
+                [encoder setBytes:&n_seqs       length:sizeof(n_seqs)       atIndex:13];
 
-                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:15];
-                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:16];
-                [encoder setBytes:&nb03 length:sizeof(nb03) atIndex:17];
-                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:18];
-                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:19];
-                [encoder setBytes:&nb13 length:sizeof(nb13) atIndex:20];
-                [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:21];
-                [encoder setBytes:&nb22 length:sizeof(nb22) atIndex:22];
-                [encoder setBytes:&nb31 length:sizeof(nb31) atIndex:23];
-                [encoder setBytes:&nb41 length:sizeof(nb41) atIndex:24];
-                [encoder setBytes:&nb42 length:sizeof(nb42) atIndex:25];
-                [encoder setBytes:&nb43 length:sizeof(nb43) atIndex:26];
-                [encoder setBytes:&nb51 length:sizeof(nb51) atIndex:27];
-                [encoder setBytes:&nb52 length:sizeof(nb52) atIndex:28];
-                [encoder setBytes:&nb53 length:sizeof(nb53) atIndex:29];
+                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:14];
+                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:15];
+                [encoder setBytes:&nb03 length:sizeof(nb03) atIndex:16];
+                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:17];
+                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:18];
+                [encoder setBytes:&nb13 length:sizeof(nb13) atIndex:19];
+                [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:20];
+                [encoder setBytes:&nb22 length:sizeof(nb22) atIndex:21];
+                [encoder setBytes:&nb31 length:sizeof(nb31) atIndex:22];
+                [encoder setBytes:&nb41 length:sizeof(nb41) atIndex:23];
+                [encoder setBytes:&nb42 length:sizeof(nb42) atIndex:24];
+                [encoder setBytes:&nb43 length:sizeof(nb43) atIndex:25];
+                [encoder setBytes:&nb51 length:sizeof(nb51) atIndex:26];
+                [encoder setBytes:&nb52 length:sizeof(nb52) atIndex:27];
+                [encoder setBytes:&nb53 length:sizeof(nb53) atIndex:28];
                 // NOTE: max index is 31
 
                 if (ne30 == 1) {

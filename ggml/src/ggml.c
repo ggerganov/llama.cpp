@@ -7181,7 +7181,6 @@ struct ggml_tensor * ggml_ssm_conv(
     const int64_t n_s     = sx->ne[2];
 
     // TODO: maybe support other strides than 1?
-    // FIXME: this is always true?
     GGML_ASSERT(sx->ne[0] == d_conv - 1 + n_t);
     GGML_ASSERT(sx->ne[1] == d_inner);
     GGML_ASSERT(n_t >= 0);
@@ -7205,7 +7204,6 @@ struct ggml_tensor * ggml_ssm_scan(
         struct ggml_tensor  * A,
         struct ggml_tensor  * B,
         struct ggml_tensor  * C,
-        struct ggml_tensor  * D,
         struct ggml_tensor  * ids) {
     GGML_ASSERT(ggml_is_contiguous(s));
     GGML_ASSERT(ggml_is_contiguous(dt));
@@ -7235,8 +7233,6 @@ struct ggml_tensor * ggml_ssm_scan(
         GGML_ASSERT(B->ne[0] == d_state);
         GGML_ASSERT(B->ne[2] == n_seq_tokens);
         GGML_ASSERT(B->ne[3] == n_seqs);
-        GGML_ASSERT(D->ne[0] == n_head);
-        GGML_ASSERT(ggml_is_vector(D));
         GGML_ASSERT(ids->ne[0] == n_seqs);
         GGML_ASSERT(ggml_is_vector(ids));
         GGML_ASSERT(A->ne[1] == n_head);
@@ -7258,8 +7254,7 @@ struct ggml_tensor * ggml_ssm_scan(
     result->src[3] = A;
     result->src[4] = B;
     result->src[5] = C;
-    result->src[6] = D;
-    result->src[7] = ids;
+    result->src[6] = ids;
 
     return result;
 }
@@ -16217,8 +16212,7 @@ static void ggml_compute_forward_ssm_scan_f32(
     const struct ggml_tensor * src3 = dst->src[3]; // A  {d_state, n_head} or {1, n_head}
     const struct ggml_tensor * src4 = dst->src[4]; // B  {d_state, n_group, n_seq_tokens, n_seqs}
     const struct ggml_tensor * src5 = dst->src[5]; // C  {d_state, n_group, n_seq_tokens, n_seqs}
-    const struct ggml_tensor * src6 = dst->src[6]; // D  {n_head}
-    const struct ggml_tensor * src7 = dst->src[7]; // ids {n_seqs}
+    const struct ggml_tensor * src6 = dst->src[6]; // ids {n_seqs}
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -16240,8 +16234,7 @@ static void ggml_compute_forward_ssm_scan_f32(
     GGML_ASSERT(src3->nb[0] == sizeof(float));
     GGML_ASSERT(src4->nb[0] == sizeof(float));
     GGML_ASSERT(src5->nb[0] == sizeof(float));
-    GGML_ASSERT(src6->nb[0] == sizeof(float));
-    GGML_ASSERT(src7->nb[0] == sizeof(int32_t));
+    GGML_ASSERT(src6->nb[0] == sizeof(int32_t));
     // allows optimizing the modulo since n_group should be a power of 2
     GGML_ASSERT((ng & -ng) == ng);
 
@@ -16252,7 +16245,7 @@ static void ggml_compute_forward_ssm_scan_f32(
     const int ih0 = dh*ith;
     const int ih1 = MIN(ih0 + dh, nh);
 
-    const int32_t * ids = (const int32_t *) src7->data;
+    const int32_t * ids = (const int32_t *) src6->data;
 
     for (int i3 = 0; i3 < ns; ++i3) {
         const float * s0 = (const float *) ((const char *) src0->data + ids[i3]*(src0->nb[3])); // {d_state, dim, nh, ns}
@@ -16264,7 +16257,6 @@ static void ggml_compute_forward_ssm_scan_f32(
             const float * A  = (const float *) ((const char *) src3->data); // {d_state, nh} or {1, nh}
             const float * B  = (const float *) ((const char *) src4->data + i2*(src4->nb[2]) + i3*(src4->nb[3])); // {d_state, ng, nt, ns}
             const float * C  = (const float *) ((const char *) src5->data + i2*(src5->nb[2]) + i3*(src5->nb[3])); // {d_state, ng, nt, ns}
-            const float * D  = (const float *) ((const char *) src6->data); // {nh}
                   float * y  = (      float *) ((      char *) dst->data + i2*(nh*nr*sizeof(float)) + i3*(nt*nh*nr*sizeof(float))); // {dim, nh, nt, ns}
 
             if (src3->ne[0] == 1) {
@@ -16325,7 +16317,7 @@ static void ggml_compute_forward_ssm_scan_f32(
                             sumf += state * C[ig];
                             s[i] = state;
                         }
-                        y[ii] = sumf + x[ii] * D[h];
+                        y[ii] = sumf;
                     }
                 }
             } else {
@@ -16353,7 +16345,7 @@ static void ggml_compute_forward_ssm_scan_f32(
                             sumf += state * C[ig];
                             s[i] = state;
                         }
-                        y[ii] = sumf + x[ii] * D[h];
+                        y[ii] = sumf;
                     }
                 }
             }
