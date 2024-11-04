@@ -2,6 +2,7 @@
 #define LLAMA_H
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 #include "ggml-backend.h"
 
 #include <stddef.h>
