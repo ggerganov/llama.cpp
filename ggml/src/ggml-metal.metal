@@ -19,18 +19,12 @@ constexpr constant static float kvalues_iq4nl_f[16] = {
 // NOTE: this is not dequantizing - we are simply fitting the template
 template <typename type4x4>
 void dequantize_f32(device const float4x4 * src, short il, thread type4x4 & reg) {
-    float4x4 temp = *(((device float4x4 *)src));
-    for (int i = 0; i < 16; i++){
-        reg[i/4][i%4] = temp[i/4][i%4];
-    }
+    reg = (type4x4)(*src);
 }
 
 template <typename type4x4>
 void dequantize_f16(device const half4x4 * src, short il, thread type4x4 & reg) {
-    half4x4 temp = *(((device half4x4 *)src));
-    for (int i = 0; i < 16; i++){
-        reg[i/4][i%4] = temp[i/4][i%4];
-    }
+    reg = (type4x4)(*src);
 }
 
 template <typename type4x4>
