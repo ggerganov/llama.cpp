@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import mmap
 import struct
 from collections import OrderedDict
 from typing import Any, Literal, NamedTuple, TypeVar, Union
@@ -91,7 +92,7 @@ class GGUFReader:
         file_mode = "rb" if mode == 'r' else 'rb+'
         self.mode = mode
         self.data = open(path, mode=file_mode)
-        self.mmap = np.memmap(path, mode = mode)
+        self.mmap = np.memmap(self.data, mode = mode)
         offs = 0
 
         # Check for GGUF magic
@@ -132,6 +133,8 @@ class GGUFReader:
             offs += self.alignment - padding
         self.data_offset = offs
         self._build_tensors(offs, tensors_fields)
+    
+    def __del__(self) -> None:
         self.data.close()
 
     _DT = TypeVar('_DT', bound = npt.DTypeLike)
@@ -145,23 +148,17 @@ class GGUFReader:
         return self.tensors[idx]
 
     def _get(
-        self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I', 'S', '<'] = None, lazy: bool = False,
+        self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I', 'S', '<'] = None,
     ) -> npt.NDArray[Any]:
         count = int(count)
         itemsize = np.dtype(dtype).itemsize
-        if not lazy:
-            self.data.seek(offset)
-            data = (
-                np.frombuffer(self.data.read(itemsize * count), dtype = dtype, count = count)
-                .newbyteorder(override_order or self.byte_order)
-            )
-            return data if self.mode == 'r' else data.copy()
-        else:
-            return (
-                self.mmap[offset:offset + itemsize * count]
-                .view(dtype = dtype)[:count]
-                .newbyteorder(override_order or self.byte_order)
-            )
+        new_offset = offset + itemsize * count
+        self.data.seek(new_offset)
+        return (
+            self.mmap[offset:new_offset]
+            .view(dtype = dtype)[:count]
+            .newbyteorder(override_order or self.byte_order)
+        )
 
     def _push_field(self, field: ReaderField, skip_sum: bool = False) -> int:
         if field.name in self.fields:
@@ -328,7 +325,7 @@ class GGUFReader:
                 n_elements = n_elems,
                 n_bytes = n_bytes,
                 data_offset = data_offs,
-                data = self._get(data_offs, item_type, item_count, lazy=True).reshape(np_dims),
+                data = self._get(data_offs, item_type, item_count).reshape(np_dims),
                 field = field,
             ))
         self.tensors = tensors
