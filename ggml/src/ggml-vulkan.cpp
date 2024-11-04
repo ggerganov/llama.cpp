@@ -1047,7 +1047,6 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
         return buf;
     }
 
-    buf->size = size;
     vk::BufferCreateInfo buffer_create_info{
         vk::BufferCreateFlags(),
         size,
@@ -1075,7 +1074,6 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
 
     if (memory_type_index == UINT32_MAX) {
         device->device.destroyBuffer(buf->buffer);
-        buf->size = 0;
         throw vk::OutOfDeviceMemoryError("No suitable memory type found");
     }
 
@@ -1092,13 +1090,11 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
             }
             catch (const vk::SystemError& e) {
                 device->device.destroyBuffer(buf->buffer);
-                buf->size = 0;
                 throw e;
             }
         } else {
             // Out of Host/Device memory, clean up buffer
             device->device.destroyBuffer(buf->buffer);
-            buf->size = 0;
             throw e;
         }
     }
@@ -1111,6 +1107,7 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
     device->device.bindBufferMemory(buf->buffer, buf->device_memory, 0);
 
     buf->device = device;
+    buf->size = size;
 
 #ifdef GGML_VULKAN_MEMORY_DEBUG
     device->memory_logger->log_allocation(buf, size);
