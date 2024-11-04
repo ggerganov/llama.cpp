@@ -107,6 +107,7 @@ static void concat_f32_sycl(const float *x, const float *y, float *dst,
         });
     break;
   case 2:
+  default:
     stream->parallel_for(
         sycl::nd_range<3>(gridDim *
                               sycl::range<3>(1, 1, SYCL_CONCAT_BLOCK_SIZE),
