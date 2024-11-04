@@ -3187,7 +3187,7 @@ static void ggml_metal_encode_node(
                     }
                     nsg /= 2;
 
-                    const size_t smem = (nqptg*(ne00 + 2*nsg*(ncpsg + nqptg)) + nsg*ne00)*(sizeof(float)/2);
+                    const size_t smem = (nqptg*(ne00 + 2*nsg*(ncpsg + nqptg)) + 2*nsg*ne00)*(sizeof(float)/2);
 
                     //printf("smem: %zu, max: %zu\n", smem, device.maxThreadgroupMemoryLength);
                     GGML_ASSERT(smem <= device.maxThreadgroupMemoryLength);
