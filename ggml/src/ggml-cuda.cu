@@ -1297,11 +1297,17 @@ static void ggml_cuda_set_peer_access(const int n_tokens, int main_device) {
                     cudaError_t err = cudaDeviceEnablePeerAccess(id_other, 0);
                     if (err != cudaErrorPeerAccessAlreadyEnabled) {
                         CUDA_CHECK(err);
+                    } else {
+                        // reset the error
+                        cudaGetLastError();
                     }
                 } else {
                     cudaError_t err = cudaDeviceDisablePeerAccess(id_other);
                     if (err != cudaErrorPeerAccessNotEnabled) {
                         CUDA_CHECK(err);
+                    } else {
+                        // reset the error
+                        cudaGetLastError();
                     }
                 }
             }
