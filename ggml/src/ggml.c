@@ -395,6 +395,8 @@ void ggml_bf16_to_fp32_row(const ggml_bf16_t * x, float * y, int64_t n) {
                                     16)));
         }
     }
+#endif
+#if defined(__AVX2__)
     if (ggml_cpu_has_avx2()) {
         for (; i + 8 <= n; i += 8) {
             _mm256_storeu_ps(y + i,
