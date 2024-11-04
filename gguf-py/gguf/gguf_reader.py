@@ -88,8 +88,9 @@ class GGUFReader:
     }
 
     def __init__(self, path: os.PathLike[str] | str, mode: Literal['r', 'r+', 'c'] = 'r'):
-        self.data = open(path, mode="rb")
-        self.mmap = np.memmap(path, mode = mode)
+        file_mode = "rb" if mode == 'r' else 'rb+'
+        self.data = open(path, mode=file_mode)
+        self.mmap = np.memmap(self.data, mode = mode)
         offs = 0
 
         # Check for GGUF magic
@@ -129,7 +130,7 @@ class GGUFReader:
         if padding != 0:
             offs += self.alignment - padding
         self.data_offset = offs
-        # self._build_tensors(offs, tensors_fields)
+        self._build_tensors(offs, tensors_fields)
         self.data.close()
 
     _DT = TypeVar('_DT', bound = npt.DTypeLike)
