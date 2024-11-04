@@ -1227,7 +1227,6 @@ static ggml_backend_buffer_t ggml_backend_cann_host_buffer_type_alloc_buffer(ggm
 
     ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(hostPtr, size);
     buffer->buft = buft;
-    buffer->iface.get_name = ggml_backend_cann_host_buffer_name;
     buffer->iface.free_buffer = ggml_backend_cann_host_buffer_free;
 
     return buffer;

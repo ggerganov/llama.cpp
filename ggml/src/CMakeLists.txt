@@ -1396,7 +1396,7 @@ if (EMSCRIPTEN)
 endif()
 
 target_compile_definitions(ggml PUBLIC    ${GGML_CDEF_PUBLIC})
-target_include_directories(ggml PUBLIC  ../include)
+target_include_directories(ggml PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
 target_include_directories(ggml PRIVATE . ${GGML_EXTRA_INCLUDES})
 target_link_directories   (ggml PRIVATE   ${GGML_EXTRA_LIBDIRS})
 target_compile_features   (ggml PRIVATE c_std_11) # don't bump
