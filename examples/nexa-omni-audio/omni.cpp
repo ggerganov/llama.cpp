@@ -523,13 +523,12 @@ bool omni_context_params_parse(int argc, char **argv, omni_context_params &param
 
 omni_context_params omni_context_default_params()
 {
-    omni_context_params params = {
-        .model = "",
-        .mmproj = "",
-        .file = "",
-        .prompt = "this conversation talks about",
-        .n_gpu_layers = -1,
-    };
+    omni_context_params params;
+    params.model = "";
+    params.mmproj = "";
+    params.file = "";
+    params.prompt = "this conversation talks about";
+    params.n_gpu_layers = -1;
     return params;
 }
 
