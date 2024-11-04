@@ -28,9 +28,8 @@ void* ggml_sycl_host_malloc(size_t size) try {
 
   if (err != 0) {
     // clear the error
-    fprintf(
-        stderr,
-        "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
+    GGML_LOG_ERROR(
+        "Error: failed to allocate %.2f MB of pinned memory: %s\n",
         size / 1024.0 / 1024.0,
         "syclGetErrorString is not supported");
     return nullptr;
