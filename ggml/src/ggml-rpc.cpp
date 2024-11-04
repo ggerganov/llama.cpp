@@ -1296,13 +1296,6 @@ static ggml_backend_buffer_type_t ggml_backend_rpc_device_get_buffer_type(ggml_b
     UNUSED(dev);
 }
 
-static ggml_backend_buffer_t ggml_backend_rpc_device_buffer_from_ptr(ggml_backend_dev_t dev, void * ptr, size_t size, size_t max_tensor_size) {
-    return ggml_backend_cpu_buffer_from_ptr(ptr, size);
-
-    UNUSED(dev);
-    UNUSED(max_tensor_size);
-}
-
 static bool ggml_backend_rpc_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
     UNUSED(dev);
     UNUSED(op);
@@ -1328,7 +1321,7 @@ static const struct ggml_backend_device_i ggml_backend_rpc_device_i = {
     /* .init_backend         = */ ggml_backend_rpc_device_init,
     /* .get_buffer_type      = */ ggml_backend_rpc_device_get_buffer_type,
     /* .get_host_buffer_type = */ NULL,
-    /* .buffer_from_host_ptr = */ ggml_backend_rpc_device_buffer_from_ptr,
+    /* .buffer_from_host_ptr = */ NULL,
     /* .supports_op          = */ ggml_backend_rpc_device_supports_op,
     /* .supports_buft        = */ ggml_backend_rpc_device_supports_buft,
     /* .offload_op           = */ NULL,

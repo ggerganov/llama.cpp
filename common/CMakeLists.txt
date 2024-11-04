@@ -66,8 +66,6 @@ add_library(${TARGET} STATIC
     ngram-cache.h
     sampling.cpp
     sampling.h
-    train.cpp
-    train.h
     )
 
 if (BUILD_SHARED_LIBS)

@@ -1951,6 +1951,8 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
 
 void yaml_dump_non_result_info(FILE * stream, const common_params & params, const llama_context * lctx,
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
+    ggml_cpu_init(); // some ARM features are detected at runtime
+
     const auto & sparams = params.sparams;
 
     fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
