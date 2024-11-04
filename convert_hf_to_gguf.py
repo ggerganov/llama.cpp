@@ -3088,7 +3088,6 @@ class Mamba2Model(Model):
         return data_torch.squeeze()
 
 
-
 @Model.register("CohereForCausalLM")
 class CommandR2Model(Model):
     model_arch = gguf.MODEL_ARCH.COMMAND_R
