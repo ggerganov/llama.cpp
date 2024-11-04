@@ -89,8 +89,9 @@ class GGUFReader:
 
     def __init__(self, path: os.PathLike[str] | str, mode: Literal['r', 'r+', 'c'] = 'r'):
         file_mode = "rb" if mode == 'r' else 'rb+'
+        self.mode = mode
         self.data = open(path, mode=file_mode)
-        self.mmap = np.memmap(self.data, mode = mode)
+        self.mmap = np.memmap(path, mode = mode)
         offs = 0
 
         # Check for GGUF magic
@@ -150,10 +151,11 @@ class GGUFReader:
         itemsize = np.dtype(dtype).itemsize
         if not lazy:
             self.data.seek(offset)
-            return (
+            data = (
                 np.frombuffer(self.data.read(itemsize * count), dtype = dtype, count = count)
                 .newbyteorder(override_order or self.byte_order)
             )
+            return data if self.mode == 'r' else data.copy()
         else:
             return (
                 self.mmap[offset:offset + itemsize * count]
