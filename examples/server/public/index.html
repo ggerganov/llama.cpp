@@ -5,9 +5,19 @@
   <meta name="color-scheme" content="light dark">
   <title>🦙 llama.cpp - chat</title>
 
-  <!-- TODO: embed dependencies into cpp -->
+  <!-- Note: dependencies can de updated using ./deps.sh script -->
   <link href="./deps_daisyui.min.css" rel="stylesheet" type="text/css" />
   <script src="./deps_tailwindcss.js"></script>
+  <script>
+    tailwind.config = {};
+  </script>
+  <style type="text/tailwindcss">
+    .markdown {
+      h1, h2, h3, h4, h5, h6, ul, ol, li { all: revert; }
+      pre { @apply whitespace-pre-wrap; }
+      /* TODO: fix table */
+    }
+  </style>
 </head>
 
 <body>
@@ -53,18 +63,18 @@
           'chat-end': msg.role === 'user',
         }">
           <div :class="{
-            'chat-bubble': true,
+            'chat-bubble markdown': true,
             'chat-bubble-primary': msg.role === 'user',
           }">
-            <p v-for="line in msg.content.split('\n')">{{ line }}</p>
+            <vue-markdown :source="msg.content" />
           </div>
         </div>
 
         <!-- pending assistant message -->
         <div id="pending-msg" class="chat chat-start">
-          <div v-if="pendingMsg" class="chat-bubble">
+          <div v-if="pendingMsg" class="chat-bubble markdown">
             <span v-if="!pendingMsg.content" class="loading loading-dots loading-md"></span>
-            <p v-else v-for="line in pendingMsg.content.split('\n')">{{ line }}</p>
+            <vue-markdown v-else :source="pendingMsg.content" />
           </div>
         </div>
       </div>
@@ -84,13 +94,30 @@
     </div>
   </div>
 
+  <script src="./deps_markdown-it.js"></script>
   <script type="module">
-    import { createApp } from './deps_vue.esm-browser.js';
+    import { createApp, defineComponent, shallowRef, computed, h } from './deps_vue.esm-browser.js';
     import { llama } from './completion.js';
 
     const BASE_URL = (new URL('.', document.baseURI).href).toString();
 
+    // markdown support
+    const VueMarkdown = defineComponent(
+      (props) => {
+        const md = shallowRef(new markdownit(props.options ?? {}));
+        for (const plugin of props.plugins ?? []) {
+          md.value.use(plugin);
+        }
+        const content = computed(() => md.value.render(props.source));
+        return () => h("div", { innerHTML: content.value });
+      },
+      { props: ["source", "options", "plugins"] }
+    );
+
     createApp({
+      components: {
+        VueMarkdown,
+      },
       data() {
         return {
           messages: [],
