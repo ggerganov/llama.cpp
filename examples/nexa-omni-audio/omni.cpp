@@ -523,13 +523,12 @@ bool omni_context_params_parse(int argc, char **argv, omni_context_params &param
 
 omni_context_params omni_context_default_params()
 {
-    omni_context_params params = {
-        .model = "",
-        .mmproj = "",
-        .file = "",
-        .prompt = "this conversation talks about",
-        .n_gpu_layers = -1,
-    };
+    omni_context_params params;
+    params.model = "";
+    params.mmproj = "";
+    params.file = "";
+    params.prompt = "this conversation talks about";
+    params.n_gpu_layers = -1;
     return params;
 }
 
@@ -565,17 +564,16 @@ bool omni_params_parse(int argc, char **argv, omni_params &params)
 
 static omni_params get_omni_params_from_context_params(omni_context_params &params)
 {
-    omni_params all_params = {
-        .gpt = {
-            .n_gpu_layers = params.n_gpu_layers,
-            .model = params.model,
-            .prompt = params.prompt,
-        },
-        .whisper = {
-            .model = params.mmproj,
-            .fname_inp = {params.file},
-        },
-    };
+    omni_params all_params;
+
+    // Initialize gpt params
+    all_params.gpt.n_gpu_layers = params.n_gpu_layers;
+    all_params.gpt.model = params.model;
+    all_params.gpt.prompt = params.prompt;
+    
+    // Initialize whisper params
+    all_params.whisper.model = params.mmproj;
+    all_params.whisper.fname_inp = {params.file};
 
     if (all_params.gpt.n_threads <= 0)
     {
