@@ -1,8 +1,6 @@
 const paramDefaults = {
   stream: true,
-  n_predict: 500,
   temperature: 0.2,
-  stop: ["</s>"]
 };
 
 let generation_settings = null;

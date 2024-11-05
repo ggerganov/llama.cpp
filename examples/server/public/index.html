@@ -7,7 +7,6 @@
 
   <!-- Note: dependencies can de updated using ./deps.sh script -->
   <link href="./deps_daisyui.min.css" rel="stylesheet" type="text/css" />
-  <!-- Note for daisyui: because we're using a subset of daisyui via CDN, many things won't be included -->
   <script src="./deps_tailwindcss.js"></script>
   <style type="text/tailwindcss">
     .markdown {
@@ -15,9 +14,14 @@
       pre { @apply whitespace-pre-wrap; }
       /* TODO: fix markdown table */
     }
+    /*
+      Note for daisyui: because we're using a subset of daisyui via CDN, many things won't be included
+      We can manually add the missing styles from https://cdnjs.cloudflare.com/ajax/libs/daisyui/4.12.14/full.css
+    */
     .bg-base-100 {background-color: var(--fallback-b1,oklch(var(--b1)/1))}
     .bg-base-200 {background-color: var(--fallback-b2,oklch(var(--b2)/1))}
     .bg-base-300 {background-color: var(--fallback-b3,oklch(var(--b3)/1))}
+    .text-base-content {color: var(--fallback-bc,oklch(var(--bc)/1))}
     .btn-mini {
       @apply cursor-pointer opacity-0 group-hover:opacity-100 hover:shadow-md;
     }
@@ -26,8 +30,11 @@
 
 <body>
   <div id="app" class="flex flex-row">
+    <!-- sidebar -->
     <div class="flex flex-col bg-black bg-opacity-5 w-64 py-8 px-4 h-screen overflow-y-auto">
       <h2 class="font-bold mb-4 ml-4">Conversations</h2>
+
+      <!-- list of conversations -->
       <div :class="{
         'btn btn-ghost justify-start': true,
         'btn-active': messages.length === 0,
@@ -51,6 +58,8 @@
         <div class="grow text-2xl font-bold mt-8 mb-6">
           🦙 llama.cpp - chat
         </div>
+
+        <!-- action buttons (top right) -->
         <div class="flex items-center">
           <button v-if="messages.length > 0" class="btn mr-1" @click="deleteConv(viewingConvId)" :disabled="isGenerating">
             <!-- delete conversation button -->
@@ -119,9 +128,8 @@
               <!-- textarea for editing message -->
               <template v-if="editingMsg && editingMsg.id === msg.id">
                 <textarea
-                  class="textarea textarea-bordered w-96"
-                  v-model="msg.content"
-                  @keydown.enter="editUserMsgAndRegenerate(msg)"></textarea>
+                  class="textarea textarea-bordered bg-base-100 text-base-content w-96"
+                  v-model="msg.content"></textarea>
                 <br/>
                 <button class="btn btn-ghost mt-2 mr-2" @click="editingMsg = null">Cancel</button>
                 <button class="btn mt-2" @click="editUserMsgAndRegenerate(msg)">Submit</button>
@@ -147,7 +155,7 @@
           </div>
         </div>
 
-        <!-- pending assistant message -->
+        <!-- pending (ongoing) assistant message -->
         <div id="pending-msg" class="chat chat-start">
           <div v-if="pendingMsg" class="chat-bubble markdown">
             <span v-if="!pendingMsg.content" class="loading loading-dots loading-md"></span>
@@ -160,13 +168,14 @@
       <div class="flex flex-row items-center mt-8 mb-6">
         <textarea
           class="textarea textarea-bordered w-full"
-          placeholder="Type a message..."
+          placeholder="Type a message (Shift+Enter to add a new line)"
           v-model="inputMsg"
-          @keydown.enter="sendMessage"
+          @keydown.enter.exact.prevent="sendMessage"
+          @keydown.enter.shift.exact.prevent="inputMsg += '\n'"
           :disabled="isGenerating"
           id="msg-input"
         ></textarea>
-        <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage">Send</button>
+        <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage" :disabled="inputMsg.length === 0">Send</button>
         <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">Stop</button>
       </div>
     </div>
@@ -175,7 +184,7 @@
     <dialog class="modal" :class="{'modal-open': showConfigDialog}">
       <div class="modal-box">
         <h3 class="text-lg font-bold mb-6">Settings</h3>
-        <p class="opacity-40 mb-6">Settings below are store in browser's localStorage</p>
+        <p class="opacity-40 mb-6">Settings below are saved in browser's localStorage</p>
         <label class="form-control mb-2">
           <div class="label">System Message</div>
           <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
@@ -191,6 +200,8 @@
           <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
           <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
         </label>
+
+        <!-- action buttons -->
         <button class="btn mr-4" @click="config = {...configDefault}">Reset to default</button>
         <button class="btn btn-primary" @click="closeSaveAndConfigDialog">Save and close</button>
       </div>
@@ -229,12 +240,12 @@
       { props: ["source", "options", "plugins"] }
     );
 
-    // storage class
     // coversations is stored in localStorage
     // format: { [convId]: { id: string, lastModified: number, messages: [...] } }
     // convId is a string prefixed with 'conv-'
-    const Conversations = {
-      getAll() {
+    const StorageUtils = {
+      // manage conversations
+      getAllConversations() {
         const res = [];
         for (const key in localStorage) {
           if (key.startsWith('conv-')) {
@@ -245,13 +256,13 @@
         return res;
       },
       // can return null if convId does not exist
-      getOne(convId) {
+      getOneConversation(convId) {
         return JSON.parse(localStorage.getItem(convId) || 'null');
       },
       // if convId does not exist, create one
       appendMsg(convId, msg) {
         if (msg.content === null) return;
-        const conv = Conversations.getOne(convId) || {
+        const conv = StorageUtils.getOneConversation(convId) || {
           id: convId,
           lastModified: Date.now(),
           messages: [],
@@ -267,11 +278,29 @@
         localStorage.removeItem(convId);
       },
       filterAndKeepMsgs(convId, predicate) {
-        const conv = Conversations.getOne(convId);
+        const conv = StorageUtils.getOneConversation(convId);
         if (!conv) return;
         conv.messages = conv.messages.filter(predicate);
         conv.lastModified = Date.now();
         localStorage.setItem(convId, JSON.stringify(conv));
+      },
+
+      // manage config
+      getConfig() {
+        return JSON.parse(localStorage.getItem('config') || 'null') || {...CONFIG_DEFAULT};
+      },
+      setConfig(config) {
+        localStorage.setItem('config', JSON.stringify(config));
+      },
+      getTheme() {
+        return localStorage.getItem('theme') || 'auto';
+      },
+      setTheme(theme) {
+        if (theme === 'auto') {
+          localStorage.removeItem('theme');
+        } else {
+          localStorage.setItem('theme', theme);
+        }
       },
     };
 
@@ -287,15 +316,15 @@
       },
       data() {
         return {
-          conversations: Conversations.getAll(),
+          conversations: StorageUtils.getAllConversations(),
           messages: [], // { id: number, role: 'user' | 'assistant', content: string }
-          viewingConvId: Conversations.getNewConvId(),
+          viewingConvId: StorageUtils.getNewConvId(),
           inputMsg: '',
           isGenerating: false,
           pendingMsg: null, // the on-going message from assistant
           stopGeneration: () => {},
-          selectedTheme: localStorage.getItem('theme') || 'auto',
-          config: JSON.parse(localStorage.getItem('config') || 'null') || {...CONFIG_DEFAULT},
+          selectedTheme: StorageUtils.getTheme(),
+          config: StorageUtils.getConfig(),
           showConfigDialog: false,
           editingMsg: null,
           // const
@@ -314,17 +343,12 @@
       },
       methods: {
         setSelectedTheme(theme) {
-          if (theme === 'auto') {
-            this.selectedTheme = 'auto';
-            localStorage.removeItem('theme');
-          } else {
-            this.selectedTheme = theme;
-            localStorage.setItem('theme', theme);
-          }
+          this.selectedTheme = theme;
+          StorageUtils.setTheme(theme);
         },
         newConversation() {
           if (this.isGenerating) return;
-          this.viewingConvId = Conversations.getNewConvId();
+          this.viewingConvId = StorageUtils.getNewConvId();
           this.editingMsg = null;
           this.fetchMessages();
           chatScrollToBottom();
@@ -339,9 +363,9 @@
         deleteConv(convId) {
           if (this.isGenerating) return;
           if (window.confirm('Are you sure to delete this conversation?')) {
-            Conversations.remove(convId);
+            StorageUtils.remove(convId);
             if (this.viewingConvId === convId) {
-              this.viewingConvId = Conversations.getNewConvId();
+              this.viewingConvId = StorageUtils.getNewConvId();
               this.editingMsg = null;
             }
             this.fetchConversation();
@@ -362,13 +386,13 @@
             }
           }
           this.showConfigDialog = false;
-          localStorage.setItem('config', JSON.stringify(this.config));
+          StorageUtils.setConfig(this.config);
         },
         async sendMessage() {
           if (!this.inputMsg) return;
           const currConvId = this.viewingConvId;
 
-          Conversations.appendMsg(currConvId, {
+          StorageUtils.appendMsg(currConvId, {
             id: Date.now(),
             role: 'user',
             content: this.inputMsg,
@@ -419,14 +443,14 @@
               }
             }
 
-            Conversations.appendMsg(currConvId, this.pendingMsg);
+            StorageUtils.appendMsg(currConvId, this.pendingMsg);
             this.fetchConversation();
             this.fetchMessages();
             setTimeout(() => document.getElementById('msg-input').focus(), 1);
           } catch (error) {
             if (error.name === 'AbortError') {
               // user stopped the generation via stopGeneration() function
-              Conversations.appendMsg(currConvId, this.pendingMsg);
+              StorageUtils.appendMsg(currConvId, this.pendingMsg);
               this.fetchConversation();
               this.fetchMessages();
             } else {
@@ -444,9 +468,9 @@
         // message actions
         regenerateMsg(msg) {
           if (this.isGenerating) return;
-          // TODO: somehow keep old history (like how ChatGPT has different "tree")
+          // TODO: somehow keep old history (like how ChatGPT has different "tree"). This can be done by adding "sub-conversations" with "subconv-" prefix, and new message will have a list of subconvIds
           const currConvId = this.viewingConvId;
-          Conversations.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
+          StorageUtils.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
           this.fetchConversation();
           this.fetchMessages();
           this.generateMessage(currConvId);
@@ -459,8 +483,8 @@
           const currConvId = this.viewingConvId;
           const newContent = msg.content;
           this.editingMsg = null;
-          Conversations.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
-          Conversations.appendMsg(currConvId, {
+          StorageUtils.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
+          StorageUtils.appendMsg(currConvId, {
             id: Date.now(),
             role: 'user',
             content: newContent,
@@ -472,10 +496,10 @@
 
         // sync state functions
         fetchConversation() {
-          this.conversations = Conversations.getAll();
+          this.conversations = StorageUtils.getAllConversations();
         },
         fetchMessages() {
-          this.messages = Conversations.getOne(this.viewingConvId)?.messages ?? [];
+          this.messages = StorageUtils.getOneConversation(this.viewingConvId)?.messages ?? [];
         },
       },
     }).mount('#app');
