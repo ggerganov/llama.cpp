@@ -1797,9 +1797,9 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
                 total_seconds = total_seconds % (60*60);
             }
             LOG("%.2f minutes\n", total_seconds / 60.0);
+            LOG("\n");
+            LOG("chunk             PPL               ln(PPL(Q)/PPL(base))          KL Divergence              Δp RMS            Same top p\n");
         }
-        LOG("\n");
-        LOG("chunk             PPL               ln(PPL(Q)/PPL(base))          KL Divergence              Δp RMS            Same top p\n");
 
         const int first = n_ctx/2;
         const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
