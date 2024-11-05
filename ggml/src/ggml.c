@@ -8,6 +8,10 @@
 #include "ggml.h"
 #include "ggml-aarch64.h"
 
+#if defined(GGML_USE_TMAC)
+#include "ggml-tmac.h"
+#endif
+
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
 #elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
@@ -546,36 +550,24 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = 8,
         .type_size                = sizeof(int8_t),
         .is_quantized             = false,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
-        .vec_dot_type             = GGML_TYPE_F32,
-        .nrows                    = 1,
     },
     [GGML_TYPE_I2] = {
         .type_name                = "i2",
         .blck_size                = 4,
         .type_size                = sizeof(int8_t),
         .is_quantized             = false,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
-        .vec_dot_type             = GGML_TYPE_F32,
-        .nrows                    = 1,
     },
     [GGML_TYPE_I3] = {
         .type_name                = "i3",
         .blck_size                = 2,
         .type_size                = sizeof(int8_t),
         .is_quantized             = false,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
-        .vec_dot_type             = GGML_TYPE_F32,
-        .nrows                    = 1,
     },
     [GGML_TYPE_I4] = {
         .type_name                = "i4",
         .blck_size                = 2,
         .type_size                = sizeof(int8_t),
         .is_quantized             = false,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
-        .vec_dot_type             = GGML_TYPE_F32,
-        .nrows                    = 1,
     },
     [GGML_TYPE_I8] = {
         .type_name                = "i8",
