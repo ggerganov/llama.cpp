@@ -18,6 +18,9 @@
     .bg-base-100 {background-color: var(--fallback-b1,oklch(var(--b1)/1))}
     .bg-base-200 {background-color: var(--fallback-b2,oklch(var(--b2)/1))}
     .bg-base-300 {background-color: var(--fallback-b3,oklch(var(--b3)/1))}
+    .btn-mini {
+      @apply cursor-pointer opacity-0 group-hover:opacity-100 hover:shadow-md;
+    }
   </style>
 </head>
 
@@ -49,11 +52,19 @@
           🦙 llama.cpp - chat
         </div>
         <div class="flex items-center">
-          <button v-if="messages.length > 0" class="btn" @click="deleteConv(viewingConvId)">
+          <button v-if="messages.length > 0" class="btn mr-1" @click="deleteConv(viewingConvId)" :disabled="isGenerating">
             <!-- delete conversation button -->
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
               <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
               <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+            </svg>
+          </button>
+
+          <button class="btn" @click="showConfigDialog = true" :disabled="isGenerating">
+            <!-- edit config button -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
+              <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/>
+              <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
             </svg>
           </button>
 
@@ -67,7 +78,7 @@
             </div>
             <ul tabindex="0" class="dropdown-content bg-base-300 rounded-box z-[1] w-52 p-2 shadow-2xl h-80 overflow-y-auto">
               <li>
-                <button 
+                <button
                   class="btn btn-sm btn-block w-full btn-ghost justify-start"
                   :class="{ 'btn-active': selectedTheme === 'auto' }"
                   @click="setSelectedTheme('auto')">
@@ -95,19 +106,44 @@
           <!-- placeholder to shift the message to the bottom -->
            {{ messages.length === 0 ? 'Send a message to start' : '' }}
         </div>
-        <div v-for="msg in messages" :class="{
-          'chat group': true,
-          'chat-start': msg.role !== 'user',
-          'chat-end': msg.role === 'user',
-        }">
+        <div v-for="msg in messages" class="group">
           <div :class="{
-            'chat-bubble markdown': true,
-            'chat-bubble-primary': msg.role === 'user',
+            'chat': true,
+            'chat-start': msg.role !== 'user',
+            'chat-end': msg.role === 'user',
           }">
-            <vue-markdown :source="msg.content" />
+            <div :class="{
+              'chat-bubble markdown': true,
+              'chat-bubble-primary': msg.role === 'user',
+            }">
+              <!-- textarea for editing message -->
+              <template v-if="editingMsg && editingMsg.id === msg.id">
+                <textarea
+                  class="textarea textarea-bordered w-96"
+                  v-model="msg.content"
+                  @keydown.enter="editUserMsgAndRegenerate(msg)"></textarea>
+                <br/>
+                <button class="btn btn-ghost mt-2 mr-2" @click="editingMsg = null">Cancel</button>
+                <button class="btn mt-2" @click="editUserMsgAndRegenerate(msg)">Submit</button>
+              </template>
+              <!-- render message as markdown -->
+              <vue-markdown v-else :source="msg.content" />
+            </div>
           </div>
-          <div v-if="msg.role === 'user'" class="badge cursor-pointer opacity-0 group-hover:opacity-100">
-            Edit
+
+          <!-- actions for each message -->
+          <div :class="{'text-right': msg.role === 'user'}" class="mx-4 mt-2 mb-2">
+            <!-- user message -->
+            <button v-if="msg.role === 'user'" class="badge btn-mini" @click="editingMsg = msg" :disabled="isGenerating">
+              ✍️ Edit
+            </button>
+            <!-- assistant message -->
+            <button v-if="msg.role === 'assistant'" class="badge btn-mini mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
+              🔄 Regenerate
+            </button>
+            <button v-if="msg.role === 'assistant'" class="badge btn-mini mr-2" @click="copyMsg(msg)" :disabled="isGenerating">
+              📋 Copy
+            </button>
           </div>
         </div>
 
@@ -127,12 +163,39 @@
           placeholder="Type a message..."
           v-model="inputMsg"
           @keydown.enter="sendMessage"
-          v-bind:disabled="isGenerating"
+          :disabled="isGenerating"
           id="msg-input"
         ></textarea>
-        <button class="btn btn-primary ml-2" @click="sendMessage" v-bind:disabled="isGenerating">Send</button>
+        <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage">Send</button>
+        <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">Stop</button>
       </div>
     </div>
+
+    <!-- modal for editing config -->
+    <dialog class="modal" :class="{'modal-open': showConfigDialog}">
+      <div class="modal-box">
+        <h3 class="text-lg font-bold mb-6">Settings</h3>
+        <p class="opacity-40 mb-6">Settings below are store in browser's localStorage</p>
+        <label class="form-control mb-2">
+          <div class="label">System Message</div>
+          <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
+        </label>
+        <template v-for="key in Object.keys(config)">
+          <label v-if="key != 'custom' && key != 'systemMessage'"
+            class="input input-bordered flex items-center gap-2 mb-2">
+            <b>{{ key }}</b>
+            <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+          </label>
+        </template>
+        <label class="form-control mb-2">
+          <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
+          <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
+        </label>
+        <button class="btn mr-4" @click="config = {...configDefault}">Reset to default</button>
+        <button class="btn btn-primary" @click="closeSaveAndConfigDialog">Save and close</button>
+      </div>
+      <div class="modal-backdrop" @click="closeSaveAndConfigDialog"></div>
+    </dialog>
   </div>
 
   <script src="./deps_markdown-it.js"></script>
@@ -142,6 +205,16 @@
 
     const BASE_URL = localStorage.getItem('base') // for debugging
       || (new URL('.', document.baseURI).href).toString(); // for production
+    const CONFIG_DEFAULT = {
+      apiKey: '',
+      systemMessage: 'You are a helpful assistant.',
+      temperature: 0.8,
+      top_k: 40,
+      top_p: 0.95,
+      max_tokens: -1,
+      custom: '', // custom json object
+    };
+    const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'];
 
     // markdown support
     const VueMarkdown = defineComponent(
@@ -177,6 +250,7 @@
       },
       // if convId does not exist, create one
       appendMsg(convId, msg) {
+        if (msg.content === null) return;
         const conv = Conversations.getOne(convId) || {
           id: convId,
           lastModified: Date.now(),
@@ -191,6 +265,13 @@
       },
       remove(convId) {
         localStorage.removeItem(convId);
+      },
+      filterAndKeepMsgs(convId, predicate) {
+        const conv = Conversations.getOne(convId);
+        if (!conv) return;
+        conv.messages = conv.messages.filter(predicate);
+        conv.lastModified = Date.now();
+        localStorage.setItem(convId, JSON.stringify(conv));
       },
     };
 
@@ -212,10 +293,14 @@
           inputMsg: '',
           isGenerating: false,
           pendingMsg: null, // the on-going message from assistant
-          abortController: null,
+          stopGeneration: () => {},
           selectedTheme: localStorage.getItem('theme') || 'auto',
+          config: JSON.parse(localStorage.getItem('config') || 'null') || {...CONFIG_DEFAULT},
+          showConfigDialog: false,
+          editingMsg: null,
           // const
-          themes: ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'],
+          themes: THEMES,
+          configDefault: {...CONFIG_DEFAULT},
         }
       },
       computed: {},
@@ -240,12 +325,14 @@
         newConversation() {
           if (this.isGenerating) return;
           this.viewingConvId = Conversations.getNewConvId();
+          this.editingMsg = null;
           this.fetchMessages();
           chatScrollToBottom();
         },
         setViewingConv(convId) {
           if (this.isGenerating) return;
           this.viewingConvId = convId;
+          this.editingMsg = null;
           this.fetchMessages();
           chatScrollToBottom();
         },
@@ -255,10 +342,27 @@
             Conversations.remove(convId);
             if (this.viewingConvId === convId) {
               this.viewingConvId = Conversations.getNewConvId();
+              this.editingMsg = null;
             }
             this.fetchConversation();
             this.fetchMessages();
           }
+        },
+        closeSaveAndConfigDialog() {
+          try {
+            if (this.config.custom.length) JSON.parse(this.config.custom);
+          } catch (error) {
+            alert('Invalid JSON for custom config. Please either fix it or leave it empty.');
+            return;
+          }
+          for (const key of ['temperature', 'top_k', 'top_p', 'max_tokens']) {
+            if (isNaN(this.config[key])) {
+              alert('Invalid number for ' + key);
+              return;
+            }
+          }
+          this.showConfigDialog = false;
+          localStorage.setItem('config', JSON.stringify(this.config));
         },
         async sendMessage() {
           if (!this.inputMsg) return;
@@ -271,20 +375,34 @@
           });
           this.fetchConversation();
           this.fetchMessages();
-
           this.inputMsg = '';
+          this.editingMsg = null;
+          this.generateMessage(currConvId);
+        },
+        async generateMessage(currConvId) {
+          if (this.isGenerating) return;
           this.pendingMsg = { id: Date.now()+1, role: 'assistant', content: null };
           this.isGenerating = true;
+          this.editingMsg = null;
 
           try {
-            this.abortController = new AbortController();
+            const abortController = new AbortController();
+            this.stopGeneration = () => abortController.abort();
             const params = {
-              messages: this.messages,
+              messages: [
+                { role: 'system', content: this.config.systemMessage },
+                ...this.messages,
+              ],
               stream: true,
               cache_prompt: true,
+              temperature: this.config.temperature,
+              top_k: this.config.top_k,
+              top_p: this.config.top_p,
+              max_tokens: this.config.max_tokens,
+              ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
             };
             const config = {
-              controller: this.abortController,
+              controller: abortController,
               api_url: BASE_URL,
               endpoint: '/chat/completions',
             };
@@ -304,15 +422,52 @@
             Conversations.appendMsg(currConvId, this.pendingMsg);
             this.fetchConversation();
             this.fetchMessages();
-            this.pendingMsg = null;
-            this.isGenerating = false;
             setTimeout(() => document.getElementById('msg-input').focus(), 1);
           } catch (error) {
-            console.error(error);
-            alert(error);
-            this.pendingMsg = null;
-            this.isGenerating = false;
+            if (error.name === 'AbortError') {
+              // user stopped the generation via stopGeneration() function
+              Conversations.appendMsg(currConvId, this.pendingMsg);
+              this.fetchConversation();
+              this.fetchMessages();
+            } else {
+              console.error(error);
+              alert(error);
+              this.inputMsg = this.pendingMsg.content || '';
+            }
           }
+
+          this.pendingMsg = null;
+          this.isGenerating = false;
+          this.stopGeneration = () => {};
+        },
+
+        // message actions
+        regenerateMsg(msg) {
+          if (this.isGenerating) return;
+          // TODO: somehow keep old history (like how ChatGPT has different "tree")
+          const currConvId = this.viewingConvId;
+          Conversations.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
+          this.fetchConversation();
+          this.fetchMessages();
+          this.generateMessage(currConvId);
+        },
+        copyMsg(msg) {
+          navigator.clipboard.writeText(msg.content);
+        },
+        editUserMsgAndRegenerate(msg) {
+          if (this.isGenerating) return;
+          const currConvId = this.viewingConvId;
+          const newContent = msg.content;
+          this.editingMsg = null;
+          Conversations.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
+          Conversations.appendMsg(currConvId, {
+            id: Date.now(),
+            role: 'user',
+            content: newContent,
+          });
+          this.fetchConversation();
+          this.fetchMessages();
+          this.generateMessage(currConvId);
         },
 
         // sync state functions
