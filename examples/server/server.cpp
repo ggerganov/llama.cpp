@@ -2396,7 +2396,7 @@ int main(int argc, char ** argv) {
         // If this is OPTIONS request, skip validation because browsers don't include Authorization header
         if (req.method == "OPTIONS") {
             res.set_header("Access-Control-Allow-Credentials", "true");
-            res.set_header("Access-Control-Allow-Methods",     "POST");
+            res.set_header("Access-Control-Allow-Methods",     "GET, POST");
             res.set_header("Access-Control-Allow-Headers",     "*");
             res.set_content("", "text/html"); // blank response, no data
             return httplib::Server::HandlerResponse::Handled; // skip further processing
