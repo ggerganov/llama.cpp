@@ -3145,12 +3145,16 @@ static void ggml_metal_encode_node(
                     GGML_ASSERT(nqptg  % 8  == 0);
                     GGML_ASSERT(ncpsg  % 32 == 0);
 
+                    // 16*32*nsgmax
+                    // the shared memory needed for the simdgroups to load the KV cache
+                    // each thread loads (dequantizes) 16 head elements, there are 32 threads in th SG
+                    //
+#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + 2*(ncpsg + nqptg)*(nsg)) + 16*32*(nsg))*(sizeof(float)/2), 16))
+
                     int64_t nsgmax = 2;
 
                     while (true) {
-                        // 16*32*nsgmax - the shared memory needed for the simdgroups to load the KV cache
-                        //                each thread loads (dequantizes) 16 head elements, there are 32 threads in th SG
-                        const size_t smem = (nqptg*(ne00 + 2*nsgmax*(ncpsg + nqptg)) + 16*32*nsgmax)*(sizeof(float)/2);
+                        const size_t smem = FATTN_SMEM(nsgmax);
                         if (smem > device.maxThreadgroupMemoryLength) {
                             break;
                         }
@@ -3161,13 +3165,12 @@ static void ggml_metal_encode_node(
                     // simdgroups per threadgroup (a.k.a. warps)
                     const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(nsgmax, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32))) : 4;
 
-                    const size_t smem = (nqptg*(ne00 + 2*nsg*(ncpsg + nqptg)) + 16*32*nsg)*(sizeof(float)/2);
+                    const size_t smem = FATTN_SMEM(nsg);
 
                     //printf("smem: %zu, max: %zu, nsg = %d\n", smem, device.maxThreadgroupMemoryLength, (int) nsg);
                     GGML_ASSERT(smem <= device.maxThreadgroupMemoryLength);
-
-                    [encoder setThreadgroupMemoryLength:GGML_PAD(smem, 16) atIndex:0];
-
+                    [encoder setThreadgroupMemoryLength:smem atIndex:0];
+#undef FATTN_SMEM
                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nqptg - 1)/nqptg, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
                 } else {
                     // half4x4 kernel
@@ -3178,8 +3181,28 @@ static void ggml_metal_encode_node(
                     GGML_ASSERT(nqptg  % 1  == 0);
                     GGML_ASSERT(ncpsg  % 32 == 0);
 
+                    // ne00 + 2*ncpsg*(nsg)
+                    // for each query, we load it as f16 in shared memory (ne00)
+                    // and store the attention scores (nqptg x ncpsg) as f32
+                    //
+                    // 2*ne00*(nsg)
+                    // each simdgroup has a full f32 head vector in shared mem to accumulate results
+                    //
+#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + 2*ncpsg*(nsg)) + 2*ne00*(nsg))*(sizeof(float)/2), 16))
+
+                    int64_t nsgmax = 2;
+
+                    while (true) {
+                        const size_t smem = FATTN_SMEM(nsgmax);
+                        if (smem > device.maxThreadgroupMemoryLength) {
+                            break;
+                        }
+                        nsgmax *= 2;
+                    }
+                    nsgmax /= 2;
+
                     // simdgroups per threadgroup (a.k.a. warps)
-                    const int64_t nsgt = MAX(2, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
+                    const int64_t nsgt = MAX(2, MIN(nsgmax, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32)));
 
                     int64_t nsg = 1;
                     while (nsg <= nsgt) {
@@ -3187,12 +3210,12 @@ static void ggml_metal_encode_node(
                     }
                     nsg /= 2;
 
-                    const size_t smem = (nqptg*(ne00 + 2*nsg*(ncpsg + nqptg)) + 2*nsg*ne00)*(sizeof(float)/2);
+                    const size_t smem = FATTN_SMEM(nsg);
 
-                    //printf("smem: %zu, max: %zu\n", smem, device.maxThreadgroupMemoryLength);
+                    //printf("smem: %zu, max: %zu, nsg = %d\n", smem, device.maxThreadgroupMemoryLength, (int) nsg);
                     GGML_ASSERT(smem <= device.maxThreadgroupMemoryLength);
-                    [encoder setThreadgroupMemoryLength:GGML_PAD(smem, 16) atIndex:0];
-
+                    [encoder setThreadgroupMemoryLength:smem atIndex:0];
+#undef FATTN_SMEM
                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nqptg - 1)/nqptg, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
                 }
             } break;

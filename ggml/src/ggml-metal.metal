@@ -2876,6 +2876,7 @@ kernel void kernel_flash_attn_ext(
                 for (short cc = 0; cc < C/8; ++cc) {
                     simdgroup_float8x8 mqk = make_filled_simdgroup_matrix<float, 8>(0.h);
 
+                    // this is compile-time check, so it does not have runtime overhead
                     if (is_same<block_q, half4x4>::value) {
                         // we can read directly from global memory
                         device const half * pk = (device const half *) ((device const char *) k + ((ic + 8*cc)*nb11 + ik2*nb12 + ik3*nb13));
@@ -2891,6 +2892,7 @@ kernel void kernel_flash_attn_ext(
                             device const block_q * pk4 = (device const block_q *) ((device const char *) k + ((ic + 8*cc + ty)*nb11 + ik2*nb12 + ik3*nb13));
 
                             if (D16%4 == 0) {
+                                // the head is evenly divisible by 4*16 = 64, so no need for bound checks
                                 half4x4 tmp;
                                 dequantize_func(pk4 + (ii + tx)/nl, (ii + tx)%nl, tmp);
                                 skv4[4*ty + tx] = tmp;
@@ -3009,6 +3011,7 @@ kernel void kernel_flash_attn_ext(
                             device const block_q * pv4 = (device const block_q *) ((device const char *) v + ((ic + 8*cc + ty)*nb21 + iv2*nb22 + iv3*nb23));
 
                             if (D16%4 == 0) {
+                                // no need for bound checks
                                 half4x4 tmp;
                                 dequantize_func(pv4 + (ii + tx)/nl, (ii + tx)%nl, tmp);
                                 skv4[4*ty + tx] = tmp;
@@ -3233,14 +3236,14 @@ kernel void kernel_flash_attn_ext_vec(
     const short D16 = D/16;
     const short NW  = N_SIMDWIDTH;
     const short NW4 = NW/4;
-    const short SH  = (C + Q); // shared memory per simdgroup in (half)
+    const short SH  = C; // shared memory per simdgroup in (half)
 
     const short T  = D + 2*nsg*SH; // shared memory size per query in (half)
 
   //threadgroup half     * sq   = (threadgroup half     *) (shared +              0*D); // holds the query data
     threadgroup half4    * sq4  = (threadgroup half4    *) (shared +              0*D); // same as above but in half4
     threadgroup half4x4  * sq44 = (threadgroup half4x4  *) (shared +              0*D); // same as above but in half4x4
-    threadgroup float    * ss   = (threadgroup float    *) (shared + 2*sgitg*SH + 1*D); // scratch buffer for attention and diagonal matrix
+    threadgroup float    * ss   = (threadgroup float    *) (shared + 2*sgitg*SH + 1*D); // scratch buffer for attention
     threadgroup float4   * ss4  = (threadgroup float4   *) (shared + 2*sgitg*SH + 1*D); // same as above but in half4
     threadgroup float4x4 * sr44 = (threadgroup float4x4 *) (shared + 2*sgitg*D  + Q*T); // scratch buffer for the results
 
