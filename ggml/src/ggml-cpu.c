@@ -304,6 +304,7 @@ static const struct ggml_type_traits_cpu type_traits_cpu[GGML_TYPE_COUNT] = {
         .nrows                    = 1,
     },
     [GGML_TYPE_Q8_0] = {
+        .from_float_to_mat        = quantize_mat_q8_0,
         .vec_dot                  = ggml_vec_dot_q8_0_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
 #if defined (__ARM_FEATURE_MATMUL_INT8)
@@ -13677,6 +13678,13 @@ int ggml_cpu_get_sve_cnt(void) {
 }
 
 void ggml_cpu_init(void) {
+    // needed to initialize f16 tables
+    {
+        struct ggml_init_params params = { 0, NULL, false };
+        struct ggml_context * ctx = ggml_init(params);
+        ggml_free(ctx);
+    }
+
     ggml_critical_section_start();
 
     static bool is_first_call = true;
@@ -13684,24 +13692,21 @@ void ggml_cpu_init(void) {
     if (is_first_call) {
         // initialize GELU, Quick GELU, SILU and EXP F32 tables
         {
-            // FIXME: this may be called before ggml_init
-            //const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
+            const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
 
             for (int i = 0; i < (1 << 16); ++i) {
                 union {
                     uint16_t u16;
                     ggml_fp16_t fp16;
                 } u = {i};
-                // FIXME: this table is used in conversion functions outside of compute
-                // current code depends on ggml_init initializing this table
-                float f = ggml_table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(u.fp16);
+                float f = GGML_FP16_TO_FP32(u.fp16);
                 ggml_table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
                 ggml_table_gelu_quick_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_quick_f32(f));
             }
 
-            //const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
+            const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
 
-            //GGML_PRINT_DEBUG("%s: GELU, Quick GELU, SILU and EXP tables initialized in %f ms\n", __func__, (t_end - t_start)/1000.0);
+            GGML_PRINT_DEBUG("%s: GELU, Quick GELU, SILU and EXP tables initialized in %f ms\n", __func__, (t_end - t_start)/1000.0);
         }
 
 #if defined(__ARM_ARCH)
