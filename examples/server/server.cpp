@@ -3112,14 +3112,11 @@ int main(int argc, char ** argv) {
     // register static assets routes
     if (!params.public_path.empty()) {
         // Set the base directory for serving static files
-        svr->set_base_dir(params.public_path);
-    }
-
-    if (!params.api_keys.empty()) {
-        // for now, if API key is set, web UI is unusable
-        svr->Get("/", [&](const httplib::Request &, httplib::Response & res) {
-            return res.set_content("Web UI is disabled because API key is set.", "text/html; charset=utf-8");
-        });
+        bool is_found = svr->set_mount_point("/", params.public_path);
+        if (!is_found) {
+            LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
+            return 1;
+        }
     } else {
         // using embedded static files
         svr->Get("/",                        handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
