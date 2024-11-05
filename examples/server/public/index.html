@@ -58,7 +58,6 @@
           </button>
 
           <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
-          <!-- TODO: memorize this theme selection in localStorage, maybe also add "auto" option -->
           <div class="dropdown dropdown-end dropdown-bottom">
             <div tabindex="0" role="button" class="btn m-1">
               Theme
@@ -66,14 +65,24 @@
                 <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
               </svg>
             </div>
-            <ul tabindex="0" class="dropdown-content bg-base-300 rounded-box z-[1] w-52 p-2 shadow-2xl">
+            <ul tabindex="0" class="dropdown-content bg-base-300 rounded-box z-[1] w-52 p-2 shadow-2xl h-80 overflow-y-auto">
+              <li>
+                <button 
+                  class="btn btn-sm btn-block w-full btn-ghost justify-start"
+                  :class="{ 'btn-active': selectedTheme === 'auto' }"
+                  @click="setSelectedTheme('auto')">
+                  auto
+                </button>
+              </li>
               <li v-for="theme in themes">
                 <input
                   type="radio"
                   name="theme-dropdown"
                   class="theme-controller btn btn-sm btn-block w-full btn-ghost justify-start"
                   :aria-label="theme"
-                  :value="theme" />
+                  :value="theme"
+                  :checked="selectedTheme === theme"
+                  @click="setSelectedTheme(theme)" />
               </li>
             </ul>
           </div>
@@ -204,8 +213,9 @@
           isGenerating: false,
           pendingMsg: null, // the on-going message from assistant
           abortController: null,
+          selectedTheme: localStorage.getItem('theme') || 'auto',
           // const
-          themes: ['light', 'dark', 'retro', 'cyberpunk', 'aqua', 'valentine', 'synthwave'],
+          themes: ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'],
         }
       },
       computed: {},
@@ -218,6 +228,15 @@
         resizeObserver.observe(pendingMsgElem);
       },
       methods: {
+        setSelectedTheme(theme) {
+          if (theme === 'auto') {
+            this.selectedTheme = 'auto';
+            localStorage.removeItem('theme');
+          } else {
+            this.selectedTheme = theme;
+            localStorage.setItem('theme', theme);
+          }
+        },
         newConversation() {
           if (this.isGenerating) return;
           this.viewingConvId = Conversations.getNewConvId();
