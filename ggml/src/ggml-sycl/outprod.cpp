@@ -4,8 +4,8 @@
 
 void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, const ggml_tensor* src0,
     const ggml_tensor* src1, ggml_tensor* dst) {
-    
-    
+
+
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
@@ -33,7 +33,7 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, const ggml_tensor* sr
 
     // Handle transposition of src1
     const bool src1_T = ggml_is_transposed(src1);
-    const oneapi::mkl::transpose src1_op = 
+    const oneapi::mkl::transpose src1_op =
         src1_T ? oneapi::mkl::transpose::nontrans : oneapi::mkl::transpose::trans;
     const int64_t ldb = (src1_T ? nb10 : nb11) / sizeof(float);
 

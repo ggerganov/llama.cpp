@@ -12,7 +12,7 @@ static void rwkv_wkv_f32_kernel(
 
     const int tid = item_ct1.get_local_id(2);
     const int bid = item_ct1.get_group(2);
-    
+
     const int head_size = WKV_BLOCK_SIZE;
     const int batch_i = bid / H;
     const int head_i = bid % H;
@@ -36,7 +36,7 @@ static void rwkv_wkv_f32_kernel(
 
     // Sync threads before shared memory operations
     item_ct1.barrier(sycl::access::fence_space::local_space);
-    
+
     // Load time-mixing parameters
     _tf[tid] = tf[head_i * head_size + tid];
     item_ct1.barrier(sycl::access::fence_space::local_space);
@@ -45,14 +45,14 @@ static void rwkv_wkv_f32_kernel(
     for (int t = batch_i * n_seq_tokens * C + head_i * head_size + tid;
          t < (batch_i + 1) * n_seq_tokens * C + head_i * head_size + tid;
          t += C) {
-        
+
         item_ct1.barrier(sycl::access::fence_space::local_space);
-        
+
         // Load current timestep data to shared memory
         _k[tid] = k[t];
         _r[tid] = r[t];
         _td[tid] = td[t];
-        
+
         item_ct1.barrier(sycl::access::fence_space::local_space);
 
         const float _v = v[t];
@@ -71,13 +71,13 @@ static void rwkv_wkv_f32_kernel(
 
             // Compute key-value product
             sycl::float4 kv4 = k4 * _v;
-            
+
             // Accumulate weighted sum
             y += sycl::dot(r4, tf4 * kv4 + s4);
-            
+
             // Update state
             s4 = s4 * td4 + kv4;
-            
+
             // Store updated state
             state[j] = s4.x();
             state[j+1] = s4.y();
@@ -97,7 +97,7 @@ static void rwkv_wkv_f32_kernel(
 
 void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, const ggml_tensor* src0,
     const ggml_tensor* src1, ggml_tensor* dst) {
-    
+
     const float* k_d = (const float*)dst->src[0]->data;
     const float* v_d = (const float*)dst->src[1]->data;
     const float* r_d = (const float*)dst->src[2]->data;

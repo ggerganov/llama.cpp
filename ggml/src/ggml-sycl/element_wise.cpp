@@ -167,7 +167,7 @@ void log_f32(const float * x, float * dst, const int k,
     }
     float xi = x[i];
     if (xi <= 0) {
-        dst[i] = -INFINITY; 
+        dst[i] = -INFINITY;
     } else {
         dst[i] = sycl::log(xi);
     }

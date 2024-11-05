@@ -2263,9 +2263,9 @@ static void argsort_f32_i32_sycl(const float *x, int *dst, const int ncols,
 
 static void argmax_f32_i32_sycl(const float *x, int *dst, const int ncols,
                                const int nrows, queue_ptr stream) {
-    const sycl::range<3> block_dims(1, 1, SYCL_ARGMAX_BLOCK_SIZE); 
+    const sycl::range<3> block_dims(1, 1, SYCL_ARGMAX_BLOCK_SIZE);
     const sycl::range<3> block_nums(1, nrows, 1);
-    const size_t shared_mem = 256 * sizeof(float); 
+    const size_t shared_mem = 256 * sizeof(float);
 
     stream->submit([&](sycl::handler &cgh) {
         sycl::local_accessor<float, 1> shared_data(
@@ -2276,12 +2276,12 @@ static void argmax_f32_i32_sycl(const float *x, int *dst, const int ncols,
         cgh.parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) {
-                const int tid = item_ct1.get_local_id(2); 
-                const int row = item_ct1.get_global_id(1); 
-                
+                const int tid = item_ct1.get_local_id(2);
+                const int row = item_ct1.get_global_id(1);
+
                 float max_val = -INFINITY;
                 int max_idx = -1;
-                
+
                 for (int col = tid; col < ncols; col += 256) {
                     float val = x[row * ncols + col];
                     if (val > max_val) {
@@ -2289,11 +2289,11 @@ static void argmax_f32_i32_sycl(const float *x, int *dst, const int ncols,
                         max_idx = col;
                     }
                 }
-                
+
                 shared_data[tid] = max_val;
                 shared_indices[tid] = max_idx;
                 item_ct1.barrier(sycl::access::fence_space::local_space);
-                
+
                 for (int stride = 256/2; stride > 0; stride >>= 1) {
                     if (tid < stride) {
                         float val1 = shared_data[tid];
@@ -2305,7 +2305,7 @@ static void argmax_f32_i32_sycl(const float *x, int *dst, const int ncols,
                     }
                     item_ct1.barrier(sycl::access::fence_space::local_space);
                 }
-                
+
 
                 if (tid == 0) {
                     dst[row] = shared_indices[0];
@@ -2632,9 +2632,9 @@ inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor 
                                   const queue_ptr &main_stream) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
-    
+
     const int64_t ne = ggml_nelements(src0);
-    
+
     sum_rows_f32_sycl(src0_dd, dst_dd, ne, 1, main_stream);
 
     (void) src1;

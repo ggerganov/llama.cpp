@@ -11655,15 +11655,15 @@ static void ggml_compute_forward_rwkv_wkv6_f32(
     float * dst_data = (float *) dst->data;
     float * state = ((float *) dst->data) + C * T;
 
-    const int ith = params->ith; 
-    const int nth = params->nth; 
+    const int ith = params->ith;
+    const int nth = params->nth;
 
     if (ith >= HEADS) {
         return;
     }
 
     const int h_start = (HEADS * ith) / nth;
-    const int h_end = ((HEADS * (ith + 1)) / nth < HEADS) ? 
+    const int h_end = ((HEADS * (ith + 1)) / nth < HEADS) ?
                 (HEADS * (ith + 1)) / nth : HEADS;
 
     float * k =          (float *) dst->src[0]->data;
@@ -11683,7 +11683,7 @@ static void ggml_compute_forward_rwkv_wkv6_f32(
     }
     ggml_barrier(params->threadpool);
 
-      
+
     #if defined(__AVX__) && !defined(__AVX512F__)
         #define GGML_F32X GGML_F32x8
         #define GGML_F32X_SET1 GGML_F32x8_SET1
@@ -11820,7 +11820,6 @@ static void ggml_compute_forward_rwkv_wkv6_f32(
                     }
                 }
             }
-            
         }
     #endif
 }
