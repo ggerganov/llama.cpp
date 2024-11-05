@@ -285,6 +285,14 @@
         conv.lastModified = Date.now();
         localStorage.setItem(convId, JSON.stringify(conv));
       },
+      popMsg(convId) {
+        const conv = StorageUtils.getOneConversation(convId);
+        if (!conv) return;
+        const msg = conv.messages.pop();
+        conv.lastModified = Date.now();
+        localStorage.setItem(convId, JSON.stringify(conv));
+        return msg;
+      },
 
       // manage config
       getConfig() {
@@ -425,6 +433,7 @@
               top_p: this.config.top_p,
               max_tokens: this.config.max_tokens,
               ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
+              ...(this.config.apiKey ? { api_key: this.config.apiKey } : {}),
             };
             const config = {
               controller: abortController,
@@ -457,13 +466,16 @@
             } else {
               console.error(error);
               alert(error);
-              this.inputMsg = this.pendingMsg.content || '';
+              // pop last user message
+              const lastUserMsg = StorageUtils.popMsg(currConvId);
+              this.inputMsg = lastUserMsg ? lastUserMsg.content : '';
             }
           }
 
           this.pendingMsg = null;
           this.isGenerating = false;
           this.stopGeneration = () => {};
+          this.fetchMessages();
         },
 
         // message actions

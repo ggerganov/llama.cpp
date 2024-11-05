@@ -2356,6 +2356,11 @@ int main(int argc, char ** argv) {
             "/v1/models",
         };
 
+        // If this is OPTIONS request, skip validation because browsers don't include Authorization header
+        if (req.method == "OPTIONS") {
+            return true;
+        }
+
         // If API key is not set, skip validation
         if (params.api_keys.empty()) {
             return true;
