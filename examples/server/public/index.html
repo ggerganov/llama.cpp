@@ -15,6 +15,9 @@
       pre { @apply whitespace-pre-wrap; }
       /* TODO: fix markdown table */
     }
+    .bg-base-100 {background-color: var(--fallback-b1,oklch(var(--b1)/1))}
+    .bg-base-200 {background-color: var(--fallback-b2,oklch(var(--b2)/1))}
+    .bg-base-300 {background-color: var(--fallback-b3,oklch(var(--b3)/1))}
   </style>
 </head>
 
@@ -134,7 +137,7 @@
     // markdown support
     const VueMarkdown = defineComponent(
       (props) => {
-        const md = shallowRef(new markdownit(props.options ?? {}));
+        const md = shallowRef(new markdownit(props.options ?? { breaks: true }));
         for (const plugin of props.plugins ?? []) {
           md.value.use(plugin);
         }
@@ -182,7 +185,12 @@
       },
     };
 
-    // format of message: { id: number, role: 'user' | 'assistant', content: string }
+    // scroll to bottom of chat messages
+    const chatScrollToBottom = () => {
+      const msgListElem = document.getElementById('messages-list');
+      setTimeout(() => msgListElem.scrollTo({ top: msgListElem.scrollHeight }), 1);
+    };
+
     createApp({
       components: {
         VueMarkdown,
@@ -190,7 +198,7 @@
       data() {
         return {
           conversations: Conversations.getAll(),
-          messages: [],
+          messages: [], // { id: number, role: 'user' | 'assistant', content: string }
           viewingConvId: Conversations.getNewConvId(),
           inputMsg: '',
           isGenerating: false,
@@ -204,11 +212,8 @@
       mounted() {
         // scroll to the bottom when the pending message height is updated
         const pendingMsgElem = document.getElementById('pending-msg');
-        const msgListElem = document.getElementById('messages-list');
         const resizeObserver = new ResizeObserver(() => {
-          if (this.isGenerating) {
-            msgListElem.scrollTo({ top: msgListElem.scrollHeight });
-          }
+          if (this.isGenerating) chatScrollToBottom();
         });
         resizeObserver.observe(pendingMsgElem);
       },
@@ -217,11 +222,13 @@
           if (this.isGenerating) return;
           this.viewingConvId = Conversations.getNewConvId();
           this.fetchMessages();
+          chatScrollToBottom();
         },
         setViewingConv(convId) {
           if (this.isGenerating) return;
           this.viewingConvId = convId;
           this.fetchMessages();
+          chatScrollToBottom();
         },
         deleteConv(convId) {
           if (this.isGenerating) return;
@@ -280,9 +287,7 @@
             this.fetchMessages();
             this.pendingMsg = null;
             this.isGenerating = false;
-            setTimeout(() => {
-              document.getElementById('msg-input').focus();
-            }, 1);
+            setTimeout(() => document.getElementById('msg-input').focus(), 1);
           } catch (error) {
             console.error(error);
             alert(error);
