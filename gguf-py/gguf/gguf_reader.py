@@ -150,7 +150,8 @@ class GGUFReader:
         self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I', 'S', '<'] = None, use_mmap: bool = False
     ) -> npt.NDArray[Any]:
         count = int(count)
-        itemsize = np.dtype(dtype).itemsize
+        dtype = np.dtype(dtype)
+        itemsize = dtype.itemsize
         end_offs = offset + itemsize * count
         if self.mode != "r" or use_mmap:
             data = (
@@ -161,6 +162,7 @@ class GGUFReader:
             self.data.seek(end_offs)
         else:
             self.data.seek(offset)
+            dtype = dtype.newbyteorder(override_order or self.byte_order)
             data = np.frombuffer(self.data.read(itemsize * count), dtype = dtype)
         return data
 
@@ -176,13 +178,16 @@ class GGUFReader:
         return 0 if skip_sum else sum(int(part.nbytes) for part in field.parts)
 
     def _get_str(self, offset: int) -> list[npt.NDArray[np.uint64], npt.NDArray[np.uint8]]:
-        self.data.seek(offset)
         if self.mode != "r":
             slen = self._get(offset, np.uint64)
-            sdata = self._get(offset + 8, np.uint8, slen[0])
+            sdata = self._get(offset + 8, np.uint8, slen.item())
         else:
-            slen = np.frombuffer(self.data.read(8), dtype = np.uint64)
-            sdata = np.frombuffer(self.data.read(slen.item()), dtype = np.uint8)
+            # This is faster to return a read-only str structure with less seek calling.
+            self.data.seek(offset)
+            u64 = np.dtype(np.uint64).newbyteorder(self.byte_order)
+            u8 = np.dtype(np.uint8).newbyteorder(self.byte_order)
+            slen = np.frombuffer(self.data.read(8), dtype=u64)
+            sdata = np.frombuffer(self.data.read(slen.item()), dtype=u8)
         return [slen, sdata]
 
     def _get_field_parts(
