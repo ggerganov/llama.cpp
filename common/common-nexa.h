@@ -11,8 +11,17 @@
 #include <variant>
 #include <cmath>
 
-#include <cxxabi.h>
-#define NEXA_CLASS_NAME (abi::__cxa_demangle(typeid(*this).name(), nullptr, nullptr, nullptr))
+// Replace the cxxabi.h include and NEXA_CLASS_NAME definition with cross-platform version
+#ifdef _MSC_VER
+    // Windows/MSVC version
+    #include <typeinfo>
+    #define NEXA_CLASS_NAME (typeid(*this).name())
+#else
+    // Unix/GCC/Clang version
+    #include <cxxabi.h>
+    #define NEXA_CLASS_NAME (abi::__cxa_demangle(typeid(*this).name(), nullptr, nullptr, nullptr))
+#endif
+
 #define NEXA_LOG(fmt, ...) fprintf(stderr, "%s::%s: " fmt "\n", NEXA_CLASS_NAME, __func__, ##__VA_ARGS__)
 
 // Prints the content of a ggml_tensor with specified precision. Can use the backend if available.

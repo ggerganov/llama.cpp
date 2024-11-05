@@ -60,6 +60,11 @@
 #include <functional>
 #include <codecvt>
 
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 // third-party utilities
 // use your favorite implementations
 #define DR_WAV_IMPLEMENTATION
