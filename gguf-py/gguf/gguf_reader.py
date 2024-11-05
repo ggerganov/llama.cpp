@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 import os
-import mmap
 import struct
 from collections import OrderedDict
 from typing import Any, Literal, NamedTuple, TypeVar, Union
@@ -133,7 +132,7 @@ class GGUFReader:
             offs += self.alignment - padding
         self.data_offset = offs
         self._build_tensors(offs, tensors_fields)
-    
+
     def __del__(self) -> None:
         self.data.close()
 
@@ -174,7 +173,7 @@ class GGUFReader:
     def _get_str(self, offset: int, return_size=False) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint8]]:
         self.data.seek(offset)
         slen = struct.unpack('<Q', self.data.read(8))
-        sdata = struct.unpack('<'+'B'*slen[0], self.data.read(1*slen[0]))
+        sdata = struct.unpack('<' + 'B' * slen[0], self.data.read(slen[0]))
         output = (slen, sdata)
         if return_size:
             output += (8 + slen[0],)
