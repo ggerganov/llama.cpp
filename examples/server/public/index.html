@@ -6,8 +6,8 @@
   <title>🦙 llama.cpp - chat</title>
 
   <!-- TODO: embed dependencies into cpp -->
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="./deps_daisyui.min.css" rel="stylesheet" type="text/css" />
+  <script src="./deps_tailwindcss.js"></script>
 </head>
 
 <body>
@@ -85,7 +85,7 @@
   </div>
 
   <script type="module">
-    import { createApp } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+    import { createApp } from './deps_vue.esm-browser.js';
     import { llama } from './completion.js';
 
     const BASE_URL = (new URL('.', document.baseURI).href).toString();

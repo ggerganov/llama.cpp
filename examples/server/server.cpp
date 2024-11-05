@@ -17,6 +17,10 @@
 #include "index.html.hpp"
 #include "completion.js.hpp"
 #include "loading.html.hpp"
+#include "deps_daisyui.min.css.hpp"
+#include "deps_markdown-it.js.hpp"
+#include "deps_tailwindcss.js.hpp"
+#include "deps_vue.esm-browser.js.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -3118,8 +3122,12 @@ int main(int argc, char ** argv) {
         });
     } else {
         // using embedded static files
-        svr->Get("/",              handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
-        svr->Get("/completion.js", handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/",                        handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
+        svr->Get("/completion.js",           handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/deps_daisyui.min.css",    handle_static_file(deps_daisyui_min_css, deps_daisyui_min_css_len, "text/css; charset=utf-8"));
+        svr->Get("/deps_markdown-it.js",     handle_static_file(deps_markdown_it_js, deps_daisyui_min_css_len, "text/javascript; charset=utf-8"));
+        svr->Get("/deps_tailwindcss.js",     handle_static_file(deps_tailwindcss_js, deps_tailwindcss_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/deps_vue.esm-browser.js", handle_static_file(deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8"));
     }
 
     // register API routes

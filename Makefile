@@ -1458,6 +1458,10 @@ llama-server: \
 	examples/server/index.html.hpp \
 	examples/server/completion.js.hpp \
 	examples/server/loading.html.hpp \
+	examples/server/deps_daisyui.min.css.hpp \
+	examples/server/deps_markdown-it.js.hpp \
+	examples/server/deps_tailwindcss.js.hpp \
+	examples/server/deps_vue.esm-browser.js.hpp \
 	common/json.hpp \
 	common/stb_image.h \
 	$(OBJ_ALL)
