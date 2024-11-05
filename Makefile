@@ -138,6 +138,10 @@ GGML_NO_OPENMP := 1
 DEPRECATE_WARNING := 1
 endif
 
+ifdef LLAMA_NO_OPENMP_SIMD
+GGML_NO_OPENMP_SIMD := 1
+endif
+
 ifdef LLAMA_NO_METAL
 GGML_NO_METAL := 1
 DEPRECATE_WARNING := 1
@@ -541,6 +545,12 @@ ifndef GGML_NO_OPENMP
 	MK_CFLAGS   += -fopenmp
 	MK_CXXFLAGS += -fopenmp
 endif # GGML_NO_OPENMP
+
+ifndef GGML_NO_OPENMP_SIMD
+	MK_CPPFLAGS += -DGGML_USE_OPENMP_SIMD
+	MK_CFLAGS   += -fopenmp-simd
+	MK_CXXFLAGS += -fopenmp-simd
+endif # GGML_NO_OPENMP_SIMD
 
 ifdef GGML_OPENBLAS
 	MK_CPPFLAGS  += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas)
@@ -948,12 +958,14 @@ OBJ_GGML = \
 	$(DIR_GGML)/src/ggml-alloc.o \
 	$(DIR_GGML)/src/ggml-backend.o \
 	$(DIR_GGML)/src/ggml-backend-reg.o \
+	$(DIR_GGML)/src/ggml-fp8_cpp11.o \
 	$(DIR_GGML)/src/ggml-opt.o \
 	$(DIR_GGML)/src/ggml-quants.o \
 	$(DIR_GGML)/src/ggml-threading.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu.o \
-	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-cpp.o \
+	$(DIR_GGML)/src/ggml-cpu/ggml-cpu_cpp11.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-aarch64.o \
+	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-fp8_cpp11.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-quants.o \
 	$(OBJ_GGML_EXT)
 
@@ -1094,17 +1106,13 @@ DEP_FILES = $(OBJ_GGML:.o=.d) $(OBJ_LLAMA:.o=.d) $(OBJ_COMMON:.o=.d)
 # Default target
 all: $(BUILD_TARGETS)
 
-# Note: need this exception because `ggml-cpu.c` and `ggml-cpu.cpp` both produce the same obj/dep files
-#       g++ -M -I ./ggml/include/ -I ./ggml/src ggml/src/ggml-cpu/ggml-cpu.cpp | grep ggml
-$(DIR_GGML)/src/ggml-cpu/ggml-cpu-cpp.o: \
-	ggml/src/ggml-cpu/ggml-cpu.cpp \
-	ggml/include/ggml-backend.h \
-	ggml/include/ggml.h \
-	ggml/include/ggml-alloc.h \
-	ggml/src/ggml-backend-impl.h \
-	ggml/include/ggml-cpu.h \
-	ggml/src/ggml-impl.h
-	$(CXX) $(CXXFLAGS)   -c $< -o $@
+# for c++17 build
+$(DIR_GGML)/%_cpp17.o: $(DIR_GGML)/%.cpp
+	$(CXX) $(CXXFLAGS) -MMD -std=c++17 -c $< -o $@
+
+# for c++11 build
+$(DIR_GGML)/%_cpp11.o: $(DIR_GGML)/%.cpp
+	$(CXX) $(CXXFLAGS) -MMD -std=c++11 -c $< -o $@
 
 # Rules for building object files
 $(DIR_GGML)/%.o: $(DIR_GGML)/%.c

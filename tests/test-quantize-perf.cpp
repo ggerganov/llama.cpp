@@ -325,7 +325,7 @@ int main(int argc, char * argv[]) {
                 printf("\n");
             }
 
-            if (params.op_quantize_row_q_dot) {
+            if (params.op_quantize_row_q_dot && ggml_get_type_traits_cpu(qfns_cpu->vec_dot_type)->from_float) {
                 printf("  quantize_row_q_dot\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));

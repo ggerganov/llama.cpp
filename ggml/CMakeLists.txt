@@ -62,6 +62,10 @@ if (NOT GGML_LLAMAFILE_DEFAULT)
     set(GGML_LLAMAFILE_DEFAULT OFF)
 endif()
 
+if (NOT GGML_OPENMP_SIMD_DEFAULT)
+    set(GGML_OPENMP_SIMD_DEFAULT OFF)
+endif()
+
 if (NOT GGML_CUDA_GRAPHS_DEFAULT)
     set(GGML_CUDA_GRAPHS_DEFAULT OFF)
 endif()
@@ -112,6 +116,7 @@ option(GGML_LASX        "ggml: enable lasx"             ON)
 option(GGML_LSX         "ggml: enable lsx"              ON)
 option(GGML_RVV         "ggml: enable rvv"              ON)
 option(GGML_SVE         "ggml: enable SVE"              OFF)
+option(GGML_OPENMP_SIMD "ggml: enable OPENMP_SIMD"      ${GGML_OPENMP_SIMD_DEFAULT})
 
 if (WIN32)
     set(GGML_WIN_VER "0x602" CACHE STRING "ggml: Windows Version")

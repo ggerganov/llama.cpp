@@ -20,6 +20,7 @@ var sources = [
     "ggml/src/ggml-cpu/ggml-cpu-quants.c",
     "ggml/src/ggml-threading.cpp",
     "ggml/src/ggml-quants.c",
+    "ggml/src/ggml-fp8.cpp",
 ]
 
 var resources: [Resource] = []
