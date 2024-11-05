@@ -88,7 +88,7 @@ class GGUFReader:
     }
 
     def __init__(self, path: os.PathLike[str] | str, mode: Literal['r', 'r+', 'c'] = 'r'):
-        file_mode = "rb" if mode == 'r' else 'rb+'
+        file_mode = "rb+" if mode == 'r+' else 'rb'
         self.mode = mode
         self.data = open(path, mode=file_mode)
         self.mmap = np.memmap(self.data, mode = mode)
@@ -147,17 +147,22 @@ class GGUFReader:
         return self.tensors[idx]
 
     def _get(
-        self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I', 'S', '<'] = None,
+        self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I', 'S', '<'] = None, use_mmap: bool = False
     ) -> npt.NDArray[Any]:
         count = int(count)
         itemsize = np.dtype(dtype).itemsize
         end_offs = offset + itemsize * count
-        self.data.seek(end_offs)
-        return (
-            self.mmap[offset:end_offs]
-            .view(dtype = dtype)[:count]
-            .newbyteorder(override_order or self.byte_order)
-        )
+        if self.mode != "r" or use_mmap:
+            data = (
+                self.mmap[offset:end_offs]
+                .view(dtype = dtype)[:count]
+                .newbyteorder(override_order or self.byte_order)
+            )
+            self.data.seek(end_offs)
+        else:
+            self.data.seek(offset)
+            data = np.frombuffer(self.data.read(itemsize * count), dtype = dtype)
+        return data
 
     def _push_field(self, field: ReaderField, skip_sum: bool = False) -> int:
         if field.name in self.fields:
@@ -170,14 +175,15 @@ class GGUFReader:
             self.fields[field.name] = field
         return 0 if skip_sum else sum(int(part.nbytes) for part in field.parts)
 
-    def _get_str(self, offset: int, return_size=False) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint8]]:
+    def _get_str(self, offset: int) -> list[npt.NDArray[np.uint64], npt.NDArray[np.uint8]]:
         self.data.seek(offset)
-        slen = struct.unpack('<Q', self.data.read(8))
-        sdata = struct.unpack('<' + 'B' * slen[0], self.data.read(slen[0]))
-        output = (slen, sdata)
-        if return_size:
-            output += (8 + slen[0],)
-        return output
+        if self.mode != "r":
+            slen = self._get(offset, np.uint64)
+            sdata = self._get(offset + 8, np.uint8, slen[0])
+        else:
+            slen = np.frombuffer(self.data.read(8), dtype = np.uint64)
+            sdata = np.frombuffer(self.data.read(slen.item()), dtype = np.uint8)
+        return [slen, sdata]
 
     def _get_field_parts(
         self, orig_offs: int, raw_type: int,
@@ -188,8 +194,8 @@ class GGUFReader:
         types.append(gtype)
         # Handle strings.
         if gtype == GGUFValueType.STRING:
-            sparts: list[npt.NDArray[Any]] = list(self._get_str(offs, return_size=True))
-            size = sparts.pop(-1)
+            sparts: list[npt.NDArray[Any]] = self._get_str(offs)
+            size = 8 + sparts[0].item()
             return size, sparts, [1], types
         # Check if it's a simple scalar type.
         nptype = self.gguf_scalar_to_np.get(gtype)
@@ -324,7 +330,7 @@ class GGUFReader:
                 n_elements = n_elems,
                 n_bytes = n_bytes,
                 data_offset = data_offs,
-                data = self._get(data_offs, item_type, item_count).reshape(np_dims),
+                data = self._get(data_offs, item_type, item_count, use_mmap=True).reshape(np_dims),
                 field = field,
             ))
         self.tensors = tensors
