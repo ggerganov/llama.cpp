@@ -9,7 +9,7 @@ echo "download js bundle files"
 
 # Note for contributors: Always pin to a specific version "maj.min.patch" to avoid breaking the CI
 
-curl -L https://cdn.tailwindcss.com/3.4.14?plugins=forms,typography > $PUBLIC/deps_tailwindcss.js
+curl -L https://cdn.tailwindcss.com/3.4.14 > $PUBLIC/deps_tailwindcss.js
 echo >> $PUBLIC/deps_tailwindcss.js # add newline
 
 curl -L https://cdnjs.cloudflare.com/ajax/libs/daisyui/4.12.14/styled.min.css > $PUBLIC/deps_daisyui.min.css

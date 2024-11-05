@@ -7,29 +7,55 @@
 
   <!-- Note: dependencies can de updated using ./deps.sh script -->
   <link href="./deps_daisyui.min.css" rel="stylesheet" type="text/css" />
+  <!-- Note for daisyui: because we're using a subset of daisyui via CDN, many things won't be included -->
   <script src="./deps_tailwindcss.js"></script>
-  <script>
-    tailwind.config = {};
-  </script>
   <style type="text/tailwindcss">
     .markdown {
       h1, h2, h3, h4, h5, h6, ul, ol, li { all: revert; }
       pre { @apply whitespace-pre-wrap; }
-      /* TODO: fix table */
+      /* TODO: fix markdown table */
     }
   </style>
 </head>
 
 <body>
-  <div id="app">
+  <div id="app" class="flex flex-row">
+    <div class="flex flex-col bg-black bg-opacity-5 w-64 py-8 px-4 h-screen overflow-y-auto">
+      <h2 class="font-bold mb-4 ml-4">Conversations</h2>
+      <div :class="{
+        'btn btn-ghost justify-start': true,
+        'btn-active': messages.length === 0,
+      }" @click="newConversation">
+        + New conversation
+      </div>
+      <div v-for="conv in conversations" :class="{
+        'btn btn-ghost justify-start font-normal': true,
+        'btn-active': conv.id === viewingConvId,
+      }" @click="setViewingConv(conv.id)">
+        <span class="truncate">{{ conv.messages[0].content }}</span>
+      </div>
+      <div class="text-center text-xs opacity-40 mt-auto mx-4">
+        Conversations are saved to browser's localStorage
+      </div>
+    </div>
+
     <div class="flex flex-col w-screen h-screen max-w-screen-md px-8 mx-auto">
       <!-- header -->
       <div class="flex flex-row items-center">
         <div class="grow text-2xl font-bold mt-8 mb-6">
           🦙 llama.cpp - chat
         </div>
-        <div>
+        <div class="flex items-center">
+          <button v-if="messages.length > 0" class="btn" @click="deleteConv(viewingConvId)">
+            <!-- delete conversation button -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
+              <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+              <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+            </svg>
+          </button>
+
           <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
+          <!-- TODO: memorize this theme selection in localStorage, maybe also add "auto" option -->
           <div class="dropdown dropdown-end dropdown-bottom">
             <div tabindex="0" role="button" class="btn m-1">
               Theme
@@ -42,7 +68,7 @@
                 <input
                   type="radio"
                   name="theme-dropdown"
-                  class="theme-controller btn btn-sm btn-block btn-ghost justify-start"
+                  class="theme-controller btn btn-sm btn-block w-full btn-ghost justify-start"
                   :aria-label="theme"
                   :value="theme" />
               </li>
@@ -58,7 +84,7 @@
            {{ messages.length === 0 ? 'Send a message to start' : '' }}
         </div>
         <div v-for="msg in messages" :class="{
-          'chat': true,
+          'chat group': true,
           'chat-start': msg.role !== 'user',
           'chat-end': msg.role === 'user',
         }">
@@ -67,6 +93,9 @@
             'chat-bubble-primary': msg.role === 'user',
           }">
             <vue-markdown :source="msg.content" />
+          </div>
+          <div v-if="msg.role === 'user'" class="badge cursor-pointer opacity-0 group-hover:opacity-100">
+            Edit
           </div>
         </div>
 
@@ -86,10 +115,10 @@
           placeholder="Type a message..."
           v-model="inputMsg"
           @keydown.enter="sendMessage"
-          v-bind:disabled="state !== 'ready'"
+          v-bind:disabled="isGenerating"
           id="msg-input"
         ></textarea>
-        <button class="btn btn-primary ml-2" @click="sendMessage" v-bind:disabled="state !== 'ready'">Send</button>
+        <button class="btn btn-primary ml-2" @click="sendMessage" v-bind:disabled="isGenerating">Send</button>
       </div>
     </div>
   </div>
@@ -99,7 +128,8 @@
     import { createApp, defineComponent, shallowRef, computed, h } from './deps_vue.esm-browser.js';
     import { llama } from './completion.js';
 
-    const BASE_URL = (new URL('.', document.baseURI).href).toString();
+    const BASE_URL = localStorage.getItem('base') // for debugging
+      || (new URL('.', document.baseURI).href).toString(); // for production
 
     // markdown support
     const VueMarkdown = defineComponent(
@@ -114,43 +144,111 @@
       { props: ["source", "options", "plugins"] }
     );
 
+    // storage class
+    // coversations is stored in localStorage
+    // format: { [convId]: { id: string, lastModified: number, messages: [...] } }
+    // convId is a string prefixed with 'conv-'
+    const Conversations = {
+      getAll() {
+        const res = [];
+        for (const key in localStorage) {
+          if (key.startsWith('conv-')) {
+            res.push(JSON.parse(localStorage.getItem(key)));
+          }
+        }
+        res.sort((a, b) => b.lastModified - a.lastModified);
+        return res;
+      },
+      // can return null if convId does not exist
+      getOne(convId) {
+        return JSON.parse(localStorage.getItem(convId) || 'null');
+      },
+      // if convId does not exist, create one
+      appendMsg(convId, msg) {
+        const conv = Conversations.getOne(convId) || {
+          id: convId,
+          lastModified: Date.now(),
+          messages: [],
+        };
+        conv.messages.push(msg);
+        conv.lastModified = Date.now();
+        localStorage.setItem(convId, JSON.stringify(conv));
+      },
+      getNewConvId() {
+        return `conv-${Date.now()}`;
+      },
+      remove(convId) {
+        localStorage.removeItem(convId);
+      },
+    };
+
+    // format of message: { id: number, role: 'user' | 'assistant', content: string }
     createApp({
       components: {
         VueMarkdown,
       },
       data() {
         return {
+          conversations: Conversations.getAll(),
           messages: [],
+          viewingConvId: Conversations.getNewConvId(),
           inputMsg: '',
-          state: 'ready',
+          isGenerating: false,
           pendingMsg: null, // the on-going message from assistant
           abortController: null,
           // const
           themes: ['light', 'dark', 'retro', 'cyberpunk', 'aqua', 'valentine', 'synthwave'],
         }
       },
+      computed: {},
       mounted() {
         // scroll to the bottom when the pending message height is updated
         const pendingMsgElem = document.getElementById('pending-msg');
         const msgListElem = document.getElementById('messages-list');
         const resizeObserver = new ResizeObserver(() => {
-          if (this.state === 'generating') {
+          if (this.isGenerating) {
             msgListElem.scrollTo({ top: msgListElem.scrollHeight });
           }
         });
         resizeObserver.observe(pendingMsgElem);
       },
       methods: {
+        newConversation() {
+          if (this.isGenerating) return;
+          this.viewingConvId = Conversations.getNewConvId();
+          this.fetchMessages();
+        },
+        setViewingConv(convId) {
+          if (this.isGenerating) return;
+          this.viewingConvId = convId;
+          this.fetchMessages();
+        },
+        deleteConv(convId) {
+          if (this.isGenerating) return;
+          if (window.confirm('Are you sure to delete this conversation?')) {
+            Conversations.remove(convId);
+            if (this.viewingConvId === convId) {
+              this.viewingConvId = Conversations.getNewConvId();
+            }
+            this.fetchConversation();
+            this.fetchMessages();
+          }
+        },
         async sendMessage() {
           if (!this.inputMsg) return;
+          const currConvId = this.viewingConvId;
 
-          this.messages = [
-            ...this.messages,
-            { role: 'user', content: this.inputMsg },
-          ];
+          Conversations.appendMsg(currConvId, {
+            id: Date.now(),
+            role: 'user',
+            content: this.inputMsg,
+          });
+          this.fetchConversation();
+          this.fetchMessages();
+
           this.inputMsg = '';
-          this.pendingMsg = { role: 'assistant', content: null };
-          this.state = 'generating';
+          this.pendingMsg = { id: Date.now()+1, role: 'assistant', content: null };
+          this.isGenerating = true;
 
           try {
             this.abortController = new AbortController();
@@ -169,12 +267,19 @@
               const addedContent = chunk.data.choices[0].delta.content;
               const lastContent = this.pendingMsg.content || '';
               if (addedContent) {
-                this.pendingMsg = { role: 'assistant', content: lastContent + addedContent };
+                this.pendingMsg = {
+                  id: this.pendingMsg.id,
+                  role: 'assistant',
+                  content: lastContent + addedContent,
+                };
               }
             }
-            this.messages = [...this.messages, this.pendingMsg];
+
+            Conversations.appendMsg(currConvId, this.pendingMsg);
+            this.fetchConversation();
+            this.fetchMessages();
             this.pendingMsg = null;
-            this.state = 'ready';
+            this.isGenerating = false;
             setTimeout(() => {
               document.getElementById('msg-input').focus();
             }, 1);
@@ -182,11 +287,19 @@
             console.error(error);
             alert(error);
             this.pendingMsg = null;
-            this.state = 'ready';
+            this.isGenerating = false;
           }
         },
+
+        // sync state functions
+        fetchConversation() {
+          this.conversations = Conversations.getAll();
+        },
+        fetchMessages() {
+          this.messages = Conversations.getOne(this.viewingConvId)?.messages ?? [];
+        },
       },
-    }).mount('#app')
+    }).mount('#app');
   </script>
 </body>
 
