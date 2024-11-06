@@ -20,7 +20,7 @@ class NexaOmniVlmInference:
     def inference(self, prompt: str, image_path: str):
         prompt = ctypes.c_char_p(prompt.encode("utf-8"))
         image_path = ctypes.c_char_p(image_path.encode("utf-8"))
-        omni_vlm_cpp.omnivlm_inference(prompt, image_path)
+        return omni_vlm_cpp.omnivlm_inference(prompt, image_path)
 
     def __del__(self):
         omni_vlm_cpp.omnivlm_free()
@@ -52,4 +52,6 @@ if __name__ == "__main__":
         while not os.path.exists(image_path):
             print("ERROR: can not find image in your input path, please check and input agian.")
             image_path = input()
-        omni_vlm_obj.inference(prompt, image_path)
+        response = omni_vlm_obj.inference(prompt, image_path)
+        print("\tresponse:")
+        print(response.decode('utf-8'))

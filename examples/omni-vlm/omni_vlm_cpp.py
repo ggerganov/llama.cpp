@@ -73,7 +73,7 @@ def omnivlm_inference(prompt: omni_char_p, image_path: omni_char_p):
 
 
 _lib.omnivlm_inference.argtypes = [omni_char_p, omni_char_p]
-_lib.omnivlm_inference.restype = None
+_lib.omnivlm_inference.restype = omni_char_p
 
 
 def omnivlm_free():
