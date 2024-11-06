@@ -185,28 +185,38 @@
     <dialog class="modal" :class="{'modal-open': showConfigDialog}">
       <div class="modal-box">
         <h3 class="text-lg font-bold mb-6">Settings</h3>
-        <p class="opacity-40 mb-6">Settings below are saved in browser's localStorage</p>
-        <label class="form-control mb-2">
-          <div class="label">System Message</div>
-          <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
-        </label>
-        <template v-for="key in Object.keys(config)">
-          <label v-if="key != 'custom' && key != 'systemMessage'"
-            class="input input-bordered flex items-center gap-2 mb-2">
-            <b>{{ key }}</b>
-            <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+        <div class="h-[calc(90vh-12rem)] overflow-y-auto">
+          <p class="opacity-40 mb-6">Settings below are saved in browser's localStorage</p>
+          <label class="form-control mb-2">
+            <div class="label">System Message</div>
+            <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
           </label>
-        </template>
-        <label class="form-control mb-2">
-          <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
-          <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
-        </label>
+          <template v-for="key in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
+            <label class="input input-bordered flex items-center gap-2 mb-2">
+              <b>{{ key }}</b>
+              <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+            </label>
+          </template>
+          <!-- TODO: add more sampling-related configs, please regroup them into different "collapse" sections -->
+          <div class="collapse collapse-plus bg-base-200 mb-2">
+            <input type="checkbox" />
+            <div class="collapse-title font-bold">Advanced config</div>
+            <div class="collapse-content">
+              <label class="form-control mb-2">
+                <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
+                <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
+              </label>
+            </div>
+          </div>
+        </div>
 
         <!-- action buttons -->
-        <button class="btn mr-4" @click="config = {...configDefault}">Reset to default</button>
-        <button class="btn btn-primary" @click="closeSaveAndConfigDialog">Save and close</button>
+        <div class="modal-action">
+          <button class="btn" @click="resetConfigDialog">Reset to default</button>
+          <button class="btn" @click="closeAndDiscardConfigDialog">Discard</button>
+          <button class="btn btn-primary" @click="closeAndSaveConfigDialog">Save and close</button>
+        </div>
       </div>
-      <div class="modal-backdrop" @click="closeSaveAndConfigDialog"></div>
     </dialog>
   </div>
 
@@ -218,14 +228,17 @@
     const BASE_URL = localStorage.getItem('base') // for debugging
       || (new URL('.', document.baseURI).href).toString(); // for production
     const CONFIG_DEFAULT = {
+      // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
       apiKey: '',
       systemMessage: 'You are a helpful assistant.',
       temperature: 0.8,
       top_k: 40,
       top_p: 0.95,
+      min_p: 0.95,
       max_tokens: -1,
-      custom: '', // custom json object
+      custom: '', // custom json-stringified object
     };
+    const CONFIG_NUMERIC_KEYS = ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens'];
     const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'];
 
     // markdown support
@@ -296,7 +309,12 @@
 
       // manage config
       getConfig() {
-        return JSON.parse(localStorage.getItem('config') || 'null') || {...CONFIG_DEFAULT};
+        const savedVal = JSON.parse(localStorage.getItem('config') || '{}');
+        // to prevent breaking changes in the future, we always provide default value for missing keys
+        return {
+          ...CONFIG_DEFAULT,
+          ...savedVal,
+        };
       },
       setConfig(config) {
         localStorage.setItem('config', JSON.stringify(config));
@@ -319,7 +337,7 @@
       setTimeout(() => msgListElem.scrollTo({ top: msgListElem.scrollHeight }), 1);
     };
 
-    createApp({
+    const mainApp = createApp({
       components: {
         VueMarkdown,
       },
@@ -380,22 +398,6 @@
             this.fetchConversation();
             this.fetchMessages();
           }
-        },
-        closeSaveAndConfigDialog() {
-          try {
-            if (this.config.custom.length) JSON.parse(this.config.custom);
-          } catch (error) {
-            alert('Invalid JSON for custom config. Please either fix it or leave it empty.');
-            return;
-          }
-          for (const key of ['temperature', 'top_k', 'top_p', 'max_tokens']) {
-            if (isNaN(this.config[key])) {
-              alert('Invalid number for ' + key);
-              return;
-            }
-          }
-          this.showConfigDialog = false;
-          StorageUtils.setConfig(this.config);
         },
         async sendMessage() {
           if (!this.inputMsg) return;
@@ -507,6 +509,34 @@
           this.generateMessage(currConvId);
         },
 
+        // settings dialog methods
+        closeAndSaveConfigDialog() {
+          try {
+            if (this.config.custom.length) JSON.parse(this.config.custom);
+          } catch (error) {
+            alert('Invalid JSON for custom config. Please either fix it or leave it empty.');
+            return;
+          }
+          for (const key of CONFIG_NUMERIC_KEYS) {
+            if (isNaN(this.config[key])) {
+              alert(`Invalid number for ${key} (expected an integer or a float)`);
+              return;
+            }
+            this.config[key] = parseFloat(this.config[key]);
+          }
+          this.showConfigDialog = false;
+          StorageUtils.setConfig(this.config);
+        },
+        closeAndDiscardConfigDialog() {
+          this.showConfigDialog = false;
+          this.config = StorageUtils.getConfig();
+        },
+        resetConfigDialog() {
+          if (window.confirm('Are you sure to reset all settings?')) {
+            this.config = {...CONFIG_DEFAULT};
+          }
+        },
+
         // sync state functions
         fetchConversation() {
           this.conversations = StorageUtils.getAllConversations();
@@ -515,7 +545,18 @@
           this.messages = StorageUtils.getOneConversation(this.viewingConvId)?.messages ?? [];
         },
       },
-    }).mount('#app');
+    });
+    mainApp.config.errorHandler = alert;
+    try {
+      mainApp.mount('#app');
+    } catch (err) {
+      console.error(err);
+      document.getElementById('app').innerHTML = `<div style="margin:2em auto">
+        Failed to start app. Please try clearing localStorage and try again.<br/>
+        <br/>
+        <button class="btn" onClick="localStorage.clear(); window.location.reload();">Clear localStorage</button>
+      </div>`;
+    }
   </script>
 </body>
 
