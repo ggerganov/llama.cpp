@@ -12,6 +12,10 @@ using namespace metal;
 
 #define N_SIMDWIDTH 32 // assuming SIMD group size is 32
 
+#if !defined(__BFLT16_M_PI__)
+#define GGML_METAL_NO_BFLOAT
+#endif
+
 #if !defined(GGML_METAL_NO_BFLOAT)
 typedef matrix<bfloat, 4, 4> bfloat4x4;
 #endif

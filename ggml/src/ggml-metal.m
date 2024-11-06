@@ -496,10 +496,6 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
                 // dictionary of preprocessor macros
                 NSMutableDictionary * prep = [NSMutableDictionary dictionary];
 
-                if (!ctx_dev->has_bfloat) {
-                    [prep setObject:@"GGML_METAL_NO_BFLOAT" forKey:@"GGML_METAL_NO_BFLOAT"];
-                }
-
                 MTLCompileOptions * options = [MTLCompileOptions new];
                 options.preprocessorMacros = prep;
 
