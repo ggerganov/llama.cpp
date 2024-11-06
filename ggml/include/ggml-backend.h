@@ -305,19 +305,7 @@ extern "C" {
     GGML_API void ggml_backend_tensor_alloc(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, void * addr);
     GGML_API void ggml_backend_view_init(struct ggml_tensor * tensor);
 
-    //
-    // CPU backend
-    //
-
-    GGML_API ggml_backend_t ggml_backend_cpu_init(void);
-
-    GGML_API bool ggml_backend_is_cpu                (ggml_backend_t backend);
-    GGML_API void ggml_backend_cpu_set_n_threads     (ggml_backend_t backend_cpu, int n_threads);
-    GGML_API void ggml_backend_cpu_set_threadpool    (ggml_backend_t backend_cpu, ggml_threadpool_t threadpool);
-    GGML_API void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback abort_callback, void * abort_callback_data);
-    GGML_API void ggml_backend_cpu_set_runtime_repack(ggml_backend_t backend_cpu, bool runtime_repack);
-
-    // Create a backend buffer from an existing pointer
+    // CPU buffer types are always available
     GGML_API ggml_backend_buffer_t      ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size);
     GGML_API ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void);
 

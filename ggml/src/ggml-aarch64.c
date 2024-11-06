@@ -3477,101 +3477,87 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     }
 }
 
-static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor *t, int interleave_block, uint8_t **pmem, size_t *psize) {
+#ifdef GGML_USE_CPU_AARCH64
+static void repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block, const void * data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(t->ne[0] % 8 == 0);
     GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
 
-    // Do in-place transformation. Allocate scratch buffer
-    size_t size = sizeof(block_q4_0x4) * t->ne[0] / QK4_0;
-    if (size > *psize) {
-        uint8_t *new_mem = realloc(*pmem, size);
-        if (!new_mem) {
-            return -1;
-        }
-        *pmem = new_mem;
-        *psize = size;
-    }
-    block_q4_0x4 *dst = (block_q4_0x4*) *pmem;
-    block_q4_0 *src = (block_q4_0*) t->data;
+    block_q4_0x4 *dst = (block_q4_0x4 *)t->data;
+    const block_q4_0 *src = (const block_q4_0 *)data;
     block_q4_0 dst_tmp[4];
-    int n = t->ne[0];
     int nrow = t->ne[1]; // Number of rows
     int nrows_interleaved = 4;
     int nblocks = t->ne[0] / QK4_0;
-    for (int b = 0; b < (nrow * n); b += nrows_interleaved * n) {
-        int cnt = 0;
-        for (int64_t x = 0; x < nblocks; x++) {
-            for (int i  = 0; i < nrows_interleaved; i++ ) {
+
+    GGML_ASSERT(data_size == nrow * nblocks * sizeof(block_q4_0));
+
+    for (int b = 0; b < nrow; b += nrows_interleaved) {
+        for (int64_t x = 0; x < nblocks; x++)
+        {
+            for (int i = 0; i < nrows_interleaved; i++) {
                 dst_tmp[i] = src[x + i * nblocks];
             }
-            dst[cnt++] = make_block_q4_0x4(dst_tmp, interleave_block, 0x88);
+            *dst++ = make_block_q4_0x4(dst_tmp, interleave_block, 0x88);
         }
-        memcpy(src, dst, size);
-        src += cnt * 4;
+        src += nrows_interleaved * nblocks;
     }
-    return 0;
+
+    GGML_UNUSED(data_size);
 }
 
-static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block,  uint8_t **pmem, size_t *psize) {
+static void repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block,  const void * data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(t->ne[0] % 8 == 0);
     GGML_ASSERT(interleave_block == 8);
 
-    // Do in-place transformation. Allocate scratch buffer
-    size_t size = sizeof(block_q4_0x8) * t->ne[0] / QK4_0;
-    if (size > *psize) {
-        uint8_t *new_mem = realloc(*pmem, size);
-        if (!new_mem) {
-            return -1;
-        }
-        *pmem = new_mem;
-        *psize = size;
-    }
-    block_q4_0x8 *dst = (block_q4_0x8*) *pmem;
-    block_q4_0 *src = (block_q4_0*) t->data;
+    block_q4_0x8 *dst = (block_q4_0x8*)t->data;
+    const block_q4_0 *src = (const block_q4_0*) data;
     block_q4_0 dst_tmp[8];
-    int n = t->ne[0];
     int nrow = t->ne[1]; // Number of rows
     int nrows_interleaved = 8;
     int nblocks = t->ne[0] / QK4_0;
-    for (int b = 0; b < (nrow * n); b += nrows_interleaved * n) {
-        int cnt = 0;
+
+    GGML_ASSERT(data_size == nrow * nblocks * sizeof(block_q4_0));
+
+    for (int b = 0; b < nrow; b += nrows_interleaved) {
         for (int64_t x = 0; x < nblocks; x++) {
             for (int i  = 0; i < nrows_interleaved; i++ ) {
                 dst_tmp[i] = src[x + i * nblocks];
             }
-            dst[cnt++] = make_block_q4_0x8(dst_tmp, interleave_block, 0x88);
+            *dst++ = make_block_q4_0x8(dst_tmp, interleave_block, 0x88);
         }
-        memcpy(src, dst, size);
-        src += cnt * 4;
+        src += nrows_interleaved * nblocks;
     }
-    return 0;
+
+    GGML_UNUSED(data_size);
 }
 
 // Prepare for optimized kernels if applicable
-void ggml_prepare_optimal_kernel(struct ggml_tensor *cur, uint8_t **pmem, size_t *psize) {
-    UNUSED(cur);
-    UNUSED(pmem);
-    UNUSED(psize);
-
+int ggml_prepare_optimal_kernel(struct ggml_tensor * cur, const void * data, size_t data_size) {
+    GGML_ASSERT(cur->type == GGML_TYPE_Q4_0);
+    int ret = -1;
 #if defined(__ARM_ARCH)
-    if (cur->type == GGML_TYPE_Q4_0) {
-        if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
-            if (repack_q4_0_to_q4_0_8_bl(cur, 8, pmem, psize) == 0) {
-                cur->type = GGML_TYPE_Q4_0_8_8;
-            }
-        }
-        else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-            if (repack_q4_0_to_q4_0_4_bl(cur, 8, pmem, psize) == 0) {
-                cur->type = GGML_TYPE_Q4_0_4_8;
-            }
-        }
-        else if (ggml_cpu_has_neon()) {
-            if (repack_q4_0_to_q4_0_4_bl(cur, 4, pmem, psize) == 0) {
-                cur->type = GGML_TYPE_Q4_0_4_4;
-            }
-        }
+    if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
+        repack_q4_0_to_q4_0_8_bl(cur, 8, data, data_size);
+        cur->type = GGML_TYPE_Q4_0_8_8;
+        ret = 0;
+    }
+    else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
+        repack_q4_0_to_q4_0_4_bl(cur, 8, data, data_size);
+        cur->type = GGML_TYPE_Q4_0_4_8;
+        ret = 0;
+    }
+    else if (ggml_cpu_has_neon()) {
+        repack_q4_0_to_q4_0_4_bl(cur, 4, data, data_size);
+        cur->type = GGML_TYPE_Q4_0_4_4;
+        ret = 0;
     }
 #endif
+    return ret;
+
+    GGML_UNUSED(cur);
+    GGML_UNUSED(data);
+    GGML_UNUSED(data_size);
 }
+#endif

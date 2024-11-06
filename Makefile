@@ -874,6 +874,11 @@ ggml/src/ggml-cuda/%.o: \
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 endif # GGML_HIPBLAS
 
+ifdef GGML_CPU_AARCH64
+	MK_CPPFLAGS += -DGGML_USE_CPU_AARCH64
+	MK_CFLAGS += -DGGML_USE_CPU_AARCH64
+endif
+
 ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit

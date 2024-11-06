@@ -145,6 +145,10 @@ extern "C" {
     GGML_API ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void);
 #endif
 
+#ifdef GGML_USE_CPU_AARCH64
+    GGML_API ggml_backend_buffer_type_t ggml_backend_cpu_aarch64_buffer_type(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
