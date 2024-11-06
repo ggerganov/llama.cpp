@@ -389,6 +389,10 @@ extern "C" {
         GGML_TYPE_Q4_0_8_8 = 33,
         GGML_TYPE_TQ1_0   = 34,
         GGML_TYPE_TQ2_0   = 35,
+        GGML_TYPE_I1      = 36,
+        GGML_TYPE_I2      = 37,
+        GGML_TYPE_I3      = 38,
+        GGML_TYPE_I4      = 39,
         GGML_TYPE_COUNT,
     };
 

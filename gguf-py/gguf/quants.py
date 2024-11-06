@@ -60,6 +60,15 @@ def quantize(data: np.ndarray, qtype: GGMLQuantizationType) -> np.ndarray:
         return data.astype(np.float16, copy=False)
     elif (q := _type_traits.get(qtype)) is not None:
         return q.quantize(data)
+    # Do nothing for I1/2/3/4, as they are already quantized
+    elif qtype == GGMLQuantizationType.I1:
+        return data
+    elif qtype == GGMLQuantizationType.I2:
+        return data
+    elif qtype == GGMLQuantizationType.I3:
+        return data
+    elif qtype == GGMLQuantizationType.I4:
+        return data
     else:
         raise NotImplementedError(f"Quantization for {qtype.name} is not yet implemented")
 
