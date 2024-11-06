@@ -12,6 +12,9 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+// TODO: for now, always use F32 for flash attention to avoid compiling 2 sets of kernels
+#define GGML_METAL_FORCE_FATTN_PREC_F32
+
 // max memory buffers that can be mapped to the device
 #define GGML_METAL_MAX_BUFFERS 64
 
@@ -495,6 +498,11 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
             @autoreleasepool {
                 // dictionary of preprocessor macros
                 NSMutableDictionary * prep = [NSMutableDictionary dictionary];
+
+                // add GGML_METAL_FORCE_FATTN_PREC_F32
+#if defined(GGML_METAL_FORCE_FATTN_PREC_F32)
+                [prep setObject:@"1" forKey:@"GGML_METAL_FORCE_FATTN_PREC_F32"];
+#endif
 
                 MTLCompileOptions * options = [MTLCompileOptions new];
                 options.preprocessorMacros = prep;
@@ -3216,11 +3224,19 @@ static void ggml_metal_encode_node(
                     GGML_ASSERT(nqptg  % 8  == 0);
                     GGML_ASSERT(ncpsg  % 32 == 0);
 
+#ifdef GGML_METAL_FORCE_FATTN_PREC_F32
+                    const enum ggml_prec prec = GGML_PREC_DEFAULT;
+#else
+                    const enum ggml_prec prec = ggml_flash_attn_ext_get_prec(dst);
+#endif
+
+                    const int64_t nhalfs = prec == GGML_PREC_DEFAULT ? 1 : 2;
+
                     // 16*32*(nsg)
                     // the shared memory needed for the simdgroups to load the KV cache
                     // each thread loads (dequantizes) 16 head elements, there are 32 threads in th SG
                     //
-#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + 2*(ncpsg + nqptg)*(nsg)) + 16*32*(nsg))*(sizeof(float)/2), 16))
+#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + nhalfs*(ncpsg + nqptg)*(nsg)) + 16*32*(nsg))*(sizeof(float)/2), 16))
 
                     int64_t nsgmax = 2;
 
