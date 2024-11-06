@@ -3599,7 +3599,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
             for (int n_mats : {4}) {
                 for (int n_used : {2}) {
                     for (bool b : {false}) {
-                        for (int n : {1}) {
+                        for (int n : {1, 32}) {
                             int m = 512;
                             int k = 256;
                             test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, n_used, b, m, n, k));
