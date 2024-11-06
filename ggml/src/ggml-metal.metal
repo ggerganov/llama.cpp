@@ -12,7 +12,13 @@ using namespace metal;
 
 #define N_SIMDWIDTH 32 // assuming SIMD group size is 32
 
-#if !defined(__BFLT16_M_PI__)
+// ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+//
+// cmd:
+//   .../usr/bin/metal -dM -E -c                             ggml/src/ggml-metal.metal
+//   .../usr/bin/metal -dM -E -c -target air64-apple-ios14.0 ggml/src/ggml-metal.metal
+//
+#if __METAL_VERSION__ < 310
 #define GGML_METAL_NO_BFLOAT
 #endif
 
