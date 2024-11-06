@@ -54,7 +54,7 @@ OMNI_AUDIO_API struct omni_context *omni_init_context(omni_context_params &param
 
 OMNI_AUDIO_API void omni_free(struct omni_context *ctx_omni);
 
-OMNI_AUDIO_API void omni_process_full(
+OMNI_AUDIO_API const char* omni_process_full(
     struct omni_context *ctx_omni,
     omni_context_params &params
 );
