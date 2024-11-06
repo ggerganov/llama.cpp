@@ -876,6 +876,11 @@ endif # GGML_HIPBLAS
 
 ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
+
+ifdef GGML_METAL_FORCE_FATTN_PREC_F16
+	MK_CPPFLAGS += -DGGML_METAL_FORCE_FATTN_PREC_F16
+endif # GGML_METAL_FORCE_FATTN_PREC_F16
+
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJ_GGML	+= ggml/src/ggml-metal.o
 ifdef GGML_METAL_NDEBUG
