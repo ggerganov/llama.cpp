@@ -1746,6 +1746,9 @@ extern "C" {
             struct ggml_tensor * a,
             enum ggml_prec       prec);
 
+    GGML_API enum ggml_prec ggml_flash_attn_ext_get_prec(
+            const struct ggml_tensor * a);
+
     // TODO: needs to be adapted to ggml_flash_attn_ext
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
            struct ggml_context * ctx,
