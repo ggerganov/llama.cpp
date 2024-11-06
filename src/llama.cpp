@@ -9134,7 +9134,7 @@ static bool llm_load_tensors(
 
     // print memory requirements per buffer type
     for (auto & buf : model.bufs) {
-        LLAMA_LOG_INFO("%s: %10s model buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf.get()), ggml_backend_buffer_get_size(buf.get()) / 1024.0 / 1024.0);
+        LLAMA_LOG_INFO("%s: %12s model buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf.get()), ggml_backend_buffer_get_size(buf.get()) / 1024.0 / 1024.0);
     }
 
     // populate tensors_by_name
