@@ -1453,6 +1453,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             } u = {i};
             ggml_table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(u.fp16);
         }
+        
+#if defined(GGML_USE_TMAC)
+        ggml_tmac_init();
+#endif
+
         is_first_call = true;
     }
 

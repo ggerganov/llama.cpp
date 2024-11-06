@@ -13891,10 +13891,6 @@ void ggml_cpu_init(void) {
         ggml_init_arm_arch_features();
 #endif
 
-#if defined(GGML_USE_TMAC)
-        ggml_tmac_init();
-#endif
-
         is_first_call = false;
     }
 
