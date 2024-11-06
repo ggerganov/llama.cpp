@@ -4072,7 +4072,7 @@ static ggml_backend_buffer_t ggml_backend_metal_device_buffer_from_ptr(ggml_back
         }
     }
 
-    return ggml_backend_buffer_init(ggml_backend_metal_buffer_type(), ggml_backend_metal_buffer_i, ctx, size);
+    return ggml_backend_buffer_init(ggml_backend_metal_buffer_from_ptr_type(), ggml_backend_metal_buffer_i, ctx, size);
 }
 
 static bool ggml_backend_metal_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
@@ -4082,7 +4082,8 @@ static bool ggml_backend_metal_device_supports_op(ggml_backend_dev_t dev, const 
 }
 
 static bool ggml_backend_metal_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
-    return buft->iface.get_name == ggml_backend_metal_buffer_type_get_name;
+    return buft->iface.get_name == ggml_backend_metal_buffer_type_get_name ||
+            buft->iface.get_name == ggml_backend_metal_buffer_from_ptr_type_get_name;
 
     UNUSED(dev);
 }
