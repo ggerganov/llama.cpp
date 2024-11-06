@@ -22,7 +22,7 @@ extern "C" {
 
 OMNIVLM_API void omnivlm_init(const char* llm_model_path, const char* projector_model_path);
 
-OMNIVLM_API void omnivlm_inference(const char* prompt, const char* imag_path);
+OMNIVLM_API const char* omnivlm_inference(const char* prompt, const char* imag_path);
 
 OMNIVLM_API void omnivlm_free();
 
