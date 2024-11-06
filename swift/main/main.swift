@@ -32,7 +32,7 @@ func downloadFile() async throws -> String {
 
 @llamaActor actor MyLlama {
     /// Get the current date.
-    @Tool public static func getCurrentDate() -> String {
+    @Tool public func getCurrentDate() -> String {
         Date.now.formatted(date: .long, time: .complete)
     }
 }

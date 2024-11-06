@@ -38,14 +38,14 @@ typedef int32_t LlamaToken;
                index:(NSInteger) index
         grammarFirst:(BOOL)grammarFirst;
 
-// if accept_grammar is true, the token is accepted both by the sampling chain and the grammar
+/// If accept_grammar is true, the token is accepted both by the sampling chain and the grammar
 - (void)accept:(LlamaToken)token
  acceptGrammar:(BOOL)acceptGrammar;
 
-// get a string representation of the last accepted tokens
+/// Get a string representation of the last accepted tokens
 - (NSString *)previousString:(LlamaContext *)context n:(NSInteger)n;
 
-// get the last accepted token
+/// Get the last accepted token
 - (LlamaToken)last;
 
 - (void)reset;

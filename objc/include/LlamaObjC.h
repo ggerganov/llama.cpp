@@ -2,6 +2,8 @@
 #define LlamaObjC_h
 
 #include <Foundation/Foundation.h>
+#include <CPUParams.h>
+#include <GGMLThreadpool.h>
 #include <GPTParams.h>
 #include <GPTSampler.h>
 #include <llama.h>

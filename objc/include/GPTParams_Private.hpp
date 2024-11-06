@@ -5,11 +5,6 @@
 #import "ggml.h"
 #import "../../common/common.h"
 
-@interface GGMLThreadpool()
-
-- (ggml_threadpool *)threadpool;
-
-@end
 
 @interface GPTParams()
 

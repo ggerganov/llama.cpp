@@ -57,6 +57,28 @@ public struct _JSONFunctionSchema: Codable {
             self.enum = nil
         }
         
+        public init(type: Int.Type, description: String?) {
+            self.type = "integer"
+            self.description = description
+            self.items = nil
+            self.enum = nil
+        }
+        
+        
+        public init(type: Double.Type, description: String?) {
+            self.type = "number"
+            self.description = description
+            self.items = nil
+            self.enum = nil
+        }
+        
+        public init(type: Bool.Type, description: String?) {
+            self.type = "boolean"
+            self.description = description
+            self.items = nil
+            self.enum = nil
+        }
+        
         public init<T: CaseIterable>(type: T.Type, description: String?) where T: RawRepresentable,
         T: StringProtocol {
             self.type = "string"
@@ -143,6 +165,14 @@ extension Double : JSONSchemaConvertible {
     public static var jsonSchema: [String: Any] {
         [
             "type": "number"
+        ]
+    }
+}
+extension Bool : JSONSchemaConvertible {
+    public static var type: String { "boolean" }
+    public static var jsonSchema: [String: Any] {
+        [
+            "type": "boolean"
         ]
     }
 }

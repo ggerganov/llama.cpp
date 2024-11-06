@@ -4,48 +4,7 @@
 @class LlamaModelParams;
 @class LlamaContextParams;
 @class GGMLThreadpool;
-
-// Define the ggml_sched_priority enum
-typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
-    GGMLSchedPriorityNormal = 0,  // Normal priority
-    GGMLSchedPriorityMedium = 1,  // Medium priority
-    GGMLSchedPriorityHigh = 2,    // High priority
-    GGMLSchedPriorityRealtime = 3 // Realtime priority
-};
-
-@interface GGMLThreadpoolParams : NSObject
-
-@property (nonatomic, assign) int nThreads;
-@property (nonatomic, assign) GGMLSchedPriority priority;
-@property (nonatomic, assign) uint32_t poll;
-@property (nonatomic, assign) BOOL strictCPU;
-@property (nonatomic, assign) BOOL paused;
-
-// Custom access methods for the cpumask array
-- (BOOL)getCpuMaskAtIndex:(NSUInteger)index;
-- (void)setCpuMask:(BOOL)value atIndex:(NSUInteger)index;
-- (GGMLThreadpool *)threadpool;
-
-@end
-
-@interface GGMLThreadpool : NSObject
-@end
-
-@interface CPUParams : NSObject
-
-// Properties
-@property (nonatomic, assign) int nThreads;
-@property (nonatomic, assign) BOOL maskValid;
-@property (nonatomic, assign) GGMLSchedPriority priority;
-@property (nonatomic, assign) BOOL strictCPU;
-@property (nonatomic, assign) uint32_t poll;
-
-// Custom methods to access or manipulate the cpumask array
-- (BOOL)getCpuMaskAtIndex:(NSUInteger)index;
-- (void)setCpuMask:(BOOL)value atIndex:(NSUInteger)index;
-- (GGMLThreadpoolParams *)ggmlThreadpoolParams;
-
-@end
+@class CPUParams;
 
 @interface GPTSamplerParams : NSObject
 
@@ -72,13 +31,10 @@ typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
 @property (nonatomic, assign) BOOL penalizeNl;
 @property (nonatomic, assign) BOOL ignoreEos;
 @property (nonatomic, assign) BOOL noPerf;
+@property (nonatomic, strong) NSArray<NSNumber *> *samplers;
+@property (nonatomic, copy) NSString *grammar;
+@property (nonatomic, strong) NSArray<NSNumber *> *logitBias;
 
-// Arrays and Strings
-@property (nonatomic, strong) NSArray<NSNumber *> *samplers; // Samplers mapped to NSArray of NSNumber (for enums)
-@property (nonatomic, copy) NSString *grammar;               // Grammar as NSString
-@property (nonatomic, strong) NSArray<NSNumber *> *logitBias; // Logit biases mapped to NSArray of NSNumber
-
-// Method to print the parameters into a string
 - (NSString *)print;
 
 @end
@@ -98,7 +54,7 @@ typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
 @property (nonatomic, assign) int32_t nGpuLayers;
 @property (nonatomic, assign) int32_t nGpuLayersDraft;
 @property (nonatomic, assign) int32_t mainGpu;
-@property (nonatomic, strong) NSMutableArray<NSNumber *> *tensorSplit; // Fixed-size array, stays the same
+@property (nonatomic, strong) NSArray<NSNumber *> *tensorSplit;
 @property (nonatomic, assign) int32_t grpAttnN;
 @property (nonatomic, assign) int32_t grpAttnW;
 @property (nonatomic, assign) int32_t nPrint;
@@ -111,13 +67,11 @@ typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
 @property (nonatomic, assign) int32_t yarnOrigCtx;
 @property (nonatomic, assign) float defragThold;
 
-// You need to replace your C++ struct "cpu_params" with an Objective-C class or struct accordingly
 @property (nonatomic, strong) CPUParams *cpuParams;
 @property (nonatomic, strong) CPUParams *cpuParamsBatch;
 @property (nonatomic, strong) CPUParams *draftCpuParams;
 @property (nonatomic, strong) CPUParams *draftCpuParamsBatch;
 
-// Callbacks (assuming they are blocks in Objective-C)
 @property (nonatomic, copy) void (^cbEval)(void *);
 @property (nonatomic, assign) void *cbEvalUserData;
 
@@ -149,12 +103,10 @@ typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
 @property (nonatomic, copy) NSString *logitsFile;
 @property (nonatomic, copy) NSString *rpcServers;
 
-// Arrays in Objective-C are represented with `NSArray`
 @property (nonatomic, strong) NSArray<NSString *> *inputFiles;
 @property (nonatomic, strong) NSArray<NSString *> *antiPrompts;
 @property (nonatomic, strong) NSArray *kvOverrides;
 
-// Boolean values (in Objective-C, use `BOOL`)
 @property (nonatomic, assign) BOOL loraInitWithoutApply;
 @property (nonatomic, strong) NSArray *loraAdapters;
 @property (nonatomic, strong) NSArray *controlVectors;
@@ -256,6 +208,8 @@ typedef NS_ENUM(NSInteger, GGMLSchedPriority) {
 @property (nonatomic, assign) BOOL inputPrefixBOS; // prefix BOS to user inputs, preceding input_prefix
 @property (nonatomic, assign) BOOL ctxShift; // context shift on inifinite text generation
 @property (nonatomic, assign) BOOL displayPrompt; // print prompt before generation
+
+@property (nonatomic, assign) BOOL logging; // print logging
 
 @end
 

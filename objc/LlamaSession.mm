@@ -3,10 +3,12 @@
 #import "../../common/common.h"
 #import "LlamaModel_Private.hpp"
 #import "LlamaContext_Private.hpp"
+#import "CPUParams_Private.hpp"
 #import "GPTSampler.h"
 #import <OSLog/OSLog.h>
 #import "ggml.h"
 #import "GPTParams_Private.hpp"
+#import "GGMLThreadpool_Private.hpp"
 #import "LlamaBatch_Private.hpp"
 
 @implementation BlockingLineQueue {
@@ -75,8 +77,7 @@
 @implementation LlamaSession {
     std::vector<llama_token> embd_inp;
     std::vector<common_chat_msg> chat_msgs;
-    GPTParams *params;
-    GPTSampler *smpl;
+
     BOOL isInteracting;
     
     bool is_antiprompt;
@@ -105,13 +106,14 @@
     std::vector<std::vector<llama_token>> antiprompt_ids;
     BOOL need_insert_eot;
     int n_ctx;
+    os_log_t os_log_inst;
 }
 
 - (NSString *)chat_add_and_format:(std::vector<common_chat_msg> &) chat_msgs role:(const std::string &) role content:(const std::string &) content {
     common_chat_msg new_msg{role, content};
-    auto formatted = common_chat_format_single([self.model cModel], [params params].chat_template, chat_msgs, new_msg, role == "user");
+    auto formatted = common_chat_format_single([self.model cModel], [_params params].chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
-    os_log_debug(OS_LOG_DEFAULT, "formatted: '%s'\n", formatted.c_str());
+    os_log_debug(os_log_inst, "formatted: '%s'\n", formatted.c_str());
     return [NSString stringWithCString:formatted.c_str() encoding:NSUTF8StringEncoding];
 }
 
@@ -131,22 +133,24 @@ static BOOL file_is_empty(NSString *path) {
 
 - (instancetype)initWithParams:(GPTParams *)params {
     self = [super init];
-    
-    self->params = params;
-    //    model = llama_init.model;
-    //    ctx = llama_init.context;
-    //
-    //    if model == nil {
-    //        LOG_ERR("%s: error: unable to load model\n", __func__);
-    //        return 1;
-    //    }
-    //
-    os_log_info(OS_LOG_DEFAULT,
-                "%s: llama threadpool init, n_threads = %d\n",
-                __func__, params.cpuParams.nThreads);
+    self->_params = [params copy];
+    self->_mutableLastOutput = [[NSMutableString alloc] init];
+    if (params.logging) {
+        os_log_inst = OS_LOG_DEFAULT;
+    } else {
+        os_log_inst = OS_LOG_DISABLED;
+    }
+    if (!params.modelPath) {
+        [NSException raise:@"ModelFailure"
+                    format:@"params.modelPath must be defined"];
+    }
+
+    os_log_info(os_log_inst,
+                "%s: llama threadpool init, n_threads = %ld\n",
+                __func__, static_cast<long>(params.cpuParams.nThreads));
 
     if (params.embedding) {
-        os_log_error(OS_LOG_DEFAULT,
+        os_log_error(os_log_inst,
                      R"(************
                      please use the 'embedding' tool for embedding calculations
                      ************)");
@@ -154,22 +158,29 @@ static BOOL file_is_empty(NSString *path) {
     }
 
     if (params.nCtx != 0 && params.nCtx < 8) {
-        os_log_info(OS_LOG_DEFAULT, "minimum context size is 8, using minimum size.");
+        os_log_info(os_log_inst, "minimum context size is 8, using minimum size.");
         params.nCtx = 8;
     }
 
     if (params.ropeFreqBase != 0) {
-        os_log_info(OS_LOG_DEFAULT, "changing RoPE frequency base to \(params.ropeFreqBase)");
+        os_log_info(os_log_inst, "changing RoPE frequency base to \(params.ropeFreqBase)");
     }
 
     if (params.ropeFreqScale != 0.0) {
-        os_log_info(OS_LOG_DEFAULT, "scaling RoPE frequency by \(params.ropeFreqScale)");
+        os_log_info(os_log_inst, "scaling RoPE frequency by \(params.ropeFreqScale)");
     }
 
     llama_backend_init();
     llama_numa_init(ggml_numa_strategy(params.numaStrategy));
     auto llama_init = common_init_from_params([params params]);
-    
+    if (llama_init.context == nil) {
+        [NSException raise:@"ContextFailure"
+                    format:@"could not load context"];
+    }
+    if (llama_init.model == nil) {
+        [NSException raise:@"ModelLoadFailure"
+                    format:@"could not load model"];
+    }
     auto tpp_batch = params.cpuParamsBatch.ggmlThreadpoolParams;
     auto tpp = params.cpuParams.ggmlThreadpoolParams;
 
@@ -179,7 +190,7 @@ static BOOL file_is_empty(NSString *path) {
     if (tpp != tpp_batch) {
         threadpool_batch = [tpp_batch threadpool];
         if (!threadpool_batch) {
-            [NSException raise:@"batch threadpool create failed"
+            [NSException raise:@"ThreadpoolFailure"
                         format:@"batch threadpool create failed"];
         }
         
@@ -189,7 +200,7 @@ static BOOL file_is_empty(NSString *path) {
     
     GGMLThreadpool *threadpool = [tpp threadpool];
     if (!threadpool) {
-        [NSException raise:@"threadpool create failed"
+        [NSException raise:@"ThreadpoolFailure"
                     format:@"threadpool create failed"];
     }
     
@@ -200,16 +211,16 @@ static BOOL file_is_empty(NSString *path) {
     n_ctx = [self.ctx nCtx];
     //
     if (n_ctx > n_ctx_train) {
-        os_log_info(OS_LOG_DEFAULT, "%s: model was trained on only %d context tokens (%d specified)\n", __func__, n_ctx_train, n_ctx);
+        os_log_info(os_log_inst, "%s: model was trained on only %d context tokens (%d specified)\n", __func__, n_ctx_train, n_ctx);
     }
 
     // print chat template example in conversation mode
     if (params.conversation) {
         if (params.enableChatTemplate) {
-            os_log_info(OS_LOG_DEFAULT, "%s: chat template example:\n%s\n", __func__,
+            os_log_info(os_log_inst, "%s: chat template example:\n%s\n", __func__,
                         [[self.model formatExample:params.chatTemplate] cStringUsingEncoding:NSUTF8StringEncoding]);
         } else {
-            os_log_info(OS_LOG_DEFAULT, "%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
+            os_log_info(os_log_inst, "%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
         }
     }
     // print system information
@@ -222,11 +233,11 @@ static BOOL file_is_empty(NSString *path) {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     
     if ([pathSession length] != 0) {
-        os_log_info(OS_LOG_DEFAULT, "%s: attempting to load saved session from '%s'\n", __func__, [pathSession cStringUsingEncoding:NSUTF8StringEncoding]);
+        os_log_info(os_log_inst, "%s: attempting to load saved session from '%s'\n", __func__, [pathSession cStringUsingEncoding:NSUTF8StringEncoding]);
         if (![fileManager fileExistsAtPath:pathSession]) {
-            os_log_info(OS_LOG_DEFAULT, "%s: session file does not exist, will create.\n", __func__);
+            os_log_info(os_log_inst, "%s: session file does not exist, will create.\n", __func__);
         } else if (file_is_empty(pathSession)) {
-            os_log_info(OS_LOG_DEFAULT,"%s: The session file is empty. A new session will be initialized.\n", __func__);
+            os_log_info(os_log_inst,"%s: The session file is empty. A new session will be initialized.\n", __func__);
         } else {
             // The file exists and is not empty
             session_tokens.resize(n_ctx);
@@ -235,7 +246,7 @@ static BOOL file_is_empty(NSString *path) {
                 [NSException raise:@"SessionLoadFailure" format:@"%s: failed to load session file '%s'\n", __func__, [pathSession cStringUsingEncoding:NSUTF8StringEncoding]];
             }
             session_tokens.resize(n_token_count_out);
-            os_log_info(OS_LOG_DEFAULT,"%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
+            os_log_info(os_log_inst,"%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
         }
     }
     
@@ -244,7 +255,7 @@ static BOOL file_is_empty(NSString *path) {
         GGML_ASSERT(![self.model addEOSToken]);
     }
     
-    os_log_debug(OS_LOG_DEFAULT, "n_ctx: %d, add_bos: %d\n", n_ctx, addBOS);
+    os_log_debug(os_log_inst, "n_ctx: %d, add_bos: %d\n", n_ctx, addBOS);
     
     
     {
@@ -252,22 +263,22 @@ static BOOL file_is_empty(NSString *path) {
         ? [self chat_add_and_format:chat_msgs role:"system" content:[params params].prompt] // format the system prompt in conversation mode
         : params.prompt;
         if (params.interactiveFirst || [params.prompt length] > 0 || session_tokens.empty()) {
-            os_log_debug(OS_LOG_DEFAULT, "tokenize the prompt\n");
+            os_log_debug(os_log_inst, "tokenize the prompt\n");
             embd_inp = [self.ctx tokenize:prompt addSpecial:true parseSpecial:true];
         } else {
-            os_log_debug(OS_LOG_DEFAULT,"use session tokens\n");
+            os_log_debug(os_log_inst,"use session tokens\n");
             embd_inp = session_tokens;
         }
         
-        os_log_debug(OS_LOG_DEFAULT,"prompt: \"%s\"\n", [prompt cStringUsingEncoding:NSUTF8StringEncoding]);
-        os_log_debug(OS_LOG_DEFAULT,"tokens: %s\n", [self.ctx convertTokensToString:embd_inp].c_str());
+        os_log_debug(os_log_inst,"prompt: \"%s\"\n", [prompt cStringUsingEncoding:NSUTF8StringEncoding]);
+        os_log_debug(os_log_inst,"tokens: %s\n", [self.ctx convertTokensToString:embd_inp].c_str());
     }
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
         if (addBOS) {
             embd_inp.push_back([self.model tokenBOS]);
-//            LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from(ctx, embd_inp).c_str());
+            os_log_info(os_log_inst, "embd_inp was considered empty and bos was added: %s\n", [_ctx convertTokensToString:embd_inp].c_str());
         } else {
             [NSException raise:@"InputEmptyError" format:@"input is empty"];
         }
@@ -303,13 +314,13 @@ static BOOL file_is_empty(NSString *path) {
         llama_kv_cache_seq_rm([self.ctx cContext], -1, n_matching_session_tokens, -1);
     }
     //
-    //    os_log_debug(OS_LOG_DEFAULT, "recalculate the cached logits (check): embd_inp.size() %zu, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu\n",
+    //    os_log_debug(os_log_inst, "recalculate the cached logits (check): embd_inp.size() %zu, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu\n",
     //         embd_inp.size(), n_matching_session_tokens, embd_inp.size(), session_tokens.size());
     //
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token to recalculate the cached logits
     if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() && session_tokens.size() > embd_inp.size()) {
-//        os_log_debug(OS_LOG_DEFAULT, "recalculate the cached logits (do): session_tokens.resize( %zu )\n", embd_inp.size() - 1);
+//        os_log_debug(os_log_inst, "recalculate the cached logits (do): session_tokens.resize( %zu )\n", embd_inp.size() - 1);
         
         session_tokens.resize(embd_inp.size() - 1);
     }
@@ -331,22 +342,21 @@ static BOOL file_is_empty(NSString *path) {
     }
     
     if (params.verbosePrompt) {
-//        LOG_INF("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
+        os_log_info(os_log_inst,
+                    "%s: prompt: '%s'\n", __func__, [params.prompt cStringUsingEncoding:NSUTF8StringEncoding]);
 //        LOG_INF("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            os_log_info(OS_LOG_DEFAULT, "%6d -> '%s'\n", embd_inp[i],
+            os_log_info(os_log_inst, "%6d -> '%s'\n", embd_inp[i],
                         [[self.ctx tokenToPiece:embd_inp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
         }
         
         if (params.nKeep > addBOS) {
 //            LOG_INF("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.nKeep; i++) {
-                os_log_debug(OS_LOG_DEFAULT, "%s",
+                os_log_debug(os_log_inst, "%s",
                              [[self.ctx tokenToPiece:embd_inp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
             }
-//            LOG("'\n");
         }
-//        LOG_INF("\n");
     }
     //
     //    // ctrl+C handling
@@ -366,55 +376,55 @@ static BOOL file_is_empty(NSString *path) {
     //    }
     //
     if (params.interactive) {
-        os_log_info(OS_LOG_DEFAULT, "%s: interactive mode on.\n", __func__);
+        os_log_info(os_log_inst, "%s: interactive mode on.\n", __func__);
         
         if ([params.antiPrompts count] > 0) {
             for (NSString *antiprompt in params.antiPrompts) {
-                os_log_info(OS_LOG_DEFAULT, "Reverse prompt: '%s'\n", [antiprompt cStringUsingEncoding:NSUTF8StringEncoding]);
+                os_log_info(os_log_inst, "Reverse prompt: '%s'\n", [antiprompt cStringUsingEncoding:NSUTF8StringEncoding]);
                 if (params.verbosePrompt) {
                     auto tmp = [_ctx tokenize:antiprompt
                                   addSpecial:false
                                 parseSpecial:true];
                     for (int i = 0; i < (int) tmp.size(); i++) {
-                        os_log_info(OS_LOG_DEFAULT, "%6d -> '%s'\n", tmp[i], [[self.ctx tokenToPiece:tmp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
+                        os_log_info(os_log_inst, "%6d -> '%s'\n", tmp[i], [[self.ctx tokenToPiece:tmp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
                     }
                 }
             }
         }
         
         if (params.inputPrefixBOS) {
-            os_log_info(OS_LOG_DEFAULT, "Input prefix with BOS\n");
+            os_log_info(os_log_inst, "Input prefix with BOS\n");
         }
         
         if ([params.inputPrefix length] > 0) {
-            os_log_info(OS_LOG_DEFAULT, "Input prefix: '%s'\n", [params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
+            os_log_info(os_log_inst, "Input prefix: '%s'\n", [params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
             if (params.verbosePrompt) {
                 auto tmp = [_ctx tokenize:params.inputPrefix addSpecial:true parseSpecial:true];
                 for (int i = 0; i < (int) tmp.size(); i++) {
-                    os_log_info(OS_LOG_DEFAULT, "%6d -> '%s'\n",
+                    os_log_info(os_log_inst, "%6d -> '%s'\n",
                                 tmp[i], [[self.ctx tokenToPiece:tmp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
                 }
             }
         }
         
         if ([params.inputSuffix length] > 0) {
-            os_log_info(OS_LOG_DEFAULT, "Input suffix: '%s'\n", [params.inputSuffix cStringUsingEncoding:NSUTF8StringEncoding]);
+            os_log_info(os_log_inst, "Input suffix: '%s'\n", [params.inputSuffix cStringUsingEncoding:NSUTF8StringEncoding]);
             if (params.verbosePrompt) {
                 auto tmp = [_ctx tokenize:params.inputSuffix addSpecial:false parseSpecial:true];
                 for (int i = 0; i < (int) tmp.size(); i++) {
-                    os_log_info(OS_LOG_DEFAULT, "%6d -> '%s'\n",
+                    os_log_info(os_log_inst, "%6d -> '%s'\n",
                                 tmp[i], [[self.ctx tokenToPiece:tmp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
                 }
             }
         }
     }
     
-    smpl = [[GPTSampler alloc] init:_model gptSamplerParams:[params samplerParams]];
-    if (!smpl) {
+    _smpl = [[GPTSampler alloc] init:_model gptSamplerParams:[params samplerParams]];
+    if (!_smpl) {
         [NSException raise:@"SamplingFailure" format:@"failed to initialize sampling subsystem"];
     }
     
-    os_log_info(OS_LOG_DEFAULT, "sampler seed: %u\n", [smpl seed]);
+    os_log_info(os_log_inst, "sampler seed: %u\n", [_smpl seed]);
     //    LOG_INF("sampler params: \n%s\n", sparams.print().c_str());
     //    LOG_INF("sampler chain: %s\n",    gpt_sampler_print(smpl).c_str());
     //
@@ -431,7 +441,7 @@ static BOOL file_is_empty(NSString *path) {
         GGML_ASSERT(ga_w % ga_n == 0            && "grp_attn_w must be a multiple of grp_attn_n");     // NOLINT
         //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of grp_attn_w");    // NOLINT
         //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * grp_attn_n"); // NOLINT
-        os_log_info(OS_LOG_DEFAULT, "self-extend: n_ctx_train = %d, grp_attn_n = %ld, grp_attn_w = %ld\n", n_ctx_train, static_cast<long>(ga_n), static_cast<long>(ga_w));
+        os_log_info(os_log_inst, "self-extend: n_ctx_train = %d, grp_attn_n = %ld, grp_attn_w = %ld\n", n_ctx_train, static_cast<long>(ga_n), static_cast<long>(ga_w));
     }
     
     if (params.interactive) {
@@ -453,14 +463,6 @@ static BOOL file_is_empty(NSString *path) {
     display              = true;
     need_to_save_session = [pathSession length] > 0 && n_matching_session_tokens < embd_inp.size();
     n_remain           = params.nPredict;
-    
-    //    // the first thing we will do is to output the prompt, so set color accordingly
-    //    console::set_display(console::prompt);
-    //    display = params.display_prompt;
-    //
-    
-    
-    
     
     antiprompt_ids.reserve([params.antiPrompts count]);
     for (NSString *antiprompt in params.antiPrompts) {
@@ -486,8 +488,13 @@ static BOOL file_is_empty(NSString *path) {
     return self;
 }
 
+// MARK: LastOutput
+- (NSString *)lastOutput {
+    return [_mutableLastOutput copy];
+}
+
 - (void)start:(BlockingLineQueue *)queue {
-    while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
+    while ((n_remain != 0 && !is_antiprompt) || _params.interactive) {
         // predict
         if (!embd.empty()) {
             // Note: (n_ctx - 4) here is to match the logic for commandline prompt handling via
@@ -500,42 +507,42 @@ static BOOL file_is_empty(NSString *path) {
                 embd.resize(max_embd_size);
 
 //                console::set_display(console::error);
-                os_log_error(OS_LOG_DEFAULT, "<<input too long: skipped %d token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
+                os_log_error(os_log_inst, "<<input too long: skipped %d token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
 //                console::set_display(console::reset);
             }
 
-            if (params.grpAttnN == 1) {
+            if (_params.grpAttnN == 1) {
                 // infinite text generation via context shifting
                 // if we run out of context:
                 // - take the n_keep first tokens from the original prompt (via n_past)
                 // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
 
                 if (n_past + (int) embd.size() >= [_ctx nCtx]) {
-                    if (!params.ctxShift) {
-                        os_log_debug(OS_LOG_DEFAULT, "\n\n%s: context full and context shift is disabled => stopping\n", __func__);
+                    if (!_params.ctxShift) {
+                        os_log_debug(os_log_inst, "\n\n%s: context full and context shift is disabled => stopping\n", __func__);
                         break;
                     } else {
-                        if (params.nPredict == -2) {
-                            os_log_debug(OS_LOG_DEFAULT, "\n\n%s: context full and n_predict == -%d => stopping\n", __func__, params.nPredict);
+                        if (_params.nPredict == -2) {
+                            os_log_debug(os_log_inst, "\n\n%s: context full and n_predict == -%d => stopping\n", __func__, _params.nPredict);
                             break;
                         }
 
-                        const int n_left    = n_past - params.nKeep;
+                        const int n_left    = n_past - _params.nKeep;
                         const int n_discard = n_left/2;
 
-                        os_log_debug(OS_LOG_DEFAULT, "context full, swapping: n_past = %d, n_left = %d, n_ctx = %lu, n_keep = %d, n_discard = %d\n",
-                                     n_past, n_left, static_cast<unsigned long>([_ctx nCtx]), params.nKeep, n_discard);
+                        os_log_debug(os_log_inst, "context full, swapping: n_past = %d, n_left = %d, n_ctx = %lu, n_keep = %d, n_discard = %d\n",
+                                     n_past, n_left, static_cast<unsigned long>([_ctx nCtx]), _params.nKeep, n_discard);
 
-                        llama_kv_cache_seq_rm ([self.ctx cContext], 0, params.nKeep            , params.nKeep + n_discard);
-                        llama_kv_cache_seq_add([self.ctx cContext], 0, params.nKeep + n_discard, n_past, -n_discard);
+                        llama_kv_cache_seq_rm ([self.ctx cContext], 0, _params.nKeep            , _params.nKeep + n_discard);
+                        llama_kv_cache_seq_add([self.ctx cContext], 0, _params.nKeep + n_discard, n_past, -n_discard);
 
                         n_past -= n_discard;
 
-                        os_log_debug(OS_LOG_DEFAULT, "after swap: n_past = %d\n", n_past);
+                        os_log_debug(os_log_inst, "after swap: n_past = %d\n", n_past);
 
-                        os_log_debug(OS_LOG_DEFAULT, "embd: %s\n", [self.ctx convertTokensToString:embd].c_str());
+                        os_log_debug(os_log_inst, "embd: %s\n", [self.ctx convertTokensToString:embd].c_str());
 
-                        os_log_debug(OS_LOG_DEFAULT, "clear session path\n");
+                        os_log_debug(os_log_inst, "clear session path\n");
                         [pathSession setString:@""];
                     }
                 }
@@ -546,10 +553,10 @@ static BOOL file_is_empty(NSString *path) {
                     const int bd = (ga_w/ga_n)*(ga_n - 1);
                     const int dd = (ga_w/ga_n) - ib*bd - ga_w;
 
-                    os_log_debug(OS_LOG_DEFAULT, "\n");
-                    os_log_debug(OS_LOG_DEFAULT, "shift: [%6ld, %6d] + %6d -> [%6ld, %6d]\n", static_cast<long>(ga_i), n_past, ib*bd, static_cast<long>(ga_i + ib*bd), n_past + ib*bd);
-                    os_log_debug(OS_LOG_DEFAULT, "div:   [%6ld, %6ld] / %6ld -> [%6ld, %6ld]\n", static_cast<long>(ga_i + ib*bd), static_cast<long>(ga_i + ib*bd + ga_w), static_cast<long>(ga_n), static_cast<long>((ga_i + ib*bd)/ga_n), static_cast<long>((ga_i + ib*bd + ga_w)/ga_n));
-                    os_log_debug(OS_LOG_DEFAULT, "shift: [%6ld, %6d] + %6d -> [%6ld, %6d]\n", static_cast<long>(ga_i + ib*bd + ga_w), n_past + ib*bd, dd, static_cast<long>(ga_i + ib*bd + ga_w + dd), n_past + ib*bd + dd);
+                    os_log_debug(os_log_inst, "\n");
+                    os_log_debug(os_log_inst, "shift: [%6ld, %6d] + %6d -> [%6ld, %6d]\n", static_cast<long>(ga_i), n_past, ib*bd, static_cast<long>(ga_i + ib*bd), n_past + ib*bd);
+                    os_log_debug(os_log_inst, "div:   [%6ld, %6ld] / %6ld -> [%6ld, %6ld]\n", static_cast<long>(ga_i + ib*bd), static_cast<long>(ga_i + ib*bd + ga_w), static_cast<long>(ga_n), static_cast<long>((ga_i + ib*bd)/ga_n), static_cast<long>((ga_i + ib*bd + ga_w)/ga_n));
+                    os_log_debug(os_log_inst, "shift: [%6ld, %6d] + %6d -> [%6ld, %6d]\n", static_cast<long>(ga_i + ib*bd + ga_w), n_past + ib*bd, dd, static_cast<long>(ga_i + ib*bd + ga_w + dd), n_past + ib*bd + dd);
 
                     [self.ctx kvCacheSeqAdd:0 p0:ga_i p1:n_past delta:ib*bd];
                     [self.ctx kvCacheSeqDiv:0 p0:ga_i + ib*bd p1:ga_i + ib*bd + ga_w delta:ga_n];
@@ -559,7 +566,7 @@ static BOOL file_is_empty(NSString *path) {
 
                     ga_i += ga_w/ga_n;
 
-                    os_log_debug(OS_LOG_DEFAULT, "\nn_past_old = %d, n_past = %d, ga_i = %ld\n\n", n_past + bd, n_past, static_cast<long>(ga_i));
+                    os_log_debug(os_log_inst, "\nn_past_old = %d, n_past = %d, ga_i = %ld\n\n", n_past + bd, n_past, static_cast<long>(ga_i));
                 }
             }
 
@@ -585,13 +592,13 @@ static BOOL file_is_empty(NSString *path) {
                 }
             }
 
-            for (int i = 0; i < (int) embd.size(); i += params.nBatch) {
+            for (int i = 0; i < (int) embd.size(); i += _params.nBatch) {
                 int n_eval = (int) embd.size() - i;
-                if (n_eval > params.nBatch) {
-                    n_eval = params.nBatch;
+                if (n_eval > _params.nBatch) {
+                    n_eval = _params.nBatch;
                 }
 
-                os_log_debug(OS_LOG_DEFAULT, "eval: %s\n", [self.ctx convertTokensToString:embd].c_str());
+                os_log_debug(os_log_inst, "eval: %s\n", [self.ctx convertTokensToString:embd].c_str());
 
                 
                 if ([self.ctx decode:[[LlamaBatch alloc] initWithBatch:llama_batch_get_one(&embd[i], n_eval)] ]) {
@@ -600,10 +607,10 @@ static BOOL file_is_empty(NSString *path) {
 
                 n_past += n_eval;
 
-                os_log_debug(OS_LOG_DEFAULT, "n_past = %d\n", n_past);
+                os_log_debug(os_log_inst, "n_past = %d\n", n_past);
                 // Display total tokens alongside total time
-                if (params.nPrint > 0 && n_past % params.nPrint == 0) {
-                    os_log_debug(OS_LOG_DEFAULT, "\n\033[31mTokens consumed so far = %d / %lu \033[0m\n", n_past, static_cast<unsigned long>([self.ctx nCtx]));
+                if (_params.nPrint > 0 && n_past % _params.nPrint == 0) {
+                    os_log_debug(os_log_inst, "\n\033[31mTokens consumed so far = %d / %lu \033[0m\n", n_past, static_cast<unsigned long>([self.ctx nCtx]));
                 }
             }
 
@@ -617,19 +624,19 @@ static BOOL file_is_empty(NSString *path) {
 
         if ((int) embd_inp.size() <= n_consumed && !isInteracting) {
             // optionally save the session on first sample (for faster prompt loading next time)
-            if ([pathSession length] > 0 && need_to_save_session && !params.promptCacheRO) {
+            if ([pathSession length] > 0 && need_to_save_session && !_params.promptCacheRO) {
                 need_to_save_session = false;
                 [self.ctx saveStateFile:pathSession tokens:session_tokens.data() nTokenCount:session_tokens.size()];
 //                llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
 
-                os_log_debug(OS_LOG_DEFAULT, "saved session to %s\n", [pathSession cStringUsingEncoding:NSUTF8StringEncoding]);
+                os_log_debug(os_log_inst, "saved session to %s\n", [pathSession cStringUsingEncoding:NSUTF8StringEncoding]);
             }
 
-            const llama_token idToken = [smpl sample:self.ctx index:-1];
+            const llama_token idToken = [_smpl sample:self.ctx index:-1];
 
-            [smpl accept:idToken acceptGrammar:true];
+            [_smpl accept:idToken acceptGrammar:true];
 
-            // os_log_debug(OS_LOG_DEFAULT, "last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
+            // os_log_debug(os_log_inst, "last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
             embd.push_back(idToken);
 
@@ -639,19 +646,19 @@ static BOOL file_is_empty(NSString *path) {
             // decrement remaining sampling budget
             --n_remain;
 
-            os_log_debug(OS_LOG_DEFAULT, "n_remain: %d\n", n_remain);
+            os_log_debug(os_log_inst, "n_remain: %d\n", n_remain);
         } else {
             // some user input remains from prompt or interaction, forward it to processing
-            os_log_debug(OS_LOG_DEFAULT, "embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), n_consumed);
+            os_log_debug(os_log_inst, "embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), n_consumed);
             while ((int) embd_inp.size() > n_consumed) {
                 embd.push_back(embd_inp[n_consumed]);
 
                 // push the prompt in the sampling context in order to apply repetition penalties later
                 // for the prompt, we don't apply grammar rules
-                [smpl accept:embd_inp[n_consumed] acceptGrammar:false];
+                [_smpl accept:embd_inp[n_consumed] acceptGrammar:false];
 
                 ++n_consumed;
-                if ((int) embd.size() >= params.nBatch) {
+                if ((int) embd.size() >= _params.nBatch) {
                     break;
                 }
             }
@@ -662,10 +669,10 @@ static BOOL file_is_empty(NSString *path) {
 //            std::cout<< "DISPLAYING TEXT" << std::endl;
             
             for (auto idToken : embd) {
-                NSString *token_str = [self.ctx tokenToPiece:idToken special:params.special];
+                NSString *token_str = [self.ctx tokenToPiece:idToken special:_params.special];
 
                 // Console/Stream Output
-                os_log_info(OS_LOG_DEFAULT, "%s", [token_str cStringUsingEncoding:NSUTF8StringEncoding]);
+                os_log_info(os_log_inst, "%s", [token_str cStringUsingEncoding:NSUTF8StringEncoding]);
 
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
@@ -678,6 +685,9 @@ static BOOL file_is_empty(NSString *path) {
                     output_tokens.push_back(idToken);
                     output_ss << [token_str cStringUsingEncoding:NSUTF8StringEncoding];
                     last_output_ss << [token_str cStringUsingEncoding:NSUTF8StringEncoding];
+                    [self willChangeValueForKey:@"lastOutput"];
+                    [_mutableLastOutput appendString:token_str];
+                    [self didChangeValueForKey:@"lastOutput"];
                 }
                 
             }
@@ -698,23 +708,23 @@ static BOOL file_is_empty(NSString *path) {
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
             // check for reverse prompt in the last n_prev tokens
-            if ([params.antiPrompts count] > 0) {
+            if ([_params.antiPrompts count] > 0) {
                 const int n_prev = 32;
-                NSString *last_output = [smpl previousString:self.ctx n:n_prev];
+                NSString *last_output = [_smpl previousString:self.ctx n:n_prev];
 
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
                 // If we're not running interactively, the reverse prompt might be tokenized with some following characters
                 // so we'll compensate for that by widening the search window a bit.
-                for (NSString *antiprompt in params.antiPrompts) {
-                    size_t extra_padding = params.interactive ? 0 : 2;
+                for (NSString *antiprompt in _params.antiPrompts) {
+                    size_t extra_padding = _params.interactive ? 0 : 2;
                     size_t search_start_pos = [last_output length] > static_cast<size_t>([antiprompt length] + extra_padding)
                     ? [last_output length] - static_cast<size_t>([antiprompt length] + extra_padding)
                         : 0;
 
                     // TODO: Check if correct
                     if ([last_output rangeOfString:antiprompt options:0 range:NSMakeRange(search_start_pos, last_output.length - search_start_pos)].location != NSNotFound) {
-                        if (params.interactive) {
+                        if (_params.interactive) {
                             isInteracting = true;
                         }
                         is_antiprompt = true;
@@ -723,10 +733,10 @@ static BOOL file_is_empty(NSString *path) {
                 }
 
                 // check for reverse prompt using special tokens
-                llama_token last_token = [smpl last];
+                llama_token last_token = [_smpl last];
                 for (std::vector<llama_token> ids : antiprompt_ids) {
                     if (ids.size() == 1 && last_token == ids[0]) {
-                        if (params.interactive) {
+                        if (_params.interactive) {
                             isInteracting = true;
                         }
                         is_antiprompt = true;
@@ -735,25 +745,25 @@ static BOOL file_is_empty(NSString *path) {
                 }
 
                 if (is_antiprompt) {
-                    os_log_debug(OS_LOG_DEFAULT, "found antiprompt: %s\n", [last_output cStringUsingEncoding:NSUTF8StringEncoding]);
+                    os_log_debug(os_log_inst, "found antiprompt: %s\n", [last_output cStringUsingEncoding:NSUTF8StringEncoding]);
                 }
             }
 
             // deal with end of generation tokens in interactive mode
             
-            if ([self.model tokenIsEOG:[smpl last]]) {
-                os_log_debug(OS_LOG_DEFAULT, "found an EOG token\n");
+            if ([self.model tokenIsEOG:[_smpl last]]) {
+                os_log_debug(os_log_inst, "found an EOG token\n");
 
-                if (params.interactive) {
-                    if ([[params antiPrompts] count] > 0) {
+                if (_params.interactive) {
+                    if ([[_params antiPrompts] count] > 0) {
                         // tokenize and inject first reverse prompt
                         
-                        const auto first_antiprompt = [self.ctx tokenize:params.antiPrompts[0] addSpecial:false parseSpecial:true];
+                        const auto first_antiprompt = [self.ctx tokenize:_params.antiPrompts[0] addSpecial:false parseSpecial:true];
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
 
-                    if (params.enableChatTemplate) {
+                    if (_params.enableChatTemplate) {
                         [self chat_add_and_format:chat_msgs
                                              role:"assistant"
                                           content:assistant_ss.str()];
@@ -764,32 +774,32 @@ static BOOL file_is_empty(NSString *path) {
             }
 
             // if current token is not EOG, we add it to current assistant message
-            if (params.conversation) {
-                const auto idToken = [smpl last];
+            if (_params.conversation) {
+                const auto idToken = [_smpl last];
                 assistant_ss << [[self.ctx tokenToPiece:idToken special:false] cStringUsingEncoding:NSUTF8StringEncoding];
             }
 
             if (n_past > 0 && isInteracting) {
-                os_log_debug(OS_LOG_DEFAULT, "waiting for user input\n");
+                os_log_debug(os_log_inst, "waiting for user input\n");
 
-                if (params.conversation) {
+                if (_params.conversation) {
 //                    osLog_("\n> ");
                 }
 
-                if (params.inputPrefixBOS) {
-                    os_log_debug(OS_LOG_DEFAULT, "adding input prefix BOS token\n");
+                if (_params.inputPrefixBOS) {
+                    os_log_debug(os_log_inst, "adding input prefix BOS token\n");
                     embd_inp.push_back([self.model tokenBOS]);
                 }
 
                 std::string buffer;
-                if ([params.inputPrefix length] > 0 && !params.conversation) {
-                    os_log_debug(OS_LOG_DEFAULT, "appending input prefix: '%s'\n", [params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
-                    os_log_info(OS_LOG_DEFAULT, "%s", [params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
+                if ([_params.inputPrefix length] > 0 && !_params.conversation) {
+                    os_log_debug(os_log_inst, "appending input prefix: '%s'\n", [_params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
+                    os_log_info(os_log_inst, "%s", [_params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
                 }
 
                 // color user input only
 //                console::set_display(console::user_input);
-                display = params.displayPrompt;
+                display = _params.displayPrompt;
 
                 std::string line;
 //                bool another_line = true;
@@ -806,8 +816,12 @@ static BOOL file_is_empty(NSString *path) {
                     auto str = last_output_ss.str();
                     last_output_ss.str("");
                     [queue addOutputLine:[NSString stringWithCString:str.c_str() encoding:NSUTF8StringEncoding]];
+                    [self willChangeValueForKey:@"lastOutput"];
+                    _mutableLastOutput = [[NSMutableString alloc] init];
+                    [self didChangeValueForKey:@"lastOutput"];
+                    
                 }
-                 
+                
                 buffer = [[queue inputLine] cStringUsingEncoding:NSUTF8StringEncoding];
 //                    do {
 //                        another_line = console::readline(line, params.multiline_input);
@@ -822,34 +836,34 @@ static BOOL file_is_empty(NSString *path) {
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
                     // append input suffix if any
-                    if ([params.inputSuffix length] > 0 && !params.conversation) {
-                        os_log_debug(OS_LOG_DEFAULT, "appending input suffix: '%s'\n", [params.inputSuffix cStringUsingEncoding:NSUTF8StringEncoding]);
-                        os_log_info(OS_LOG_DEFAULT, "%s", [params.inputSuffix cStringUsingEncoding:NSUTF8StringEncoding]);
+                    if ([[self params].inputSuffix length] > 0 && !_params.conversation) {
+                        os_log_debug(os_log_inst, "appending input suffix: '%s'\n", [_params.inputSuffix cStringUsingEncoding:NSUTF8StringEncoding]);
+                        os_log_info(os_log_inst, "%s", [_params.inputSuffix cStringUsingEncoding:NSUTF8StringEncoding]);
                     }
 
-                    os_log_debug(OS_LOG_DEFAULT, "buffer: '%s'\n", buffer.c_str());
+                    os_log_debug(os_log_inst, "buffer: '%s'\n", buffer.c_str());
 
                     const size_t original_size = embd_inp.size();
 
-                    if (params.escapeSequences) {
+                    if (_params.escapeSequences) {
                         string_process_escapes(buffer);
                     }
 
-                    bool format_chat = params.conversation && params.enableChatTemplate;
+                    bool format_chat = _params.conversation && _params.enableChatTemplate;
                     std::string user_inp = format_chat
                     ? [[self chat_add_and_format:chat_msgs role:"user" content:std::move(buffer)] cStringUsingEncoding:NSUTF8StringEncoding]
                         : std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
-                    const auto line_pfx = [self.ctx tokenize:params.inputPrefix addSpecial:false parseSpecial:true];
+                    const auto line_pfx = [self.ctx tokenize:_params.inputPrefix addSpecial:false parseSpecial:true];
                     const auto line_inp = [self.ctx tokenize:[NSString stringWithCString:user_inp.c_str()
                                                                            encoding:NSUTF8StringEncoding]
                                              addSpecial:false
                                            parseSpecial:format_chat];
-                    const auto line_sfx = [self.ctx tokenize:params.inputSuffix
+                    const auto line_sfx = [self.ctx tokenize:_params.inputSuffix
                                              addSpecial:false
                                            parseSpecial:true];
 
-                    os_log_debug(OS_LOG_DEFAULT, "input tokens: %s\n", [self.ctx convertTokensToString:line_inp].c_str());
+                    os_log_debug(os_log_inst, "input tokens: %s\n", [self.ctx convertTokensToString:line_inp].c_str());
 
                     // if user stop generation mid-way, we must add EOT to finish model's last response
                     if (need_insert_eot && format_chat) {
@@ -872,9 +886,9 @@ static BOOL file_is_empty(NSString *path) {
                     assistant_ss.str("");
 
                     n_remain -= line_inp.size();
-                    os_log_debug(OS_LOG_DEFAULT, "n_remain: %d\n", n_remain);
+                    os_log_debug(os_log_inst, "n_remain: %d\n", n_remain);
                 } else {
-                    os_log_debug(OS_LOG_DEFAULT, "empty line, passing control back\n");
+                    os_log_debug(os_log_inst, "empty line, passing control back\n");
                 }
 
                 input_echo = false; // do not echo this again
@@ -882,22 +896,22 @@ static BOOL file_is_empty(NSString *path) {
 
             if (n_past > 0) {
                 if (isInteracting) {
-                    [smpl reset];
+                    [_smpl reset];
                 }
                 isInteracting = false;
             }
         }
 
         // end of generation
-        if (!embd.empty() && [self.model tokenIsEOG:embd.back()] && !(params.interactive)) {
-            os_log_info(OS_LOG_DEFAULT, " [end of text]\n");
+        if (!embd.empty() && [self.model tokenIsEOG:embd.back()] && !(_params.interactive)) {
+            os_log_info(os_log_inst, " [end of text]\n");
             break;
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
         // We skip this logic when n_predict == -1 (infinite) or -2 (stop at context size).
-        if (params.interactive && n_remain <= 0 && params.nPredict >= 0) {
-            n_remain = params.nPredict;
+        if (_params.interactive && n_remain <= 0 && _params.nPredict >= 0) {
+            n_remain = _params.nPredict;
             isInteracting = true;
         }
     }

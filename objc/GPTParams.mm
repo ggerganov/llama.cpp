@@ -1,126 +1,9 @@
 #import <Foundation/Foundation.h>
 #import "GPTParams_Private.hpp"
+#import "CPUParams_Private.hpp"
+#import "GPTSampler.h"
 #import "../common/common.h"
 #import "ggml.h"
-
-@implementation GGMLThreadpool {
-    ggml_threadpool *threadpool;
-}
-
-- (instancetype)initWithThreadpool:(ggml_threadpool *)threadpool
-{
-    self = [super init];
-    if (self) {
-        self->threadpool = threadpool;
-    }
-    return self;
-}
-
-- (ggml_threadpool *)threadpool {
-    return threadpool;
-}
-
-@end
-
-@implementation GGMLThreadpoolParams {
-    ggml_threadpool_params params;
-}
-
-- (BOOL)getCpuMaskAtIndex:(NSUInteger)index {
-    abort();
-}
-
-- (void)setCpuMask:(BOOL)value atIndex:(NSUInteger)index {
-    abort();
-}
-
-- (instancetype)initWithParams:(ggml_threadpool_params&&)params
-{
-    self = [super init];
-    if (self) {
-        self->params = params;
-    }
-    return self;
-}
-
-- (BOOL)isEqual:(id)other {
-    GGMLThreadpoolParams *rhs = (GGMLThreadpoolParams *)other;
-    ggml_threadpool_params rhs_params = rhs->params;
-    return ggml_threadpool_params_match(&params, &rhs_params);
-}
-
-- (GGMLThreadpool *)threadpool {
-    auto tp = ggml_threadpool_new(&params);
-    return [[GGMLThreadpool alloc] initWithThreadpool:tp];
-}
-@end
-
-@implementation CPUParams {
-    cpu_params *params;
-}
-
-- (instancetype)initWithParams:(cpu_params&)params;
-{
-    self = [super init];
-    if (self) {
-        self->params = &params;
-    }
-    return self;
-}
-
-- (int)nThreads {
-    return params->n_threads;
-}
-
-- (void)setNThreads:(int)nThreads {
-    params->n_threads = nThreads;
-}
-
-- (BOOL)maskValid {
-    return params->mask_valid;
-}
-
-- (void)setMaskValid:(BOOL)maskValid {
-    params->mask_valid = maskValid;
-}
-
-- (GGMLSchedPriority)priority {
-    return GGMLSchedPriority(params->priority);
-}
-
-- (void)setPriority:(GGMLSchedPriority)priority {
-    params->priority = ggml_sched_priority(priority);
-}
-
-- (BOOL)strictCPU {
-    return params->strict_cpu;
-}
-
-- (void)setStrictCPU:(BOOL)strictCPU {
-    params->strict_cpu = strictCPU;
-}
-
-- (uint32_t)poll {
-    return params->poll;
-}
-
-- (void)setPoll:(uint32_t)poll {
-    params->poll = poll;
-}
-
-- (BOOL)getCpuMaskAtIndex:(NSUInteger)index {
-    return params->cpumask[index];
-}
-
-- (void)setCpuMask:(BOOL)value atIndex:(NSUInteger)index {
-    params->cpumask[index] = value;
-}
-
-- (GGMLThreadpoolParams *)ggmlThreadpoolParams {
-    return [[GGMLThreadpoolParams alloc] initWithParams:ggml_threadpool_params_from_cpu_params(*params)];
-}
-
-@end
 
 @implementation GPTSamplerParams {
     common_sampler_params *gpt_sampler_params;
@@ -413,6 +296,42 @@
         [antiprompts addObject:[NSString stringWithCString:antiprompt.c_str() encoding:NSUTF8StringEncoding]];
     }
     return antiprompts;
+}
+
+- (void)setAntiPrompts:(NSArray<NSString *> *)antiPrompts {
+    gpt_params.antiprompt.clear();
+    for (NSString *antiprompt in antiPrompts) {
+        gpt_params.antiprompt.push_back([antiprompt cStringUsingEncoding:NSUTF8StringEncoding]);
+    }
+}
+
+- (NSArray<NSString *> *)apiKeys {
+    auto apiKeys = [[NSMutableArray alloc] init];
+    for (auto& apiKey : gpt_params.api_keys) {
+        [apiKeys addObject:[NSString stringWithCString:apiKey.c_str() encoding:NSUTF8StringEncoding]];
+    }
+    return apiKeys;
+}
+
+- (void)setApiKeys:(NSArray<NSString *> *)apiKeys {
+    gpt_params.api_keys.clear();
+    for (NSString *apiKey in apiKeys) {
+        gpt_params.api_keys.push_back([apiKey cStringUsingEncoding:NSUTF8StringEncoding]);
+    }
+}
+
+- (NSArray<NSNumber *> *)tensorSplit {
+    auto tensorSplit = [[NSMutableArray alloc] init];
+    for (auto& tensor : gpt_params.tensor_split) {
+        [tensorSplit addObject:[[NSNumber alloc] initWithFloat:tensor]];
+    }
+    return tensorSplit;
+}
+
+- (void)setTensorSplit:(NSArray<NSNumber *> *)tensorSplit {
+    for (size_t i = 0; i < [tensorSplit count]; i++) {
+        gpt_params.tensor_split[i] = [tensorSplit[i] floatValue];
+    }
 }
 
 - (common_params&)params {
@@ -714,6 +633,31 @@
 
 - (void)setInputSuffix:(NSString *)inputSuffix {
     gpt_params.input_suffix = [inputSuffix cStringUsingEncoding:NSUTF8StringEncoding];
+}
+
+- (BOOL)interactive {
+    return gpt_params.interactive;
+}
+
+- (void)setInteractive:(BOOL)interactive {
+    gpt_params.interactive = interactive;
+}
+
+- (BOOL)interactiveFirst {
+    return gpt_params.interactive_first;
+}
+
+- (void)setInteractiveFirst:(BOOL)interactiveFirst {
+    gpt_params.interactive_first = interactiveFirst;
+}
+- (id)copyWithZone:(NSZone *)zone {
+    GPTParams *copy = [[[self class] allocWithZone:zone] init];
+    
+    if (copy) {
+        copy->gpt_params = gpt_params;
+    }
+    
+    return copy;
 }
 
 @end

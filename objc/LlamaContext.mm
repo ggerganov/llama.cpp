@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "LlamaContext_Private.hpp"
+#import "GGMLThreadpool_Private.hpp"
 #import "GPTParams_Private.hpp"
 #import "LlamaModel_Private.hpp"
 #import "LlamaBatch_Private.hpp"
@@ -15,6 +16,12 @@
         ctx = context;
     }
     return self;
+}
+
+- (void)dealloc
+{
+    [super dealloc];
+    llama_free(ctx);
 }
 
 - (void)attachThreadpool:(GGMLThreadpool *)threadpool

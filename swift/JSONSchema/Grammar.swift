@@ -24,8 +24,6 @@ public class SchemaConverter {
     }
 
     private func formatLiteral(_ literal: Any) -> String {
-//        let escaped = GRAMMAR_LITERAL_ESCAPES.reduce("\(literal)", {
-//        let regex = Regex("[\r\n\"]")
         let escaped = GRAMMAR_LITERAL_ESCAPES.reduce("\(literal)") {
             $0.replacingOccurrences(of: $1.key, with: $1.value)
         }

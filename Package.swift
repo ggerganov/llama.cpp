@@ -32,7 +32,7 @@ var cSettings: [CSetting] =  [
     // We should consider add this in the future when we drop support for iOS 14
     // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
     .define("ACCELERATE_NEW_LAPACK"),
-    .define("ACCELERATE_LAPACK_ILP64")
+    .define("ACCELERATE_LAPACK_ILP64"),
 ]
 
 #if canImport(Darwin)
@@ -80,7 +80,8 @@ let package = Package(
                    "ggml"
                 ],
                 sources: cppSources,
-                publicHeadersPath: "spm-headers"),
+                publicHeadersPath: "spm-headers",
+                cSettings: cSettings),
         .target(
             name: "llama",
             dependencies: ["llama_cpp"],
@@ -94,6 +95,8 @@ let package = Package(
                 dependencies: ["llama"],
                 path: "objc",
                 sources: [
+                    "CPUParams.mm",
+                    "GGMLThreadpool.mm",
                     "GPTParams.mm",
                     "GPTSampler.mm",
                     "LlamaBatch.mm",

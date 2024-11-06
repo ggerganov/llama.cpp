@@ -16,12 +16,14 @@ struct ToolMacro: BodyMacro {
 
 struct LlamaActorMacro: ExtensionMacro, MemberMacro {
     static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        [
+        return [
             """
-            let session: LlamaToolSession
+            var session: LlamaToolSession!
             
             public init(params: GPTParams) async throws {
-                self.session = try await LlamaToolSession(params: params, tools: Self.tools)
+                \(raw: declaration.inheritanceClause != nil ? "self.init()" : "")
+                let tools = Self.tools(self)
+                self.session = try await LlamaToolSession(params: params, tools: tools)
             }
             """
         ]
@@ -41,6 +43,7 @@ struct LlamaActorMacro: ExtensionMacro, MemberMacro {
              callableString: String,
              callableName: String)
         ] = []
+        let typeName = type.as(IdentifierTypeSyntax.self)!.name.text
         for member in declaration.memberBlock.members {
             let comments = member.leadingTrivia.filter { $0.isComment }
             guard let member = member.decl.as(FunctionDeclSyntax.self) else {
@@ -72,6 +75,11 @@ struct LlamaActorMacro: ExtensionMacro, MemberMacro {
             let callableName = context.makeUniqueName(name.text)
             let callableString = """
             @dynamicCallable struct \(callableName.text): DynamicCallable {
+                private weak var llamaActor: \(typeName)?
+                init(_ llamaActor: \(typeName)) {
+                    self.llamaActor = llamaActor
+                }
+            
                 @discardableResult
                 func dynamicallyCall(withKeywordArguments args: [String: Any]) async throws -> String {
                     \(parameters.map {
@@ -79,11 +87,15 @@ struct LlamaActorMacro: ExtensionMacro, MemberMacro {
                     }.joined(separator: "\n"))
                     for (key, value) in args {
                         \(parameters.map {
-                            "if key == \"\($0.name)\" { \($0.name) = value as! \($0.type) }"
+                            """
+                            if key == "\($0.name)", let value = value as? AnyDecodable, case let .\($0.type.lowercased())(v) = value {
+                                    \($0.name) = v
+                            }
+                            """
                         }.joined(separator: "\n"))
                     }
             
-                    let returnValue = try await \(name.text)(\(parameters.map { "\($0.name): \($0.name)" }.joined(separator: ",")))
+                    let returnValue = try await self.llamaActor!.\(name.text)(\(parameters.map { "\($0.name): \($0.name)" }.joined(separator: ",")))
                     let jsonValue = try JSONEncoder().encode(returnValue)
                     return String(data: jsonValue, encoding: .utf8)!
                 }
@@ -105,10 +117,10 @@ struct LlamaActorMacro: ExtensionMacro, MemberMacro {
                     $0.callableString
                 }.joined(separator: "\n"))
             
-                static var tools: [String: (DynamicCallable, _JSONFunctionSchema)] {
+                static func tools(_ self: \(raw: typeName)) -> [String: (DynamicCallable, _JSONFunctionSchema)] {
                     [\(raw: tools.map { tool in
                         """
-                        "\(tool.name)": (\(tool.callableName)(), _JSONFunctionSchema(name: "\(tool.name)", description: "\(tool.description)", parameters: _JSONFunctionSchema.Parameters(properties: \(tool.parameters.count == 0 ? "[:]" : "[" + tool.parameters.map { parameter in
+                        "\(tool.name)": (\(tool.callableName)(self), _JSONFunctionSchema(name: "\(tool.name)", description: "\(tool.description)", parameters: _JSONFunctionSchema.Parameters(properties: \(tool.parameters.count == 0 ? "[:]" : "[" + tool.parameters.map { parameter in
                             """
                             "\(parameter.name)": _JSONFunctionSchema.Property(type: \(parameter.type).self, description: "\(parameter.description)"),
                             """

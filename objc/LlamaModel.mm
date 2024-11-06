@@ -22,6 +22,12 @@
     return self;
 }
 
+- (void)dealloc
+{
+    [super dealloc];
+    llama_free_model(model);
+}
+
 - (LlamaContext *)context:(LlamaContextParams *)params {
     return nil;
 }
