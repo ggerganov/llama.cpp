@@ -30,7 +30,7 @@
 </head>
 
 <body>
-  <div id="app" class="flex flex-row">
+  <div id="app" class="flex flex-row opacity-0"> <!-- opacity-0 will be removed on app mounted -->
     <!-- sidebar -->
     <div class="flex flex-col bg-black bg-opacity-5 w-64 py-8 px-4 h-screen overflow-y-auto">
       <h2 class="font-bold mb-4 ml-4">Conversations</h2>
@@ -213,7 +213,7 @@
         <!-- action buttons -->
         <div class="modal-action">
           <button class="btn" @click="resetConfigDialog">Reset to default</button>
-          <button class="btn" @click="closeAndDiscardConfigDialog">Discard</button>
+          <button class="btn" @click="closeAndDiscardConfigDialog">Close</button>
           <button class="btn btn-primary" @click="closeAndSaveConfigDialog">Save and close</button>
         </div>
       </div>
@@ -225,20 +225,26 @@
     import { createApp, defineComponent, shallowRef, computed, h } from './deps_vue.esm-browser.js';
     import { llama } from './completion.js';
 
+    const isString = (x) => !!x.toLowerCase;
+    const isNumeric = (n) => !isString(n) && !isNaN(n);
+
     const BASE_URL = localStorage.getItem('base') // for debugging
       || (new URL('.', document.baseURI).href).toString(); // for production
     const CONFIG_DEFAULT = {
       // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
       apiKey: '',
       systemMessage: 'You are a helpful assistant.',
+      // make sure these default values are in sync with `common.h`
       temperature: 0.8,
       top_k: 40,
       top_p: 0.95,
-      min_p: 0.95,
+      min_p: 0.05,
       max_tokens: -1,
       custom: '', // custom json-stringified object
     };
-    const CONFIG_NUMERIC_KEYS = ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens'];
+    // config keys having numeric value (i.e. temperature, top_k, top_p, etc)
+    const CONFIG_NUMERIC_KEYS = Object.entries(CONFIG_DEFAULT).filter(e => isNumeric(e[1])).map(e => e[0]);
+    // list of themes supported by daisyui
     const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'];
 
     // markdown support
@@ -365,6 +371,7 @@
       },
       computed: {},
       mounted() {
+        document.getElementById('app').classList.remove('opacity-0'); // show app
         // scroll to the bottom when the pending message height is updated
         const pendingMsgElem = document.getElementById('pending-msg');
         const resizeObserver = new ResizeObserver(() => {
@@ -523,7 +530,7 @@
             return;
           }
           for (const key of CONFIG_NUMERIC_KEYS) {
-            if (isNaN(this.config[key])) {
+            if (!isNumeric(this.config[key])) {
               alert(`Invalid number for ${key} (expected an integer or a float)`);
               return;
             }
