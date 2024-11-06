@@ -332,9 +332,13 @@
     };
 
     // scroll to bottom of chat messages
-    const chatScrollToBottom = () => {
+    // if requiresNearBottom is true, only auto-scroll if user is near bottom
+    const chatScrollToBottom = (requiresNearBottom) => {
       const msgListElem = document.getElementById('messages-list');
-      setTimeout(() => msgListElem.scrollTo({ top: msgListElem.scrollHeight }), 1);
+      const spaceToBottom = msgListElem.scrollHeight - msgListElem.scrollTop - msgListElem.clientHeight;
+      if (!requiresNearBottom || (spaceToBottom < 100)) {
+        setTimeout(() => msgListElem.scrollTo({ top: msgListElem.scrollHeight }), 1);
+      }
     };
 
     const mainApp = createApp({
@@ -364,7 +368,7 @@
         // scroll to the bottom when the pending message height is updated
         const pendingMsgElem = document.getElementById('pending-msg');
         const resizeObserver = new ResizeObserver(() => {
-          if (this.isGenerating) chatScrollToBottom();
+          if (this.isGenerating) chatScrollToBottom(true);
         });
         resizeObserver.observe(pendingMsgElem);
       },
@@ -413,6 +417,7 @@
           this.inputMsg = '';
           this.editingMsg = null;
           this.generateMessage(currConvId);
+          chatScrollToBottom();
         },
         async generateMessage(currConvId) {
           if (this.isGenerating) return;
