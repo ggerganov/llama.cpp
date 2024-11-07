@@ -801,6 +801,7 @@ struct server_context {
         slot.params.cache_prompt        = json_value(data, "cache_prompt",       false);
         slot.params.n_predict           = json_value(data, "n_predict",          json_value(data, "max_tokens", default_params.n_predict));
         slot.params.n_indent            = json_value(data, "n_indent",           default_params.n_indent);
+        slot.sparams.k_shift            = json_value(data, "k_shift",           default_sparams.k_shift);
         slot.sparams.top_k              = json_value(data, "top_k",              default_sparams.top_k);
         slot.sparams.top_p              = json_value(data, "top_p",              default_sparams.top_p);
         slot.sparams.min_p              = json_value(data, "min_p",              default_sparams.min_p);
@@ -1140,6 +1141,7 @@ struct server_context {
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
+            {"k_shift",                   slot.sparams.k_shift},
             {"top_k",                     slot.sparams.top_k},
             {"top_p",                     slot.sparams.top_p},
             {"min_p",                     slot.sparams.min_p},

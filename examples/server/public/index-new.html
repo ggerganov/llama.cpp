@@ -44,7 +44,8 @@
       dry_base: 1.75,     // 0.0 = disabled
       dry_allowed_length: 2, // tokens extending repetitions beyond this receive penalty, 2 works well
       dry_penalty_last_n: -1, // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
-      top_k: 0, // <= 0 to use vocab size
+      k_shift: 0, // <= 0 to use vocab size
+      top_k: 0, // 0 = disabled
       top_p: 1.0, // 1.0 = disabled
       min_p: 0.05, // 0 = disabled; recommended for non-english: ~ 0.4
       xtc_probability: 0.0, // 0 = disabled;
@@ -834,6 +835,7 @@ return html`
       <details>
         <summary><span class="summary-title">Further Options</span></summary>
         <fieldset class="params">
+          ${IntField({ label: "K-Shift", title: "Cuts out first k tokens once at the start of sampling. Intended to use with greedy sampling.", max: 100, min: 0, step: 1, name: "k_shift", value: params.value.k_shift })}
           ${IntField({ label: "Top-K", title: "Limits the selection of the next token to the K most probable tokens. 1 means no randomness = greedy sampling. If set to 0, it means the entire vocabulary size is considered.", max: 100, min: 0, step: 1, name: "top_k", value: params.value.top_k })}
           ${IntField({ label: "Penalize Last N", title: "The last n tokens that are taken into account to penalise repetitions. A value of 0 means that this function is deactivated and -1 means that the entire size of the context is taken into account.", max: 2048, min: 0, step: 16, name: "repeat_last_n", value: params.value.repeat_last_n })}
           ${FloatField({ label: "Presence Penalty", title: "A penalty that is applied if certain tokens appear repeatedly in the generated text. A higher value leads to fewer repetitions.", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}

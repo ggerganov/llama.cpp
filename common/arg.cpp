@@ -923,6 +923,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
+        {"--k-shift"}, "N",
+        string_format("k-shift sampling (default: %d, 0 = disabled)", params.sparams.k_shift),
+        [](common_params & params, int value) {
+            params.sparams.k_shift = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
         {"--top-k"}, "N",
         string_format("top-k sampling (default: %d, 0 = disabled)", params.sparams.top_k),
         [](common_params & params, int value) {
