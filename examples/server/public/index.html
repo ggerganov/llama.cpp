@@ -530,7 +530,7 @@
             return;
           }
           for (const key of CONFIG_NUMERIC_KEYS) {
-            if (!isNumeric(this.config[key])) {
+            if (!isNaN(this.config[key]) && this.config[key].trim().length > 0) {
               alert(`Invalid number for ${key} (expected an integer or a float)`);
               return;
             }
