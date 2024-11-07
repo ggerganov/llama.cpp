@@ -529,7 +529,6 @@
             alert('Invalid JSON for custom config. Please either fix it or leave it empty.');
             return;
           }
-          console.log(this.config)
           for (const key of CONFIG_NUMERIC_KEYS) {
             if (isNaN(this.config[key]) || this.config[key].toString().trim().length === 0) {
               alert(`Invalid number for ${key} (expected an integer or a float)`);
