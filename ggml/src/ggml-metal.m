@@ -1139,7 +1139,7 @@ static void ggml_metal_encode_node(
     const uint64_t nb20 = src2 ? src2->nb[0] : 0; GGML_UNUSED(nb20);
     const uint64_t nb21 = src2 ? src2->nb[1] : 0;
     const uint64_t nb22 = src2 ? src2->nb[2] : 0;
-    const uint64_t nb23 = src2 ? src2->nb[3] : 0;
+    const uint64_t nb23 = src2 ? src2->nb[3] : 0; GGML_UNUSED(nb23);
 
     const int64_t  ne0  =  dst ?  dst->ne[0] : 0;
     const int64_t  ne1  =  dst ?  dst->ne[1] : 0;
@@ -3241,18 +3241,15 @@ static void ggml_metal_encode_node(
                 [encoder setBytes:&nb11          length:sizeof(uint64_t)      atIndex:14];
                 [encoder setBytes:&nb12          length:sizeof(uint64_t)      atIndex:15];
                 [encoder setBytes:&nb13          length:sizeof(uint64_t)      atIndex:16];
-                [encoder setBytes:&nb21          length:sizeof(uint64_t)      atIndex:17];
-                [encoder setBytes:&nb22          length:sizeof(uint64_t)      atIndex:18];
-                [encoder setBytes:&nb23          length:sizeof(uint64_t)      atIndex:19];
-                [encoder setBytes:&nb31          length:sizeof(uint64_t)      atIndex:20];
-                [encoder setBytes:&ne1           length:sizeof( int64_t)      atIndex:21];
-                [encoder setBytes:&ne2           length:sizeof( int64_t)      atIndex:22];
-                [encoder setBytes:&scale         length:sizeof(   float)      atIndex:23];
-                [encoder setBytes:&max_bias      length:sizeof(   float)      atIndex:24];
-                [encoder setBytes:&m0            length:sizeof(m0)            atIndex:25];
-                [encoder setBytes:&m1            length:sizeof(m1)            atIndex:26];
-                [encoder setBytes:&n_head_log2   length:sizeof(n_head_log2)   atIndex:27];
-                [encoder setBytes:&logit_softcap length:sizeof(logit_softcap) atIndex:28];
+                [encoder setBytes:&nb31          length:sizeof(uint64_t)      atIndex:17];
+                [encoder setBytes:&ne1           length:sizeof( int64_t)      atIndex:18];
+                [encoder setBytes:&ne2           length:sizeof( int64_t)      atIndex:19];
+                [encoder setBytes:&scale         length:sizeof(   float)      atIndex:20];
+                [encoder setBytes:&max_bias      length:sizeof(   float)      atIndex:21];
+                [encoder setBytes:&m0            length:sizeof(m0)            atIndex:22];
+                [encoder setBytes:&m1            length:sizeof(m1)            atIndex:23];
+                [encoder setBytes:&n_head_log2   length:sizeof(n_head_log2)   atIndex:24];
+                [encoder setBytes:&logit_softcap length:sizeof(logit_softcap) atIndex:25];
 
                 if (!use_vec_kernel) {
                     // half8x8 kernel
@@ -3263,21 +3260,11 @@ static void ggml_metal_encode_node(
                     GGML_ASSERT(nqptg  % 8  == 0);
                     GGML_ASSERT(ncpsg  % 32 == 0);
 
-#ifdef GGML_METAL_FORCE_FATTN_PREC_F16
-                    const enum ggml_prec prec = GGML_PREC_DEFAULT;
-#else
-                    // TODO: support both precisions
-                    const enum ggml_prec prec = GGML_PREC_F32;
-                    //const enum ggml_prec prec = ggml_flash_attn_ext_get_prec(dst);
-#endif
-
-                    const int64_t nhalfs = prec == GGML_PREC_DEFAULT ? 1 : 2;
-
                     // 16*32*(nsg)
                     // the shared memory needed for the simdgroups to load the KV cache
                     // each thread loads (dequantizes) 16 head elements, there are 32 threads in th SG
                     //
-#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + nhalfs*(2*ncpsg + nqptg)*(nsg)) + 16*32*(nsg))*(sizeof(float)/2), 16))
+#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + 2*(2*ncpsg + nqptg)*(nsg)) + 16*32*(nsg))*(sizeof(float)/2), 16))
 
                     int64_t nsgmax = 2;
 
