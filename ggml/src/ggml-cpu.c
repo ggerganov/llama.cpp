@@ -7425,7 +7425,13 @@ static void ggml_compute_forward_mul_mat(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const enum ggml_type type = src0->type;
+    enum ggml_type type = src0->type;
+
+#ifdef GGML_USE_CPU_AARCH64
+    if (strcmp(src0->buffer->buft->iface.get_name(src0->buffer->buft),"CPU_AARCH64") == 0) {
+        type  = ggml_get_optimal_type(src0);
+    }
+#endif
 
     enum ggml_type           const vec_dot_type         = type_traits_cpu[type].vec_dot_type;
     ggml_from_float_t        const from_float           = ggml_get_type_traits(vec_dot_type)->from_float;

@@ -35,6 +35,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const vo
 
 #ifdef GGML_USE_CPU_AARCH64
 int ggml_prepare_optimal_kernel(struct ggml_tensor * cur, const void * data, size_t data_size);
+enum ggml_type ggml_get_optimal_type(const struct ggml_tensor * cur);
 #endif
 
 #ifdef __cplusplus

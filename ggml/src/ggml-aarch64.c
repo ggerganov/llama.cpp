@@ -3540,17 +3540,14 @@ int ggml_prepare_optimal_kernel(struct ggml_tensor * cur, const void * data, siz
 #if defined(__ARM_ARCH)
     if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
         repack_q4_0_to_q4_0_8_bl(cur, 8, data, data_size);
-        cur->type = GGML_TYPE_Q4_0_8_8;
         ret = 0;
     }
     else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
         repack_q4_0_to_q4_0_4_bl(cur, 8, data, data_size);
-        cur->type = GGML_TYPE_Q4_0_4_8;
         ret = 0;
     }
     else if (ggml_cpu_has_neon()) {
         repack_q4_0_to_q4_0_4_bl(cur, 4, data, data_size);
-        cur->type = GGML_TYPE_Q4_0_4_4;
         ret = 0;
     }
 #endif
@@ -3559,5 +3556,24 @@ int ggml_prepare_optimal_kernel(struct ggml_tensor * cur, const void * data, siz
     GGML_UNUSED(cur);
     GGML_UNUSED(data);
     GGML_UNUSED(data_size);
+}
+
+enum ggml_type ggml_get_optimal_type(const struct ggml_tensor * cur) {
+#if defined(__ARM_ARCH)
+    if (cur->type == GGML_TYPE_Q4_0) {
+        if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
+            return GGML_TYPE_Q4_0_8_8;
+        }
+        else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
+            return GGML_TYPE_Q4_0_4_8;
+        }
+        else if (ggml_cpu_has_neon()) {
+            return GGML_TYPE_Q4_0_4_4;
+        }
+    }
+#endif
+    return cur->type;
+
+    GGML_UNUSED(cur);
 }
 #endif

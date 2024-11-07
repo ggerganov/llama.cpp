@@ -2638,11 +2638,7 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
 #ifdef GGML_USE_CPU_AARCH64
     const struct ggml_tensor *tensor = op->src[0];
     if (tensor && tensor->buffer && (strcmp(tensor->buffer->buft->iface.get_name(tensor->buffer->buft),"CPU_AARCH64") == 0)) {
-        if ((op->op == GGML_OP_MUL_MAT) &&
-            (tensor->type == GGML_TYPE_Q4_0 ||
-             tensor->type == GGML_TYPE_Q4_0_4_4 ||
-             tensor->type == GGML_TYPE_Q4_0_4_8 ||
-             tensor->type == GGML_TYPE_Q4_0_8_8)) {
+        if (op->op == GGML_OP_MUL_MAT && tensor->type == GGML_TYPE_Q4_0) {
             return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_get_type_traits_cpu(tensor->type)->vec_dot_type;
         }
         return false;
