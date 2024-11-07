@@ -975,7 +975,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "WIN_UNPART",
     "GET_REL_POS",
     "ADD_REL_POS",
-    "RWKV_WKV",
+    "RWKV_WKV6",
 
     "UNARY",
 
@@ -1070,7 +1070,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "win_unpart(x)",
     "get_rel_pos(x)",
     "add_rel_pos(x)",
-    "rwkv_wkv(k, v, r, tf, td, s)",
+    "rwkv_wkv6(k, v, r, tf, td, s)",
 
     "unary(x)",
 
@@ -4503,9 +4503,9 @@ struct ggml_tensor * ggml_add_rel_pos_inplace(
     return ggml_add_rel_pos_impl(ctx, a, pw, ph, true);
 }
 
-// ggml_rwkv_wkv
+// ggml_rwkv_wkv6
 
-struct ggml_tensor * ggml_rwkv_wkv(
+struct ggml_tensor * ggml_rwkv_wkv6(
         struct ggml_context * ctx,
         struct ggml_tensor  * k,
         struct ggml_tensor  * v,
@@ -4537,7 +4537,7 @@ struct ggml_tensor * ggml_rwkv_wkv(
     const int64_t ne[4] = { S * H, n_tokens + S * n_seqs, 1, 1 };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
-    result->op     = GGML_OP_RWKV_WKV;
+    result->op     = GGML_OP_RWKV_WKV6;
     result->src[0] = k;
     result->src[1] = v;
     result->src[2] = r;
@@ -6084,7 +6084,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_GET_REL_POS:
         case GGML_OP_ADD_REL_POS:
-        case GGML_OP_RWKV_WKV:
+        case GGML_OP_RWKV_WKV6:
         case GGML_OP_MAP_UNARY:
         case GGML_OP_MAP_BINARY:
         case GGML_OP_MAP_CUSTOM1_F32:
