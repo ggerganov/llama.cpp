@@ -9,6 +9,7 @@ cp -rpv ../ggml/src/ggml*.cpp        ./ggml/src/
 cp -rpv ../ggml/src/ggml*.h          ./ggml/src/
 cp -rpv ../ggml/src/ggml*.cu         ./ggml/src/
 cp -rpv ../ggml/src/ggml*.m          ./ggml/src/
+cp -rpv ../ggml/src/ggml-amx/*       ./ggml/src/ggml-amx/
 cp -rpv ../ggml/src/ggml-cann/*      ./ggml/src/ggml-cann/
 cp -rpv ../ggml/src/ggml-cuda/*      ./ggml/src/ggml-cuda/
 cp -rpv ../ggml/src/ggml-sycl/*      ./ggml/src/ggml-sycl/
