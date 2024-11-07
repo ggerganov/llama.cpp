@@ -3234,10 +3234,10 @@ kernel void kernel_flash_attn_ext(
     // final rescale with 1/S and store to global memory
     if (sgitg == 0) {
         for (short j = 0; j < Q && iq1 + j < ne01; ++j) {
-            const float S = ss[j*TS + 0];
+            const half S = ss[j*TS + 0];
 
             for (short i = tiisg; i < D4; i += NW) {
-                dst4[(iq3*ne2*ne1 + iq2 + (iq1 + j)*ne1)*D4 + i] = (float4) so4[j*T4 + i]/S;
+                dst4[((int64_t)iq3*ne2*ne1 + iq2 + (iq1 + j)*ne1)*D4 + i] = (float4) so4[j*T4 + i]/S;
             }
         }
     }
