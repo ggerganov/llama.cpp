@@ -409,6 +409,8 @@ static const struct ggml_type_traits_cpu type_traits_cpu[GGML_TYPE_COUNT] = {
         .gemm                     = ggml_gemm_q4_0_4x8_q8_0,
     },
     [GGML_TYPE_Q4_0_8_8] = {
+        .vec_dot                  = NULL,
+        .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
         .ncols                    = 8,
         .gemv                     = ggml_gemv_q4_0_8x8_q8_0,
