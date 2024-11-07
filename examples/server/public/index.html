@@ -29,6 +29,12 @@
       @apply cursor-pointer opacity-0 group-hover:opacity-100 hover:shadow-md;
     }
     .chat-screen { max-width: 900px; }
+    /* because the default bubble color is quite dark, we will make a custom one using bg-base-300 */
+    .chat-bubble-base-300 {
+      --tw-bg-opacity: 1;
+      --tw-text-opacity: 1;
+      @apply bg-base-300 text-base-content;
+    }
   </style>
 </head>
 
@@ -127,7 +133,7 @@
           }">
             <div :class="{
               'chat-bubble markdown': true,
-              'chat-bubble-primary': msg.role === 'user',
+              'chat-bubble-base-300': msg.role !== 'user',
             }">
               <!-- textarea for editing message -->
               <template v-if="editingMsg && editingMsg.id === msg.id">
