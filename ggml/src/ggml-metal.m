@@ -3294,10 +3294,10 @@ static void ggml_metal_encode_node(
                     // for each query, we load it as f16 in shared memory (ne00)
                     // and store the attention scores (nqptg x ncpsg) as f32
                     //
-                    // 2*ne00*(nsg)
-                    // each simdgroup has a full f32 head vector in shared mem to accumulate results
+                    // ne00*(nsg)
+                    // each simdgroup has a full f16 head vector in shared mem to accumulate results
                     //
-#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + 2*ncpsg*(nsg)) + 2*ne00*(nsg))*(sizeof(float)/2), 16))
+#define FATTN_SMEM(nsg) (GGML_PAD((nqptg*(ne00 + 2*ncpsg*(nsg)) + ne00*(nsg))*(sizeof(float)/2), 16))
 
                     int64_t nsgmax = 2;
 
