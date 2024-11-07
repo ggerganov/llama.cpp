@@ -1,6 +1,7 @@
 // Unit tests for quantization specific functions - quantize, dequantize and dot product
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -78,18 +79,18 @@ static float dot_product(const float * a1, const float * a2, size_t test_size) {
 
 // Total dot product error
 static float dot_product_error(
-    const ggml_type_traits * qfns, size_t test_size, const float * test_data1, const float *test_data2
+    const ggml_type_traits * qfns, const ggml_type_traits_cpu * qfns_cpu, size_t test_size, const float * test_data1, const float *test_data2
 ) {
     std::vector<uint8_t> tmp_q1(2*test_size);
     std::vector<uint8_t> tmp_q2(2*test_size);
 
-    const auto * vdot = ggml_get_type_traits(qfns->vec_dot_type);
+    const auto * vdot = ggml_get_type_traits(qfns_cpu->vec_dot_type);
 
     qfns->from_float(test_data1, tmp_q1.data(), test_size);
     vdot->from_float(test_data2, tmp_q2.data(), test_size);
 
     float result = INFINITY;
-    qfns->vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
+    qfns_cpu->vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
 
     const float dot_ref = dot_product(test_data1, test_data2, test_size);
 
@@ -132,6 +133,7 @@ int main(int argc, char * argv[]) {
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
         const auto * qfns = ggml_get_type_traits(type);
+        const auto * qfns_cpu = ggml_get_type_traits_cpu(type);
 
         // deprecated - skip
         if (qfns->blck_size == 0) {
@@ -166,7 +168,7 @@ int main(int argc, char * argv[]) {
                 printf("%5s reference implementation error: %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], reference_error);
             }
 
-            const float vec_dot_error = dot_product_error(qfns, test_size, test_data.data(), test_data2.data());
+            const float vec_dot_error = dot_product_error(qfns, qfns_cpu, test_size, test_data.data(), test_data2.data());
             const float max_allowed_error = type == GGML_TYPE_Q2_K || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ2_XXS ||
                                             type == GGML_TYPE_IQ3_XXS || type == GGML_TYPE_IQ3_S || type == GGML_TYPE_IQ2_S
                                           ? MAX_DOT_PRODUCT_ERROR_LOWBIT

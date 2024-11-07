@@ -313,7 +313,6 @@
       min_p: 0.05, // 0 = disabled
       xtc_probability: 0.0, // 0 = disabled;
       xtc_threshold: 0.1, // > 0.5 disables XTC;
-      tfs_z: 1.0, // 1.0 = disabled
       typical_p: 1.0, // 1.0 = disabled
       presence_penalty: 0.0, // 0.0 = disabled
       frequency_penalty: 0.0, // 0.0 = disabled
@@ -1015,7 +1014,6 @@
           <details>
             <summary>More options</summary>
             <fieldset class="two">
-              ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
               ${FloatField({ label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
               ${FloatField({ label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
               ${FloatField({ label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}

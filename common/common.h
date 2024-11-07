@@ -88,7 +88,7 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_TOP_K       = 2,
     COMMON_SAMPLER_TYPE_TOP_P       = 3,
     COMMON_SAMPLER_TYPE_MIN_P       = 4,
-    COMMON_SAMPLER_TYPE_TFS_Z       = 5,
+  //COMMON_SAMPLER_TYPE_TFS_Z       = 5,
     COMMON_SAMPLER_TYPE_TYPICAL_P   = 6,
     COMMON_SAMPLER_TYPE_TEMPERATURE = 7,
     COMMON_SAMPLER_TYPE_XTC         = 8,
@@ -113,7 +113,6 @@ struct common_sampler_params {
     float   min_p              = 0.05f; // 0.0 = disabled
     float   xtc_probability    = 0.00f; // 0.0 = disabled
     float   xtc_threshold      = 0.10f; // > 0.5 disables XTC
-    float   tfs_z              = 1.00f; // 1.0 = disabled
     float   typ_p              = 1.00f; // typical_p, 1.0 = disabled
     float   temp               = 0.80f; // <= 0.0 to sample greedily, 0.0 to not output probabilities
     float   dynatemp_range     = 0.00f; // 0.0 = disabled
@@ -139,7 +138,6 @@ struct common_sampler_params {
     std::vector<enum common_sampler_type> samplers = {
         COMMON_SAMPLER_TYPE_DRY,
         COMMON_SAMPLER_TYPE_TOP_K,
-        COMMON_SAMPLER_TYPE_TFS_Z,
         COMMON_SAMPLER_TYPE_TYPICAL_P,
         COMMON_SAMPLER_TYPE_TOP_P,
         COMMON_SAMPLER_TYPE_MIN_P,
@@ -157,7 +155,7 @@ struct common_sampler_params {
 
 struct common_params {
     int32_t n_predict             =    -1; // new tokens to predict
-    int32_t n_ctx                 =     0; // context size
+    int32_t n_ctx                 =  4096; // context size
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_ubatch              =   512; // physical batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                =     0; // number of tokens to keep from initial prompt

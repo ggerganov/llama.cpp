@@ -1,6 +1,7 @@
 // Benchmark quantization specific functions on synthetic data
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 
 #undef NDEBUG
 #include <algorithm>
@@ -271,6 +272,7 @@ int main(int argc, char * argv[]) {
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
         const auto * qfns = ggml_get_type_traits(type);
+        const auto * qfns_cpu = ggml_get_type_traits_cpu(type);
         if (!params.include_types.empty() && ggml_type_name(type) && std::find(params.include_types.begin(), params.include_types.end(), ggml_type_name(type)) == params.include_types.end()) {
             continue;
         }
@@ -328,7 +330,7 @@ int main(int argc, char * argv[]) {
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
                     auto quantize_fn = [&](void) -> float {
-                        const auto * vdot = ggml_get_type_traits(qfns->vec_dot_type);
+                        const auto * vdot = ggml_get_type_traits(qfns_cpu->vec_dot_type);
                         vdot->from_float(test_data1, test_q1, size);
                         return test_q1[0];
                     };
@@ -346,7 +348,7 @@ int main(int argc, char * argv[]) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
                     auto quantize_fn = [&](void) -> float {
                         float result;
-                        qfns->vec_dot(size, &result, 0, test_q1, 0, test_q2, 0, 1);
+                        qfns_cpu->vec_dot(size, &result, 0, test_q1, 0, test_q2, 0, 1);
                         return result;
                     };
                     size_t quantized_size = ggml_row_size(type, size);

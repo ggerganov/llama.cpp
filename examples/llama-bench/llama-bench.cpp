@@ -21,12 +21,6 @@
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
-#include "ggml-cuda.h"
-#include "ggml-sycl.h"
-
-#ifdef GGML_USE_CANN
-#include "ggml-cann.h"
-#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -82,95 +76,27 @@ static T stdev(const std::vector<T> & v) {
 }
 
 static std::string get_cpu_info() {
-    std::string id;
-#ifdef __linux__
-    FILE * f = fopen("/proc/cpuinfo", "r");
-    if (f) {
-        char buf[1024];
-        while (fgets(buf, sizeof(buf), f)) {
-            if (strncmp(buf, "model name", 10) == 0) {
-                char * p = strchr(buf, ':');
-                if (p) {
-                    p++;
-                    while (std::isspace(*p)) {
-                        p++;
-                    }
-                    while (std::isspace(p[strlen(p) - 1])) {
-                        p[strlen(p) - 1] = '\0';
-                    }
-                    id = p;
-                    break;
-                }
-            }
-        }
-        fclose(f);
-    }
-#elif defined(_WIN32)
-    HKEY hKey;
-    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
-                     TEXT("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"),
-                     0,
-                     KEY_READ,
-                     &hKey) != ERROR_SUCCESS) {
-        // fail to open registry key
-        return "";
-    }
-    char cpu_brand[256];
-    DWORD cpu_brand_size = sizeof(cpu_brand);
-    if (RegQueryValueExA(hKey,
-                        TEXT("ProcessorNameString"),
-                        NULL,
-                        NULL,
-                        (LPBYTE)cpu_brand,
-                        &cpu_brand_size) == ERROR_SUCCESS) {
-        id.assign(cpu_brand, cpu_brand_size);
-        if (id.find('\0') != std::string::npos) {
-            id.resize(id.find('\0'));
+    std::vector<std::string> cpu_list;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto * dev = ggml_backend_dev_get(i);
+        auto dev_type = ggml_backend_dev_type(dev);
+        if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU || dev_type == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
+            cpu_list.push_back(ggml_backend_dev_description(dev));
         }
     }
-    RegCloseKey(hKey);
-#endif
-    // TODO: other platforms
-    return id;
+    return join(cpu_list, ", ");
 }
 
 static std::string get_gpu_info() {
-    std::string id;
-#ifdef GGML_USE_CUDA
-    int count = ggml_backend_cuda_get_device_count();
-    for (int i = 0; i < count; i++) {
-        char buf[128];
-        ggml_backend_cuda_get_device_description(i, buf, sizeof(buf));
-        id += buf;
-        if (i < count - 1) {
-            id += "/";
+    std::vector<std::string> gpu_list;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto * dev = ggml_backend_dev_get(i);
+        auto dev_type = ggml_backend_dev_type(dev);
+        if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) {
+            gpu_list.push_back(ggml_backend_dev_description(dev));
         }
     }
-#endif
-#ifdef GGML_USE_SYCL
-    int count = ggml_backend_sycl_get_device_count();
-    for (int i = 0; i < count; i++) {
-        char buf[128];
-        ggml_backend_sycl_get_device_description(i, buf, sizeof(buf));
-        id += buf;
-        if (i < count - 1) {
-            id += "/";
-        }
-    }
-#endif
-#ifdef GGML_USE_CANN
-    uint32_t count = ggml_backend_cann_get_device_count();
-    for (uint32_t i = 0; i < count; i++) {
-        char buf[128];
-        ggml_backend_cann_get_device_description(i, buf, sizeof(buf));
-        id += buf;
-        if (i < count - 1) {
-            id += "/";
-        }
-    }
-#endif
-    // TODO: other backends
-    return id;
+    return join(gpu_list, ", ");
 }
 
 // command line params
@@ -938,29 +864,15 @@ struct test {
     }
 
     static std::string get_backend() {
-        if (cuda) {
-            return GGML_CUDA_NAME;
+        std::vector<std::string> backends;
+        for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
+            auto * reg = ggml_backend_reg_get(i);
+            std::string name = ggml_backend_reg_name(reg);
+            if (name != "CPU") {
+                backends.push_back(ggml_backend_reg_name(reg));
+            }
         }
-        if (vulkan) {
-            return "Vulkan";
-        }
-        if (kompute) {
-            return "Kompute";
-        }
-        if (metal) {
-            return "Metal";
-        }
-        if (sycl) {
-            return GGML_SYCL_NAME;
-        }
-        if (gpu_blas) {
-            return "GPU BLAS";
-        }
-        if (blas) {
-            return "BLAS";
-        }
-
-        return "CPU";
+        return backends.empty() ? "CPU" : join(backends, ",");
     }
 
     static const std::vector<std::string> & get_fields() {

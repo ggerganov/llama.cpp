@@ -16,12 +16,6 @@
 #if defined(__AMX_INT8__)
 
 // AMX buffer interface
-static const char * ggml_backend_amx_buffer_get_name(ggml_backend_buffer_t buffer) {
-    return "AMX";
-
-    GGML_UNUSED(buffer);
-}
-
 static void ggml_backend_amx_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     free(buffer->context);
 }
@@ -72,7 +66,6 @@ static void ggml_backend_amx_buffer_clear(ggml_backend_buffer_t buffer, uint8_t 
 }
 
 static ggml_backend_buffer_i ggml_backend_amx_buffer_interface = {
-    /* .get_name        = */ ggml_backend_amx_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_amx_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_amx_buffer_get_base,
     /* .init_tensor     = */ NULL, // no initialization required
@@ -121,14 +114,14 @@ static bool ggml_backend_amx_buffer_type_is_host(ggml_backend_buffer_type_t buft
 ggml_backend_buffer_type_t ggml_backend_amx_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_buffer_type_amx = {
         /* .iface = */ {
-        /* .get_name         = */ ggml_backend_amx_buffer_type_get_name,
-        /* .alloc_buffer     = */ ggml_backend_amx_buffer_type_alloc_buffer,
-        /* .get_alignment    = */ ggml_backend_amx_buffer_type_get_alignment,
-        /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
-        /* .get_alloc_size   = */ ggml_backend_amx_buffer_type_get_alloc_size,
-        /* .is_host          = */ ggml_backend_amx_buffer_type_is_host,
+            /* .get_name         = */ ggml_backend_amx_buffer_type_get_name,
+            /* .alloc_buffer     = */ ggml_backend_amx_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_amx_buffer_type_get_alignment,
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
+            /* .get_alloc_size   = */ ggml_backend_amx_buffer_type_get_alloc_size,
+            /* .is_host          = */ ggml_backend_amx_buffer_type_is_host,
         },
-        /* .device  = */ NULL,
+        /* .device  = */ ggml_backend_reg_dev_get(ggml_backend_amx_reg(), 0),
         /* .context = */ NULL,
     };
 
@@ -147,12 +140,6 @@ static void ggml_backend_amx_free(ggml_backend_t backend) {
     ggml_backend_amx_context * ctx = (ggml_backend_amx_context *)backend->context;
     delete ctx;
     delete backend;
-}
-
-static ggml_backend_buffer_type_t ggml_backend_amx_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_amx_buffer_type();
-
-    GGML_UNUSED(backend);
 }
 
 static enum ggml_status ggml_backend_amx_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
@@ -187,7 +174,6 @@ static enum ggml_status ggml_backend_amx_graph_compute(ggml_backend_t backend, s
 static struct ggml_backend_i ggml_backend_amx_i = {
     /* .get_name                = */ ggml_backend_amx_name,
     /* .free                    = */ ggml_backend_amx_free,
-    /* .get_default_buffer_type = */ ggml_backend_amx_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_async        = */ NULL,
@@ -197,9 +183,6 @@ static struct ggml_backend_i ggml_backend_amx_i = {
     /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_amx_graph_compute,
-    /* .supports_op             = */ NULL,
-    /* .supports_buft           = */ NULL,
-    /* .offload_op              = */ NULL,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
 };
@@ -279,7 +262,7 @@ static void ggml_backend_amx_device_get_memory(ggml_backend_dev_t dev, size_t * 
 }
 
 static enum ggml_backend_dev_type ggml_backend_amx_device_get_type(ggml_backend_dev_t dev) {
-    return GGML_BACKEND_DEVICE_TYPE_CPU;
+    return GGML_BACKEND_DEVICE_TYPE_ACCEL;
 
     GGML_UNUSED(dev);
 }
