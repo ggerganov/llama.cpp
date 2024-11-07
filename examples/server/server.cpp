@@ -14,22 +14,13 @@
 #define MIMETYPE_JSON "application/json; charset=utf-8"
 
 // auto generated files (update with ./deps.sh)
-#include "colorthemes.css.hpp"
-#include "style.css.hpp"
-#include "theme-beeninorder.css.hpp"
-#include "theme-ketivah.css.hpp"
-#include "theme-mangotango.css.hpp"
-#include "theme-playground.css.hpp"
-#include "theme-polarnight.css.hpp"
-#include "theme-snowstorm.css.hpp"
 #include "index.html.hpp"
-#include "index-new.html.hpp"
-#include "index.js.hpp"
 #include "completion.js.hpp"
-#include "system-prompts.js.hpp"
-#include "prompt-formats.js.hpp"
-#include "json-schema-to-grammar.mjs.hpp"
 #include "loading.html.hpp"
+#include "deps_daisyui.min.css.hpp"
+#include "deps_markdown-it.js.hpp"
+#include "deps_tailwindcss.js.hpp"
+#include "deps_vue.esm-browser.js.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -2285,16 +2276,6 @@ int main(int argc, char ** argv) {
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
     svr->set_default_headers({{"Server", "llama.cpp"}});
-
-    // CORS preflight
-    svr->Options(R"(.*)", [](const httplib::Request &, httplib::Response & res) {
-        // Access-Control-Allow-Origin is already set by middleware
-        res.set_header("Access-Control-Allow-Credentials", "true");
-        res.set_header("Access-Control-Allow-Methods",     "POST");
-        res.set_header("Access-Control-Allow-Headers",     "*");
-        return res.set_content("", "text/html"); // blank response, no data
-    });
-
     svr->set_logger(log_server_request);
 
     auto res_error = [](httplib::Response & res, const json & error_data) {
@@ -2407,6 +2388,14 @@ int main(int argc, char ** argv) {
     // register server middlewares
     svr->set_pre_routing_handler([&middleware_validate_api_key, &middleware_server_state](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        // If this is OPTIONS request, skip validation because browsers don't include Authorization header
+        if (req.method == "OPTIONS") {
+            res.set_header("Access-Control-Allow-Credentials", "true");
+            res.set_header("Access-Control-Allow-Methods",     "GET, POST");
+            res.set_header("Access-Control-Allow-Headers",     "*");
+            res.set_content("", "text/html"); // blank response, no data
+            return httplib::Server::HandlerResponse::Handled; // skip further processing
+        }
         if (!middleware_server_state(req, res)) {
             return httplib::Server::HandlerResponse::Handled;
         }
@@ -3116,33 +3105,19 @@ int main(int argc, char ** argv) {
     // register static assets routes
     if (!params.public_path.empty()) {
         // Set the base directory for serving static files
-        svr->set_base_dir(params.public_path);
-    }
-
-    if (!params.api_keys.empty()) {
-        // for now, if API key is set, web UI is unusable
-        svr->Get("/", [&](const httplib::Request &, httplib::Response & res) {
-            return res.set_content("Web UI is disabled because API key is set.", "text/html; charset=utf-8");
-        });
+        bool is_found = svr->set_mount_point("/", params.public_path);
+        if (!is_found) {
+            LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
+            return 1;
+        }
     } else {
         // using embedded static files
-        svr->Get("/",                           handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
-        svr->Get("/index.js",                   handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/completion.js",              handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/json-schema-to-grammar.mjs", handle_static_file(json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
-
-        // add new-ui files
-        svr->Get("/colorthemes.css",       handle_static_file(colorthemes_css, colorthemes_css_len, "text/css; charset=utf-8"));
-        svr->Get("/style.css",             handle_static_file(style_css, style_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-beeninorder.css", handle_static_file(theme_beeninorder_css, theme_beeninorder_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-ketivah.css",     handle_static_file(theme_ketivah_css, theme_ketivah_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-mangotango.css",  handle_static_file(theme_mangotango_css, theme_mangotango_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-playground.css",  handle_static_file(theme_playground_css, theme_playground_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-polarnight.css",  handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-snowstorm.css",   handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
-        svr->Get("/index-new.html",        handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
-        svr->Get("/system-prompts.js",     handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/prompt-formats.js",     handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/",                        handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
+        svr->Get("/completion.js",           handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/deps_daisyui.min.css",    handle_static_file(deps_daisyui_min_css, deps_daisyui_min_css_len, "text/css; charset=utf-8"));
+        svr->Get("/deps_markdown-it.js",     handle_static_file(deps_markdown_it_js, deps_markdown_it_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/deps_tailwindcss.js",     handle_static_file(deps_tailwindcss_js, deps_tailwindcss_js_len, "text/javascript; charset=utf-8"));
+        svr->Get("/deps_vue.esm-browser.js", handle_static_file(deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8"));
     }
 
     // register API routes

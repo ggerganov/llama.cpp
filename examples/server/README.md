@@ -928,6 +928,16 @@ Apart from error types supported by OAI, we also have custom types that are spec
 }
 ```
 
+### Legacy completion web UI
+
+A new chat-based UI has replaced the old completion-based since [this PR](https://github.com/ggerganov/llama.cpp/pull/10175). If you want to use the old completion, start the server with `--path ./examples/server/public_legacy`
+
+For example:
+
+```sh
+./llama-server -m my_model.gguf -c 8192 --path ./examples/server/public_legacy
+```
+
 ### Extending or building alternative Web Front End
 
 You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
