@@ -3021,9 +3021,11 @@ kernel void kernel_flash_attn_ext(
                     }
 
                     // cast qk_t -> s_t
-                    s8x8_t mqks(1.0f);
-                    simdgroup_multiply(mqks, mqk, mqks);
-                    simdgroup_store(mqks, ss + 8*cc, TS, 0, false);
+                    //s8x8_t mqks(1.0f);
+                    //simdgroup_multiply(mqks, mqk, mqks);
+                    //simdgroup_store(mqks, ss + 8*cc, TS, 0, false);
+
+                    simdgroup_store(mqk, ss + 8*cc, TS, 0, false);
                 }
             }
 

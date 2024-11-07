@@ -504,10 +504,6 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
                 // dictionary of preprocessor macros
                 NSMutableDictionary * prep = [NSMutableDictionary dictionary];
 
-#if defined(GGML_METAL_FORCE_FATTN_PREC_F16)
-                [prep setObject:@"1" forKey:@"GGML_METAL_FORCE_FATTN_PREC_F16"];
-#endif
-
                 MTLCompileOptions * options = [MTLCompileOptions new];
                 options.preprocessorMacros = prep;
 
@@ -558,11 +554,6 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
         }
     }
 
-#if defined(GGML_METAL_FORCE_FATTN_PREC_F16)
-    GGML_LOG_INFO("%s: GGML_METAL_FORCE_FATTN_PREC_F16  = yes\n", __func__);
-#else
-    GGML_LOG_INFO("%s: GGML_METAL_FORCE_FATTN_PREC_F16  = no\n",  __func__);
-#endif
     GGML_LOG_INFO("%s: simdgroup reduction   = %s\n", __func__, ctx_dev->has_simdgroup_reduction     ? "true" : "false");
     GGML_LOG_INFO("%s: simdgroup matrix mul. = %s\n", __func__, ctx_dev->has_simdgroup_mm            ? "true" : "false");
     GGML_LOG_INFO("%s: bfloat                = %s\n", __func__, ctx_dev->has_bfloat                  ? "true" : "false");
