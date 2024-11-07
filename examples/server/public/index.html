@@ -167,7 +167,7 @@
 
         <!-- pending (ongoing) assistant message -->
         <div id="pending-msg" class="chat chat-start">
-          <div v-if="pendingMsg" class="chat-bubble markdown">
+          <div v-if="pendingMsg" class="chat-bubble markdown chat-bubble-base-300">
             <span v-if="!pendingMsg.content" class="loading loading-dots loading-md"></span>
             <vue-markdown v-else :source="pendingMsg.content" />
           </div>
