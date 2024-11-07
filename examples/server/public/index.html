@@ -11,7 +11,10 @@
   <style type="text/tailwindcss">
     .markdown {
       h1, h2, h3, h4, h5, h6, ul, ol, li { all: revert; }
-      pre { @apply whitespace-pre-wrap; }
+      pre {
+        @apply whitespace-pre-wrap my-4 rounded-lg p-2;
+        border: 1px solid currentColor;
+      }
       /* TODO: fix markdown table */
     }
     /*
