@@ -14,6 +14,7 @@
 #define GGML_SYCL_VECDOTQ_HPP
 
 #include "dpct/helper.hpp"
+#include "syclcompat/math.hpp"
 
 typedef float (*vec_dot_q_sycl_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs);
 
@@ -89,14 +90,14 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_impl_mmvq(
         const int vi = (v >> (2*i)) & 0x03030303;
 
         sumf_d +=
-            d8[i] * (dpct::dp4a(vi, u[i], 0) * (sc & 0xF)); // SIMD dot product
+            d8[i] * (syclcompat::dp4a(vi, u[i], 0) * (sc & 0xF)); // SIMD dot product
 
         // fill int with 4x m
         int m = sc >> 4;
         m |= m <<  8;
         m |= m << 16;
         sumf_m += d8[i] *
-                  dpct::dp4a(
+                  syclcompat::dp4a(
                       m, u[i],
                       0); // multiply constant q2_K part with sum of q8_1 values
     }
@@ -139,7 +140,7 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_impl_mmvq(
         const int vi =
             dpct::vectorized_binary<sycl::char4>(vil, vih, dpct::sub_sat());
 
-        sumf += d8[i] * (dpct::dp4a(vi, u[i], 0) * sc); // SIMD dot product
+        sumf += d8[i] * (syclcompat::dp4a(vi, u[i], 0) * sc); // SIMD dot product
     }
 
     return d3 * sumf;
@@ -162,11 +163,11 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_vmmq(
         const int v1i = (v[1] >> (4*i)) & 0x0F0F0F0F;
 
         const int dot1 =
-            dpct::dp4a(v1i, u[2 * i + 1],
-                       dpct::dp4a(v0i, u[2 * i + 0], 0)); // SIMD dot product
+            syclcompat::dp4a(v1i, u[2 * i + 1],
+                       syclcompat::dp4a(v0i, u[2 * i + 0], 0)); // SIMD dot product
         const int dot2 =
-            dpct::dp4a(0x01010101, u[2 * i + 1],
-                       dpct::dp4a(0x01010101, u[2 * i + 0], 0)); // sum of u
+            syclcompat::dp4a(0x01010101, u[2 * i + 1],
+                       syclcompat::dp4a(0x01010101, u[2 * i + 0], 0)); // sum of u
 
         sumf_d += d8[i] * (dot1 * sc[i]);
         sumf_m += d8[i] * (dot2 * m[i]);  // multiply constant part of q4_K with sum of q8_1 values
@@ -203,11 +204,11 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_vmmq(
         const int v1i = vl1i | vh1i;
 
         const int dot1 =
-            dpct::dp4a(v0i, u[2 * i + 0],
-                       dpct::dp4a(v1i, u[2 * i + 1], 0)); // SIMD dot product
+            syclcompat::dp4a(v0i, u[2 * i + 0],
+                       syclcompat::dp4a(v1i, u[2 * i + 1], 0)); // SIMD dot product
         const int dot2 =
-            dpct::dp4a(0x01010101, u[2 * i + 0],
-                       dpct::dp4a(0x01010101, u[2 * i + 1], 0)); // sum of u
+            syclcompat::dp4a(0x01010101, u[2 * i + 0],
+                       syclcompat::dp4a(0x01010101, u[2 * i + 1], 0)); // sum of u
 
         sumf_d += d8[i] * (dot1 * sc[i]);
         sumf_m += d8[i] * (dot2 * m[i]);
@@ -243,7 +244,7 @@ vec_dot_q6_K_q8_1_impl_mmvq(const int &vl, const int &vh,
         const int vi = dpct::vectorized_binary<sycl::char4>(
             (vil | vih), 0x20202020, dpct::sub_sat()); // vi = (vil | vih) - 32
 
-        sumf += d8[i] * (dpct::dp4a(vi, u[i], 0) * sc); // SIMD dot product
+        sumf += d8[i] * (syclcompat::dp4a(vi, u[i], 0) * sc); // SIMD dot product
     }
 
     return d*sumf;
@@ -266,8 +267,8 @@ static __dpct_inline__ float vec_dot_q4_0_q8_1_impl(const int *v, const int *u,
         const int vi1 = (v[i] >> 4) & 0x0F0F0F0F;
 
         // SIMD dot product of quantized values
-        sumi = dpct::dp4a(vi0, u[2 * i + 0], sumi);
-        sumi = dpct::dp4a(vi1, u[2 * i + 1], sumi);
+        sumi = syclcompat::dp4a(vi0, u[2 * i + 0], sumi);
+        sumi = syclcompat::dp4a(vi1, u[2 * i + 1], sumi);
     }
 
     const sycl::float2 ds8f =
@@ -293,8 +294,8 @@ static __dpct_inline__ float vec_dot_q4_1_q8_1_impl(const int *v, const int *u,
         const int vi1 = (v[i] >> 4) & 0x0F0F0F0F;
 
         // SIMD dot product of quantized values
-        sumi = dpct::dp4a(vi0, u[2 * i + 0], sumi);
-        sumi = dpct::dp4a(vi1, u[2 * i + 1], sumi);
+        sumi = syclcompat::dp4a(vi0, u[2 * i + 0], sumi);
+        sumi = syclcompat::dp4a(vi1, u[2 * i + 1], sumi);
     }
 
 #ifdef GGML_SYCL_F16
@@ -331,7 +332,7 @@ vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
         vi0    |= (vh[i] << 11) & 0x00001000; // 1 -> 12
         vi0    |= (vh[i] << 18) & 0x00100000; // 2 -> 20
         vi0    |= (vh[i] << 25) & 0x10000000; // 3 -> 28
-        sumi = dpct::dp4a(vi0, u[2 * i + 0],
+        sumi = syclcompat::dp4a(vi0, u[2 * i + 0],
                           sumi); // SIMD dot product of quantized values
 
         int vi1 = (vl[i] >>  4) & 0x0F0F0F0F; // upper 4 qs bits, still need qh as 5th bits
@@ -339,7 +340,7 @@ vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
         vi1    |= (vh[i] >>  5) & 0x00001000; // 17 -> 12
         vi1    |= (vh[i] <<  2) & 0x00100000; // 18 -> 20
         vi1    |= (vh[i] <<  9) & 0x10000000; // 19 -> 28
-        sumi = dpct::dp4a(vi1, u[2 * i + 1],
+        sumi = syclcompat::dp4a(vi1, u[2 * i + 1],
                           sumi); // SIMD dot product of quantized values
     }
 
@@ -367,7 +368,7 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
         vi0    |= (vh[i] << 11) & 0x00001000; // 1 -> 12
         vi0    |= (vh[i] << 18) & 0x00100000; // 2 -> 20
         vi0    |= (vh[i] << 25) & 0x10000000; // 3 -> 28
-        sumi = dpct::dp4a(vi0, u[2 * i + 0],
+        sumi = syclcompat::dp4a(vi0, u[2 * i + 0],
                           sumi); // SIMD dot product of quantized values
 
         int vi1 = (vl[i] >>  4) & 0x0F0F0F0F; // upper 4 qs bits, still need qh as 5th bits
@@ -375,7 +376,7 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
         vi1    |= (vh[i] >>  5) & 0x00001000; // 17 -> 12
         vi1    |= (vh[i] <<  2) & 0x00100000; // 18 -> 20
         vi1    |= (vh[i] <<  9) & 0x10000000; // 19 -> 28
-        sumi = dpct::dp4a(vi1, u[2 * i + 1],
+        sumi = syclcompat::dp4a(vi1, u[2 * i + 1],
                           sumi); // SIMD dot product of quantized values
     }
 
@@ -412,7 +413,7 @@ static __dpct_inline__ float vec_dot_q8_0_q8_1_impl(const int *v, const int *u,
 #pragma unroll
     for (int i = 0; i < vdr; ++i) {
         // SIMD dot product of quantized values
-        sumi = dpct::dp4a(v[i], u[i], sumi);
+        sumi = syclcompat::dp4a(v[i], u[i], sumi);
     }
 
     return d8_0*d8_1 * sumi;
@@ -428,7 +429,7 @@ static __dpct_inline__ float vec_dot_q8_1_q8_1_impl(const int *v, const int *u,
 #pragma unroll
     for (int i = 0; i < vdr; ++i) {
         // SIMD dot product of quantized values
-        sumi = dpct::dp4a(v[i], u[i], sumi);
+        sumi = syclcompat::dp4a(v[i], u[i], sumi);
     }
 
 #ifdef GGML_SYCL_F16
@@ -677,10 +678,10 @@ vec_dot_q4_K_q8_1(const void *__restrict__ vbq,
     const int v1 = q4[0];
     const int v2 = q4[4];
 
-    const int dot1 = dpct::dp4a(ui2, v2 & 0x0f0f0f0f, dpct::dp4a(ui1, v1 & 0x0f0f0f0f, 0));
-    const int dot2 = dpct::dp4a(ui4, (v2 >> 4) & 0x0f0f0f0f, dpct::dp4a(ui3, (v1 >> 4) & 0x0f0f0f0f, 0));
-    const int dot3 = dpct::dp4a(0x01010101, ui2, dpct::dp4a(0x01010101, ui1, 0));
-    const int dot4 = dpct::dp4a(0x01010101, ui4, dpct::dp4a(0x01010101, ui3, 0));
+    const int dot1 = syclcompat::dp4a(ui2, v2 & 0x0f0f0f0f, syclcompat::dp4a(ui1, v1 & 0x0f0f0f0f, 0));
+    const int dot2 = syclcompat::dp4a(ui4, (v2 >> 4) & 0x0f0f0f0f, syclcompat::dp4a(ui3, (v1 >> 4) & 0x0f0f0f0f, 0));
+    const int dot3 = syclcompat::dp4a(0x01010101, ui2, syclcompat::dp4a(0x01010101, ui1, 0));
+    const int dot4 = syclcompat::dp4a(0x01010101, ui4, syclcompat::dp4a(0x01010101, ui3, 0));
 
     sumf_d += d8_1 * (dot1 * s[0]) + d8_2 * (dot2 * s[1]);
     sumf_m += d8_1 * (dot3 * s[2]) + d8_2 * (dot4 * s[3]);
@@ -772,8 +773,8 @@ vec_dot_q5_K_q8_1(const void *__restrict__ vbq,
     const int v3 = (((vh >> 0) & 0x10101010) ^ 0x10101010) | ((vl1 >> 4) & 0x0f0f0f0f);
     const int v4 = (((vh >> 2) & 0x10101010) ^ 0x10101010) | ((vl2 >> 4) & 0x0f0f0f0f);
 
-    const float sumf_d = d8_1 * (dpct::dp4a(ui1, v1, 0) * s[0] + dpct::dp4a(ui2, v2, 0) * s[1])
-                       + d8_2 * (dpct::dp4a(ui3, v3, 0) * s[2] + dpct::dp4a(ui4, v4, 0) * s[3]);
+    const float sumf_d = d8_1 * (syclcompat::dp4a(ui1, v1, 0) * s[0] + syclcompat::dp4a(ui2, v2, 0) * s[1])
+                       + d8_2 * (syclcompat::dp4a(ui3, v3, 0) * s[2] + syclcompat::dp4a(ui4, v4, 0) * s[3]);
 
     return d * sumf_d;
 
@@ -865,8 +866,8 @@ vec_dot_iq2_xs_q8_1(const void *__restrict__ vbq,
             grid[0] ^ signs[0], signs[0], std::minus<>());
         const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
             grid[1] ^ signs[1], signs[1], std::minus<>());
-        sumi1 = dpct::dp4a(grid_l, *((const int *)q8 + 0), sumi1);
-        sumi1 = dpct::dp4a(grid_h, *((const int *)q8 + 1), sumi1);
+        sumi1 = syclcompat::dp4a(grid_l, *((const int *)q8 + 0), sumi1);
+        sumi1 = syclcompat::dp4a(grid_h, *((const int *)q8 + 1), sumi1);
         q8 += 8;
     }
     int sumi2 = 0;
@@ -877,8 +878,8 @@ vec_dot_iq2_xs_q8_1(const void *__restrict__ vbq,
             grid[0] ^ signs[0], signs[0], std::minus<>());
         const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
             grid[1] ^ signs[1], signs[1], std::minus<>());
-        sumi2 = dpct::dp4a(grid_l, *((const int *)q8 + 0), sumi2);
-        sumi2 = dpct::dp4a(grid_h, *((const int *)q8 + 1), sumi2);
+        sumi2 = syclcompat::dp4a(grid_l, *((const int *)q8 + 0), sumi2);
+        sumi2 = syclcompat::dp4a(grid_h, *((const int *)q8 + 1), sumi2);
         q8 += 8;
     }
     const float d = (float)bq2->d * bq8_1[ib32].ds[0] * 0.25f;
@@ -917,8 +918,8 @@ vec_dot_iq2_s_q8_1(const void *__restrict__ vbq,
             grid[0] ^ signs0, signs0, std::minus<>());
         const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
             grid[1] ^ signs1, signs1, std::minus<>());
-        sumi1 = dpct::dp4a(grid_l, *((const int *)q8 + 0), sumi1);
-        sumi1 = dpct::dp4a(grid_h, *((const int *)q8 + 1), sumi1);
+        sumi1 = syclcompat::dp4a(grid_l, *((const int *)q8 + 0), sumi1);
+        sumi1 = syclcompat::dp4a(grid_h, *((const int *)q8 + 1), sumi1);
         q8 += 8;
     }
     int sumi2 = 0;
@@ -934,8 +935,8 @@ vec_dot_iq2_s_q8_1(const void *__restrict__ vbq,
             grid[0] ^ signs0, signs0, std::minus<>());
         const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
             grid[1] ^ signs1, signs1, std::minus<>());
-        sumi2 = dpct::dp4a(grid_l, *((const int *)q8 + 0), sumi2);
-        sumi2 = dpct::dp4a(grid_h, *((const int *)q8 + 1), sumi2);
+        sumi2 = syclcompat::dp4a(grid_l, *((const int *)q8 + 0), sumi2);
+        sumi2 = syclcompat::dp4a(grid_h, *((const int *)q8 + 1), sumi2);
         q8 += 8;
     }
     const float d = (float)bq2->d * bq8_1[ib32].ds[0] * 0.25f;
@@ -968,8 +969,8 @@ vec_dot_iq3_xxs_q8_1(const void *__restrict__ vbq,
             grid1[0] ^ signs[0], signs[0], std::minus<>());
         const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
             grid2[0] ^ signs[1], signs[1], std::minus<>());
-        sumi = dpct::dp4a(grid_l, *((int *)q8 + 0), sumi);
-        sumi = dpct::dp4a(grid_h, *((int *)q8 + 1), sumi);
+        sumi = syclcompat::dp4a(grid_l, *((const int *)q8 + 0), sumi);
+        sumi = syclcompat::dp4a(grid_h, *((const int *)q8 + 1), sumi);
         q8 += 8;
         aux32 >>= 7;
     }
@@ -1009,8 +1010,8 @@ vec_dot_iq3_s_q8_1(const void *__restrict__ vbq,
             grid1[0] ^ signs0, signs0, std::minus<>());
         const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
             grid2[0] ^ signs1, signs1, std::minus<>());
-        sumi = dpct::dp4a(grid_l, *((int *)q8 + 0), sumi);
-        sumi = dpct::dp4a(grid_h, *((int *)q8 + 1), sumi);
+        sumi = syclcompat::dp4a(grid_l, *((const int *)q8 + 0), sumi);
+        sumi = syclcompat::dp4a(grid_h, *((const int *)q8 + 1), sumi);
         q8 += 8;
     }
     const float d =
@@ -1037,8 +1038,8 @@ vec_dot_iq1_s_q8_1(const void *__restrict__ vbq,
         const int * grid = (const int *)(iq1s_grid_gpu + (bq1->qs[4*ib32+l] | (((bq1->qh[ib32] >> 3*l) & 7) << 8)));
         int grid0 = grid[0] & 0x0f0f0f0f;
         int grid1 = (grid[0] >> 4) & 0x0f0f0f0f;
-        sumi = dpct::dp4a(q8[2 * l + 1], grid1,
-                          dpct::dp4a(q8[2 * l + 0], grid0, sumi));
+        sumi = syclcompat::dp4a(q8[2 * l + 1], grid1,
+                          syclcompat::dp4a(q8[2 * l + 0], grid0, sumi));
     }
 
     const float delta = bq1->qh[ib32] & 0x8000 ? -1-IQ1S_DELTA : -1+IQ1S_DELTA;
@@ -1066,11 +1067,11 @@ vec_dot_iq1_m_q8_1(const void *__restrict__ vbq,
         const int * grid = (const int *)(iq1s_grid_gpu + (bq1->qs[4*ib32+l] | (((bq1->qh[2*ib32+l/2] >> 4*(l%2)) & 7) << 8)));
         int grid0 = grid[0] & 0x0f0f0f0f;
         int grid1 = (grid[0] >> 4) & 0x0f0f0f0f;
-        sumi[l / 2] = dpct::dp4a(q8[2 * l + 1], grid1,
-                                 dpct::dp4a(q8[2 * l + 0], grid0, sumi[l / 2]));
+        sumi[l / 2] = syclcompat::dp4a(q8[2 * l + 1], grid1,
+                                 syclcompat::dp4a(q8[2 * l + 0], grid0, sumi[l / 2]));
         const float delta = (bq1->qh[2*ib32+l/2] >> 4*(l%2)) & 0x08 ? -1-IQ1M_DELTA : -1+IQ1M_DELTA;
-        const int sumy = dpct::dp4a(q8[2 * l + 1], 0x01010101,
-                                    dpct::dp4a(q8[2 * l + 0], 0x01010101, 0));
+        const int sumy = syclcompat::dp4a(q8[2 * l + 1], 0x01010101,
+                                    syclcompat::dp4a(q8[2 * l + 0], 0x01010101, 0));
         sumf[l/2] += delta*sumy;
     }
 
@@ -1101,8 +1102,8 @@ vec_dot_iq4_nl_q8_1(const void *__restrict__ vbq,
     for (int l = 0; l < VDR_Q4_0_Q8_1_MMVQ; ++l) {
         const uint32_t aux = q4[2*l] | (q4[2*l+1] << 16);
         get_int_from_table_16(aux, values, v1, v2);
-        sumi1 = dpct::dp4a(v1, q8[l + 0], sumi1);
-        sumi2 = dpct::dp4a(v2, q8[l + 4], sumi2);
+        sumi1 = syclcompat::dp4a(v1, q8[l + 0], sumi1);
+        sumi2 = syclcompat::dp4a(v2, q8[l + 4], sumi2);
     }
 
     const float d = (float)bq->d * bq8_1->ds[0];
@@ -1128,8 +1129,8 @@ vec_dot_iq4_xs_q8_1(const void *__restrict__ vbq,
     int sumi1 = 0, sumi2 = 0;
     for (int j = 0; j < 4; ++j) {
         get_int_from_table_16(q4[j], values, v1, v2);
-        sumi1 = dpct::dp4a(v1, q8[j + 0], sumi1);
-        sumi2 = dpct::dp4a(v2, q8[j + 4], sumi2);
+        sumi1 = syclcompat::dp4a(v1, q8[j + 0], sumi1);
+        sumi2 = syclcompat::dp4a(v2, q8[j + 4], sumi2);
     }
     return d * (sumi1 + sumi2);
 #else
