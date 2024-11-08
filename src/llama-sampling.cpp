@@ -1107,14 +1107,18 @@ static const char * llama_sampler_k_shift_name(const struct llama_sampler * /*sm
 static void llama_sampler_k_shift_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     auto * ctx = (llama_sampler_k_shift *) smpl->ctx;
 
-    if (ctx->k_set == true
-        || ctx->k <= 0
-        || ctx->k >= (int) cur_p->size) {
+    // ensures that k-shift can happen on the first step only
+    if (ctx->k_set != true) {
+        ctx->k_set = true;
+    } else {
+        return;
+    }
+
+    if (ctx->k <= 0 || ctx->k >= (int) cur_p->size) {
         return;
     }
 
     llama_sampler_top_shift_impl(cur_p, ctx->k);
-    ctx->k_set = true;
 }
 
 static struct llama_sampler * llama_sampler_k_shift_clone(const struct llama_sampler * smpl) {
