@@ -133,3 +133,9 @@ poetry.toml
 
 # Test models for lora adapters
 /lora-tests
+
+# Ignore all files in docs-api
+docs-api/*
+# Except Doxyfile and CMakeLists.txt
+!docs-api/Doxyfile
+!docs-api/CMakeLists.txt

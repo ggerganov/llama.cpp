@@ -73,6 +73,9 @@ option(LLAMA_BUILD_SERVER   "llama: build server example" ${LLAMA_STANDALONE})
 # 3rd party libs
 option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
 
+# doxygen documentation
+option(LLAMA_DOCS "Build documentation" OFF)
+
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
 
@@ -213,4 +216,8 @@ endif()
 if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
     add_subdirectory(pocs)
+endif()
+
+if(LLAMA_DOCS)
+    add_subdirectory(docs-api)
 endif()
