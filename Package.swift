@@ -61,6 +61,7 @@ let package = Package(
             name: "llama",
             path: ".",
             exclude: [
+               "build",
                "cmake",
                "examples",
                "scripts",
