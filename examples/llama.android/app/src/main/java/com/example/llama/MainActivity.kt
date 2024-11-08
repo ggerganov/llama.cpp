@@ -72,24 +72,14 @@ class MainActivity(
 
         val models = listOf(
             Downloadable(
-                "Phi-2 7B (Q4_0, 1.6 GiB)",
-                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf?download=true"),
-                File(extFilesDir, "phi-2-q4_0.gguf"),
-            ),
-            Downloadable(
-                "TinyLlama 1.1B (f16, 2.2 GiB)",
-                Uri.parse("https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true"),
-                File(extFilesDir, "tinyllama-1.1-f16.gguf"),
-            ),
-            Downloadable(
-                "Phi 2 DPO (Q3_K_M, 1.48 GiB)",
-                Uri.parse("https://huggingface.co/TheBloke/phi-2-dpo-GGUF/resolve/main/phi-2-dpo.Q3_K_M.gguf?download=true"),
-                File(extFilesDir, "phi-2-dpo.Q3_K_M.gguf")
+                "Llama3.2-1B-Instruct (Q4_0, 735 MB)",
+                Uri.parse("https://public-storage.nexa4ai.com/Llama3.2-1B-Instruct/q4_0.gguf"),
+                File(extFilesDir, "Llama3.2-1B-Instruct-q4_0.gguf"),
             ),
             Downloadable(
                 "octopus",
-                Uri.parse("https://storage.nexa4ai.com/NexaAI/Octopus-v2/gguf-q4_K_M/q4_K_M.gguf?Expires=1731051192&Signature=Poxm8V5tsx3RfeQPf-bI3umao~KcBU-GeeHtOFmkiIox0wQpd4ylZ6sOrdLL75HIwzsnu6LaTe26U4HkEh1L2nVJ0IHV~czRA6~v-b2HLXf-gekr6LyL~dPP2hVhaFNk4qtxcXvK7kMF1PzvU1yn34i5AUhmiQVASzGSW-Vl3EEUxabJpgnM7APcRk8xF6zCk6AP77HPw70omoSjvFdGroOHGCLVwrbX8QS6IH2ojc~b-1MPRo4RFt9DRadQ8-Z9v1PisrFUc6fsyOfYLawAJyzlKVB97kgfWfLVPQkzUaxQlEdtOl4EZfUpzD5r7BoakFonoLMkiTCZChaFSwVq0w__&Key-Pair-Id=APKAU6GDWEP267O3XXG3"),
-                File(extFilesDir, "octopus.q4_K_M.gguf")
+                Uri.parse("https://public-storage.nexa4ai.com/Octopus-v2/q4_0.gguf"),
+                File(extFilesDir, "octopus-q4_0.gguf")
             ),
         )
 
