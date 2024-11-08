@@ -256,6 +256,9 @@ static ggml_type ggml_type_from_name(const std::string & s) {
     if (s == "f16") {
         return GGML_TYPE_F16;
     }
+    if (s == "bf16") {
+        return GGML_TYPE_BF16;
+    }
     if (s == "q8_0") {
         return GGML_TYPE_Q8_0;
     }
