@@ -48,7 +48,7 @@ cSettings.append(
 let package = Package(
     name: "llama",
     platforms: [
-        .macOS(.v14),
+        .macOS(.v12),
         .iOS(.v14),
         .watchOS(.v4),
         .tvOS(.v14)
