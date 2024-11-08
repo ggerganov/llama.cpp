@@ -92,7 +92,7 @@ else()
 endif()
 
 option(GGML_CPU_HBM     "ggml: use memkind for CPU HBM" OFF)
-option(GGML_CPU_AARCH64 "ggml: use runtime weight quantization to enable optimized GEMM/GEMV kernels for AARCH64 cpu" OFF)
+option(GGML_RUNTIME_REPACK "ggml: use runtime weight quantization to enable optimized GEMM/GEMV kernels for AARCH64 cpu" OFF)
 
 option(GGML_AVX         "ggml: enable AVX"              ${INS_ENB})
 option(GGML_AVX2        "ggml: enable AVX2"             ${INS_ENB})

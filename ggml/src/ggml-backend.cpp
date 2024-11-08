@@ -2239,7 +2239,7 @@ ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void) {
 }
 #endif
 
-#ifdef GGML_USE_CPU_AARCH64
+#ifdef GGML_USE_RUNTIME_REPACK
 
 // buffer type AARCH64
 
@@ -2316,7 +2316,7 @@ static ggml_backend_buffer_type_t * ggml_backend_cpu_get_extra_bufts(ggml_backen
     bufts[index++] = ggml_backend_cpu_hbm_buffer_type();
 #endif
 
-#ifdef GGML_USE_CPU_AARCH64
+#ifdef GGML_USE_RUNTIME_REPACK
     if (ggml_cpu_has_neon() || ggml_cpu_has_matmul_int8() || ggml_cpu_has_sve()) {
         bufts[index++] = ggml_backend_cpu_aarch64_buffer_type();
     }
@@ -2635,7 +2635,7 @@ static ggml_backend_buffer_t ggml_backend_cpu_device_buffer_from_host_ptr(ggml_b
 }
 
 static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
-#ifdef GGML_USE_CPU_AARCH64
+#ifdef GGML_USE_RUNTIME_REPACK
     const struct ggml_tensor *tensor = op->src[0];
     if (tensor && tensor->buffer && (strcmp(tensor->buffer->buft->iface.get_name(tensor->buffer->buft),"CPU_AARCH64") == 0)) {
         if (op->op == GGML_OP_MUL_MAT && tensor->type == GGML_TYPE_Q4_0) {

@@ -7427,7 +7427,7 @@ static void ggml_compute_forward_mul_mat(
 
     enum ggml_type type = src0->type;
 
-#ifdef GGML_USE_CPU_AARCH64
+#ifdef GGML_USE_RUNTIME_REPACK
     if (strcmp(src0->buffer->buft->iface.get_name(src0->buffer->buft),"CPU_AARCH64") == 0) {
         type  = ggml_get_optimal_type(src0);
     }

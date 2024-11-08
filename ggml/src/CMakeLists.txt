@@ -880,10 +880,10 @@ if (GGML_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
 
-if (GGML_CPU_AARCH64)
+if (GGML_RUNTIME_REPACK)
     message(STATUS "Using runtime weight quantization to enable optimized GEMM/GEMV kernels for AARCH64 cpu")
 
-    add_compile_definitions(GGML_USE_CPU_AARCH64)
+    add_compile_definitions(GGML_USE_RUNTIME_REPACK)
 endif()
 
 if (GGML_CANN)
