@@ -625,7 +625,7 @@ class Model:
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
-        if chkhsh == "b6e8e1518dc4305be2fe39c313ed643381c4da5db34a98f6a04c093f8afbe99b":
+        if chkhsh == "b6e8e1518dc4305be2fe39c313ed643381c4da5db34a98f6a04c093f8afbe99b" or chkhsh == "81d72c7348a9f0ebe86f23298d37debe0a5e71149e29bd283904c02262b27516":
             # ref: https://huggingface.co/THUDM/glm-4-9b-chat
             res = "chatglm-bpe"
         if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
@@ -3989,7 +3989,14 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_head_count_kv(n_head_kv)
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layernorm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_rope_dimension_count(64)
+        if "attention_dim" in self.hparams:
+            rope_dim = self.hparams["attention_dim"]
+        else:
+            rope_dim = self.hparams["hidden_size"] // self.hparams["num_attention_heads"]
+        if "THUDM/glm4-nano" in self.hparams.get("_name_or_path", "") or "THUDM/glm4-mini" in self.hparams.get("_name_or_path", ""):
+            self.gguf_writer.add_rope_dimension_count(rope_dim)
+        else:
+            self.gguf_writer.add_rope_dimension_count(int(rope_dim/2))
         self.gguf_writer.add_add_bos_token(False)
         rope_freq = 10000
         if "rope_ratio" in self.hparams:

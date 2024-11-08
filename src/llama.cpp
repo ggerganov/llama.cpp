@@ -5912,8 +5912,20 @@ static void llm_load_hparams(
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 28: model.type = e_model::MODEL_6B; break;
-                    case 40: model.type = e_model::MODEL_9B; break;
+                    case 28: {
+                        if(hparams.n_head(0)==16){
+                            model.type = e_model::MODEL_1_6B;
+                        }else{
+                            model.type = e_model::MODEL_6B;
+                        }
+                    }break;
+                    case 40:{
+                        if(hparams.n_head(0)==24){
+                            model.type = e_model::MODEL_4B;
+                        }else{
+                            model.type = e_model::MODEL_9B;
+                        }
+                    } break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
@@ -8859,7 +8871,7 @@ static bool llm_load_tensors(
                         layer.attn_norm = create_tensor(tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, 0);
 
                         layer.wqkv = create_tensor(tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, 0);
-                        layer.bqkv = create_tensor(tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, 0);
+                        layer.bqkv = create_tensor(tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, llama_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wo   = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd}, 0);
 
@@ -15722,8 +15734,10 @@ struct llm_build_context {
                 cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
 
-                cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
-                cb(cur, "bqkv", il);
+                if(model.layers[il].bqkv){
+                    cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
+                    cb(cur, "bqkv", il);
+                }
 
                 Qcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
                 Kcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
@@ -21735,6 +21749,14 @@ static int32_t llama_chat_apply_template_internal(
         }
     } else if (tmpl == "chatglm4" || tmpl_contains("[gMASK]<sop>")) {
         ss << "[gMASK]" << "<sop>";
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|" << role << "|>" << "\n" << message->content;
+        }
+        if (add_ass) {
+            ss << "<|assistant|>";
+        }
+    } else if(tmpl == "glm-edge" || tmpl_contains("<|assistant|>")){
         for (auto message : chat) {
             std::string role(message->role);
             ss << "<|" << role << "|>" << "\n" << message->content;
