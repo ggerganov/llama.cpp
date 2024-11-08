@@ -61,13 +61,15 @@ let package = Package(
             name: "llama",
             path: ".",
             exclude: [
+               "build",
                "cmake",
                "examples",
                "scripts",
                "models",
                "tests",
                "CMakeLists.txt",
-               "Makefile"
+               "Makefile",
+               "ggml/src/ggml-metal-embed.metal"
             ],
             sources: sources,
             resources: resources,
