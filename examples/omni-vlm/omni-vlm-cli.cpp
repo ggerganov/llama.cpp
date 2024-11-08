@@ -212,8 +212,8 @@ static struct omnivlm_context * omnivlm_init_context(gpt_params * params, llama_
         prompt = "describe the image in detail.";
     }
 
-    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 10);
-
+    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 0);
+    clip_set_omni_vlm_version(ctx_clip, params);
 
     llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
@@ -249,9 +249,6 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
 
-    // if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
-    //     return 1;
-    // }
     if (!gpt_params_parse(argc, argv, params)) {
         print_usage(argc, argv, params);
         return 1;
@@ -261,8 +258,21 @@ int main(int argc, char ** argv) {
         print_usage(argc, argv, {});
         return 1;
     }
+    if (params.omni_vlm_version != "vlm-81-ocr" && params.prompt.empty()) {
+        LOG_TEE("%s : prompt is empty.\n", __func__);
+        print_usage(argc, argv, {});
+        return 1;
+    }
 
-    params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nDescribe this image for me\n<|vision_start|><|image_pad|><|vision_end|><|im_end|>";
+    if (params.omni_vlm_version == "vlm-81-ocr") {
+        params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n <|ocr_start|><|vision_start|><|image_pad|><|vision_end|><|ocr_end|><|im_end|>";
+    } else if (params.omni_vlm_version == "vlm-81-instruct" || params.omni_vlm_version == "nano-vlm-instruct") {
+        params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n" + params.prompt + "\n<|vision_start|><|image_pad|><|vision_end|><|im_end|>";
+    } else {
+        LOG_TEE("%s : error: you set wrong vlm version info:'%s'.\n", __func__, params.omni_vlm_version.c_str());
+        print_usage(argc, argv, {});
+        return 1;
+    }
 
     auto * model = omnivlm_init(&params);
     if (model == NULL) {
@@ -270,8 +280,12 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-
     auto * ctx_omnivlm = omnivlm_init_context(&params, model);
+
+    // temporarily set to greedy decoding.
+    params.sparams.top_k = 1;
+    params.sparams.top_p = 1.0f;
+
     for (auto & image : params.image) {
         auto * image_embed = load_image(ctx_omnivlm, &params, image);
         if (!image_embed) {

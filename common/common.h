@@ -265,6 +265,8 @@ struct gpt_params {
     bool spm_infill = false; // suffix/prefix/middle pattern for infill
 
     std::string lora_outfile = "ggml-lora-merged-f16.gguf";
+
+    std::string omni_vlm_version = "vlm-81-ocr";
 };
 
 void gpt_params_parse_from_env(gpt_params & params);
