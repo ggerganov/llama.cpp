@@ -1,16 +1,12 @@
 const paramDefaults = {
   stream: true,
+  n_predict: 500,
   temperature: 0.2,
+  stop: ["</s>"]
 };
 
 let generation_settings = null;
 
-export class CompletionError extends Error {
-  constructor(message, name, data) {
-    super(message);
-    this.name = name;
-  }
-};
 
 // Completes the prompt as a generator. Recommended for most use cases.
 //
@@ -44,18 +40,6 @@ export async function* llama(prompt, params = {}, config = {}) {
     },
     signal: controller.signal,
   });
-
-  const status = response.status;
-  if (status !== 200) {
-    try {
-      const body = await response.json();
-      if (body && body.error && body.error.message) {
-        throw new CompletionError(body.error.message, 'ServerError');
-      }
-    } catch (err) {
-      throw new CompletionError(err.message, 'ServerError');
-    }
-  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
