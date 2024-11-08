@@ -1387,3 +1387,33 @@ jobs:
 #          popd
 #          emcmake cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
 #          make
+
+  openEuler-latest-cmake-cann:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        cann: ['python3.9-cann8.0.rc2.beta1']
+        build: ['Release']
+
+    container:
+      image: ascendai/cann:openeuler-${{ matrix.cann }}
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        run: |
+          yum update -y
+          yum install cmake gcc gcc-c++ make -y
+
+      - name: Build
+        id: cmake-build
+        run: |
+            mkdir build
+            cd build
+            cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DWITH_CANN=on
+            cmake --build . -j $(nproc)
