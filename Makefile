@@ -876,7 +876,6 @@ endif # GGML_HIPBLAS
 
 ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
-
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJ_GGML	+= ggml/src/ggml-metal.o
 ifdef GGML_METAL_NDEBUG
