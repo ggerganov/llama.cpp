@@ -2941,6 +2941,7 @@ kernel void kernel_flash_attn_ext(
                 // used to detect blocks full of -INF
                 half smax = -INFINITY;
 
+                // load the mask in shared memory
                 for (short j = 0; j < Q; ++j) {
                     device const half * pm = (device const half *) ((device const char *) mask + (iq1 + j)*nb31);
 
@@ -3228,6 +3229,9 @@ kernel void kernel_flash_attn_ext(
     }
 }
 
+// TODO: this is quite ugly. in the future these types will be hardcoded in the kernel, but for now keep them as
+//       template to be able to explore different combinations
+//
 #define FA_TYPES \
     half,  half4,   simdgroup_half8x8,  \
     half,  half4x4, simdgroup_half8x8,  \
@@ -3235,8 +3239,6 @@ kernel void kernel_flash_attn_ext(
     float,          simdgroup_float8x8, \
     float,          simdgroup_float8x8, \
     half,  half4,   simdgroup_half8x8
-
-// TOOD: static_assert
 
 typedef decltype(kernel_flash_attn_ext<FA_TYPES, half4x4, 1, dequantize_f16, half4x4, 1, dequantize_f16, 64>) flash_attn_ext_t;
 
