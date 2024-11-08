@@ -33,6 +33,7 @@ project("llama-android")
 
 #load local llama.cpp
 add_subdirectory(../../../../../../ build-llama)
+add_subdirectory(../../../../../../examples/llava build-llava)
 
 # In order to load a library into your app from Java/Kotlin, you must call
 # System.loadLibrary() and pass the name of the library defined here;
@@ -50,4 +51,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         llama
         common
         android
-        log)
+        log
+        llava)
