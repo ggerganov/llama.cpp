@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-OMNIVLM_API void omnivlm_init(const char* llm_model_path, const char* projector_model_path);
+OMNIVLM_API void omnivlm_init(const char* llm_model_path, const char* projector_model_path, const char* omni_vlm_version);
 
 OMNIVLM_API const char* omnivlm_inference(const char* prompt, const char* imag_path);
 
