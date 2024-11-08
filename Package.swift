@@ -67,7 +67,8 @@ let package = Package(
                "models",
                "tests",
                "CMakeLists.txt",
-               "Makefile"
+               "Makefile",
+               "ggml/src/ggml-metal-embed.metal"
             ],
             sources: sources,
             resources: resources,
