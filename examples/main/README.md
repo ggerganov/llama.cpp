@@ -214,10 +214,11 @@ Example usage: `--dry-multiplier 0.8 --dry-base 1.75 --dry-allowed-length 2 --dr
 ### K-Shift Sampling
 
 -   `--k-shift N`: Shift the first token selection by cutting out N tokens from the top once (default: 0).
+-   `--shift-p-min N`: Sets the minimum probability for tokens that can be cut, ensuring coherency (default: 0.0001).
 
 K-Shift is a sampling method that guides models away from the most obvious output, eliciting reasoning and analysis. It cuts out k top tokens once at the beginning of inference, making sure that the dialog will start from a less obvious path without guiding the model too much. The method was mentoned in a paper [Chain-of-Thought Reasoning without Prompting](https://arxiv.org/pdf/2402.10200) as a simple trick to guiding a model towards reasoning. In practice, K-Shift can improve the quality of reasoning, help bypass bias or censorship in certain cases, and may also be used as a diagnostics tool. K-Shift is intended to be used with greedy sampling (`--k-shift 10 --top-k 1`), but can help with creative writing too - albeit, not as much as XTC. The default value is 0.
 
-Example usage: `--k-shift 10`
+Example usage: `--k-shift 10 --shift-p-min 0.001`
 
 ### Top-K Sampling
 

@@ -188,7 +188,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     }
                         break;
                 case COMMON_SAMPLER_TYPE_K_SHIFT:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_k_shift  (params.k_shift));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_k_shift  (params.k_shift, params.shift_p_min));
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
                     llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));

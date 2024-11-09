@@ -188,11 +188,14 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
     cur_p->size = k;
 }
 
-static void llama_sampler_top_shift_impl(llama_token_data_array * cur_p, int k) {
+static void llama_sampler_top_shift_impl(llama_token_data_array * cur_p, int k, float p_min) {
     // sort before shifting
-    std::sort(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
-        return a.logit > b.logit;
-    });
+    llama_sampler_softmax_impl(cur_p);
+
+    // limit to the first token we define as coherent
+    while (cur_p->data[k].p < p_min && k > 0) {
+        --k;
+    }
 
     // shift to a token #[k]
     cur_p->data += k;
@@ -1097,6 +1100,7 @@ struct llama_sampler * llama_sampler_init_xtc(float p, float t, size_t min_keep,
 
 struct llama_sampler_k_shift {
     const int32_t k;
+    const float   p_min;
     bool k_set;
 };
 
@@ -1106,6 +1110,11 @@ static const char * llama_sampler_k_shift_name(const struct llama_sampler * /*sm
 
 static void llama_sampler_k_shift_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     auto * ctx = (llama_sampler_k_shift *) smpl->ctx;
+
+    // return early if minimum probability is impossible or makes k-shift useless
+    if (ctx->p_min >= 1) {
+        return;
+    }
 
     // ensures that k-shift can happen on the first step only
     if (ctx->k_set != true) {
@@ -1118,13 +1127,13 @@ static void llama_sampler_k_shift_apply(struct llama_sampler * smpl, llama_token
         return;
     }
 
-    llama_sampler_top_shift_impl(cur_p, ctx->k);
+    llama_sampler_top_shift_impl(cur_p, ctx->k, ctx->p_min);
 }
 
 static struct llama_sampler * llama_sampler_k_shift_clone(const struct llama_sampler * smpl) {
     auto * ctx = (const llama_sampler_k_shift *) smpl->ctx;
 
-    return llama_sampler_init_k_shift(ctx->k);
+    return llama_sampler_init_k_shift(ctx->k, ctx->p_min);
 }
 
 static void llama_sampler_k_shift_free(struct llama_sampler * smpl) {
@@ -1145,11 +1154,12 @@ static struct llama_sampler_i llama_sampler_k_shift_i = {
     /* .free   = */ llama_sampler_k_shift_free,
 };
 
-struct llama_sampler * llama_sampler_init_k_shift(int32_t k) {
+struct llama_sampler * llama_sampler_init_k_shift(int32_t k, float p_min) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_k_shift_i,
         /* .ctx   = */ new llama_sampler_k_shift {
-            /* .k = */ k,
+        /*     .k = */ k,
+        /* .p_min = */ p_min,
         /* .k_set = */ false,
         },
     };

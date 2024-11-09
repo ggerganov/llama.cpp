@@ -924,9 +924,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--k-shift"}, "N",
-        string_format("k-shift sampling (default: %d, 0 = disabled)", params.sparams.k_shift),
+        string_format("K-Shift sampling (default: %d, 0 = disabled)", params.sparams.k_shift),
         [](common_params & params, int value) {
             params.sparams.k_shift = value;
+        }
+    ).set_sparam());
+    add_opt(common_arg(
+        {"--shift-p-min"}, "N",
+        string_format("minimum probability required for tokens to be cut by k-shift (default: %.4f, 1.0 = disabled)", params.sparams.shift_p_min),
+        [](common_params & params, int value) {
+            params.sparams.shift_p_min = value;
         }
     ).set_sparam());
     add_opt(common_arg(

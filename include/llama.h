@@ -1098,7 +1098,7 @@ extern "C" {
     LLAMA_API struct llama_sampler * llama_sampler_init_xtc        (float   p, float   t,     size_t min_keep, uint32_t seed);
 
 
-    LLAMA_API struct llama_sampler * llama_sampler_init_k_shift    (int32_t k);
+    LLAMA_API struct llama_sampler * llama_sampler_init_k_shift    (int32_t k, float   p_min);
 
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
