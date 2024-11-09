@@ -211,6 +211,20 @@
             <input type="checkbox" />
             <div class="collapse-title font-bold">Advanced config</div>
             <div class="collapse-content">
+              <div class="label">Samplers</div>
+              <template v-for="key in ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold']">
+                <label class="input input-bordered flex items-center gap-2 mb-2">
+                  <b>{{ key }}</b>
+                  <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+                </label>
+              </template>
+              <div class="label">Penalties</div>
+              <template v-for="key in ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n']">
+                <label class="input input-bordered flex items-center gap-2 mb-2">
+                  <b>{{ key }}</b>
+                  <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+                </label>
+              </template>
               <label class="form-control mb-2">
                 <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
                 <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
@@ -245,9 +259,22 @@
       systemMessage: 'You are a helpful assistant.',
       // make sure these default values are in sync with `common.h`
       temperature: 0.8,
+      dynatemp_range: 0.0,
+      dynatemp_exponent: 1.0,
       top_k: 40,
       top_p: 0.95,
       min_p: 0.05,
+      xtc_probability: 0.0,
+      xtc_threshold: 0.1,
+      typical_p: 1.0,
+      repeat_last_n: 64,
+      repeat_penalty: 1.0,
+      presence_penalty: 0.0,
+      frequency_penalty: 0.0,
+      dry_multiplier: 0.0,
+      dry_base: 1.75,
+      dry_allowed_length: 2,
+      dry_penalty_last_n: -1,
       max_tokens: -1,
       custom: '', // custom json-stringified object
     };
@@ -452,8 +479,22 @@
               stream: true,
               cache_prompt: true,
               temperature: this.config.temperature,
+              dynatemp_range: this.config.dynatemp_range,
+              dynatemp_exponent: this.config.dynatemp_exponent,
               top_k: this.config.top_k,
               top_p: this.config.top_p,
+              min_p: this.config.min_p,
+              typical_p: this.config.typical_p,
+              xtc_probability: this.config.xtc_probability,
+              xtc_threshold: this.config.xtc_threshold,
+              repeat_last_n: this.config.repeat_last_n,
+              repeat_penalty: this.config.repeat_penalty,
+              presence_penalty: this.config.presence_penalty,
+              frequency_penalty: this.config.frequency_penalty,
+              dry_multiplier: this.config.dry_multiplier,
+              dry_base: this.config.dry_base,
+              dry_allowed_length: this.config.dry_allowed_length,
+              dry_penalty_last_n: this.config.dry_penalty_last_n,
               max_tokens: this.config.max_tokens,
               ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
               ...(this.config.apiKey ? { api_key: this.config.apiKey } : {}),
