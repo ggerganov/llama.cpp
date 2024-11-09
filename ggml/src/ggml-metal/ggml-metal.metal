@@ -3264,7 +3264,6 @@ kernel void kernel_flash_attn_ext_vec(
         constant ggml_metal_kargs_flash_attn_ext & args,
         threadgroup   half * shared [[threadgroup(0)]],
         uint3   tgpig[[threadgroup_position_in_grid]],
-        ushort3 tpitg[[thread_position_in_threadgroup]],
         ushort3   ntg[[threads_per_threadgroup]],
         ushort  tiisg[[thread_index_in_simdgroup]],
         ushort  sgitg[[simdgroup_index_in_threadgroup]]) {
@@ -6215,38 +6214,26 @@ kernel void kernel_get_rows_i32(
 
 // each block_q contains 16*nl weights
 template<typename T, typename T4x4, typename simdgroup_T8x8, typename block_q, short nl, void (*dequantize_func)(device const block_q *, short, thread T4x4 &)>
-kernel void kernel_mul_mm(device const  uchar * src0,
-                          device const  uchar * src1,
-                          device        float * dst,
-                          constant    int64_t & ne00,
-                          constant    int64_t & ne02,
-                          constant   uint64_t & nb01,
-                          constant   uint64_t & nb02,
-                          constant   uint64_t & nb03,
-                          constant    int64_t & ne12,
-                          constant   uint64_t & nb10,
-                          constant   uint64_t & nb11,
-                          constant   uint64_t & nb12,
-                          constant   uint64_t & nb13,
-                          constant    int64_t & ne0,
-                          constant    int64_t & ne1,
-                          constant       uint & r2,
-                          constant       uint & r3,
-                          threadgroup   uchar * shared_memory [[threadgroup(0)]],
-                          uint3                 tgpig[[threadgroup_position_in_grid]],
-                          uint                  tiitg[[thread_index_in_threadgroup]],
-                          uint                  sgitg[[simdgroup_index_in_threadgroup]]) {
+kernel void kernel_mul_mm(
+        device const char * src0,
+        device const char * src1,
+        device       char * dst,
+        constant ggml_metal_kargs_mul_mm & args,
+        threadgroup  char * shared_memory [[threadgroup(0)]],
+        uint3  tgpig[[threadgroup_position_in_grid]],
+        ushort tiitg[[thread_index_in_threadgroup]],
+        ushort sgitg[[simdgroup_index_in_threadgroup]]) {
 
     threadgroup T     * sa = (threadgroup T     *)(shared_memory);
     threadgroup float * sb = (threadgroup float *)(shared_memory + 4096);
 
-    const uint r0 = tgpig.y;
-    const uint r1 = tgpig.x;
-    const uint im = tgpig.z;
+    const int r0 = tgpig.y;
+    const int r1 = tgpig.x;
+    const int im = tgpig.z;
 
     // if this block is of 64x32 shape or smaller
-    short n_rows = (ne0 - r0*BLOCK_SIZE_M < BLOCK_SIZE_M) ? (ne0 - r0*BLOCK_SIZE_M) : BLOCK_SIZE_M;
-    short n_cols = (ne1 - r1*BLOCK_SIZE_N < BLOCK_SIZE_N) ? (ne1 - r1*BLOCK_SIZE_N) : BLOCK_SIZE_N;
+    short n_rows = (args.ne0 - r0*BLOCK_SIZE_M < BLOCK_SIZE_M) ? (args.ne0 - r0*BLOCK_SIZE_M) : BLOCK_SIZE_M;
+    short n_cols = (args.ne1 - r1*BLOCK_SIZE_N < BLOCK_SIZE_N) ? (args.ne1 - r1*BLOCK_SIZE_N) : BLOCK_SIZE_N;
 
     // a thread shouldn't load data outside of the matrix
     short thread_row = ((short)tiitg/THREAD_PER_ROW) < n_rows ? ((short)tiitg/THREAD_PER_ROW) : n_rows - 1;
@@ -6262,20 +6249,20 @@ kernel void kernel_mul_mm(device const  uchar * src0,
 
     short il = (tiitg % THREAD_PER_ROW);
 
-    const uint i12 = im%ne12;
-    const uint i13 = im/ne12;
+    const int i12 = im%args.ne12;
+    const int i13 = im/args.ne12;
 
-    uint   offset0 = (i12/r2)*nb02 + (i13/r3)*nb03;
-    ushort offset1 = il/nl;
+    int   offset0 = (i12/args.r2)*args.nb02 + (i13/args.r3)*args.nb03;
+    short offset1 = il/nl;
 
-    device const block_q * x = (device const block_q *)(src0 + (r0*BLOCK_SIZE_M + thread_row)*nb01 + offset0) + offset1;
+    device const block_q * x = (device const block_q *)(src0 + (r0*BLOCK_SIZE_M + thread_row)*args.nb01 + offset0) + offset1;
     device const float   * y = (device const float   *)(src1
-        + nb13 * i13
-        + nb12 * i12
-        + nb11 * (r1 * BLOCK_SIZE_N + thread_col)
-        + nb10 * (BLOCK_SIZE_K / THREAD_PER_COL * (tiitg % THREAD_PER_COL)));
+        + args.nb13*i13
+        + args.nb12*i12
+        + args.nb11*(r1 * BLOCK_SIZE_N + thread_col)
+        + args.nb10*(BLOCK_SIZE_K / THREAD_PER_COL * (tiitg % THREAD_PER_COL)));
 
-    for (int loop_k = 0; loop_k < ne00; loop_k += BLOCK_SIZE_K) {
+    for (int loop_k = 0; loop_k < args.ne00; loop_k += BLOCK_SIZE_K) {
         // load data and store to threadgroup memory
         T4x4 temp_a;
         dequantize_func(x, il, temp_a);
@@ -6322,11 +6309,13 @@ kernel void kernel_mul_mm(device const  uchar * src0,
         }
     }
 
-    if ((r0 + 1) * BLOCK_SIZE_M <= ne0 && (r1 + 1) * BLOCK_SIZE_N <= ne1) {
-        device float * C = dst + (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) \
-                               + (BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)) * ne0 + im*ne1*ne0;
+    if ((r0 + 1) * BLOCK_SIZE_M <= args.ne0 && (r1 + 1) * BLOCK_SIZE_N <= args.ne1) {
+        device float * C = (device float *) dst +
+            (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) + \
+            (BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)) * args.ne0 + im*args.ne1*args.ne0;
+
         for (short i = 0; i < 8; i++) {
-            simdgroup_store(mc[i], C + 8 * (i%4) + 8 * ne0 * (i/4), ne0);
+            simdgroup_store(mc[i], C + 8 * (i%4) + 8 * args.ne0 * (i/4), args.ne0);
         }
     } else {
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
@@ -6341,7 +6330,7 @@ kernel void kernel_mul_mm(device const  uchar * src0,
 
         if (sgitg == 0) {
             for (int j = tiitg; j < n_cols; j += BLOCK_SIZE_N) {
-                device float  * D  = dst + (r0*BLOCK_SIZE_M) + (r1*BLOCK_SIZE_N + j)*ne0 + im*ne1*ne0;
+                device float  * D  = (device float  *) dst + (r0*BLOCK_SIZE_M) + (r1*BLOCK_SIZE_N + j)*args.ne0 + im*args.ne1*args.ne0;
                 device float4 * D4 = (device float4 *) D;
 
                 threadgroup float  * C  = temp_str + (j*BLOCK_SIZE_M);
