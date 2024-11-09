@@ -196,6 +196,10 @@
         <h3 class="text-lg font-bold mb-6">Settings</h3>
         <div class="h-[calc(90vh-12rem)] overflow-y-auto">
           <p class="opacity-40 mb-6">Settings below are saved in browser's localStorage</p>
+          <label class="input input-bordered flex items-center gap-2 mb-2">
+            <b>API Key</b>
+            <input type="text" class="grow" placeholder="Default: (empty)" v-model="config.apiKey" />
+          </label>
           <label class="form-control mb-2">
             <div class="label">System Message</div>
             <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
@@ -331,7 +335,11 @@
         if (!conv) return;
         const msg = conv.messages.pop();
         conv.lastModified = Date.now();
-        localStorage.setItem(convId, JSON.stringify(conv));
+        if (conv.messages.length === 0) {
+          StorageUtils.remove(convId);
+        } else {
+          localStorage.setItem(convId, JSON.stringify(conv));
+        }
         return msg;
       },
 
@@ -512,6 +520,7 @@
           this.isGenerating = false;
           this.stopGeneration = () => {};
           this.fetchMessages();
+          chatScrollToBottom();
         },
 
         // message actions
