@@ -3041,6 +3041,8 @@ static void ggml_metal_encode_node(
 
                 bool use_vec_kernel = false;
 
+                // TODO: add vec kernels for (ne00%64 == 0) and maybe also for (ne00%32 == 0)
+                //       for now avoiding mainly to keep the number of templates/kernels a bit lower
                 if (ne01 >= 4 || (ne00%128 != 0)) {
                     switch (src1->type) {
                         case GGML_TYPE_F16:
