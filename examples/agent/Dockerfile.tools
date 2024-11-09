@@ -1,15 +1,19 @@
 FROM python:3.12-slim
 
 RUN python -m pip install --upgrade pip && \
+    apt install -y wget && \
     apt clean cache
 
 COPY requirements.txt /root/
 COPY tools /root/tools
 WORKDIR /root
-RUN pip install -r requirements.txt
+RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu && \
+    pip install -r requirements.txt
 
 COPY ./squid/ssl_cert/squidCA.crt /usr/local/share/ca-certificates/squidCA.crt
 RUN chmod 644 /usr/local/share/ca-certificates/squidCA.crt && update-ca-certificates
+
+RUN wget https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf -O /root/nomic-embed-text-v1.5.Q4_K_M.gguf
 
 ENTRYPOINT [ "uvicorn" ]
 CMD ["tools:app", "--host", "0.0.0.0", "--port", "8088"]

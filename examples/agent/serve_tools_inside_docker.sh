@@ -27,4 +27,4 @@ openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
 
 openssl x509 -outform PEM -in squid/ssl_cert/squidCA.pem -out squid/ssl_cert/squidCA.crt
 
-docker compose up --build "$@"
+docker compose --verbose up --build "$@"

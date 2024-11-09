@@ -13,7 +13,7 @@ services:
       - 8088:8088
     command: TCP-LISTEN:8088,fork,bind=tools_endpoint TCP-CONNECT:siloed_tools:8088
 
-  # Runs tools w/o direct internet access.
+  # Runs tools w/o **direct* internet access.
   #
   # All outgoing tool traffic must go through outgoing_proxy, which will log even HTTPS requests
   # (the proxy's self-signed cert is added to this container's root CAs).
@@ -22,19 +22,30 @@ services:
   siloed_tools:
     container_name: siloed_tools
     depends_on:
+      # - embeddings_server
       - outgoing_proxy
     image: local/llama.cpp:isolated-tools
+    # sqlite-vec isn't compiled for linux/arm64 so to virtualize on Mac we force this to be x86_64
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.tools
     ports:
       - 8088:8088
+    volumes:
+      - ./data:/data:rw
     networks:
       - private_net
     environment:
-      - VERBOSE=1
       - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
+      - EMBEDDINGS_DIMS=768
+      - EMBEDDINGS_MODEL_FILE=/models/nomic-embed-text-v1.5.Q4_K_M.gguf
+      # - EMBEDDINGS_ENDPOINT=http://embeddings_server:8081/v1/embeddings
+      - EXCLUDE_TOOLS=${EXCLUDE_TOOLS:-}
+      - INCLUDE_TOOLS=${INCLUDE_TOOLS:-}
+      - MEMORY_SQLITE_DB=/data/memory.db
       - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/squidCA.crt
+      - VERBOSE=1
       - http_proxy=http://outgoing_proxy:3128
       - https_proxy=http://outgoing_proxy:3128
 

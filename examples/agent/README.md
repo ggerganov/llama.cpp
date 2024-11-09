@@ -22,22 +22,22 @@ Here's how to run an agent w/ local tool call:
   # (otherwise they'd use the generic tool call support, which may be less efficient
   # and consume more tokens)
 
-  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+  ./llama-server --jinja -fa --verbose \
     -hfr bartowski/Qwen2.5-7B-Instruct-GGUF -hff Qwen2.5-7B-Instruct-Q4_K_M.gguf
 
-  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+  ./llama-server --jinja -fa --verbose \
     -hfr NousResearch/Hermes-3-Llama-3.1-8B-GGUF -hff Hermes-3-Llama-3.1-8B.Q4_K_M.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
 
-  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+  ./llama-server --jinja -fa --verbose \
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q8_0.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py meetkai/functionary-medium-v3.2 )
 
-  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+  ./llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct )
 
-  ./llama-server --jinja -fa -ctk q4_0 -ctv q4_0 --verbose \
+  ./llama-server --jinja -fa --verbose \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
     --chat-template-file <( python scripts/get_hf_chat_template.py mistralai/Mistral-Nemo-Instruct-2407 )
 

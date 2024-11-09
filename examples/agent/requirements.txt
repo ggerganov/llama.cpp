@@ -1,7 +1,11 @@
-aiohttp
+aiosqlite
+docling
 fastapi[standard]
+# html2text
 ipython
-html2text
 requests
-pyppeteer
+sparqlwrapper
+sqlite-lembed
+sqlite-rembed
+sqlite-vec
 uvicorn
