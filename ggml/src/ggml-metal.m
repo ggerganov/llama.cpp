@@ -1959,24 +1959,29 @@ static void ggml_metal_encode_node(
                                 default: GGML_ABORT("MUL MAT-MAT not implemented");
                             }
 
+                            ggml_metal_kargs_mul_mm args = {
+                                /*.ne00 =*/ ne00,
+                                /*.ne02 =*/ ne02,
+                                /*.nb01 =*/ nb01,
+                                /*.nb02 =*/ nb02,
+                                /*.nb03 =*/ nb03,
+                                /*.ne12 =*/ ne12,
+                                /*.nb10 =*/ nb10,
+                                /*.nb11 =*/ nb11,
+                                /*.nb12 =*/ nb12,
+                                /*.nb13 =*/ nb13,
+                                /*.ne0  =*/ ne0,
+                                /*.ne1  =*/ ne1,
+                                /*.r2   =*/ r2,
+                                /*.r3   =*/ r3,
+                            };
+
                             [encoder setComputePipelineState:pipeline];
                             [encoder setBuffer:id_src0 offset:offs_src0    atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1    atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst     atIndex:2];
-                            [encoder setBytes:&ne00    length:sizeof(ne00) atIndex:3];
-                            [encoder setBytes:&ne02    length:sizeof(ne02) atIndex:4];
-                            [encoder setBytes:&nb01    length:sizeof(nb01) atIndex:5];
-                            [encoder setBytes:&nb02    length:sizeof(nb02) atIndex:6];
-                            [encoder setBytes:&nb03    length:sizeof(nb03) atIndex:7];
-                            [encoder setBytes:&ne12    length:sizeof(ne12) atIndex:8];
-                            [encoder setBytes:&nb10    length:sizeof(nb10) atIndex:9];
-                            [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:10];
-                            [encoder setBytes:&nb12    length:sizeof(nb12) atIndex:11];
-                            [encoder setBytes:&nb13    length:sizeof(nb13) atIndex:12];
-                            [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:13];
-                            [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:14];
-                            [encoder setBytes:&r2      length:sizeof(r2)   atIndex:15];
-                            [encoder setBytes:&r3      length:sizeof(r3)   atIndex:16];
+                            [encoder setBytes:&args    length:sizeof(args) atIndex:3];
+
                             [encoder setThreadgroupMemoryLength:8192 atIndex:0];
                             [encoder dispatchThreadgroups:MTLSizeMake( (ne11 + 31)/32, (ne01 + 63)/64, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
                         } else {
@@ -2707,31 +2712,31 @@ static void ggml_metal_encode_node(
                 }
 
                 ggml_metal_kargs_rope args = {
-                    .ne00        = ne00,
-                    .ne01        = ne01,
-                    .ne02        = ne02,
-                    .ne03        = ne03,
-                    .nb00        = nb00,
-                    .nb01        = nb01,
-                    .nb02        = nb02,
-                    .nb03        = nb03,
-                    .ne0         = ne0,
-                    .ne1         = ne1,
-                    .ne2         = ne2,
-                    .ne3         = ne3,
-                    .nb0         = nb0,
-                    .nb1         = nb1,
-                    .nb2         = nb2,
-                    .nb3         = nb3,
-                    .n_past      = n_past,
-                    .n_dims      = n_dims,
-                    .n_ctx_orig  = n_ctx_orig,
-                    .freq_base   = freq_base,
-                    .freq_scale  = freq_scale,
-                    .ext_factor  = ext_factor,
-                    .attn_factor = attn_factor,
-                    .beta_fast   = beta_fast,
-                    .beta_slow   = beta_slow,
+                    /*.ne00        =*/ ne00,
+                    /*.ne01        =*/ ne01,
+                    /*.ne02        =*/ ne02,
+                    /*.ne03        =*/ ne03,
+                    /*.nb00        =*/ nb00,
+                    /*.nb01        =*/ nb01,
+                    /*.nb02        =*/ nb02,
+                    /*.nb03        =*/ nb03,
+                    /*.ne0         =*/ ne0,
+                    /*.ne1         =*/ ne1,
+                    /*.ne2         =*/ ne2,
+                    /*.ne3         =*/ ne3,
+                    /*.nb0         =*/ nb0,
+                    /*.nb1         =*/ nb1,
+                    /*.nb2         =*/ nb2,
+                    /*.nb3         =*/ nb3,
+                    /*.n_past      =*/ n_past,
+                    /*.n_dims      =*/ n_dims,
+                    /*.n_ctx_orig  =*/ n_ctx_orig,
+                    /*.freq_base   =*/ freq_base,
+                    /*.freq_scale  =*/ freq_scale,
+                    /*.ext_factor  =*/ ext_factor,
+                    /*.attn_factor =*/ attn_factor,
+                    /*.beta_fast   =*/ beta_fast,
+                    /*.beta_slow   =*/ beta_slow,
                 };
 
                 [encoder setComputePipelineState:pipeline];
@@ -3229,27 +3234,27 @@ static void ggml_metal_encode_node(
                 }
 
                 ggml_metal_kargs_flash_attn_ext args = {
-                    .ne01          = ne01,
-                    .ne02          = ne02,
-                    .ne03          = ne03,
-                    .nb01          = nb01,
-                    .nb02          = nb02,
-                    .nb03          = nb03,
-                    .ne11          = ne11,
-                    .ne_12_2       = ne12,
-                    .ne_12_3       = ne13,
-                    .nb_12_1       = nb11,
-                    .nb_12_2       = nb12,
-                    .nb_12_3       = nb13,
-                    .nb31          = nb31,
-                    .ne1           = ne1,
-                    .ne2           = ne2,
-                    .scale         = scale,
-                    .max_bias      = max_bias,
-                    .m0            = m0,
-                    .m1            = m1,
-                    .n_head_log2   = n_head_log2,
-                    .logit_softcap = logit_softcap,
+                    /*.ne01          =*/ ne01,
+                    /*.ne02          =*/ ne02,
+                    /*.ne03          =*/ ne03,
+                    /*.nb01          =*/ nb01,
+                    /*.nb02          =*/ nb02,
+                    /*.nb03          =*/ nb03,
+                    /*.ne11          =*/ ne11,
+                    /*.ne_12_2       =*/ ne12,
+                    /*.ne_12_3       =*/ ne13,
+                    /*.nb_12_1       =*/ nb11,
+                    /*.nb_12_2       =*/ nb12,
+                    /*.nb_12_3       =*/ nb13,
+                    /*.nb31          =*/ nb31,
+                    /*.ne1           =*/ ne1,
+                    /*.ne2           =*/ ne2,
+                    /*.scale         =*/ scale,
+                    /*.max_bias      =*/ max_bias,
+                    /*.m0            =*/ m0,
+                    /*.m1            =*/ m1,
+                    /*.n_head_log2   =*/ n_head_log2,
+                    /*.logit_softcap =*/ logit_softcap,
                 };
 
                 [encoder setComputePipelineState:pipeline];
