@@ -3228,37 +3228,41 @@ static void ggml_metal_encode_node(
                     }
                 }
 
+                ggml_metal_kargs_flash_attn_ext args = {
+                    .ne01          = ne01,
+                    .ne02          = ne02,
+                    .ne03          = ne03,
+                    .nb01          = nb01,
+                    .nb02          = nb02,
+                    .nb03          = nb03,
+                    .ne11          = ne11,
+                    .ne_12_2       = ne12,
+                    .ne_12_3       = ne13,
+                    .nb_12_1       = nb11,
+                    .nb_12_2       = nb12,
+                    .nb_12_3       = nb13,
+                    .nb31          = nb31,
+                    .ne1           = ne1,
+                    .ne2           = ne2,
+                    .scale         = scale,
+                    .max_bias      = max_bias,
+                    .m0            = m0,
+                    .m1            = m1,
+                    .n_head_log2   = n_head_log2,
+                    .logit_softcap = logit_softcap,
+                };
+
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0     offset:offs_src0           atIndex:0];
-                [encoder setBuffer:id_src1     offset:offs_src1           atIndex:1];
-                [encoder setBuffer:id_src2     offset:offs_src2           atIndex:2];
+                [encoder setBuffer:id_src0 offset:offs_src0     atIndex:0];
+                [encoder setBuffer:id_src1 offset:offs_src1     atIndex:1];
+                [encoder setBuffer:id_src2 offset:offs_src2     atIndex:2];
                 if (id_src3) {
-                    [encoder setBuffer:id_src3     offset:offs_src3           atIndex:3];
+                    [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
                 } else {
-                    [encoder setBuffer:id_src0     offset:offs_src0           atIndex:3];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:3];
                 }
-                [encoder setBuffer:id_dst        offset:offs_dst              atIndex:4];
-                [encoder setBytes:&ne01          length:sizeof( int64_t)      atIndex:5];
-                [encoder setBytes:&ne02          length:sizeof( int64_t)      atIndex:6];
-                [encoder setBytes:&ne03          length:sizeof( int64_t)      atIndex:7];
-                [encoder setBytes:&nb01          length:sizeof(uint64_t)      atIndex:8];
-                [encoder setBytes:&nb02          length:sizeof(uint64_t)      atIndex:9];
-                [encoder setBytes:&nb03          length:sizeof(uint64_t)      atIndex:10];
-                [encoder setBytes:&ne11          length:sizeof( int64_t)      atIndex:11];
-                [encoder setBytes:&ne12          length:sizeof( int64_t)      atIndex:12];
-                [encoder setBytes:&ne13          length:sizeof( int64_t)      atIndex:13];
-                [encoder setBytes:&nb11          length:sizeof(uint64_t)      atIndex:14];
-                [encoder setBytes:&nb12          length:sizeof(uint64_t)      atIndex:15];
-                [encoder setBytes:&nb13          length:sizeof(uint64_t)      atIndex:16];
-                [encoder setBytes:&nb31          length:sizeof(uint64_t)      atIndex:17];
-                [encoder setBytes:&ne1           length:sizeof( int64_t)      atIndex:18];
-                [encoder setBytes:&ne2           length:sizeof( int64_t)      atIndex:19];
-                [encoder setBytes:&scale         length:sizeof(   float)      atIndex:20];
-                [encoder setBytes:&max_bias      length:sizeof(   float)      atIndex:21];
-                [encoder setBytes:&m0            length:sizeof(m0)            atIndex:22];
-                [encoder setBytes:&m1            length:sizeof(m1)            atIndex:23];
-                [encoder setBytes:&n_head_log2   length:sizeof(n_head_log2)   atIndex:24];
-                [encoder setBytes:&logit_softcap length:sizeof(logit_softcap) atIndex:25];
+                [encoder setBuffer:id_dst offset:offs_dst       atIndex:4];
+                [encoder setBytes:&args length:sizeof(args)     atIndex:5];
 
                 if (!use_vec_kernel) {
                     // half8x8 kernel
