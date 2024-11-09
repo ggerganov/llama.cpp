@@ -446,6 +446,30 @@ typedef struct {
     float    beta_fast;
     float    beta_slow;
 } ggml_metal_kargs_rope;
+
+typedef struct {
+    int32_t  ne01;
+    int32_t  ne02;
+    int32_t  ne03;
+    uint64_t nb01;
+    uint64_t nb02;
+    uint64_t nb03;
+    int32_t  ne11;
+    int32_t  ne_12_2; // assume K and V are same shape
+    int32_t  ne_12_3;
+    uint64_t nb_12_1;
+    uint64_t nb_12_2;
+    uint64_t nb_12_3;
+    uint64_t nb31;
+    int32_t  ne1;
+    int32_t  ne2;
+    float    scale;
+    float    max_bias;
+    float    m0;
+    float    m1;
+    uint16_t n_head_log2;
+    float    logit_softcap;
+} ggml_metal_kargs_flash_attn_ext;
 #endif
 
 #endif // GGML_COMMON_DECL
