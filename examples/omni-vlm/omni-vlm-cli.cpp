@@ -149,7 +149,7 @@ static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_ima
             LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_omnivlm->ctx_llama, tmp[i]).c_str());
         }
     }
-    LOG_TEE("user_prompt: %s\n", user_prompt.c_str());
+    // LOG_TEE("user_prompt: %s\n", user_prompt.c_str());
     if (params->verbose_prompt) {
         auto tmp = ::llama_tokenize(ctx_omnivlm->ctx_llama, user_prompt, true, true);
         for (int i = 0; i < (int) tmp.size(); i++) {
@@ -165,6 +165,9 @@ static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_ima
 
     LOG("\n");
 
+    params->sparams.temp = 0.0f;
+    params->sparams.top_k = 1;
+    params->sparams.top_p = 1.0f;
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams);
     if (!ctx_sampling) {
         LOG_TEE("%s: failed to initialize sampling subsystem\n", __func__);
@@ -177,8 +180,8 @@ static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_ima
         response += tmp;
         if (strcmp(tmp, "<|im_end|>") == 0) break;
         if (strcmp(tmp, "</s>") == 0) break;
-        // if (strstr(tmp, "###")) break; // Yi-VL behavior
         printf("%s", tmp);
+        // LOG("%s", tmp);
         // if (strstr(response.c_str(), "<|im_end|>")) break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
         // if (strstr(response.c_str(), "<|im_start|>")) break; // Yi-34B llava-1.6
         // if (strstr(response.c_str(), "USER:")) break; // mistral llava-1.6
@@ -265,7 +268,7 @@ int main(int argc, char ** argv) {
     }
 
     if (params.omni_vlm_version == "vlm-81-ocr") {
-        params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n <|ocr_start|><|vision_start|><|image_pad|><|vision_end|><|ocr_end|><|im_end|>";
+        params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n <|vision_start|><|image_pad|><|vision_end|><|im_end|>";
     } else if (params.omni_vlm_version == "vlm-81-instruct" || params.omni_vlm_version == "nano-vlm-instruct") {
         params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n" + params.prompt + "\n<|vision_start|><|image_pad|><|vision_end|><|im_end|>";
     } else {
@@ -281,10 +284,6 @@ int main(int argc, char ** argv) {
     }
 
     auto * ctx_omnivlm = omnivlm_init_context(&params, model);
-
-    // temporarily set to greedy decoding.
-    params.sparams.top_k = 1;
-    params.sparams.top_p = 1.0f;
 
     for (auto & image : params.image) {
         auto * image_embed = load_image(ctx_omnivlm, &params, image);

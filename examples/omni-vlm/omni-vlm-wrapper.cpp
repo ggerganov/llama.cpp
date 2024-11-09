@@ -222,8 +222,6 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
 
 // inference interface definition
 void omnivlm_init(const char* llm_model_path, const char* projector_model_path, const char* omni_vlm_version) {
-    std::cout << "debug0 " << llm_model_path << std::endl;
-    std::cout << "debug1 " << omni_vlm_version << std::endl;
     const char* argv = "omni-wrapper-py";
     char* nc_argv = const_cast<char*>(argv);
     if (!gpt_params_parse(1, &nc_argv, params)) {
@@ -235,8 +233,6 @@ void omnivlm_init(const char* llm_model_path, const char* projector_model_path, 
     params.omni_vlm_version = omni_vlm_version;
 
     std::string omni_vlm_ver = params.omni_vlm_version;
-    std::cout << "\t\t DEBUG omni_ver" << std::endl;
-    std::cout << params.omni_vlm_version << std::endl;
     if(omni_vlm_ver != "vlm-81-ocr" && omni_vlm_ver != "vlm-81-instruct" && omni_vlm_ver != "nano-vlm-instruct") {
         fprintf(stderr, "%s: error: you set wrong omni_vlm_string: %s\n", __func__, omni_vlm_version);
         fprintf(stderr, "%s: Valid omni_vlm_version set is ('vlm-81-ocr', 'vlm-81-instruct', 'nano-vlm-instruct')\n", __func__);
