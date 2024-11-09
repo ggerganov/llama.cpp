@@ -2301,6 +2301,7 @@ enum e_model {
     MODEL_1B,
     MODEL_1_3B,
     MODEL_1_4B,
+    MODEL_1_5B,
     MODEL_1_6B,
     MODEL_2B,
     MODEL_2_8B,
@@ -5227,6 +5228,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_1B:            return "1B";
         case MODEL_1_3B:          return "1.3B";
         case MODEL_1_4B:          return "1.4B";
+        case MODEL_1_5B:          return "1.5B";
         case MODEL_1_6B:          return "1.6B";
         case MODEL_2B:            return "2B";
         case MODEL_2_8B:          return "2.8B";
@@ -5598,6 +5600,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
                     case 24: model.type = hparams.n_embd == 1024 ? e_model::MODEL_0_5B : e_model::MODEL_1B; break;
+                    case 28: model.type = hparams.n_embd == 1536 ? e_model::MODEL_1_5B : e_model::MODEL_7B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 40: model.type = hparams.n_head() == 20 ? e_model::MODEL_4B : e_model::MODEL_13B; break;
                     case 80: model.type = e_model::MODEL_70B; break;
