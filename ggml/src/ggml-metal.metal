@@ -1,4 +1,5 @@
 #define GGML_COMMON_DECL_METAL
+#define GGML_COMMON_DECL_METAL_KARGS
 #define GGML_COMMON_IMPL_METAL
 #include "ggml-common.h"
 
@@ -2229,7 +2230,7 @@ static float rope_yarn_ramp(const float low, const float high, const int i0) {
 // YaRN algorithm based on LlamaYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
 static void rope_yarn(
-    float theta_extrap, float freq_scale, float corr_dims[2], int64_t i0, float ext_factor, float mscale,
+    float theta_extrap, float freq_scale, float corr_dims[2], int i0, float ext_factor, float mscale,
     thread float * cos_theta, thread float * sin_theta) {
     // Get n-d rotational scaling corrected for extrapolation
     float theta_interp = freq_scale * theta_extrap;
@@ -2261,65 +2262,41 @@ static void rope_yarn_corr_dims(
 
 template<typename T>
 kernel void kernel_rope_norm(
-        device const    void * src0,
-        device const int32_t * src1,
-        device const   float * src2,
-        device         float * dst,
-        constant     int64_t & ne00,
-        constant     int64_t & ne01,
-        constant     int64_t & ne02,
-        constant     int64_t & ne03,
-        constant    uint64_t & nb00,
-        constant    uint64_t & nb01,
-        constant    uint64_t & nb02,
-        constant    uint64_t & nb03,
-        constant     int64_t & ne0,
-        constant     int64_t & ne1,
-        constant     int64_t & ne2,
-        constant     int64_t & ne3,
-        constant    uint64_t & nb0,
-        constant    uint64_t & nb1,
-        constant    uint64_t & nb2,
-        constant    uint64_t & nb3,
-        constant         int & n_past,
-        constant         int & n_dims,
-        constant         int & n_ctx_orig,
-        constant       float & freq_base,
-        constant       float & freq_scale,
-        constant       float & ext_factor,
-        constant       float & attn_factor,
-        constant       float & beta_fast,
-        constant       float & beta_slow,
+        device const char * src0,
+        device const char * src1,
+        device const char * src2,
+        device       char * dst,
+        constant ggml_metal_kargs_rope & args,
         uint  tiitg[[thread_index_in_threadgroup]],
-        uint3 tptg[[threads_per_threadgroup]],
+        uint3 tptg [[threads_per_threadgroup]],
         uint3 tgpig[[threadgroup_position_in_grid]]) {
-    const int64_t i3 = tgpig[2];
-    const int64_t i2 = tgpig[1];
-    const int64_t i1 = tgpig[0];
+    const int i3 = tgpig[2];
+    const int i2 = tgpig[1];
+    const int i1 = tgpig[0];
 
     float corr_dims[2];
-    rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
+    rope_yarn_corr_dims(args.n_dims, args.n_ctx_orig, args.freq_base, args.beta_fast, args.beta_slow, corr_dims);
 
-    device const int32_t * pos = src1;
+    device const int32_t * pos = (device const int32_t *) src1;
 
     const float theta_base = (float) pos[i2];
-    const float inv_ndims = -1.f/n_dims;
+    const float inv_ndims = -1.f/args.n_dims;
 
     float cos_theta;
     float sin_theta;
 
-    for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
-        if (i0 < n_dims) {
-            const int64_t ic = i0/2;
+    for (int i0 = 2*tiitg; i0 < args.ne0; i0 += 2*tptg.x) {
+        if (i0 < args.n_dims) {
+            const int ic = i0/2;
 
-            const float theta = theta_base * pow(freq_base, inv_ndims*i0);
+            const float theta = theta_base * pow(args.freq_base, inv_ndims*i0);
 
-            const float freq_factor = src2 != src0 ? src2[ic] : 1.0f;
+            const float freq_factor = src2 != src0 ? ((device const float *) src2)[ic] : 1.0f;
 
-            rope_yarn(theta/freq_factor, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
+            rope_yarn(theta/freq_factor, args.freq_scale, corr_dims, i0, args.ext_factor, args.attn_factor, &cos_theta, &sin_theta);
 
-            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+            device const T * const src = (device T *)(src0 + i3*args.nb03 + i2*args.nb02 + i1*args.nb01 + i0*args.nb00);
+            device       T * dst_data  = (device T *)( dst + i3*args.nb3  + i2*args.nb2  + i1*args.nb1  + i0*args.nb0);
 
             const float x0 = src[0];
             const float x1 = src[1];
@@ -2327,8 +2304,8 @@ kernel void kernel_rope_norm(
             dst_data[0] = x0*cos_theta - x1*sin_theta;
             dst_data[1] = x0*sin_theta + x1*cos_theta;
         } else {
-            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+            device const T * const src = (device T *)(src0 + i3*args.nb03 + i2*args.nb02 + i1*args.nb01 + i0*args.nb00);
+            device       T * dst_data  = (device T *)( dst + i3*args.nb3  + i2*args.nb2  + i1*args.nb1  + i0*args.nb0);
 
             dst_data[0] = src[0];
             dst_data[1] = src[1];
@@ -2338,74 +2315,50 @@ kernel void kernel_rope_norm(
 
 template<typename T>
 kernel void kernel_rope_neox(
-        device const    void * src0,
-        device const int32_t * src1,
-        device const   float * src2,
-        device         float * dst,
-        constant     int64_t & ne00,
-        constant     int64_t & ne01,
-        constant     int64_t & ne02,
-        constant     int64_t & ne03,
-        constant    uint64_t & nb00,
-        constant    uint64_t & nb01,
-        constant    uint64_t & nb02,
-        constant    uint64_t & nb03,
-        constant     int64_t & ne0,
-        constant     int64_t & ne1,
-        constant     int64_t & ne2,
-        constant     int64_t & ne3,
-        constant    uint64_t & nb0,
-        constant    uint64_t & nb1,
-        constant    uint64_t & nb2,
-        constant    uint64_t & nb3,
-        constant         int & n_past,
-        constant         int & n_dims,
-        constant         int & n_ctx_orig,
-        constant       float & freq_base,
-        constant       float & freq_scale,
-        constant       float & ext_factor,
-        constant       float & attn_factor,
-        constant       float & beta_fast,
-        constant       float & beta_slow,
+        device const char * src0,
+        device const char * src1,
+        device const char * src2,
+        device       char * dst,
+        constant ggml_metal_kargs_rope & args,
         uint  tiitg[[thread_index_in_threadgroup]],
         uint3 tptg[[threads_per_threadgroup]],
         uint3 tgpig[[threadgroup_position_in_grid]]) {
-    const int64_t i3 = tgpig[2];
-    const int64_t i2 = tgpig[1];
-    const int64_t i1 = tgpig[0];
+    const int i3 = tgpig[2];
+    const int i2 = tgpig[1];
+    const int i1 = tgpig[0];
 
     float corr_dims[2];
-    rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
+    rope_yarn_corr_dims(args.n_dims, args.n_ctx_orig, args.freq_base, args.beta_fast, args.beta_slow, corr_dims);
 
-    device const int32_t * pos = src1;
+    device const int32_t * pos = (device const int32_t *) src1;
 
     const float theta_base = (float) pos[i2];
-    const float inv_ndims = -1.f/n_dims;
+    const float inv_ndims = -1.f/args.n_dims;
 
     float cos_theta;
     float sin_theta;
 
-    for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
-        if (i0 < n_dims) {
-            const int64_t ic = i0/2;
+    for (int i0 = 2*tiitg; i0 < args.ne0; i0 += 2*tptg.x) {
+        if (i0 < args.n_dims) {
+            const int ic = i0/2;
 
-            const float theta = theta_base * pow(freq_base, inv_ndims*i0);
+            const float theta = theta_base * pow(args.freq_base, inv_ndims*i0);
 
-            const float freq_factor = src2 != src0 ? src2[ic] : 1.0f;
+            const float freq_factor = src2 != src0 ? ((device const float *) src2)[ic] : 1.0f;
 
-            rope_yarn(theta/freq_factor, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
+            rope_yarn(theta/freq_factor, args.freq_scale, corr_dims, i0, args.ext_factor, args.attn_factor, &cos_theta, &sin_theta);
 
-            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + ic*nb00);
-            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + ic*nb0);
+            device const T * const src = (device T *)(src0 + i3*args.nb03 + i2*args.nb02 + i1*args.nb01 + ic*args.nb00);
+            device       T * dst_data  = (device T *)( dst + i3*args.nb3  + i2*args.nb2  + i1*args.nb1  + ic*args.nb0);
 
             const float x0 = src[0];
-            const float x1 = src[n_dims/2];
+            const float x1 = src[args.n_dims/2];
 
-            dst_data[0]        = x0*cos_theta - x1*sin_theta;
-            dst_data[n_dims/2] = x0*sin_theta + x1*cos_theta;
+            dst_data[0]             = x0*cos_theta - x1*sin_theta;
+            dst_data[args.n_dims/2] = x0*sin_theta + x1*cos_theta;
         } else {
-            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+            device const T * const src = (device T *)(src0 + i3*args.nb03 + i2*args.nb02 + i1*args.nb01 + i0*args.nb00);
+            device       T * dst_data  = (device T *)( dst + i3*args.nb3  + i2*args.nb2  + i1*args.nb1  + i0*args.nb0);
 
             dst_data[0] = src[0];
             dst_data[1] = src[1];

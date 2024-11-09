@@ -3,6 +3,10 @@
 #import "ggml-impl.h"
 #import "ggml-backend-impl.h"
 
+#define GGML_COMMON_DECL_C
+#define GGML_COMMON_DECL_METAL_KARGS
+#include "ggml-common.h"
+
 #import <Foundation/Foundation.h>
 
 #import <Metal/Metal.h>
@@ -2702,40 +2706,44 @@ static void ggml_metal_encode_node(
                     };
                 }
 
+                ggml_metal_kargs_rope args = {
+                    .ne00        = ne00,
+                    .ne01        = ne01,
+                    .ne02        = ne02,
+                    .ne03        = ne03,
+                    .nb00        = nb00,
+                    .nb01        = nb01,
+                    .nb02        = nb02,
+                    .nb03        = nb03,
+                    .ne0         = ne0,
+                    .ne1         = ne1,
+                    .ne2         = ne2,
+                    .ne3         = ne3,
+                    .nb0         = nb0,
+                    .nb1         = nb1,
+                    .nb2         = nb2,
+                    .nb3         = nb3,
+                    .n_past      = n_past,
+                    .n_dims      = n_dims,
+                    .n_ctx_orig  = n_ctx_orig,
+                    .freq_base   = freq_base,
+                    .freq_scale  = freq_scale,
+                    .ext_factor  = ext_factor,
+                    .attn_factor = attn_factor,
+                    .beta_fast   = beta_fast,
+                    .beta_slow   = beta_slow,
+                };
+
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0     offset:offs_src0        atIndex:0];
-                [encoder setBuffer:id_src1     offset:offs_src1        atIndex:1];
+                [encoder setBuffer:id_src0 offset:offs_src0     atIndex:0];
+                [encoder setBuffer:id_src1 offset:offs_src1     atIndex:1];
                 if (id_src2 != nil) {
-                    [encoder setBuffer:id_src2 offset:offs_src2        atIndex:2];
+                    [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
                 } else {
-                    [encoder setBuffer:id_src0 offset:offs_src0        atIndex:2];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:2];
                 }
-                [encoder setBuffer:id_dst      offset:offs_dst         atIndex:3];
-                [encoder setBytes:&ne00        length:sizeof( int64_t) atIndex:4];
-                [encoder setBytes:&ne01        length:sizeof( int64_t) atIndex:5];
-                [encoder setBytes:&ne02        length:sizeof( int64_t) atIndex:6];
-                [encoder setBytes:&ne03        length:sizeof( int64_t) atIndex:7];
-                [encoder setBytes:&nb00        length:sizeof(uint64_t) atIndex:8];
-                [encoder setBytes:&nb01        length:sizeof(uint64_t) atIndex:9];
-                [encoder setBytes:&nb02        length:sizeof(uint64_t) atIndex:10];
-                [encoder setBytes:&nb03        length:sizeof(uint64_t) atIndex:11];
-                [encoder setBytes:&ne0         length:sizeof( int64_t) atIndex:12];
-                [encoder setBytes:&ne1         length:sizeof( int64_t) atIndex:13];
-                [encoder setBytes:&ne2         length:sizeof( int64_t) atIndex:14];
-                [encoder setBytes:&ne3         length:sizeof( int64_t) atIndex:15];
-                [encoder setBytes:&nb0         length:sizeof(uint64_t) atIndex:16];
-                [encoder setBytes:&nb1         length:sizeof(uint64_t) atIndex:17];
-                [encoder setBytes:&nb2         length:sizeof(uint64_t) atIndex:18];
-                [encoder setBytes:&nb3         length:sizeof(uint64_t) atIndex:19];
-                [encoder setBytes:&n_past      length:sizeof(     int) atIndex:20];
-                [encoder setBytes:&n_dims      length:sizeof(     int) atIndex:21];
-                [encoder setBytes:&n_ctx_orig  length:sizeof(     int) atIndex:22];
-                [encoder setBytes:&freq_base   length:sizeof(   float) atIndex:23];
-                [encoder setBytes:&freq_scale  length:sizeof(   float) atIndex:24];
-                [encoder setBytes:&ext_factor  length:sizeof(   float) atIndex:25];
-                [encoder setBytes:&attn_factor length:sizeof(   float) atIndex:26];
-                [encoder setBytes:&beta_fast   length:sizeof(   float) atIndex:27];
-                [encoder setBytes:&beta_slow   length:sizeof(   float) atIndex:28];
+                [encoder setBuffer:id_dst  offset:offs_dst      atIndex:3];
+                [encoder setBytes:&args length:sizeof(args)     atIndex:4];
 
                 [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
             } break;
