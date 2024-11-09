@@ -228,6 +228,9 @@ public:
   }
   Value get(const Value& key) {
     if (array_) {
+      if (!key.is_number_integer()) {
+        return Value();
+      }
       auto index = key.get<int>();
       return array_->at(index < 0 ? array_->size() + index : index);
     } else if (object_) {
@@ -618,7 +621,7 @@ public:
     Value evaluate(const std::shared_ptr<Context> & context) const {
         try {
             return do_evaluate(context);
-        } catch (const std::runtime_error & e) {
+        } catch (const std::exception & e) {
             std::ostringstream out;
             out << e.what();
             if (location.source) out << error_location_suffix(*location.source, location.pos);
@@ -769,7 +772,7 @@ public:
     void render(std::ostringstream & out, const std::shared_ptr<Context> & context) const {
         try {
             do_render(out, context);
-        } catch (const std::runtime_error & e) {
+        } catch (const std::exception & e) {
             std::ostringstream err;
             err << e.what();
             if (location_.source) err << error_location_suffix(*location_.source, location_.pos);
@@ -2152,7 +2155,7 @@ private:
           }
         }
         return tokens;
-      } catch (const std::runtime_error & e) {
+      } catch (const std::exception & e) {
         throw std::runtime_error(e.what() + error_location_suffix(*template_str, std::distance(start, it)));
       }
     }
