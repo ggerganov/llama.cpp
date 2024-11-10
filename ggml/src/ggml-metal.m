@@ -1977,10 +1977,10 @@ static void ggml_metal_encode_node(
                             };
 
                             [encoder setComputePipelineState:pipeline];
-                            [encoder setBuffer:id_src0 offset:offs_src0    atIndex:0];
-                            [encoder setBuffer:id_src1 offset:offs_src1    atIndex:1];
-                            [encoder setBuffer:id_dst  offset:offs_dst     atIndex:2];
-                            [encoder setBytes:&args    length:sizeof(args) atIndex:3];
+                            [encoder setBytes:&args    length:sizeof(args) atIndex:0];
+                            [encoder setBuffer:id_src0 offset:offs_src0    atIndex:1];
+                            [encoder setBuffer:id_src1 offset:offs_src1    atIndex:2];
+                            [encoder setBuffer:id_dst  offset:offs_dst     atIndex:3];
 
                             [encoder setThreadgroupMemoryLength:8192 atIndex:0];
                             [encoder dispatchThreadgroups:MTLSizeMake( (ne11 + 31)/32, (ne01 + 63)/64, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
@@ -2181,10 +2181,10 @@ static void ggml_metal_encode_node(
                             };
 
                             [encoder setComputePipelineState:pipeline];
-                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
-                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBytes:&args length:sizeof(args) atIndex:3];
+                            [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
 
                             if (src0t == GGML_TYPE_Q4_0  || src0t == GGML_TYPE_Q4_1  || src0t == GGML_TYPE_Q5_0 ||
                                 src0t == GGML_TYPE_Q5_1  || src0t == GGML_TYPE_Q8_0  || src0t == GGML_TYPE_Q2_K ||
@@ -2499,11 +2499,11 @@ static void ggml_metal_encode_node(
                     };
 
                     [encoder setComputePipelineState:pipeline];
-                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
-                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                    [encoder setBuffer:id_src2 offset:offs_src2 atIndex:3];
-                    [encoder setBytes:&args length:sizeof(args) atIndex:4];
+                    [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
+                    [encoder setBuffer:id_src2 offset:offs_src2 atIndex:4];
 
                     const int64_t _ne1 = 1;
                     const int tgz = dst_rows;
@@ -2748,15 +2748,15 @@ static void ggml_metal_encode_node(
                 };
 
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0 offset:offs_src0     atIndex:0];
-                [encoder setBuffer:id_src1 offset:offs_src1     atIndex:1];
+                [encoder setBytes:&args length:sizeof(args)     atIndex:0];
+                [encoder setBuffer:id_src0 offset:offs_src0     atIndex:1];
+                [encoder setBuffer:id_src1 offset:offs_src1     atIndex:2];
                 if (id_src2 != nil) {
-                    [encoder setBuffer:id_src2 offset:offs_src2 atIndex:2];
+                    [encoder setBuffer:id_src2 offset:offs_src2 atIndex:3];
                 } else {
-                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:2];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:3];
                 }
-                [encoder setBuffer:id_dst  offset:offs_dst      atIndex:3];
-                [encoder setBytes:&args length:sizeof(args)     atIndex:4];
+                [encoder setBuffer:id_dst  offset:offs_dst      atIndex:4];
 
                 [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
             } break;
@@ -3266,16 +3266,16 @@ static void ggml_metal_encode_node(
                 };
 
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0 offset:offs_src0     atIndex:0];
-                [encoder setBuffer:id_src1 offset:offs_src1     atIndex:1];
-                [encoder setBuffer:id_src2 offset:offs_src2     atIndex:2];
+                [encoder setBytes:&args length:sizeof(args)     atIndex:0];
+                [encoder setBuffer:id_src0 offset:offs_src0     atIndex:1];
+                [encoder setBuffer:id_src1 offset:offs_src1     atIndex:2];
+                [encoder setBuffer:id_src2 offset:offs_src2     atIndex:3];
                 if (id_src3) {
-                    [encoder setBuffer:id_src3 offset:offs_src3 atIndex:3];
+                    [encoder setBuffer:id_src3 offset:offs_src3 atIndex:4];
                 } else {
-                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:3];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:4];
                 }
-                [encoder setBuffer:id_dst offset:offs_dst       atIndex:4];
-                [encoder setBytes:&args length:sizeof(args)     atIndex:5];
+                [encoder setBuffer:id_dst offset:offs_dst       atIndex:5];
 
                 if (!use_vec_kernel) {
                     // half8x8 kernel
