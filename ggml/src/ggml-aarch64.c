@@ -3477,13 +3477,12 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     }
 }
 
-#ifdef GGML_USE_RUNTIME_REPACK
-static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block, const void * data, size_t data_size) {
+static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block, const void * restrict data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
 
-    block_q4_0x4 *dst = (block_q4_0x4 *)t->data;
-    const block_q4_0 *src = (const block_q4_0 *)data;
+    block_q4_0x4 * dst = (block_q4_0x4 *)t->data;
+    const block_q4_0 * src = (const block_q4_0 *)data;
     block_q4_0 dst_tmp[4];
     int nrow = t->ne[1]; // Number of rows
     int nrows_interleaved = 4;
@@ -3509,12 +3508,12 @@ static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block
     GGML_UNUSED(data_size);
 }
 
-static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block, const void * data, size_t data_size) {
+static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block, const void * restrict data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 8);
 
-    block_q4_0x8 *dst = (block_q4_0x8*)t->data;
-    const block_q4_0 *src = (const block_q4_0*) data;
+    block_q4_0x8 * dst = (block_q4_0x8*)t->data;
+    const block_q4_0 * src = (const block_q4_0*) data;
     block_q4_0 dst_tmp[8];
     int nrow = t->ne[1]; // Number of rows
     int nrows_interleaved = 8;
@@ -3541,42 +3540,47 @@ static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block,
 }
 
 // Prepare for optimized kernels if applicable
-int ggml_prepare_optimal_kernel(struct ggml_tensor * cur, const void * data, size_t data_size) {
-    GGML_ASSERT(cur->type == GGML_TYPE_Q4_0);
-#if defined(__ARM_ARCH)
-    if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
-        return repack_q4_0_to_q4_0_8_bl(cur, 8, data, data_size);
-    }
-    else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        return repack_q4_0_to_q4_0_4_bl(cur, 8, data, data_size);
-    }
-    else if (ggml_cpu_has_neon()) {
-        return repack_q4_0_to_q4_0_4_bl(cur, 4, data, data_size);
-    }
-#endif
-    return -1;
+void ggml_aarch64_repack_tensor(struct ggml_tensor * cur, enum ggml_type repack_type, const void * restrict data, size_t data_size) {
+    int ret = -1;
 
-    GGML_UNUSED(cur);
-    GGML_UNUSED(data);
-    GGML_UNUSED(data_size);
+    if (cur->type == repack_type) {
+        memcpy(cur->data, data, data_size);
+        return;
+    }
+
+    GGML_ASSERT(cur->type == GGML_TYPE_Q4_0);
+
+    switch (repack_type) {
+        case GGML_TYPE_Q4_0_8_8:
+            ret = repack_q4_0_to_q4_0_8_bl(cur, 8, data, data_size);
+            break;
+        case GGML_TYPE_Q4_0_4_8:
+            ret = repack_q4_0_to_q4_0_4_bl(cur, 8, data, data_size);
+            break;
+        case GGML_TYPE_Q4_0_4_4:
+            ret = repack_q4_0_to_q4_0_4_bl(cur, 4, data, data_size);
+            break;
+        default:
+            GGML_ABORT("Unsupported type");
+    }
+    if (ret == -1) {
+        memcpy(cur->data, data, data_size);
+    }
 }
 
-enum ggml_type ggml_get_optimal_type(const struct ggml_tensor * cur) {
-#if defined(__ARM_ARCH)
+enum ggml_type ggml_aarch64_get_optimal_repack_type(const struct ggml_tensor * cur) {
     if (cur->type == GGML_TYPE_Q4_0) {
-        if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0) {
+        // TODO: enable for AVX2 - currently disabled due to bad gemv performance
+        if (/* ggml_cpu_has_avx2() || */ (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0)) {
             return GGML_TYPE_Q4_0_8_8;
         }
-        else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
+        if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
             return GGML_TYPE_Q4_0_4_8;
         }
-        else if (ggml_cpu_has_neon()) {
+        if (ggml_cpu_has_neon()) {
             return GGML_TYPE_Q4_0_4_4;
         }
     }
-#endif
-    return cur->type;
 
-    GGML_UNUSED(cur);
+    return cur->type;
 }
-#endif
