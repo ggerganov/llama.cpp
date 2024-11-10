@@ -1193,35 +1193,39 @@ static void ggml_metal_encode_node(
 
                 const int32_t dim = ((const int32_t *) dst->op_params)[0];
 
+                ggml_metal_kargs_concat args = {
+                    /*.ne00 =*/ ne00,
+                    /*.ne01 =*/ ne01,
+                    /*.ne02 =*/ ne02,
+                    /*.ne03 =*/ ne03,
+                    /*.nb00 =*/ nb00,
+                    /*.nb01 =*/ nb01,
+                    /*.nb02 =*/ nb02,
+                    /*.nb03 =*/ nb03,
+                    /*.ne10 =*/ ne10,
+                    /*.ne11 =*/ ne11,
+                    /*.ne12 =*/ ne12,
+                    /*.ne13 =*/ ne13,
+                    /*.nb10 =*/ nb10,
+                    /*.nb11 =*/ nb11,
+                    /*.nb12 =*/ nb12,
+                    /*.nb13 =*/ nb13,
+                    /*.ne0  =*/ ne0,
+                    /*.ne1  =*/ ne1,
+                    /*.ne2  =*/ ne2,
+                    /*.ne3  =*/ ne3,
+                    /*.nb0  =*/ nb0,
+                    /*.nb1  =*/ nb1,
+                    /*.nb2  =*/ nb2,
+                    /*.nb3  =*/ nb3,
+                    /*.dim  =*/ dim,
+                };
+
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
-                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
-                [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:4];
-                [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:5];
-                [encoder setBytes:&ne03 length:sizeof(ne03) atIndex:6];
-                [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:7];
-                [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:8];
-                [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:9];
-                [encoder setBytes:&nb03 length:sizeof(nb03) atIndex:10];
-                [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:11];
-                [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:12];
-                [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:13];
-                [encoder setBytes:&ne13 length:sizeof(ne13) atIndex:14];
-                [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:15];
-                [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:16];
-                [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:17];
-                [encoder setBytes:&nb13 length:sizeof(nb13) atIndex:18];
-                [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:19];
-                [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:20];
-                [encoder setBytes:&ne2  length:sizeof(ne2)  atIndex:21];
-                [encoder setBytes:&ne3  length:sizeof(ne3)  atIndex:22];
-                [encoder setBytes:&nb0  length:sizeof(nb0)  atIndex:23];
-                [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:24];
-                [encoder setBytes:&nb2  length:sizeof(nb2)  atIndex:25];
-                [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:26];
-                [encoder setBytes:&dim  length:sizeof(dim)  atIndex:27];
+                [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
+                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
 
                 const int nth = MIN(1024, ne0);
 
