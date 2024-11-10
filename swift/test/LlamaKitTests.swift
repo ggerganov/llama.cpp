@@ -146,6 +146,7 @@ struct LlamaSessionSuite {
     }
 
     // MARK: Session dealloc Test
+    // Note this test will fail if run in parallel
     @Test func llamaToolSessionDealloc() async throws {
         let params = try await baseParams(url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q8_0.gguf?download=true", to: "llama_tools.gguf")
         func reportMemoryUsage() -> UInt64? {
@@ -175,7 +176,6 @@ struct LlamaSessionSuite {
             output = try await llama.infer("What question did i just ask you?")
             print(output)
         }.value
-        sleep(1)
         var memDealloc = reportMemoryUsage()! / 1024 / 1024
         #expect(memDealloc < 200)
         try await Task {
@@ -184,7 +184,6 @@ struct LlamaSessionSuite {
             #expect(memPostAlloc > 500)
             _ = try await llama.infer("What was the first question I asked you?")
         }.value
-        sleep(1)
         memDealloc = reportMemoryUsage()! / 1024 / 1024
         #expect(memDealloc < 200)
     }

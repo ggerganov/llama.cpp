@@ -5,7 +5,7 @@ import CoreLocation
 func downloadFile() async throws -> String {
     let fm = FileManager.default
     let tmpDir = fm.temporaryDirectory
-    let destinationURL = tmpDir.appending(path: "llama_groq_gguf.gguf")
+    let destinationURL = tmpDir.appending(path: "llama_tools.gguf")
     
     guard !fm.fileExists(atPath: destinationURL.path()) else {
         return destinationURL.path()

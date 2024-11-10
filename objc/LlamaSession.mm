@@ -424,8 +424,6 @@ static BOOL file_is_empty(NSString *path) {
     }
     
     os_log_info(os_log_inst, "sampler seed: %u\n", [_smpl seed]);
-    //    LOG_INF("sampler params: \n%s\n", sparams.print().c_str());
-    //    LOG_INF("sampler chain: %s\n",    gpt_sampler_print(smpl).c_str());
     os_log_info(os_log_inst, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.nBatch, params.nPredict, params.nKeep);
 
     // group-attention state
@@ -679,7 +677,6 @@ static BOOL file_is_empty(NSString *path) {
                     output_tokens.push_back(idToken);
                     output_ss << [token_str cStringUsingEncoding:NSUTF8StringEncoding];
                     last_output_ss << [token_str cStringUsingEncoding:NSUTF8StringEncoding];
-                    NSLog(@"Generated %s", last_output_ss.str().c_str());
                     [self willChangeValueForKey:@"lastOutput"];
                     [_mutableLastOutput appendString:token_str];
                     [self didChangeValueForKey:@"lastOutput"];

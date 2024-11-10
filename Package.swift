@@ -1,40 +1,8 @@
 // swift-tools-version:5.9
-import CompilerPluginSupport
+
 import PackageDescription
+import CompilerPluginSupport
 
-var cppSources = [
-    "src/llama.cpp",
-    "src/llama-vocab.cpp",
-    "src/llama-grammar.cpp",
-    "src/llama-sampling.cpp",
-    "src/unicode.cpp",
-    "src/unicode-data.cpp",
-    "common/sampling.cpp",
-    "common/common.cpp",
-    "common/json-schema-to-grammar.cpp",
-    "common/log.cpp",
-    "common/console.cpp"
-]
-
-var ggmlSources = [
-    "src/ggml.c",
-    "src/ggml-alloc.c",
-    "src/ggml-backend.cpp",
-    "src/ggml-cpu.c",
-    "src/ggml-quants.c",
-    "src/ggml-aarch64.c"
-]
-var resources: [Resource] = []
-var linkerSettings: [LinkerSetting] = []
-var cSettings: [CSetting] =  [
-    .unsafeFlags(["-Wno-shorten-64-to-32", "-O3", "-DNDEBUG"]),
-    .unsafeFlags(["-fno-objc-arc"]),
-    // NOTE: NEW_LAPACK will required iOS version 16.4+
-    // We should consider add this in the future when we drop support for iOS 14
-    // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
-    .define("ACCELERATE_NEW_LAPACK"),
-    .define("ACCELERATE_LAPACK_ILP64"),
-]
 var sources = [
     "src/llama.cpp",
     "src/llama-vocab.cpp",
@@ -52,13 +20,24 @@ var sources = [
     "common/common.cpp",
     "common/json-schema-to-grammar.cpp",
     "common/log.cpp",
+    "common/console.cpp"
 ]
+
+var resources: [Resource] = []
+var linkerSettings: [LinkerSetting] = []
+var cSettings: [CSetting] =  [
+    .unsafeFlags(["-Wno-shorten-64-to-32", "-O3", "-DNDEBUG"]),
+    .unsafeFlags(["-fno-objc-arc"]),
+    // NOTE: NEW_LAPACK will required iOS version 16.4+
+    // We should consider add this in the future when we drop support for iOS 14
+    // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
+    // .define("ACCELERATE_NEW_LAPACK"),
+    // .define("ACCELERATE_LAPACK_ILP64")
+]
+
 #if canImport(Darwin)
 sources.append("ggml/src/ggml-metal.m")
-ggmlSources.append("src/ggml-metal.m")
-//resources.append(.process("src/ggml-metal.metal"))
 resources.append(.process("ggml/src/ggml-metal.metal"))
-
 linkerSettings.append(.linkedFramework("Accelerate"))
 cSettings.append(
     contentsOf: [
@@ -69,7 +48,7 @@ cSettings.append(
 #endif
 
 #if os(Linux)
-    cSettings.append(.define("_GNU_SOURCE"))
+cSettings.append(.define("_GNU_SOURCE"))
 #endif
 
 let package = Package(
@@ -81,8 +60,7 @@ let package = Package(
         .tvOS(.v14)
     ],
     products: [
-        .library(name: "LlamaKit", targets: ["LlamaKit"]),
-        .executable(name: "LlamaKitMain", targets: ["LlamaKitMain"])
+        .library(name: "llama", targets: ["llama"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-syntax.git", branch: "main")
@@ -92,15 +70,15 @@ let package = Package(
             name: "llama",
             path: ".",
             exclude: [
-               "build",
-               "cmake",
-               "examples",
-               "scripts",
-               "models",
-               "tests",
-               "CMakeLists.txt",
-               "Makefile",
-               "ggml/src/ggml-metal-embed.metal"
+                "build",
+                "cmake",
+                "examples",
+                "scripts",
+                "models",
+                "tests",
+                "CMakeLists.txt",
+                "Makefile",
+                "ggml/src/ggml-metal-embed.metal"
             ],
             sources: sources,
             resources: resources,
@@ -108,30 +86,6 @@ let package = Package(
             cSettings: cSettings,
             linkerSettings: linkerSettings
         ),
-//        .target(name: "llama_cpp",
-//                path: ".",
-//                exclude: [
-//                   "cmake",
-//                   "examples",
-//                   "scripts",
-//                   "models",
-//                   "tests",
-//                   "CMakeLists.txt",
-//                   "Makefile",
-//                   "ggml"
-//                ],
-//                sources: cppSources,
-//                publicHeadersPath: "spm-headers",
-//                cSettings: cSettings),
-//        .target(
-//            name: "llama",
-//            dependencies: ["llama_cpp"],
-//            path: "ggml",
-//            sources: ggmlSources,
-//            resources: resources,
-//            publicHeadersPath: "include",
-//            cSettings: cSettings,
-//            linkerSettings: linkerSettings),
         .target(name: "LlamaObjC",
                 dependencies: ["llama"],
                 path: "objc",
@@ -155,7 +109,7 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-            ], 
+            ],
             path: "swift/JSONSchemaMacros"
         ),
         .macro(
@@ -186,7 +140,7 @@ let package = Package(
         .executableTarget(name: "LlamaKitMain",
                           dependencies: ["LlamaKit"],
                           path: "swift/main",
-                          cSettings: cSettings),
+                          resources: [.process("Llama-3.2-3B-Instruct-Q4_0.gguf")]),
     ],
     cxxLanguageStandard: .cxx17
 )
