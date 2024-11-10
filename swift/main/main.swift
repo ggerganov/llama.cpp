@@ -12,7 +12,7 @@ func downloadFile() async throws -> String {
     }
     print("Downloading Llama Tools, this may take a while...")
     // Define the URL
-    guard let url = URL(string: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q5_K_M.gguf?download=true") else {
+    guard let url = URL(string: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q8_0.gguf?download=true") else {
         print("Invalid URL.")
         throw URLError(.badURL)
     }
