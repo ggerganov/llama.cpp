@@ -201,10 +201,23 @@
             <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
           </label>
           <template v-for="key in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
-            <label class="input input-bordered flex items-center gap-2 mb-2">
-              <b>{{ key }}</b>
-              <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-            </label>
+            <div class="join">
+              <!-- A button with information about this sampler -->
+              <label :for="`modal-${key}`" class="btn join-item">?</label>
+              <input type="checkbox" :id="`modal-${key}`" class="modal-toggle" />
+              <div class="modal" role="dialog">
+                <div class="modal-box">
+                  <h3 class="text-lg font-bold">{{ key }}</h3>
+                  <p class="py-4">{{ configInfo[key] }}</p>
+                </div>
+                <label class="modal-backdrop" :for="`modal-${key}`">OK</label>
+              </div>
+              <!-- The sampler input field-->
+              <label class="input input-bordered join-item flex items-center gap-2 mb-2">
+                <b>{{ key }}</b>
+                <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+              </label>
+            </div>
           </template>
           <!-- TODO: add more sampling-related configs, please regroup them into different "collapse" sections -->
           <div class="collapse collapse-arrow bg-base-200 mb-2">
@@ -213,17 +226,43 @@
             <div class="collapse-content">
               <div class="label">Samplers</div>
               <template v-for="key in ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold']">
-                <label class="input input-bordered flex items-center gap-2 mb-2">
-                  <b>{{ key }}</b>
-                  <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-                </label>
+                <div class="join">
+                  <!-- A button with information about this sampler -->
+                  <label :for="`modal-${key}`" class="btn join-item">?</label>
+                  <input type="checkbox" :id="`modal-${key}`" class="modal-toggle" />
+                  <div class="modal" role="dialog">
+                    <div class="modal-box">
+                      <h3 class="text-lg font-bold">{{ key }}</h3>
+                      <p class="py-4">{{ configInfo[key] }}</p>
+                    </div>
+                    <label class="modal-backdrop" :for="`modal-${key}`">OK</label>
+                  </div>
+                  <!-- The sampler input field-->
+                  <label class="input input-bordered join-item flex items-center gap-2 mb-2">
+                    <b>{{ key }}</b>
+                    <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+                  </label>
+                </div>
               </template>
               <div class="label">Penalties</div>
               <template v-for="key in ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n']">
-                <label class="input input-bordered flex items-center gap-2 mb-2">
-                  <b>{{ key }}</b>
-                  <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-                </label>
+                <div class="join">
+                  <!-- A button with information about this sampler -->
+                  <label :for="`modal-${key}`" class="btn join-item">?</label>
+                  <input type="checkbox" :id="`modal-${key}`" class="modal-toggle" />
+                  <div class="modal" role="dialog">
+                    <div class="modal-box">
+                      <h3 class="text-lg font-bold">{{ key }}</h3>
+                      <p class="py-4">{{ configInfo[key] }}</p>
+                    </div>
+                    <label class="modal-backdrop" :for="`modal-${key}`">OK</label>
+                  </div>
+                  <!-- The sampler input field-->
+                  <label class="input input-bordered join-item flex items-center gap-2 mb-2">
+                    <b>{{ key }}</b>
+                    <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
+                  </label>
+                </div>
               </template>
               <label class="form-control mb-2">
                 <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
@@ -276,6 +315,29 @@
       dry_allowed_length: 2,
       dry_penalty_last_n: -1,
       max_tokens: -1,
+      custom: '', // custom json-stringified object
+    };
+    const CONFIG_INFO = {
+      apiKey: '',
+      systemMessage: 'The starting message that defines how model should behave.',
+      temperature: 'Controls the randomness of the generated text by affecting the probability distribution of the output tokens. Higher = more random, lower = more focused.',
+      dynatemp_range: 'The added value to the range of dynamic temperature, which adjusts probabilities by entropy of tokens.',
+      dynatemp_exponent: 'Smoothes out the probability redistribution based on the most probable token.',
+      top_k: 'Keeps only k top tokens.',
+      top_p: 'Limits tokens to those that together have a cumulative probability of at least p',
+      min_p: 'Limits tokens based on the minimum probability for a token to be considered, relative to the probability of the most likely token.',
+      xtc_probability: 'The probability that the XTC sampler will cut token from the beginning.',
+      xtc_threshold: 'If XTC is used, all top tokens with probabilities above this threshold will be cut.',
+      typical_p: 'Sorts and limits tokens based on the difference between log-probability and entropy.',
+      repeat_last_n: 'Last n tokens to consider for penalizing repetition',
+      repeat_penalty: 'Controls the repetition of token sequences in the generated text',
+      presence_penalty: 'Limits tokens based on whether they appear in the output or not.',
+      frequency_penalty: 'Limits tokens based on how often they appear in the output.',
+      dry_multiplier: 'Sets the DRY sampling multiplier.',
+      dry_base: 'Sets the DRY sampling base value.',
+      dry_allowed_length: 'Sets the allowed length for DRY sampling.',
+      dry_penalty_last_n: 'Sets DRY penalty for the last n tokens.',
+      max_tokens: 'The maximum number of token per output.',
       custom: '', // custom json-stringified object
     };
     // config keys having numeric value (i.e. temperature, top_k, top_p, etc)
@@ -403,6 +465,7 @@
           // const
           themes: THEMES,
           configDefault: {...CONFIG_DEFAULT},
+          configInfo: {...CONFIG_INFO},
         }
       },
       computed: {},
