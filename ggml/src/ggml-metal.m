@@ -2297,27 +2297,30 @@ static void ggml_metal_encode_node(
                         default: GGML_ABORT("MUL_MAT_ID not implemented");
                     }
 
+                    ggml_metal_kargs_mul_mm_id args = {
+                        /*.nei0 =*/ ne20,
+                        /*.nei1 =*/ ne21,
+                        /*.nbi1 =*/ nb21,
+                        /*.ne00 =*/ ne00,
+                        /*.ne02 =*/ ne02,
+                        /*.nb01 =*/ nb01,
+                        /*.nb02 =*/ nb02,
+                        /*.ne11 =*/ ne11,
+                        /*.ne12 =*/ ne12,
+                        /*.ne13 =*/ ne13,
+                        /*.nb10 =*/ nb10,
+                        /*.nb11 =*/ nb11,
+                        /*.nb12 =*/ nb12,
+                        /*.ne0  =*/ ne0,
+                        /*.ne1  =*/ ne1,
+                    };
+
                     [encoder setComputePipelineState:pipeline];
-                    [encoder setBuffer:id_src0 offset:offs_src0    atIndex:0];
-                    [encoder setBuffer:id_src1 offset:offs_src1    atIndex:1];
-                    [encoder setBuffer:id_dst  offset:offs_dst     atIndex:2];
-                    [encoder setBuffer:id_src2 offset:offs_src2    atIndex:3];
-                    [encoder setBytes:&ne20    length:sizeof(ne20) atIndex:4];
-                    [encoder setBytes:&ne21    length:sizeof(ne21) atIndex:5];
-                    [encoder setBytes:&nb21    length:sizeof(nb21) atIndex:6];
-                    [encoder setBytes:&ne00    length:sizeof(ne00) atIndex:7];
-                    [encoder setBytes:&ne02    length:sizeof(ne02) atIndex:8];
-                    [encoder setBytes:&nb01    length:sizeof(nb01) atIndex:9];
-                    [encoder setBytes:&nb02    length:sizeof(nb02) atIndex:10];
-                    [encoder setBytes:&ne11    length:sizeof(ne11) atIndex:11];
-                    [encoder setBytes:&ne12    length:sizeof(ne12) atIndex:12];
-                    [encoder setBytes:&ne13    length:sizeof(ne13) atIndex:13];
-                    [encoder setBytes:&nb10    length:sizeof(nb10) atIndex:14];
-                    [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:15];
-                    [encoder setBytes:&nb12    length:sizeof(nb12) atIndex:16];
-                    [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:17];
-                    [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:18];
-                    [encoder setBytes:&nb1     length:sizeof(nb1)  atIndex:19];
+                    [encoder setBytes:&args    length:sizeof(args) atIndex:0];
+                    [encoder setBuffer:id_src0 offset:offs_src0    atIndex:1];
+                    [encoder setBuffer:id_src1 offset:offs_src1    atIndex:2];
+                    [encoder setBuffer:id_dst  offset:offs_dst     atIndex:3];
+                    [encoder setBuffer:id_src2 offset:offs_src2    atIndex:4];
 
                     [encoder setThreadgroupMemoryLength:GGML_PAD(8192 + dst_rows*4/*sizeof(ushort2)*/, 16) atIndex:0];
 
