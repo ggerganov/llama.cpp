@@ -200,76 +200,38 @@
             <div class="label">System Message</div>
             <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
           </label>
-          <template v-for="key in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
-            <div class="join flex">
-              <!-- A button with information about this sampler -->
-              <label :for="`modal-${key}`" class="btn join-item">?</label>
-              <input type="checkbox" :id="`modal-${key}`" class="modal-toggle" />
-              <div class="modal" role="dialog">
-                <div class="modal-box">
-                  <h3 class="text-lg font-bold">{{ key }}</h3>
-                  <p class="py-4">{{ configInfo[key] }}</p>
-                </div>
-                <label class="modal-backdrop" :for="`modal-${key}`">OK</label>
-              </div>
-              <!-- The sampler input field-->
-              <label class="input input-bordered join-item grow flex items-center gap-2 mb-2">
-                <b>{{ key }}</b>
-                <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-              </label>
-            </div>
+          <template v-for="configKey in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
+            <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
           </template>
           <!-- TODO: add more sampling-related configs, please regroup them into different "collapse" sections -->
-          <div class="collapse collapse-arrow bg-base-200 mb-2">
-            <input type="checkbox" />
-            <div class="collapse-title font-bold">Advanced config</div>
+          <!-- Section: Other sampler settings -->
+          <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+            <summary class="collapse-title font-bold">Other sampler settings</summary>
             <div class="collapse-content">
-              <div class="label">Samplers</div>
-              <template v-for="key in ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold']">
-                <div class="join flex">
-                  <!-- A button with information about this sampler -->
-                  <label :for="`modal-${key}`" class="btn join-item">?</label>
-                  <input type="checkbox" :id="`modal-${key}`" class="modal-toggle" />
-                  <div class="modal" role="dialog">
-                    <div class="modal-box">
-                      <h3 class="text-lg font-bold">{{ key }}</h3>
-                      <p class="py-4">{{ configInfo[key] }}</p>
-                    </div>
-                    <label class="modal-backdrop" :for="`modal-${key}`">OK</label>
-                  </div>
-                  <!-- The sampler input field-->
-                  <label class="input input-bordered join-item grow flex items-center gap-2 mb-2">
-                    <b>{{ key }}</b>
-                    <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-                  </label>
-                </div>
+              <template v-for="configKey in ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold']">
+                <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
               </template>
-              <div class="label">Penalties</div>
-              <template v-for="key in ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n']">
-                <div class="join flex">
-                  <!-- A button with information about this sampler -->
-                  <label :for="`modal-${key}`" class="btn join-item">?</label>
-                  <input type="checkbox" :id="`modal-${key}`" class="modal-toggle" />
-                  <div class="modal" role="dialog">
-                    <div class="modal-box">
-                      <h3 class="text-lg font-bold">{{ key }}</h3>
-                      <p class="py-4">{{ configInfo[key] }}</p>
-                    </div>
-                    <label class="modal-backdrop" :for="`modal-${key}`">OK</label>
-                  </div>
-                  <!-- The sampler input field-->
-                  <label class="input input-bordered join-item grow flex items-center gap-2 mb-2">
-                    <b>{{ key }}</b>
-                    <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-                  </label>
-                </div>
+            </div>
+          </details>
+          <!-- Section: Penalties settings -->
+          <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+            <summary class="collapse-title font-bold">Penalties settings</summary>
+            <div class="collapse-content">
+              <template v-for="configKey in ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n']">
+                <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
               </template>
+            </div>
+          </details>
+          <!-- Section: Advanced config -->
+          <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+            <summary class="collapse-title font-bold">Advanced config</summary>
+            <div class="collapse-content">
               <label class="form-control mb-2">
                 <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
                 <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
               </label>
             </div>
-          </div>
+          </details>
         </div>
 
         <!-- action buttons -->
@@ -281,6 +243,21 @@
       </div>
     </dialog>
   </div>
+
+  <!-- Template to be used by settings modal -->
+  <template id="settings-modal-numeric-input">
+    <label class="input input-bordered join-item grow flex items-center gap-2 mb-2">
+      <!-- Show help message on hovering on the input label -->
+      <div class="dropdown dropdown-hover">
+        <div tabindex="0" role="button" class="font-bold">{{ configKey }}</div>
+        <div class="dropdown-content menu bg-base-100 rounded-box z-10 w-64 p-2 shadow mt-4">
+          {{ configInfo[configKey] || '(no help message available)' }}
+        </div>
+      </div>
+      <!-- Here we forward v-model from parent to child component, see: https://stackoverflow.com/questions/47311936/v-model-and-child-components -->
+      <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[configKey] || 'none')" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)" />
+    </label>
+  </template>
 
   <script src="./deps_markdown-it.js"></script>
   <script type="module">
@@ -357,6 +334,12 @@
       },
       { props: ["source", "options", "plugins"] }
     );
+
+    // inout field to be used by settings modal
+    const SettingsModalNumericInput = defineComponent({
+      template: document.getElementById('settings-modal-numeric-input').innerHTML,
+      props: ['configKey', 'configDefault', 'configInfo', 'modelValue'],
+    });
 
     // coversations is stored in localStorage
     // format: { [convId]: { id: string, lastModified: number, messages: [...] } }
@@ -448,6 +431,7 @@
     const mainApp = createApp({
       components: {
         VueMarkdown,
+        SettingsModalNumericInput,
       },
       data() {
         return {
