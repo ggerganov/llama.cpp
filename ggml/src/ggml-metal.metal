@@ -1,7 +1,7 @@
 #define GGML_COMMON_DECL_METAL
-#define GGML_COMMON_DECL_METAL_KARGS
 #define GGML_COMMON_IMPL_METAL
 #include "ggml-common.h"
+#include "ggml-metal-impl.h"
 
 #include <metal_stdlib>
 

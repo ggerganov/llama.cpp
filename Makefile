@@ -901,9 +901,12 @@ ggml/src/ggml-metal.o: \
 ifdef GGML_METAL_EMBED_LIBRARY
 ggml/src/ggml-metal-embed.o: \
 	ggml/src/ggml-metal.metal \
-	ggml/src/ggml-common.h
+	ggml/src/ggml-common.h \
+	ggml/src/ggml-metal-impl.h
 	@echo "Embedding Metal library"
-	@sed -e '/#include "ggml-common.h"/r ggml/src/ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml/src/ggml-metal.metal > ggml/src/ggml-metal-embed.metal
+	@sed -e '/#include "ggml-common.h"/r     ggml/src/ggml-common.h'     -e '/#include "ggml-common.h"/d'     < ggml/src/ggml-metal.metal           > ggml/src/ggml-metal-embed.metal.tmp
+	@sed -e '/#include "ggml-metal-impl.h"/r ggml/src/ggml-metal-impl.h' -e '/#include "ggml-metal-impl.h"/d' < ggml/src/ggml-metal-embed.metal.tmp > ggml/src/ggml-metal-embed.metal
+
 	$(eval TEMP_ASSEMBLY=$(shell mktemp -d))
 	@echo ".section __DATA, __ggml_metallib"            >  $(TEMP_ASSEMBLY)/ggml-metal-embed.s
 	@echo ".globl _ggml_metallib_start"                 >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
