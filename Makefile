@@ -878,6 +878,10 @@ ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJ_GGML	+= ggml/src/ggml-metal.o
+
+ifdef GGML_METAL_USE_BF16
+	MK_CPPFLAGS += -DGGML_METAL_USE_BF16
+endif # GGML_METAL_USE_BF16
 ifdef GGML_METAL_NDEBUG
 	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
 endif
@@ -1455,22 +1459,13 @@ llama-server: \
 	examples/server/server.cpp \
 	examples/server/utils.hpp \
 	examples/server/httplib.h \
-	examples/server/colorthemes.css.hpp \
-	examples/server/style.css.hpp \
-	examples/server/theme-beeninorder.css.hpp \
-	examples/server/theme-ketivah.css.hpp \
-	examples/server/theme-mangotango.css.hpp \
-	examples/server/theme-playground.css.hpp \
-	examples/server/theme-polarnight.css.hpp \
-	examples/server/theme-snowstorm.css.hpp \
 	examples/server/index.html.hpp \
-	examples/server/index-new.html.hpp \
-	examples/server/index.js.hpp \
 	examples/server/completion.js.hpp \
-	examples/server/system-prompts.js.hpp \
-	examples/server/prompt-formats.js.hpp \
-	examples/server/json-schema-to-grammar.mjs.hpp \
 	examples/server/loading.html.hpp \
+	examples/server/deps_daisyui.min.css.hpp \
+	examples/server/deps_markdown-it.js.hpp \
+	examples/server/deps_tailwindcss.js.hpp \
+	examples/server/deps_vue.esm-browser.js.hpp \
 	common/json.hpp \
 	common/stb_image.h \
 	$(OBJ_ALL)

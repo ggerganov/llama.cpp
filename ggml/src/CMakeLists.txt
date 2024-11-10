@@ -58,6 +58,10 @@ if (GGML_METAL)
         add_compile_definitions(GGML_METAL_NDEBUG)
     endif()
 
+    if (GGML_METAL_USE_BF16)
+        add_compile_definitions(GGML_METAL_USE_BF16)
+    endif()
+
     # copy ggml-common.h and ggml-metal.metal to bin directory
     configure_file(ggml-common.h    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-common.h    COPYONLY)
     configure_file(ggml-metal.metal ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
@@ -1261,8 +1265,13 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
     message(STATUS "PowerPC detected")
-    if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64le")
-        list(APPEND ARCH_FLAGS -mcpu=powerpc64le)
+    execute_process(COMMAND bash -c "grep POWER10 /proc/cpuinfo | head -n 1"
+                   OUTPUT_VARIABLE POWER10_M)
+    string(FIND ${POWER10_M} "POWER10" substring_index)
+    if(${substring_index} GREATER_EQUAL 0)
+       list(APPEND ARCH_FLAGS -mcpu=power10)
+    elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64le")
+       list(APPEND ARCH_FLAGS -mcpu=powerpc64le)
     else()
         list(APPEND ARCH_FLAGS -mcpu=native -mtune=native)
         #TODO: Add  targets for Power8/Power9 (Altivec/VSX) and Power10(MMA) and query for big endian systems (ppc64/le/be)

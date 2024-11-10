@@ -15,22 +15,13 @@ set(TARGET_SRCS
     httplib.h
 )
 set(PUBLIC_ASSETS
-    colorthemes.css
-    style.css
-    theme-beeninorder.css
-    theme-ketivah.css
-    theme-mangotango.css
-    theme-playground.css
-    theme-polarnight.css
-    theme-snowstorm.css
     index.html
-    index-new.html
-    index.js
     completion.js
-    system-prompts.js
-    prompt-formats.js
-    json-schema-to-grammar.mjs
     loading.html
+    deps_daisyui.min.css
+    deps_markdown-it.js
+    deps_tailwindcss.js
+    deps_vue.esm-browser.js
 )
 
 foreach(asset ${PUBLIC_ASSETS})

@@ -377,7 +377,7 @@ found 2 SYCL devices:
 
 |Chosen Device ID|Setting|
 |-|-|
-|0|`export ONEAPI_DEVICE_SELECTOR="level_zero:1"` or no action|
+|0|`export ONEAPI_DEVICE_SELECTOR="level_zero:0"` or no action|
 |1|`export ONEAPI_DEVICE_SELECTOR="level_zero:1"`|
 |0 & 1|`export ONEAPI_DEVICE_SELECTOR="level_zero:0;level_zero:1"`|
 
