@@ -3502,13 +3502,10 @@ static bool llama_kv_cache_init(
     return true;
 }
 
-// find an empty slot of size "n_tokens" in the cache
-// updates the cache head
-// Note: On success, it's important that cache.head points
-// to the first cell of the slot.
+// a structure holds information about the slot found in llama_kv_cache_find_slot
 struct llama_kv_cache_slot_info {
-    std::pair<uint32_t, uint32_t> boundaries;
-    bool found = false;
+    std::pair<uint32_t, uint32_t> boundaries; // slot boundaries [begin, end)
+    bool found = false;                       // the slot was found
 
     explicit llama_kv_cache_slot_info(bool found_) : found{found_} {}
     llama_kv_cache_slot_info(uint32_t begin, uint32_t end) : boundaries{begin, end}, found{true} {}
@@ -3517,6 +3514,11 @@ struct llama_kv_cache_slot_info {
 };
 static const llama_kv_cache_slot_info llama_kv_cache_slot_info_failed{false};
 
+// find an empty slot of size "n_tokens" in the cache
+// updates the cache head
+// returns a structure holding information about the slot found
+// Note: On success, it's important that cache.head points
+// to the first cell of the slot.
 static struct llama_kv_cache_slot_info llama_kv_cache_find_slot(
            struct llama_kv_cache & cache,
        const struct llama_ubatch & batch) {
@@ -4019,7 +4021,9 @@ struct llama_kv_slot_restorer {
         uint32_t n    = 0;
     } old_state;
 
-    std::vector<std::pair<uint32_t, uint32_t>> slot_boundaries; // for non-recurrent models only
+    // for non-recurrent models only
+    // list of slots to restore
+    std::vector<std::pair<uint32_t, uint32_t>> slot_boundaries;
 
     bool do_restore = false;
 
@@ -4028,7 +4032,8 @@ struct llama_kv_slot_restorer {
         old_state.n     = cache.n;
     }
 
-    void save(const struct llama_kv_cache_slot_info& slot) {
+    // saves a slot information for future restoration
+    void save(const struct llama_kv_cache_slot_info & slot) {
         if (slot) {
             do_restore = true;
             if (slot.boundaries.first != slot.boundaries.second) {
@@ -4037,6 +4042,8 @@ struct llama_kv_slot_restorer {
         }
     }
 
+    // must be explicitly called to restore the kv_cache state
+    // and rollback changes from all llama_kv_cache_find_slot calls
     void restore(struct llama_kv_cache & cache) {
         if (do_restore) {
             cache.head  = old_state.head;
@@ -17236,6 +17243,7 @@ static void llama_output_reorder(struct llama_context * ctx) {
     }
 }
 
+// returns the result of ggml_backend_sched_graph_compute_async execution
 static enum ggml_status llama_graph_compute(
           llama_context & lctx,
             ggml_cgraph * gf,
@@ -17262,6 +17270,9 @@ static enum ggml_status llama_graph_compute(
 }
 
 // decode a batch of tokens by evaluating the transformer
+// in case of unsuccessful decoding (error or warning),
+// the kv_cache state will be returned to its original state
+// (for non-recurrent models) or cleaned (for recurrent models)
 //
 //   - lctx:      llama context
 //   - batch:     batch to evaluate
