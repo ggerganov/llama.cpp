@@ -1377,25 +1377,29 @@ static void ggml_metal_encode_node(
 
                     const id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_CPY_F32_F32].pipeline;
 
+                    ggml_metal_kargs_cpy args = {
+                        /*.ne00 =*/ ne00,
+                        /*.ne01 =*/ ne01,
+                        /*.ne02 =*/ ne02,
+                        /*.ne03 =*/ ne03,
+                        /*.nb00 =*/ nb00,
+                        /*.nb01 =*/ nb01,
+                        /*.nb02 =*/ nb02,
+                        /*.nb03 =*/ nb03,
+                        /*.ne0  =*/ ne0,
+                        /*.ne1  =*/ ne1,
+                        /*.ne2  =*/ ne2,
+                        /*.ne3  =*/ ne3,
+                        /*.nb0  =*/ nb0,
+                        /*.nb1  =*/ nb1,
+                        /*.nb2  =*/ nb2,
+                        /*.nb3  =*/ nb3,
+                    };
+
                     [encoder setComputePipelineState:pipeline];
-                    [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
-                    [encoder setBuffer:id_dst  offset:offs_dst         atIndex:1];
-                    [encoder setBytes:&ne00    length:sizeof( int64_t) atIndex:2];
-                    [encoder setBytes:&ne01    length:sizeof( int64_t) atIndex:3];
-                    [encoder setBytes:&ne02    length:sizeof( int64_t) atIndex:4];
-                    [encoder setBytes:&ne03    length:sizeof( int64_t) atIndex:5];
-                    [encoder setBytes:&nb00    length:sizeof(uint64_t) atIndex:6];
-                    [encoder setBytes:&nb01    length:sizeof(uint64_t) atIndex:7];
-                    [encoder setBytes:&nb02    length:sizeof(uint64_t) atIndex:8];
-                    [encoder setBytes:&nb03    length:sizeof(uint64_t) atIndex:9];
-                    [encoder setBytes:&ne0     length:sizeof( int64_t) atIndex:10];
-                    [encoder setBytes:&ne1     length:sizeof( int64_t) atIndex:11];
-                    [encoder setBytes:&ne2     length:sizeof( int64_t) atIndex:12];
-                    [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:13];
-                    [encoder setBytes:&nb0     length:sizeof(uint64_t) atIndex:14];
-                    [encoder setBytes:&nb1     length:sizeof(uint64_t) atIndex:15];
-                    [encoder setBytes:&nb2     length:sizeof(uint64_t) atIndex:16];
-                    [encoder setBytes:&nb3     length:sizeof(uint64_t) atIndex:17];
+                    [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
 
                     const int nth = MIN((int) pipeline.maxTotalThreadsPerThreadgroup, ne00);
 
@@ -3425,25 +3429,29 @@ static void ggml_metal_encode_node(
                     default: GGML_ABORT("not implemented");
                 }
 
+                ggml_metal_kargs_cpy args = {
+                    /*.ne00 =*/ ne00,
+                    /*.ne01 =*/ ne01,
+                    /*.ne02 =*/ ne02,
+                    /*.ne03 =*/ ne03,
+                    /*.nb00 =*/ nb00,
+                    /*.nb01 =*/ nb01,
+                    /*.nb02 =*/ nb02,
+                    /*.nb03 =*/ nb03,
+                    /*.ne0  =*/ ne0,
+                    /*.ne1  =*/ ne1,
+                    /*.ne2  =*/ ne2,
+                    /*.ne3  =*/ ne3,
+                    /*.nb0  =*/ nb0,
+                    /*.nb1  =*/ nb1,
+                    /*.nb2  =*/ nb2,
+                    /*.nb3  =*/ nb3,
+                };
+
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
-                [encoder setBuffer:id_dst  offset:offs_dst         atIndex:1];
-                [encoder setBytes:&ne00    length:sizeof( int64_t) atIndex:2];
-                [encoder setBytes:&ne01    length:sizeof( int64_t) atIndex:3];
-                [encoder setBytes:&ne02    length:sizeof( int64_t) atIndex:4];
-                [encoder setBytes:&ne03    length:sizeof( int64_t) atIndex:5];
-                [encoder setBytes:&nb00    length:sizeof(uint64_t) atIndex:6];
-                [encoder setBytes:&nb01    length:sizeof(uint64_t) atIndex:7];
-                [encoder setBytes:&nb02    length:sizeof(uint64_t) atIndex:8];
-                [encoder setBytes:&nb03    length:sizeof(uint64_t) atIndex:9];
-                [encoder setBytes:&ne0     length:sizeof( int64_t) atIndex:10];
-                [encoder setBytes:&ne1     length:sizeof( int64_t) atIndex:11];
-                [encoder setBytes:&ne2     length:sizeof( int64_t) atIndex:12];
-                [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:13];
-                [encoder setBytes:&nb0     length:sizeof(uint64_t) atIndex:14];
-                [encoder setBytes:&nb1     length:sizeof(uint64_t) atIndex:15];
-                [encoder setBytes:&nb2     length:sizeof(uint64_t) atIndex:16];
-                [encoder setBytes:&nb3     length:sizeof(uint64_t) atIndex:17];
+                [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
 
                 [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
             } break;
