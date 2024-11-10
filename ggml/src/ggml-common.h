@@ -648,6 +648,13 @@ typedef struct {
     int32_t  ne00_4;
     uint64_t nb01;
     float    eps;
+} ggml_metal_kargs_norm;
+
+typedef struct {
+    int32_t  ne00;
+    int32_t  ne00_4;
+    uint64_t nb01;
+    float    eps;
 } ggml_metal_kargs_rms_norm;
 #endif
 
