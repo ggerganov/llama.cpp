@@ -133,7 +133,10 @@ def main(args):
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), vcfg.depth)
     fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, VISION), 0)  # BUG: not sure what this does
     fout.add_name(model_name)
-    # fout.add_string("clip.vision.mm_patch_merge_type", v_hparams["mm_patch_merge_type"])
+    """
+    HACK: Since vision rope related parameter aren't stored in the `Qwen2VLConfig, 
+            it will be hardcoded in the `clip_image_build_graph` from `clip.cpp`.
+    """
 
     processor: Qwen2VLProcessor = AutoProcessor.from_pretrained(model_name)
     # breakpoint()

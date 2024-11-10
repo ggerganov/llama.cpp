@@ -310,6 +310,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_SCALE,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
+    LLM_KV_ROPE_DIMENSION_SECTIONS,
     LLM_KV_ROPE_FREQ_BASE,
     LLM_KV_ROPE_SCALE_LINEAR,
     LLM_KV_ROPE_SCALING_TYPE,
@@ -426,6 +427,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_SCALE,                  "%s.attention.scale"                  },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,             "%s.rope.dimension_count"                 },
+    { LLM_KV_ROPE_DIMENSION_SECTIONS,          "%s.rope.dimension_sections"              },
     { LLM_KV_ROPE_FREQ_BASE,                   "%s.rope.freq_base"                       },
     { LLM_KV_ROPE_SCALE_LINEAR,                "%s.rope.scale_linear"                    },
     { LLM_KV_ROPE_SCALING_TYPE,                "%s.rope.scaling.type"                    },
@@ -2429,11 +2431,12 @@ struct llama_hparams {
     uint32_t time_decay_extra_dim = 0;
     uint32_t wkv_head_size = 0;
 
-    float    rope_attn_factor = 1.0f;
-    float    rope_freq_base_train;
-    float    rope_freq_scale_train;
-    uint32_t n_ctx_orig_yarn;
-    float    rope_yarn_log_mul;
+    float                   rope_attn_factor = 1.0f;
+    float                   rope_freq_base_train;
+    float                   rope_freq_scale_train;
+    uint32_t                n_ctx_orig_yarn;
+    float                   rope_yarn_log_mul;
+    std::array<uint32_t, 4> rope_mrope_sections;
 
     // for State Space Models
     uint32_t ssm_d_conv  = 0;
@@ -2488,8 +2491,9 @@ struct llama_hparams {
         if (this->n_ff_shexp         != other.n_ff_shexp)         return true;
         if (this->n_expert_shared    != other.n_expert_shared)    return true;
 
-        if (this->rope_finetuned  != other.rope_finetuned)  return true;
-        if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn) return true;
+        if (this->rope_finetuned  != other.rope_finetuned)          return true;
+        if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn)         return true;
+        if (this->rope_mrope_sections != other.rope_mrope_sections) return true;
 
         if (this->ssm_d_conv  != other.ssm_d_conv)  return true;
         if (this->ssm_d_inner != other.ssm_d_inner) return true;
@@ -5710,8 +5714,12 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-        case LLM_ARCH_QWEN2:
         case LLM_ARCH_QWEN2VL:
+            {
+                std::fill(hparams.rope_mrope_sections.begin(), hparams.rope_mrope_sections.end(), 0);
+                ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS, hparams.rope_mrope_sections, 4, true);
+            }
+        case LLM_ARCH_QWEN2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
@@ -12532,7 +12540,7 @@ struct llm_build_context {
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
-        int sections[4] = {16, 24, 24, 0};  // TODO: move this into gguf model file.
+        int * sections = (int *)hparams.rope_mrope_sections.data();
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;

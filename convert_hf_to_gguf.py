@@ -1980,6 +1980,12 @@ class Qwen2Model(Model):
 class Qwen2VLModel(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2VL
 
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        mrope_section = self.hparams["rope_scaling"]["mrope_section"]
+        mrope_section += [0] * max(0, 4 - len(mrope_section))
+        self.gguf_writer.add_rope_dimension_sections(mrope_section)
+
     def set_vocab(self):
         try:
             self._set_vocab_sentencepiece()

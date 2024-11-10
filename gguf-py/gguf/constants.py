@@ -131,6 +131,7 @@ class Keys:
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
+        DIMENSION_SECTIONS      = "{arch}.rope.dimension_sections"
         FREQ_BASE               = "{arch}.rope.freq_base"
         SCALING_TYPE            = "{arch}.rope.scaling.type"
         SCALING_FACTOR          = "{arch}.rope.scaling.factor"
