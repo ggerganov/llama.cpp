@@ -1288,50 +1288,45 @@ kernel void kernel_norm(
 }
 
 kernel void kernel_rms_norm(
-        device const  void * src0,
-        device       float * dst,
-        constant   int64_t & ne00,
-        constant  uint64_t & nb01,
-        constant     float & eps,
-        threadgroup float  * buf [[threadgroup(0)]],
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint sgitg[[simdgroup_index_in_threadgroup]],
-        uint tiisg[[thread_index_in_simdgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const float4 * x = (device const float4 *) ((device const char *) src0 + tgpig*nb01);
+        constant ggml_metal_kargs_rms_norm & args,
+        device const char * src0,
+        device       char * dst,
+        threadgroup float * shmem_f32 [[threadgroup(0)]],
+        uint   tgpig[[threadgroup_position_in_grid]],
+        ushort tpitg[[thread_position_in_threadgroup]],
+        ushort sgitg[[simdgroup_index_in_threadgroup]],
+        ushort tiisg[[thread_index_in_simdgroup]],
+        ushort   ntg[[threads_per_threadgroup]]) {
+    if (sgitg == 0) {
+        shmem_f32[tiisg] = 0.0f;
+    }
 
-    float4 sumf = 0;
-    float all_sum = 0;
+    device const float4 * x = (device const float4 *) (src0 + tgpig*args.nb01);
+
+    float sumf = 0.0f;
 
     // parallel sum
-    for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        sumf += x[i00] * x[i00];
+    for (int i00 = tpitg; i00 < args.ne00_4; i00 += ntg) {
+        sumf += dot(x[i00], x[i00]);
     }
-    all_sum = sumf[0] + sumf[1] + sumf[2] + sumf[3];
-    all_sum = simd_sum(all_sum);
-    if (ntg > N_SIMDWIDTH) {
-        if (sgitg == 0) {
-            buf[tiisg] = 0.0f;
-        }
+    sumf = simd_sum(sumf);
 
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        if (tiisg == 0) {
-            buf[sgitg] = all_sum;
-        }
-
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        all_sum = buf[tiisg];
-        all_sum = simd_sum(all_sum);
+    if (tiisg == 0) {
+        shmem_f32[sgitg] = sumf;
     }
 
-    const float mean  = all_sum/ne00;
-    const float scale = 1.0f/sqrt(mean + eps);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    device float4 * y = (device float4 *) (dst + tgpig*ne00);
-    for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
+    sumf = shmem_f32[tiisg];
+    sumf = simd_sum(sumf);
+
+    const float mean  = sumf/args.ne00;
+    const float scale = 1.0f/sqrt(mean + args.eps);
+
+    device float4 * y = (device float4 *) dst + tgpig*args.ne00_4;
+    for (int i00 = tpitg; i00 < args.ne00_4; i00 += ntg) {
         y[i00] = x[i00] * scale;
     }
 }

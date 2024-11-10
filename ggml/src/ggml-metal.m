@@ -2618,20 +2618,28 @@ static void ggml_metal_encode_node(
                 float eps;
                 memcpy(&eps, dst->op_params, sizeof(float));
 
+                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_RMS_NORM].pipeline;
+
                 int nth = 32; // SIMD width
 
-                while (nth < ne00/4 && nth < 1024) {
+                while (nth < ne00/4 && nth < (int) pipeline.maxTotalThreadsPerThreadgroup) {
                     nth *= 2;
                 }
 
-                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_RMS_NORM].pipeline;
+                nth = MIN(nth, ne00/4);
+
+                ggml_metal_kargs_rms_norm args = {
+                    /*.ne00   =*/ ne00,
+                    /*.ne00_4 =*/ ne00/4,
+                    /*.nb01   =*/ nb01,
+                    /*.eps    =*/ eps,
+                };
 
                 [encoder setComputePipelineState:pipeline];
-                [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
-                [encoder setBuffer:id_dst  offset:offs_dst         atIndex:1];
-                [encoder setBytes:&ne00    length:sizeof( int64_t) atIndex:2];
-                [encoder setBytes:&nb01    length:sizeof(uint64_t) atIndex:3];
-                [encoder setBytes:&eps     length:sizeof(   float) atIndex:4];
+                [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+
                 [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
 
                 const int64_t nrows = ggml_nrows(src0);

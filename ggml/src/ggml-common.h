@@ -642,6 +642,13 @@ typedef struct {
     int32_t  ne1;
     uint64_t nb1;
 } ggml_metal_kargs_mul_mv_id;
+
+typedef struct {
+    int32_t  ne00;
+    int32_t  ne00_4;
+    uint64_t nb01;
+    float    eps;
+} ggml_metal_kargs_rms_norm;
 #endif
 
 #endif // GGML_COMMON_DECL
