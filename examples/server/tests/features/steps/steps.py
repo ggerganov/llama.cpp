@@ -260,13 +260,13 @@ async def step_wait_for_server_status(context, expecting_status: Literal['health
 async def step_all_slots_status(context, expected_slot_status_string: Literal['idle', 'busy'] | str):
     match expected_slot_status_string:
         case 'idle':
-            expected_slot_status = 0
+            expected_slot_status = False
         case 'busy':
-            expected_slot_status = 1
+            expected_slot_status = True
         case _:
             assert False, "unknown status"
 
-    expected_slots = [{'id': slot_id, 'state': expected_slot_status}
+    expected_slots = [{'id': slot_id, 'is_processing': expected_slot_status}
                       for slot_id in range(context.n_slots)]
     await request_slots_status(context, expected_slots)
 
@@ -1354,8 +1354,8 @@ async def wait_for_slots_status(context,
                 if status_code == 503 and status_code == expected_http_status_code:
                     return
                 if status_code == 200 and status_code == expected_http_status_code:
-                    n_slots_idle = sum(1 if slot["state"] == 0 else 0 for slot in slots)
-                    n_slots_processing = sum(1 if slot["state"] != 0 else 0 for slot in slots)
+                    n_slots_idle = sum(1 if not slot["is_processing"] else 0 for slot in slots)
+                    n_slots_processing = sum(1 if slot["is_processing"] else 0 for slot in slots)
                     if ((slots_idle is None or slots_idle == n_slots_idle)
                         and (slots_processing is None or slots_processing == n_slots_processing)):
                         return

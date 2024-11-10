@@ -57,7 +57,7 @@ while true {
             break
         } else {
             print("🧔🏽‍♂️: \(userInput)")
-            let response = try await llama.chat(userInput)
+            let response = try await llama.infer(userInput)
             print("🤖: \(response)")
         }
     } else {

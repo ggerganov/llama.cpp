@@ -16,6 +16,11 @@
     return self->threadpool;
 }
 
+- (void)dealloc
+{
+    ggml_threadpool_free(threadpool);
+    [super dealloc];
+}
 @end
 
 @implementation GGMLThreadpoolParams {

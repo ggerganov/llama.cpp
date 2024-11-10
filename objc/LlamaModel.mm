@@ -24,12 +24,8 @@
 
 - (void)dealloc
 {
-    [super dealloc];
     llama_free_model(model);
-}
-
-- (LlamaContext *)context:(LlamaContextParams *)params {
-    return nil;
+    [super dealloc];
 }
 
 - (BOOL)addBOSToken {

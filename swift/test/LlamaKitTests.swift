@@ -4,6 +4,18 @@ import Testing
 import JSONSchema
 import OSLog
 
+@llamaActor actor MyLlama {
+    /// Get the user's favorite season
+    @Tool public func getFavoriteSeason() async throws -> String {
+        return "autumn"
+    }
+    
+    /// Get the user's favorite animal.
+    @Tool public func getFavoriteAnimal() async throws -> String {
+        return "cat"
+    }
+}
+
 // MARK: LlamaGrammarSession Suite
 @Suite("LlamaSession Suite")
 struct LlamaSessionSuite {
@@ -43,7 +55,7 @@ struct LlamaSessionSuite {
     func baseParams(url: String, to path: String) async throws -> GPTParams {
         let params = GPTParams()
         params.modelPath = try await downloadFile(url: url, to: path)
-        params.nPredict = 512
+        params.nPredict = 4096
         params.nCtx = 4096
         params.cpuParams.nThreads = 8
         params.cpuParamsBatch.nThreads = 8
@@ -89,7 +101,7 @@ struct LlamaSessionSuite {
         """
         let session = try await LlamaSession<Trip>(params: params)
         await #expect(throws: Never.self) {
-            let trip = try await session.chat(message: "Please create a trip for me to New York City that starts two weeks from now. The duration of the trip MUST be 3 days long.")
+            let trip = try await session.infer(message: "Please create a trip for me to New York City that starts two weeks from now. The duration of the trip MUST be 3 days long.")
             #expect(trip.location.contains("New York"))
             // TODO: Testing the other fields is difficult considering model size
             // TODO: so for now, we are just asserting the grammar works
@@ -100,83 +112,93 @@ struct LlamaSessionSuite {
         let isSpellingCorrect: Bool
     }
     
+    // MARK: Grammar Test
     @Test func llamaSimpleGrammarSession() async throws {
-        let params = try await baseParams(url: "https://huggingface.co/RichardErkhov/openfoodfacts_-_spellcheck-mistral-7b-gguf/resolve/main/spellcheck-mistral-7b.Q8_0.gguf?download=true",
-                                          to: "spellcheck_q8.gguf")
+        let params = try await baseParams(url: "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q5_K_S.gguf?download=true",
+                                          to: "spellcheck_mistral.gguf")
         params.prompt = """
-        ###You are a spell checker. I will provide you with the word 'strawberry'. If the spelling of the given word is correct, please respond {"isCorrect": true} else respond {"isCorrect": false}.\n
+        You are a spell checker. I will provide you with versions of the word 'strawberry'. Tell me if the spelling is correct or not.
         """
+        params.inputPrefix = "<s>[INST]"
+        params.inputSuffix = "[/INST]"
+        params.antiPrompts.append("</s>")
         let session = try await LlamaSession<IsCorrect>(params: params)
-        for _ in 0..<10 {
-            var output = try await session.chat(message: "###strawberry\n")
-            #expect(output.isSpellingCorrect)
-            output = try await session.chat(message: "###strawberrry\n")
-            #expect(!output.isSpellingCorrect)
+        var output = try await session.infer(message: "strawberry\n")
+        #expect(output.isSpellingCorrect)
+        output = try await session.infer(message: "st44rawberrry\n")
+        #expect(!output.isSpellingCorrect)
+    }
+    
+    // MARK: Tool Test
+    @Test func llamaToolSession() async throws {
+        let params = try await baseParams(url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q8_0.gguf?download=true", to: "llama_tools.gguf")
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory
+        let cacheURL = tmpDir.appending(path: "cache")
+        params.pathPromptCache = cacheURL.path()
+        params.logging = true
+        defer { try? fm.removeItem(at: cacheURL) }
+        let llama = try await MyLlama(params: params)
+        var output = try await llama.infer("What's my favorite animal?")
+        #expect(output.contains("cat"))
+        output = try await llama.infer("What's my favorite season?")
+        #expect(output.contains("autumn"))
+    }
+
+    // MARK: Session dealloc Test
+    @Test func llamaToolSessionDealloc() async throws {
+        let params = try await baseParams(url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q8_0.gguf?download=true", to: "llama_tools.gguf")
+        func reportMemoryUsage() -> UInt64? {
+            var info = mach_task_basic_info()
+            var count = mach_msg_type_number_t(MemoryLayout.size(ofValue: info)) / 4
+
+            let kerr = withUnsafeMutablePointer(to: &info) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                    task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+                }
+            }
+
+            guard kerr == KERN_SUCCESS else {
+                print("Error with task_info(): \(kerr)")
+                return nil
+            }
+
+            return info.resident_size // Memory in bytes
         }
+        var memPostAlloc: UInt64!
+        try await Task {
+            let llama = try await MyLlama(params: params)
+            memPostAlloc = reportMemoryUsage()! / 1024 / 1024
+            #expect(memPostAlloc > 500) // we are estimating here
+            var output = try await llama.infer("What's my favorite animal?")
+            print(output)
+            output = try await llama.infer("What question did i just ask you?")
+            print(output)
+        }.value
+        sleep(1)
+        var memDealloc = reportMemoryUsage()! / 1024 / 1024
+        #expect(memDealloc < 200)
+        try await Task {
+            let llama = try await MyLlama(params: params)
+            memPostAlloc = reportMemoryUsage()! / 1024 / 1024
+            #expect(memPostAlloc > 500)
+            _ = try await llama.infer("What was the first question I asked you?")
+        }.value
+        sleep(1)
+        memDealloc = reportMemoryUsage()! / 1024 / 1024
+        #expect(memDealloc < 200)
     }
-}
 
-import WeatherKit
-import CoreLocation
-
-func downloadFile() async throws -> String {
-    let fm = FileManager.default
-    let tmpDir = fm.temporaryDirectory
-    let destinationURL = tmpDir.appending(path: "llama_groq_gguf.gguf")
-    
-    guard !fm.fileExists(atPath: destinationURL.path()) else {
-        return destinationURL.path()
+    // MARK: Stream Test
+    @Test func llamaToolSessionStream() async throws {
+        let params = try await baseParams(url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q8_0.gguf?download=true", to: "llama_tools.gguf")
+        params.prompt = "You are an AI tool assistant that can chain tool calls together."
+        let llama = try await MyLlama(params: params)
+        var buffer = ""
+        for await output in await llama.inferenceStream(message: "What's my favorite animal and season?") {
+            buffer += output
+            print(output, terminator: "")
+        }
+        #expect(buffer.contains("cat") && buffer.contains("autumn"))
     }
-    print("Downloading Llama Tools, this may take a while...")
-    // Define the URL
-    guard let url = URL(string: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q5_K_M.gguf?download=true") else {
-        print("Invalid URL.")
-        throw URLError(.badURL)
-    }
-    
-    // Start the async download
-    let (tempURL, _) = try await URLSession.shared.download(from: url)
-    
-    // Define the destination path in the documents directory
-    
-    
-    // Move the downloaded file to the destination
-    try fm.moveItem(at: tempURL, to: destinationURL)
-    print("File downloaded to: \(destinationURL.path())")
-    return destinationURL.path()
-}
-
-
-@llamaActor actor MyLlama {
-    struct CurrentWeather: Codable {
-        let temperature: Double
-        let condition: WeatherCondition
-    }
-    
-    /// Get the current weather in a given location.
-    /// - parameter location: The city and state, e.g. San Francisco, CA
-    /// - parameter unit: The unit of temperature
-    @Tool public func getCurrentWeather(location: String, unit: String) async throws -> CurrentWeather {
-        let weather = try await WeatherService().weather(for: CLGeocoder().geocodeAddressString(location)[0].location!)
-        var temperature = weather.currentWeather.temperature
-        temperature.convert(to: .fahrenheit)
-        return CurrentWeather(temperature: temperature.value,
-                              condition: weather.currentWeather.condition)
-    }
-}
-
-@Test func llamaToolSession() async throws {
-    let params = GPTParams()
-    params.modelPath = try await downloadFile()
-    params.nPredict = 512
-    params.nCtx = 4096
-    params.cpuParams.nThreads = 8
-    params.cpuParamsBatch.nThreads = 8
-    params.nBatch = 1024
-    params.nGpuLayers = 1024
-    let llama = try await MyLlama(params: params)
-    let currentWeather = try await llama.getCurrentWeather(location: "San Francisco, CA", unit: "farenheit")
-    let output = try await llama.chat("What's the weather (in farenheit) in San Francisco, CA?")
-    #expect(output.contains(String(format: "%d", Int(currentWeather.temperature))))
-    // #expect(output.contains(currentWeather.condition.rawValue))
 }

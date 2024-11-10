@@ -72,6 +72,18 @@
     [outputCondition unlock];
     return line;
 }
+
+- (void)dealloc
+{
+    [outputCondition unlock];
+    [inputCondition unlock];
+    [inputCondition dealloc];
+    [outputCondition dealloc];
+    [log dealloc];
+    [inputQueue dealloc];
+    [outputQueue dealloc];
+    [super dealloc];
+}
 @end
 
 @implementation LlamaSession {
@@ -107,6 +119,9 @@
     BOOL need_insert_eot;
     int n_ctx;
     os_log_t os_log_inst;
+    
+    GGMLThreadpool *threadpool;
+    GGMLThreadpool *threadpool_batch;
 }
 
 - (NSString *)chat_add_and_format:(std::vector<common_chat_msg> &) chat_msgs role:(const std::string &) role content:(const std::string &) content {
@@ -135,6 +150,7 @@ static BOOL file_is_empty(NSString *path) {
     self = [super init];
     self->_params = [params copy];
     self->_mutableLastOutput = [[NSMutableString alloc] init];
+    self->_queue = [BlockingLineQueue new];
     if (params.logging) {
         os_log_inst = OS_LOG_DEFAULT;
     } else {
@@ -186,7 +202,6 @@ static BOOL file_is_empty(NSString *path) {
 
     set_process_priority(ggml_sched_priority(params.cpuParams.priority));
     
-    GGMLThreadpool *threadpool_batch;
     if (tpp != tpp_batch) {
         threadpool_batch = [tpp_batch threadpool];
         if (!threadpool_batch) {
@@ -198,7 +213,7 @@ static BOOL file_is_empty(NSString *path) {
         tpp.paused = true;
     }
     
-    GGMLThreadpool *threadpool = [tpp threadpool];
+    threadpool = [tpp threadpool];
     if (!threadpool) {
         [NSException raise:@"ThreadpoolFailure"
                     format:@"threadpool create failed"];
@@ -299,28 +314,28 @@ static BOOL file_is_empty(NSString *path) {
             n_matching_session_tokens++;
         }
         if ([params.prompt length] == 0 && n_matching_session_tokens == embd_inp.size()) {
-//            LOG_INF("%s: using full prompt from session file\n", __func__);
+            os_log_info(os_log_inst, "%s: using full prompt from session file\n", __func__);
         } else if (n_matching_session_tokens >= embd_inp.size()) {
-//            LOG_INF("%s: session file has exact match for prompt!\n", __func__);
+            os_log_info(os_log_inst, "%s: session file has exact match for prompt!\n", __func__);
         } else if (n_matching_session_tokens < (embd_inp.size() / 2)) {
-//            LOG_WRN("%s: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
-//                    __func__, n_matching_session_tokens, embd_inp.size());
+            os_log_error(os_log_inst, "%s: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
+                    __func__, n_matching_session_tokens, embd_inp.size());
         } else {
-//            LOG_INF("%s: session file matches %zu / %zu tokens of prompt\n",
-//                    __func__, n_matching_session_tokens, embd_inp.size());
+            os_log_info(os_log_inst, "%s: session file matches %zu / %zu tokens of prompt\n",
+                    __func__, n_matching_session_tokens, embd_inp.size());
         }
         
         // remove any "future" tokens that we might have inherited from the previous session
         llama_kv_cache_seq_rm([self.ctx cContext], -1, n_matching_session_tokens, -1);
     }
-    //
-    //    os_log_debug(os_log_inst, "recalculate the cached logits (check): embd_inp.size() %zu, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu\n",
-    //         embd_inp.size(), n_matching_session_tokens, embd_inp.size(), session_tokens.size());
-    //
+
+    os_log_debug(os_log_inst, "recalculate the cached logits (check): embd_inp.size() %zu, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu\n",
+             embd_inp.size(), n_matching_session_tokens, embd_inp.size(), session_tokens.size());
+
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token to recalculate the cached logits
     if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() && session_tokens.size() > embd_inp.size()) {
-//        os_log_debug(os_log_inst, "recalculate the cached logits (do): session_tokens.resize( %zu )\n", embd_inp.size() - 1);
+        os_log_debug(os_log_inst, "recalculate the cached logits (do): session_tokens.resize( %zu )\n", embd_inp.size() - 1);
         
         session_tokens.resize(embd_inp.size() - 1);
     }
@@ -344,37 +359,21 @@ static BOOL file_is_empty(NSString *path) {
     if (params.verbosePrompt) {
         os_log_info(os_log_inst,
                     "%s: prompt: '%s'\n", __func__, [params.prompt cStringUsingEncoding:NSUTF8StringEncoding]);
-//        LOG_INF("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
+        os_log_info(os_log_inst, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
             os_log_info(os_log_inst, "%6d -> '%s'\n", embd_inp[i],
                         [[self.ctx tokenToPiece:embd_inp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
         }
         
         if (params.nKeep > addBOS) {
-//            LOG_INF("%s: static prompt based on n_keep: '", __func__);
+            os_log_info(os_log_inst, "%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.nKeep; i++) {
                 os_log_debug(os_log_inst, "%s",
                              [[self.ctx tokenToPiece:embd_inp[i]] cStringUsingEncoding:NSUTF8StringEncoding]);
             }
         }
     }
-    //
-    //    // ctrl+C handling
-    //    {
-    //#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
-    //        struct sigaction sigint_action;
-    //        sigint_action.sa_handler = sigint_handler;
-    //        sigemptyset (&sigint_action.sa_mask);
-    //        sigint_action.sa_flags = 0;
-    //        sigaction(SIGINT, &sigint_action, NULL);
-    //#elif defined (_WIN32)
-    //        auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
-    //            return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
-    //        };
-    //        SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
-    //#endif
-    //    }
-    //
+
     if (params.interactive) {
         os_log_info(os_log_inst, "%s: interactive mode on.\n", __func__);
         
@@ -427,9 +426,8 @@ static BOOL file_is_empty(NSString *path) {
     os_log_info(os_log_inst, "sampler seed: %u\n", [_smpl seed]);
     //    LOG_INF("sampler params: \n%s\n", sparams.print().c_str());
     //    LOG_INF("sampler chain: %s\n",    gpt_sampler_print(smpl).c_str());
-    //
-    //    LOG_INF("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
-    //
+    os_log_info(os_log_inst, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.nBatch, params.nPredict, params.nKeep);
+
     // group-attention state
     // number of grouped KV tokens so far (used only if params.grp_attn_n > 1)
     
@@ -439,8 +437,8 @@ static BOOL file_is_empty(NSString *path) {
     if (ga_n != 1) {
         GGML_ASSERT(ga_n > 0                    && "grp_attn_n must be positive");                     // NOLINT
         GGML_ASSERT(ga_w % ga_n == 0            && "grp_attn_w must be a multiple of grp_attn_n");     // NOLINT
-        //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of grp_attn_w");    // NOLINT
-        //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * grp_attn_n"); // NOLINT
+        GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of grp_attn_w");    // NOLINT
+        GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * grp_attn_n"); // NOLINT
         os_log_info(os_log_inst, "self-extend: n_ctx_train = %d, grp_attn_n = %ld, grp_attn_w = %ld\n", n_ctx_train, static_cast<long>(ga_n), static_cast<long>(ga_w));
     }
     
@@ -493,7 +491,7 @@ static BOOL file_is_empty(NSString *path) {
     return [_mutableLastOutput copy];
 }
 
-- (void)start:(BlockingLineQueue *)queue {
+- (void)start {
     while ((n_remain != 0 && !is_antiprompt) || _params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -506,9 +504,7 @@ static BOOL file_is_empty(NSString *path) {
                 const int skipped_tokens = (int) embd.size() - max_embd_size;
                 embd.resize(max_embd_size);
 
-//                console::set_display(console::error);
                 os_log_error(os_log_inst, "<<input too long: skipped %d token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
-//                console::set_display(console::reset);
             }
 
             if (_params.grpAttnN == 1) {
@@ -626,8 +622,9 @@ static BOOL file_is_empty(NSString *path) {
             // optionally save the session on first sample (for faster prompt loading next time)
             if ([pathSession length] > 0 && need_to_save_session && !_params.promptCacheRO) {
                 need_to_save_session = false;
-                [self.ctx saveStateFile:pathSession tokens:session_tokens.data() nTokenCount:session_tokens.size()];
-//                llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
+                [self.ctx saveStateFile:pathSession
+                                 tokens:session_tokens.data()
+                            nTokenCount:session_tokens.size()];
 
                 os_log_debug(os_log_inst, "saved session to %s\n", [pathSession cStringUsingEncoding:NSUTF8StringEncoding]);
             }
@@ -635,8 +632,6 @@ static BOOL file_is_empty(NSString *path) {
             const llama_token idToken = [_smpl sample:self.ctx index:-1];
 
             [_smpl accept:idToken acceptGrammar:true];
-
-            // os_log_debug(os_log_inst, "last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
             embd.push_back(idToken);
 
@@ -666,7 +661,6 @@ static BOOL file_is_empty(NSString *path) {
 
         // display text
         if (input_echo && display) {
-//            std::cout<< "DISPLAYING TEXT" << std::endl;
             
             for (auto idToken : embd) {
                 NSString *token_str = [self.ctx tokenToPiece:idToken special:_params.special];
@@ -685,24 +679,13 @@ static BOOL file_is_empty(NSString *path) {
                     output_tokens.push_back(idToken);
                     output_ss << [token_str cStringUsingEncoding:NSUTF8StringEncoding];
                     last_output_ss << [token_str cStringUsingEncoding:NSUTF8StringEncoding];
+                    NSLog(@"Generated %s", last_output_ss.str().c_str());
                     [self willChangeValueForKey:@"lastOutput"];
                     [_mutableLastOutput appendString:token_str];
                     [self didChangeValueForKey:@"lastOutput"];
                 }
                 
             }
-            if (!last_output_ss.str().empty()) {
-//                queue->addOutputLine(last_output_ss.str());
-            }
-        }
-
-        // reset color to default if there is no pending user input
-        if (input_echo && (int) embd_inp.size() == n_consumed) {
-            if (!last_output_ss.str().empty()) {
-//                queue->addOutputLine(last_output_ss.str());
-            }
-//            console::set_display(console::reset);
-            display = true;
         }
 
         // if not currently processing queued inputs;
@@ -769,7 +752,6 @@ static BOOL file_is_empty(NSString *path) {
                                           content:assistant_ss.str()];
                     }
                     isInteracting = true;
-//                    LOG("\n");
                 }
             }
 
@@ -797,39 +779,23 @@ static BOOL file_is_empty(NSString *path) {
                     os_log_info(os_log_inst, "%s", [_params.inputPrefix cStringUsingEncoding:NSUTF8StringEncoding]);
                 }
 
-                // color user input only
-//                console::set_display(console::user_input);
                 display = _params.displayPrompt;
-
-                std::string line;
-//                bool another_line = true;
-                static int read_one = 0;
-//                if (!read_one) {
-//                    do {
-//                        another_line = false;// console::readline(line, params.multiline_input);
-//                        buffer += "What is the weather in New York?";//line;
-//                    } while (another_line);
-//                    read_one++;
-//                }
-//                else {
+                
                 if (!last_output_ss.str().empty()) {
                     auto str = last_output_ss.str();
                     last_output_ss.str("");
-                    [queue addOutputLine:[NSString stringWithCString:str.c_str() encoding:NSUTF8StringEncoding]];
+                    [_queue addOutputLine:[NSString stringWithCString:str.c_str() encoding:NSUTF8StringEncoding]];
                     [self willChangeValueForKey:@"lastOutput"];
                     _mutableLastOutput = [[NSMutableString alloc] init];
                     [self didChangeValueForKey:@"lastOutput"];
                     
                 }
                 
-                buffer = [[queue inputLine] cStringUsingEncoding:NSUTF8StringEncoding];
-//                    do {
-//                        another_line = console::readline(line, params.multiline_input);
-//                        buffer += line;
-//                    } while (another_line);
-//                }
-                // done taking input, reset color
-//                console::set_display(console::reset);
+                buffer = [[_queue inputLine] cStringUsingEncoding:NSUTF8StringEncoding];
+                if ([_queue isClosed]) {
+                    break;
+                }
+                
                 display = true;
 
                 // Add tokens to embd only if the input buffer is non-empty
@@ -881,7 +847,6 @@ static BOOL file_is_empty(NSString *path) {
                         output_tokens.push_back(token);
                         output_ss << [[self.ctx tokenToPiece:token] cStringUsingEncoding:NSUTF8StringEncoding];
                     }
-
                     // reset assistant message
                     assistant_ss.str("");
 
@@ -915,6 +880,30 @@ static BOOL file_is_empty(NSString *path) {
             isInteracting = true;
         }
     }
+    
+    NSLog(@"Loop over");
+    [_queue addOutputLine:@""];
+}
+
+- (void)stop {
+    isInteracting = false;
+    _params.interactive = false;
+    _queue.isClosed = YES;
+    [_queue addInputLine:@""];
+    [_queue outputLine];
+}
+
+- (void)dealloc
+{
+    [_queue dealloc];
+    [self.smpl dealloc];
+    [self.ctx dealloc];
+    [self.model dealloc];
+    llama_backend_free();
+    [threadpool dealloc];
+    [threadpool_batch dealloc];
+    
+    [super dealloc];
 }
 
 @end

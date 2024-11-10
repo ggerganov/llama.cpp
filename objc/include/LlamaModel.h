@@ -19,7 +19,6 @@ typedef int32_t LlamaToken;
 
 @interface LlamaModel : NSObject
 
-- (LlamaContext *)context:(LlamaContextParams *)params;
 - (LlamaToken)tokenBOS;
 - (LlamaToken)tokenEOT;
 - (LlamaToken)tokenEOS;

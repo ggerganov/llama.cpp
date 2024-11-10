@@ -46,4 +46,10 @@
     common_sampler_reset(sampler);
 }
 
+- (void)dealloc
+{
+    common_sampler_free(sampler);
+    [super dealloc];
+}
+
 @end

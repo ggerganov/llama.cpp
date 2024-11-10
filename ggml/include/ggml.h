@@ -217,7 +217,6 @@
 
 #define GGML_MAX_DIMS           4
 #define GGML_MAX_PARAMS         2048
-#define GGML_MAX_CONTEXTS       64
 #define GGML_MAX_SRC            10
 #define GGML_MAX_N_THREADS      512
 #define GGML_MAX_OP_PARAMS      64
@@ -559,10 +558,10 @@ extern "C" {
 
     enum ggml_log_level {
         GGML_LOG_LEVEL_NONE  = 0,
-        GGML_LOG_LEVEL_INFO  = 1,
-        GGML_LOG_LEVEL_WARN  = 2,
-        GGML_LOG_LEVEL_ERROR = 3,
-        GGML_LOG_LEVEL_DEBUG = 4,
+        GGML_LOG_LEVEL_DEBUG = 1,
+        GGML_LOG_LEVEL_INFO  = 2,
+        GGML_LOG_LEVEL_WARN  = 3,
+        GGML_LOG_LEVEL_ERROR = 4,
         GGML_LOG_LEVEL_CONT  = 5, // continue previous log
     };
 
@@ -572,6 +571,13 @@ extern "C" {
         GGML_TENSOR_FLAG_OUTPUT =  2, // ...is an output for the GGML compute graph
         GGML_TENSOR_FLAG_PARAM  =  4, // ...contains trainable parameters
         GGML_TENSOR_FLAG_LOSS   =  8, // ...defines loss for numerical optimization (multiple loss tensors add up)
+    };
+
+    struct ggml_init_params {
+        // memory pool
+        size_t mem_size;   // bytes
+        void * mem_buffer; // if NULL, memory will be allocated internally
+        bool   no_alloc;   // don't allocate memory for the tensor data
     };
 
     // n-dimensional tensor
@@ -619,66 +625,6 @@ extern "C" {
     // If it returns true, the computation is aborted
     typedef bool (*ggml_abort_callback)(void * data);
 
-    // Scheduling priorities
-    enum ggml_sched_priority {
-        GGML_SCHED_PRIO_NORMAL,
-        GGML_SCHED_PRIO_MEDIUM,
-        GGML_SCHED_PRIO_HIGH,
-        GGML_SCHED_PRIO_REALTIME
-    };
-
-    // Threadpool params
-    // Use ggml_threadpool_params_default() or ggml_threadpool_params_init() to populate the defaults
-    struct ggml_threadpool_params {
-        bool                cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores (all-zeros means use default affinity settings)
-        int                 n_threads;                   // number of threads
-        enum ggml_sched_priority prio;                   // thread priority
-        uint32_t            poll;                        // polling level (0 - no polling, 100 - aggressive polling)
-        bool                strict_cpu;                  // strict cpu placement
-        bool                paused;                      // start in paused state
-    };
-
-    struct ggml_threadpool;     // forward declaration, see ggml.c
-
-    typedef struct ggml_threadpool * ggml_threadpool_t;
-
-    // the compute plan that needs to be prepared for ggml_graph_compute()
-    // since https://github.com/ggerganov/ggml/issues/287
-    struct ggml_cplan {
-        size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
-        uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
-
-        int n_threads;
-        struct ggml_threadpool * threadpool;
-
-        // abort ggml_graph_compute when true
-        ggml_abort_callback abort_callback;
-        void *              abort_callback_data;
-    };
-
-    // scratch buffer
-    struct ggml_scratch {
-        size_t offs;
-        size_t size;
-        void * data;
-    };
-
-    struct ggml_init_params {
-        // memory pool
-        size_t mem_size;   // bytes
-        void * mem_buffer; // if NULL, memory will be allocated internally
-        bool   no_alloc;   // don't allocate memory for the tensor data
-    };
-
-    // numa strategies
-    enum ggml_numa_strategy {
-        GGML_NUMA_STRATEGY_DISABLED   = 0,
-        GGML_NUMA_STRATEGY_DISTRIBUTE = 1,
-        GGML_NUMA_STRATEGY_ISOLATE    = 2,
-        GGML_NUMA_STRATEGY_NUMACTL    = 3,
-        GGML_NUMA_STRATEGY_MIRROR     = 4,
-        GGML_NUMA_STRATEGY_COUNT
-    };
 
     //
     // GUID
@@ -700,9 +646,6 @@ extern "C" {
 
     // accepts a UTF-8 path, even on Windows
     GGML_API FILE *  ggml_fopen(const char * fname, const char * mode);
-
-    GGML_API void    ggml_numa_init(enum ggml_numa_strategy numa); // call once for better performance on NUMA systems
-    GGML_API bool    ggml_is_numa(void); // true if init detected that system has >1 NUMA node
 
     GGML_API void    ggml_print_object (const struct ggml_object * obj);
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);
@@ -760,12 +703,12 @@ extern "C" {
 
     // main
 
-    GGML_API struct ggml_context * ggml_init(struct ggml_init_params params);
-    GGML_API void                  ggml_free(struct ggml_context * ctx);
+    GGML_API struct ggml_context * ggml_init (struct ggml_init_params params);
+    GGML_API void                  ggml_reset(struct ggml_context * ctx);
+    GGML_API void                  ggml_free (struct ggml_context * ctx);
 
     GGML_API size_t  ggml_used_mem(const struct ggml_context * ctx);
 
-    GGML_API size_t  ggml_set_scratch (struct ggml_context * ctx, struct ggml_scratch scratch);
     GGML_API bool    ggml_get_no_alloc(struct ggml_context * ctx);
     GGML_API void    ggml_set_no_alloc(struct ggml_context * ctx, bool no_alloc);
 
@@ -805,8 +748,7 @@ extern "C" {
             int64_t ne2,
             int64_t ne3);
 
-    GGML_API struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value);
-    GGML_API struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value);
+    GGML_API void * ggml_new_buffer(struct ggml_context * ctx, size_t nbytes);
 
     GGML_API struct ggml_tensor * ggml_dup_tensor (struct ggml_context * ctx, const struct ggml_tensor * src);
     GGML_API struct ggml_tensor * ggml_view_tensor(struct ggml_context * ctx, struct ggml_tensor * src);
@@ -816,34 +758,24 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_get_next_tensor (const struct ggml_context * ctx, struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * name);
 
-    GGML_API struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor);
-    GGML_API struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value);
-    GGML_API struct ggml_tensor * ggml_set_f32 (struct ggml_tensor * tensor, float value);
-
     // Converts a flat index into coordinates
-    GGML_API void    ggml_unravel_index(const struct ggml_tensor * tensor, int64_t i, int64_t * i0, int64_t * i1, int64_t * i2, int64_t * i3);
+    GGML_API void ggml_unravel_index(const struct ggml_tensor * tensor, int64_t i, int64_t * i0, int64_t * i1, int64_t * i2, int64_t * i3);
 
-    GGML_API int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i);
-    GGML_API void    ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value);
-
-    GGML_API int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
-    GGML_API void    ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, int32_t value);
-
-    GGML_API float   ggml_get_f32_1d(const struct ggml_tensor * tensor, int i);
-    GGML_API void    ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value);
-
-    GGML_API float   ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
-    GGML_API void    ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, float value);
+    GGML_API enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor);
 
     GGML_API void *  ggml_get_data    (const struct ggml_tensor * tensor);
     GGML_API float * ggml_get_data_f32(const struct ggml_tensor * tensor);
-
-    GGML_API enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor);
 
     GGML_API const char *         ggml_get_name   (const struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_set_name   (      struct ggml_tensor * tensor, const char * name);
     GGML_ATTRIBUTE_FORMAT(2, 3)
     GGML_API struct ggml_tensor * ggml_format_name(      struct ggml_tensor * tensor, const char * fmt, ...);
+
+    // Tensor flags
+    GGML_API void ggml_set_input(struct ggml_tensor * tensor);
+    GGML_API void ggml_set_output(struct ggml_tensor * tensor);
+    GGML_API void ggml_set_param(struct ggml_context * ctx, struct ggml_tensor * tensor);
+    GGML_API void ggml_set_loss(struct ggml_tensor * tensor);
 
     //
     // operations on tensors with backpropagation
@@ -2060,9 +1992,6 @@ extern "C" {
     // automatic differentiation
     //
 
-    GGML_API void ggml_set_param(struct ggml_context * ctx, struct ggml_tensor * tensor);
-    GGML_API void ggml_set_loss(struct ggml_tensor * tensor);
-
     GGML_API void ggml_build_forward_expand (struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
     GGML_API void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * gf, struct ggml_cgraph * gb, bool accumulate);
 
@@ -2093,27 +2022,6 @@ extern "C" {
 
     GGML_API size_t ggml_graph_overhead(void);
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
-
-    GGML_API struct ggml_threadpool_params ggml_threadpool_params_default(int n_threads);
-    GGML_API void                          ggml_threadpool_params_init   (struct ggml_threadpool_params * p, int n_threads);
-    GGML_API bool                          ggml_threadpool_params_match  (const struct ggml_threadpool_params * p0, const struct ggml_threadpool_params * p1);
-    GGML_API struct ggml_threadpool *      ggml_threadpool_new          (struct ggml_threadpool_params  * params);
-    GGML_API void                          ggml_threadpool_free         (struct ggml_threadpool * threadpool);
-    GGML_API int                           ggml_threadpool_get_n_threads(struct ggml_threadpool * threadpool);
-    GGML_API void                          ggml_threadpool_pause        (struct ggml_threadpool * threadpool);
-    GGML_API void                          ggml_threadpool_resume       (struct ggml_threadpool * threadpool);
-
-    // ggml_graph_plan() has to be called before ggml_graph_compute()
-    // when plan.work_size > 0, caller must allocate memory for plan.work_data
-    GGML_API struct ggml_cplan ggml_graph_plan(
-                  const struct ggml_cgraph * cgraph,
-                                       int   n_threads, /* = GGML_DEFAULT_N_THREADS */
-                    struct ggml_threadpool * threadpool /* = NULL */ );
-    GGML_API enum ggml_status  ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
-
-    // same as ggml_graph_compute() but the work data is allocated as a part of the context
-    // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
-    GGML_API enum ggml_status  ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
 
     GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);
 
@@ -2285,6 +2193,8 @@ extern "C" {
         } lbfgs;
     };
 
+    GGML_API struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor);
+
     GGML_API struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type);
 
     // optimize the function defined by the tensor f
@@ -2315,12 +2225,6 @@ extern "C" {
             struct ggml_cgraph * gb,
             ggml_opt_callback callback,
             void * callback_data);
-
-    //
-    // tensor flags
-    //
-    GGML_API void ggml_set_input(struct ggml_tensor * tensor);
-    GGML_API void ggml_set_output(struct ggml_tensor * tensor);
 
     //
     // quantization
@@ -2490,8 +2394,6 @@ extern "C" {
     GGML_API int ggml_cpu_has_avx512_bf16(void);
     GGML_API int ggml_cpu_has_amx_int8   (void);
     GGML_API int ggml_cpu_has_fma        (void);
-    GGML_API int ggml_cpu_has_neon       (void);
-    GGML_API int ggml_cpu_has_sve        (void);
     GGML_API int ggml_cpu_has_arm_fma    (void);
     GGML_API int ggml_cpu_has_metal      (void);
     GGML_API int ggml_cpu_has_f16c       (void);
@@ -2508,16 +2410,8 @@ extern "C" {
     GGML_API int ggml_cpu_has_sycl       (void);
     GGML_API int ggml_cpu_has_rpc        (void);
     GGML_API int ggml_cpu_has_vsx        (void);
-    GGML_API int ggml_cpu_has_matmul_int8(void);
     GGML_API int ggml_cpu_has_cann       (void);
     GGML_API int ggml_cpu_has_llamafile  (void);
-
-    // get the sve vector length in bytes
-    GGML_API int ggml_cpu_get_sve_cnt(void);
-
-    //
-    // Internal types and functions exposed for tests and benchmarks
-    //
 
 #ifdef  __cplusplus
 // restrict not standard in C++
@@ -2527,14 +2421,6 @@ extern "C" {
 #endif
     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k);
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
-    typedef void (*ggml_from_float_to_mat_t)
-                                     (const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t nr, int64_t k, int64_t bs);
-    typedef void (*ggml_vec_dot_t)  (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
-                                       const void * GGML_RESTRICT y, size_t by, int nrc);
-    typedef void (*ggml_gemv_t)     (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x,
-                                       const void * GGML_RESTRICT y, int nr, int nc);
-    typedef void (*ggml_gemm_t)     (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x,
-                                       const void * GGML_RESTRICT y, int nr, int nc);
 
     struct ggml_type_traits {
         const char             * type_name;
@@ -2545,13 +2431,6 @@ extern "C" {
         ggml_to_float_t          to_float;
         ggml_from_float_t        from_float;
         ggml_from_float_t        from_float_ref;
-        ggml_from_float_to_mat_t from_float_to_mat;
-        ggml_vec_dot_t           vec_dot;
-        enum ggml_type           vec_dot_type;
-        int64_t                  nrows; // number of rows to process simultaneously
-        int64_t                  ncols; // number of columns to process simultaneously
-        ggml_gemv_t              gemv;
-        ggml_gemm_t              gemm;
     };
 
     GGML_API const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type);

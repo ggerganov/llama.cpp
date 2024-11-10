@@ -20,6 +20,7 @@ var ggmlSources = [
     "src/ggml.c",
     "src/ggml-alloc.c",
     "src/ggml-backend.cpp",
+    "src/ggml-cpu.c",
     "src/ggml-quants.c",
     "src/ggml-aarch64.c"
 ]
@@ -34,10 +35,30 @@ var cSettings: [CSetting] =  [
     .define("ACCELERATE_NEW_LAPACK"),
     .define("ACCELERATE_LAPACK_ILP64"),
 ]
-
+var sources = [
+    "src/llama.cpp",
+    "src/llama-vocab.cpp",
+    "src/llama-grammar.cpp",
+    "src/llama-sampling.cpp",
+    "src/unicode.cpp",
+    "src/unicode-data.cpp",
+    "ggml/src/ggml.c",
+    "ggml/src/ggml-cpu.c",
+    "ggml/src/ggml-alloc.c",
+    "ggml/src/ggml-backend.cpp",
+    "ggml/src/ggml-quants.c",
+    "ggml/src/ggml-aarch64.c",
+    "common/sampling.cpp",
+    "common/common.cpp",
+    "common/json-schema-to-grammar.cpp",
+    "common/log.cpp",
+]
 #if canImport(Darwin)
+sources.append("ggml/src/ggml-metal.m")
 ggmlSources.append("src/ggml-metal.m")
-resources.append(.process("src/ggml-metal.metal"))
+//resources.append(.process("src/ggml-metal.metal"))
+resources.append(.process("ggml/src/ggml-metal.metal"))
+
 linkerSettings.append(.linkedFramework("Accelerate"))
 cSettings.append(
     contentsOf: [
@@ -67,30 +88,48 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-syntax.git", branch: "main")
     ],
     targets: [
-        .target(name: "llama_cpp",
-                path: ".",
-                exclude: [
-                   "cmake",
-                   "examples",
-                   "scripts",
-                   "models",
-                   "tests",
-                   "CMakeLists.txt",
-                   "Makefile",
-                   "ggml"
-                ],
-                sources: cppSources,
-                publicHeadersPath: "spm-headers",
-                cSettings: cSettings),
         .target(
             name: "llama",
-            dependencies: ["llama_cpp"],
-            path: "ggml",
-            sources: ggmlSources,
+            path: ".",
+            exclude: [
+               "cmake",
+               "examples",
+               "scripts",
+               "models",
+               "tests",
+               "CMakeLists.txt",
+               "Makefile"
+            ],
+            sources: sources,
             resources: resources,
-            publicHeadersPath: "include",
+            publicHeadersPath: "spm-headers",
             cSettings: cSettings,
-            linkerSettings: linkerSettings),
+            linkerSettings: linkerSettings
+        ),
+//        .target(name: "llama_cpp",
+//                path: ".",
+//                exclude: [
+//                   "cmake",
+//                   "examples",
+//                   "scripts",
+//                   "models",
+//                   "tests",
+//                   "CMakeLists.txt",
+//                   "Makefile",
+//                   "ggml"
+//                ],
+//                sources: cppSources,
+//                publicHeadersPath: "spm-headers",
+//                cSettings: cSettings),
+//        .target(
+//            name: "llama",
+//            dependencies: ["llama_cpp"],
+//            path: "ggml",
+//            sources: ggmlSources,
+//            resources: resources,
+//            publicHeadersPath: "include",
+//            cSettings: cSettings,
+//            linkerSettings: linkerSettings),
         .target(name: "LlamaObjC",
                 dependencies: ["llama"],
                 path: "objc",

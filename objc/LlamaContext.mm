@@ -20,8 +20,8 @@
 
 - (void)dealloc
 {
-    [super dealloc];
     llama_free(ctx);
+    [super dealloc];
 }
 
 - (void)attachThreadpool:(GGMLThreadpool *)threadpool
