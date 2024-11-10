@@ -196,16 +196,13 @@
         <h3 class="text-lg font-bold mb-6">Settings</h3>
         <div class="h-[calc(90vh-12rem)] overflow-y-auto">
           <p class="opacity-40 mb-6">Settings below are saved in browser's localStorage</p>
-          <label class="input input-bordered flex items-center gap-2 mb-2">
-            <b>API Key</b>
-            <input type="text" class="grow" placeholder="Default: (empty)" v-model="config.apiKey" />
-          </label>
+          <settings-modal-short-input :config-key="'apiKey'" :config-default="configDefault" :config-info="configInfo" v-model="config.apiKey"></settings-modal-short-input>
           <label class="form-control mb-2">
             <div class="label">System Message</div>
             <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
           </label>
           <template v-for="configKey in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
-            <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
+            <settings-modal-short-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
           </template>
           <!-- TODO: add more sampling-related configs, please regroup them into different "collapse" sections -->
           <!-- Section: Other sampler settings -->
@@ -213,7 +210,7 @@
             <summary class="collapse-title font-bold">Other sampler settings</summary>
             <div class="collapse-content">
               <template v-for="configKey in ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold']">
-                <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
+                <settings-modal-short-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
               </template>
             </div>
           </details>
@@ -222,7 +219,7 @@
             <summary class="collapse-title font-bold">Penalties settings</summary>
             <div class="collapse-content">
               <template v-for="configKey in ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n']">
-                <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
+                <settings-modal-short-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
               </template>
             </div>
           </details>
@@ -249,7 +246,7 @@
   </div>
 
   <!-- Template to be used by settings modal -->
-  <template id="settings-modal-numeric-input">
+  <template id="settings-modal-short-input">
     <label class="input input-bordered join-item grow flex items-center gap-2 mb-2">
       <!-- Show help message on hovering on the input label -->
       <div class="dropdown dropdown-hover">
@@ -303,7 +300,7 @@
       custom: '', // custom json-stringified object
     };
     const CONFIG_INFO = {
-      apiKey: '',
+      apiKey: 'Set the API Key if you are using --api-key option for the server.',
       systemMessage: 'The starting message that defines how model should behave.',
       temperature: 'Controls the randomness of the generated text by affecting the probability distribution of the output tokens. Higher = more random, lower = more focused.',
       dynatemp_range: 'Addon for the temperature sampler. The added value to the range of dynamic temperature, which adjusts probabilities by entropy of tokens.',
@@ -353,8 +350,8 @@
     );
 
     // inout field to be used by settings modal
-    const SettingsModalNumericInput = defineComponent({
-      template: document.getElementById('settings-modal-numeric-input').innerHTML,
+    const SettingsModalShortInput = defineComponent({
+      template: document.getElementById('settings-modal-short-input').innerHTML,
       props: ['configKey', 'configDefault', 'configInfo', 'modelValue'],
     });
 
@@ -452,7 +449,7 @@
     const mainApp = createApp({
       components: {
         VueMarkdown,
-        SettingsModalNumericInput,
+        SettingsModalShortInput,
       },
       data() {
         return {
