@@ -2,10 +2,7 @@
 
 #import "ggml-impl.h"
 #import "ggml-backend-impl.h"
-
-#define GGML_COMMON_DECL_C
-#define GGML_COMMON_DECL_METAL_KARGS
-#include "ggml-common.h"
+#import "ggml-metal-impl.h"
 
 #import <Foundation/Foundation.h>
 
