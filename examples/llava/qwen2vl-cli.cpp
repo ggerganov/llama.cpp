@@ -64,8 +64,6 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
             nullptr,  // n_seq_id
             nullptr,  // seq_id
             nullptr,  // logits
-            *n_past, // all_pos_0
-            1, 0,
         };
         
         if (llama_decode(ctx_llama, batch)) {
@@ -87,7 +85,7 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        auto batch = llama_batch_get_one(&tokens[i], n_eval, *n_past, 0);
+        auto batch = llama_batch_get_one(&tokens[i], n_eval);
         // TODO: add mrope pos ids somewhere else
         pos.resize(batch.n_tokens * 4);
         std::fill(pos.begin(), pos.end(), 0);
@@ -114,21 +112,21 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past, int 
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, int * st_pos_id, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = common_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past, st_pos_id);
     return true;
 }
 
-static const char * sample(struct gpt_sampler * smpl,
+static const char * sample(struct common_sampler * smpl,
                            struct llama_context * ctx_llama,
                            int * n_past, int * st_pos_id) {
-    const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
-    gpt_sampler_accept(smpl, id, true);
+    const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
+    common_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past, st_pos_id);
     return ret.c_str();
@@ -197,7 +195,7 @@ static void print_usage(int, char ** argv) {
     LOG("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
-static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_params * params, const std::string & fname) {
+static struct llava_image_embed * load_image(llava_context * ctx_llava, common_params * params, const std::string & fname) {
 
     // load and preprocess the image
     llava_image_embed * embed = NULL;
@@ -223,7 +221,7 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
     return embed;
 }
 
-static void process_prompt(struct llava_context * ctx_llava, struct llava_image_embed * image_embed, gpt_params * params, const std::string & prompt) {
+static void process_prompt(struct llava_context * ctx_llava, struct llava_image_embed * image_embed, common_params * params, const std::string & prompt) {
     int n_past = 0;
     int cur_pos_id = 0;
 
@@ -232,21 +230,21 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     std::string system_prompt, user_prompt;
     size_t image_pos = prompt.find("<|vision_start|>");
     if (image_pos != std::string::npos) {
-        // new templating mode: Provide the full prompt including system message and use <|vision_start|> as a placeholder for the image
+        // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
         system_prompt = prompt.substr(0, image_pos);
-        user_prompt = prompt.substr(image_pos + std::string("<|vision_start|>").length());
+        user_prompt = prompt.substr(image_pos + std::string("<image>").length());
         LOG_INF("system_prompt: %s\n", system_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
         LOG_INF("user_prompt: %s\n", user_prompt.c_str());
         if (params->verbose_prompt) {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
     } else {
@@ -254,9 +252,9 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         system_prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|>";
         user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
         if (params->verbose_prompt) {
-            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
     }
@@ -272,7 +270,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG("\n");
 
-    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
+    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sparams);
     if (!smpl) {
         LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -292,15 +290,15 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         fflush(stdout);
     }
 
-    gpt_sampler_free(smpl);
+    common_sampler_free(smpl);
     LOG("\n");
 }
 
-static struct llama_model * llava_init(gpt_params * params) {
+static struct llama_model * llava_init(common_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(*params);
+    llama_model_params model_params = common_model_params_to_llama(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -310,7 +308,7 @@ static struct llama_model * llava_init(gpt_params * params) {
     return model;
 }
 
-static struct llava_context * llava_init_context(gpt_params * params, llama_model * model) {
+static struct llava_context * llava_init_context(common_params * params, llama_model * model) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
@@ -321,7 +319,7 @@ static struct llava_context * llava_init_context(gpt_params * params, llama_mode
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
+    llama_context_params ctx_params = common_context_params_to_llama(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
@@ -352,181 +350,7 @@ static void llava_free(struct llava_context * ctx_llava) {
 
 #ifndef NDEBUG
 
-static void tmp_test_conv2d_reshape(struct llava_context * ctx_llava, gpt_params * params) {
-    int image_size_width = 256;
-    int image_size_height = 256;
-    int batch_size = 1;
-
-    static size_t buf_size = 512u*1024*1024;
-    static void * buf = malloc(buf_size);
-
-    struct ggml_init_params init_params = {
-        /*.mem_size   =*/ buf_size,
-        /*.mem_buffer =*/ buf,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(init_params);
-    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
-
-    struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size_width, image_size_height, 3, batch_size);
-    ggml_set_name(inp_raw, "inp_raw");
-    ggml_set_input(inp_raw);
-
-    auto image_pixels = batch_size * image_size_width * image_size_height * 3;
-    auto one_ch = image_size_width * image_size_height;
-    std::vector<float> dummy_img;
-    dummy_img.resize(image_pixels);
-    std::fill(dummy_img.begin(), dummy_img.begin() + one_ch, 0.1);
-    std::fill(dummy_img.begin() + one_ch, dummy_img.begin() + one_ch * 2, 0.2);
-    std::fill(dummy_img.begin() + one_ch * 2, dummy_img.end(), 0.3);
-    memcpy(inp_raw->data, dummy_img.data(), image_pixels * ggml_element_size(inp_raw));
-
-    int patch_size = 14;
-    int hidden_size = 32;
-    int patch_w = image_size_width / patch_size;
-    int patch_h = image_size_height / patch_size;
-    int num_patches = (image_size_width / patch_size) * (image_size_height / patch_size);
-    struct ggml_tensor * kernel_0 = ggml_new_tensor_4d(
-        ctx0, GGML_TYPE_F32, 
-        patch_size, patch_size, 3, hidden_size);
-    ggml_set_name(kernel_0, "conv2d_kernel_0");
-    ggml_set_input(kernel_0);
-
-    auto kernel_ne = patch_size * patch_size * 3 * hidden_size;
-    std::vector<float> dummy_kernel;
-    dummy_kernel.resize(kernel_ne);
-    std::fill(dummy_kernel.begin(), dummy_kernel.end(), 0.0);
-    memcpy(kernel_0->data, dummy_img.data(), kernel_ne * ggml_element_size(kernel_0));
-
-    struct ggml_tensor * inp = ggml_conv_2d(ctx0, kernel_0, inp_raw, patch_size, patch_size, 0, 0, 1, 1);
-    // inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
-    // inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));  // swap axis 0 & 1, ignore axis 3 which is empty in this tensor
-    inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));  // [w, h, c, b] -> [c, w, h, b]
-    inp = ggml_reshape_4d(
-        ctx0, inp, 
-        hidden_size * 2, patch_w / 2, patch_h, batch_size);
-    inp = ggml_reshape_4d(
-        ctx0, inp, 
-        hidden_size * 2, patch_w / 2, 2, batch_size * (patch_h / 2));
-    inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 0, 2, 1, 3));
-    inp = ggml_reshape_2d(
-        ctx0, inp, 
-        hidden_size * 4, (patch_w / 2) * batch_size * (patch_h / 2));
-    
-    ggml_build_forward_expand(gf, inp);
-    ggml_graph_compute_with_ctx(ctx0, gf, 2);
-
-    std::vector<float> embd;
-    embd.resize(num_patches * hidden_size * batch_size);
-    memcpy(
-        embd.data(), 
-        (float *) ggml_get_data(inp), 
-        sizeof(float) * num_patches * hidden_size * batch_size);
-    ggml_free(ctx0);
-
-    std::ofstream outFile("conv2d.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
-
-        outFile.close();
-        std::cout << "Data successfully written to conv2d.bin" << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-}
-
-
-static void tmp_test_4d_reshape(struct llava_context * ctx_llava, gpt_params * params) {
-    int image_size_width = 32;
-    int image_size_height = 32;
-    int batch_size = 1;
-
-    static size_t buf_size = 512u*1024*1024;
-    static void * buf = malloc(buf_size);
-
-    struct ggml_init_params init_params = {
-        /*.mem_size   =*/ buf_size,
-        /*.mem_buffer =*/ buf,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(init_params);
-    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
-
-    struct ggml_tensor * inp_raw = ggml_new_tensor_4d(
-        ctx0, GGML_TYPE_F32, image_size_width, image_size_height, 8, batch_size);
-    ggml_set_name(inp_raw, "inp_raw");
-    ggml_set_input(inp_raw);
-
-    auto image_pixels = batch_size * image_size_width * image_size_height * 8;
-    auto one_ch = image_size_width * image_size_height;
-    std::vector<float> dummy_img;
-    dummy_img.resize(image_pixels);
-    for (int i = 0; i < 8; i++)
-    {
-        // std::fill(
-        //     dummy_img.begin() + one_ch * i, 
-        //     dummy_img.begin() + one_ch * (i + 1), 
-        //     0.1 * i
-        // );
-        for (size_t y = 0; y < image_size_height; y++)
-        {
-            for (size_t x = 0; x < image_size_width; x++)
-            {
-                dummy_img[one_ch * i + image_size_width * y + x] = i * (image_size_width * y + x) / (float)(32 * 32);
-            }
-            
-        }
-        
-    }    
-    memcpy(inp_raw->data, dummy_img.data(), image_pixels * ggml_element_size(inp_raw));
-
-    int patch_size = 1;
-    int hidden_size = 8;
-    int patch_w = image_size_width / patch_size;
-    int patch_h = image_size_height / patch_size;
-    int num_patches = (image_size_width / patch_size) * (image_size_height / patch_size);
-
-    // inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
-    // inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));  // swap axis 0 & 1, ignore axis 3 which is empty in this tensor
-    // auto inp = ggml_cont(ctx0, ggml_permute(ctx0, inp_raw, 2, 0, 1, 3));  // [w, h, c, b] -> [c, w, h, b]
-    auto inp = ggml_cont(ctx0, ggml_permute(ctx0, inp_raw, 1, 2, 0, 3));  // [w, h, c, b] -> [c, w, h, b] [(0-->1), (1-->2), (2-->0), (3-->3)]
-    inp = ggml_reshape_4d(
-        ctx0, inp, 
-        hidden_size * 2, patch_w / 2, patch_h, batch_size);
-    inp = ggml_reshape_4d(
-        ctx0, inp, 
-        hidden_size * 2, patch_w / 2, 2, batch_size * (patch_h / 2));
-    inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 0, 2, 1, 3));
-    inp = ggml_reshape_2d(
-        ctx0, inp, 
-        hidden_size * 4, (patch_w / 2) * batch_size * (patch_h / 2));
-    
-    ggml_build_forward_expand(gf, inp);
-    ggml_graph_compute_with_ctx(ctx0, gf, 2);
-
-    std::vector<float> embd;
-    embd.resize(num_patches * hidden_size * batch_size);
-    memcpy(
-        embd.data(), 
-        (float *) ggml_get_data(inp), 
-        sizeof(float) * num_patches * hidden_size * batch_size);
-    ggml_free(ctx0);
-
-    std::ofstream outFile("reshape_4d.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
-
-        outFile.close();
-        std::cout << "Data successfully written to reshape_4d.bin" << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-}
-
-
-static void tmp_test_rope(struct llava_context * ctx_llava, gpt_params * params) {
+static void tmp_test_rope(struct llava_context * ctx_llava, common_params * params) {
     
     int n_threads = 1;
     static size_t buf_size = 512u*1024*1024;
@@ -591,140 +415,7 @@ static void tmp_test_rope(struct llava_context * ctx_llava, gpt_params * params)
     }
 }
 
-
-static void tmp_test_mrope(struct llava_context * ctx_llava, gpt_params * params) {
-    
-    int n_threads = 1;
-    static size_t buf_size = 512u*1024*1024;
-    static void * buf = malloc(buf_size);
-
-    struct ggml_init_params init_params = {
-        /*.mem_size   =*/ buf_size,
-        /*.mem_buffer =*/ buf,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(init_params);
-    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
-
-    struct ggml_tensor * inp_raw = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 128, 12, 30);
-    ggml_set_name(inp_raw, "inp_raw");
-    ggml_set_input(inp_raw);
-
-    std::vector<float> dummy_q;
-    dummy_q.resize(128 * 12 * 30);
-    std::fill(dummy_q.begin(), dummy_q.end(), 0.1);
-    memcpy(inp_raw->data, dummy_q.data(), 128 * 12 * 30 * ggml_element_size(inp_raw));
-
-    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 30 * 3);
-    ggml_set_name(pos, "pos");
-    ggml_set_input(pos);
-
-    std::vector<int> pos_id;
-    pos_id.resize(90);
-    for (int i = 0; i < 30; i ++) pos_id[i] = i;
-    for (int i = 30; i < 60; i ++) pos_id[i] = i - 0;
-    for (int i = 60; i < 90; i ++) pos_id[i] = i - 0;
-    memcpy(pos->data, pos_id.data(), 90 * ggml_element_size(pos));
-
-    int sections[3] = {16, 24, 24};
-    auto encode = ggml_mrope_ext(
-        ctx0, inp_raw, pos, nullptr,
-        128, sections, LLAMA_ROPE_TYPE_NEOX, 32768, 1000000, 1,
-        0, 1, 32, 1);
-    
-    ggml_build_forward_expand(gf, encode);
-    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
-
-    std::vector<float> embd;
-    embd.resize(128 * 12 * 30);
-    memcpy(
-        embd.data(), 
-        (float *) ggml_get_data(encode), 
-        sizeof(float) * 128 * 12 * 30);
-    ggml_free(ctx0);
-
-    std::ofstream outFile("mrope.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
-
-        outFile.close();
-        std::cout << "Data successfully written to mrope.bin" << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-}
-
-
-static void tmp_test_mrope_2d(struct llava_context * ctx_llava, gpt_params * params) {
-    
-    int n_threads = 1;
-    static size_t buf_size = 512u*1024*1024;
-    static void * buf = malloc(buf_size);
-
-    struct ggml_init_params init_params = {
-        /*.mem_size   =*/ buf_size,
-        /*.mem_buffer =*/ buf,
-        /*.no_alloc   =*/ false,
-    };
-
-    struct ggml_context * ctx0 = ggml_init(init_params);
-    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
-
-    struct ggml_tensor * inp_raw = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 128, 12, 30);
-    ggml_set_name(inp_raw, "inp_raw");
-    ggml_set_input(inp_raw);
-
-    std::vector<float> dummy_q;
-    dummy_q.resize(128 * 12 * 30);
-    std::fill(dummy_q.begin(), dummy_q.end(), 0.1);
-    memcpy(inp_raw->data, dummy_q.data(), 128 * 12 * 30 * ggml_element_size(inp_raw));
-
-    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 30 * 4);
-    ggml_set_name(pos, "pos");
-    ggml_set_input(pos);
-
-    std::vector<int> pos_id;
-    pos_id.resize(30 * 4);
-    for (int i = 0; i < 30; i ++) {
-        pos_id[i] = i;
-        pos_id[i + 30] = i + 10;
-        pos_id[i + 60] = i + 10;
-        pos_id[i + 90] = i + 10;
-    }
-    
-    memcpy(pos->data, pos_id.data(), 30 * 4 * ggml_element_size(pos));
-
-    int sections[4] = {32, 32, 32, 32};
-    auto encode = ggml_mrope_ext(
-        ctx0, inp_raw, pos, nullptr,
-        128/2, sections, LLAMA_ROPE_TYPE_NEOX, 32768, 1000000, 1,
-        0, 1, 32, 1);
-    
-    ggml_build_forward_expand(gf, encode);
-    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
-
-    std::vector<float> embd;
-    embd.resize(128 * 12 * 30);
-    memcpy(
-        embd.data(), 
-        (float *) ggml_get_data(encode), 
-        sizeof(float) * 128 * 12 * 30);
-    ggml_free(ctx0);
-
-    std::ofstream outFile("mrope_2d.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd.data()), embd.size() * sizeof(int));
-
-        outFile.close();
-        std::cout << "Data successfully written to mrope.bin" << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-}
-
-
-static void tmp_dump_img_embed(struct llava_context * ctx_llava, gpt_params * params) {
+static void tmp_dump_img_embed(struct llava_context * ctx_llava, common_params * params) {
     // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
     int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
     // int ne = n_embd * image_embed->n_image_pos;
@@ -755,132 +446,19 @@ static void tmp_dump_img_embed(struct llava_context * ctx_llava, gpt_params * pa
     }
 }
 
-static void tmp_dump_img_embed_from_file(struct llava_context * ctx_llava, gpt_params * params) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
-    auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
-    int ne = n_embd * image_embed->n_image_pos;
-    // int ne = 1280 * image_embed->n_image_pos * 4;
-
-    std::ofstream outFile("img_embed_f.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(image_embed->embed), ne * sizeof(float));
-
-        outFile.close();
-        std::cout << "Data successfully written to img_embed_f.bin, tokens: " << image_embed->n_image_pos << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-    
-    llava_image_embed_free(image_embed);
-}
-
-static void tmp_dump_img_mid_embed(struct llava_context * ctx_llava, gpt_params * params) {
-    int layers = 2;
-    // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
-    // int ne = n_embd * image_embed->n_image_pos;
-    int ne = 1280 * 4 * 4;
-    float vals[56 * 56 * 3];
-    float embd[ne];
-    
-    // for (int i = 0; i < 3*56*56; i++)
-    // {
-    //     vals[i] = 0.5;
-    // }
-    for (int i = 0; i < 56*56; i++)
-    {
-        for (int c = 0; c < 3; c++)
-            vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
-    }
-    // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
-
-
-    // tmp_clip_set_layers(ctx_llava->ctx_clip, layers);
-    tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
-
-    std::ofstream outFile("img_layer_" + std::to_string(layers) + "_embed.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
-
-        outFile.close();
-        std::cout << "Data successfully written to mrope.bin" << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-}
-
-static void tmp_dump_patch_embed(struct llava_context * ctx_llava, gpt_params * params) {
-    // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
-    // int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
-    // int ne = n_embd * image_embed->n_image_pos;
-    int ne = 1280 * 4 *4;
-    float vals[56 * 56 * 3];
-    float embd[ne];
-    for (int i = 0; i < 3*56*56; i++)
-    {
-        vals[i] = 0.1;
-    }
-    // for (int i = 0; i < 56*56; i++)
-    // {
-    //     for (int c = 0; c < 3; c++)
-    //         vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
-    // }
-    // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
-    tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
-
-    std::ofstream outFile("patch_embed.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
-
-        outFile.close();
-        std::cout << "Data successfully written to mrope.bin" << std::endl;
-    } else {
-        std::cerr << "Error opening file!" << std::endl;
-    }
-}
-
-
-static llava_image_embed * tmp_load_img_embed() {
-    std::ifstream inputFile("/home/ron/Projects/llm2vec/hf_img_embed_f.bin", std::ios::binary);
-
-    if (!inputFile) {
-        std::cerr << "Could not open the file!" << std::endl;
-        return NULL;
-    }
-
-    // Determine the size of the file
-    inputFile.seekg(0, std::ios::end);
-    std::streamsize fileSize = inputFile.tellg();
-    inputFile.seekg(0, std::ios::beg);
-    
-    static llava_image_embed * result = (llava_image_embed*)malloc(sizeof(llava_image_embed));
-    result->embed = (float*)malloc(fileSize);
-    result->n_image_pos = 24 * 36 /4;
-
-    // Assuming the binary file contains floating-point numbers (float)
-    std::size_t numElements = fileSize / sizeof(float);
-    inputFile.read(reinterpret_cast<char*>(result->embed), fileSize);
-    inputFile.close();
-    
-    return result;
-}
-
 #endif
 
-/*
-    -----------------------------------------------------------------------------------------------------------------
-*/
 
 int main(int argc, char ** argv) {
     ggml_time_init();
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
         return 1;
     }
 
-    gpt_init();
+    common_init();
 
     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
         print_usage(argc, argv);
@@ -905,39 +483,16 @@ int main(int argc, char ** argv) {
         llava_image_embed_free(image_embed);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
-    } else if (params.image[0].empty()) {
-        // This section is for testing LLM parts of the model during development phase!
-        auto ctx_llava = llava_init_context(&params, model);
-
 #ifndef NDEBUG
-        // {
-        //     auto img_embed = tmp_load_img_embed();
-        //     struct clip_image_size * load_image_size = clip_image_size_init();
-        //     load_image_size->height = 336;
-        //     load_image_size->width = 504;
-        //     clip_add_load_image_size(ctx_llava->ctx_clip, load_image_size);
-        //     process_prompt(ctx_llava, img_embed, &params, params.prompt);
-        //     llava_image_embed_free(img_embed);
-        // }
-
-        // process the prompt
-        tmp_dump_img_embed(ctx_llava, &params);
-        // tmp_dump_img_embed_from_file(ctx_llava, &params);
+    } else if (params.image[0].empty()) {
+        auto ctx_llava = llava_init_context(&params, model);
         
-        // tmp_dump_img_mid_embed(ctx_llava, &params);
-        // tmp_dump_patch_embed(ctx_llava, &params);
-        // tmp_test_4d_reshape(ctx_llava, &params);
-        // tmp_test_rope(ctx_llava, &params);
-        // tmp_test_mrope(ctx_llava, &params);
-        // tmp_test_mrope_2d(ctx_llava, &params);
-#endif
-
-        // process_prompt(ctx_llava, nullptr, &params, params.prompt);
+        tmp_dump_img_embed(ctx_llava, &params);
 
         llama_perf_context_print(ctx_llava->ctx_llama);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
-        
+#endif
     } else {
         for (auto & image : params.image) {
             auto * ctx_llava = llava_init_context(&params, model);
