@@ -36,7 +36,7 @@ class LLamaAndroid {
         }
     }.asCoroutineDispatcher()
 
-    private val nlen: Int = 64
+    private val nlen: Int = 256
 
     private external fun log_to_android()
     private external fun load_model(filename: String): Long

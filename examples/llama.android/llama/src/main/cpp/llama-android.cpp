@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include "llama.h"
 #include "common.h"
+#include "llava.h"
 
 // Write C++ code here.
 //

@@ -1442,6 +1442,11 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     // End of Parse args for logging parameters
 #endif // LOG_DISABLE_LOGS
 
+    if (arg == "--omni-vlm-version") {
+        CHECK_ARG
+        params.omni_vlm_version = argv[i];
+        return true;
+    }
     return false;
 }
 
@@ -1688,6 +1693,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "layer range to apply the control vector(s) to, start and end inclusive" });
     options.push_back({ "*",           "-m,    --model FNAME",          "model path (default: models/$filename with filename from --hf-file\n"
                                                                         "or --model-url if set, otherwise %s)", DEFAULT_MODEL_PATH });
+    options.push_back({ "*",           "        --omni-vlm-version VERSION_STRING",          "omni vlm string version(one of 'vlm-81-ocr', 'vlm-81-instruct', 'nano-vlm-instruct')\n"                               "(default: 'vlm-81-ocr')"});
     options.push_back({ "*",           "-md,   --model-draft FNAME",    "draft model for speculative decoding (default: unused)" });
     options.push_back({ "*",           "-mu,   --model-url MODEL_URL",  "model download url (default: unused)" });
     options.push_back({ "*",           "-hfr,  --hf-repo REPO",         "Hugging Face model repository (default: unused)" });

@@ -1,22 +1,30 @@
 # omni-vlm
 
-Currently this implementation supports [omni-vlm](https://huggingface.co/NexaAIDev/nano-vlm-instruct) variants,
+Currently this implementation supports:
 
-After API is confirmed, more models will be supported / uploaded.
+* [nano-vlm-instruct](https://huggingface.co/NexaAIDev/nano-vlm-instruct/tree/main) ([gguf](https://huggingface.co/NexaAIDev/nano-vlm-instruct-gguf/tree/main))
+* [vlm-81-ocr](https://huggingface.co/NexaAIDev/vlm-81-ocr/tree/main) ([gguf](https://huggingface.co/NexaAIDev/vlm-81-ocr-gguf/tree/main))
+* [vlm-81-instruct](https://huggingface.co/NexaAIDev/vlm-81-instruct/tree/main) ([gguf](https://huggingface.co/NexaAIDev/vlm-81-instruct-gguf/tree/main))
+
+After API is stable, more models will be supported.
 
 ## Usage
-Build with cmake in the `llama-cpp-experiments` folder:
-```bash
+
+Build with cmake in the `llama.cpp` folder:
+
+```console
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build --verbose -j
 ```
+
 After building, run: `./omni-vlm-cli` to see the usage. For example:
 
-```bash
+```console
 ./omni-vlm-cli \
-    -m Nano-Llm-494M-F16.gguf \
-    --mmproj mmproj-omni-vlm-f16.gguf \
-    --image example/omni-vlm/cat.png
+    -m <llm-F16.gguf> \
+    --mmproj <mmproj-F16.gguf> \
+    --image example/omni-vlm/cat.png \
+    --omni-vlm-version <vlm-81-ocr | vlm-81-instruct | nano-vlm-instruct>
 ```
 
 See next section to convert gguf files from original safetensors.
@@ -27,6 +35,7 @@ See next section to convert gguf files from original safetensors.
 )
 
 ## Omni-vlm gguf conversion
+
 1) First clone omni-vlm model:
 ```console
 git clone https://huggingface.co/NexaAIDev/nano-vlm-instruct
@@ -34,7 +43,7 @@ git clone https://huggingface.co/NexaAIDev/nano-vlm-instruct
 
 2) Install the required Python packages:
 
-```sh
+```console
 pip install -r examples/omni-vlm/requirements.txt
 ```
 
@@ -104,6 +113,5 @@ After successfully compiling omni_vlm_wrapper_shared dynamic library, run:
 python omni_vlm_demo.py \
   --model <PATH TO nano-vlm-processor>/Nano-Llm-494M-F16.gguf \
   --mmproj <PATH TO nano-vlm-instruct>/mmproj-omni-vlm-f16.gguf \
-  --prompt="Describe this image for me" \
-  --image-path cat.png
+  --omni-vlm-version <vlm-81-ocr | vlm-81-instruct | nano-vlm-instruct>
 ```

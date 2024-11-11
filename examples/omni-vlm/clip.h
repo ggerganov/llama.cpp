@@ -42,6 +42,9 @@ struct clip_image_f32_batch {
 CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
 CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity);
 
+struct gpt_params;
+CLIP_API void clip_set_omni_vlm_version(struct clip_ctx * ctx_clip, const struct gpt_params * params);
+
 CLIP_API void clip_free(struct clip_ctx * ctx);
 
 CLIP_API size_t clip_embd_nbytes(const struct clip_ctx * ctx);
