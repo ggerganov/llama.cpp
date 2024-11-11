@@ -19,6 +19,8 @@ if (BLAS_FOUND)
     target_include_directories(ggml-blas PRIVATE . ..)
 
     if (${GGML_BLAS_VENDOR} MATCHES "Apple")
+        add_compile_definitions(ACCELERATE_NEW_LAPACK)
+        add_compile_definitions(ACCELERATE_LAPACK_ILP64)
         add_compile_definitions(GGML_BLAS_USE_ACCELERATE)
     elseif ("${BLAS_INCLUDE_DIRS}" STREQUAL "")
         # BLAS_INCLUDE_DIRS is missing in FindBLAS.cmake.

@@ -4931,6 +4931,8 @@ void quantize_row_iq2_s_ref(const float * restrict x, block_iq2_s * restrict y, 
     quantize_iq2_s(x, y, 1, k, NULL);
 }
 
+// =============================== data validation
+
 static bool validate_float(float f, size_t i) {
     if (isinf(f)) {
         fprintf(stderr, "ggml_validate_row_data: found inf value at block %zu\n", i);

@@ -263,9 +263,9 @@ int main(int argc, char** argv) {
         // Note, we do not include this in the timing as in practical application
         // we already have the quantized model weights.
         if (useQ4_1) {
-            funcs->from_float(x1.data(), q41.data(), kVecSize);
+            funcs_cpu->from_float(x1.data(), q41.data(), kVecSize);
         } else {
-            funcs->from_float(x1.data(), q40.data(), kVecSize);
+            funcs_cpu->from_float(x1.data(), q40.data(), kVecSize);
         }
 
         // Now measure time the dot product needs using the "scalar" version above
@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
             dot_q4_q8(kVecSize, &result, q40.data(), q8.data());
         }
         else {
-            const auto * vdot = ggml_get_type_traits(funcs_cpu->vec_dot_type);
+            const auto * vdot = ggml_get_type_traits_cpu(funcs_cpu->vec_dot_type);
             vdot->from_float(y1.data(), q8.data(), kVecSize);
             if (useQ4_1) funcs_cpu->vec_dot(kVecSize, &result, 0, q41.data(), 0, q8.data(), 0, 1);
             else funcs_cpu->vec_dot(kVecSize, &result, 0, q40.data(), 0, q8.data(), 0, 1);
