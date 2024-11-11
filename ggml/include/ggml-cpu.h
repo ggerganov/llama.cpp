@@ -96,12 +96,35 @@ extern "C" {
     // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
     GGML_API enum ggml_status  ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
 
-    // TODO: move to backend interface
+    //
+    // system info
+    //
+
+    // x86
+    GGML_API int ggml_cpu_has_sse3       (void);
+    GGML_API int ggml_cpu_has_ssse3      (void);
+    GGML_API int ggml_cpu_has_avx        (void);
+    GGML_API int ggml_cpu_has_avx2       (void);
+    GGML_API int ggml_cpu_has_f16c       (void);
+    GGML_API int ggml_cpu_has_fma        (void);
+    GGML_API int ggml_cpu_has_avx_vnni   (void);
+    GGML_API int ggml_cpu_has_avx512     (void);
+    GGML_API int ggml_cpu_has_avx512_vbmi(void);
+    GGML_API int ggml_cpu_has_avx512_vnni(void);
+    GGML_API int ggml_cpu_has_avx512_bf16(void);
+    GGML_API int ggml_cpu_has_amx_int8   (void);
+    // ARM
     GGML_API int ggml_cpu_has_neon       (void);
-    GGML_API int ggml_cpu_has_sve        (void);
+    GGML_API int ggml_cpu_has_arm_fma    (void);
+    GGML_API int ggml_cpu_has_fp16_va    (void);
     GGML_API int ggml_cpu_has_matmul_int8(void);
-    // get the sve vector length in bytes
-    GGML_API int ggml_cpu_get_sve_cnt(void);
+    GGML_API int ggml_cpu_has_sve        (void);
+    GGML_API int ggml_cpu_get_sve_cnt    (void);  // sve vector length in bytes
+    // other
+    GGML_API int ggml_cpu_has_riscv_v    (void);
+    GGML_API int ggml_cpu_has_vsx        (void);
+    GGML_API int ggml_cpu_has_wasm_simd  (void);
+    GGML_API int ggml_cpu_has_llamafile  (void);
 
     // Internal types and functions exposed for tests and benchmarks
 
@@ -115,6 +138,7 @@ extern "C" {
                                        const void * GGML_RESTRICT y, int nr, int nc);
 
     struct ggml_type_traits_cpu {
+        ggml_from_float_t        from_float;
         ggml_from_float_to_mat_t from_float_to_mat;
         ggml_vec_dot_t           vec_dot;
         enum ggml_type           vec_dot_type;
