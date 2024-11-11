@@ -25,8 +25,11 @@
     .bg-base-200 {background-color: var(--fallback-b2,oklch(var(--b2)/1))}
     .bg-base-300 {background-color: var(--fallback-b3,oklch(var(--b3)/1))}
     .text-base-content {color: var(--fallback-bc,oklch(var(--bc)/1))}
+    .show-on-hover {
+      @apply opacity-0 group-hover:opacity-100;
+    }
     .btn-mini {
-      @apply cursor-pointer opacity-0 group-hover:opacity-100 hover:shadow-md;
+      @apply cursor-pointer hover:shadow-md;
     }
     .chat-screen { max-width: 900px; }
     /* because the default bubble color is quite dark, we will make a custom one using bg-base-300 */
@@ -152,14 +155,14 @@
           <!-- actions for each message -->
           <div :class="{'text-right': msg.role === 'user'}" class="mx-4 mt-2 mb-2">
             <!-- user message -->
-            <button v-if="msg.role === 'user'" class="badge btn-mini" @click="editingMsg = msg" :disabled="isGenerating">
+            <button v-if="msg.role === 'user'" class="badge btn-minishow-on-hover " @click="editingMsg = msg" :disabled="isGenerating">
               ✍️ Edit
             </button>
             <!-- assistant message -->
-            <button v-if="msg.role === 'assistant'" class="badge btn-mini mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
+            <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
               🔄 Regenerate
             </button>
-            <button v-if="msg.role === 'assistant'" class="badge btn-mini mr-2" @click="copyMsg(msg)" :disabled="isGenerating">
+            <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="copyMsg(msg)" :disabled="isGenerating">
               📋 Copy
             </button>
           </div>
