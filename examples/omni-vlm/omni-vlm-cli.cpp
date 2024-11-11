@@ -12,6 +12,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+// #include <iostream>
+//
+// using std::cout;
+// using std::endl;
 
 static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
@@ -283,9 +287,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    auto * ctx_omnivlm = omnivlm_init_context(&params, model);
 
     for (auto & image : params.image) {
+        auto * ctx_omnivlm = omnivlm_init_context(&params, model);
         auto * image_embed = load_image(ctx_omnivlm, &params, image);
         if (!image_embed) {
             LOG_TEE("%s: failed to load image %s. Terminating\n\n", __func__, image.c_str());
@@ -296,9 +300,9 @@ int main(int argc, char ** argv) {
 
         llama_print_timings(ctx_omnivlm->ctx_llama);
         omnivlm_image_embed_free(image_embed);
+        ctx_omnivlm->model = NULL;
+        omnivlm_free(ctx_omnivlm);
     }
-    ctx_omnivlm->model = NULL;
-    omnivlm_free(ctx_omnivlm);
 
     llama_free_model(model);
 

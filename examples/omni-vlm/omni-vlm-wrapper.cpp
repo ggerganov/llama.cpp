@@ -244,10 +244,11 @@ void omnivlm_init(const char* llm_model_path, const char* projector_model_path, 
         fprintf(stderr, "%s: error: failed to init omnivlm model\n", __func__);
         throw std::runtime_error("Failed to init omnivlm model");
     }
-    ctx_omnivlm = omnivlm_init_context(&params, model);
 }
 
 const char* omnivlm_inference(const char *prompt, const char *imag_path) {
+    ctx_omnivlm = omnivlm_init_context(&params, model);
+
     std::string image = imag_path;
     params.prompt = prompt;
 
@@ -270,6 +271,9 @@ const char* omnivlm_inference(const char *prompt, const char *imag_path) {
 
     // llama_perf_print(ctx_omnivlm->ctx_llama, LLAMA_PERF_TYPE_CONTEXT);
     omnivlm_image_embed_free(image_embed);
+    ctx_omnivlm->model = nullptr;
+    omnivlm_free(ctx_omnivlm);
+    ctx_omnivlm = nullptr;
 
     return ret_chars;
 }
