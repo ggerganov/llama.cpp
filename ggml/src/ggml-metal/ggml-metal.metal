@@ -1752,6 +1752,135 @@ kernel void kernel_mul_mv_q8_0_f32(
     kernel_mul_mv_q8_0_f32_impl<constant ggml_metal_kargs_mul_mv &>(args, src0, src1, dst, nullptr, tgpig, tiisg, sgitg);
 }
 
+template<short nsg, short nxpsg>
+void kernel_mul_mv_ext_q8_0_f32_impl(
+        constant ggml_metal_kargs_mul_mv_ext & args,
+        device const char * src0,
+        device const char * src1,
+        device       char * dst,
+        uint3   tgpig[[threadgroup_position_in_grid]],
+        ushort3   ntg[[threads_per_threadgroup]],
+        ushort  tiisg[[thread_index_in_simdgroup]],
+        ushort  sgitg[[simdgroup_index_in_threadgroup]]) {
+    const short chpt = 1;
+    const short r0pt = 2;
+
+  //const short nxpsg = (32);
+    const short nypsg = (32/nxpsg)*r0pt;
+
+    const short tx = tiisg%nxpsg;
+    const short ty = tiisg/nxpsg;
+
+    const int i01 = tgpig.x*(nypsg*nsg) + nypsg*sgitg + ty*r0pt;
+    const int i11 = tgpig.y;
+    const int i1m = tgpig.z;
+
+    const int i12 = i1m%args.ne12;
+    const int i13 = i1m/args.ne12;
+
+    const uint64_t offset0 = i01*args.nb01 + (i12/args.r2)*args.nb02 + (i13/args.r3)*args.nb03;
+    const uint64_t offset1 = i11*args.nb11 + (i12        )*args.nb12 + (i13        )*args.nb13;
+
+    device const block_q8_0 * xq[r0pt];
+
+    for (short ir0 = 0; ir0 < r0pt; ++ir0) {
+        xq[ir0] = (i01 + ir0 < args.ne01) ? (device const block_q8_0 *) (src0 + offset0 + ir0*args.nb01) + (chpt*tx)/2 : (device const block_q8_0 *) src0;
+    }
+
+    device const float4x4 * y4x4 = (device const float4x4 *) (src1 + offset1) + chpt*tx;
+
+    float sumf[r0pt] = { [0 ... r0pt - 1] = 0.0f };
+
+    for (int iib = 0; (16*chpt)*(iib*nxpsg + tx) < args.ne00; ++iib) {
+        float4x4 lx;
+
+#pragma unroll(2)
+        for (short ir0 = 0; ir0 < r0pt; ++ir0) {
+#pragma unroll
+            for (short ch = 0; ch < chpt; ++ch) {
+                dequantize_q8_0(xq[ir0] + ch/2, (chpt*tx + ch)%2, lx);
+
+                const float4x4 ly = y4x4[ch];
+
+                sumf[ir0] +=
+                    dot(lx[0], ly[0]) +
+                    dot(lx[1], ly[1]) +
+                    dot(lx[2], ly[2]) +
+                    dot(lx[3], ly[3]);
+            }
+        }
+
+        y4x4 += ((16*chpt)*nxpsg)/16;
+
+        for (short ir0 = 0; ir0 < r0pt; ++ir0) {
+            xq[ir0] += ((16*chpt)*nxpsg)/32;
+        }
+    }
+
+    for (short ir0 = 0; ir0 < r0pt; ++ir0) {
+        if (nxpsg >= 32) {
+            sumf[ir0] += simd_shuffle_down(sumf[ir0],  16);
+        }
+        if (nxpsg >= 16) {
+            sumf[ir0] += simd_shuffle_down(sumf[ir0],  8);
+        }
+        if (nxpsg >= 8) {
+            sumf[ir0] += simd_shuffle_down(sumf[ir0],  4);
+        }
+        if (nxpsg >= 4) {
+            sumf[ir0] += simd_shuffle_down(sumf[ir0],  2);
+        }
+        if (nxpsg >= 2) {
+            sumf[ir0] += simd_shuffle_down(sumf[ir0],  1);
+        }
+
+        //sumf[ir0] = simd_sum(sumf[ir0]);
+    }
+
+    device float * dst_f32 = (device float *) dst + (uint64_t)i1m*args.ne0*args.ne1 + (uint64_t)i11*args.ne0;
+
+    if (tx == 0) {
+        for (short ir0 = 0; ir0 < r0pt && i01 + ir0 < args.ne01; ++ir0) {
+            dst_f32[i01 + ir0] = sumf[ir0];
+        }
+    }
+}
+
+[[host_name("kernel_mul_mv_ext_q8_0_f32")]]
+kernel void kernel_mul_mv_ext_q8_0_f32(
+        constant ggml_metal_kargs_mul_mv_ext & args,
+        device const char * src0,
+        device const char * src1,
+        device       char * dst,
+        uint3   tgpig[[threadgroup_position_in_grid]],
+        ushort3   ntg[[threads_per_threadgroup]],
+        ushort  tiisg[[thread_index_in_simdgroup]],
+        ushort  sgitg[[simdgroup_index_in_threadgroup]]) {
+    switch (args.nsg) {
+        case 1:
+            switch (args.nxpsg) {
+                case 4:  kernel_mul_mv_ext_q8_0_f32_impl<1, 4> (args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 8:  kernel_mul_mv_ext_q8_0_f32_impl<1, 8> (args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 16: kernel_mul_mv_ext_q8_0_f32_impl<1, 16>(args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 32: kernel_mul_mv_ext_q8_0_f32_impl<1, 32>(args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+            } break;
+        case 2:
+            switch (args.nxpsg) {
+                case 4:  kernel_mul_mv_ext_q8_0_f32_impl<2, 4> (args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 8:  kernel_mul_mv_ext_q8_0_f32_impl<2, 8> (args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 16: kernel_mul_mv_ext_q8_0_f32_impl<2, 16>(args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 32: kernel_mul_mv_ext_q8_0_f32_impl<2, 32>(args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+            } break;
+        case 4:
+            switch (args.nxpsg) {
+                case 4:  kernel_mul_mv_ext_q8_0_f32_impl<4, 4> (args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 8:  kernel_mul_mv_ext_q8_0_f32_impl<4, 8> (args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 16: kernel_mul_mv_ext_q8_0_f32_impl<4, 16>(args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+                case 32: kernel_mul_mv_ext_q8_0_f32_impl<4, 32>(args, src0, src1, dst, tgpig, ntg, tiisg, sgitg); break;
+            } break;
+    }
+}
+
 #define N_MV_T_T 4
 
 template<typename T0, typename T04, typename T1, typename T14, typename args_t>

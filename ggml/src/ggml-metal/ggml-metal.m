@@ -1,6 +1,8 @@
 #import "ggml-metal.h"
 
 #import "ggml-impl.h"
+#define GGML_COMMON_DECL_C
+#import "ggml-common.h"
 #import "ggml-backend-impl.h"
 #import "ggml-metal-impl.h"
 
@@ -175,6 +177,7 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_0_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_1_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_Q8_0_F32,
+    GGML_METAL_KERNEL_TYPE_MUL_MV_EXT_Q8_0_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_Q2_K_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_Q3_K_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_K_F32,
@@ -699,6 +702,7 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_0_F32,               mul_mv_q5_0_f32,                has_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_1_F32,               mul_mv_q5_1_f32,                has_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_Q8_0_F32,               mul_mv_q8_0_f32,                has_simdgroup_reduction);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_EXT_Q8_0_F32,           mul_mv_ext_q8_0_f32,            has_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_Q2_K_F32,               mul_mv_q2_K_f32,                has_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_Q3_K_F32,               mul_mv_q3_K_f32,                has_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_K_F32,               mul_mv_q4_K_f32,                has_simdgroup_reduction);
@@ -1951,6 +1955,55 @@ static void ggml_metal_encode_node(
                         }
 #endif
 
+                if (src0t == GGML_TYPE_Q8_0 && (ne00%16 == 0) && (ne11 >= 4 && ne11 < 32)) {
+                //if (false) {
+                    id<MTLComputePipelineState> pipeline = nil;
+
+                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_EXT_Q8_0_F32].pipeline;
+
+                    const int nsg    = 2;
+                    const int r0pt   = 2;
+                    const int r1pt   = 1;
+                    const int nxpsg  = ne11 > 1 ? 8 : 32;
+                    const int nypsg  = 32/nxpsg;
+                    const int nr0ptg = nypsg*r0pt*nsg;
+
+                    //GGML_ASSERT(ne00%1024 == 0);
+                    //GGML_ASSERT(ne01%nr0ptg == 0);
+                    //printf("ne01 = %lld, nr0ptg = %d, ne00 = %lld\n", ne01, nr0ptg, ne00);
+
+                    ggml_metal_kargs_mul_mv_ext args = {
+                        /*.ne00  =*/ ne00,
+                        /*.ne01  =*/ ne01,
+                        /*.ne02  =*/ ne02,
+                        /*.nb00  =*/ nb00,
+                        /*.nb01  =*/ nb01,
+                        /*.nb02  =*/ nb02,
+                        /*.nb03  =*/ nb03,
+                        /*.ne10  =*/ ne10,
+                        /*.ne11  =*/ ne11,
+                        /*.ne12  =*/ ne12,
+                        /*.nb10  =*/ nb10,
+                        /*.nb11  =*/ nb11,
+                        /*.nb12  =*/ nb12,
+                        /*.nb13  =*/ nb13,
+                        /*.ne0   =*/ ne0,
+                        /*.ne1   =*/ ne1,
+                        /*.r2    =*/ r2,
+                        /*.r3    =*/ r3,
+                        /*.nsg   =*/ nsg,
+                        /*.nxpsg =*/ nxpsg,
+                    };
+
+                    [encoder setComputePipelineState:pipeline];
+                    [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
+
+                    //printf("ne01 = %lld nr0ptg = %d\n", ne01, nr0ptg);
+                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nr0ptg - 1)/nr0ptg, (ne11 + r1pt - 1)/r1pt, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
+                } else
                 // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
                 // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
                 if ([device supportsFamily:MTLGPUFamilyApple7] &&
