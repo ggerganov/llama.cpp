@@ -227,6 +227,15 @@
             <summary class="collapse-title font-bold">Advanced config</summary>
             <div class="collapse-content">
               <label class="form-control mb-2">
+                <!-- Samplers queue -->
+                <div class="dropdown dropdown-hover">
+                  <div tabindex="0" role="button" class="font">Samplers queue</div>
+                  <div class="dropdown-content menu bg-base-100 rounded-box z-10 p-2 shadow mt-4">
+                    {{ configInfo['samplers'] }}
+                  </div>
+                </div>
+                <textarea class="textarea textarea-bordered flex h-12 mb-2" :placeholder="'Default: ' + configDefault.samplers" v-model="config.samplers"></textarea>
+                <!-- Custom parameters input -->
                 <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
                 <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
               </label>
@@ -274,6 +283,7 @@
       apiKey: '',
       systemMessage: 'You are a helpful assistant.',
       // make sure these default values are in sync with `common.h`
+      samplers: 'dkypmxt',
       temperature: 0.8,
       dynatemp_range: 0.0,
       dynatemp_exponent: 1.0,
@@ -297,6 +307,7 @@
     const CONFIG_INFO = {
       apiKey: '',
       systemMessage: 'The starting message that defines how model should behave.',
+      samplers: 'The order at which samplers are applied, in simplified way. Default is "dkypmxt": dry->top_k->typ_p->top_p->min_p->xtc->temperature',
       temperature: 'Controls the randomness of the generated text by affecting the probability distribution of the output tokens. Higher = more random, lower = more focused.',
       dynatemp_range: 'Addon for the temperature sampler. The added value to the range of dynamic temperature, which adjusts probabilities by entropy of tokens.',
       dynatemp_exponent: 'Addon for the temperature sampler. Smoothes out the probability redistribution based on the most probable token.',
@@ -525,6 +536,7 @@
               ],
               stream: true,
               cache_prompt: true,
+              samplers: this.config.samplers,
               temperature: this.config.temperature,
               dynatemp_range: this.config.dynatemp_range,
               dynatemp_exponent: this.config.dynatemp_exponent,
@@ -643,6 +655,11 @@
         resetConfigDialog() {
           if (window.confirm('Are you sure to reset all settings?')) {
             this.config = {...CONFIG_DEFAULT};
+          }
+        },
+        resetSamplersDialog() {
+          if (window.confirm('Are you sure to reset seamplers?')) {
+            this.config.samplers = this.configDefault.samplers;
           }
         },
 
