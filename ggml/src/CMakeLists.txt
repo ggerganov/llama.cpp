@@ -275,19 +275,6 @@ if (GGML_SYCL)
     endif()
 endif()
 
-if (GGML_RPC)
-    message(STATUS "RPC found")
-
-    list(APPEND GGML_CDEF_PUBLIC GGML_USE_RPC)
-
-    if (WIN32)
-        list(APPEND GGML_EXTRA_LIBS_PRIVATE ws2_32)
-    endif()
-
-    set(GGML_HEADERS_RPC ../include/ggml-rpc.h)
-    set(GGML_SOURCES_RPC ggml-rpc.cpp)
-endif()
-
 if (GGML_VULKAN)
     find_package(Vulkan COMPONENTS glslc REQUIRED)
 
@@ -820,6 +807,11 @@ endif()
 if (GGML_BLAS)
     add_subdirectory(ggml-blas)
     target_link_libraries(ggml PUBLIC ggml-blas)
+endif()
+
+if (GGML_RPC)
+    add_subdirectory(ggml-rpc)
+    target_link_libraries(ggml PUBLIC ggml-rpc)
 endif()
 
 if (EMSCRIPTEN)
