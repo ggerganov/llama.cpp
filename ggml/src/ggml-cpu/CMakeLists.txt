@@ -238,3 +238,7 @@ endif()
 
 target_compile_options(ggml-cpu PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 target_compile_options(ggml-cpu PRIVATE "$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
+
+if (EMSCRIPTEN)
+    set_target_properties(ggml-cpu PROPERTIES COMPILE_FLAGS "-msimd128")
+endif()

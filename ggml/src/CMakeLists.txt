@@ -29,27 +29,6 @@ endif()
 unset(GGML_EXTRA_LIBS_PRIVATE)
 unset(GGML_EXTRA_LIBS_PUBLIC)
 
-if (GGML_AMX)
-    if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11.0)
-    else()
-        set(GGML_AMX OFF)
-        message(WARNING "AMX requires gcc version > 11.0. Turning off GGML_AMX.")
-    endif()
-
-    if (GGML_AMX)
-        message(STATUS "Using AMX")
-
-        list(APPEND GGML_CDEF_PUBLIC GGML_USE_AMX)
-
-        file(GLOB   GGML_HEADERS_AMX "ggml-amx/*.h")
-        list(APPEND GGML_HEADERS_AMX "../include/ggml-amx.h")
-
-        file(GLOB   GGML_SOURCES_AMX "ggml-amx/*.cpp")
-        list(APPEND GGML_SOURCES_AMX "ggml-amx.cpp")
-    endif()
-endif()
-
-
 if (GGML_HIPBLAS)
     if (NOT EXISTS $ENV{ROCM_PATH})
         if (NOT EXISTS /opt/rocm)
@@ -157,156 +136,6 @@ if (GGML_HIPBLAS)
     endif()
 
     list(APPEND GGML_EXTRA_LIBS_PUBLIC hip::host roc::rocblas roc::hipblas)
-endif()
-
-if (GGML_SYCL)
-    if (NOT GGML_SYCL_TARGET MATCHES "^(INTEL|NVIDIA|AMD)$")
-        message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL, NVIDIA, or AMD")
-    endif()
-
-    check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
-
-    if (DEFINED ENV{ONEAPI_ROOT})
-        message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
-    elseif(SUPPORTS_SYCL)
-        message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}.
-         If you expected the oneAPI Release compiler, please install oneAPI & source it, like:
-         source /opt/intel/oneapi/setvars.sh")
-    else()
-        message(FATAL_ERROR, "C++ compiler lacks SYCL support.")
-    endif()
-    message(STATUS "SYCL found")
-    #todo: AOT
-
-    list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
-
-    if (GGML_SYCL_F16)
-        if (GGML_SYCL_TARGET STREQUAL "AMD")
-            message(WARNING "AMD target does not entirely support FP16 in the SYCL backend.")
-        endif()
-        add_compile_definitions(GGML_SYCL_F16)
-    endif()
-
-    if (GGML_CUDA_FORCE_MMQ)
-        add_compile_definitions(GGML_SYCL_FORCE_MMQ)
-    endif()
-
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -fsycl")
-
-    if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
-        add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
-    elseif (GGML_SYCL_TARGET STREQUAL "AMD")
-        # INFO: Allowed Sub_group_sizes are not consistent through all
-        # hip targets. For example, 64 is used for certain models, but the backend
-        # does not support it.
-        # Target archs tested working: gfx1030, gfx1031, (Only tested sub_group_size = 32)
-        add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
-    else()
-        add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
-    endif()
-
-    file(GLOB   GGML_HEADERS_SYCL "ggml-sycl/*.hpp")
-    list(APPEND GGML_HEADERS_SYCL "../include/ggml-sycl.h")
-
-    file(GLOB   GGML_SOURCES_SYCL "ggml-sycl/*.cpp")
-    list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
-
-    find_package(DNNL)
-    message("-- DNNL found:" ${DNNL_FOUND})
-
-    if (GGML_SYCL_TARGET STREQUAL "INTEL")
-        add_compile_definitions(GGML_SYCL_DNNL=${DNNL_FOUND})
-    else()
-        add_compile_definitions(GGML_SYCL_DNNL=0)
-    endif()
-
-    if (${DNNL_FOUND} AND GGML_SYCL_TARGET STREQUAL "INTEL")
-        list(APPEND GGML_EXTRA_LIBS_PRIVATE DNNL::dnnl)
-    endif()
-
-    if (WIN32)
-        find_package(IntelSYCL REQUIRED)
-        find_package(MKL REQUIRED)
-        list(APPEND GGML_EXTRA_LIBS_PRIVATE IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
-    else()
-        if (GGML_SYCL_TARGET STREQUAL "INTEL")
-            list(APPEND GGML_EXTRA_LIBS_PRIVATE sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
-        elseif (GGML_SYCL_TARGET STREQUAL "NVIDIA")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
-            list(APPEND GGML_EXTRA_LIBS_PRIVATE sycl pthread m dl onemkl)
-        elseif (GGML_SYCL_TARGET STREQUAL "AMD")
-            if (GGML_SYCL_HIP_TARGET STREQUAL "")
-                message(ERROR "Can't enable SYCL hip backend, GGML_SYCL_HIP_TARGET has not been set.")
-            endif()
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=${GGML_SYCL_HIP_TARGET}")
-            list(APPEND GGML_EXTRA_LIBS_PRIVATE sycl pthread m dl onemkl)
-        endif()
-    endif()
-endif()
-
-if (GGML_CANN)
-    if ("cann${CANN_INSTALL_DIR}" STREQUAL "cann" AND DEFINED ENV{ASCEND_TOOLKIT_HOME})
-        set(CANN_INSTALL_DIR $ENV{ASCEND_TOOLKIT_HOME})
-        message(STATUS "CANN: updated CANN_INSTALL_DIR from ASCEND_TOOLKIT_HOME=$ENV{ASCEND_TOOLKIT_HOME}")
-    endif()
-
-    if (CANN_INSTALL_DIR)
-        # Only Support Linux.
-        if (GGML_CANN)
-            if (NOT UNIX)
-                set(GGML_CANN OFF)
-                message(WARNING "CANN: CANN toolkit supports unix but not ${CMAKE_SYSTEM_NAME}. Turning off GGML_CANN")
-            endif()
-        endif()
-
-        # Supported platforms: x86-64, arm64
-        if (GGML_CANN)
-            if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-            elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "amd64")
-            else()
-                set(GGML_CANN OFF)
-                message(WARNING "CANN: CANN toolkit supports x86-64 and arm64 but not ${CMAKE_SYSTEM_PROCESSOR}. Turning off GGML_CANN")
-            endif()
-        endif()
-
-        # Set header and libs
-        if(GGML_CANN)
-            set(CANN_INCLUDE_DIRS
-                ${CANN_INSTALL_DIR}/include
-                ${CANN_INSTALL_DIR}/include/aclnn
-                ${CANN_INSTALL_DIR}/acllib/include
-            )
-
-            add_subdirectory(ggml-cann/kernels)
-            list(APPEND CANN_LIBRARIES
-                ascendcl
-                nnopbase
-                opapi
-                acl_op_compiler
-                ascendc_kernels
-            )
-
-            set(GGML_HEADERS_CANN "../include/ggml-cann.h")
-            file(GLOB GGML_SOURCES_CANN "ggml-cann/*.cpp")
-            list(APPEND GGML_SOURCES_CANN "ggml-cann.cpp")
-
-            message(STATUS "CANN: CANN_INCLUDE_DIRS =  ${CANN_INCLUDE_DIRS}")
-            message(STATUS "CANN: CANN_LIBRARIES =  ${CANN_LIBRARIES}")
-
-            list(APPEND GGML_EXTRA_LIBS_PRIVATE ${CANN_LIBRARIES} )
-            list(APPEND GGML_EXTRA_INCLUDES     ${CANN_INCLUDE_DIRS})
-            list(APPEND GGML_EXTRA_LIBDIRS      ${CANN_INSTALL_DIR}/lib64)
-
-            list(APPEND GGML_CDEF_PUBLIC GGML_USE_CANN)
-        endif()
-    else()
-        set(GGML_CANN OFF)
-        message(WARNING "CANN: Can't find CANN_INSTALL_DIR, do you forget to source set_var.sh. Turning off GGML_CANN")
-    endif()
-
-    if(NOT GGML_CANN)
-        message(WARNING "CANN: GGML_CANN is turned OFF, see above for details.")
-    endif()
 endif()
 
 function(get_flags CCID CCVER)
@@ -485,15 +314,10 @@ if (WIN32)
     endif()
 endif()
 
-#
-# libraries
-#
-
 # ggml
 
 add_library(ggml-base
             ../include/ggml.h
-            ../include/ggml-alloc
             ../include/ggml-alloc.h
             ../include/ggml-backend.h
             ../include/ggml-cpp.h
@@ -505,41 +329,42 @@ add_library(ggml-base
             ggml-quants.c
             ggml-quants.h
             ggml-aarch64.c
-            ggml-aarch64.h
-            )
+            ggml-aarch64.h)
 
 add_library(ggml
-            ggml-backend-reg.cpp
-            )
-add_subdirectory(ggml-cpu)
+            ggml-backend-reg.cpp)
 
-target_link_libraries(ggml PUBLIC ggml-base ggml-cpu)
+target_link_libraries(ggml PUBLIC ggml-base)
 
 function(ggml_add_backend backend)
     string(TOUPPER "GGML_${backend}" backend_id)
     if (${backend_id})
         string(TOLOWER "ggml-${backend}" backend_target)
         add_subdirectory(${backend_target})
-        if (${BUILD_SHARED_LIBS})
-            target_compile_definitions(${backend_target} PRIVATE GGML_BACKEND_BUILD)
-            target_compile_definitions(${backend_target} PUBLIC  GGML_BACKEND_SHARED)
+        if (${backend_id})
+            message(STATUS "Including ${backend} backend")
+            if (${BUILD_SHARED_LIBS})
+                target_compile_definitions(${backend_target} PRIVATE GGML_BACKEND_BUILD)
+                target_compile_definitions(${backend_target} PUBLIC  GGML_BACKEND_SHARED)
+            endif()
+            target_link_libraries(ggml PUBLIC ${backend_target})
+            string(TOUPPER "GGML_USE_${backend}" backend_use)
+            target_compile_definitions(ggml PUBLIC ${backend_use})
         endif()
-        target_link_libraries(ggml PUBLIC ${backend_target})
-        string(TOUPPER "GGML_USE_${backend}" backend_use)
-        #set(GGML_CDEF_PUBLIC ${GGML_CDEF_PUBLIC} ${backend_use} PARENT_SCOPE)
-        target_compile_definitions(ggml PUBLIC ${backend_use})
     endif()
 endfunction()
 
-ggml_add_backend(CUDA)
-ggml_add_backend(METAL)
+set(GGML_CPU ON)
+ggml_add_backend(CPU)
+ggml_add_backend(AMX)
 ggml_add_backend(BLAS)
+ggml_add_backend(CANN)
+ggml_add_backend(CUDA)
+ggml_add_backend(Kompute)
+ggml_add_backend(METAL)
 ggml_add_backend(RPC)
+ggml_add_backend(SYCL)
 ggml_add_backend(Vulkan)
-
-if (EMSCRIPTEN)
-    set_target_properties(ggml PROPERTIES COMPILE_FLAGS "-msimd128")
-endif()
 
 target_compile_definitions(ggml-base PUBLIC    ${GGML_CDEF_PUBLIC})
 target_include_directories(ggml-base PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
@@ -574,5 +399,7 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(ggml-base PROPERTIES POSITION_INDEPENDENT_CODE ON)
     set_target_properties(ggml      PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(ggml-base PRIVATE GGML_BUILD)
+    target_compile_definitions(ggml      PRIVATE GGML_BUILD)
     target_compile_definitions(ggml-base PUBLIC  GGML_SHARED)
+    target_compile_definitions(ggml      PUBLIC  GGML_SHARED)
 endif()
