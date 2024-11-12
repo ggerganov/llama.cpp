@@ -65,8 +65,8 @@ static struct omnivlm_context * omnivlm_init_context(gpt_params * params, llama_
         prompt = "describe the image in detail.";
     }
 
-    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 0);
-    clip_set_omni_vlm_version(ctx_clip, params);
+    auto ctx_clip = clip_model_load(clip_path, params->omni_vlm_version.c_str(), /*verbosity=*/ 0);
+    // clip_set_omni_vlm_version(ctx_clip, params);
 
 
     llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
@@ -280,7 +280,10 @@ const char* omnivlm_inference(const char *prompt, const char *imag_path) {
 
 void omnivlm_free() {
     if(internal_chars != nullptr) { free(internal_chars); }
-    ctx_omnivlm->model = NULL;
-    omnivlm_free(ctx_omnivlm);
+    if(ctx_omnivlm != nullptr) {
+        // this snipet should never be run!
+        ctx_omnivlm->model = nullptr;
+        omnivlm_free(ctx_omnivlm);
+    }
     llama_free_model(model);
 }
