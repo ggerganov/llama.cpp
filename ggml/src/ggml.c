@@ -368,7 +368,7 @@ void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, int64_t n) {
 void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int64_t n) {
     int64_t i = 0;
 #if defined(__F16C__)
-    if (ggml_cpu_has_f16c()) {
+    //if (ggml_cpu_has_f16c()) {
         for (; i + 7 < n; i += 8) {
             __m256 x_vec = _mm256_loadu_ps(x + i);
             __m128i y_vec = _mm256_cvtps_ph(x_vec, _MM_FROUND_TO_NEAREST_INT);
@@ -379,7 +379,7 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int64_t n) {
             __m128i y_vec = _mm_cvtps_ph(x_vec, _MM_FROUND_TO_NEAREST_INT);
             _mm_storel_epi64((__m128i *)(y + i), y_vec);
         }
-    }
+    //}
 #endif
     for (; i < n; i++) {
         y[i] = GGML_FP32_TO_FP16(x[i]);
@@ -389,7 +389,7 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int64_t n) {
 void ggml_bf16_to_fp32_row(const ggml_bf16_t * x, float * y, int64_t n) {
     int64_t i = 0;
 #if defined(__AVX512F__)
-    if (ggml_cpu_has_avx512()) {
+    //if (ggml_cpu_has_avx512()) {
         for (; i + 16 <= n; i += 16) {
             _mm512_storeu_ps(y + i,
                             _mm512_castsi512_ps(
@@ -399,10 +399,10 @@ void ggml_bf16_to_fp32_row(const ggml_bf16_t * x, float * y, int64_t n) {
                                             (const __m256i *)(x + i))),
                                     16)));
         }
-    }
+    //}
 #endif
 #if defined(__AVX2__)
-    if (ggml_cpu_has_avx2()) {
+    //if (ggml_cpu_has_avx2()) {
         for (; i + 8 <= n; i += 8) {
             _mm256_storeu_ps(y + i,
                             _mm256_castsi256_ps(
@@ -412,7 +412,7 @@ void ggml_bf16_to_fp32_row(const ggml_bf16_t * x, float * y, int64_t n) {
                                             (const __m128i *)(x + i))),
                                     16)));
         }
-    }
+    //}
 #endif
     for (; i < n; i++) {
         y[i] = GGML_BF16_TO_FP32(x[i]);

@@ -523,11 +523,11 @@ ifndef GGML_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
-		MK_CPPFLAGS += -DGGML_USE_ACCELERATE -DGGML_USE_BLAS
+		MK_CPPFLAGS += -DGGML_USE_ACCELERATE -DGGML_USE_BLAS -DGGML_BLAS_USE_ACCELERATE
 		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
 		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
 		MK_LDFLAGS  += -framework Accelerate
-		OBJ_GGML    += ggml/src/ggml-blas.o
+		OBJ_GGML    += ggml/src/ggml-blas/ggml-blas.o
 	endif
 endif # GGML_NO_ACCELERATE
 
@@ -552,36 +552,36 @@ ifdef GGML_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
-	OBJ_GGML    += ggml/src/ggml-blas.o
+	OBJ_GGML    += ggml/src/ggml-blas/ggml-blas.o
 endif # GGML_OPENBLAS
 
 ifdef GGML_OPENBLAS64
 	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas64)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas64)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas64)
-	OBJ_GGML    += ggml/src/ggml-blas.o
+	OBJ_GGML    += src/ggml-blas/ggml-blas.o
 endif # GGML_OPENBLAS64
 
 ifdef GGML_BLIS
 	MK_CPPFLAGS += -DGGML_USE_BLAS -DGGML_BLAS_USE_BLIS -I/usr/local/include/blis -I/usr/include/blis
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
-	OBJ_GGML    += ggml/src/ggml-blas.o
+	OBJ_GGML    += src/ggml-blas/ggml-blas.o
 endif # GGML_BLIS
 
 ifdef GGML_NVPL
 	MK_CPPFLAGS += -DGGML_USE_BLAS -DGGML_BLAS_USE_NVPL -DNVPL_ILP64 -I/usr/local/include/nvpl_blas -I/usr/include/nvpl_blas
 	MK_LDFLAGS  += -L/usr/local/lib -lnvpl_blas_core -lnvpl_blas_ilp64_gomp
-	OBJ_GGML    += ggml/src/ggml-blas.o
+	OBJ_GGML    += src/ggml-blas/ggml-blas.o
 endif # GGML_NVPL
 
 ifndef GGML_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
-	OBJ_GGML    += ggml/src/llamafile/sgemm.o
+	OBJ_GGML    += ggml/src/ggml-cpu/llamafile/sgemm.o
 endif
 
 ifndef GGML_NO_AMX
 	MK_CPPFLAGS += -DGGML_USE_AMX
-	OBJ_GGML    += ggml/src/ggml-amx.o ggml/src/ggml-amx/mmq.o
+	OBJ_GGML    += ggml/src/ggml-amx/ggml-amx.o ggml/src/ggml-amx/mmq.o
 endif
 
 ifdef GGML_RPC
@@ -623,7 +623,7 @@ ifdef GGML_CUDA
 		MK_NVCCFLAGS += -use_fast_math
 	endif # GGML_MUSA
 
-	OBJ_GGML += ggml/src/ggml-cuda.o
+	OBJ_GGML += ggml/src/ggml-cuda/ggml-cuda.o
 	OBJ_GGML += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/*.cu))
 	OBJ_GGML += $(OBJ_CUDA_TMPL)
 
@@ -742,8 +742,8 @@ ggml/src/ggml-cuda/%.o: \
 	ggml/src/ggml-cuda/common.cuh
 	$(NVCC_COMPILE)
 
-ggml/src/ggml-cuda.o: \
-	ggml/src/ggml-cuda.cu \
+ggml/src/ggml-cuda/ggml-cuda.o: \
+	ggml/src/ggml-cuda/ggml-cuda.cu \
 	ggml/include/ggml-cuda.h \
 	ggml/include/ggml.h \
 	ggml/include/ggml-backend.h \
@@ -852,12 +852,12 @@ ifdef GGML_CUDA_NO_PEER_COPY
 	HIPFLAGS += -DGGML_CUDA_NO_PEER_COPY
 endif # GGML_CUDA_NO_PEER_COPY
 
-	OBJ_GGML += ggml/src/ggml-cuda.o
+	OBJ_GGML += ggml/src/ggml-cuda/ggml-cuda.o
 	OBJ_GGML += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/*.cu))
 	OBJ_GGML += $(OBJ_CUDA_TMPL)
 
-ggml/src/ggml-cuda.o: \
-	ggml/src/ggml-cuda.cu \
+ggml/src/ggml-cuda/ggml-cuda.o: \
+	ggml/src/ggml-cuda/ggml-cuda.cu \
 	ggml/include/ggml-cuda.h \
 	ggml/include/ggml.h \
 	ggml/include/ggml-backend.h \
@@ -877,7 +877,7 @@ endif # GGML_HIPBLAS
 ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
-	OBJ_GGML	+= ggml/src/ggml-metal.o
+	OBJ_GGML	+= ggml/src/ggml-metal/ggml-metal.o
 
 ifdef GGML_METAL_USE_BF16
 	MK_CPPFLAGS += -DGGML_METAL_USE_BF16
@@ -892,18 +892,18 @@ endif
 endif # GGML_METAL
 
 ifdef GGML_METAL
-ggml/src/ggml-metal.o: \
-	ggml/src/ggml-metal.m \
+ggml/src/ggml-metal/ggml-metal.o: \
+	ggml/src/ggml-metal/ggml-metal.m \
 	ggml/include/ggml-metal.h \
 	ggml/include/ggml.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 ifdef GGML_METAL_EMBED_LIBRARY
 ggml/src/ggml-metal-embed.o: \
-	ggml/src/ggml-metal.metal \
+	ggml/src/ggml-metal/ggml-metal.metal \
 	ggml/src/ggml-common.h
 	@echo "Embedding Metal library"
-	@sed -e '/#include "ggml-common.h"/r ggml/src/ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml/src/ggml-metal.metal > ggml/src/ggml-metal-embed.metal
+	@sed -e '/#include "ggml-common.h"/r ggml/src/ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml/src/ggml-metal/ggml-metal.metal > ggml/src/ggml-metal/ggml-metal-embed.metal
 	$(eval TEMP_ASSEMBLY=$(shell mktemp -d))
 	@echo ".section __DATA, __ggml_metallib"            >  $(TEMP_ASSEMBLY)/ggml-metal-embed.s
 	@echo ".globl _ggml_metallib_start"                 >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
@@ -919,11 +919,16 @@ endif # GGML_METAL
 
 OBJ_GGML += \
 	ggml/src/ggml.o \
-	ggml/src/ggml-cpu.o \
+	ggml/src/ggml-aarch64.o \
 	ggml/src/ggml-alloc.o \
 	ggml/src/ggml-backend.o \
+	ggml/src/ggml-backend-reg.o \
 	ggml/src/ggml-quants.o \
-	ggml/src/ggml-aarch64.o
+	ggml/src/ggml-threading.o \
+	ggml/src/ggml-cpu/ggml-cpu.o \
+	ggml/src/ggml-cpu/ggml-cpu-cpp.o \
+	ggml/src/ggml-cpu/ggml-cpu-aarch64.o \
+	ggml/src/ggml-cpu/ggml-cpu-quants.o
 
 OBJ_LLAMA = \
 	src/llama.o \
@@ -1051,11 +1056,22 @@ ggml/src/ggml.o: \
 	ggml/include/ggml.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-ggml/src/ggml-cpu.o: \
-	ggml/src/ggml-cpu.c \
+ggml/src/ggml-threading.o: \
+	ggml/src/ggml-threading.cpp \
+	ggml/include/ggml.h
+	$(CXX) $(XXCFLAGS)   -c $< -o $@
+
+ggml/src/ggml-cpu/ggml-cpu.o: \
+	ggml/src/ggml-cpu/ggml-cpu.c \
 	ggml/include/ggml.h \
 	ggml/src/ggml-common.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
+
+ggml/src/ggml-cpu/ggml-cpu-cpp.o: \
+	ggml/src/ggml-cpu/ggml-cpu.cpp \
+	ggml/include/ggml.h \
+	ggml/src/ggml-common.h
+	$(CXX) $(CXXFLAGS)   -c $< -o $@
 
 ggml/src/ggml-alloc.o: \
 	ggml/src/ggml-alloc.c \
@@ -1084,22 +1100,22 @@ ggml/src/ggml-aarch64.o: \
 	ggml/src/ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
-ggml/src/ggml-blas.o: \
-	ggml/src/ggml-blas.cpp \
+ggml/src/ggml-blas/ggml-blas.o: \
+	ggml/src/ggml-blas/ggml-blas.cpp \
 	ggml/include/ggml-blas.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 ifndef GGML_NO_LLAMAFILE
-ggml/src/llamafile/sgemm.o: \
-	ggml/src/llamafile/sgemm.cpp \
-	ggml/src/llamafile/sgemm.h \
+ggml/src/ggml-cpu/llamafile/sgemm.o: \
+	ggml/src/ggml-cpu/llamafile/sgemm.cpp \
+	ggml/src/ggml-cpu/llamafile/sgemm.h \
 	ggml/include/ggml.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@ -I ggml/src -I ggml/src/ggml-cpu
 endif # GGML_NO_LLAMAFILE
 
 ifndef GGML_NO_AMX
-ggml/src/ggml-amx.o: \
-	ggml/src/ggml-amx.cpp \
+ggml/src/ggml-amx/ggml-amx.o: \
+	ggml/src/ggml-amx/ggml-amx.cpp \
 	ggml/include/ggml-amx.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -1250,10 +1266,11 @@ clean:
 	rm -rvf ggml/*.a
 	rm -rvf ggml/*.dll
 	rm -rvf ggml/*.so
-	rm -vrf ggml/src/*.o
-	rm -rvf ggml/src/llamafile/*.o
+	rm -rvf ggml/src/*.o
+	rm -rvf ggml/src/ggml-cpu/*.o
+	rm -rvf ggml/src/ggml-cpu/llamafile/*.o
 	rm -rvf common/build-info.cpp
-	rm -vrf ggml/src/ggml-metal-embed.metal
+	rm -vrf ggml/src/ggml-metal/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -vrf ggml/src/ggml-amx/*.o

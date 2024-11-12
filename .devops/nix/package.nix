@@ -126,9 +126,9 @@ effectiveStdenv.mkDerivation (finalAttrs: {
   };
 
   postPatch = ''
-    substituteInPlace ./ggml/src/ggml-metal.m \
+    substituteInPlace ./ggml/src/ggml-metal/ggml-metal.m \
       --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
-    substituteInPlace ./ggml/src/ggml-metal.m \
+    substituteInPlace ./ggml/src/ggml-metal/ggml-metal.m \
       --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
   '';
 

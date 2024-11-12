@@ -30,8 +30,8 @@ var cSettings: [CSetting] =  [
 ]
 
 #if canImport(Darwin)
-sources.append("ggml/src/ggml-metal.m")
-resources.append(.process("ggml/src/ggml-metal.metal"))
+sources.append("ggml/src/ggml-metal/ggml-metal.m")
+resources.append(.process("ggml/src/ggml-metal/ggml-metal.metal"))
 linkerSettings.append(.linkedFramework("Accelerate"))
 cSettings.append(
     contentsOf: [

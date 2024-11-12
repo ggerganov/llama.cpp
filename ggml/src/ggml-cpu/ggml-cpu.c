@@ -44,7 +44,7 @@
 #endif
 
 #ifdef GGML_USE_LLAMAFILE
-#include <llamafile/sgemm.h>
+#include "llamafile/sgemm.h"
 #endif
 
 #if defined(_MSC_VER)
