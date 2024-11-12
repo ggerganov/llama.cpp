@@ -433,4 +433,8 @@ void ggml_backend_amx_set_n_threads(ggml_backend_t backend_amx, int n_threads) {
     GGML_UNUSED(n_threads);
 }
 
+ggml_backend_reg_t ggml_backend_amx_reg(void) {
+    return nullptr;
+}
+
 #endif

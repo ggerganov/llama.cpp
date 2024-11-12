@@ -31,10 +31,6 @@
 #include "ggml-rpc.h"
 #endif
 
-#ifndef __AMX_INT8__
-#undef GGML_USE_AMX
-#endif
-
 #ifdef GGML_USE_AMX
 #  include "ggml-amx.h"
 #endif
@@ -84,6 +80,10 @@ struct ggml_backend_registry {
     }
 
     void register_backend(ggml_backend_reg_t reg) {
+        if (!reg) {
+            return;
+        }
+
 #ifndef NDEBUG
         GGML_LOG_DEBUG("%s: registered backend %s (%zu devices)\n",
             __func__, ggml_backend_reg_name(reg), ggml_backend_reg_dev_count(reg));
