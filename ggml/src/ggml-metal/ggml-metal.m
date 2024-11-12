@@ -1962,7 +1962,7 @@ static void ggml_metal_encode_node(
                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_EXT_Q8_0_F32].pipeline;
 
                     const int nsg    = 2;
-                    const int r0pt   = 2;
+                    const int r0pt   = 1;
                     const int r1pt   = 1;
                     const int nxpsg  = ne11 > 1 ? 8 : 32;
                     const int nypsg  = 32/nxpsg;
