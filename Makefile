@@ -878,6 +878,10 @@ ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJ_GGML	+= ggml/src/ggml-metal.o
+
+ifdef GGML_METAL_USE_BF16
+	MK_CPPFLAGS += -DGGML_METAL_USE_BF16
+endif # GGML_METAL_USE_BF16
 ifdef GGML_METAL_NDEBUG
 	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
 endif

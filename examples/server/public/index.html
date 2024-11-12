@@ -200,23 +200,38 @@
             <div class="label">System Message</div>
             <textarea class="textarea textarea-bordered h-24" :placeholder="'Default: ' + configDefault.systemMessage" v-model="config.systemMessage"></textarea>
           </label>
-          <template v-for="key in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
-            <label class="input input-bordered flex items-center gap-2 mb-2">
-              <b>{{ key }}</b>
-              <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[key] || 'none')" v-model="config[key]" />
-            </label>
+          <template v-for="configKey in ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens']">
+            <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
           </template>
           <!-- TODO: add more sampling-related configs, please regroup them into different "collapse" sections -->
-          <div class="collapse collapse-arrow bg-base-200 mb-2">
-            <input type="checkbox" />
-            <div class="collapse-title font-bold">Advanced config</div>
+          <!-- Section: Other sampler settings -->
+          <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+            <summary class="collapse-title font-bold">Other sampler settings</summary>
+            <div class="collapse-content">
+              <template v-for="configKey in ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold']">
+                <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
+              </template>
+            </div>
+          </details>
+          <!-- Section: Penalties settings -->
+          <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+            <summary class="collapse-title font-bold">Penalties settings</summary>
+            <div class="collapse-content">
+              <template v-for="configKey in ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n']">
+                <settings-modal-numeric-input :config-key="configKey" :config-default="configDefault" :config-info="configInfo" v-model="config[configKey]" />
+              </template>
+            </div>
+          </details>
+          <!-- Section: Advanced config -->
+          <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+            <summary class="collapse-title font-bold">Advanced config</summary>
             <div class="collapse-content">
               <label class="form-control mb-2">
                 <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
                 <textarea class="textarea textarea-bordered h-24" placeholder="Example: { &quot;mirostat&quot;: 1, &quot;min_p&quot;: 0.1 }" v-model="config.custom"></textarea>
               </label>
             </div>
-          </div>
+          </details>
         </div>
 
         <!-- action buttons -->
@@ -228,6 +243,21 @@
       </div>
     </dialog>
   </div>
+
+  <!-- Template to be used by settings modal -->
+  <template id="settings-modal-numeric-input">
+    <label class="input input-bordered join-item grow flex items-center gap-2 mb-2">
+      <!-- Show help message on hovering on the input label -->
+      <div class="dropdown dropdown-hover">
+        <div tabindex="0" role="button" class="font-bold">{{ configKey }}</div>
+        <div class="dropdown-content menu bg-base-100 rounded-box z-10 w-64 p-2 shadow mt-4">
+          {{ configInfo[configKey] || '(no help message available)' }}
+        </div>
+      </div>
+      <!-- Here we forward v-model from parent to child component, see: https://stackoverflow.com/questions/47311936/v-model-and-child-components -->
+      <input type="text" class="grow" :placeholder="'Default: ' + (configDefault[configKey] || 'none')" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)" />
+    </label>
+  </template>
 
   <script src="./deps_markdown-it.js"></script>
   <script type="module">
@@ -245,10 +275,46 @@
       systemMessage: 'You are a helpful assistant.',
       // make sure these default values are in sync with `common.h`
       temperature: 0.8,
+      dynatemp_range: 0.0,
+      dynatemp_exponent: 1.0,
       top_k: 40,
       top_p: 0.95,
       min_p: 0.05,
+      xtc_probability: 0.0,
+      xtc_threshold: 0.1,
+      typical_p: 1.0,
+      repeat_last_n: 64,
+      repeat_penalty: 1.0,
+      presence_penalty: 0.0,
+      frequency_penalty: 0.0,
+      dry_multiplier: 0.0,
+      dry_base: 1.75,
+      dry_allowed_length: 2,
+      dry_penalty_last_n: -1,
       max_tokens: -1,
+      custom: '', // custom json-stringified object
+    };
+    const CONFIG_INFO = {
+      apiKey: '',
+      systemMessage: 'The starting message that defines how model should behave.',
+      temperature: 'Controls the randomness of the generated text by affecting the probability distribution of the output tokens. Higher = more random, lower = more focused.',
+      dynatemp_range: 'Addon for the temperature sampler. The added value to the range of dynamic temperature, which adjusts probabilities by entropy of tokens.',
+      dynatemp_exponent: 'Addon for the temperature sampler. Smoothes out the probability redistribution based on the most probable token.',
+      top_k: 'Keeps only k top tokens.',
+      top_p: 'Limits tokens to those that together have a cumulative probability of at least p',
+      min_p: 'Limits tokens based on the minimum probability for a token to be considered, relative to the probability of the most likely token.',
+      xtc_probability: 'XTC sampler cuts out top tokens; this parameter controls the chance of cutting tokens at all. 0 disables XTC.',
+      xtc_threshold: 'XTC sampler cuts out top tokens; this parameter controls the token probability that is required to cut that token.',
+      typical_p: 'Sorts and limits tokens based on the difference between log-probability and entropy.',
+      repeat_last_n: 'Last n tokens to consider for penalizing repetition',
+      repeat_penalty: 'Controls the repetition of token sequences in the generated text',
+      presence_penalty: 'Limits tokens based on whether they appear in the output or not.',
+      frequency_penalty: 'Limits tokens based on how often they appear in the output.',
+      dry_multiplier: 'DRY sampling reduces repetition in generated text even across long contexts. This parameter sets the DRY sampling multiplier.',
+      dry_base: 'DRY sampling reduces repetition in generated text even across long contexts. This parameter sets the DRY sampling base value.',
+      dry_allowed_length: 'DRY sampling reduces repetition in generated text even across long contexts. This parameter sets the allowed length for DRY sampling.',
+      dry_penalty_last_n: 'DRY sampling reduces repetition in generated text even across long contexts. This parameter sets DRY penalty for the last n tokens.',
+      max_tokens: 'The maximum number of token per output.',
       custom: '', // custom json-stringified object
     };
     // config keys having numeric value (i.e. temperature, top_k, top_p, etc)
@@ -268,6 +334,12 @@
       },
       { props: ["source", "options", "plugins"] }
     );
+
+    // inout field to be used by settings modal
+    const SettingsModalNumericInput = defineComponent({
+      template: document.getElementById('settings-modal-numeric-input').innerHTML,
+      props: ['configKey', 'configDefault', 'configInfo', 'modelValue'],
+    });
 
     // coversations is stored in localStorage
     // format: { [convId]: { id: string, lastModified: number, messages: [...] } }
@@ -359,6 +431,7 @@
     const mainApp = createApp({
       components: {
         VueMarkdown,
+        SettingsModalNumericInput,
       },
       data() {
         return {
@@ -376,6 +449,7 @@
           // const
           themes: THEMES,
           configDefault: {...CONFIG_DEFAULT},
+          configInfo: {...CONFIG_INFO},
         }
       },
       computed: {},
@@ -452,8 +526,22 @@
               stream: true,
               cache_prompt: true,
               temperature: this.config.temperature,
+              dynatemp_range: this.config.dynatemp_range,
+              dynatemp_exponent: this.config.dynatemp_exponent,
               top_k: this.config.top_k,
               top_p: this.config.top_p,
+              min_p: this.config.min_p,
+              typical_p: this.config.typical_p,
+              xtc_probability: this.config.xtc_probability,
+              xtc_threshold: this.config.xtc_threshold,
+              repeat_last_n: this.config.repeat_last_n,
+              repeat_penalty: this.config.repeat_penalty,
+              presence_penalty: this.config.presence_penalty,
+              frequency_penalty: this.config.frequency_penalty,
+              dry_multiplier: this.config.dry_multiplier,
+              dry_base: this.config.dry_base,
+              dry_allowed_length: this.config.dry_allowed_length,
+              dry_penalty_last_n: this.config.dry_penalty_last_n,
               max_tokens: this.config.max_tokens,
               ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
               ...(this.config.apiKey ? { api_key: this.config.apiKey } : {}),
