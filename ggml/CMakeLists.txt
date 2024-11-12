@@ -242,9 +242,10 @@ if (BUILD_SHARED_LIBS)
     install(TARGETS ggml LIBRARY)
 endif()
 
+# FIXME: this should be done in the backend cmake files
 if (GGML_METAL)
     install(
-        FILES src/ggml-metal.metal
+        FILES src/ggml-metal/ggml-metal.metal
         PERMISSIONS
             OWNER_READ
             OWNER_WRITE
