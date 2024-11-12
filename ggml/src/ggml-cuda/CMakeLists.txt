@@ -51,8 +51,6 @@ if (CUDAToolkit_FOUND)
     target_link_libraries(ggml-cuda PRIVATE ggml-base)
     target_include_directories(ggml-cuda PRIVATE . ..)
 
-    set(GGML_CDEF_PUBLIC ${GGML_CDEF_PUBLIC} GGML_USE_CUDA PARENT_SCOPE)
-
     # TODO: change the definitions to this target only
 
     add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})

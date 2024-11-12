@@ -78,8 +78,6 @@ if (BLAS_FOUND)
     #add_compile_options(${BLAS_LINKER_FLAGS})
     target_compile_options(ggml-blas PRIVATE ${BLAS_LINKER_FLAGS})
 
-    set(GGML_CDEF_PUBLIC ${GGML_CDEF_PUBLIC} GGML_USE_BLAS PARENT_SCOPE)
-
     if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${GGML_BLAS_VENDOR} MATCHES "Generic" OR ${GGML_BLAS_VENDOR} MATCHES "Intel"))
         add_compile_definitions(GGML_BLAS_USE_MKL)
     endif()

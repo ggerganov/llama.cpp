@@ -17,8 +17,6 @@ target_link_libraries(ggml-metal PRIVATE
 
 target_include_directories(ggml-metal PRIVATE . ..)
 
-set(GGML_CDEF_PUBLIC ${GGML_CDEF_PUBLIC} GGML_USE_METAL PARENT_SCOPE)
-
 if (GGML_METAL_NDEBUG)
     add_compile_definitions(GGML_METAL_NDEBUG)
 endif()

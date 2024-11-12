@@ -1,7 +1,5 @@
 message(STATUS "Using RPC backend")
 
-set(GGML_CDEF_PUBLIC ${GGML_CDEF_PUBLIC} GGML_USE_RPC PARENT_SCOPE)
-
 add_library(ggml-rpc
             ggml-rpc.cpp)
 
