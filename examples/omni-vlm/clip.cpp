@@ -701,7 +701,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 }
 
 // read and create ggml_context containing the tensors and their data
-struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
+struct clip_ctx * clip_model_load(const char * fname, const char * omni_vlm_version, const int verbosity = 1) {
     struct ggml_context * meta = NULL;
 
     struct gguf_init_params params = {
@@ -796,6 +796,15 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     }
 
     clip_ctx * new_clip = new clip_ctx{};
+    if (std::string(omni_vlm_version) == "vlm-81-ocr") {
+        new_clip->omni_vlm_ver_type = omni_vlm_version_type::VLM_81_OCR;
+    } else if (std::string(omni_vlm_version) == "vlm-81-instruct") {
+        new_clip->omni_vlm_ver_type = omni_vlm_version_type::VLM_81_INSTRUCT;
+    } else if (std::string(omni_vlm_version) == "nano-vlm-instruct") {
+        new_clip->omni_vlm_ver_type = omni_vlm_version_type::NANO_VLM_INSTRUCT;
+    } else {
+        throw std::runtime_error(std::string("error vlm version info: ") + omni_vlm_version);
+    }
 
     // update projector type
     {
@@ -1209,17 +1218,17 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-void clip_set_omni_vlm_version(struct clip_ctx * ctx_clip, const struct gpt_params * params) {
-    if (params->omni_vlm_version == "vlm-81-ocr") {
-        ctx_clip->omni_vlm_ver_type = omni_vlm_version_type::VLM_81_OCR;
-    } else if (params->omni_vlm_version == "vlm-81-instruct") {
-        ctx_clip->omni_vlm_ver_type = omni_vlm_version_type::VLM_81_INSTRUCT;
-    } else if (params->omni_vlm_version == "nano-vlm-instruct") {
-        ctx_clip->omni_vlm_ver_type = omni_vlm_version_type::NANO_VLM_INSTRUCT;
-    } else {
-        throw std::runtime_error(std::string("error vlm version info: ") + params->omni_vlm_version);
-    }
-}
+// void clip_set_omni_vlm_version(struct clip_ctx * ctx_clip, const struct gpt_params * params) {
+//     if (params->omni_vlm_version == "vlm-81-ocr") {
+//         ctx_clip->omni_vlm_ver_type = omni_vlm_version_type::VLM_81_OCR;
+//     } else if (params->omni_vlm_version == "vlm-81-instruct") {
+//         ctx_clip->omni_vlm_ver_type = omni_vlm_version_type::VLM_81_INSTRUCT;
+//     } else if (params->omni_vlm_version == "nano-vlm-instruct") {
+//         ctx_clip->omni_vlm_ver_type = omni_vlm_version_type::NANO_VLM_INSTRUCT;
+//     } else {
+//         throw std::runtime_error(std::string("error vlm version info: ") + params->omni_vlm_version);
+//     }
+// }
 
 void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size * load_image_size) {
     ctx_clip->load_image_size = load_image_size;
@@ -2207,13 +2216,13 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     return true;
 }
 
-bool clip_model_quantize(const char * fname_inp, const char * fname_out, const int itype) {
+bool clip_model_quantize(const char * fname_inp, const char * fname_out, const int itype, const char* omni_vlm_version) {
     ggml_type type = GGML_TYPE_Q4_1;
 
     assert(itype < GGML_TYPE_COUNT);
     type = static_cast<ggml_type>(itype);
 
-    auto * ctx_clip = clip_model_load(fname_inp, 2);
+    auto * ctx_clip = clip_model_load(fname_inp, omni_vlm_version, 2);
 
     const auto & ctx_src = ctx_clip->ctx_gguf;
     const auto & ctx_data = ctx_clip->ctx_data;

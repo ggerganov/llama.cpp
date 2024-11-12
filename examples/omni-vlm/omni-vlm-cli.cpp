@@ -219,8 +219,8 @@ static struct omnivlm_context * omnivlm_init_context(gpt_params * params, llama_
         prompt = "describe the image in detail.";
     }
 
-    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 0);
-    clip_set_omni_vlm_version(ctx_clip, params);
+    auto ctx_clip = clip_model_load(clip_path, params->omni_vlm_version.c_str(), /*verbosity=*/ 0);
+    // clip_set_omni_vlm_version(ctx_clip, params);
 
     llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
