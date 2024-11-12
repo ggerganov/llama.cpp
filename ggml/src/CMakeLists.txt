@@ -1,7 +1,5 @@
 include(CheckCXXCompilerFlag)
 
-unset(GGML_CDEF_PUBLIC)
-
 add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
 # enable libstdc++ assertions for debug builds
@@ -25,9 +23,6 @@ if (NOT MSVC)
         link_libraries     (-fsanitize=undefined)
     endif()
 endif()
-
-unset(GGML_EXTRA_LIBS_PRIVATE)
-unset(GGML_EXTRA_LIBS_PUBLIC)
 
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
@@ -222,6 +217,8 @@ add_library(ggml-base
             ggml-aarch64.c
             ggml-aarch64.h)
 
+target_include_directories(ggml-base PRIVATE .)
+
 add_library(ggml
             ggml-backend-reg.cpp)
 
@@ -232,6 +229,9 @@ function(ggml_add_backend backend)
     if (${backend_id})
         string(TOLOWER "ggml-${backend}" backend_target)
         add_subdirectory(${backend_target})
+        # check again in case the backend disabled itself
+        # note that this should NOT be the normal behavior, in case of errors the backend should fail the build
+        # however, currently it is necessary for AMX, since it is enabled by default on llama.cpp
         if (${backend_id})
             message(STATUS "Including ${backend} backend")
             if (${BUILD_SHARED_LIBS})
@@ -257,40 +257,28 @@ ggml_add_backend(RPC)
 ggml_add_backend(SYCL)
 ggml_add_backend(Vulkan)
 
-target_compile_definitions(ggml-base PUBLIC    ${GGML_CDEF_PUBLIC})
-target_include_directories(ggml-base PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
-target_compile_features   (ggml-base PRIVATE c_std_11) # don't bump
+foreach (target ggml-base ggml)
+    target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
+    target_compile_features   (${target} PRIVATE c_std_11) # don't bump
+endforeach()
 
-target_compile_definitions(ggml      PUBLIC    ${GGML_CDEF_PUBLIC})
-target_include_directories(ggml      PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
-target_compile_features   (ggml      PRIVATE c_std_11) # don't bump
-
-# this probably should be removed
-target_include_directories(ggml-base PRIVATE . ${GGML_EXTRA_INCLUDES})
-target_link_directories   (ggml-base PRIVATE   ${GGML_EXTRA_LIBDIRS})
-
-list(APPEND GGML_EXTRA_LIBS_PRIVATE Threads::Threads)
+target_link_libraries(ggml-base PRIVATE Threads::Threads)
 
 find_library(MATH_LIBRARY m)
 if (MATH_LIBRARY)
     if (NOT WIN32 OR NOT DEFINED ENV{ONEAPI_ROOT})
-        list(APPEND GGML_EXTRA_LIBS_PRIVATE m)
+        target_link_libraries(ggml-base PRIVATE m)
     endif()
 endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Android")
-    list(APPEND GGML_EXTRA_LIBS_PRIVATE dl) # Must be linked explicitly
+    target_link_libraries(ggml-base PRIVATE dl)
 endif()
 
-list(REMOVE_DUPLICATES GGML_EXTRA_LIBS_PRIVATE)
-list(REMOVE_DUPLICATES GGML_EXTRA_LIBS_PUBLIC)
-target_link_libraries(ggml PRIVATE ${GGML_EXTRA_LIBS_PRIVATE} PUBLIC ${GGML_EXTRA_LIBS_PUBLIC})
-
 if (BUILD_SHARED_LIBS)
-    set_target_properties(ggml-base PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    set_target_properties(ggml      PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_compile_definitions(ggml-base PRIVATE GGML_BUILD)
-    target_compile_definitions(ggml      PRIVATE GGML_BUILD)
-    target_compile_definitions(ggml-base PUBLIC  GGML_SHARED)
-    target_compile_definitions(ggml      PUBLIC  GGML_SHARED)
+    foreach (target ggml-base ggml)
+        set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_compile_definitions(${target} PRIVATE GGML_BUILD)
+        target_compile_definitions(${target} PUBLIC  GGML_SHARED)
+    endforeach()
 endif()
