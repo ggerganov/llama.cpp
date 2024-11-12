@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#ifdef GGML_USE_HIPBLAS
+#ifdef GGML_USE_HIP
 #define GGML_CUDA_NAME "ROCm"
 #define GGML_CUBLAS_NAME "hipBLAS"
 #elif defined(GGML_USE_MUSA)

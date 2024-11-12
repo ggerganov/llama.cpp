@@ -116,6 +116,7 @@ endif()
 
 # ggml core
 set(GGML_SCHED_MAX_COPIES  "4" CACHE STRING "ggml: max input copies for pipeline parallelism")
+option(GGML_CPU                             "ggml: enable CPU backend"                        ON)
 
 # 3rd party libs / backends
 option(GGML_ACCELERATE                      "ggml: enable Accelerate framework"               ON)
@@ -141,7 +142,7 @@ option(GGML_CUDA_NO_VMM                     "ggml: do not try to use CUDA VMM"  
 option(GGML_CUDA_FA_ALL_QUANTS              "ggml: compile all quants for FlashAttention"     OFF)
 option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ${GGML_CUDA_GRAPHS_DEFAULT})
 
-option(GGML_HIPBLAS                         "ggml: use hipBLAS"                               OFF)
+option(GGML_HIP                             "ggml: use HIP"                                   OFF)
 option(GGML_HIP_UMA                         "ggml: use HIP unified memory architecture"       OFF)
 option(GGML_VULKAN                          "ggml: use Vulkan"                                OFF)
 option(GGML_VULKAN_CHECK_RESULTS            "ggml: run Vulkan op checks"                      OFF)

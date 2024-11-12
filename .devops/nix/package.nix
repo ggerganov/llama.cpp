@@ -173,7 +173,7 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       (cmakeBool "GGML_NATIVE" false)
       (cmakeBool "GGML_BLAS" useBlas)
       (cmakeBool "GGML_CUDA" useCuda)
-      (cmakeBool "GGML_HIPBLAS" useRocm)
+      (cmakeBool "GGML_HIP" useRocm)
       (cmakeBool "GGML_METAL" useMetalKit)
       (cmakeBool "GGML_VULKAN" useVulkan)
       (cmakeBool "GGML_STATIC" enableStatic)

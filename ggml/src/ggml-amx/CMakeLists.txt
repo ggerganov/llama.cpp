@@ -1,10 +1,4 @@
 if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11.0)
-else()
-    set(GGML_AMX OFF PARENT_SCOPE)
-    message(WARNING "AMX requires gcc version > 11.0. Turning off GGML_AMX.")
-endif()
-
-if (GGML_AMX)
     message(STATUS "Using AMX")
 
     file(GLOB   GGML_HEADERS_AMX "*.h")
@@ -104,4 +98,7 @@ if (GGML_AMX)
     endif()
 
     target_compile_options(ggml-amx PRIVATE ${ARCH_FLAGS})
+else()
+    set(GGML_AMX OFF PARENT_SCOPE)
+    message(WARNING "AMX requires gcc version > 11.0. Turning off GGML_AMX.")
 endif()
