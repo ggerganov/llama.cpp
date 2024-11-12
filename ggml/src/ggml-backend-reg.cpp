@@ -1,5 +1,7 @@
-#include "ggml-backend.h"
 #include "ggml-backend-impl.h"
+#include "ggml-backend.h"
+#include "ggml-cpu.h"
+#include "ggml-impl.h"
 #include <cstring>
 #include <vector>
 
@@ -44,8 +46,6 @@
 #ifdef GGML_USE_KOMPUTE
 #include "ggml-kompute.h"
 #endif
-
-#include "ggml-cpu.h"
 
 struct ggml_backend_registry {
     std::vector<ggml_backend_reg_t> backends;

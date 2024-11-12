@@ -11,6 +11,14 @@
 #include <sys/sysctl.h>
 #endif
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+    #define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 // ggml-backend interface
 
 #ifdef GGML_USE_CPU_HBM

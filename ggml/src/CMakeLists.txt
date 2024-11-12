@@ -29,37 +29,6 @@ endif()
 unset(GGML_EXTRA_LIBS_PRIVATE)
 unset(GGML_EXTRA_LIBS_PUBLIC)
 
-# musa, hip: add directory with a CMakeLists.txt file, but no source files (use refer to ggml-cuda files as ../ggml-cuda)
-if (GGML_MUSA)
-    list(APPEND CMAKE_MODULE_PATH "/usr/local/musa/cmake/")
-    find_package(MUSAToolkit)
-    set(CUDAToolkit_FOUND ${MUSAToolkit_FOUND})
-else()
-    find_package(CUDAToolkit)
-endif()
-
-# if (GGML_MUSA)
-# set(CMAKE_CUDA_COMPILER ${MUSAToolkit_MCC_EXECUTABLE})
-# else()
-# if (GGML_MUSA)
-# set_source_files_properties(${GGML_SOURCES_CUDA} PROPERTIES LANGUAGE CXX)
-# foreach(SOURCE ${GGML_SOURCES_CUDA})
-#     set_property(SOURCE ${SOURCE} PROPERTY COMPILE_FLAGS "-x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22")
-# endforeach()
-# endif()
-
-
-if (GGML_MUSA)
-    set(CMAKE_C_COMPILER clang)
-    set(CMAKE_C_EXTENSIONS OFF)
-    set(CMAKE_CXX_COMPILER clang++)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-
-    set(GGML_CUDA ON)
-
-    list(APPEND GGML_CDEF_PUBLIC GGML_USE_MUSA)
-endif()
-
 if (GGML_AMX)
     if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11.0)
     else()
@@ -597,12 +566,6 @@ function(get_flags CCID CCVER)
     elseif (CCID STREQUAL "GNU")
         set(C_FLAGS   -Wdouble-promotion)
         set(CXX_FLAGS -Wno-array-bounds)
-
-        if (NOT GGML_MUSA)
-            if (CCVER VERSION_GREATER_EQUAL 7.1.0)
-                list(APPEND CXX_FLAGS -Wno-format-truncation)
-            endif()
-        endif()
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
@@ -768,7 +731,7 @@ endif()
 
 # ggml
 
-add_library(ggml-base STATIC
+add_library(ggml-base
             ../include/ggml.h
             ../include/ggml-alloc
             ../include/ggml-alloc.h
@@ -779,18 +742,16 @@ add_library(ggml-base STATIC
             ggml-backend.cpp
             ggml-threading.cpp
             ggml-threading.h
-            ggml-quants.c # for quantize functions TODO: move dot fns to a separate file
+            ggml-quants.c
             ggml-quants.h
             ggml-aarch64.c
             ggml-aarch64.h
-
-)
-
-add_subdirectory(ggml-cpu)
+            )
 
 add_library(ggml
             ggml-backend-reg.cpp
-)
+            )
+add_subdirectory(ggml-cpu)
 
 target_link_libraries(ggml PUBLIC ggml-base ggml-cpu)
 
@@ -850,5 +811,6 @@ target_link_libraries(ggml PRIVATE ${GGML_EXTRA_LIBS_PRIVATE} PUBLIC ${GGML_EXTR
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml-base PROPERTIES POSITION_INDEPENDENT_CODE ON)
     set_target_properties(ggml      PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_compile_definitions(ggml PRIVATE GGML_SHARED GGML_BUILD)
+    target_compile_definitions(ggml-base PRIVATE GGML_BUILD)
+    target_compile_definitions(ggml-base PUBLIC  GGML_SHARED)
 endif()

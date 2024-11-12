@@ -10783,22 +10783,6 @@ void ggml_vec_dot_iq4_xs_q8_K(int n, float * restrict s, size_t bs, const void *
 #endif
 }
 
-//
-// ============================================= 3-bit using D4 lattice
-//
-
-void quantize_row_iq3_xxs(const float * restrict x, void * restrict vy, int64_t k) {
-    assert(k % QK_K == 0);
-    block_iq3_xxs * restrict y = vy;
-    quantize_row_iq3_xxs_ref(x, y, k);
-}
-
-void quantize_row_iq3_s(const float * restrict x, void * restrict vy, int64_t k) {
-    assert(k % QK_K == 0);
-    block_iq3_s * restrict y = vy;
-    quantize_row_iq3_s_ref(x, y, k);
-}
-
 // ============================ 4-bit non-linear quants
 
 void quantize_row_iq4_nl(const float * restrict x, void * restrict y, int64_t k) {
@@ -10809,11 +10793,4 @@ void quantize_row_iq4_nl(const float * restrict x, void * restrict y, int64_t k)
 void quantize_row_iq4_xs(const float * restrict x, void * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     quantize_iq4_xs(x, y, 1, k, NULL);
-}
-
-// =============================== 2.5625 bpw
-
-void quantize_row_iq2_s(const float * restrict x, void * restrict y, int64_t k) {
-    assert(k % QK_K == 0);
-    quantize_iq2_s(x, y, 1, k, NULL);
 }
