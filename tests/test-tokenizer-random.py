@@ -5,7 +5,7 @@
 #
 #Sample usage:
 #
-#    python3 test-tokenizer-random.py ./models/ggml-vocab-llama-bpe.gguf ./models/tokenizers/llama-bpe
+#    python3 tests/test-tokenizer-random.py ./models/ggml-vocab-llama-bpe.gguf ./models/tokenizers/llama-bpe
 #
 
 from __future__ import annotations
