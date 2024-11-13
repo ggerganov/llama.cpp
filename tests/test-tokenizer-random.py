@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Test libllama tokenizer against AutoTokenizer using brute force random words/text generation.
+# Test libllama tokenizer == AutoTokenizer.
+# Brute force random words/text generation.
 
 Sample usage:
 
