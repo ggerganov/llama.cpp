@@ -46,7 +46,7 @@ if (GGML_METAL_EMBED_LIBRARY)
     add_custom_command(
         OUTPUT ${METALLIB_EMBED_ASM}
         COMMAND echo "Embedding Metal library"
-        COMMAND sed -e '/\#include \"ggml-common.h\"/r ${METALLIB_COMMON}' -e '/\#include \"ggml-common.h\"/d' < ${METALLIB_SOURCE} > ${METALLIB_SOURCE_EMBED}
+        COMMAND sed -e '/__embed_ggml-common.h__/r ${METALLIB_COMMON}' -e '/__embed_ggml-common.h__/d' < ${METALLIB_SOURCE} > ${METALLIB_SOURCE_EMBED}
         COMMAND echo ".section __DATA,__ggml_metallib"          >  ${METALLIB_EMBED_ASM}
         COMMAND echo ".globl _ggml_metallib_start"              >> ${METALLIB_EMBED_ASM}
         COMMAND echo "_ggml_metallib_start:"                    >> ${METALLIB_EMBED_ASM}
