@@ -18,7 +18,7 @@ import subprocess
 import random
 import unicodedata
 from pathlib import Path
-from typing import Any, Iterator, cast
+from typing import Any, Iterator, cast, Sequence
 from typing_extensions import Buffer
 #
 # External Imports
@@ -31,17 +31,12 @@ logger = logging.getLogger("test-tokenizer-random")
 if shutil.which("gcc") is None:
     raise EnvironmentError("GCC is not available on this system. Please install GCC or use preprocessed headers.")
 
+
 class LibLlama:
 
     DEFAULT_PATH_LLAMA_H = "./include/llama.h"
     DEFAULT_PATH_INCLUDES = ["./ggml/include/", "./include/"]
     DEFAULT_PATH_LIBLLAMA = "./build/src/libllama.so"  # CMakeLists.txt: BUILD_SHARED_LIBS ON
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.free()
 
     def __init__(self, path_llama_h: str | None = None, path_includes: list[str] = [], path_libllama: str | None = None):
         path_llama_h = path_llama_h or self.DEFAULT_PATH_LLAMA_H
@@ -494,6 +489,7 @@ def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLl
         logger.info(f"{generator.__qualname__}: end,  {t_encode1=:.3f} {t_encode2=:.3f}  {t_decode1=:.3f} {t_decode2=:.3f}  {t_total=:.3f}")
     except Exception as e:
         logger.exception(f"An error occurred during tokenizer comparison: {e}")
+
 
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
