@@ -239,9 +239,8 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml PUBLIC_HEADER)
 
 if (BUILD_SHARED_LIBS)
-    install(TARGETS ggml LIBRARY)
-    get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
-    install(TARGETS ${GGML_LINK_LIBRARIES} LIBRARY)
+    install(TARGETS ggml      LIBRARY)
+    install(TARGETS ggml-base LIBRARY)
 endif()
 
 # FIXME: this should be done in the backend cmake files
