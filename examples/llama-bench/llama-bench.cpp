@@ -872,7 +872,7 @@ struct test {
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
-            "cpu_info", "gpu_info",
+            "cpu_info", "gpu_info", "backends",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_ubatch",
             "n_threads", "cpu_mask", "cpu_strict", "poll",
@@ -927,7 +927,7 @@ struct test {
         }
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
-            cpu_info, gpu_info,
+            cpu_info, gpu_info, get_backend(),
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_ubatch),
             std::to_string(n_threads), cpu_mask, std::to_string(cpu_strict), std::to_string(poll),
@@ -1158,7 +1158,8 @@ struct markdown_printer : public printer {
         fields.emplace_back("size");
         fields.emplace_back("params");
         fields.emplace_back("backend");
-        bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
+        bool is_cpu_backend = test::get_backend().find("CPU") != std::string::npos ||
+                              test::get_backend().find("BLAS") != std::string::npos;
         if (!is_cpu_backend) {
             fields.emplace_back("n_gpu_layers");
         }

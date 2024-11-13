@@ -559,19 +559,19 @@ ifdef GGML_OPENBLAS64
 	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas64)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas64)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas64)
-	OBJ_GGML    += src/ggml-blas/ggml-blas.o
+	OBJ_GGML    += ggml/src/ggml-blas/ggml-blas.o
 endif # GGML_OPENBLAS64
 
 ifdef GGML_BLIS
 	MK_CPPFLAGS += -DGGML_USE_BLAS -DGGML_BLAS_USE_BLIS -I/usr/local/include/blis -I/usr/include/blis
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
-	OBJ_GGML    += src/ggml-blas/ggml-blas.o
+	OBJ_GGML    += ggml/src/ggml-blas/ggml-blas.o
 endif # GGML_BLIS
 
 ifdef GGML_NVPL
 	MK_CPPFLAGS += -DGGML_USE_BLAS -DGGML_BLAS_USE_NVPL -DNVPL_ILP64 -I/usr/local/include/nvpl_blas -I/usr/include/nvpl_blas
 	MK_LDFLAGS  += -L/usr/local/lib -lnvpl_blas_core -lnvpl_blas_ilp64_gomp
-	OBJ_GGML    += src/ggml-blas/ggml-blas.o
+	OBJ_GGML    += ggml/src/ggml-blas/ggml-blas.o
 endif # GGML_NVPL
 
 ifndef GGML_NO_LLAMAFILE
@@ -1267,13 +1267,22 @@ clean:
 	rm -rvf ggml/*.dll
 	rm -rvf ggml/*.so
 	rm -rvf ggml/src/*.o
+	rm -rvf common/build-info.cpp
 	rm -rvf ggml/src/ggml-cpu/*.o
 	rm -rvf ggml/src/ggml-cpu/llamafile/*.o
-	rm -rvf common/build-info.cpp
-	rm -vrf ggml/src/ggml-metal/ggml-metal-embed.metal
+	rm -vrf ggml/src/ggml-amx/*.o
+	rm -vrf ggml/src/ggml-blas/*.o
+	rm -vrf ggml/src/ggml-cann/*.o
+	rm -vrf ggml/src/ggml-cpu/*.o
 	rm -vrf ggml/src/ggml-cuda/*.o
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
-	rm -vrf ggml/src/ggml-amx/*.o
+	rm -vrf ggml/src/ggml-hip/*.o
+	rm -vrf ggml/src/ggml-kompute/*.o
+	rm -vrf ggml/src/ggml-metal/*.o
+	rm -vrf ggml/src/ggml-metal/ggml-metal-embed.metal
+	rm -vrf ggml/src/ggml-rpc/*.o
+	rm -vrf ggml/src/ggml-sycl/*.o
+	rm -vrf ggml/src/ggml-vulkan/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
 	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp

@@ -244,6 +244,7 @@ endif()
 
 # FIXME: this should be done in the backend cmake files
 if (GGML_METAL)
+    # FIXME: does this need to be installed with GGML_METAL_EMBED_LIBRARY?
     install(
         FILES src/ggml-metal/ggml-metal.metal
         PERMISSIONS
