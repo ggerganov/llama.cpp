@@ -3387,19 +3387,42 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
 }
 
 // FIXME: this code is duplicated from ggml-aarch64.c
-static block_q4_0x4 make_block_q4_0x4(block_q4_0 * in, unsigned int blck_size_interleave, unsigned int xor_mask) {
+static block_q4_0x4 make_block_q4_0x4(block_q4_0 * in, unsigned int blck_size_interleave) {
     block_q4_0x4 out;
 
     for (int i = 0; i < 4; i++) {
         out.d[i] = in[i].d;
     }
 
-    for (int i = 0; i < QK4_0 * 2; i++) {
-        int src_offset = (i / (4 * blck_size_interleave)) * blck_size_interleave;
-        int src_id = (i % (4 * blck_size_interleave)) / blck_size_interleave;
-        src_offset += (i % blck_size_interleave);
+    const int end = QK4_0 * 2 / blck_size_interleave;
 
-        out.qs[i] = in[src_id].qs[src_offset] ^ xor_mask;
+    if (blck_size_interleave == 8) {
+        const uint64_t xor_mask = 0x8888888888888888ULL;
+        for (int i = 0; i < end; ++i) {
+            int src_id = i % 4;
+            int src_offset = (i / 4) * blck_size_interleave;
+            int dst_offset = i * blck_size_interleave;
+
+            uint64_t elems;
+            // Using memcpy to avoid unaligned memory accesses
+            memcpy(&elems, &in[src_id].qs[src_offset], sizeof(uint64_t));
+            elems ^= xor_mask;
+            memcpy(&out.qs[dst_offset], &elems, sizeof(uint64_t));
+        }
+    } else if (blck_size_interleave == 4) {
+        const uint32_t xor_mask = 0x88888888;
+        for (int i = 0; i < end; ++i) {
+            int src_id = i % 4;
+            int src_offset = (i / 4) * blck_size_interleave;
+            int dst_offset = i * blck_size_interleave;
+
+            uint32_t elems;
+            memcpy(&elems, &in[src_id].qs[src_offset], sizeof(uint32_t));
+            elems ^= xor_mask;
+            memcpy(&out.qs[dst_offset], &elems, sizeof(uint32_t));
+        }
+    } else {
+        GGML_ASSERT(false);
     }
 
     return out;
@@ -3409,19 +3432,25 @@ static block_q4_0x4 make_block_q4_0x4(block_q4_0 * in, unsigned int blck_size_in
 // returns an interleaved block_q4_0x8
 // in the interleaved block_q4_0x8, place deltas for 8 block_q4_0 blocks
 // first, then interleave quants from 8 block_q4_0s in blocks of blck_size_interleave
-static block_q4_0x8 make_block_q4_0x8(block_q4_0 * in, unsigned int blck_size_interleave, unsigned int xor_mask) {
+static block_q4_0x8 make_block_q4_0x8(block_q4_0 * in, unsigned int blck_size_interleave) {
     block_q4_0x8 out;
 
     for (int i = 0; i < 8; i++) {
         out.d[i] = in[i].d;
     }
 
-    for (int i = 0; i < QK4_0 * 4; i++) {
-        int src_offset = (i / (8 * blck_size_interleave)) * blck_size_interleave;
-        int src_id = (i % (8 * blck_size_interleave)) / blck_size_interleave;
-        src_offset += (i % blck_size_interleave);
+    const int end = QK4_0 * 4 / blck_size_interleave;
+    const uint64_t xor_mask = 0x8888888888888888ULL;
 
-        out.qs[i] = in[src_id].qs[src_offset] ^ xor_mask;
+    for (int i = 0; i < end; ++i) {
+        int src_id = i % 8;
+        int src_offset = (i / 8) * blck_size_interleave;
+        int dst_offset = i * blck_size_interleave;
+
+        uint64_t elems;
+        memcpy(&elems, &in[src_id].qs[src_offset], sizeof(uint64_t));
+        elems ^= xor_mask;
+        memcpy(&out.qs[dst_offset], &elems, sizeof(uint64_t));
     }
 
     return out;
@@ -3449,7 +3478,7 @@ static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block
             for (int i = 0; i < nrows_interleaved; i++) {
                 dst_tmp[i] = src[x + i * nblocks];
             }
-            *dst++ = make_block_q4_0x4(dst_tmp, interleave_block, 0x88);
+            *dst++ = make_block_q4_0x4(dst_tmp, interleave_block);
         }
         src += nrows_interleaved * nblocks;
     }
@@ -3480,7 +3509,7 @@ static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block,
             for (int i  = 0; i < nrows_interleaved; i++ ) {
                 dst_tmp[i] = src[x + i * nblocks];
             }
-            *dst++ = make_block_q4_0x8(dst_tmp, interleave_block, 0x88);
+            *dst++ = make_block_q4_0x8(dst_tmp, interleave_block);
         }
         src += nrows_interleaved * nblocks;
     }
