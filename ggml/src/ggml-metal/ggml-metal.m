@@ -1961,14 +1961,15 @@ static void ggml_metal_encode_node(
 
                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_EXT_Q8_0_F32].pipeline;
 
-                    const int nsg    = 2;
-                    const int r0pt   = 1;
+                    const int nsg    = 4;
+                    const int r0pt   = 4;
                     const int r1pt   = 1;
-                    const int nxpsg  = ne11 > 1 ? 8 : 32;
+                    //const int nxpsg  = ne11 > 1 ? 8 : 32;
+                    const int nxpsg  = 32;
                     const int nypsg  = 32/nxpsg;
                     const int nr0ptg = nypsg*r0pt*nsg;
 
-                    //GGML_ASSERT(ne00%1024 == 0);
+                    //GGML_ASSERT(ne00%4096 == 0);
                     //GGML_ASSERT(ne01%nr0ptg == 0);
                     //printf("ne01 = %lld, nr0ptg = %d, ne00 = %lld\n", ne01, nr0ptg, ne00);
 
@@ -2000,6 +2001,11 @@ static void ggml_metal_encode_node(
                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
                     [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
+
+                    //printf("ne01 = %lld nr0ptg = %d\n", ne01, nr0ptg);
+                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nr0ptg - 1)/nr0ptg, (ne11 + r1pt - 1)/r1pt, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
+
+                    [encoder setThreadgroupMemoryLength:2*8192 atIndex:0];
 
                     //printf("ne01 = %lld nr0ptg = %d\n", ne01, nr0ptg);
                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nr0ptg - 1)/nr0ptg, (ne11 + r1pt - 1)/r1pt, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
