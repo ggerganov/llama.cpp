@@ -240,6 +240,8 @@ install(TARGETS ggml PUBLIC_HEADER)
 
 if (BUILD_SHARED_LIBS)
     install(TARGETS ggml LIBRARY)
+    get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
+    install(TARGETS ${GGML_LINK_LIBRARIES} LIBRARY)
 endif()
 
 # FIXME: this should be done in the backend cmake files
