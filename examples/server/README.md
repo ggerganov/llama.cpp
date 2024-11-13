@@ -667,29 +667,29 @@ See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-r
 
 - input as string
 
-```shell
-curl http://localhost:8080/v1/embeddings \
--H "Content-Type: application/json" \
--H "Authorization: Bearer no-key" \
--d '{
-        "input": "hello",
-        "model":"GPT-4",
-        "encoding_format": "float"
-}'
-```
+  ```shell
+  curl http://localhost:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer no-key" \
+  -d '{
+          "input": "hello",
+          "model":"GPT-4",
+          "encoding_format": "float"
+  }'
+  ```
 
 - `input` as string array
 
-```shell
-curl http://localhost:8080/v1/embeddings \
--H "Content-Type: application/json" \
--H "Authorization: Bearer no-key" \
--d '{
-        "input": ["hello", "world"],
-        "model":"GPT-4",
-        "encoding_format": "float"
-}'
-```
+  ```shell
+  curl http://localhost:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer no-key" \
+  -d '{
+          "input": ["hello", "world"],
+          "model":"GPT-4",
+          "encoding_format": "float"
+  }'
+  ```
 
 ### GET `/slots`: Returns the current slots processing state
 
