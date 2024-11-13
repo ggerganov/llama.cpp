@@ -3,6 +3,8 @@
 #include "types.comp"
 #include "generic_unary_head.comp"
 
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
 uint src0_idx_mod(uint idx) {
     const uint i13 = idx / (p.ne12*p.ne11*p.ne10);
     const uint i13_offset = i13 * p.ne12*p.ne11*p.ne10;
