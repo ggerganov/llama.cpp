@@ -661,9 +661,10 @@ struct server_context {
         if (res >= 0) {
             llama_chat_message chat[] = {{"user", "test"}};
             std::string tmpl = std::string(model_template.data(), model_template.size());
-            res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
+            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
+            return chat_res > 0;
         }
-        return res >= 0;
+        return false;
     }
 
     void init() {
