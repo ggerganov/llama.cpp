@@ -3,13 +3,13 @@
 # Test libllama tokenizer == AutoTokenizer.
 # Brute force random words/text generation.
 #
-#Sample usage:
+# Sample usage:
 #
 #   python3 tests/test-tokenizer-random.py ./models/ggml-vocab-llama-bpe.gguf ./models/tokenizers/llama-bpe
 #
 
 from __future__ import annotations
-#
+
 import time
 import logging
 import argparse
