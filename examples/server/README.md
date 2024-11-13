@@ -39,7 +39,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--cpu-strict-batch <0\|1>` | use strict CPU placement (default: same as --cpu-strict) |
 | `--prio-batch N` | set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: 0)<br/> |
 | `--poll-batch <0\|1>` | use polling to wait for work (default: same as --poll) |
-| `-c, --ctx-size N` | size of the prompt context (default: 0, 0 = loaded from model)<br/>(env: LLAMA_ARG_CTX_SIZE) |
+| `-c, --ctx-size N` | size of the prompt context (default: 4096, 0 = loaded from model)<br/>(env: LLAMA_ARG_CTX_SIZE) |
 | `-n, --predict, --n-predict N` | number of tokens to predict (default: -1, -1 = infinity, -2 = until context filled)<br/>(env: LLAMA_ARG_N_PREDICT) |
 | `-b, --batch-size N` | logical maximum batch size (default: 2048)<br/>(env: LLAMA_ARG_BATCH) |
 | `-ub, --ubatch-size N` | physical maximum batch size (default: 512)<br/>(env: LLAMA_ARG_UBATCH) |
@@ -64,7 +64,7 @@ The project is under active development, and we are [looking for feedback and co
 | `-nkvo, --no-kv-offload` | disable KV offload<br/>(env: LLAMA_ARG_NO_KV_OFFLOAD) |
 | `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_K) |
 | `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_V) |
-| `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: -1.0, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
+| `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: 0.1, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
 | `-np, --parallel N` | number of parallel sequences to decode (default: 1)<br/>(env: LLAMA_ARG_N_PARALLEL) |
 | `--mlock` | force system to keep model in RAM rather than swapping or compressing<br/>(env: LLAMA_ARG_MLOCK) |
 | `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock)<br/>(env: LLAMA_ARG_NO_MMAP) |
@@ -99,25 +99,27 @@ The project is under active development, and we are [looking for feedback and co
 
 | Argument | Explanation |
 | -------- | ----------- |
-| `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;typ_p;top_p;min_p;temperature) |
+| `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: dry;top_k;typ_p;top_p;min_p;xtc;temperature) |
 | `-s, --seed SEED` | RNG seed (default: -1, use random seed for -1) |
-| `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: kfypmt) |
+| `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: dkypmxt) |
 | `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
 | `--penalize-nl` | penalize newline tokens (default: false) |
 | `--temp N` | temperature (default: 0.8) |
 | `--top-k N` | top-k sampling (default: 40, 0 = disabled) |
 | `--top-p N` | top-p sampling (default: 0.9, 1.0 = disabled) |
 | `--min-p N` | min-p sampling (default: 0.1, 0.0 = disabled) |
+| `--xtc-probability N` | xtc probability (default: 0.0, 0.0 = disabled) |
+| `--xtc-threshold N` | xtc threshold (default: 0.1, 1.0 = disabled) |
 | `--typical N` | locally typical sampling, parameter p (default: 1.0, 1.0 = disabled) |
 | `--repeat-last-n N` | last n tokens to consider for penalize (default: 64, 0 = disabled, -1 = ctx_size) |
 | `--repeat-penalty N` | penalize repeat sequence of tokens (default: 1.0, 1.0 = disabled) |
 | `--presence-penalty N` | repeat alpha presence penalty (default: 0.0, 0.0 = disabled) |
 | `--frequency-penalty N` | repeat alpha frequency penalty (default: 0.0, 0.0 = disabled) |
-| `--dry-multiplier N` | DRY sampling multiplier (default: 0.0, 0.0 = disabled) |
-| `--dry-base N` | DRY sampling base value (default: 1.75) |
-| `--dry-allowed-length N` | allowed length for DRY sampling (default: 2) |
-| `--dry-penalty-last-n N` | DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size) |
-| `--dry-sequence-breaker STRING` | add sequence breaker for DRY sampling, clearing out default breakers (`['\n', ':', '"', '*']`) in the process; use `"none"` to not use any sequence breakers
+| `--dry-multiplier N` | set DRY sampling multiplier (default: 0.0, 0.0 = disabled) |
+| `--dry-base N` | set DRY sampling base value (default: 1.75) |
+| `--dry-allowed-length N` | set allowed length for DRY sampling (default: 2) |
+| `--dry-penalty-last-n N` | set DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size) |
+| `--dry-sequence-breaker STRING` | add sequence breaker for DRY sampling, clearing out default breakers ('\n', ':', '"', '*') in the process; use "none" to not use any sequence breakers<br/> |
 | `--dynatemp-range N` | dynamic temperature range (default: 0.0, 0.0 = disabled) |
 | `--dynatemp-exp N` | dynamic temperature exponent (default: 1.0) |
 | `--mirostat N` | use Mirostat sampling.<br/>Top K, Nucleus and Locally Typical samplers are ignored if used.<br/>(default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0) |
