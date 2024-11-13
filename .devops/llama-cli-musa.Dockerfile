@@ -16,15 +16,16 @@ WORKDIR /app
 COPY . .
 
 RUN cmake -B build -DGGML_MUSA=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
-    cmake --build build --config Release --target llama-cli -j$(nproc)
+    cmake --build build --config Release --target llama-cli -j$(nproc) && \
+    mkdir -p /app/lib && \
+    find build -name "*.so" -exec cp {} /app/lib \;
 
 FROM ${BASE_MUSA_RUN_CONTAINER} AS runtime
 
 RUN apt-get update && \
     apt-get install -y libgomp1
 
-COPY --from=build /app/build/ggml/src/libggml.so /libggml.so
-COPY --from=build /app/build/src/libllama.so /libllama.so
+COPY --from=build /app/lib/ /
 COPY --from=build /app/build/bin/llama-cli /llama-cli
 
 ENTRYPOINT [ "/llama-cli" ]
