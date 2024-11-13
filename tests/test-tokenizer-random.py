@@ -25,10 +25,6 @@ from typing_extensions import Buffer
 import cffi
 from transformers import AutoTokenizer, PreTrainedTokenizer
 #
-####################################################################################################
-#
-# Classes:
-
 
 logger = logging.getLogger("test-tokenizer-random")
 
