@@ -496,19 +496,20 @@ inline void from_float(const float * x, char * vy, int64_t k);
 
 template <>
 inline void from_float<block_q8_0>(const float * x, char * vy, int64_t k) {
-    quantize_row_q8_0(x, vy, k);
+    // FIXME: using unoptimized reference impl until moved to CPU backend
+    quantize_row_q8_0_ref(x, (block_q8_0 *)vy, k);
 }
 
 template <>
 inline void from_float<block_q8_1>(const float * x, char * vy, int64_t k) {
-    quantize_row_q8_1(x, vy, k);
+    quantize_row_q8_1_ref(x, (block_q8_1 *)vy, k);
 }
 
 template <>
 inline void from_float<block_q8_K>(const float * x, char * vy, int64_t k) {
 #if 1
     // TODO: this is reference impl!
-    quantize_row_q8_K(x, vy, k);
+    quantize_row_q8_K_ref(x, (block_q8_K *)vy, k);
 #else
     quantize_row_q8_K_vnni(x, vy, k);
 #endif

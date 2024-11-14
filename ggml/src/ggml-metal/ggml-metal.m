@@ -516,6 +516,10 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
                     [prep setObject:@"1" forKey:@"GGML_METAL_USE_BF16"];
                 }
 
+#if GGML_METAL_EMBED_LIBRARY
+                [prep setObject:@"1" forKey:@"GGML_METAL_EMBED_LIBRARY"];
+#endif
+
                 MTLCompileOptions * options = [MTLCompileOptions new];
                 options.preprocessorMacros = prep;
 

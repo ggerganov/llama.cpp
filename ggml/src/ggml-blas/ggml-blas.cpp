@@ -6,7 +6,7 @@
 #include <vector>
 #include <cstring>
 
-#if defined(GGML_USE_ACCELERATE)
+#if defined(GGML_BLAS_USE_ACCELERATE)
 #   include <Accelerate/Accelerate.h>
 #elif defined(GGML_BLAS_USE_MKL)
 #   include <mkl.h>
@@ -320,7 +320,7 @@ static const char * ggml_backend_blas_device_get_name(ggml_backend_dev_t dev) {
 }
 
 static const char * ggml_backend_blas_device_get_description(ggml_backend_dev_t dev) {
-    #if defined(GGML_USE_ACCELERATE)
+    #if defined(GGML_BLAS_USE_ACCELERATE)
         return "Accelerate";
     #elif defined(GGML_BLAS_USE_MKL)
         return "MKL";
