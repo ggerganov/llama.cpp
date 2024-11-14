@@ -421,9 +421,18 @@ ggml_backend_reg_t ggml_backend_amx_reg(void) {
 
 #else // if defined(__AMX_INT8__)
 
+ggml_backend_buffer_type_t ggml_backend_amx_buffer_type(void) {
+    return nullptr;
+}
+
+bool ggml_backend_is_amx(ggml_backend_t backend) {
+    GGML_UNUSED(backend);
+    return false;
+}
+
 ggml_backend_t ggml_backend_amx_init(void) {
     fprintf(stderr, "GGML is not compiled with AMX support!\n");
-    return ggml_backend_t{};
+    return nullptr;
 }
 
 void ggml_backend_amx_set_n_threads(ggml_backend_t backend_amx, int n_threads) {
@@ -431,6 +440,10 @@ void ggml_backend_amx_set_n_threads(ggml_backend_t backend_amx, int n_threads) {
 
     GGML_UNUSED(backend_amx);
     GGML_UNUSED(n_threads);
+}
+
+ggml_backend_reg_t ggml_backend_amx_reg(void) {
+    return nullptr;
 }
 
 #endif

@@ -140,7 +140,6 @@ set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location o
 set(LLAMA_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
 set(LLAMA_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
 
-
 # At the moment some compile definitions are placed within the ggml/src
 # directory but not exported on the `ggml` target. This could be improved by
 # determining _precisely_ which defines are necessary for the llama-config

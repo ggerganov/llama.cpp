@@ -176,15 +176,15 @@
 #ifdef GGML_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef GGML_BUILD
-#            define GGML_API __declspec(dllexport)
+#            define GGML_API __declspec(dllexport) extern
 #        else
-#            define GGML_API __declspec(dllimport)
+#            define GGML_API __declspec(dllimport) extern
 #        endif
 #    else
-#        define GGML_API __attribute__ ((visibility ("default")))
+#        define GGML_API __attribute__ ((visibility ("default"))) extern
 #    endif
 #else
-#    define GGML_API
+#    define GGML_API extern
 #endif
 
 // TODO: support for clang
@@ -1490,7 +1490,7 @@ extern "C" {
         "use ggml_rope_ext_inplace instead");
 
     // compute correction dims for YaRN RoPE scaling
-    void ggml_rope_yarn_corr_dims(
+    GGML_API void ggml_rope_yarn_corr_dims(
         int n_dims, int n_ctx_orig, float freq_base, float beta_fast, float beta_slow, float dims[2]);
 
     // rotary position embedding backward, i.e compute dx from dy
@@ -2384,38 +2384,6 @@ extern "C" {
     GGML_API size_t gguf_get_meta_size(const struct gguf_context * ctx);
     GGML_API void   gguf_get_meta_data(const struct gguf_context * ctx, void * data);
 
-    //
-    // system info
-    //
-
-    GGML_API int ggml_cpu_has_avx        (void);
-    GGML_API int ggml_cpu_has_avx_vnni   (void);
-    GGML_API int ggml_cpu_has_avx2       (void);
-    GGML_API int ggml_cpu_has_avx512     (void);
-    GGML_API int ggml_cpu_has_avx512_vbmi(void);
-    GGML_API int ggml_cpu_has_avx512_vnni(void);
-    GGML_API int ggml_cpu_has_avx512_bf16(void);
-    GGML_API int ggml_cpu_has_amx_int8   (void);
-    GGML_API int ggml_cpu_has_fma        (void);
-    GGML_API int ggml_cpu_has_arm_fma    (void);
-    GGML_API int ggml_cpu_has_metal      (void);
-    GGML_API int ggml_cpu_has_f16c       (void);
-    GGML_API int ggml_cpu_has_fp16_va    (void);
-    GGML_API int ggml_cpu_has_wasm_simd  (void);
-    GGML_API int ggml_cpu_has_blas       (void);
-    GGML_API int ggml_cpu_has_cuda       (void);
-    GGML_API int ggml_cpu_has_vulkan     (void);
-    GGML_API int ggml_cpu_has_kompute    (void);
-    GGML_API int ggml_cpu_has_gpublas    (void);
-    GGML_API int ggml_cpu_has_sse3       (void);
-    GGML_API int ggml_cpu_has_ssse3      (void);
-    GGML_API int ggml_cpu_has_riscv_v    (void);
-    GGML_API int ggml_cpu_has_sycl       (void);
-    GGML_API int ggml_cpu_has_rpc        (void);
-    GGML_API int ggml_cpu_has_vsx        (void);
-    GGML_API int ggml_cpu_has_cann       (void);
-    GGML_API int ggml_cpu_has_llamafile  (void);
-
 #ifdef  __cplusplus
 // restrict not standard in C++
 #define GGML_RESTRICT
@@ -2432,7 +2400,6 @@ extern "C" {
         size_t                   type_size;
         bool                     is_quantized;
         ggml_to_float_t          to_float;
-        ggml_from_float_t        from_float;
         ggml_from_float_t        from_float_ref;
     };
 
