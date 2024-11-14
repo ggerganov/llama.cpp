@@ -163,8 +163,11 @@ if (GGML_TARGET_DEFINES)
     list(APPEND GGML_TRANSIENT_DEFINES ${GGML_TARGET_DEFINES})
 endif()
 get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
-
-set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h)
+# all public headers
+set(LLAMA_PUBLIC_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/llama-cpp.h)
+set_target_properties(llama PROPERTIES PUBLIC_HEADER "${LLAMA_PUBLIC_HEADERS}")
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 configure_package_config_file(
