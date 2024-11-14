@@ -42,7 +42,7 @@ The following release is verified with good quality:
 ## News
 
 - 2024.11
-  - Use syclcompat to improve the performance on some backends. This requires to use oneAPI 2025.0 or more recent.
+  - Use syclcompat to improve the performance on some platforms. This requires to use oneAPI 2025.0 or newer.
 
 - 2024.8
   - Use oneDNN as the default GEMM library, improve the compatibility for new Intel GPUs.
