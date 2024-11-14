@@ -2907,7 +2907,7 @@ struct llama_model {
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
 
-    int64_t n_elements = 0;
+    uint64_t n_elements = 0;
     size_t  n_bytes    = 0;
 
     int64_t t_load_us  = 0;
@@ -4278,7 +4278,7 @@ struct llama_model_loader {
     int n_tensors = 0;
     int n_created = 0;
 
-    int64_t n_elements = 0;
+    uint64_t n_elements = 0;
     size_t  n_bytes    = 0;
 
     bool use_mmap = false;
@@ -19962,7 +19962,7 @@ size_t llama_model_size(const struct llama_model *model) {
     return model->n_bytes;
 }
 
-int64_t llama_model_n_params(const struct llama_model *model) {
+uint64_t llama_model_n_params(const struct llama_model *model) {
     return model->n_elements;
 }
 
