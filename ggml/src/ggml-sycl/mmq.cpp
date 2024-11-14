@@ -575,8 +575,8 @@ vec_dot_q2_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 
 #pragma unroll
         for (int i = i0; i < i0 + QI8_1/2; ++i) {
-            sumi_d_sc = syclcompat::dp4a(v[i], u[i], sumi_d_sc); // SIMD dot product
-            sumi_m = syclcompat::dp4a(m, u[i],
+            sumi_d_sc = dpct::dp4a(v[i], u[i], sumi_d_sc); // SIMD dot product
+            sumi_m = dpct::dp4a(m, u[i],
                                 sumi_m); // multiply sum of q8_1 values with m
         }
 
@@ -730,7 +730,7 @@ vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
         int sumi_sc = 0;
 
         for (int i = i0; i < i0 + QI8_1/2; ++i) {
-            sumi_sc = syclcompat::dp4a(v[i], u[i], sumi_sc); // SIMD dot product
+            sumi_sc = dpct::dp4a(v[i], u[i], sumi_sc); // SIMD dot product
         }
 
         sumi += sumi_sc * scales[i0 / (QI8_1/2)];
@@ -873,7 +873,7 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_mmq(
 
 #pragma unroll
         for (int j = 0; j < QI8_1; ++j) {
-            sumi_d = syclcompat::dp4a((v[j] >> (4 * i)) & 0x0F0F0F0F,
+            sumi_d = dpct::dp4a((v[j] >> (4 * i)) & 0x0F0F0F0F,
                                 u[i * QI8_1 + j], sumi_d); // SIMD dot product
         }
 
@@ -1018,7 +1018,7 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_mmq(
 
 #pragma unroll
         for (int j = 0; j < QI8_1; ++j) {
-            sumi_d = syclcompat::dp4a(v[i * QI8_1 + j], u[i * QI8_1 + j],
+            sumi_d = dpct::dp4a(v[i * QI8_1 + j], u[i * QI8_1 + j],
                                 sumi_d); // SIMD dot product
         }
 
@@ -1156,14 +1156,14 @@ vec_dot_q6_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 
 #pragma unroll
         for (int i = i0; i < i0 + 2; ++i) {
-            sumi_d.x() = syclcompat::dp4a(v[2 * i + 0], u[2 * i + 0],
+            sumi_d.x() = dpct::dp4a(v[2 * i + 0], u[2 * i + 0],
                                     sumi_d.x()); // SIMD dot product
-            sumi_d.x() = syclcompat::dp4a(v[2 * i + 1], u[2 * i + 1],
+            sumi_d.x() = dpct::dp4a(v[2 * i + 1], u[2 * i + 1],
                                     sumi_d.x()); // SIMD dot product
 
-            sumi_d.y() = syclcompat::dp4a(v[2 * i + 4], u[2 * i + 4],
+            sumi_d.y() = dpct::dp4a(v[2 * i + 4], u[2 * i + 4],
                                     sumi_d.y()); // SIMD dot product
-            sumi_d.y() = syclcompat::dp4a(v[2 * i + 5], u[2 * i + 5],
+            sumi_d.y() = dpct::dp4a(v[2 * i + 5], u[2 * i + 5],
                                     sumi_d.y()); // SIMD dot product
         }
 

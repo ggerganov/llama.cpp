@@ -15,6 +15,7 @@
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
+#include <syclcompat/math.hpp>
 #include <oneapi/mkl.hpp>
 #include <map>
 
@@ -1828,6 +1829,12 @@ namespace dpct
                                        target_offset < logical_sub_group_size
                                            ? start_index + target_offset
                                            : id);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline auto dp4a(T1 a, T2 b, T3 c)
+    {
+        return syclcompat::dp4a(a, b, c);
     }
 
     struct sub_sat
