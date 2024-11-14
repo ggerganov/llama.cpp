@@ -655,11 +655,16 @@ struct server_context {
     }
 
     bool validate_model_chat_template() const {
-        llama_chat_message chat[] = {{"user", "test"}};
-
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
-
-        return res > 0;
+        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
+        std::string template_key = "tokenizer.chat_template";
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        if (res >= 0) {
+            llama_chat_message chat[] = {{"user", "test"}};
+            std::string tmpl = std::string(model_template.data(), model_template.size());
+            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
+            return chat_res > 0;
+        }
+        return false;
     }
 
     void init() {
