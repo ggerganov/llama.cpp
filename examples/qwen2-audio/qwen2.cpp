@@ -763,6 +763,7 @@ static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_e
         }
         *n_past += n_eval;
     }
+    free(audio_embed_data);
     return true;
 }
 
