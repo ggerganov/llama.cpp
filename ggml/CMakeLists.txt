@@ -117,6 +117,7 @@ endif()
 
 # ggml core
 set(GGML_SCHED_MAX_COPIES  "4" CACHE STRING "ggml: max input copies for pipeline parallelism")
+option(GGML_CPU                             "ggml: enable CPU backend"                        ON)
 
 # 3rd party libs / backends
 option(GGML_ACCELERATE                      "ggml: enable Accelerate framework"               ON)
@@ -142,7 +143,7 @@ option(GGML_CUDA_NO_VMM                     "ggml: do not try to use CUDA VMM"  
 option(GGML_CUDA_FA_ALL_QUANTS              "ggml: compile all quants for FlashAttention"     OFF)
 option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ${GGML_CUDA_GRAPHS_DEFAULT})
 
-option(GGML_HIPBLAS                         "ggml: use hipBLAS"                               OFF)
+option(GGML_HIP                             "ggml: use HIP"                                   OFF)
 option(GGML_HIP_UMA                         "ggml: use HIP unified memory architecture"       OFF)
 option(GGML_VULKAN                          "ggml: use Vulkan"                                OFF)
 option(GGML_VULKAN_CHECK_RESULTS            "ggml: run Vulkan op checks"                      OFF)
@@ -154,6 +155,7 @@ option(GGML_VULKAN_VALIDATE                 "ggml: enable Vulkan validation"    
 option(GGML_VULKAN_RUN_TESTS                "ggml: run Vulkan tests"                          OFF)
 option(GGML_KOMPUTE                         "ggml: use Kompute"                               OFF)
 option(GGML_METAL                           "ggml: use Metal"                                 ${GGML_METAL_DEFAULT})
+option(GGML_METAL_USE_BF16                  "ggml: use bfloat if available"                   OFF)
 option(GGML_METAL_NDEBUG                    "ggml: disable Metal debugging"                   OFF)
 option(GGML_METAL_SHADER_DEBUG              "ggml: compile Metal with -fno-fast-math"         OFF)
 option(GGML_METAL_EMBED_LIBRARY             "ggml: embed Metal library"                       ${GGML_METAL})
@@ -238,12 +240,15 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml PUBLIC_HEADER)
 
 if (BUILD_SHARED_LIBS)
-    install(TARGETS ggml LIBRARY)
+    install(TARGETS ggml      LIBRARY)
+    install(TARGETS ggml-base LIBRARY)
 endif()
 
+# FIXME: this should be done in the backend cmake files
 if (GGML_METAL)
+    # FIXME: does this need to be installed with GGML_METAL_EMBED_LIBRARY?
     install(
-        FILES src/ggml-metal.metal
+        FILES src/ggml-metal/ggml-metal.metal
         PERMISSIONS
             OWNER_READ
             OWNER_WRITE
