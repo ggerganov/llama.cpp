@@ -452,8 +452,7 @@ ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
 	MK_CFLAGS   += -Xassembler -muse-unaligned-vector-move
 	MK_CXXFLAGS += -Xassembler -muse-unaligned-vector-move
 
-	# Target Windows 8 for PrefetchVirtualMemory
-	MK_CPPFLAGS += -D_WIN32_WINNT=0x602
+	MK_CPPFLAGS += -D_WIN32_WINNT=_WIN32_WINNT_WIN7 -DWINVER=_WIN32_WINNT_WIN7
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
