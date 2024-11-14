@@ -9261,7 +9261,6 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
         }
 
         llm_load_stats(ml, model);
-        
         llm_load_print_meta(ml, model);
 
         if (model.vocab.type != LLAMA_VOCAB_TYPE_NONE &&
