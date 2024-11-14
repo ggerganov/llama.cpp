@@ -3156,6 +3156,8 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_RWKV_WKV6:
             return true;
         case GGML_OP_FLASH_ATTN_EXT: {
+            // FIXME: this is not accurate, the flash attn implementation only has kernels for a limited number of configurations,
+            //        which varies depending on too many factors to duplicate here.
 #ifndef FLASH_ATTN_AVAILABLE
             return false;
 #endif
