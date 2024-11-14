@@ -2907,10 +2907,10 @@ struct llama_model {
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
 
-    uint64_t n_bytes = 0;
-    uint64_t n_elements = 0;
+    int64_t n_elements = 0;
+    size_t  n_bytes    = 0;
 
-    int64_t t_load_us = 0;
+    int64_t t_load_us  = 0;
     int64_t t_start_us = 0;
 
     // keep track of loaded lora adapters
@@ -19958,11 +19958,11 @@ int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t bu
             llama_model_ftype_name(model->ftype).c_str());
 }
 
-uint64_t llama_model_size(const struct llama_model *model) {
+size_t llama_model_size(const struct llama_model *model) {
     return model->n_bytes;
 }
 
-uint64_t llama_model_n_params(const struct llama_model *model) {
+int64_t llama_model_n_params(const struct llama_model *model) {
     return model->n_elements;
 }
 
