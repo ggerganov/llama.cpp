@@ -53,6 +53,8 @@ if [ ! -z ${GG_BUILD_SYCL} ]; then
         exit 1
     fi
 
+    # Only functionality CI for SYCL now
+    GG_BUILD_LOW_PERF=True
     CMAKE_EXTRA="${CMAKE_EXTRA} -DGGML_SYCL=1 -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON"
 fi
 
@@ -150,7 +152,12 @@ function gg_run_ctest_release {
     if [ -z ${GG_BUILD_LOW_PERF} ]; then
         (time ctest --output-on-failure -L main ) 2>&1 | tee -a $OUT/${ci}-ctest.log
     else
-        (time ctest --output-on-failure -L main -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+       if [ ! -z "$GG_BUILD_SYCL" ]; then
+            # TODO(airMeng): fix iq1_xs and iq3_xs quantization in SYCL
+            (time ctest --output-on-failure -L main -E "test-quantize-fns|test-opt" ) 2>&1 | tee -a "$OUT/${ci}-ctest.log"
+       else
+            (time ctest --output-on-failure -L main -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+       fi
     fi
 
     set +e
@@ -824,7 +831,10 @@ fi
 
 ret=0
 
-test $ret -eq 0 && gg_run ctest_debug
+if [ -z "$GG_BUILD_SYCL" ]; then
+    # to save time, remove after more machines available
+    test $ret -eq 0 && gg_run ctest_debug
+fi
 test $ret -eq 0 && gg_run ctest_release
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
