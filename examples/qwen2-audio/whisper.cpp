@@ -9467,6 +9467,8 @@ static bool whisper_encoder_load(struct whisper_model_loader *loader, whisper_co
 
     wctx.t_load_us = ggml_time_us() - t_start_us;
 
+    gguf_free(gguf_ctx);
+
     return true;
 }
 
