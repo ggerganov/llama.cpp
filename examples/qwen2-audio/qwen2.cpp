@@ -18,6 +18,7 @@
 #include <thread>
 #include <vector>
 #include <cstring>
+#include <iostream>
 
 //
 // Constants
@@ -708,6 +709,7 @@ void omni_free(struct omni_context *ctx_omni)
     if(internal_chars != nullptr)
     {
         free(internal_chars);
+        internal_chars = nullptr;
     }
     if (ctx_omni->ctx_whisper)
     {
@@ -716,12 +718,13 @@ void omni_free(struct omni_context *ctx_omni)
     }
     if (ctx_omni->projector)
     {
-        ctx_omni->projector->free();
+        delete ctx_omni->projector;
     }
 
     llama_free(ctx_omni->ctx_llama);
     llama_free_model(ctx_omni->model);
     llama_backend_free();
+    free(ctx_omni);
 }
 
 static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_embed, int n_batch, int *n_past)
@@ -761,6 +764,7 @@ static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_e
         }
         *n_past += n_eval;
     }
+    free(audio_embed_data);
     return true;
 }
 
