@@ -38,6 +38,7 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-vdot \
 	llama-cvector-generator \
+	llama-test-vanilla-pca \
 	llama-gen-docs \
 	tests/test-c.o
 
@@ -1475,6 +1476,12 @@ llama-eval-callback: examples/eval-callback/eval-callback.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+# TODO: Move to tests
+llama-test-vanilla-pca: examples/cvector-generator/mini-tests/test-vanilla-pca.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
