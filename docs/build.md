@@ -280,6 +280,28 @@ The following compilation options are also available to tweak performance (yes, 
 
 **Windows**
 
+#### w64devkit
+
+Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
+
+Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). When selecting components, only the Vulkan SDK Core is required.
+
+Launch `w64devkit.exe` and run the following commands to copy Vulkan dependencies:
+```sh
+SDK_VERSION=1.3.283.0
+cp /VulkanSDK/$SDK_VERSION/Bin/glslc.exe $W64DEVKIT_HOME/bin/
+cp /VulkanSDK/$SDK_VERSION/Lib/vulkan-1.lib $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/
+cp -r /VulkanSDK/$SDK_VERSION/Include/* $W64DEVKIT_HOME/x86_64-w64-mingw32/include/
+cat > $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/pkgconfig/vulkan.pc <<EOF
+Name: Vulkan-Loader
+Description: Vulkan Loader
+Version: $SDK_VERSION
+Libs: -lvulkan-1
+EOF
+
+```
+Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
+
 #### Git Bash MINGW64
 
 [![](https://i.imgur.com/M8dnyk5.png)](https://git-scm.com/downloads/win).
@@ -319,28 +341,6 @@ Now you can load the model in conversation mode using `Vulkan`
 ```
 build/bin/release/llama-cli -m "[PATH TO MODEL]" -ngl 100 -c 16384 -t 10 -n -2 -cnv
 ```
-
-#### w64devkit
-
-Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
-
-Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). When selecting components, only the Vulkan SDK Core is required.
-
-Launch `w64devkit.exe` and run the following commands to copy Vulkan dependencies:
-```sh
-SDK_VERSION=1.3.283.0
-cp /VulkanSDK/$SDK_VERSION/Bin/glslc.exe $W64DEVKIT_HOME/bin/
-cp /VulkanSDK/$SDK_VERSION/Lib/vulkan-1.lib $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/
-cp -r /VulkanSDK/$SDK_VERSION/Include/* $W64DEVKIT_HOME/x86_64-w64-mingw32/include/
-cat > $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/pkgconfig/vulkan.pc <<EOF
-Name: Vulkan-Loader
-Description: Vulkan Loader
-Version: $SDK_VERSION
-Libs: -lvulkan-1
-EOF
-
-```
-Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
 
 #### MSYS2
 Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
