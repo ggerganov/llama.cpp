@@ -1,6 +1,6 @@
 ARG ASCEND_VERSION=8.0.rc2.alpha003-910b-openeuler22.03-py3.8
 
-FROM cosdt/cann:$ASCEND_VERSION AS build
+FROM ascendai/cann:$ASCEND_VERSION AS build
 
 WORKDIR /app
 
@@ -26,7 +26,7 @@ RUN echo "Building with static libs" && \
     cmake --build build --config Release --target llama-cli
 
 # TODO: use image with NNRT
-FROM cosdt/cann:$ASCEND_VERSION AS runtime
+FROM ascendai/cann:$ASCEND_VERSION AS runtime
 COPY --from=build /app/build/bin/llama-cli /llama-cli
 
 ENV LC_ALL=C.utf8
