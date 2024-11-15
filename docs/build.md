@@ -282,9 +282,13 @@ The following compilation options are also available to tweak performance (yes, 
 
 #### w64devkit
 
-Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
+[![](https://github.com/user-attachments/assets/dee8d303-d40c-446d-85fc-60726d384d71)](https://github.com/skeeto/w64devkit/releases)
 
-Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). When selecting components, only the Vulkan SDK Core is required.
+Download and extract [`w64devkit`](https://github.com/skeeto/w64devkit/releases).
+
+[![](https://i.imgur.com/cN0LDwJ.png)](https://vulkan.lunarg.com/sdk/home#windows)
+
+Download and install the [`Vulkan SDK`](https://vulkan.lunarg.com/sdk/home#windows) with the default settings.
 
 Launch `w64devkit.exe` and run the following commands to copy Vulkan dependencies:
 ```sh
