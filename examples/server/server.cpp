@@ -102,6 +102,12 @@ struct server_task_result {
     bool error;
 };
 
+struct server_static_file {
+    const unsigned char * data;
+    unsigned int size;
+    const char * mime_type;
+};
+
 struct slot_params {
     bool stream       = true;
     bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
@@ -2259,6 +2265,16 @@ int main(int argc, char ** argv) {
     LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     LOG_INF("\n");
 
+    // static files
+    std::map<std::string, server_static_file> static_files = {
+        { "/",                        { index_html,              index_html_len,              "text/html; charset=utf-8" }},
+        { "/completion.js",           { completion_js,           completion_js_len,           "text/javascript; charset=utf-8" }},
+        { "/deps_daisyui.min.css",    { deps_daisyui_min_css,    deps_daisyui_min_css_len,    "text/css; charset=utf-8" }},
+        { "/deps_markdown-it.js",     { deps_markdown_it_js,     deps_markdown_it_js_len,     "text/javascript; charset=utf-8" }},
+        { "/deps_tailwindcss.js",     { deps_tailwindcss_js,     deps_tailwindcss_js_len,     "text/javascript; charset=utf-8" }},
+        { "/deps_vue.esm-browser.js", { deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8" }},
+    };
+
     std::unique_ptr<httplib::Server> svr;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
@@ -2339,7 +2355,7 @@ int main(int argc, char ** argv) {
     // Middlewares
     //
 
-    auto middleware_validate_api_key = [&params, &res_error](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_validate_api_key = [&params, &res_error, &static_files](const httplib::Request & req, httplib::Response & res) {
         static const std::unordered_set<std::string> public_endpoints = {
             "/health",
             "/models",
@@ -2351,8 +2367,8 @@ int main(int argc, char ** argv) {
             return true;
         }
 
-        // If path is public, skip validation
-        if (public_endpoints.find(req.path) != public_endpoints.end()) {
+        // If path is public or is static file, skip validation
+        if (public_endpoints.find(req.path) != public_endpoints.end() || static_files.find(req.path) != static_files.end()) {
             return true;
         }
 
@@ -3096,13 +3112,6 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
-    auto handle_static_file = [](unsigned char * content, size_t len, const char * mime_type) {
-        return [content, len, mime_type](const httplib::Request &, httplib::Response & res) {
-            res.set_content(reinterpret_cast<const char*>(content), len, mime_type);
-            return false;
-        };
-    };
-
     //
     // Router
     //
@@ -3117,12 +3126,13 @@ int main(int argc, char ** argv) {
         }
     } else {
         // using embedded static files
-        svr->Get("/",                        handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
-        svr->Get("/completion.js",           handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/deps_daisyui.min.css",    handle_static_file(deps_daisyui_min_css, deps_daisyui_min_css_len, "text/css; charset=utf-8"));
-        svr->Get("/deps_markdown-it.js",     handle_static_file(deps_markdown_it_js, deps_markdown_it_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/deps_tailwindcss.js",     handle_static_file(deps_tailwindcss_js, deps_tailwindcss_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/deps_vue.esm-browser.js", handle_static_file(deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8"));
+        for (const auto & it : static_files) {
+            const server_static_file & static_file = it.second;
+            svr->Get(it.first.c_str(), [&static_file](const httplib::Request &, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(static_file.data), static_file.size, static_file.mime_type);
+                return false;
+            });
+        }
     }
 
     // register API routes
