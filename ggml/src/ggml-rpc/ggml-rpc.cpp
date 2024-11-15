@@ -671,7 +671,7 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .event_wait              = */ NULL,
 };
 
-GGML_API ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
+ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
     // NOTE: buffer types are allocated and never freed; this is by design
@@ -718,7 +718,7 @@ ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
     return backend;
 }
 
-GGML_API bool ggml_backend_is_rpc(ggml_backend_t backend) {
+bool ggml_backend_is_rpc(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_rpc_guid());
 }
 
@@ -730,7 +730,7 @@ static void get_device_memory(const std::shared_ptr<socket_t> & sock, size_t * f
     *total = response.total_mem;
 }
 
-GGML_API void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total) {
+void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total) {
     auto sock = get_socket(endpoint);
     if (sock == nullptr) {
         *free = 0;
