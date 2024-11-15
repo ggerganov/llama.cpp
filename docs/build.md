@@ -375,7 +375,7 @@ cmake --build build --config release
 
 You can test with:
 
-`./build/llama-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32`
+`./build/bin/llama-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32`
 
 If the fllowing info is output on screen, you are using `llama.cpp by CANN backend`:
 ```bash
