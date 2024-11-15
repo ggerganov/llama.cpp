@@ -1,4 +1,4 @@
-ARG ONEAPI_VERSION=2024.1.1-devel-ubuntu22.04
+ARG ONEAPI_VERSION=2025.0.0-0-devel-ubuntu22.04
 
 FROM intel/oneapi-basekit:$ONEAPI_VERSION AS build
 
