@@ -6,15 +6,18 @@ if (CUDAToolkit_FOUND)
     message(STATUS "CUDA Toolkit found")
 
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        # 52 == lowest CUDA 12 standard
-        # 60 == FP16 CUDA intrinsics
-        # 61 == integer CUDA intrinsics
-        # 70 == compute capability at which unrolling a loop in mul_mat_q kernels is faster
-        if (GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
+        # native == GPUs available at build time
+        # 52     == Maxwell, lowest CUDA 12 standard
+        # 60     == P100, FP16 CUDA intrinsics
+        # 61     == Pascal, __dp4a instruction (per-byte integer dot product)
+        # 70     == V100, FP16 tensor cores
+        # 75     == Turing, int6 tensor cores
+        if (GGML_NATIVE AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.6")
+            set(CMAKE_CUDA_ARCHITECTURES "native")
+        elseif(GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
             set(CMAKE_CUDA_ARCHITECTURES "60;61;70;75")
         else()
             set(CMAKE_CUDA_ARCHITECTURES "52;61;70;75")
-            #set(CMAKE_CUDA_ARCHITECTURES "OFF") # use this to compile much faster, but only F16 models work
         endif()
     endif()
     message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
