@@ -15,6 +15,7 @@
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
+#include <syclcompat/math.hpp>
 #include <oneapi/mkl.hpp>
 #include <map>
 
@@ -1830,31 +1831,10 @@ namespace dpct
                                            : id);
     }
 
-    template <typename T>
-    sycl::vec<T, 4> extract_and_sign_or_zero_extend4(T val)
-    {
-        return sycl::vec<T, 1>(val)
-            .template as<sycl::vec<
-                std::conditional_t<std::is_signed_v<T>, int8_t, uint8_t>, 4>>()
-            .template convert<T>();
-    }
-
-    template <typename T1, typename T2>
-    using dot_product_acc_t =
-        std::conditional_t<std::is_unsigned_v<T1> && std::is_unsigned_v<T2>,
-                           uint32_t, int32_t>;
-
     template <typename T1, typename T2, typename T3>
     inline auto dp4a(T1 a, T2 b, T3 c)
     {
-        dot_product_acc_t<T1, T2> res = c;
-        auto va = extract_and_sign_or_zero_extend4(a);
-        auto vb = extract_and_sign_or_zero_extend4(b);
-        res += va[0] * vb[0];
-        res += va[1] * vb[1];
-        res += va[2] * vb[2];
-        res += va[3] * vb[3];
-        return res;
+        return syclcompat::dp4a(a, b, c);
     }
 
     struct sub_sat

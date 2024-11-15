@@ -256,6 +256,9 @@ static ggml_type ggml_type_from_name(const std::string & s) {
     if (s == "f16") {
         return GGML_TYPE_F16;
     }
+    if (s == "bf16") {
+        return GGML_TYPE_BF16;
+    }
     if (s == "q8_0") {
         return GGML_TYPE_Q8_0;
     }
@@ -771,13 +774,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
 struct test {
     static const std::string build_commit;
     static const int build_number;
-    static const bool cuda;
-    static const bool vulkan;
-    static const bool kompute;
-    static const bool metal;
-    static const bool sycl;
-    static const bool gpu_blas;
-    static const bool blas;
     static const std::string cpu_info;
     static const std::string gpu_info;
     std::string model_filename;
@@ -790,7 +786,6 @@ struct test {
     std::string cpu_mask;
     bool cpu_strict;
     int poll;
-    bool has_rpc;
     ggml_type type_k;
     ggml_type type_v;
     int n_gpu_layers;
@@ -819,7 +814,6 @@ struct test {
         cpu_mask = inst.cpu_mask;
         cpu_strict = inst.cpu_strict;
         poll = inst.poll;
-        has_rpc = !inst.rpc_servers.empty();
         type_k = inst.type_k;
         type_v = inst.type_v;
         n_gpu_layers = inst.n_gpu_layers;
@@ -878,8 +872,7 @@ struct test {
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
-            "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas", "blas",
-            "cpu_info", "gpu_info",
+            "cpu_info", "gpu_info", "backends",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_ubatch",
             "n_threads", "cpu_mask", "cpu_strict", "poll",
@@ -905,8 +898,7 @@ struct test {
             field == "avg_ns" || field == "stddev_ns") {
             return INT;
         }
-        if (field == "cuda" || field == "vulkan" || field == "kompute" || field == "metal" ||
-            field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
+        if (field == "f16_kv" || field == "no_kv_offload" ||
             field == "cpu_strict" ||
             field == "flash_attn" || field == "use_mmap" || field == "embeddings") {
             return BOOL;
@@ -935,9 +927,7 @@ struct test {
         }
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
-            std::to_string(cuda), std::to_string(vulkan), std::to_string(vulkan),
-            std::to_string(metal), std::to_string(sycl), std::to_string(has_rpc), std::to_string(gpu_blas), std::to_string(blas),
-            cpu_info, gpu_info,
+            cpu_info, gpu_info, get_backend(),
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_ubatch),
             std::to_string(n_threads), cpu_mask, std::to_string(cpu_strict), std::to_string(poll),
@@ -964,13 +954,6 @@ struct test {
 
 const std::string test::build_commit = LLAMA_COMMIT;
 const int         test::build_number = LLAMA_BUILD_NUMBER;
-const bool        test::cuda         = !!ggml_cpu_has_cuda();
-const bool        test::vulkan       = !!ggml_cpu_has_vulkan();
-const bool        test::kompute      = !!ggml_cpu_has_kompute();
-const bool        test::metal        = !!ggml_cpu_has_metal();
-const bool        test::gpu_blas     = !!ggml_cpu_has_gpublas();
-const bool        test::blas         = !!ggml_cpu_has_blas();
-const bool        test::sycl         = !!ggml_cpu_has_sycl();
 const std::string test::cpu_info     = get_cpu_info();
 const std::string test::gpu_info     = get_gpu_info();
 
@@ -1175,7 +1158,8 @@ struct markdown_printer : public printer {
         fields.emplace_back("size");
         fields.emplace_back("params");
         fields.emplace_back("backend");
-        bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
+        bool is_cpu_backend = test::get_backend().find("CPU") != std::string::npos ||
+                              test::get_backend().find("BLAS") != std::string::npos;
         if (!is_cpu_backend) {
             fields.emplace_back("n_gpu_layers");
         }
@@ -1265,9 +1249,6 @@ struct markdown_printer : public printer {
                 value = buf;
             } else if (field == "backend") {
                 value = test::get_backend();
-                if (t.has_rpc) {
-                    value += "+RPC";
-                }
             } else if (field == "test") {
                 if (t.n_prompt > 0 && t.n_gen == 0) {
                     snprintf(buf, sizeof(buf), "pp%d", t.n_prompt);

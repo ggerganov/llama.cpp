@@ -41,6 +41,8 @@ The following release is verified with good quality:
 
 ## News
 
+- 2024.11
+  - Use syclcompat to improve the performance on some platforms. This requires to use oneAPI 2025.0 or newer.
 
 - 2024.8
   - Use oneDNN as the default GEMM library, improve the compatibility for new Intel GPUs.
@@ -380,7 +382,7 @@ found 2 SYCL devices:
 
 |Chosen Device ID|Setting|
 |-|-|
-|0|`export ONEAPI_DEVICE_SELECTOR="level_zero:1"` or no action|
+|0|`export ONEAPI_DEVICE_SELECTOR="level_zero:0"` or no action|
 |1|`export ONEAPI_DEVICE_SELECTOR="level_zero:1"`|
 |0 & 1|`export ONEAPI_DEVICE_SELECTOR="level_zero:0;level_zero:1"`|
 
