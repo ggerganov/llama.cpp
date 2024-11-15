@@ -940,6 +940,10 @@ ggml/src/ggml-cuda/%.o: \
 	$(MCC) $(CXXFLAGS) $(MUSAFLAGS) -x musa -mtgpu -c -o $@ $<
 endif # GGML_MUSA
 
+ifndef GGML_NO_CPU_AARCH64
+	MK_CPPFLAGS += -DGGML_USE_CPU_AARCH64
+endif
+
 ifdef GGML_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit

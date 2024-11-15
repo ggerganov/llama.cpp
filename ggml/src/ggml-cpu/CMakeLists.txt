@@ -236,6 +236,11 @@ else()
     message(STATUS "Unknown architecture")
 endif()
 
+if (GGML_CPU_AARCH64)
+    message(STATUS "Using runtime weight conversion of Q4_0 to Q4_0_x_x to enable optimized GEMM/GEMV kernels")
+    add_compile_definitions(GGML_USE_CPU_AARCH64)
+endif()
+
 target_compile_options(ggml-cpu PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 target_compile_options(ggml-cpu PRIVATE "$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
 
