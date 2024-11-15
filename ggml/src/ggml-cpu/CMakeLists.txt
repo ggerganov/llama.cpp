@@ -211,10 +211,13 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
     message(STATUS "PowerPC detected")
-    execute_process(COMMAND bash -c "grep POWER10 /proc/cpuinfo | head -n 1"
-                   OUTPUT_VARIABLE POWER10_M)
-    string(FIND ${POWER10_M} "POWER10" substring_index)
-    if(${substring_index} GREATER_EQUAL 0)
+    execute_process(COMMAND bash -c "grep POWER10 /proc/cpuinfo | head -n 1" OUTPUT_VARIABLE POWER10_M)
+    string(FIND "${POWER10_M}" "POWER10" substring_index)
+    if (NOT DEFINED substring_index OR "${substring_index}" STREQUAL "")
+        set(substring_index -1)
+    endif()
+
+    if (${substring_index} GREATER_EQUAL 0)
        list(APPEND ARCH_FLAGS -mcpu=power10)
     elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64le")
        list(APPEND ARCH_FLAGS -mcpu=powerpc64le)
