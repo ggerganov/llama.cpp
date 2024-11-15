@@ -681,6 +681,7 @@ struct test_case {
 
         // run
         int64_t total_time_us = 0;
+        int64_t total_mem = 0;
         int total_runs = 0;
         do {
             int64_t start_time = ggml_time_us();
@@ -688,6 +689,7 @@ struct test_case {
             int64_t end_time = ggml_time_us();
 
             total_time_us += end_time - start_time;
+            total_mem += mem;
             total_runs += n_runs;
         } while (total_time_us < 1000*1000); // run for at least 1 second
 
@@ -717,7 +719,7 @@ struct test_case {
         } else {
             printf("%8zu kB/run - \033[1;34m%7.2f GB/s\033[0m",
                 op_size(out) / 1024,
-                mem / (total_time_us / 1e6) / 1024.0 / 1024.0 / 1024.0);
+                total_mem / (total_time_us / 1e6) / 1024.0 / 1024.0 / 1024.0);
         }
         printf("\n");
 
@@ -2740,6 +2742,13 @@ struct test_flash_attn_ext : public test_case {
         return 5e-4;
     }
 
+    uint64_t op_flops(ggml_tensor * t) override {
+        GGML_UNUSED(t);
+        // Just counting matmul costs:
+        // Q*K^T is nb x hs x kv, P*V is nb x kv x hs, per head
+        return 2 * 2 * nh * nb * hs * kv;
+    }
+
     test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8,
                         bool mask = true, float max_bias = 0.0f, float logit_softcap = 0.0f, ggml_type type_KV = GGML_TYPE_F16)
         : hs(hs), nh(nh), kv(kv), nb(nb), mask(mask), max_bias(max_bias), logit_softcap(logit_softcap), type_KV(type_KV) {}
@@ -3778,6 +3787,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
 
     test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1,   1, 1, 1}));
     test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1, 512, 1, 1}));
+
+    test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, GGML_TYPE_F16, {512, 3072, 1, 1}));
 
     for (int bs : {1, 512}) {
         for (ggml_type type_a : all_types) {
