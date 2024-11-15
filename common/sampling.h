@@ -60,6 +60,8 @@ void common_perf_print(const struct llama_context * ctx, const struct common_sam
 //
 llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first = false);
 
+std::vector<llama_token> common_sampler_sample_n(struct common_sampler * gsmpl, struct llama_context * ctx, const std::vector<int> & idxs, const std::vector<llama_token> & draft, bool grammar_first = false);
+
 uint32_t common_sampler_get_seed(const struct common_sampler * gsmpl);
 
 // helpers
