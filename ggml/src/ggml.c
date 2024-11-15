@@ -49,6 +49,14 @@
 
 #define UNUSED GGML_UNUSED
 
+#if defined(_MSC_VER)
+#define m512bh(p) p
+#define m512i(p) p
+#else
+#define m512bh(p) (__m512bh)(p)
+#define m512i(p) (__m512i)(p)
+#endif
+
 // precomputed f32 table for f16 (256 KB) (ggml-impl.h)
 float ggml_table_f32_f16[1 << 16];
 
