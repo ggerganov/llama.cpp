@@ -1763,7 +1763,8 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     fp16 = fp16 && vk12_features.shaderFloat16;
 
     std::string device_name = props2.properties.deviceName.data();
-    std::cerr << GGML_VK_NAME << idx << ": " << device_name << " (" << driver_props.driverName << ") | uma: " << uma << " | fp16: " << fp16 << " | warp size: " << subgroup_size << std::endl;
+    GGML_LOG_DEBUG("ggml_vulkan: %d = %s (%s) | uma: %d | fp16: %d | warp size: %d\n",
+              idx, device_name.c_str(), driver_props.driverName, uma, fp16, subgroup_size);
 
     if (props2.properties.deviceType == vk::PhysicalDeviceType::eCpu) {
         std::cerr << "ggml_vulkan: Warning: Device type is CPU. This is probably not the device you want." << std::endl;
@@ -1821,8 +1822,7 @@ void ggml_vk_instance_init() {
         };
         validation_features.setPNext(nullptr);
         instance_create_info.setPNext(&validation_features);
-
-        std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
+        GGML_LOG_DEBUG("ggml_vulkan: Validation layers enabled\n");
     }
     vk_instance.instance = vk::createInstance(instance_create_info);
 
@@ -1936,8 +1936,8 @@ void ggml_vk_instance_init() {
             vk_instance.device_indices.push_back(0);
         }
     }
+    GGML_LOG_DEBUG("ggml_vulkan: Found %d Vulkan devices:\n", vk_instance.device_indices.size());
 
-    std::cerr << "ggml_vulkan: Found " << vk_instance.device_indices.size() << " Vulkan devices:" << std::endl;
 
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         ggml_vk_print_gpu_info(i);

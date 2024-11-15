@@ -414,6 +414,27 @@ jobs:
           cmake -B build2 -S . -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc -DGGML_HIP=ON
           cmake --build build2 --config Release -j $(nproc)
 
+  ubuntu-22-cmake-musa:
+    runs-on: ubuntu-22.04
+    container: mthreads/musa:rc3.1.0-devel-ubuntu22.04
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        run: |
+          apt-get update
+          apt-get install -y build-essential git cmake libcurl4-openssl-dev
+
+      - name: Build with native CMake MUSA support
+        id: cmake_build
+        run: |
+          cmake -B build -S . -DGGML_MUSA=ON
+          cmake --build build --config Release -j $(nproc)
+
   ubuntu-22-cmake-sycl:
     runs-on: ubuntu-22.04
 
