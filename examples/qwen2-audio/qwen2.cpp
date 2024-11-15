@@ -724,6 +724,7 @@ void omni_free(struct omni_context *ctx_omni)
     llama_free(ctx_omni->ctx_llama);
     llama_free_model(ctx_omni->model);
     llama_backend_free();
+    free(ctx_omni);
 }
 
 static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_embed, int n_batch, int *n_past)
@@ -763,6 +764,7 @@ static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_e
         }
         *n_past += n_eval;
     }
+    free(audio_embed_data);
     return true;
 }
 
