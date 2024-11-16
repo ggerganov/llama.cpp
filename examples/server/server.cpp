@@ -927,14 +927,22 @@ struct server_context {
 
         {
             const auto & samplers = data.find("samplers");
-            if (samplers != data.end() && samplers->is_array()) {
-                std::vector<std::string> sampler_names;
-                for (const auto & name : *samplers) {
-                    if (name.is_string()) {
-                        sampler_names.emplace_back(name);
+            if (samplers != data.end()) {
+                if (samplers->is_array()) {
+                    std::vector<std::string> sampler_names;
+                    for (const auto & name : *samplers) {
+                        if (name.is_string()) {
+                            sampler_names.emplace_back(name);
+                        }
                     }
+                    slot.sparams.samplers = common_sampler_types_from_names(sampler_names, false);
+                } else if (samplers->is_string()){
+                    std::string sampler_string;
+                    for (const auto & name : *samplers) {
+                        sampler_string += name;
+                    }
+                    slot.sparams.samplers = common_sampler_types_from_chars(sampler_string);
                 }
-                slot.sparams.samplers = common_sampler_types_from_names(sampler_names, false);
             } else {
                 slot.sparams.samplers = default_sparams.samplers;
             }

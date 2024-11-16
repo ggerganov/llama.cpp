@@ -1,11 +1,34 @@
 #version 450
 
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+
 #include "mul_mat_vec_base.comp"
 
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 shared FLOAT_TYPE tmp[32];
 
+// Declare aliased versions of A and B bindings that can use 16b/32b loads for
+// the quantized values, and vec4 loads for B.
+struct block_q4_K_u32
+{
+    f16vec2 d;
+    uint32_t scales[3*QUANT_K/64/4];
+    uint32_t qs[QUANT_K/2/4];
+};
+
+struct block_q4_K_u16
+{
+    f16vec2 d;
+    uint16_t scales[3*QUANT_K/64/2];
+    uint16_t qs[QUANT_K/2/2];
+};
+
+layout (binding = 0) readonly buffer A_u32 {block_q4_K_u32 data_a_u32[];};
+layout (binding = 0) readonly buffer A_u16 {block_q4_K_u16 data_a_u16[];};
+layout (binding = 1) readonly buffer BV4 {B_TYPE_VEC4 data_b_v4[];};
+
+// This shader assumes K_QUANTS_PER_ITERATION == 2 for alignment of loads
 void main() {
     const uint row = gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z;
 
@@ -31,78 +54,80 @@ void main() {
     const uint q_offset = 32*v_im + l0;
     const uint y_offset = 64*v_im + l0;
 
-    tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
+    FLOAT_TYPE temp = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
     [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
         const uint y1_idx = i * QUANT_K + y_offset;
         const uint y2_idx = y1_idx + 128;
 
-        const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
-        const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
+        f16vec2 d = data_a[ib0 + i].d;
+        const FLOAT_TYPE dall = FLOAT_TYPE(d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(d.y);
 
-        const uint8_t sc0 = uint8_t(  data_a[ib0 + i].scales[v_im * 2    ]       & 0x3f);
-        const uint8_t sc1 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 1]       & 0x3f);
-        const uint8_t sc2 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 4]       & 0x3f);
-        const uint8_t sc3 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 5]       & 0x3f);
-        const uint8_t sc4 = uint8_t(( data_a[ib0 + i].scales[v_im * 2 + 8]       & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2    ] & 0xc0) >> 2));
-        const uint8_t sc5 = uint8_t(( data_a[ib0 + i].scales[v_im * 2 + 9]       & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 1] & 0xc0) >> 2));
-        const uint8_t sc6 = uint8_t(((data_a[ib0 + i].scales[v_im * 2 + 8] >> 4) & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 4] & 0xc0) >> 2));
-        const uint8_t sc7 = uint8_t(((data_a[ib0 + i].scales[v_im * 2 + 9] >> 4) & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 5] & 0xc0) >> 2));
+        uint32_t scale0_u32 = data_a_u16[ib0 + i].scales[v_im    ];
+        uint32_t scale4_u32 = data_a_u16[ib0 + i].scales[v_im + 2];
+        uint32_t scale8_u32 = data_a_u16[ib0 + i].scales[v_im + 4];
+        uvec4 scale0 = uvec4(unpack8(scale0_u32));
+        uvec4 scale4 = uvec4(unpack8(scale4_u32));
+        uvec4 scale8 = uvec4(unpack8(scale8_u32));
 
-#if K_QUANTS_PER_ITERATION == 2
-        const uint8_t q4_0  = uint8_t(data_a[ib0 + i].qs[q_offset     ] & 0xf);
-        const uint8_t q4_1  = uint8_t(data_a[ib0 + i].qs[q_offset +  1] & 0xf);
-        const uint8_t q4_2  = uint8_t(data_a[ib0 + i].qs[q_offset +  2] & 0xf);
-        const uint8_t q4_3  = uint8_t(data_a[ib0 + i].qs[q_offset +  3] & 0xf);
-        const uint8_t q4_4  = uint8_t(data_a[ib0 + i].qs[q_offset     ]  >> 4);
-        const uint8_t q4_5  = uint8_t(data_a[ib0 + i].qs[q_offset +  1]  >> 4);
-        const uint8_t q4_6  = uint8_t(data_a[ib0 + i].qs[q_offset +  2]  >> 4);
-        const uint8_t q4_7  = uint8_t(data_a[ib0 + i].qs[q_offset +  3]  >> 4);
-        const uint8_t q4_8  = uint8_t(data_a[ib0 + i].qs[q_offset + 64] & 0xf);
-        const uint8_t q4_9  = uint8_t(data_a[ib0 + i].qs[q_offset + 65] & 0xf);
-        const uint8_t q4_10 = uint8_t(data_a[ib0 + i].qs[q_offset + 66] & 0xf);
-        const uint8_t q4_11 = uint8_t(data_a[ib0 + i].qs[q_offset + 67] & 0xf);
-        const uint8_t q4_12 = uint8_t(data_a[ib0 + i].qs[q_offset + 64]  >> 4);
-        const uint8_t q4_13 = uint8_t(data_a[ib0 + i].qs[q_offset + 65]  >> 4);
-        const uint8_t q4_14 = uint8_t(data_a[ib0 + i].qs[q_offset + 66]  >> 4);
-        const uint8_t q4_15 = uint8_t(data_a[ib0 + i].qs[q_offset + 67]  >> 4);
+        const uint32_t sc0 = (  scale0.x       & 0x3f);
+        const uint32_t sc1 = (  scale0.y       & 0x3f);
+        const uint32_t sc2 = (  scale4.x       & 0x3f);
+        const uint32_t sc3 = (  scale4.y       & 0x3f);
+        const uint32_t sc4 = (( scale8.x       & 0x0f) | ((scale0.x & 0xc0) >> 2));
+        const uint32_t sc5 = (( scale8.y       & 0x0f) | ((scale0.y & 0xc0) >> 2));
+        const uint32_t sc6 = (((scale8.x >> 4) & 0x0f) | ((scale4.x & 0xc0) >> 2));
+        const uint32_t sc7 = (((scale8.y >> 4) & 0x0f) | ((scale4.y & 0xc0) >> 2));
 
-        const FLOAT_TYPE sx = fma(FLOAT_TYPE(data_b[b_offset + y1_idx]),      q4_0,  fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 1]),  q4_1,  fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 2]),  q4_2,  FLOAT_TYPE(data_b[b_offset + y1_idx + 3]) *  q4_3)));
-        const FLOAT_TYPE sy = fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 32]), q4_4,  fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 33]), q4_5,  fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 34]), q4_6,  FLOAT_TYPE(data_b[b_offset + y1_idx + 35]) * q4_7)));
-        const FLOAT_TYPE sz = fma(FLOAT_TYPE(data_b[b_offset + y2_idx]),      q4_8,  fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 1]),  q4_9,  fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 2]),  q4_10, FLOAT_TYPE(data_b[b_offset + y2_idx + 3]) *  q4_11)));
-        const FLOAT_TYPE sw = fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 32]), q4_12, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 33]), q4_13, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 34]), q4_14, FLOAT_TYPE(data_b[b_offset + y2_idx + 35]) * q4_15)));
+        uint32_t qs0_u32 = data_a_u32[ib0 + i].qs[q_offset / 4];
+        uint32_t qs64_u32 = data_a_u32[ib0 + i].qs[q_offset / 4 + 16];
+
+        uint32_t qs0_u32_lo4 = qs0_u32 & 0x0F0F0F0F;
+        uint32_t qs0_u32_hi4 = (qs0_u32 >> 4) & 0x0F0F0F0F;
+        uint32_t qs64_u32_lo4 = qs64_u32 & 0x0F0F0F0F;
+        uint32_t qs64_u32_hi4 = (qs64_u32 >> 4) & 0x0F0F0F0F;
+
+        uvec4 qs0_lo4 = uvec4(unpack8(qs0_u32_lo4));
+        uvec4 qs64_lo4 = uvec4(unpack8(qs64_u32_lo4));
+        uvec4 qs0_hi4 = uvec4(unpack8(qs0_u32_hi4));
+        uvec4 qs64_hi4 = uvec4(unpack8(qs64_u32_hi4));
+
+        const uint32_t q4_0  = qs0_lo4.x;
+        const uint32_t q4_1  = qs0_lo4.y;
+        const uint32_t q4_2  = qs0_lo4.z;
+        const uint32_t q4_3  = qs0_lo4.w;
+        const uint32_t q4_4  = qs0_hi4.x;
+        const uint32_t q4_5  = qs0_hi4.y;
+        const uint32_t q4_6  = qs0_hi4.z;
+        const uint32_t q4_7  = qs0_hi4.w;
+        const uint32_t q4_8  = qs64_lo4.x;
+        const uint32_t q4_9  = qs64_lo4.y;
+        const uint32_t q4_10 = qs64_lo4.z;
+        const uint32_t q4_11 = qs64_lo4.w;
+        const uint32_t q4_12 = qs64_hi4.x;
+        const uint32_t q4_13 = qs64_hi4.y;
+        const uint32_t q4_14 = qs64_hi4.z;
+        const uint32_t q4_15 = qs64_hi4.w;
+
+        B_TYPE_VEC4 by10 =  data_b_v4[(b_offset + y1_idx) / 4];
+        B_TYPE_VEC4 by132 = data_b_v4[(b_offset + y1_idx) / 4 + 8];
+        B_TYPE_VEC4 by20 =  data_b_v4[(b_offset + y2_idx) / 4];
+        B_TYPE_VEC4 by232 = data_b_v4[(b_offset + y2_idx) / 4 + 8];
+
+        const FLOAT_TYPE sx = fma(FLOAT_TYPE(by10.x),      q4_0,  fma(FLOAT_TYPE(by10.y),  q4_1,  fma(FLOAT_TYPE(by10.z),  q4_2,  FLOAT_TYPE(by10.w) *  q4_3)));
+        const FLOAT_TYPE sy = fma(FLOAT_TYPE(by132.x),     q4_4,  fma(FLOAT_TYPE(by132.y), q4_5,  fma(FLOAT_TYPE(by132.z), q4_6,  FLOAT_TYPE(by132.w) * q4_7)));
+        const FLOAT_TYPE sz = fma(FLOAT_TYPE(by20.x),      q4_8,  fma(FLOAT_TYPE(by20.y),  q4_9,  fma(FLOAT_TYPE(by20.z),  q4_10, FLOAT_TYPE(by20.w) *  q4_11)));
+        const FLOAT_TYPE sw = fma(FLOAT_TYPE(by232.x),     q4_12, fma(FLOAT_TYPE(by232.y), q4_13, fma(FLOAT_TYPE(by232.z), q4_14, FLOAT_TYPE(by232.w) * q4_15)));
         const FLOAT_TYPE smin =
-            fma(FLOAT_TYPE(data_b[b_offset + y1_idx    ]), sc2, fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 32]), sc3, fma(FLOAT_TYPE(data_b[b_offset + y2_idx    ]), sc6, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 32]), sc7,
-            fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 1]), sc2, fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 33]), sc3, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 1]), sc6, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 33]), sc7,
-            fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 2]), sc2, fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 34]), sc3, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 2]), sc6, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 34]), sc7,
-            fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 3]), sc2, fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 35]), sc3, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 3]), sc6,     FLOAT_TYPE(data_b[b_offset + y2_idx + 35]) * sc7)))))))))))))));
-        const uint tmp_idx = 16 * ix + tid;
-        tmp[tmp_idx] = fma(dall, fma(sx, sc0, fma(sy, sc1, fma(sz, sc4, sw * sc5))), fma(-dmin, smin, tmp[tmp_idx]));
-#else
-        const uint8_t q4_0 = uint8_t(data_a[ib0 + i].qs[q_offset     ] & 0xf);
-        const uint8_t q4_1 = uint8_t(data_a[ib0 + i].qs[q_offset +  1] & 0xf);
-        const uint8_t q4_2 = uint8_t(data_a[ib0 + i].qs[q_offset     ]  >> 4);
-        const uint8_t q4_3 = uint8_t(data_a[ib0 + i].qs[q_offset +  1]  >> 4);
-        const uint8_t q4_4 = uint8_t(data_a[ib0 + i].qs[q_offset + 64] & 0xf);
-        const uint8_t q4_5 = uint8_t(data_a[ib0 + i].qs[q_offset + 65] & 0xf);
-        const uint8_t q4_6 = uint8_t(data_a[ib0 + i].qs[q_offset + 64]  >> 4);
-        const uint8_t q4_7 = uint8_t(data_a[ib0 + i].qs[q_offset + 65]  >> 4);
-
-        const FLOAT_TYPE sx = fma(FLOAT_TYPE(data_b[b_offset + y1_idx     ]), q4_0, FLOAT_TYPE(data_b[b_offset + y1_idx +  1]) * q4_1);
-        const FLOAT_TYPE sy = fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 32]), q4_2, FLOAT_TYPE(data_b[b_offset + y1_idx + 33]) * q4_3);
-        const FLOAT_TYPE sz = fma(FLOAT_TYPE(data_b[b_offset + y2_idx     ]), q4_4, FLOAT_TYPE(data_b[b_offset + y2_idx +  1]) * q4_5);
-        const FLOAT_TYPE sw = fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 32]), q4_6, FLOAT_TYPE(data_b[b_offset + y2_idx + 33]) * q4_7);
-        const FLOAT_TYPE smin =
-            fma(FLOAT_TYPE(data_b[b_offset + y1_idx    ]), sc2, fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 32]), sc3, fma(FLOAT_TYPE(data_b[b_offset + y2_idx    ]), sc6, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 32]), sc7,
-          + fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 1]), sc2, fma(FLOAT_TYPE(data_b[b_offset + y1_idx + 33]), sc3, fma(FLOAT_TYPE(data_b[b_offset + y2_idx + 1]), sc6, FLOAT_TYPE(data_b[b_offset + y2_idx + 33]) * sc7)))))));
-
-        tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * FLOAT_TYPE(data_a[ib0 + i].scales[v_im] & 0x3f) + sy * FLOAT_TYPE(data_a[ib0 + i].scales[v_im + 1] & 0x3f) +
-                        sz * FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 4] & 0x0f) | ((data_a[ib0 + i].scales[v_im] & 0xc0) >> 2)) + sw * FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 5] & 0x0f) | ((data_a[ib0 + i].scales[v_im + 1] & 0xc0) >> 2))) - dmin * smin);
-        const uint tmp_idx = 16 * ix + tid;
-        tmp[tmp_idx] = fma(dall, (fma(sx, FLOAT_TYPE(data_a[ib0 + i].scales[v_im] & 0x3f), fma(sy, FLOAT_TYPE(data_a[ib0 + i].scales[v_im + 1] & 0x3f),
-                       fma(sz, FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 4] & 0x0f) | ((data_a[ib0 + i].scales[v_im] & 0xc0) >> 2)), fma(sw, FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 5] & 0x0f) | ((data_a[ib0 + i].scales[v_im + 1] & 0xc0) >> 2))))))), fma(-dmin, smin, tmp[tmp_idx]));
-#endif
+            fma(FLOAT_TYPE(by10.x), sc2, fma(FLOAT_TYPE(by132.x), sc3, fma(FLOAT_TYPE(by20.x), sc6, fma(FLOAT_TYPE(by232.x), sc7,
+            fma(FLOAT_TYPE(by10.y), sc2, fma(FLOAT_TYPE(by132.y), sc3, fma(FLOAT_TYPE(by20.y), sc6, fma(FLOAT_TYPE(by232.y), sc7,
+            fma(FLOAT_TYPE(by10.z), sc2, fma(FLOAT_TYPE(by132.z), sc3, fma(FLOAT_TYPE(by20.z), sc6, fma(FLOAT_TYPE(by232.z), sc7,
+            fma(FLOAT_TYPE(by10.w), sc2, fma(FLOAT_TYPE(by132.w), sc3, fma(FLOAT_TYPE(by20.w), sc6,     FLOAT_TYPE(by232.w) * sc7)))))))))))))));
+        temp = fma(dall, fma(sx, sc0, fma(sy, sc1, fma(sz, sc4, sw * sc5))), fma(-dmin, smin, temp));
     }
+
+    tmp[gl_LocalInvocationID.x] = temp;
 
     // sum up partial sums and write back result
     barrier();
