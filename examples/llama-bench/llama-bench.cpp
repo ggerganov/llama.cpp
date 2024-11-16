@@ -1337,7 +1337,14 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_batch, int n_th
         for (int i = 1; i < n_tokens; i++) {
             tokens[i] = std::rand() % n_vocab;
         }
-        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens));
+        auto batch = llama_batch_get_one(tokens.data(), n_tokens);
+        int8_t logits[512];
+        for (int i = 0; i < n_tokens; i++) {
+            logits[i] = 1;
+        }
+        batch.logits = logits;
+
+        llama_decode(ctx, batch);
         n_processed += n_tokens;
     }
 
