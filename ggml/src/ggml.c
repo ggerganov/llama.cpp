@@ -5501,7 +5501,7 @@ static void ggml_compute_backward(
                     fprintf(stderr, "%s: unsupported unary op for backward pass: %s\n",
                         __func__, ggml_unary_op_name(ggml_get_unary_op(tensor)));
                     GGML_ABORT("fatal error");
-                } break;
+                } //break;
             }
         } break;
         case GGML_OP_CROSS_ENTROPY_LOSS: {
@@ -5517,7 +5517,7 @@ static void ggml_compute_backward(
         default: {
             fprintf(stderr, "%s: unsupported ggml op for backward pass: %s\n", __func__, ggml_op_name(tensor->op));
             GGML_ABORT("fatal error");
-        } break;
+        } //break;
     }
 
     GGML_ASSERT(!src0_needs_grads || ggml_are_same_shape(src0, cgraph->grads[isrc0]));
