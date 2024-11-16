@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <inttypes.h>
+#include <cinttypes>
 #include <map>
 #include <random>
 #include <vector>
