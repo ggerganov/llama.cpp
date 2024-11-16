@@ -3,6 +3,7 @@
 *.a
 *.bat
 *.bin
+*.d
 *.dll
 *.dot
 *.etag
