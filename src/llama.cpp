@@ -19965,7 +19965,7 @@ int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t bu
             llama_model_ftype_name(model->ftype).c_str());
 }
 
-size_t llama_model_size(const struct llama_model * model) {
+uint64_t llama_model_size(const struct llama_model * model) {
     return model->n_bytes;
 }
 
