@@ -996,6 +996,7 @@ OBJ_GGML = \
 	$(DIR_GGML)/src/ggml-alloc.o \
 	$(DIR_GGML)/src/ggml-backend.o \
 	$(DIR_GGML)/src/ggml-backend-reg.o \
+	$(DIR_GGML)/src/ggml-opt.o \
 	$(DIR_GGML)/src/ggml-quants.o \
 	$(DIR_GGML)/src/ggml-threading.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu.o \
