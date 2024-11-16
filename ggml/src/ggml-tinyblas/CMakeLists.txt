@@ -1,3 +1,5 @@
+message(STATUS "Using TINYBLAS")
+
 add_library(ggml-tinyblas
             ggml-tinyblas.cpp
             )
@@ -224,6 +226,10 @@ endif()
 
 target_compile_options(ggml-tinyblas PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 target_compile_options(ggml-tinyblas PRIVATE "$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
+
+#set_source_files_properties( ${GGML_SOURCES_FP8} PROPERTIES CXX_STANDARD 17)
+#set_source_files_properties( ${GGML_SOURCES_FP8} PROPERTIES COMPILE_FLAGS "-std=c++17")
+target_compile_features   (ggml-tinyblas PRIVATE cxx_std_17)
 
 if (EMSCRIPTEN)
     set_target_properties(ggml-tinyblas PROPERTIES COMPILE_FLAGS "-msimd128")

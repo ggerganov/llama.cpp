@@ -57,8 +57,8 @@ else()
 endif()
 
 # defaults
-if (NOT GGML_LLAMAFILE_DEFAULT)
-    set(GGML_LLAMAFILE_DEFAULT OFF)
+if (NOT GGML_TINYBLAS_DEFAULT)
+    set(GGML_TINYBLAS_DEFAULT OFF)
 endif()
 
 if (NOT GGML_CUDA_GRAPHS_DEFAULT)
@@ -124,8 +124,7 @@ option(GGML_ACCELERATE                      "ggml: enable Accelerate framework" 
 option(GGML_BLAS                            "ggml: use BLAS"                                  ${GGML_BLAS_DEFAULT})
 set(GGML_BLAS_VENDOR ${GGML_BLAS_VENDOR_DEFAULT} CACHE STRING
                                             "ggml: BLAS library vendor")
-option(GGML_LLAMAFILE                       "ggml: use LLAMAFILE"                             ${GGML_LLAMAFILE_DEFAULT})
-
+option(GGML_TINYBLAS                        "ggml: use TINYBLAS"                              OFF)
 option(GGML_CUDA                            "ggml: use CUDA"                                  OFF)
 option(GGML_MUSA                            "ggml: use MUSA"                                  OFF)
 option(GGML_CUDA_FORCE_DMMV                 "ggml: use dmmv instead of mmvq CUDA kernels"     OFF)
@@ -231,6 +230,7 @@ set(GGML_PUBLIC_HEADERS
     include/ggml-metal.h
     include/ggml-rpc.h
     include/ggml-sycl.h
+    include/ggml-tinyblas.h
     include/ggml-vulkan.h)
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")

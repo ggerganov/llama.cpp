@@ -1739,6 +1739,17 @@ namespace ggml::backend::tinyblas {
         }
 #endif
         return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const float *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
@@ -1787,6 +1798,17 @@ namespace ggml::backend::tinyblas {
         }
 #endif
         return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const ggml_fp16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
@@ -1835,6 +1857,17 @@ namespace ggml::backend::tinyblas {
         }
 #endif
         return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const ggml_fp16_t *A, int64_t lda, const ggml_fp16_t *B, int64_t ldb, float *C, int64_t ldc,
@@ -1876,6 +1909,17 @@ namespace ggml::backend::tinyblas {
         // TODO
 #endif
         return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const ggml_bf16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
@@ -1914,6 +1958,17 @@ namespace ggml::backend::tinyblas {
         }
 #endif
         return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const ggml_bf16_t *A, int64_t lda, const ggml_bf16_t *B, int64_t ldb, float *C, int64_t ldc,
@@ -1950,6 +2005,17 @@ namespace ggml::backend::tinyblas {
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const block_q8_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
@@ -1986,6 +2052,17 @@ namespace ggml::backend::tinyblas {
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const block_q4_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
@@ -2016,6 +2093,17 @@ namespace ggml::backend::tinyblas {
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const block_q5_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
@@ -2045,6 +2133,17 @@ namespace ggml::backend::tinyblas {
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
     template bool gemm<true>(int64_t m, int64_t n, int64_t k,
             const block_iq4_nl *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,

@@ -44,16 +44,6 @@ if (GGML_OPENMP)
     endif()
 endif()
 
-if (GGML_LLAMAFILE)
-    message(STATUS "Using llamafile")
-
-    add_compile_definitions(GGML_USE_LLAMAFILE)
-
-    target_sources(ggml-cpu PRIVATE
-                    llamafile/sgemm.cpp
-                    llamafile/sgemm.h)
-endif()
-
 if (GGML_CPU_HBM)
     find_library(memkind memkind REQUIRED)
 

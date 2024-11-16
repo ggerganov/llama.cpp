@@ -1,3 +1,48 @@
+// Copyright 2024 Mozilla Foundation
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+//
+//                   _   _          ___ _      _   ___
+//                  | |_(_)_ _ _  _| _ ) |    /_\ / __|
+//                  |  _| | ' \ || | _ \ |__ / _ \\__ \.
+//                   \__|_|_||_\_, |___/____/_/ \_\___/
+//                             |__/
+//
+//                    BASIC LINEAR ALGEBRA SUBPROGRAMS
+//
+//
+// This file implements multithreaded CPU matrix multiplication for the
+// common contiguous use case C = Aᵀ * B. These kernels are designed to
+// have excellent performance[1] for matrices that fit in the CPU cache
+// without imposing any overhead such as cache filling or malloc calls.
+//
+// This implementation does not guarantee any upper bound with rounding
+// errors, which grow along with k. Our goal's to maximally exploit the
+// hardware for performance, and then use whatever resources remain for
+// improving numerical accuracy.
+//
+// [1] J. Tunney, ‘LLaMA Now Goes Faster on CPUs’, Mar. 2024. [Online].
+//     Available: https://justine.lol/matmul/. [Accessed: 29-Mar-2024].
+
 #include "ggml-cpu.h"
 #include "ggml-impl.h"
 #include "ggml-tinyblas.h"
@@ -7,8 +52,9 @@
 
 #include <memory>
 #include <cstring>
-#include <iostream>
 
+// TODO: see how to use threads/pool for all backend: ggml_graph_compute / ggml_threadpool
+// https://github.com/ggerganov/llama.cpp/pull/1999
 #ifdef GGML_USE_OPENMP
 #include <omp.h>
 #endif
@@ -21,8 +67,6 @@ namespace ggml::backend::tinyblas {
         int n_threads = GGML_DEFAULT_N_THREADS;
         std::unique_ptr<char[]> work_data;
         size_t work_size = 0;
-        //int pp_threads = GGML_DEFAULT_N_THREADS;
-        //int tg_threads = GGML_DEFAULT_N_THREADS;
     };
 
     template<bool RUN>
@@ -112,7 +156,7 @@ namespace ggml::backend::tinyblas {
             }
         }
 
-        // apres conversion de B: FP32 => src0->vec_dot_type
+        // after convert B: FP32 => src0->vec_dot_type
         enum ggml_type const vec_dot_type = ggml_get_type_traits_cpu(src0->type)->vec_dot_type;
         if ((src1->type != vec_dot_type) && (src1->type == GGML_TYPE_F32)) {
             if (mul_mat<false>(ne01, ne11, ne00/ggml_blck_size(src0->type),
@@ -120,7 +164,7 @@ namespace ggml::backend::tinyblas {
                     src1->data, nb11/ggml_type_size(src1->type),
                     dst->data, nb1/ggml_type_size(dst->type),
                     0, 1, src0->type, vec_dot_type, GGML_TYPE_F32)) {
-                // @ voir ca aurait etait bien de redimensioner work_data ici..
+                // TODO: how to resize work_data here
                 return true;
             }
         }
@@ -136,7 +180,6 @@ namespace ggml::backend::tinyblas {
         const enum ggml_type type0 = src0->type;
         const enum ggml_type type1 = src1->type;
 
-        // les type "directs"
         // broadcast factors
         const int64_t r2 = ne12 / ne02;
         const int64_t r3 = ne13 / ne03;
@@ -160,21 +203,18 @@ namespace ggml::backend::tinyblas {
         }
         UseGgmlGemm1:;
 
-        // apres conversion de B ?
+        // with B converted from FP32 -> vec_dot_type
         GGML_ASSERT(src1->type == GGML_TYPE_F32); // for use 'from_float'
         enum ggml_type    const vec_dot_type = ggml_get_type_traits_cpu(type0)->vec_dot_type;
         ggml_from_float_t const from_float   = ggml_get_type_traits_cpu(vec_dot_type)->from_float;
-        // auto const type_size = ggml_get_type_traits(vec_dot_type)->type_size;
 
         if (src1->type != vec_dot_type) {
-            // OK on va au moins essayer de changer le type de B
-
             const size_t nbw1 = ggml_row_size(vec_dot_type, ne10);
             // const size_t row_size = ggml_row_size(vec_dot_type, ne10);
             const size_t nbw2 = nbw1*ne11;
             const size_t nbw3 = nbw2*ne12;
 
-            // TOD0: vor si on peu caller ca dans supports_mul_mat
+            // TODO: move to: supports_mul_mat
             if ((ith == 0) && (ctx->work_size < ne13*nbw3)) {
                 ctx->work_data.reset(new char[ne13*nbw3]);
                 ctx->work_size = ne13*nbw3;
@@ -182,7 +222,7 @@ namespace ggml::backend::tinyblas {
 #ifdef GGML_USE_OPENMP
 #pragma omp barrier
 #else
-            static_assert(false, "Note implemented: use GGML_USE_OPENMP");
+            static_assert(false, "Not implemented: use GGML_USE_OPENMP");
 #endif
             char * wdata = ctx->work_data.get();
 
@@ -200,7 +240,7 @@ namespace ggml::backend::tinyblas {
 #ifdef GGML_USE_OPENMP
 #pragma omp barrier
 #else
-            static_assert(false, "Note implemented: use GGML_USE_OPENMP");
+            static_assert(false, "Not implemented: use GGML_USE_OPENMP");
 #endif
             // mat-mul bis...
             for (int64_t i13 = 0; i13 < ne13; i13++)
@@ -232,10 +272,6 @@ namespace ggml::backend::tinyblas {
         delete backend;
     }
 
-    // TODO: voir comment gerer les threads / pool ... pour tous les backends qui en ont besoin...
-    //  - voir ggml_graph_compute / ggml_threadpool
-    // https://github.com/ggerganov/llama.cpp/pull/1999
-    //
     static enum ggml_status graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
         context * ctx = (context *)backend->context;
 
@@ -252,7 +288,7 @@ namespace ggml::backend::tinyblas {
                 mul_mat(ctx, node, ith, nth);
             }
 #else
-            static_assert(false, "Note implemented: use GGML_USE_OPENMP");
+            static_assert(false, "Not implemented: use GGML_USE_OPENMP");
             mul_mat(ctx, node, 0, 1);
 #endif
             break;
@@ -309,25 +345,10 @@ namespace ggml::backend::tinyblas {
         return backend != NULL && ggml_guid_matches(backend->guid, guid());
     }
 
-    // number of threads to use for compute
-    static void set_pp_threads(ggml_backend_t backend, int n_threads) {
-        GGML_ASSERT(is_tinyblas(backend));
-        context * ctx = (context *)backend->context;
-        //ctx->pp_threads = n_threads;
-    }
-
-    static void set_tg_threads(ggml_backend_t backend, int n_threads) {
-        GGML_ASSERT(is_tinyblas(backend));
-        context * ctx = (context *)backend->context;
-        //ctx->tg_threads = n_threads;
-    }
-
     static void set_n_threads(ggml_backend_t backend, int n_threads) {
         GGML_ASSERT(is_tinyblas(backend));
         context * ctx = (context *)backend->context;
         ctx->n_threads = n_threads;
-        //ctx->tg_threads = n_threads;
-        //ctx->pp_threads = n_threads;
     }
 
 }
@@ -378,9 +399,6 @@ namespace ggml::backend::tinyblas::device {
     }
 
     static bool supports_op(ggml_backend_dev_t device, const struct ggml_tensor * op) {
-        //const struct ggml_tensor * src0 = op->src[0];
-        //const struct ggml_tensor * src1 = op->src[1];
-
         switch (op->op) {
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
@@ -444,12 +462,6 @@ namespace ggml::backend::tinyblas::reg {
     static void * get_proc_address(ggml_backend_reg_t, const char * name) {
         if (std::strcmp(name, "ggml_backend_set_n_threads") == 0) {
             return (void *)ggml::backend::tinyblas::set_n_threads;
-        }
-        if (std::strcmp(name, "ggml_backend_set_pp_threads") == 0) {
-            return (void *)ggml::backend::tinyblas::set_pp_threads;
-        }
-        if (std::strcmp(name, "ggml_backend_set_tg_threads") == 0) {
-            return (void *)ggml::backend::tinyblas::set_tg_threads;
         }
         return NULL;
     }
