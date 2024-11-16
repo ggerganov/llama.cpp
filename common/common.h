@@ -251,6 +251,7 @@ struct common_params {
     bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
+    bool special_cmds      = true;  // enable special commands in main example
 
     bool escape            = true;  // escape "\n", "\r", "\t", "\'", "\"", and "\\"
     bool multiline_input   = false; // reverse the usage of `\`
