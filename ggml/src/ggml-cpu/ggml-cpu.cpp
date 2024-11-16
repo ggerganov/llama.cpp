@@ -616,9 +616,6 @@ static ggml_backend_feature * ggml_backend_cpu_get_features(ggml_backend_reg_t r
         if (ggml_cpu_has_wasm_simd()) {
             features.push_back({ "WASM_SIMD", "1" });
         }
-        if (ggml_cpu_has_llamafile()) {
-            features.push_back({ "LLAMAFILE", "1" });
-        }
 
         features.push_back({ nullptr, nullptr });
 

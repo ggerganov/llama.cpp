@@ -13868,14 +13868,6 @@ int ggml_cpu_has_wasm_simd(void) {
 #endif
 }
 
-int ggml_cpu_has_llamafile(void) {
-#if defined(GGML_USE_LLAMAFILE)
-    return 1;
-#else
-    return 0;
-#endif
-}
-
 int ggml_cpu_has_sse3(void) {
 #if defined(__SSE3__)
     return 1;

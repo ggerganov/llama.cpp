@@ -27,6 +27,10 @@
 #include "ggml-blas.h"
 #endif
 
+#ifdef GGML_USE_TINYBLAS
+#include "ggml-tinyblas.h"
+#endif
+
 #ifdef GGML_USE_RPC
 #include "ggml-rpc.h"
 #endif
@@ -65,6 +69,9 @@ struct ggml_backend_registry {
 #endif
 #ifdef GGML_USE_BLAS
         register_backend(ggml_backend_blas_reg());
+#endif
+#ifdef GGML_USE_TINYBLAS
+        register_backend(ggml_backend_tinyblas_reg());
 #endif
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
