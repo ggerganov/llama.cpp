@@ -282,9 +282,9 @@ The following compilation options are also available to tweak performance (yes, 
 
 #### w64devkit
 
-Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
+Download and extract [`w64devkit`](https://github.com/skeeto/w64devkit/releases).
 
-Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). When selecting components, only the Vulkan SDK Core is required.
+Download and install the [`Vulkan SDK`](https://vulkan.lunarg.com/sdk/home#windows) with the default settings.
 
 Launch `w64devkit.exe` and run the following commands to copy Vulkan dependencies:
 ```sh
@@ -301,6 +301,29 @@ EOF
 
 ```
 Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
+
+#### Git Bash MINGW64
+
+Download and install [`Git-SCM`](https://git-scm.com/downloads/win) with the default settings
+
+Download and install [`Visual Studio Community Edition`](https://visualstudio.microsoft.com/) and make sure you select `C++`
+
+Download and install [`CMake`](https://cmake.org/download/) with the default settings
+
+Download and install the [`Vulkan SDK`](https://vulkan.lunarg.com/sdk/home#windows) with the default settings.
+
+Go into your `llama.cpp` directory and right click, select `Open Git Bash Here` and then run the following commands
+
+```
+cmake -B build -DGGML_VULKAN=ON
+cmake --build build --config Release
+```
+
+Now you can load the model in conversation mode using `Vulkan`
+
+```
+build/bin/release/llama-cli -m "[PATH TO MODEL]" -ngl 100 -c 16384 -t 10 -n -2 -cnv
+```
 
 #### MSYS2
 Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
