@@ -2,7 +2,7 @@
 #include "common.h"
 #include "llama.h"
 #include "ggml.h"
-#include "../vanilla_pca.hpp"
+#include "../pca.hpp"
 
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
@@ -15,28 +15,11 @@
 #include <cstdio>
 #include <cstring>
 
-// Function to initialize ggml with optional GPU backend support
-struct ggml_context *initialize_ggml_context() {
-#ifdef GGML_USE_CUDA
-    struct ggml_init_params params = { .mem_size = 1024 * 1024, .mem_buffer = NULL, .use_gpu = true };
-    printf("Initializing with GPU backend...\n");
-#else
-    struct ggml_init_params params = { .mem_size = 1024 * 1024, .mem_buffer = NULL };
-    printf("Initializing with CPU backend...\n");
-#endif
-    return ggml_init(params);
-}
-
-// Helper function to create a tensor from a matrix
-struct ggml_tensor *create_tensor(struct ggml_context *ctx, float *data, int rows, int cols) {
-    struct ggml_tensor *tensor = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, cols, rows);
-    memcpy(tensor->data, data, ggml_nbytes(tensor));
-    return tensor;
-}
-
 // Function to run PCA and print results
-void run_pca_test(struct ggml_context *ctx, float *matrix, int rows, int cols) {
-    struct ggml_tensor *input_tensor = create_tensor(ctx, matrix, rows, cols);
+static void run_pca_test(struct ggml_context *ctx, float *matrix, int rows, int cols) {
+    // struct ggml_tensor *input_tensor = create_tensor(ctx, matrix, rows, cols);
+    struct ggml_tensor *input_tensor = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, rows, cols);
+    memcpy(input_tensor->data, matrix, rows * cols * sizeof(float));
 
     PCA::pca_params pca_params;
     pca_params.n_threads = 8;
@@ -44,20 +27,37 @@ void run_pca_test(struct ggml_context *ctx, float *matrix, int rows, int cols) {
     pca_params.n_iterations = 1000;
     pca_params.tolerance = 1e-5;
 
-    PCA::pca_result result;
+    PCA::pca_result result = {NULL, 0};
     PCA::run_single_pca(pca_params, input_tensor, result);
 
-    printf("\nPrincipal components:\n");
-    float *b = (float *)result.principal_component->data;
-    for (int i = 0; i < result.principal_component->ne[0]; i++) {
-        printf("%f ", b[i]);
+    printf("Principal components:\n");
+    for (int i = 0; i < cols; i++) {
+        printf("%f ", result.principal_component[i]);
     }
     printf("\nEigenvalue: %f\n", result.explained_variance);
+
+    free(result.principal_component);
 }
 
 int main() {
     // Initialize ggml context
-    struct ggml_context *ctx = initialize_ggml_context();
+    size_t ctx_size = 0;
+    ctx_size += 4 * 4 * ggml_type_size(GGML_TYPE_F32);
+    ctx_size += 10 * 10 * ggml_type_size(GGML_TYPE_F32);
+    ctx_size += 3 * 3 * ggml_type_size(GGML_TYPE_F32);
+    ctx_size += 3 * 3 * ggml_type_size(GGML_TYPE_F32);
+    ctx_size += 4 * ggml_tensor_overhead();
+    ctx_size += 1024;
+
+    // Step 2. Initialize GGML Context
+    struct ggml_init_params ctx_params {
+        ctx_size,  // mem_size
+        NULL,      // mem_buffer
+        false,      // no_alloc
+    };
+    struct ggml_context * ctx = ggml_init(ctx_params);
+
+
     if (ctx == NULL) {
         printf("Failed to initialize ggml context\n");
         return 1;
