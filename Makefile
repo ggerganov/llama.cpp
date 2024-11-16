@@ -569,7 +569,7 @@ endif # GGML_NVPL
 
 ifndef GGML_NO_LLAMAFILE
 	MK_CPPFLAGS  += -DGGML_USE_TINYBLAS
-	OBJ_GGML_EXT += ggml/src/ggml-tinyblas/ggml-tinyblas.o ggml/src/ggml-tinyblas/sgemm.o
+	OBJ_GGML_EXT += ggml/src/ggml-tinyblas/ggml-tinyblas-cpp17.o ggml/src/ggml-tinyblas/sgemm-cpp17.o
 endif
 
 ifndef GGML_NO_AMX
@@ -1153,22 +1153,9 @@ $(DIR_GGML)/src/ggml-cpu/ggml-cpu-cpp.o: \
 	ggml/src/ggml-impl.h
 	$(CXX) $(CXXFLAGS)   -c $< -o $@
 
-# TODO: renomer en GGML_NO_TINYBLAS
-# needed for c++17 build
-ifndef GGML_NO_LLAMAFILE
-ggml/src/ggml-tinyblas/ggml-tinyblas.o: \
-	ggml/src/ggml-tinyblas/ggml-tinyblas.cpp \
-	ggml/include/ggml-tinyblas.h \
-	ggml/src/ggml-tinyblas/sgemm.h \
-	ggml/include/ggml.h
-	$(CXX) $(CXXFLAGS) -std=c++17 -c $< -o $@
-
-ggml/src/ggml-tinyblas/sgemm.o: \
-	ggml/src/ggml-tinyblas/sgemm.cpp \
-	ggml/src/ggml-tinyblas/sgemm.h \
-	ggml/include/ggml.h
-	$(CXX) $(CXXFLAGS) -std=c++17 -c $< -o $@
-endif # GGML_NO_LLAMAFILE
+# for c++17 build
+$(DIR_GGML)/%-cpp17.o: $(DIR_GGML)/%.cpp
+	$(CXX) $(CXXFLAGS) -MMD -std=c++17 -c $< -o $@
 
 # Rules for building object files
 $(DIR_GGML)/%.o: $(DIR_GGML)/%.c
