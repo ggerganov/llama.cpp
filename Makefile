@@ -48,7 +48,6 @@ TEST_TARGETS = \
 	tests/test-backend-ops \
 	tests/test-chat-template \
 	tests/test-double-float \
-	tests/test-grad0 \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
@@ -1497,11 +1496,6 @@ tests/test-double-float: tests/test-double-float.cpp
 tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grad0: tests/test-grad0.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-opt: tests/test-opt.cpp \
