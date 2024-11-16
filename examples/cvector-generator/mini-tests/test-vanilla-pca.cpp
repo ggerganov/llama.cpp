@@ -4,20 +4,25 @@
 #include "ggml.h"
 #include "../pca.hpp"
 
-#ifdef GGML_USE_CUDA
-#include "ggml-cuda.h"
-#endif
-
-#ifdef GGML_USE_METAL
-#include "ggml-metal.h"
-#endif
+#include "ggml-cpp.h"
+#include "ggml-backend.h"
 
 #include <cstdio>
 #include <cstring>
 
 // Function to run PCA and print results
-static void run_pca_test(struct ggml_context *ctx, float *matrix, int rows, int cols) {
-    // struct ggml_tensor *input_tensor = create_tensor(ctx, matrix, rows, cols);
+static void run_pca_test(float *matrix, int rows, int cols) {
+    // Initialize ggml context
+    size_t ctx_size = 0;
+    ctx_size += rows * cols * ggml_type_size(GGML_TYPE_F32);
+    ctx_size += 1 * ggml_tensor_overhead();
+
+    struct ggml_init_params ctx_params {
+        /*.mem_size   =*/ ctx_size,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ false,
+    };
+    struct ggml_context * ctx = ggml_init(ctx_params);
     struct ggml_tensor *input_tensor = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, rows, cols);
     memcpy(input_tensor->data, matrix, rows * cols * sizeof(float));
 
@@ -37,32 +42,10 @@ static void run_pca_test(struct ggml_context *ctx, float *matrix, int rows, int 
     printf("\nEigenvalue: %f\n", result.explained_variance);
 
     free(result.principal_component);
+    ggml_free(ctx);
 }
 
 int main() {
-    // Initialize ggml context
-    size_t ctx_size = 0;
-    ctx_size += 4 * 4 * ggml_type_size(GGML_TYPE_F32);
-    ctx_size += 10 * 10 * ggml_type_size(GGML_TYPE_F32);
-    ctx_size += 3 * 3 * ggml_type_size(GGML_TYPE_F32);
-    ctx_size += 3 * 3 * ggml_type_size(GGML_TYPE_F32);
-    ctx_size += 4 * ggml_tensor_overhead();
-    ctx_size += 1024;
-
-    // Step 2. Initialize GGML Context
-    struct ggml_init_params ctx_params {
-        ctx_size,  // mem_size
-        NULL,      // mem_buffer
-        false,      // no_alloc
-    };
-    struct ggml_context * ctx = ggml_init(ctx_params);
-
-
-    if (ctx == NULL) {
-        printf("Failed to initialize ggml context\n");
-        return 1;
-    }
-
     // Define matrices
     float input_matrix1[16] = {
         -0.124132, 0.740341, -0.452462, 0.777050,
@@ -98,19 +81,18 @@ int main() {
 
     // Run PCA for each matrix
     printf("Testing Matrix 1:\n");
-    run_pca_test(ctx, input_matrix1, 4, 4);
+    run_pca_test(input_matrix1, 4, 4);
 
     printf("\nTesting Matrix 2:\n");
-    run_pca_test(ctx, input_matrix2, 10, 10);
+    run_pca_test(input_matrix2, 10, 10);
 
     printf("\nTesting Matrix 3:\n");
-    run_pca_test(ctx, input_matrix3, 3, 3);
+    run_pca_test(input_matrix3, 3, 3);
 
     printf("\nTesting Matrix 4:\n");
-    run_pca_test(ctx, input_matrix4, 3, 3);
+    run_pca_test(input_matrix4, 3, 3);
 
     // Cleanup
-    ggml_free(ctx);
     return 0;
 }
 

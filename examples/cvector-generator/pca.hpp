@@ -51,7 +51,6 @@ static void compute_covariance(struct pca_params &pca_params,
                         struct ggml_backend * backend) {
 
     size_t ctx_size = 0;
-    ctx_size += 7 * X->ne[0] * X->ne[1] * ggml_type_size(GGML_TYPE_F32);
     ctx_size += 7 * ggml_tensor_overhead();
     ctx_size += ggml_graph_overhead();
     ctx_size += 1024;
@@ -105,7 +104,6 @@ static void compute_cross_covariance(struct pca_params &pca_params,
                               struct ggml_backend * backend) {
 
     size_t ctx_size = 0;
-    ctx_size += 9 * A->ne[0] * B->ne[1] * ggml_type_size(GGML_TYPE_F32);
     ctx_size += 9 * ggml_tensor_overhead();
     ctx_size += ggml_graph_overhead();
     ctx_size += 1024;
@@ -280,7 +278,6 @@ static void run_single_pca(struct pca_params &pca_params,
 
     // Compute the context size needed
     size_t ctx_size = 0;
-    ctx_size += m * m * ggml_type_size(GGML_TYPE_F32);
     ctx_size += 1 * ggml_tensor_overhead();
 
     // Step 2. Initialize GGML Context
