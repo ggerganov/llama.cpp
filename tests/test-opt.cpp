@@ -5,7 +5,7 @@
 #include "ggml-opt.h"
 
 #include <cmath>
-#include <inttypes.h>
+#include <cinttypes>
 #include <random>
 #include <string>
 #include <thread>
