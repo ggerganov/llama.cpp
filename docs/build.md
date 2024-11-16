@@ -282,11 +282,7 @@ The following compilation options are also available to tweak performance (yes, 
 
 #### w64devkit
 
-[![](https://github.com/user-attachments/assets/dee8d303-d40c-446d-85fc-60726d384d71)](https://github.com/skeeto/w64devkit/releases)
-
 Download and extract [`w64devkit`](https://github.com/skeeto/w64devkit/releases).
-
-[![](https://i.imgur.com/cN0LDwJ.png)](https://vulkan.lunarg.com/sdk/home#windows)
 
 Download and install the [`Vulkan SDK`](https://vulkan.lunarg.com/sdk/home#windows) with the default settings.
 
@@ -308,35 +304,18 @@ Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
 
 #### Git Bash MINGW64
 
-[![](https://i.imgur.com/M8dnyk5.png)](https://git-scm.com/downloads/win).
-
 Download and install [`Git-SCM`](https://git-scm.com/downloads/win) with the default settings
-
-[![](https://i.imgur.com/hiAMq2S.png)](https://visualstudio.microsoft.com/)
 
 Download and install [`Visual Studio Community Edition`](https://visualstudio.microsoft.com/) and make sure you select `C++`
 
-[![](https://i.imgur.com/piiceV6.png)](https://cmake.org/download/)
-
 Download and install [`CMake`](https://cmake.org/download/) with the default settings
-
-[![](https://i.imgur.com/cN0LDwJ.png)](https://vulkan.lunarg.com/sdk/home#windows)
 
 Download and install the [`Vulkan SDK`](https://vulkan.lunarg.com/sdk/home#windows) with the default settings.
 
-![](https://i.imgur.com/qTl7jbF.png)
-
 Go into your `llama.cpp` directory and right click, select `Open Git Bash Here` and then run the following commands
-
-![](https://i.imgur.com/7UQ7Rf1.png)
 
 ```
 cmake -B build -DGGML_VULKAN=ON
-```
-
-![](https://i.imgur.com/GlJnitl.png)
-
-```
 cmake --build build --config Release
 ```
 
