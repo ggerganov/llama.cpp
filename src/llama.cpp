@@ -2907,8 +2907,14 @@ struct llama_model {
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
 
-    int64_t t_load_us = 0;
+    int64_t t_load_us  = 0;
     int64_t t_start_us = 0;
+
+    // total number of parameters in the model
+    uint64_t n_elements = 0;
+
+    // total size of all the tensors in the model in bytes
+    size_t  n_bytes     = 0;
 
     // keep track of loaded lora adapters
     std::set<struct llama_lora_adapter *> lora_adapters;
@@ -4275,8 +4281,8 @@ struct llama_model_loader {
     int n_tensors = 0;
     int n_created = 0;
 
-    int64_t n_elements = 0;
-    size_t  n_bytes    = 0;
+    uint64_t n_elements = 0;
+    size_t  n_bytes     = 0;
 
     bool use_mmap = false;
     bool check_tensors;
@@ -5342,6 +5348,11 @@ static const char * llama_model_vocab_type_name(enum llama_vocab_type type){
         case LLAMA_VOCAB_TYPE_RWKV: return "RWKV";
         default:                    return "unknown";
     }
+}
+
+static void llm_load_stats(llama_model_loader & ml, llama_model & model) {
+    model.n_elements = ml.n_elements;
+    model.n_bytes = ml.n_bytes;
 }
 
 static void llm_load_arch(llama_model_loader & ml, llama_model & model) {
@@ -9256,6 +9267,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
             throw std::runtime_error("error loading model vocabulary: " + std::string(e.what()));
         }
 
+        llm_load_stats(ml, model);
         llm_load_print_meta(ml, model);
 
         if (model.vocab.type != LLAMA_VOCAB_TYPE_NONE &&
@@ -18601,6 +18613,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llama_model model;
     llm_load_arch(ml, model);
     llm_load_hparams(ml, model);
+    llm_load_stats(ml, model);
 
     struct quantize_state_internal qs(model, params);
 
@@ -19953,19 +19966,11 @@ int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t bu
 }
 
 uint64_t llama_model_size(const struct llama_model * model) {
-    uint64_t size = 0;
-    for (const auto & it : model->tensors_by_name) {
-        size += ggml_nbytes(it.second);
-    }
-    return size;
+    return model->n_bytes;
 }
 
 uint64_t llama_model_n_params(const struct llama_model * model) {
-    uint64_t nparams = 0;
-    for (const auto & it : model->tensors_by_name) {
-        nparams += ggml_nelements(it.second);
-    }
-    return nparams;
+    return model->n_elements;
 }
 
 struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name) {
