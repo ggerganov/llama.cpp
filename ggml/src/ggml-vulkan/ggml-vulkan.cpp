@@ -2208,7 +2208,7 @@ static void ggml_vk_host_free(vk_device& device, void* ptr) {
     }
     VK_LOG_MEMORY("ggml_vk_host_free(" << ptr << ")");
     vk_buffer buf;
-    size_t index;
+    size_t index = 0;
     for (size_t i = 0; i < device->pinned_memory.size(); i++) {
         const uint8_t* addr = (const uint8_t*) std::get<0>(device->pinned_memory[i]);
         const uint8_t* endr = addr + std::get<1>(device->pinned_memory[i]);
