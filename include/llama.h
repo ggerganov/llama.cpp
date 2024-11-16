@@ -1244,8 +1244,6 @@ extern "C" {
     LLAMA_API void                           llama_perf_sampler_print(const struct llama_sampler * chain);
     LLAMA_API void                           llama_perf_sampler_reset(      struct llama_sampler * chain);
 
-    LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
-
 #ifdef __cplusplus
 }
 #endif

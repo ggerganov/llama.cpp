@@ -209,7 +209,6 @@ struct common_params {
     std::string path_prompt_cache    = ""; // path to file for saving/loading prompt eval state             // NOLINT
     std::string input_prefix         = ""; // string to prefix user inputs with                             // NOLINT
     std::string input_suffix         = ""; // string to suffix user inputs with                             // NOLINT
-    std::string logdir               = ""; // directory in which to save YAML log files                     // NOLINT
     std::string lookup_cache_static  = ""; // path of static ngram cache file for lookup decoding           // NOLINT
     std::string lookup_cache_dynamic = ""; // path of dynamic ngram cache file for lookup decoding          // NOLINT
     std::string logits_file          = ""; // file for saving *all* logits                                  // NOLINT
@@ -584,15 +583,3 @@ common_control_vector_data common_control_vector_load(const std::vector<common_c
 static const char * const LLM_KV_SPLIT_NO            = "split.no";
 static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
-
-//
-// YAML utils
-//
-
-void yaml_dump_vector_float    (FILE * stream, const char * prop_name, const std::vector<float> & data);
-void yaml_dump_vector_int      (FILE * stream, const char * prop_name, const std::vector<int> & data);
-void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const char * data);
-
-void yaml_dump_non_result_info(
-    FILE * stream, const common_params & params, const llama_context * lctx,
-    const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
