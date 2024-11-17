@@ -19,8 +19,21 @@ struct common_speculative * common_speculative_init(struct common_speculative_pa
 
 void common_speculative_free(struct common_speculative * spec);
 
+// TODO: remove
 void common_speculative_set_prompt(struct common_speculative * spec, llama_token * tokens, int32_t n_tokens);
 
+// sample up to n_draft tokens and add them to the batch using the draft model
+//
+// TODO: change to:
+//
+//    void common_speculative_add_draft(
+//            struct common_speculative * spec,
+//            struct llama_batch & batch_tgt,
+//            llama_token * tokens,
+//            int32_t n_tokens);
+//
+//       and update the internal logic to compute only the new tokens
+//
 void common_speculative_add_draft(
         struct common_speculative * spec,
         struct llama_batch & batch_tgt,

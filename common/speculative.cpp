@@ -4,11 +4,6 @@
 #include "common.h"
 #include "sampling.h"
 
-#include <vector>
-
-struct seq_draft {
-};
-
 struct common_speculative {
     struct common_speculative_params params;
 
@@ -140,7 +135,7 @@ void common_speculative_add_draft(
     }
 
     // don't waste time on small batches
-    // TODO: do not evaluate the draft model for tha many rounds
+    // TODO: do not evaluate the draft model for that many rounds
     if (batch_tgt.n_tokens < spec->params.n_min) {
         batch_tgt.n_tokens = 1;
         spec->tokens.resize(0);
