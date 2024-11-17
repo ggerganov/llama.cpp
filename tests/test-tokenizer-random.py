@@ -423,8 +423,11 @@ def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLl
         #         return -1
         #     return min(len(ids1), len(ids2))
         # Rewritten to use zip() and next() instead of for loop
-        def find_first_mismatch(ids1: Sequence[Any], ids2: Sequence[Any]) -> int:
-            return next((i for i, (a, b) in enumerate(zip(ids1, ids2)) if a != b), -1)
+        def find_first_mismatch(ids1, ids2) -> int:
+            index = next((i for i, (a, b) in enumerate(zip(ids1, ids2)) if a != b), -1)
+            if index < 0 and len(ids1) != len(ids2):
+                index = min(len(ids1), len(ids2))
+            return index
 
         def check_detokenizer(text: str, text1: str, text2: str) -> bool:
             if text1 == text2:  # equal to TokenizerGroundtruth?
