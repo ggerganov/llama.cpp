@@ -66,11 +66,15 @@ endif()
 
 find_library(ggml_LIBRARY ggml
     REQUIRED
-    HINTS ${LLAMA_LIB_DIR})
+    HINTS ${LLAMA_LIB_DIR}
+    NO_CMAKE_FIND_ROOT_PATH
+)
 
 find_library(llama_LIBRARY llama
     REQUIRED
-    HINTS ${LLAMA_LIB_DIR})
+    HINTS ${LLAMA_LIB_DIR}
+    NO_CMAKE_FIND_ROOT_PATH
+)
 
 set(_llama_link_deps "${ggml_LIBRARY}" "@GGML_LINK_LIBRARIES@")
 set(_llama_transient_defines "@GGML_TRANSIENT_DEFINES@")
