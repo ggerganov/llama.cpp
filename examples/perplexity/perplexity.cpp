@@ -34,55 +34,6 @@ struct results_log_softmax {
     float  prob;
 };
 
-static void write_logfile(
-    const llama_context * ctx, const common_params & params, const llama_model * model,
-    const struct results_perplexity & results
-) {
-    if (params.logdir.empty()) {
-        return;
-    }
-
-    if (params.hellaswag) {
-        LOG_WRN("%s: logging results is not implemented for HellaSwag. No files will be written.\n", __func__);
-        return;
-    }
-
-    const std::string timestamp = string_get_sortable_timestamp();
-
-    const bool success = fs_create_directory_with_parents(params.logdir);
-    if (!success) {
-        LOG_WRN("%s: failed to create logdir %s, cannot write logfile\n",
-                __func__, params.logdir.c_str());
-        return;
-    }
-
-    const std::string logfile_path = params.logdir + timestamp + ".yml";
-    FILE * logfile = fopen(logfile_path.c_str(), "w");
-
-    if (logfile == NULL) {
-        LOG_ERR("%s: failed to open logfile %s\n", __func__, logfile_path.c_str());
-        return;
-    }
-
-    fprintf(logfile, "binary: main\n");
-    char model_desc[128];
-    llama_model_desc(model, model_desc, sizeof(model_desc));
-    yaml_dump_non_result_info(logfile, params, ctx, timestamp, results.tokens, model_desc);
-
-    fprintf(logfile, "\n");
-    fprintf(logfile, "######################\n");
-    fprintf(logfile, "# Perplexity Results #\n");
-    fprintf(logfile, "######################\n");
-    fprintf(logfile, "\n");
-
-    yaml_dump_vector_float(logfile, "logits", results.logits);
-    fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
-    yaml_dump_vector_float(logfile, "probs", results.probs);
-
-    llama_perf_dump_yaml(logfile, ctx);
-    fclose(logfile);
-}
-
 static std::vector<float> softmax(const std::vector<float>& logits) {
     std::vector<float> probs(logits.size());
     float max_logit = logits[0];
@@ -2071,8 +2022,6 @@ int main(int argc, char ** argv) {
 
     LOG("\n");
     llama_perf_context_print(ctx);
-
-    write_logfile(ctx, params, model, results);
 
     llama_free(ctx);
     llama_free_model(model);
