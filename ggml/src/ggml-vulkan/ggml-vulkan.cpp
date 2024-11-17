@@ -3466,7 +3466,7 @@ static void ggml_vk_mul_mat_id_q_f16(ggml_backend_vk_context * ctx, vk_context& 
     } else {
         to_fp16_vk_1 = ggml_vk_get_to_fp16(ctx, src1->type);
     }
-    GGML_ASSERT(!qx_needs_dequant || to_fp16_vk_0 != nullptr || !qy_needs_dequant || to_fp16_vk_1 != nullptr);  // NOLINT
+    GGML_ASSERT((!qx_needs_dequant || to_fp16_vk_0 != nullptr) && (!qy_needs_dequant || to_fp16_vk_1 != nullptr));  // NOLINT
 
     if (dryrun) {
         const uint64_t x_sz_upd = x_sz * ne02 * ne03;
