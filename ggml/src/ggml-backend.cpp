@@ -689,7 +689,7 @@ static int ggml_backend_sched_backend_id(ggml_backend_sched_t sched, ggml_backen
 }
 
 static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, const struct ggml_tensor * tensor, const struct ggml_tensor * op) {
-    ggml_backend_buffer_t buffer = tensor->buffer;
+    ggml_backend_buffer_t buffer = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
     if (buffer == NULL) {
         return -1;
     }
@@ -722,8 +722,6 @@ static char causes[GGML_DEFAULT_GRAPH_SIZE*16 + GGML_SCHED_MAX_SPLITS_DEBUG*GGML
 
 // returns the backend that should be used for the node based on the current locations
 static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, struct ggml_tensor * tensor) {
-    // TODO: use supports_op to check if the backend supports the op
-
     // assign pre-allocated nodes to their backend
     int cur_backend_id = ggml_backend_sched_backend_from_buffer(sched, tensor, tensor);
     if (cur_backend_id != -1) {
@@ -742,7 +740,7 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
 
     if (tensor->buffer || (tensor->view_src && tensor->view_src->buffer)) {
         // since the tensor is pre-allocated, it cannot be moved to another backend
-        GGML_ABORT("pre-allocated tensor in a backend that cannot run the operation");
+        GGML_ABORT("pre-allocated tensor (%s) in a backend that cannot run the operation", tensor->name);
     }
 
     // graph input
@@ -886,6 +884,9 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
         int * node_backend_id = &tensor_backend_id(node);
+        if (ggml_is_view_op(node->op)) {
+            continue;
+        }
         // do not overwrite user assignments
         if (*node_backend_id == -1) {
             *node_backend_id = ggml_backend_sched_backend_id_from_cur(sched, node);
