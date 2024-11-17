@@ -459,14 +459,14 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 - Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
 - A bit of backstory for those who are interested: [Changelog podcast](https://changelog.com/podcast/532)
 
-## Other documentations
+## Other documentation
 
 - [main (cli)](./examples/main/README.md)
 - [server](./examples/server/README.md)
 - [jeopardy](./examples/jeopardy/README.md)
 - [GBNF grammars](./grammars/README.md)
 
-**Development documentations**
+**Development documentation**
 
 - [How to build](./docs/build.md)
 - [Running on Docker](./docs/docker.md)
