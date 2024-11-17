@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <assert.h>
 #include <functional>
-#include <inttypes.h>
 #include <math.h>
 #include <memory>
 #include <stdio.h>

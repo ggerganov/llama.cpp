@@ -16,11 +16,11 @@
 #include "ggml-cuda/cpy.cuh"
 #include "ggml-cuda/cross-entropy-loss.cuh"
 #include "ggml-cuda/diagmask.cuh"
-#include "ggml-cuda/dmmv.cuh"
 #include "ggml-cuda/fattn.cuh"
 #include "ggml-cuda/getrows.cuh"
 #include "ggml-cuda/im2col.cuh"
 #include "ggml-cuda/mmq.cuh"
+#include "ggml-cuda/mmv.cuh"
 #include "ggml-cuda/mmvq.cuh"
 #include "ggml-cuda/norm.cuh"
 #include "ggml-cuda/opt-step-adamw.cuh"
@@ -1020,114 +1020,6 @@ typedef void (*ggml_cuda_op_mul_mat_t)(
 
 #define MUL_MAT_SRC1_COL_STRIDE 128
 
-static __global__ void mul_mat_p021_f16_f32(
-    const void * __restrict__ vx, const float * __restrict__ y, float * __restrict__ dst,
-    const int ncols_x, const int nrows_x, const int nchannels_x, const int nchannels_y) {
-
-    const half * x = (const half *) vx;
-
-    const int row_x = blockDim.y*blockIdx.y + threadIdx.y;
-    const int channel = blockDim.z*blockIdx.z + threadIdx.z;
-    const int channel_x = channel / (nchannels_y / nchannels_x);
-
-    const int nrows_y = ncols_x;
-    const int nrows_dst = nrows_x;
-    const int row_dst = row_x;
-
-    float tmp = 0.0f;
-
-    for (int col_x0 = 0; col_x0 < ncols_x; col_x0 += blockDim.x) {
-        const int col_x = col_x0 + threadIdx.x;
-
-        if (col_x >= ncols_x) {
-            break;
-        }
-
-        // x is transposed and permuted
-        const int ix = row_x*nchannels_x*ncols_x + channel_x*ncols_x + col_x;
-        const float xi = __half2float(x[ix]);
-
-        const int row_y = col_x;
-
-        // y is not transposed but permuted
-        const int iy = channel*nrows_y + row_y;
-
-        tmp += xi * y[iy];
-    }
-
-    // dst is not transposed and not permuted
-    const int idst = channel*nrows_dst + row_dst;
-
-    // sum up partial sums and write back result
-    tmp = warp_reduce_sum(tmp);
-
-    if (threadIdx.x == 0) {
-        dst[idst] = tmp;
-    }
-}
-
-static __global__ void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
-    const void * __restrict__ vx, const float * __restrict__ y, float * __restrict__ dst, const int ncols_x, const int nrows_x,
-    const int row_stride_x, const int channel_stride_x, const int channel_x_divisor) {
-
-    const half * x = (const half *) vx;
-
-    const int row_x     = blockDim.y*blockIdx.y + threadIdx.y;
-    const int channel   = blockDim.z*blockIdx.z + threadIdx.z;
-    const int channel_x = channel / channel_x_divisor;
-
-    const int nrows_y   = ncols_x;
-    const int nrows_dst = nrows_x;
-    const int row_dst   = row_x;
-
-    const int idst = channel*nrows_dst + row_dst;
-
-    float tmp = 0.0f;
-
-    for (int col_x0 = 0; col_x0 < ncols_x; col_x0 += blockDim.x) {
-        const int col_x = col_x0 + threadIdx.x;
-
-        if (col_x >= ncols_x) {
-            break;
-        }
-
-        const int row_y = col_x;
-
-        const int ix = channel_x*channel_stride_x + row_x*row_stride_x + col_x;
-        const int iy = channel*nrows_y + row_y;
-
-        const float xi = __half2float(x[ix]);
-
-        tmp += xi * y[iy];
-    }
-
-    // sum up partial sums and write back result
-    tmp = warp_reduce_sum(tmp);
-
-    if (threadIdx.x == 0) {
-        dst[idst] = tmp;
-    }
-}
-
-static void ggml_mul_mat_p021_f16_f32_cuda(
-    const void * vx, const float * y, float * dst, const int ncols_x, const int nrows_x,
-    const int nchannels_x, const int nchannels_y, cudaStream_t stream) {
-
-    const dim3 block_nums(1, nrows_x, nchannels_y);
-    const dim3 block_dims(WARP_SIZE, 1, 1);
-    mul_mat_p021_f16_f32<<<block_nums, block_dims, 0, stream>>>(vx, y, dst, ncols_x, nrows_x, nchannels_x, nchannels_y);
-}
-
-static void ggml_mul_mat_vec_nc_f16_f32_cuda(
-    const void * vx, const float * y, float * dst, const int ncols_x, const int nrows_x, const int row_stride_x,
-    const int nchannels_x, const int nchannels_y, const int channel_stride_x, cudaStream_t stream) {
-
-    const dim3 block_nums(1, nrows_x, nchannels_y);
-    const dim3 block_dims(WARP_SIZE, 1, 1);
-    mul_mat_vec_nc_f16_f32<<<block_nums, block_dims, 0, stream>>>
-        (vx, y, dst, ncols_x, nrows_x, row_stride_x, channel_stride_x, nchannels_y/nchannels_x);
-}
-
 static cudaError_t ggml_cuda_cpy_tensor_2d(
     void * dst, const struct ggml_tensor * src, int64_t i3, int64_t i2, int64_t i1_low, int64_t i1_high, cudaStream_t stream) {
 
@@ -1654,58 +1546,6 @@ static void ggml_cuda_op_mul_mat(
     }
 }
 
-static void ggml_cuda_mul_mat_vec_p021(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    GGML_ASSERT(ggml_is_permuted(src0) && ggml_is_permuted(src1));
-    GGML_ASSERT(ggml_backend_buffer_is_cuda(src0->buffer));
-    GGML_ASSERT(src0->nb[0] <= src0->nb[1] && src0->nb[2] <= src0->nb[3]); // 0213 permutation
-    GGML_ASSERT(src1->nb[0] <= src1->nb[1] && src1->nb[2] <= src1->nb[3]); // 0213 permutation
-    GGML_ASSERT(src0->type == GGML_TYPE_F16);
-    GGML_ASSERT(src1->type == GGML_TYPE_F32);
-
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-
-    const int64_t ne12 = src1->ne[2];
-
-    cudaStream_t main_stream = ctx.stream();
-
-    void  * src0_ddq = src0->data;
-    float * src1_ddf = (float *) src1->data;
-    float * dst_ddf  = (float *) dst->data;
-
-    ggml_mul_mat_p021_f16_f32_cuda(src0_ddq, src1_ddf, dst_ddf, ne00, ne01, ne02, ne12, main_stream);
-}
-
-static void ggml_cuda_mul_mat_vec_nc(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    GGML_ASSERT(!ggml_is_transposed(src0));
-    GGML_ASSERT(!ggml_is_transposed(src1));
-    GGML_ASSERT(!ggml_is_permuted(src0));
-    GGML_ASSERT(ggml_backend_buffer_is_cuda(src0->buffer));
-    GGML_ASSERT(src0->type == GGML_TYPE_F16);
-    GGML_ASSERT(src1->type == GGML_TYPE_F32);
-
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-
-    const int64_t nb01 = src0->nb[1];
-    const int64_t nb02 = src0->nb[2];
-
-    const int64_t ne12 = src1->ne[2];
-
-    cudaStream_t main_stream = ctx.stream();
-
-    void  * src0_ddq = src0->data;
-    float * src1_ddf = (float *) src1->data;
-    float * dst_ddf  = (float *) dst->data;
-
-    const int64_t row_stride_x = nb01 / sizeof(half);
-    const int64_t channel_stride_x = nb02 / sizeof(half);
-
-    ggml_mul_mat_vec_nc_f16_f32_cuda(src0_ddq, src1_ddf, dst_ddf, ne00, ne01, row_stride_x, ne02, ne12, channel_stride_x, main_stream);
-}
-
 static __global__ void k_compute_batched_ptrs(
         const half * src0_as_f16, const half * src1_as_f16, char * dst,
         const void ** ptrs_src, void ** ptrs_dst,
@@ -1879,21 +1719,17 @@ static void ggml_cuda_mul_mat_batched_cublas(ggml_backend_cuda_context & ctx, co
 static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const bool split = ggml_backend_buft_is_cuda_split(src0->buffer->buft);
 
-    bool use_dequantize_mul_mat_vec = ggml_cuda_dmmv_type_supported(src0->type)
+    bool use_mul_mat_vec   = src0->type == GGML_TYPE_F16
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
-        && src0->ne[0] % (GGML_CUDA_DMMV_X*2) == 0 && src1->ne[1] == 1;
-    bool          use_mul_mat_vec_q =  ggml_is_quantized(src0->type)
+        && src0->ne[0] % 2 == 0 && src1->ne[1] == 1;
+    bool use_mul_mat_vec_q = ggml_is_quantized(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
         && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
-    bool              use_mul_mat_q =  ggml_is_quantized(src0->type)
+    bool use_mul_mat_q     = ggml_is_quantized(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
 
-    // if mmvq is available it's a better choice than dmmv:
-#ifndef GGML_CUDA_FORCE_DMMV
-    use_dequantize_mul_mat_vec = use_dequantize_mul_mat_vec && !use_mul_mat_vec_q;
-#endif // GGML_CUDA_FORCE_DMMV
-
-    bool any_gpus_with_slow_fp16 = false;
+    bool any_gpus_with_slow_fp16   = false;
+    bool any_gpus_without_fp16_mma = false;
 
     if (split) {
         ggml_backend_cuda_split_buffer_type_context * buft_ctx = (ggml_backend_cuda_split_buffer_type_context *) src0->buffer->buft->context;
@@ -1904,14 +1740,16 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
                 continue;
             }
 
-            const int cc            = ggml_cuda_info().devices[id].cc;
-            use_mul_mat_q           = use_mul_mat_q           && ggml_cuda_should_use_mmq(src0->type, cc, src1->ne[1]);
-            any_gpus_with_slow_fp16 = any_gpus_with_slow_fp16 || !fast_fp16_available(cc);
+            const int cc              = ggml_cuda_info().devices[id].cc;
+            use_mul_mat_q             = use_mul_mat_q             && ggml_cuda_should_use_mmq(src0->type, cc, src1->ne[1]);
+            any_gpus_with_slow_fp16   = any_gpus_with_slow_fp16   || !fast_fp16_available(cc);
+            any_gpus_without_fp16_mma = any_gpus_without_fp16_mma || !fp16_mma_available(cc);
         }
     } else {
-        const int cc            = ggml_cuda_info().devices[ctx.device].cc;
-        use_mul_mat_q           = use_mul_mat_q           && ggml_cuda_should_use_mmq(src0->type, cc, src1->ne[1]);
-        any_gpus_with_slow_fp16 = any_gpus_with_slow_fp16 || !fast_fp16_available(cc);
+        const int cc              = ggml_cuda_info().devices[ctx.device].cc;
+        use_mul_mat_q             = use_mul_mat_q             && ggml_cuda_should_use_mmq(src0->type, cc, src1->ne[1]);
+        any_gpus_with_slow_fp16   = any_gpus_with_slow_fp16   || !fast_fp16_available(cc);
+        any_gpus_without_fp16_mma = any_gpus_without_fp16_mma || !fp16_mma_available(cc);
     }
 
     // debug helpers
@@ -1922,18 +1760,14 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
     //printf("src0 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src0), ggml_is_transposed(src0), ggml_type_name(src0->type), src0->name);
     //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
 
-    if (!split && any_gpus_with_slow_fp16 && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
-        // FP32 precision KQ single-batch for batch size 1 without FlashAttention
-        ggml_cuda_mul_mat_vec_p021(ctx, src0, src1, dst);
-    } else if (!split && any_gpus_with_slow_fp16 && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
-        // FP32 precision KQV single-batch for batch size 1 without FlashAttention
-        ggml_cuda_mul_mat_vec_nc(ctx, src0, src1, dst);
+    if (!split && src0->type == GGML_TYPE_F16 && src1->ne[1] == 1 && dst->ne[3] == 1 && (src0->ne[1] < MMV_MAX_ROWS || any_gpus_without_fp16_mma)) {
+        ggml_cuda_mul_mat_vec(ctx, src0, src1, dst);
     } else if (!split && src0->type == GGML_TYPE_F16 && (src1->type == GGML_TYPE_F16 || !any_gpus_with_slow_fp16)
                && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
         // KQ + KQV multi-batch without FlashAttention
         ggml_cuda_mul_mat_batched_cublas(ctx, src0, src1, dst);
-    } else if (use_dequantize_mul_mat_vec) {
-        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, nullptr);
+    } else if (use_mul_mat_vec) {
+        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec, nullptr);
     } else if (use_mul_mat_vec_q) {
         ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, quantize_row_q8_1_cuda);
     } else if (use_mul_mat_q) {

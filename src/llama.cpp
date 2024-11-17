@@ -3460,21 +3460,13 @@ static bool llama_kv_cache_init(
         const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa(i) + hparams.n_embd_k_s();
         const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa(i) + hparams.n_embd_v_s();
 
-        const llama_model::buft_list_t * buft_list;
+        ggml_backend_buffer_type_t buft;
         if (offload) {
-            buft_list = model.dev_layer.at(i).buft_list;
+            auto * dev = model.dev_layer.at(i).dev;
+            buft = ggml_backend_dev_buffer_type(dev);
         } else {
-            buft_list = &model.cpu_buft_list;
+            buft = ggml_backend_cpu_buffer_type();
         }
-        ggml_backend_buffer_type_t buft = select_buft(*buft_list,
-            [&](ggml_context * ctx) {
-                ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k_gqa*kv_size);
-                if (hparams.rope_type == LLAMA_ROPE_TYPE_NONE) {
-                    return k;
-                }
-                ggml_tensor * p = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1);
-                return ggml_rope(ctx, k, p, hparams.n_rot, hparams.rope_type);
-            });
         ggml_context * ctx = ctx_for_buft(buft);
 
         if (!ctx) {
@@ -22073,28 +22065,6 @@ void llama_perf_context_reset(struct llama_context * ctx) {
     ctx->t_start_us  = ggml_time_us();
     ctx->t_eval_us   = ctx->n_eval = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
-}
-
-void llama_perf_dump_yaml(FILE * stream, const llama_context * ctx) {
-    fprintf(stream, "\n");
-    fprintf(stream, "###########\n");
-    fprintf(stream, "# Timings #\n");
-    fprintf(stream, "###########\n");
-    fprintf(stream, "\n");
-
-    fprintf(stream, "mst_eval: %.2f  # ms / token during generation\n",
-            1.0e-3 * ctx->t_eval_us / ctx->n_eval);
-    fprintf(stream, "mst_p_eval: %.2f  # ms / token during prompt processing\n",
-            1.0e-3 * ctx->t_p_eval_us / ctx->n_p_eval);
-    fprintf(stream, "n_eval: %d  # number of tokens generated (excluding the first one)\n", ctx->n_eval);
-    fprintf(stream, "n_p_eval: %d  # number of tokens processed in batches at the beginning\n", ctx->n_p_eval);
-    fprintf(stream, "t_eval_us: %" PRId64 "  # total microseconds spent generating tokens\n", ctx->t_eval_us);
-    fprintf(stream, "t_load_us: %" PRId64 "  # total microseconds spent loading the model\n", ctx->t_load_us);
-    fprintf(stream, "t_p_eval_us: %" PRId64 "  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
-    fprintf(stream, "ts_eval: %.2f  # tokens / second during generation\n",
-            1.0e6 * ctx->n_eval / ctx->t_eval_us);
-    fprintf(stream, "ts_p_eval: %.2f  # tokens / second during prompt processing\n",
-            1.0e6 * ctx->n_p_eval / ctx->t_p_eval_us);
 }
 
 // For internal test use

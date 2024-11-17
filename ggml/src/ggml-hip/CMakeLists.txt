@@ -75,16 +75,9 @@ target_include_directories(ggml-hip PRIVATE . ..)
 target_compile_definitions(ggml PUBLIC GGML_USE_CUDA)
 
 add_compile_definitions(GGML_USE_HIP)
-add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
 
 if (GGML_HIP_UMA)
     add_compile_definitions(GGML_HIP_UMA)
-endif()
-
-if (GGML_CUDA_FORCE_DMMV)
-    add_compile_definitions(GGML_CUDA_FORCE_DMMV)
 endif()
 
 if (GGML_CUDA_FORCE_MMQ)

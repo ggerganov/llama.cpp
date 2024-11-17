@@ -48,7 +48,6 @@ TEST_TARGETS = \
 	tests/test-backend-ops \
 	tests/test-chat-template \
 	tests/test-double-float \
-	tests/test-grad0 \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
@@ -636,10 +635,6 @@ else ifndef CUDA_POWER_ARCH
 	MK_NVCCFLAGS += -arch=native
 endif # CUDA_DOCKER_ARCH
 
-ifdef GGML_CUDA_FORCE_DMMV
-	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
-endif # GGML_CUDA_FORCE_DMMV
-
 ifdef GGML_CUDA_FORCE_MMQ
 	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_MMQ
 endif # GGML_CUDA_FORCE_MMQ
@@ -648,20 +643,6 @@ ifdef GGML_CUDA_FORCE_CUBLAS
 	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_CUBLAS
 endif # GGML_CUDA_FORCE_CUBLAS
 
-ifdef GGML_CUDA_DMMV_X
-	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(GGML_CUDA_DMMV_X)
-else
-	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
-endif # GGML_CUDA_DMMV_X
-
-ifdef GGML_CUDA_MMV_Y
-	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(GGML_CUDA_MMV_Y)
-else ifdef GGML_CUDA_DMMV_Y
-	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(GGML_CUDA_DMMV_Y) # for backwards compatibility
-else
-	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
-endif # GGML_CUDA_MMV_Y
-
 ifdef GGML_CUDA_F16
 	MK_NVCCFLAGS += -DGGML_CUDA_F16
 endif # GGML_CUDA_F16
@@ -669,12 +650,6 @@ endif # GGML_CUDA_F16
 ifdef GGML_CUDA_DMMV_F16
 	MK_NVCCFLAGS += -DGGML_CUDA_F16
 endif # GGML_CUDA_DMMV_F16
-
-ifdef GGML_CUDA_KQUANTS_ITER
-	MK_NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(GGML_CUDA_KQUANTS_ITER)
-else
-	MK_NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
-endif
 
 ifdef GGML_CUDA_PEER_MAX_BATCH_SIZE
 	MK_NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=$(GGML_CUDA_PEER_MAX_BATCH_SIZE)
@@ -784,10 +759,6 @@ ifdef GGML_HIPBLAS
 		AMDGPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
 	endif
 
-	GGML_CUDA_DMMV_X       ?= 32
-	GGML_CUDA_MMV_Y        ?= 1
-	GGML_CUDA_KQUANTS_ITER ?= 2
-
 	MK_CPPFLAGS += -DGGML_USE_HIP -DGGML_USE_CUDA
 
 ifdef GGML_HIP_UMA
@@ -801,13 +772,6 @@ endif # GGML_HIP_UMA
 	HIPCC ?= $(CCACHE) $(ROCM_PATH)/bin/hipcc
 
 	HIPFLAGS += $(addprefix --offload-arch=,$(AMDGPU_TARGETS))
-	HIPFLAGS += -DGGML_CUDA_DMMV_X=$(GGML_CUDA_DMMV_X)
-	HIPFLAGS += -DGGML_CUDA_MMV_Y=$(GGML_CUDA_MMV_Y)
-	HIPFLAGS += -DK_QUANTS_PER_ITERATION=$(GGML_CUDA_KQUANTS_ITER)
-
-ifdef GGML_CUDA_FORCE_DMMV
-	HIPFLAGS += -DGGML_CUDA_FORCE_DMMV
-endif # GGML_CUDA_FORCE_DMMV
 
 ifdef GGML_CUDA_FORCE_MMQ
 	HIPFLAGS += -DGGML_CUDA_FORCE_MMQ
@@ -870,10 +834,6 @@ ifdef GGML_MUSA
 
 	MUSAFLAGS += $(addprefix --cuda-gpu-arch=, $(MTGPU_TARGETS))
 
-ifdef GGML_CUDA_FORCE_DMMV
-	MUSAFLAGS += -DGGML_CUDA_FORCE_DMMV
-endif # GGML_CUDA_FORCE_DMMV
-
 ifdef GGML_CUDA_FORCE_MMQ
 	MUSAFLAGS += -DGGML_CUDA_FORCE_MMQ
 endif # GGML_CUDA_FORCE_MMQ
@@ -882,18 +842,6 @@ ifdef GGML_CUDA_FORCE_CUBLAS
 	MUSAFLAGS += -DGGML_CUDA_FORCE_CUBLAS
 endif # GGML_CUDA_FORCE_CUBLAS
 
-ifdef GGML_CUDA_DMMV_X
-	MUSAFLAGS += -DGGML_CUDA_DMMV_X=$(GGML_CUDA_DMMV_X)
-else
-	MUSAFLAGS += -DGGML_CUDA_DMMV_X=32
-endif # GGML_CUDA_DMMV_X
-
-ifdef GGML_CUDA_MMV_Y
-	MUSAFLAGS += -DGGML_CUDA_MMV_Y=$(GGML_CUDA_MMV_Y)
-else
-	MUSAFLAGS += -DGGML_CUDA_MMV_Y=1
-endif # GGML_CUDA_MMV_Y
-
 ifdef GGML_CUDA_F16
 	MUSAFLAGS += -DGGML_CUDA_F16
 endif # GGML_CUDA_F16
@@ -901,12 +849,6 @@ endif # GGML_CUDA_F16
 ifdef GGML_CUDA_DMMV_F16
 	MUSAFLAGS += -DGGML_CUDA_F16
 endif # GGML_CUDA_DMMV_F16
-
-ifdef GGML_CUDA_KQUANTS_ITER
-	MUSAFLAGS += -DK_QUANTS_PER_ITERATION=$(GGML_CUDA_KQUANTS_ITER)
-else
-	MUSAFLAGS += -DK_QUANTS_PER_ITERATION=2
-endif
 
 ifdef GGML_CUDA_PEER_MAX_BATCH_SIZE
 	MUSAFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=$(GGML_CUDA_PEER_MAX_BATCH_SIZE)
@@ -964,6 +906,7 @@ endif # GGML_METAL
 ifdef GGML_METAL
 ggml/src/ggml-metal/ggml-metal.o: \
 	ggml/src/ggml-metal/ggml-metal.m \
+	ggml/src/ggml-metal/ggml-metal-impl.h \
 	ggml/include/ggml-metal.h \
 	ggml/include/ggml.h
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -971,9 +914,11 @@ ggml/src/ggml-metal/ggml-metal.o: \
 ifdef GGML_METAL_EMBED_LIBRARY
 ggml/src/ggml-metal-embed.o: \
 	ggml/src/ggml-metal/ggml-metal.metal \
+	ggml/src/ggml-metal/ggml-metal-impl.h \
 	ggml/src/ggml-common.h
 	@echo "Embedding Metal library"
-	@sed -e '/__embed_ggml-common.h__/r ggml/src/ggml-common.h' -e '/__embed_ggml-common.h__/d' < ggml/src/ggml-metal/ggml-metal.metal > ggml/src/ggml-metal/ggml-metal-embed.metal
+	@sed -e '/__embed_ggml-common.h__/r      ggml/src/ggml-common.h'                -e '/__embed_ggml-common.h__/d'      < ggml/src/ggml-metal/ggml-metal.metal           > ggml/src/ggml-metal/ggml-metal-embed.metal.tmp
+	@sed -e '/#include "ggml-metal-impl.h"/r ggml/src/ggml-metal/ggml-metal-impl.h' -e '/#include "ggml-metal-impl.h"/d' < ggml/src/ggml-metal/ggml-metal-embed.metal.tmp > ggml/src/ggml-metal/ggml-metal-embed.metal
 	$(eval TEMP_ASSEMBLY=$(shell mktemp -d))
 	@echo ".section __DATA, __ggml_metallib"                       >  $(TEMP_ASSEMBLY)/ggml-metal-embed.s
 	@echo ".globl _ggml_metallib_start"                            >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
@@ -997,6 +942,7 @@ OBJ_GGML = \
 	$(DIR_GGML)/src/ggml-alloc.o \
 	$(DIR_GGML)/src/ggml-backend.o \
 	$(DIR_GGML)/src/ggml-backend-reg.o \
+	$(DIR_GGML)/src/ggml-opt.o \
 	$(DIR_GGML)/src/ggml-quants.o \
 	$(DIR_GGML)/src/ggml-threading.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu.o \
@@ -1497,11 +1443,6 @@ tests/test-double-float: tests/test-double-float.cpp
 tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grad0: tests/test-grad0.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-opt: tests/test-opt.cpp \
