@@ -54,19 +54,10 @@ if (CUDAToolkit_FOUND)
     target_link_libraries(ggml-cuda PRIVATE ggml-base)
     target_include_directories(ggml-cuda PRIVATE . ..)
 
-    # TODO: change the definitions to this target only
-
-    add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-    add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-    add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
     if (GGML_CUDA_GRAPHS)
         add_compile_definitions(GGML_CUDA_USE_GRAPHS)
-    endif()
-
-    if (GGML_CUDA_FORCE_DMMV)
-        add_compile_definitions(GGML_CUDA_FORCE_DMMV)
     endif()
 
     if (GGML_CUDA_FORCE_MMQ)
@@ -79,10 +70,6 @@ if (CUDAToolkit_FOUND)
 
     if (GGML_CUDA_NO_VMM)
         add_compile_definitions(GGML_CUDA_NO_VMM)
-    endif()
-
-    if (DEFINED GGML_CUDA_DMMV_Y)
-        add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_DMMV_Y}) # for backwards compatibility
     endif()
 
     if (GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
