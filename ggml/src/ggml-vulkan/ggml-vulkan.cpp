@@ -3090,7 +3090,7 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context&
         to_fp16_vk_1 = ggml_vk_get_to_fp16(ctx, src1->type);
     }
     vk_pipeline dmmv = ggml_vk_get_dequantize_mul_mat_vec(ctx, src0->type, src1->type);
-    GGML_ASSERT(dmmv != nullptr && !qx_needs_dequant || to_fp16_vk_0 != nullptr || !qy_needs_dequant || to_fp16_vk_1 != nullptr);  // NOLINT
+    GGML_ASSERT(dmmv != nullptr && (!qx_needs_dequant || to_fp16_vk_0 != nullptr || !qy_needs_dequant || to_fp16_vk_1 != nullptr));  // NOLINT
 
     if (dryrun) {
         const uint64_t x_sz_upd = x_sz * ne02 * ne03;
