@@ -106,6 +106,9 @@ void main() {
     if (first_row + NUM_ROWS <= p.stride_d) {
         compute_outputs(first_row, NUM_ROWS);
     } else {
+        if (first_row >= p.stride_d) {
+            return;
+        }
         compute_outputs(first_row, p.stride_d - first_row);
     }
 }
