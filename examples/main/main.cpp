@@ -62,49 +62,6 @@ static bool file_is_empty(const std::string & path) {
     return f.tellg() == 0;
 }
 
-static void write_logfile(
-    const llama_context * ctx, const common_params & params, const llama_model * model,
-    const std::vector<llama_token> & input_tokens, const std::string & output,
-    const std::vector<llama_token> & output_tokens
-) {
-    if (params.logdir.empty()) {
-        return;
-    }
-
-    const std::string timestamp = string_get_sortable_timestamp();
-
-    const bool success = fs_create_directory_with_parents(params.logdir);
-    if (!success) {
-        LOG_ERR("%s: failed to create logdir %s, cannot write logfile\n", __func__, params.logdir.c_str());
-        return;
-    }
-
-    const std::string logfile_path = params.logdir + timestamp + ".yml";
-    FILE * logfile = fopen(logfile_path.c_str(), "w");
-
-    if (logfile == NULL) {
-        LOG_ERR("%s: failed to open logfile %s\n", __func__, logfile_path.c_str());
-        return;
-    }
-
-    fprintf(logfile, "binary: main\n");
-    char model_desc[128];
-    llama_model_desc(model, model_desc, sizeof(model_desc));
-    yaml_dump_non_result_info(logfile, params, ctx, timestamp, input_tokens, model_desc);
-
-    fprintf(logfile, "\n");
-    fprintf(logfile, "######################\n");
-    fprintf(logfile, "# Generation Results #\n");
-    fprintf(logfile, "######################\n");
-    fprintf(logfile, "\n");
-
-    yaml_dump_string_multiline(logfile, "output", output.c_str());
-    yaml_dump_vector_int(logfile, "output_tokens", output_tokens);
-
-    llama_perf_dump_yaml(logfile, ctx);
-    fclose(logfile);
-}
-
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 static void sigint_handler(int signo) {
     if (signo == SIGINT) {
@@ -115,7 +72,6 @@ static void sigint_handler(int signo) {
             console::cleanup();
             LOG("\n");
             common_perf_print(*g_ctx, *g_smpl);
-            write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
 
             // make sure all logs are flushed
             LOG("Interrupted by user\n");
@@ -926,7 +882,6 @@ int main(int argc, char ** argv) {
 
     LOG("\n\n");
     common_perf_print(ctx, smpl);
-    write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     common_sampler_free(smpl);
 

@@ -116,9 +116,8 @@ llama_target_and_test(test-sampling.cpp)
 llama_target_and_test(test-chat-template.cpp)
 
 llama_target_and_test(test-grammar-parser.cpp)
-llama_target_and_test(test-llama-grammar.cpp)
 llama_target_and_test(test-grammar-integration.cpp)
-llama_target_and_test(test-grad0.cpp)
+llama_target_and_test(test-llama-grammar.cpp)
 llama_target_and_test(test-barrier.cpp)
 # llama_target_and_test(test-opt.cpp) # SLOW
 llama_target_and_test(test-backend-ops.cpp)

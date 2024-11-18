@@ -85,7 +85,6 @@ The project is under active development, and we are [looking for feedback and co
 | `-hfr, --hf-repo REPO` | Hugging Face model repository (default: unused)<br/>(env: LLAMA_ARG_HF_REPO) |
 | `-hff, --hf-file FILE` | Hugging Face model file (default: unused)<br/>(env: LLAMA_ARG_HF_FILE) |
 | `-hft, --hf-token TOKEN` | Hugging Face access token (default: value from HF_TOKEN environment variable)<br/>(env: HF_TOKEN) |
-| `-ld, --logdir LOGDIR` | path under which to save YAML logs (no logging if unset) |
 | `--log-disable` | Log disable |
 | `--log-file FNAME` | Log to file |
 | `--log-colors` | Enable colored logging<br/>(env: LLAMA_LOG_COLORS) |

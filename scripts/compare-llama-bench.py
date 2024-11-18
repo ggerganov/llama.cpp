@@ -19,22 +19,22 @@ logger = logging.getLogger("compare-llama-bench")
 
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
-    "cpu_info", "gpu_info", "n_gpu_layers", "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas",
-    "blas", "model_filename", "model_type", "n_batch", "n_ubatch", "embeddings", "n_threads",
-    "type_k", "type_v", "use_mmap", "no_kv_offload", "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
+    "cpu_info", "gpu_info", "backends", "n_gpu_layers", "model_filename", "model_type", "n_batch", "n_ubatch",
+    "embeddings", "cpu_mask", "cpu_strict", "poll", "n_threads", "type_k", "type_v", "use_mmap", "no_kv_offload",
+    "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
 ]
 
 # Properties that are boolean and are converted to Yes/No for the table:
-BOOL_PROPERTIES = ["cuda", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas", "embeddings", "use_mmap", "no_kv_offload", "flash_attn"]
+BOOL_PROPERTIES = ["embeddings", "cpu_strict", "use_mmap", "no_kv_offload", "flash_attn"]
 
 # Header names for the table:
 PRETTY_NAMES = {
-    "cuda": "CUDA", "vulkan": "Vulkan", "kompute": "Kompute", "metal": "Metal", "sycl": "SYCL", "rpc": "RPC",
-    "gpu_blas": "GPU BLAS", "blas": "BLAS", "cpu_info": "CPU", "gpu_info": "GPU", "model_filename": "File", "model_type": "Model",
-    "model_size": "Model Size [GiB]", "model_n_params": "Num. of Par.", "n_batch": "Batch size", "n_ubatch": "Microbatch size",
-    "n_threads": "Threads", "type_k": "K type", "type_v": "V type", "n_gpu_layers": "GPU layers", "split_mode": "Split mode",
-    "main_gpu": "Main GPU", "no_kv_offload": "NKVO", "flash_attn": "FlashAttention", "tensor_split": "Tensor split",
-    "use_mmap": "Use mmap", "embeddings": "Embeddings",
+    "cpu_info": "CPU", "gpu_info": "GPU", "backends": "Backends", "n_gpu_layers": "GPU layers",
+    "model_filename": "File", "model_type": "Model", "model_size": "Model size [GiB]",
+    "model_n_params": "Num. of par.", "n_batch": "Batch size", "n_ubatch": "Microbatch size",
+    "embeddings": "Embeddings", "cpu_mask": "CPU mask", "cpu_strict": "CPU strict", "poll": "Poll",
+    "n_threads": "Threads", "type_k": "K type", "type_v": "V type", "split_mode": "Split mode", "main_gpu": "Main GPU",
+    "no_kv_offload": "NKVO", "flash_attn": "FlashAttention", "tensor_split": "Tensor split", "use_mmap": "Use mmap",
 }
 
 DEFAULT_SHOW = ["model_type"]  # Always show these properties by default.
@@ -303,14 +303,11 @@ else:
 
     show = []
     # Show CPU and/or GPU by default even if the hardware for all results is the same:
-    if "gpu_blas" not in properties_different and "n_gpu_layers" not in properties_different:
-        gpu_blas = bool(rows_full[0][KEY_PROPERTIES.index("gpu_blas")])
+    if "n_gpu_layers" not in properties_different:
         ngl = int(rows_full[0][KEY_PROPERTIES.index("n_gpu_layers")])
 
-        if not gpu_blas or ngl != 99 and "cpu_info" not in properties_different:
+        if ngl != 99 and "cpu_info" not in properties_different:
             show.append("cpu_info")
-        if gpu_blas and "gpu_info" not in properties_different:
-            show.append("gpu_info")
 
     show += properties_different
 
