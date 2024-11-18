@@ -1764,7 +1764,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     fp16 = fp16 && vk12_features.shaderFloat16;
 
     std::string device_name = props2.properties.deviceName.data();
-    GGML_LOG_DEBUG("ggml_vulkan: %ld = %s (%s) | uma: %d | fp16: %d | warp size: %ld\n",
+    GGML_LOG_DEBUG("ggml_vulkan: %zu = %s (%s) | uma: %d | fp16: %d | warp size: %zu\n",
               idx, device_name.c_str(), driver_props.driverName.data(), uma, fp16, subgroup_size);
 
     if (props2.properties.deviceType == vk::PhysicalDeviceType::eCpu) {
@@ -1937,7 +1937,7 @@ void ggml_vk_instance_init() {
             vk_instance.device_indices.push_back(0);
         }
     }
-    GGML_LOG_DEBUG("ggml_vulkan: Found %ld Vulkan devices:\n", vk_instance.device_indices.size());
+    GGML_LOG_DEBUG("ggml_vulkan: Found %zu Vulkan devices:\n", vk_instance.device_indices.size());
 
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         ggml_vk_print_gpu_info(i);
