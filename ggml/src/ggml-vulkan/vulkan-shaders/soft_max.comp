@@ -152,30 +152,21 @@ void main() {
     // instantiate the soft_max function for several different
     // dimensions, to allow loop unrolling
     uint num_blocks = (p.KX + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    switch (num_blocks) {
-    case 1:
-        soft_max(1);
-        break;
-    case 2:
-        soft_max(2);
-        break;
-    case 3:
-        soft_max(3);
-        break;
-    case 4:
-        soft_max(4);
-        break;
-    case 5:
-    case 6:
-    case 7:
-    case 8:
-        soft_max(8);
-        break;
-    case 16:
-        soft_max(16);
-        break;
-    default:
+    if (num_blocks > 32) {
         soft_max(num_blocks);
-        break;
+    } else if (num_blocks > 16) {
+        soft_max(32);
+    } else if (num_blocks > 8) {
+        soft_max(16);
+    } else if (num_blocks > 4) {
+        soft_max(8);
+    } else if (num_blocks == 4) {
+        soft_max(4);
+    } else if (num_blocks == 3) {
+        soft_max(3);
+    } else if (num_blocks == 2) {
+        soft_max(2);
+    } else if (num_blocks == 1) {
+        soft_max(1);
     }
 }
