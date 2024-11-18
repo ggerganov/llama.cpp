@@ -3934,8 +3934,7 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
             if (src1 == nullptr || src1->type == GGML_TYPE_F32) {
                 return ctx->device->pipeline_soft_max_f32;
             }
-            else {
-                GGML_ASSERT(src1->type == GGML_TYPE_F16);
+            else if (src1->type == GGML_TYPE_F16) {
                 return ctx->device->pipeline_soft_max_f32_f16;
             }
         }
