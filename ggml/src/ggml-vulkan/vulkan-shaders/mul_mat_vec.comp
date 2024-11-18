@@ -5,8 +5,6 @@
 #endif
 #extension GL_EXT_shader_explicit_arithmetic_types_int32 : require
 
-#extension GL_EXT_null_initializer : enable
-
 #include "mul_mat_vec_base.comp"
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
@@ -57,7 +55,11 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
-    FLOAT_TYPE temp[NUM_ROWS] = {};
+    FLOAT_TYPE temp[NUM_ROWS];
+
+    for (uint i = 0; i < NUM_ROWS; ++i) {
+        temp[i] = FLOAT_TYPE(0);
+    }
 
     const int unroll_count = 8;
 
