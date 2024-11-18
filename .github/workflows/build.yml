@@ -989,24 +989,24 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          echo "copy oneAPI runtime dll files for 2024/2025 basekits in ${{ env.ONEAPI_ROOT }} to ./build/bin"
-          echo "2024"
+          echo "copying Intel oneAPI runtime libraries for 2024/2025 basekits in ${{ env.ONEAPI_ROOT }} to ./build/bin"
+          echo "copying 2024 base kit libraries to ./build/bin"
           cp "${{ env.ONEAPI_ROOT }}/mkl/2024.2/bin/mkl_sycl_blas.4.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/2024.2/bin/sycl7.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/2024.2/bin/pi_win_proxy_loader.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/2024.2/bin/pi_level_zero.dll" ./build/bin
-          echo "2025"
+          echo "copying 2025 base kit libraries to ./build/bin"
           cp "${{ env.ONEAPI_ROOT }}/mkl/2025.0/bin/mkl_sycl_blas.5.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/2025.0/bin/sycl8.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/2025.0/bin/ur_win_proxy_loader.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/2025.0/bin/ur_adapter_level_zero.dll" ./build/bin
-          echo "Shared"
+          echo "copying shared base kit libraries to ./build/bin"
           cp "${{ env.ONEAPI_ROOT }}/mkl/latest/bin/mkl_core.2.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/mkl/latest/bin/mkl_tbb_thread.2.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/svml_dispmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libmmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libiomp5md.dll" ./build/bin
-          echo "copied oneAPI runtime dll files for 2024/2025 basekits to ./build/bin"
+          echo "copied Intel oneAPI runtime libraries for 2024/2025 basekits to ./build/bin"
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
 
       - name: Upload artifacts
