@@ -4350,10 +4350,6 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
                 if (op->op == GGML_OP_MUL_MAT) {
                     a = op->src[0];
                     b = op->src[1];
-                    if (ggml_is_permuted(a) || ggml_is_permuted(b)) {
-                        // TODO: fix like https://github.com/ggerganov/llama.cpp/pull/10021
-                        return false;
-                    }
                 } else {
                     a = op->src[2];
                     b = op->src[1];
