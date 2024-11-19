@@ -1351,11 +1351,15 @@ static void ggml_vk_cpy_f16_f32(Args&&... args) {
 }
 
 static bool ggml_backend_kompute_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
+    int64_t n = ggml_nelements(op);
     switch (op->op) {
         case GGML_OP_UNARY:
+            if (n % 4 != 0) return false;
             switch (ggml_get_unary_op(op)) {
-                case GGML_UNARY_OP_RELU:
                 case GGML_UNARY_OP_GELU:
+                    if (n % 8 != 0) return false;
+                    // fall through
+                case GGML_UNARY_OP_RELU:
                 case GGML_UNARY_OP_SILU:
                     return ggml_is_contiguous(op->src[0]);
                 default:
