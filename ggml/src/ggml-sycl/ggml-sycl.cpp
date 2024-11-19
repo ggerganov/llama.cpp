@@ -3447,8 +3447,15 @@ static void ggml_sycl_mul_mat(ggml_backend_sycl_context & ctx, const ggml_tensor
         use_dequantize_mul_mat_vec = use_dequantize_mul_mat_vec && !use_mul_mat_vec_q;
 
     if (!split && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
-        // KQ single-batch
-        ggml_sycl_mul_mat_vec_p021(ctx, src0, src1, dst);
+        // TODO: Refactor and cleanup of mul mat dispatching.
+        if (src0->ne[3] == 1 && src1->ne[3] == 1) {
+            // KQ single-batch
+            // mmv p021 was specific for these dimensions
+            ggml_sycl_mul_mat_vec_p021(ctx, src0, src1, dst);
+        } else {
+            // The kernel from the if path is faster for that specific case, but does not support all mul mats.
+            ggml_sycl_mul_mat_batched_sycl(ctx, src0, src1, dst);
+        }
     } else if (!split && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
         // KQV single-batch
         ggml_sycl_mul_mat_vec_nc(ctx, src0, src1, dst);
