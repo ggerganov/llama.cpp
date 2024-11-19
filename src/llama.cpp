@@ -20463,7 +20463,7 @@ void llama_kv_cache_update(struct llama_context * ctx) {
 }
 
 bool llama_kv_cache_can_shift(struct llama_context * ctx) {
-    return ctx->model.arch != LLM_ARCH_DEEPSEEK2;
+    return ctx->model.arch != LLM_ARCH_DEEPSEEK2; // not supported due to MLA
 }
 
 // deprecated
