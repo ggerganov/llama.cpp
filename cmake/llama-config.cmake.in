@@ -69,6 +69,7 @@ if (NOT LLAMA_SHARED_LIB)
 
     if (GGML_BLAS)
         find_package(BLAS REQUIRED)
+        list(APPEND _llama_link_deps BLAS::BLAS)
     endif()
 
     if (GGML_CUDA)
