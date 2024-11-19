@@ -109,6 +109,7 @@ if (NOT MSVC)
 endif()
 option(GGML_LASX        "ggml: enable lasx"             ON)
 option(GGML_LSX         "ggml: enable lsx"              ON)
+option(GGML_RVV         "ggml: enable rvv"              ON)
 option(GGML_SVE         "ggml: enable SVE"              OFF)
 
 if (WIN32)
