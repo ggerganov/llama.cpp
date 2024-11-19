@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# type: ignore[reportUnusedImport]
+
 import subprocess
 import os
 import sys
@@ -166,7 +168,7 @@ class ServerProcess:
         )
         thread_stderr.start()
 
-        print(f"server pid={self.process.pid}, behave pid={os.getpid()}")
+        print(f"server pid={self.process.pid}, pytest pid={os.getpid()}")
 
         # wait for server to start
         start_time = time.time()

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# type: ignore
+
 import asyncio
 import json
 import os
