@@ -235,12 +235,8 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #if (GGML_METAL)
 #    set_target_properties(ggml PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/ggml-metal.metal")
 #endif()
-install(TARGETS ggml PUBLIC_HEADER)
-
-if (BUILD_SHARED_LIBS)
-    install(TARGETS ggml      LIBRARY)
-    install(TARGETS ggml-base LIBRARY)
-endif()
+install(TARGETS ggml LIBRARY PUBLIC_HEADER)
+install(TARGETS ggml-base LIBRARY)
 
 # FIXME: this should be done in the backend cmake files
 if (GGML_METAL)
