@@ -18213,7 +18213,7 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
 
     // apply K-shift if needed
     if (lctx.model.hparams.rope_type != LLAMA_ROPE_TYPE_NONE && lctx.kv_self.has_shift) {
-        if (lctx.model.arch == LLM_ARCH_DEEPSEEK2) { // not supported due to MLA
+        if (!llama_kv_cache_can_shift(&lctx)) {
             GGML_ABORT("Deepseek2 does not support K-shift");
         }
 
@@ -20460,6 +20460,10 @@ void llama_kv_cache_defrag(struct llama_context * ctx) {
 
 void llama_kv_cache_update(struct llama_context * ctx) {
     llama_kv_cache_update_internal(*ctx);
+}
+
+bool llama_kv_cache_can_shift(struct llama_context * ctx) {
+    return ctx->model.arch != LLM_ARCH_DEEPSEEK2; // not supported due to MLA
 }
 
 // deprecated

@@ -667,6 +667,9 @@ extern "C" {
     // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
+    // Check if the context supports KV cache shifting
+    LLAMA_API bool llama_kv_cache_can_shift(struct llama_context * ctx);
+
     //
     // State / sessions
     //
