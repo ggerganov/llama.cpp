@@ -22,6 +22,7 @@ find_package(Threads REQUIRED)
 
 set(_llama_transient_defines "@GGML_TRANSIENT_DEFINES@")
 set(_llama_link_deps "")
+set(_llama_link_opts "")
 foreach(_ggml_lib ggml ggml-base)
     string(REPLACE "-" "_" _ggml_lib_var "${_ggml_lib}_LIBRARY")
     find_library(${_ggml_lib_var} ${_ggml_lib}
@@ -70,6 +71,7 @@ if (NOT LLAMA_SHARED_LIB)
     if (GGML_BLAS)
         find_package(BLAS REQUIRED)
         list(APPEND _llama_link_deps ${BLAS_LIBRARIES})
+        list(APPEND _llama_link_opts ${BLAS_LINKER_FLAGS})
     endif()
 
     if (GGML_CUDA)
@@ -110,6 +112,7 @@ set_target_properties(llama
     PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${LLAMA_INCLUDE_DIR}"
         INTERFACE_LINK_LIBRARIES "${_llama_link_deps}"
+        INTERFACE_LINK_OPTIONS   "${_llama_link_opts}"
         INTERFACE_COMPILE_DEFINITIONS "${_llama_transient_defines}"
         IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
         IMPORTED_LOCATION "${llama_LIBRARY}"
