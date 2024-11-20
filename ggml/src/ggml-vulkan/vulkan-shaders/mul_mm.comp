@@ -75,6 +75,10 @@ shared u16vec2 row_ids[3072];
 #endif
 
 void main() {
+#if defined(DATA_A_IQ4_NL)
+    init_iq4nl_shmem();
+#endif
+
 #ifdef MUL_MAT_ID
     const uint expert_idx = gl_GlobalInvocationID.z;
 #else
