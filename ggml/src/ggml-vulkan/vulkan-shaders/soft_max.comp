@@ -73,7 +73,9 @@ void soft_max(uint num_iters) {
 
         FLOAT_TYPE v = a * p.scale + slope * b;
 
-        max_val = max(max_val, v);
+        if (col < p.KX) {
+            max_val = max(max_val, v);
+        }
 
         if (idx < DATA_CACHE_SIZE) {
             data_cache[idx] = v;
