@@ -298,10 +298,21 @@ struct block_iq4_nl_packed16
 #define A_TYPE block_iq4_nl
 #define A_TYPE_PACKED16 block_iq4_nl_packed16
 
-const int8_t kvalues_iq4nl[16] = {
+const int8_t kvalues_iq4nl_const[16] = {
     int8_t(-127), int8_t(-104), int8_t(-83), int8_t(-65), int8_t(-49), int8_t(-35), int8_t(-22), int8_t(-10),
     int8_t(1), int8_t(13), int8_t(25), int8_t(38), int8_t(53), int8_t(69), int8_t(89), int8_t(113)
 };
+
+shared FLOAT_TYPE kvalues_iq4nl[16];
+
+void init_iq4nl_shmem()
+{
+    // copy the table into shared memory and sync
+    if (gl_LocalInvocationIndex.x < 16) {
+        kvalues_iq4nl[gl_LocalInvocationIndex.x] = FLOAT_TYPE(kvalues_iq4nl_const[gl_LocalInvocationIndex.x]);
+    }
+    barrier();
+}
 #endif
 
 #endif // !defined(GGML_TYPES_COMP)
