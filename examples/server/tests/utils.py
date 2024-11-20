@@ -11,6 +11,7 @@ import sys
 import threading
 import requests
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import (
     Any,
     Callable,
@@ -19,7 +20,7 @@ from typing import (
     Iterator,
     List,
     Literal,
-    Sequence,
+    Tuple,
     Set,
 )
 from re import RegexFlag
@@ -28,7 +29,7 @@ from re import RegexFlag
 class ServerResponse:
     headers: dict
     status_code: int
-    body: dict
+    body: dict | Any
 
 
 class ServerProcess:
@@ -322,30 +323,42 @@ class ServerPreset:
         return server
 
 
-def multiple_post_requests(
-    server: ServerProcess, path: str, data: Sequence[dict], headers: dict | None = None
-) -> Sequence[ServerResponse]:
-    def worker(data_chunk):
+def parallel_function_calls(function_list: List[Tuple[Callable[..., Any], Tuple[Any, ...]]]) -> List[Any]:
+    """
+    Run multiple functions in parallel and return results in the same order as calls. Equivalent to Promise.all in JS.
+
+    Example usage:
+
+    results = parallel_function_calls([
+        (func1, (arg1, arg2)),
+        (func2, (arg3, arg4)),
+    ])
+    """
+    results = [None] * len(function_list)
+    exceptions = []
+
+    def worker(index, func, args):
         try:
-            return server.make_request("POST", path, data=data_chunk, headers=headers)
+            result = func(*args)
+            results[index] = result
         except Exception as e:
-            print(f"Error occurred: {e}", file=sys.stderr)
-            os._exit(1)  # terminate main thread
+            exceptions.append((index, str(e)))
 
-    threads = []
-    results = []
+    with ThreadPoolExecutor() as executor:
+        futures = []
+        for i, (func, args) in enumerate(function_list):
+            future = executor.submit(worker, i, func, args)
+            futures.append(future)
 
-    def thread_target(data_chunk):
-        result = worker(data_chunk)
-        results.append(result)
+        # Wait for all futures to complete
+        for future in as_completed(futures):
+            pass
 
-    for chunk in data:
-        thread = threading.Thread(target=thread_target, args=(chunk,))
-        threads.append(thread)
-        thread.start()
-
-    for thread in threads:
-        thread.join()
+    # Check if there were any exceptions
+    if exceptions:
+        print("Exceptions occurred:")
+        for index, error in exceptions:
+            print(f"Function at index {index}: {error}")
 
     return results
 
