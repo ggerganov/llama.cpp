@@ -120,3 +120,5 @@ def test_consistent_result_different_batch_size(n_batch: int, temperature: float
         if last_res is not None:
             assert res.body["content"] == last_res.body["content"]
         last_res = res
+
+# TODO: add completion with tokens as input, mixed token+string input

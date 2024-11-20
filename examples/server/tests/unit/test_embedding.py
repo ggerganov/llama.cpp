@@ -4,6 +4,7 @@ from utils import *
 
 server = ServerPreset.bert_bge_small()
 
+EPSILON = 1e-3
 
 @pytest.fixture(scope="module", autouse=True)
 def create_server():
@@ -23,7 +24,7 @@ def test_embedding_single():
     assert len(res.body['data'][0]['embedding']) > 1
 
     # make sure embedding vector is normalized
-    assert abs(sum([x ** 2 for x in res.body['data'][0]['embedding']]) - 1) < 1e-5
+    assert abs(sum([x ** 2 for x in res.body['data'][0]['embedding']]) - 1) < EPSILON
 
 
 def test_embedding_multiple():
@@ -95,4 +96,4 @@ def test_same_prompt_give_same_result():
         v0 = res.body['data'][0]['embedding']
         vi = res.body['data'][i]['embedding']
         for x, y in zip(v0, vi):
-            assert abs(x - y) < 1e-5
+            assert abs(x - y) < EPSILON

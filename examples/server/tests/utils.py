@@ -17,6 +17,7 @@ from typing import (
     ContextManager,
     Iterable,
     Iterator,
+    List,
     Literal,
     Sequence,
     Set,
@@ -65,7 +66,7 @@ class ServerProcess:
     draft: int | None = None
     api_key: str | None = None
     response_format: str | None = None
-    lora_file: str | None = None
+    lora_files: List[str] | None = None
     disable_ctx_shift: int | None = False
 
     # session variables
@@ -134,8 +135,9 @@ class ServerProcess:
             server_args.extend(["--grp-attn-w", self.n_ga_w])
         if self.debug:
             server_args.append("--verbose")
-        if self.lora_file:
-            server_args.extend(["--lora", self.lora_file])
+        if self.lora_files:
+            for lora_file in self.lora_files:
+                server_args.extend(["--lora", lora_file])
         if self.disable_ctx_shift:
             server_args.extend(["--no-context-shift"])
         if self.api_key:
@@ -202,7 +204,7 @@ class ServerProcess:
         self,
         method: str,
         path: str,
-        data: dict | None = None,
+        data: dict | Any | None = None,
         headers: dict | None = None,
     ) -> ServerResponse:
         url = f"http://{self.server_host}:{self.server_port}{path}"
@@ -275,6 +277,48 @@ class ServerPreset:
         server.n_slots = 2
         server.seed = 42
         server.server_embeddings = True
+        return server
+
+    @staticmethod
+    def tinyllama_infill() -> ServerProcess:
+        server = ServerProcess()
+        server.model_hf_repo = "ggml-org/models"
+        server.model_hf_file = "tinyllamas/stories260K-infill.gguf"
+        server.model_alias = "tinyllama-infill"
+        server.n_ctx = 2048
+        server.n_batch = 1024
+        server.n_slots = 1
+        server.n_predict = 64
+        server.temperature = 0.0
+        server.seed = 42
+        return server
+    
+    @staticmethod
+    def stories15m_moe() -> ServerProcess:
+        server = ServerProcess()
+        server.model_hf_repo = "ggml-org/stories15M_MOE"
+        server.model_hf_file = "stories15M_MOE-F16.gguf"
+        server.model_alias = "stories15m-moe"
+        server.n_ctx = 2048
+        server.n_batch = 1024
+        server.n_slots = 1
+        server.n_predict = 64
+        server.temperature = 0.0
+        server.seed = 42
+        return server
+    
+    @staticmethod
+    def jina_reranker_tiny() -> ServerProcess:
+        server = ServerProcess()
+        server.model_hf_repo = "ggml-org/models"
+        server.model_hf_file = "jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
+        server.model_alias = "jina-reranker"
+        server.model_file = "./tmp/jina-reranker-v1-tiny-en.gguf"
+        server.n_ctx = 512
+        server.n_batch = 512
+        server.n_slots = 1
+        server.seed = 42
+        server.server_reranking = True
         return server
 
 
