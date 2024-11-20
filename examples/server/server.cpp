@@ -3228,7 +3228,7 @@ int main(int argc, char ** argv) {
             params.chat_template = "chatml";
         }
     } else if (!params.input_prefix.empty() || !params.input_suffix.empty()) {
-        LOG_WRN("%s: Prefix and suffix are not used because a chat template is defined.\n", __func__); 
+        LOG_WRN("%s: Prefix and suffix are not used because a chat template is defined.\n", __func__);
     }
 
     // print sample chat example to make it clear which template is used
