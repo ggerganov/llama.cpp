@@ -523,6 +523,8 @@ bool common_chat_verify_template(const std::string & tmpl);
 // If the custom "tmpl" is not supported, we throw an error
 std::string common_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
+        const std::string & prefix,
+        const std::string & suffix,
         const std::vector<common_chat_msg> & chat,
         bool add_ass);
 
@@ -535,7 +537,9 @@ std::string common_chat_format_single(const struct llama_model * model,
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(const struct llama_model * model,
-        const std::string & tmpl);
+        const std::string & tmpl,
+        const std::string & prefix,
+        const std::string & suffix);
 
 //
 // KV cache utils

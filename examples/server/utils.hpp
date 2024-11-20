@@ -300,7 +300,7 @@ static llama_tokens format_infill(
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::string & prefix, const std::string & suffix, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
@@ -328,7 +328,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat.push_back({role, content});
     }
 
-    const auto formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
+    const auto formatted_chat = common_chat_apply_template(model, tmpl, prefix, suffix, chat, true);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
@@ -597,13 +597,15 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json & body, /* openai api json semantics */
-    const std::string & chat_template) {
+    const std::string & chat_template,
+    const std::string & input_prefix,
+    const std::string & input_suffix) {
     json llama_params;
 
     llama_params["__oaicompat"] = true;
 
     // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    llama_params["prompt"] = format_chat(model, chat_template, input_prefix, input_suffix, body.at("messages"));
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {

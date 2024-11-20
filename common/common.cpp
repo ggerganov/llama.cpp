@@ -1559,12 +1559,14 @@ std::string common_detokenize(llama_context * ctx, const std::vector<llama_token
 
 bool common_chat_verify_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
-    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
+    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), nullptr, nullptr, chat, 1, true, nullptr, 0);
     return res >= 0;
 }
 
 std::string common_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
+        const std::string & prefix,
+        const std::string & suffix,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass) {
     int alloc_size = 0;
@@ -1576,10 +1578,12 @@ std::string common_chat_apply_template(const struct llama_model * model,
     }
 
     const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
+    const char * ptr_prefix = prefix.empty() ? nullptr : prefix.c_str();
+    const char * ptr_suffix = suffix.empty() ? nullptr : suffix.c_str();
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    int32_t res = llama_chat_apply_template(model, ptr_tmpl, ptr_prefix, ptr_suffix, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
 
     // error: chat template is not supported
     if (res < 0) {
@@ -1589,7 +1593,7 @@ std::string common_chat_apply_template(const struct llama_model * model,
             throw std::runtime_error("this custom template is not supported");
         } else {
             // If the built-in template is not supported, we default to chatml
-            res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+            res = llama_chat_apply_template(nullptr, "chatml", nullptr, nullptr, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
             fallback = true;
         }
     }
@@ -1600,6 +1604,8 @@ std::string common_chat_apply_template(const struct llama_model * model,
         res = llama_chat_apply_template(
             fallback ? nullptr : model,
             fallback ? "chatml" : ptr_tmpl,
+            fallback ? nullptr : ptr_prefix,
+            fallback ? nullptr : ptr_suffix,
             chat.data(), chat.size(), add_ass, buf.data(), buf.size());
     }
 
@@ -1613,7 +1619,9 @@ std::string common_chat_format_single(const struct llama_model * model,
         const common_chat_msg & new_msg,
         bool add_ass) {
     std::ostringstream ss;
-    auto fmt_past_msg = past_msg.empty() ? "" : common_chat_apply_template(model, tmpl, past_msg, false);
+    const std::string prefix;
+    const std::string suffix;
+    auto fmt_past_msg = past_msg.empty() ? "" : common_chat_apply_template(model, tmpl, prefix, suffix, past_msg, false);
     std::vector<common_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
     if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
@@ -1621,21 +1629,21 @@ std::string common_chat_format_single(const struct llama_model * model,
     };
     // format chat with new_msg
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = common_chat_apply_template(model, tmpl, chat_new, add_ass);
+    auto fmt_new_msg = common_chat_apply_template(model, tmpl, prefix, suffix, chat_new, add_ass);
     // get the diff part
     ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return ss.str();
 }
 
 std::string common_chat_format_example(const struct llama_model * model,
-        const std::string & tmpl) {
+        const std::string & tmpl, const std::string & prefix, const std::string & suffix) {
     std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant"},
         {"user",      "Hello"},
         {"assistant", "Hi there"},
         {"user",      "How are you?"},
     };
-    return common_chat_apply_template(model, tmpl, msgs, true);
+    return common_chat_apply_template(model, tmpl, prefix, suffix, msgs, true);
 }
 
 //

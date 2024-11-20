@@ -21820,6 +21820,8 @@ int32_t llama_detokenize(
 // This function uses heuristic checks to determine commonly used template. It is not a jinja parser.
 static int32_t llama_chat_apply_template_internal(
     const std::string & tmpl,
+    const std::string & prefix,
+    const std::string & suffix,
     const std::vector<const llama_chat_message *> & chat,
     std::string & dest, bool add_ass) {
     // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
@@ -22096,6 +22098,16 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|start_of_role|>assistant<|end_of_role|>\n";
         }
+    } else if (tmpl == "custom") {
+        // a custom template using only prefix and suffix
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user") {
+                ss << prefix << message->content << suffix;
+            } else {
+                ss << message->content;
+            }
+        }
     } else {
         // template not supported
         return -1;
@@ -22107,6 +22119,8 @@ static int32_t llama_chat_apply_template_internal(
 int32_t llama_chat_apply_template(
                 const struct llama_model * model,
                               const char * tmpl,
+                              const char * prefix,
+                              const char * suffix,
          const struct llama_chat_message * chat,
                                   size_t   n_msg,
                                     bool   add_ass,
@@ -22135,7 +22149,9 @@ int32_t llama_chat_apply_template(
     }
 
     std::string formatted_chat;
-    int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
+    std::string prefix_chat = (prefix == nullptr ? "" : prefix);
+    std::string suffix_chat = (suffix == nullptr ? "" : suffix);
+    int32_t res = llama_chat_apply_template_internal(curr_tmpl, prefix_chat, suffix_chat, chat_vec, formatted_chat, add_ass);
     if (res < 0) {
         return res;
     }
