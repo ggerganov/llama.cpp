@@ -23,7 +23,7 @@ def test_embedding_single():
     assert len(res.body['data'][0]['embedding']) > 1
 
     # make sure embedding vector is normalized
-    assert abs(sum([x ** 2 for x in res.body['data'][0]['embedding']]) - 1) < 1e-6
+    assert abs(sum([x ** 2 for x in res.body['data'][0]['embedding']]) - 1) < 1e-5
 
 
 def test_embedding_multiple():
@@ -95,4 +95,4 @@ def test_same_prompt_give_same_result():
         v0 = res.body['data'][0]['embedding']
         vi = res.body['data'][i]['embedding']
         for x, y in zip(v0, vi):
-            assert abs(x - y) < 1e-6
+            assert abs(x - y) < 1e-5

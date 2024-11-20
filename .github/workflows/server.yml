@@ -180,7 +180,7 @@ jobs:
         run: |
           cd examples/server/tests
           $env:PYTHONIOENCODING = ":replace"
-          pytest -v -s -x
+          pytest -v -x
 
       - name: Slow tests
         id: server_integration_tests_slow
@@ -188,4 +188,4 @@ jobs:
         run: |
           cd examples/server/tests
           $env:SLOW_TESTS = "1"
-          pytest -v -s -x
+          pytest -v -x
