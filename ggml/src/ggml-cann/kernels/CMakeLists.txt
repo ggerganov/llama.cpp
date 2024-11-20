@@ -1,6 +1,23 @@
-if (NOT SOC_TYPE)
-    set (SOC_TYPE "Ascend910B3")
+# Function used to auto-detech soc type, if detect failed, will abort build
+set(SOC_VERSION "")
+function(detect_ascend_soc_type SOC_VERSION)
+    execute_process(
+        COMMAND bash -c "npu-smi info|awk -F' ' 'NF > 0 && NR==7 {print $3}'" 
+        OUTPUT_VARIABLE npu_info
+        RESULT_VARIABLE npu_result
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if("${npu_info}" STREQUAL "" OR ${npu_result})
+        message(FATAL_ERROR "Auto-detech ascend soc type failed, please specify manually or check ascend device working normally.")
+    endif()
+    set(${SOC_VERSION} "Ascend${npu_info}" PARENT_SCOPE)
+endfunction()
+
+if(NOT SOC_TYPE)
+    detect_ascend_soc_type(SOC_VERSION)
+    set(SOC_TYPE "${SOC_VERSION}")
 endif()
+message(STATUS "CANN: device SOC_TYPE:${SOC_TYPE}")
 
 file(GLOB SRC_FILES
     get_row_f32.cpp
@@ -30,4 +47,8 @@ ascendc_library(ascendc_kernels STATIC
     ${SRC_FILES}
 )
 
+string(FIND "${SOC_VERSION}" "ascend310p" FIRST_310P_INDEX)
+if(FIRST_310P_INDEX GREATER -1)
+    ascendc_compile_definitions(ascendc_kernels PRIVATE -DASCEND_310P)
+endif()
 # ascendc_compile_definitions(ascendc_kernels PRIVATE -DASCENDC_DUMP)
