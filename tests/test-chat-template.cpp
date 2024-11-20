@@ -118,7 +118,7 @@ int main(void) {
     int32_t res;
 
     // test invalid chat template
-    res = llama_chat_apply_template(nullptr, "INVALID TEMPLATE", conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
+    res = llama_chat_apply_template(nullptr, "INVALID TEMPLATE", nullptr, nullptr, conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
     assert(res < 0);
 
     for (size_t i = 0; i < templates.size(); i++) {
@@ -128,6 +128,8 @@ int main(void) {
         res = llama_chat_apply_template(
             nullptr,
             custom_template.c_str(),
+            nullptr,
+            nullptr,
             conversation,
             message_count,
             true,
