@@ -4486,7 +4486,7 @@ static bool ggml_backend_sycl_device_supports_buft(ggml_backend_dev_t dev, ggml_
 static int64_t get_op_batch_size(const ggml_tensor * op) {
     switch (op->op) {
         case GGML_OP_GET_ROWS:
-            return op->ne[1]; // this will increse the speed of prefill in test
+            return 0;
         case GGML_OP_MUL_MAT:
             return op->ne[1];
         case GGML_OP_MUL_MAT_ID:
