@@ -292,7 +292,7 @@ class ServerPreset:
         server.temperature = 0.0
         server.seed = 42
         return server
-    
+
     @staticmethod
     def stories15m_moe() -> ServerProcess:
         server = ServerProcess()
@@ -306,7 +306,7 @@ class ServerPreset:
         server.temperature = 0.0
         server.seed = 42
         return server
-    
+
     @staticmethod
     def jina_reranker_tiny() -> ServerProcess:
         server = ServerProcess()

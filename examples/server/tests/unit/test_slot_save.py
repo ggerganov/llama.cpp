@@ -47,7 +47,7 @@ def test_slot_save_restore():
     })
     assert res.status_code == 200
     assert res.body["n_restored"] == 84
-    
+
     # Since we have cache, slot 0 should only process the last tokens
     res = server.make_request("POST", "/completion", data={
         "prompt": "What is the capital of Germany?",

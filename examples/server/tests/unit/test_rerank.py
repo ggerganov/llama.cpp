@@ -24,7 +24,7 @@ def test_rerank():
     })
     assert res.status_code == 200
     assert len(res.body["results"]) == 4
-    
+
     most_relevant = res.body["results"][0]
     least_relevant = res.body["results"][0]
     for doc in res.body["results"]:
