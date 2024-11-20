@@ -788,7 +788,8 @@ static void ggml_vk_soft_max(
     const std::shared_ptr<kp::Tensor>& out,
     uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
     int32_t ne00, int32_t ne01, int32_t ne02, uint32_t ne03,
-    float scale
+    float scale, float max_bias, float m0, float m1,
+    uint32_t n_head_log2
 ) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_softmax_comp_spv,
         kp::shader_data::op_softmax_comp_spv_len);
@@ -796,12 +797,14 @@ static void ggml_vk_soft_max(
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff;
         int32_t ne00, ne01, ne02;
-        float scale;
+        float scale, max_bias, m0, m1;
+        uint32_t n_head_log2;
         int32_t mask;
     } pushConsts {
         safe_divide(inAOff, 4), safe_divide(inBOff, 4), safe_divide(outOff, 4),
         ne00, ne01, ne02,
-        scale,
+        scale, max_bias, m0, m1,
+        n_head_log2,
         bool(inB)
     };
 
@@ -1597,11 +1600,16 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
 #pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
                         GGML_ASSERT(!src1 || src1t == GGML_TYPE_F32);
 
-#pragma message("TODO: add ALiBi support")
-#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/7192")
-                        GGML_ASSERT(max_bias == 0.0f);
+                        const int64_t nrows_x = ggml_nrows(src0);
+                        const int64_t nrows_y = src0->ne[1];
 
-                        ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
+                        const uint32_t n_head      = nrows_x/nrows_y;
+                        const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head));
+
+                        const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
+                        const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
+
+                        ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale, max_bias, m0, m1, n_head_log2);
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
                     {
