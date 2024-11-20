@@ -3,17 +3,11 @@ set(LLAMA_BUILD_COMMIT @LLAMA_BUILD_COMMIT@)
 set(LLAMA_BUILD_NUMBER @LLAMA_BUILD_NUMBER@)
 set(LLAMA_SHARED_LIB   @BUILD_SHARED_LIBS@)
 
-set(GGML_BLAS       @GGML_BLAS@)
-set(GGML_CUDA       @GGML_CUDA@)
-set(GGML_METAL      @GGML_METAL@)
-set(GGML_HIP        @GGML_HIP@)
 set(GGML_ACCELERATE @GGML_ACCELERATE@)
-set(GGML_VULKAN @GGML_VULKAN@)
 set(GGML_VULKAN_CHECK_RESULTS @GGML_VULKAN_CHECK_RESULTS@)
 set(GGML_VULKAN_DEBUG @GGML_VULKAN_DEBUG@)
 set(GGML_VULKAN_MEMORY_DEBUG @GGML_VULKAN_MEMORY_DEBUG@)
 set(GGML_VULKAN_VALIDATE @GGML_VULKAN_VALIDATE@)
-set(GGML_SYCL @GGML_SYCL@)
 set(GGML_OPENMP @GGML_OPENMP@)
 
 @PACKAGE_INIT@
@@ -22,9 +16,38 @@ set_and_check(LLAMA_INCLUDE_DIR "@PACKAGE_LLAMA_INCLUDE_INSTALL_DIR@")
 set_and_check(LLAMA_LIB_DIR     "@PACKAGE_LLAMA_LIB_INSTALL_DIR@")
 set_and_check(LLAMA_BIN_DIR     "@PACKAGE_LLAMA_BIN_INSTALL_DIR@")
 
-# Ensure transient dependencies satisfied
-
 find_package(Threads REQUIRED)
+
+set(_llama_transient_defines "@GGML_TRANSIENT_DEFINES@")
+set(_llama_link_deps "")
+foreach(_ggml_lib ggml ggml-base)
+    string(REPLACE "-" "_" _ggml_lib_var "${_ggml_lib}_LIBRARY")
+    find_library(${_ggml_lib_var} ${_ggml_lib}
+        REQUIRED
+        HINTS ${LLAMA_LIB_DIR}
+        NO_CMAKE_FIND_ROOT_PATH
+    )
+    list(APPEND _llama_link_deps "${${_ggml_lib_var}}")
+    message(STATUS "Found ${${_ggml_lib_var}}")
+endforeach()
+
+foreach(backend amx blas cann cpu cuda hip kompute metal musa rpc sycl vulkan)
+    string(TOUPPER "GGML_${backend}" backend_id)
+    set(_ggml_lib "ggml-${backend}")
+    string(REPLACE "-" "_" _ggml_lib_var "${_ggml_lib}_LIBRARY")
+
+    find_library(${_ggml_lib_var} ${_ggml_lib}
+        HINTS ${LLAMA_LIB_DIR}
+        NO_CMAKE_FIND_ROOT_PATH
+    )
+    if(${_ggml_lib_var})
+        list(APPEND _llama_link_deps "${${_ggml_lib_var}}")
+        set(${backend_id} ON)
+        message(STATUS "Found backend ${${_ggml_lib_var}}")
+    else()
+        set(${backend_id} OFF)
+    endif()
+endforeach()
 
 if (APPLE AND GGML_ACCELERATE)
     find_library(ACCELERATE_FRAMEWORK Accelerate REQUIRED)
@@ -48,7 +71,7 @@ if (GGML_VULKAN)
     find_package(Vulkan REQUIRED)
 endif()
 
-if (GGML_HIPBLAS)
+if (GGML_HIP)
     find_package(hip REQUIRED)
     find_package(hipblas REQUIRED)
     find_package(rocblas REQUIRED)
@@ -63,24 +86,13 @@ if (GGML_OPENMP)
     find_package(OpenMP REQUIRED)
 endif()
 
-
-find_library(ggml_LIBRARY ggml
-    REQUIRED
-    HINTS ${LLAMA_LIB_DIR}
-    NO_CMAKE_FIND_ROOT_PATH
-)
-
 find_library(llama_LIBRARY llama
     REQUIRED
     HINTS ${LLAMA_LIB_DIR}
     NO_CMAKE_FIND_ROOT_PATH
 )
 
-set(_llama_link_deps "${ggml_LIBRARY}" "@GGML_LINK_LIBRARIES@")
-set(_llama_transient_defines "@GGML_TRANSIENT_DEFINES@")
-
 add_library(llama UNKNOWN IMPORTED)
-
 set_target_properties(llama
     PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${LLAMA_INCLUDE_DIR}"
