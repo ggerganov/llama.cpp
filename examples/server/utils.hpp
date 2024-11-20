@@ -299,7 +299,7 @@ static llama_tokens format_infill(
     return embd_inp;
 }
 
-// Format given chat. If tmpl is empty, we take the template from model metadata
+// Format given chat. If tmpl is empty, we either use prefix and suffix (if defined), or take the template from model metadata
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::string & prefix, const std::string & suffix, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
     std::string formatted_chat;
@@ -331,14 +331,36 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
             if (role == "user") formatted_chat += prefix + content + suffix;
             else formatted_chat += content;
         } else {
-            chat.push_back({role, content}); 
+            chat.push_back({role, content});
         }
     }
 
     if (tmpl != "custom") formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
-    LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
+    LOG_WRN("formatted_chat using '%s': '%s'\n", tmpl.c_str(), formatted_chat.c_str());
 
     return formatted_chat;
+}
+
+inline std::string format_chat_example(const struct llama_model * model, const std::string & tmpl, const std::string & prefix, const std::string & suffix) {
+    std::vector<common_chat_msg> msgs = {
+        {"system",    "You are a helpful assistant"},
+        {"user",      "Hello"},
+        {"assistant", "Hi there"},
+        {"user",      "How are you?"},
+    };
+
+    std::string formatted_example;
+
+    if (tmpl == "custom") {
+        for (auto message : msgs) {
+            if (message.role == "user") formatted_example += prefix + message.content + suffix;
+            else formatted_example += message.content;
+        }
+    } else {
+        formatted_example = common_chat_apply_template(model, tmpl, msgs, true);
+    }
+
+    return formatted_example;
 }
 
 static std::string llama_get_chat_template(const struct llama_model * model) {

@@ -1147,6 +1147,9 @@ struct server_context {
             {"model",                     params.model_alias},
             {"seed",                      slot.sparams.seed},
             {"seed_cur",                  slot.smpl ? common_sampler_get_seed(slot.smpl) : 0},
+            {"chat_template",             params.chat_template},
+            {"input_prefix",              params.input_prefix},
+            {"input_suffix",              params.input_suffix},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
@@ -3218,7 +3221,9 @@ int main(int argc, char ** argv) {
 
     LOG_INF("%s: model loaded\n", __func__);
 
-    // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
+    // if a standard chat template is not chosen, check prefix and suffix to switch to custom template
+    // otherwise use the one that comes with the model (if any)
+    // if a standard chat template is chosen, warn about prefix and suffix not being used
     if (params.chat_template.empty()) {
         if (!params.input_prefix.empty() || !params.input_suffix.empty()) {
             LOG_WRN("%s: Prefix and suffix are used instead of a chat template. This may cause the model to output suboptimal responses\n", __func__);
@@ -3227,12 +3232,15 @@ int main(int argc, char ** argv) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             params.chat_template = "chatml";
         }
-    } else if (!params.input_prefix.empty() || !params.input_suffix.empty()) {
-        LOG_WRN("%s: Prefix and suffix are not used because a chat template is defined.\n", __func__);
+    } else if (params.chat_template != "custom" && 
+              (!params.input_prefix.empty() || !params.input_suffix.empty())) {
+        LOG_WRN("%s: Prefix and suffix are defined, but will not be used because a standard chat template is chosen.\n", __func__);
     } else {
-        // print sample chat example to make it clear which template is used
-        LOG_INF("%s: chat template, built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.empty(), common_chat_format_example(ctx_server.model, params.chat_template).c_str());
+        LOG_WRN("%s: Custom chat template is chosen. This may cause the model to output suboptimal responses\n", __func__);
     }
+
+    // print sample chat example to make it clear which template is used
+    LOG_INF("%s: chat template: '%s', built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.c_str(), params.chat_template.empty(), format_chat_example(ctx_server.model, params.chat_template, params.input_prefix, params.input_suffix).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));
