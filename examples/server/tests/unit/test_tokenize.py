@@ -1,13 +1,13 @@
 import pytest
 from utils import *
 
-server = ServerPreset.tinyllamas()
+server = ServerPreset.tinyllama2()
 
 
 @pytest.fixture(scope="module", autouse=True)
 def create_server():
     global server
-    server = ServerPreset.tinyllamas()
+    server = ServerPreset.tinyllama2()
 
 
 def test_tokenize_detokenize():
@@ -15,17 +15,17 @@ def test_tokenize_detokenize():
     server.start()
     # tokenize
     content = "What is the capital of France ?"
-    resTok = server.make_request("POST", "/tokenize", data={
+    res_tok = server.make_request("POST", "/tokenize", data={
         "content": content
     })
-    assert resTok.status_code == 200
-    assert len(resTok.body["tokens"]) > 5
+    assert res_tok.status_code == 200
+    assert len(res_tok.body["tokens"]) > 5
     # detokenize
-    resDetok = server.make_request("POST", "/detokenize", data={
-        "tokens": resTok.body["tokens"],
+    res_detok = server.make_request("POST", "/detokenize", data={
+        "tokens": res_tok.body["tokens"],
     })
-    assert resDetok.status_code == 200
-    assert resDetok.body["content"].strip() == content
+    assert res_detok.status_code == 200
+    assert res_detok.body["content"].strip() == content
 
 
 def test_tokenize_with_bos():
@@ -34,12 +34,12 @@ def test_tokenize_with_bos():
     # tokenize
     content = "What is the capital of France ?"
     bosId = 1
-    resTok = server.make_request("POST", "/tokenize", data={
+    res_tok = server.make_request("POST", "/tokenize", data={
         "content": content,
         "add_special": True,
     })
-    assert resTok.status_code == 200
-    assert resTok.body["tokens"][0] == bosId
+    assert res_tok.status_code == 200
+    assert res_tok.body["tokens"][0] == bosId
 
 
 def test_tokenize_with_pieces():
@@ -47,12 +47,12 @@ def test_tokenize_with_pieces():
     server.start()
     # tokenize
     content = "This is a test string with unicode 媽 and emoji 🤗"
-    resTok = server.make_request("POST", "/tokenize", data={
+    res_tok = server.make_request("POST", "/tokenize", data={
         "content": content,
         "with_pieces": True,
     })
-    assert resTok.status_code == 200
-    for token in resTok.body["tokens"]:
+    assert res_tok.status_code == 200
+    for token in res_tok.body["tokens"]:
         assert "id" in token
         assert token["id"] > 0
         assert "piece" in token

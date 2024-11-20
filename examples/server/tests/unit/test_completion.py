@@ -2,13 +2,13 @@ import pytest
 from openai import OpenAI
 from utils import *
 
-server = ServerPreset.tinyllamas()
+server = ServerPreset.tinyllama2()
 
 
 @pytest.fixture(scope="module", autouse=True)
 def create_server():
     global server
-    server = ServerPreset.tinyllamas()
+    server = ServerPreset.tinyllama2()
 
 
 @pytest.mark.parametrize("prompt,n_predict,re_content,n_prompt,n_predicted,truncated", [
@@ -61,10 +61,62 @@ def test_completion_with_openai_library():
     res = client.completions.create(
         model="gpt-3.5-turbo-instruct",
         prompt="I believe the meaning of life is",
-        n=8,
+        max_tokens=8,
         seed=42,
         temperature=0.8,
     )
     print(res)
     assert res.choices[0].finish_reason == "length"
     assert match_regex("(going|bed)+", res.choices[0].text)
+
+
+@pytest.mark.parametrize("n_slots", [1, 2])
+def test_consistent_result_same_seed(n_slots: int):
+    global server
+    server.n_slots = n_slots
+    server.start()
+    last_res = None
+    for _ in range(4):
+        res = server.make_request("POST", "/completion", data={
+            "prompt": "I believe the meaning of life is",
+            "seed": 42,
+            "temperature": 1.0,
+        })
+        if last_res is not None:
+            assert res.body["content"] == last_res.body["content"]
+        last_res = res
+
+
+@pytest.mark.parametrize("n_slots", [1, 2])
+def test_different_result_different_seed(n_slots: int):
+    global server
+    server.n_slots = n_slots
+    server.start()
+    last_res = None
+    for seed in range(4):
+        res = server.make_request("POST", "/completion", data={
+            "prompt": "I believe the meaning of life is",
+            "seed": seed,
+            "temperature": 1.0,
+        })
+        if last_res is not None:
+            assert res.body["content"] != last_res.body["content"]
+        last_res = res
+
+
+@pytest.mark.parametrize("n_batch", [16, 32])
+@pytest.mark.parametrize("temperature", [0.0, 1.0])
+def test_consistent_result_different_batch_size(n_batch: int, temperature: float):
+    global server
+    server.n_batch = n_batch
+    server.start()
+    last_res = None
+    for _ in range(4):
+        res = server.make_request("POST", "/completion", data={
+            "prompt": "I believe the meaning of life is",
+            "seed": 42,
+            "temperature": temperature,
+        })
+        if last_res is not None:
+            assert res.body["content"] == last_res.body["content"]
+        last_res = res

@@ -58,13 +58,12 @@ class ServerProcess:
     id_slot: int | None = None
     cache_prompt: bool | None = None
     n_slots: int | None = None
-    server_api_key: str | None = None
     server_continuous_batching: bool | None = False
     server_embeddings: bool | None = False
     server_reranking: bool | None = False
     server_metrics: bool | None = False
     draft: int | None = None
-    user_api_key: str | None = None
+    api_key: str | None = None
     response_format: str | None = None
     lora_file: str | None = None
     disable_ctx_shift: int | None = False
@@ -129,8 +128,6 @@ class ServerProcess:
             server_args.extend(["--n-predict", self.n_predict])
         if self.slot_save_path:
             server_args.extend(["--slot-save-path", self.slot_save_path])
-        if self.server_api_key:
-            server_args.extend(["--api-key", self.server_api_key])
         if self.n_ga:
             server_args.extend(["--grp-attn-n", self.n_ga])
         if self.n_ga_w:
@@ -141,6 +138,8 @@ class ServerProcess:
             server_args.extend(["--lora", self.lora_file])
         if self.disable_ctx_shift:
             server_args.extend(["--no-context-shift"])
+        if self.api_key:
+            server_args.extend(["--api-key", self.api_key])
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -180,7 +179,9 @@ class ServerProcess:
         start_time = time.time()
         while time.time() - start_time < timeout_seconds:
             try:
-                response = self.make_request("GET", "/slots")
+                response = self.make_request("GET", "/slots", headers={
+                    "Authorization": f"Bearer {self.api_key}" if self.api_key else None
+                })
                 if response.status_code == 200:
                     self.ready = True
                     return  # server is ready
@@ -205,15 +206,13 @@ class ServerProcess:
         headers: dict | None = None,
     ) -> ServerResponse:
         url = f"http://{self.server_host}:{self.server_port}{path}"
-        headers = {}
-        if self.user_api_key:
-            headers["Authorization"] = f"Bearer {self.user_api_key}"
-        if self.response_format:
-            headers["Accept"] = self.response_format
+        parse_body = False
         if method == "GET":
             response = requests.get(url, headers=headers)
+            parse_body = True
         elif method == "POST":
             response = requests.post(url, headers=headers, json=data)
+            parse_body = True
         elif method == "OPTIONS":
             response = requests.options(url, headers=headers)
         else:
@@ -221,10 +220,10 @@ class ServerProcess:
         result = ServerResponse()
         result.headers = dict(response.headers)
         result.status_code = response.status_code
-        result.body = response.json()
+        result.body = response.json() if parse_body else None
         print("Response from server", result.body)
         return result
-    
+
     def make_stream_request(
         self,
         method: str,
@@ -233,9 +232,6 @@ class ServerProcess:
         headers: dict | None = None,
     ) -> Iterator[dict]:
         url = f"http://{self.server_host}:{self.server_port}{path}"
-        headers = {}
-        if self.user_api_key:
-            headers["Authorization"] = f"Bearer {self.user_api_key}"
         if method == "POST":
             response = requests.post(url, headers=headers, json=data, stream=True)
         else:
@@ -255,7 +251,7 @@ server_instances: Set[ServerProcess] = set()
 
 class ServerPreset:
     @staticmethod
-    def tinyllamas() -> ServerProcess:
+    def tinyllama2() -> ServerProcess:
         server = ServerProcess()
         server.model_hf_repo = "ggml-org/models"
         server.model_hf_file = "tinyllamas/stories260K.gguf"
@@ -265,6 +261,20 @@ class ServerPreset:
         server.n_slots = 2
         server.n_predict = 64
         server.seed = 42
+        return server
+    
+    @staticmethod
+    def bert_bge_small() -> ServerProcess:
+        server = ServerProcess()
+        server.model_hf_repo = "ggml-org/models"
+        server.model_hf_file = "bert-bge-small/ggml-model-f16.gguf"
+        server.model_alias = "bert-bge-small"
+        server.n_ctx = 512
+        server.n_batch = 128
+        server.n_ubatch = 128
+        server.n_slots = 2
+        server.seed = 42
+        server.server_embeddings = True
         return server
 
 
