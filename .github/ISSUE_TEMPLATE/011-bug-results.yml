@@ -1,41 +1,22 @@
-name: Low Severity Bugs
-description: Used to report low severity bugs in llama.cpp (e.g. cosmetic issues, non critical UI glitches)
-title: "Bug: "
-labels: ["bug-unconfirmed", "low severity"]
+name: Bug (model evaluation)
+description: Something goes wrong when evaluating a model without any complex components such as the server on top.
+title: "Eval bug: "
+labels: ["bug-unconfirmed", "model evaluation"]
 body:
   - type: markdown
     attributes:
       value: >
         Thanks for taking the time to fill out this bug report!
-        Please include information about your system, the steps to reproduce the bug,
-        and the version of llama.cpp that you are using.
-        If you encountered the bug using a third-party frontend (e.g. ollama),
-        please reproduce the bug using llama.cpp only.
+        This issue template is intended for bug reports where the model evaluation results
+        (i.e. the generated text) are incorrect or llama.cpp crashes during model evaluation.
+        If you encountered the issue while using an external UI (e.g. ollama),
+        please reproduce your issue using one of the examples/binaries in this repository.
         The `llama-cli` binary can be used for simple and reproducible model inference.
-  - type: textarea
-    id: what-happened
-    attributes:
-      label: What happened?
-      description: >
-        Please give us a summary of what happened.
-        If the problem is not obvious: what did you expect to happen?
-      placeholder: Tell us what you see!
-    validations:
-      required: true
-  - type: textarea
-    id: hardware
-    attributes:
-      label: Hardware
-      description: Which CPUs/GPUs and which GGML backends are you using?
-      placeholder: >
-        e.g. Ryzen 5950X + RTX 4090 (CUDA)
-    validations:
-      required: true
   - type: textarea
     id: version
     attributes:
       label: Name and Version
-      description: Which executable and which version of our software are you running? (use `--version` to get a version string)
+      description: Which version of our software are you running? (use `--version` to get a version string)
       placeholder: |
         $./llama-cli --version
         version: 2999 (42b4109e)
@@ -45,7 +26,7 @@ body:
   - type: dropdown
     id: operating-system
     attributes:
-      label: What operating system are you seeing the problem on?
+      label: Which operating systems do you know to be affected?
       multiple: true
       options:
         - Linux
@@ -54,13 +35,29 @@ body:
         - BSD
         - Other? (Please let us know in description)
     validations:
-      required: false
+      required: true
+  - type: dropdown
+    id: backends
+    attributes:
+        label: GGML backends
+        description: Which GGML backends do you know to be affected?
+        options: [AMX, BLAS, CPU, CUDA, HIP, Kompute, Metal, Musa, RPC, SYCL, Vulkan]
+        multiple: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Which CPUs/GPUs are you using?
+      placeholder: >
+        e.g. Ryzen 5950X + 2x RTX 4090
+    validations:
+      required: true
   - type: textarea
     id: model
     attributes:
       label: Model
       description: >
-        If applicable: which model at which quantization were you using when encountering the bug?
+        Which model at which quantization were you using when encountering the bug?
         If you downloaded a GGUF file off of Huggingface, please provide a link.
       placeholder: >
         e.g. Meta LLaMA 3.1 Instruct 8b q4_K_M
@@ -71,7 +68,7 @@ body:
     attributes:
       label: Steps to Reproduce
       description: >
-        Please tell us how to reproduce the bug.
+        Please tell us how to reproduce the bug and any additional information that you think could be useful for fixing it.
         If you can narrow down the bug to specific hardware, compile flags, or command line arguments,
         that information would be very much appreciated by us.
       placeholder: >
@@ -93,5 +90,9 @@ body:
     id: logs
     attributes:
       label: Relevant log output
-      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      description: >
+          Please copy and paste any relevant log output, including the command that you entered and any generated text.
+          This will be automatically formatted into code, so no need for backticks.
       render: shell
+    validations:
+      required: true

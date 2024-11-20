@@ -1,0 +1,63 @@
+name: Bug (misc.)
+description: Something is not working the way it should (and it's not covered by any of the above cases).
+title: "Misc. bug: "
+labels: ["bug-unconfirmed"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for taking the time to fill out this bug report!
+        This issue template is intended for miscellaneous bugs that don't fit into any other category.
+        If you encountered the issue while using an external UI (e.g. ollama),
+        please reproduce your issue using one of the examples/binaries in this repository.
+  - type: textarea
+    id: version
+    attributes:
+      label: Name and Version
+      description: Which version of our software are you running? (use `--version` to get a version string)
+      placeholder: |
+        $./llama-cli --version
+        version: 2999 (42b4109e)
+        built with cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0 for x86_64-linux-gnu
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Which operating systems do you know to be affected?
+      multiple: true
+      options:
+        - Linux
+        - Mac
+        - Windows
+        - BSD
+        - Other? (Please let us know in description)
+    validations:
+      required: true
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: >
+        Please tell us how to reproduce the bug and any additional information that you think could be useful for fixing it.
+    validations:
+      required: true
+  - type: textarea
+    id: first_bad_commit
+    attributes:
+      label: First Bad Commit
+      description: >
+        If the bug was not present on an earlier version: when did it start appearing?
+        If possible, please do a git bisect and identify the exact commit that introduced the bug.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+          Please copy and paste any relevant log output, including the command that you entered and any generated text.
+          This will be automatically formatted into code, so no need for backticks.
+      render: shell
+    validations:
+      required: true
