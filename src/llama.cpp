@@ -20097,43 +20097,34 @@ float llama_rope_freq_scale_train(const struct llama_model * model) {
     return model->hparams.rope_freq_scale_train;
 }
 
-int32_t llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size) {
+char* llama_model_meta_val_str(const struct llama_model * model, const char * key) {
     const auto & it = model->gguf_kv.find(key);
     if (it == model->gguf_kv.end()) {
-        if (buf_size > 0) {
-            buf[0] = '\0';
-        }
-        return -1;
+        return NULL;
     }
-    return snprintf(buf, buf_size, "%s", it->second.c_str());
+    return strdup(it->second.c_str());
 }
 
 int32_t llama_model_meta_count(const struct llama_model * model) {
     return (int)model->gguf_kv.size();
 }
 
-int32_t llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size) {
+char* llama_model_meta_key_by_index(const struct llama_model * model, int i) {
     if (i < 0 || i >= (int)model->gguf_kv.size()) {
-        if (buf_size > 0) {
-            buf[0] = '\0';
-        }
-        return -1;
+        return NULL;
     }
     auto it = model->gguf_kv.begin();
     std::advance(it, i);
-    return snprintf(buf, buf_size, "%s", it->first.c_str());
+    return strdup(it->first.c_str());
 }
 
-int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int32_t i, char * buf, size_t buf_size) {
+char* llama_model_meta_val_str_by_index(const struct llama_model * model, int32_t i) {
     if (i < 0 || i >= (int)model->gguf_kv.size()) {
-        if (buf_size > 0) {
-            buf[0] = '\0';
-        }
-        return -1;
+        return NULL;
     }
     auto it = model->gguf_kv.begin();
     std::advance(it, i);
-    return snprintf(buf, buf_size, "%s", it->second.c_str());
+    return strdup(it->second.c_str());
 }
 
 int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
@@ -22118,12 +22109,13 @@ int32_t llama_chat_apply_template(
         // load template from model
         std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
         std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        if (res < 0) {
+        char* tmpl = llama_model_meta_val_str(model, template_key.c_str());
+        if (tmpl == NULL) {
             // worst case: there is no information about template, we will use chatml by default
             curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
         } else {
-            curr_tmpl = std::string(model_template.data(), model_template.size());
+            curr_tmpl = tmpl;
+            free(tmpl);
         }
     }
 
