@@ -336,15 +336,8 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
 
 static std::string llama_get_chat_template(const struct llama_model * model) {
     std::string template_key = "tokenizer.chat_template";
-    // call with NULL buffer to get the total size of the string
-    int32_t res = llama_model_meta_val_str(model, template_key.c_str(), NULL, 0);
-    if (res < 0) {
-        return "";
-    } else {
-        std::vector<char> model_template(res, 0);
-        llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        return std::string(model_template.data(), model_template.size());
-    }
+    const char* tmpl = llama_model_meta_val_str(model, template_key.c_str());
+    return tmpl ? tmpl : "";
 }
 
 //

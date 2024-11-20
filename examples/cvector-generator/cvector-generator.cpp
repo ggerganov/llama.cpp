@@ -422,8 +422,7 @@ int main(int argc, char ** argv) {
     int n_layers = llama_n_layer(model);
     int n_embd = llama_n_embd(model);
     // get model hint param (a.k.a model arch name)
-    char model_hint[128];
-    llama_model_meta_val_str(model, "general.architecture", model_hint, 128);
+    const char* model_hint = llama_model_meta_val_str(model, "general.architecture");
 
     // init train_context
     train_context ctx_train(n_embd, n_layers);
