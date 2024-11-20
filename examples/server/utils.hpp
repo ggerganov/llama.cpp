@@ -341,9 +341,9 @@ static std::string llama_get_chat_template(const struct llama_model * model) {
     if (res < 0) {
         return "";
     } else {
-        std::vector<char> model_template(res, 0);
+        std::vector<char> model_template(res + 1, 0);
         llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        return std::string(model_template.data(), model_template.size());
+        return std::string(model_template.data(), model_template.size() - 1);
     }
 }
 
