@@ -202,7 +202,7 @@ int main(int argc, char ** argv) {
     // print chat template example in conversation mode
     if (params.conversation) {
         if (params.enable_chat_template) {
-            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(model, params.chat_template, params.input_suffix, params.input_suffix).c_str());
+            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(model, params.chat_template).c_str());
         } else {
             LOG_INF("%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
         }

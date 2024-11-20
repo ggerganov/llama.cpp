@@ -302,6 +302,7 @@ static llama_tokens format_infill(
 // Format given chat. If tmpl is empty, we take the template from model metadata
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::string & prefix, const std::string & suffix, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
+    std::string formatted_chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
@@ -325,10 +326,16 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
             throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
         }
 
-        chat.push_back({role, content});
+        if (tmpl == "custom") {
+            // simple format using prefix and suffix
+            if (role == "user") formatted_chat += prefix + content + suffix;
+            else formatted_chat += content;
+        } else {
+            chat.push_back({role, content}); 
+        }
     }
 
-    const auto formatted_chat = common_chat_apply_template(model, tmpl, prefix, suffix, chat, true);
+    if (tmpl != "custom") formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;

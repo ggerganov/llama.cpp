@@ -667,7 +667,7 @@ struct server_context {
         if (res >= 0) {
             llama_chat_message chat[] = {{"user", "test"}};
             std::string tmpl = std::string(model_template.data(), model_template.size());
-            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), nullptr, nullptr, chat, 1, true, nullptr, 0);
+            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
             return chat_res > 0;
         }
         return false;
@@ -3229,10 +3229,10 @@ int main(int argc, char ** argv) {
         }
     } else if (!params.input_prefix.empty() || !params.input_suffix.empty()) {
         LOG_WRN("%s: Prefix and suffix are not used because a chat template is defined.\n", __func__);
+    } else {
+        // print sample chat example to make it clear which template is used
+        LOG_INF("%s: chat template, built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.empty(), common_chat_format_example(ctx_server.model, params.chat_template).c_str());
     }
-
-    // print sample chat example to make it clear which template is used
-    LOG_INF("%s: chat template, built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.empty(), common_chat_format_example(ctx_server.model, params.chat_template, params.input_prefix, params.input_suffix).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));

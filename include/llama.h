@@ -981,8 +981,6 @@ extern "C" {
     LLAMA_API int32_t llama_chat_apply_template(
               const struct llama_model * model,
                             const char * tmpl,
-                            const char * prefix,
-                            const char * suffix,
        const struct llama_chat_message * chat,
                                 size_t   n_msg,
                                   bool   add_ass,
