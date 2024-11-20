@@ -1,19 +1,13 @@
 import pytest
 from utils import *
 
-server = ServerProcess()
+server = ServerPreset.tinyllamas()
 
 
 @pytest.fixture(scope="module", autouse=True)
 def create_server():
     global server
-    server = ServerProcess()
-    server.model_hf_repo = "ggml-org/models"
-    server.model_hf_file = "tinyllamas/stories260K.gguf"
-    server.n_ctx = 256
-    server.n_batch = 32
-    server.n_slots = 2
-    server.n_predict = 64
+    server = ServerPreset.tinyllamas()
 
 
 def test_server_start_simple():

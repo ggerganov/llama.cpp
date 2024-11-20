@@ -3,7 +3,7 @@ from utils import *
 
 
 # ref: https://stackoverflow.com/questions/22627659/run-code-before-and-after-each-test-in-py-test
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(autouse=True)
 def stop_server_after_each_test():
     # do nothing before each test
     yield

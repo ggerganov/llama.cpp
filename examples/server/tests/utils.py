@@ -5,6 +5,8 @@
 
 import subprocess
 import os
+import re
+import json
 import sys
 import threading
 import requests
@@ -19,6 +21,7 @@ from typing import (
     Sequence,
     Set,
 )
+from re import RegexFlag
 
 
 class ServerResponse:
@@ -34,6 +37,9 @@ class ServerProcess:
     server_host: str = "127.0.0.1"
     model_hf_repo: str = "ggml-org/models"
     model_hf_file: str = "tinyllamas/stories260K.gguf"
+    model_alias: str = "tinyllama-2"
+    temperature: float = 0.8
+    seed: int = 42
 
     # custom options
     model_alias: str | None = None
@@ -48,7 +54,6 @@ class ServerProcess:
     n_ga_w: int | None = None
     n_predict: int | None = None
     n_prompts: int | None = 0
-    n_server_predict: int | None = None
     slot_save_path: str | None = None
     id_slot: int | None = None
     cache_prompt: bool | None = None
@@ -58,12 +63,9 @@ class ServerProcess:
     server_embeddings: bool | None = False
     server_reranking: bool | None = False
     server_metrics: bool | None = False
-    seed: int | None = None
     draft: int | None = None
-    server_seed: int | None = None
     user_api_key: str | None = None
     response_format: str | None = None
-    temperature: float | None = None
     lora_file: str | None = None
     disable_ctx_shift: int | None = False
 
@@ -86,6 +88,10 @@ class ServerProcess:
             self.server_host,
             "--port",
             self.server_port,
+            "--temp",
+            self.temperature,
+            "--seed",
+            self.seed,
         ]
         if self.model_file:
             server_args.extend(["--model", self.model_file])
@@ -119,8 +125,8 @@ class ServerProcess:
             server_args.extend(["--ctx-size", self.n_ctx])
         if self.n_slots:
             server_args.extend(["--parallel", self.n_slots])
-        if self.n_server_predict:
-            server_args.extend(["--n-predict", self.n_server_predict])
+        if self.n_predict:
+            server_args.extend(["--n-predict", self.n_predict])
         if self.slot_save_path:
             server_args.extend(["--slot-save-path", self.slot_save_path])
         if self.server_api_key:
@@ -216,10 +222,50 @@ class ServerProcess:
         result.headers = dict(response.headers)
         result.status_code = response.status_code
         result.body = response.json()
+        print("Response from server", result.body)
         return result
+    
+    def make_stream_request(
+        self,
+        method: str,
+        path: str,
+        data: dict | None = None,
+        headers: dict | None = None,
+    ) -> Iterator[dict]:
+        url = f"http://{self.server_host}:{self.server_port}{path}"
+        headers = {}
+        if self.user_api_key:
+            headers["Authorization"] = f"Bearer {self.user_api_key}"
+        if method == "POST":
+            response = requests.post(url, headers=headers, json=data, stream=True)
+        else:
+            raise ValueError(f"Unimplemented method: {method}")
+        for line_bytes in response.iter_lines():
+            line = line_bytes.decode("utf-8")
+            if '[DONE]' in line:
+                break
+            elif line.startswith('data: '):
+                data = json.loads(line[6:])
+                print("Partial response from server", data)
+                yield data
 
 
 server_instances: Set[ServerProcess] = set()
+
+
+class ServerPreset:
+    @staticmethod
+    def tinyllamas() -> ServerProcess:
+        server = ServerProcess()
+        server.model_hf_repo = "ggml-org/models"
+        server.model_hf_file = "tinyllamas/stories260K.gguf"
+        server.model_alias = "tinyllama-2"
+        server.n_ctx = 256
+        server.n_batch = 32
+        server.n_slots = 2
+        server.n_predict = 64
+        server.seed = 42
+        return server
 
 
 def multiple_post_requests(
@@ -248,3 +294,12 @@ def multiple_post_requests(
         thread.join()
 
     return results
+
+
+def match_regex(regex: str, text: str) -> bool:
+    return (
+        re.compile(
+            regex, flags=RegexFlag.IGNORECASE | RegexFlag.MULTILINE | RegexFlag.DOTALL
+        ).search(text)
+        is not None
+    )
