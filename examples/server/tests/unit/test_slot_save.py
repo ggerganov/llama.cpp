@@ -8,6 +8,7 @@ def create_server():
     global server
     server = ServerPreset.tinyllama2()
     server.slot_save_path = "./tmp"
+    server.temperature = 0.0
 
 
 def test_slot_save_restore():
@@ -21,7 +22,7 @@ def test_slot_save_restore():
         "cache_prompt": True,
     })
     assert res.status_code == 200
-    assert match_regex("(Lily|cake)+", res.body["content"])
+    assert match_regex("(Whiskers|Flana)+", res.body["content"])
     assert res.body["timings"]["prompt_n"] == 21  # all tokens are processed
 
     # Save state of slot 1
@@ -79,7 +80,7 @@ def test_slot_erase():
         "cache_prompt": True,
     })
     assert res.status_code == 200
-    assert match_regex("(Lily|cake)+", res.body["content"])
+    assert match_regex("(Whiskers|Flana)+", res.body["content"])
     assert res.body["timings"]["prompt_n"] == 21  # all tokens are processed
 
     # erase slot 1
@@ -93,5 +94,5 @@ def test_slot_erase():
         "cache_prompt": True,
     })
     assert res.status_code == 200
-    assert match_regex("(Lily|cake)+", res.body["content"])
+    assert match_regex("(Whiskers|Flana)+", res.body["content"])
     assert res.body["timings"]["prompt_n"] == 21  # all tokens are processed

@@ -47,7 +47,7 @@ class ServerProcess:
     model_url: str | None = None
     model_file: str | None = None
     n_threads: int | None = None
-    n_gpu_layer: str | None = None
+    n_gpu_layer: int | None = None
     n_batch: int | None = None
     n_ubatch: int | None = None
     n_ctx: int | None = None
