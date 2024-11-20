@@ -5,17 +5,30 @@ labels: ["bug-unconfirmed", "high severity"]
 body:
   - type: markdown
     attributes:
-      value: |
+      value: >
         Thanks for taking the time to fill out this bug report!
         Please include information about your system, the steps to reproduce the bug,
         and the version of llama.cpp that you are using.
-        If possible, please provide a minimal code example that reproduces the bug.
+        If you encountered the bug using a third-party frontend (e.g. ollama),
+        please reproduce the bug using llama.cpp only.
+        The `llama-cli` binary can be used for simple and reproducible model inference.
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
-      description: Also tell us, what did you expect to happen?
+      description: >
+        Please give us a summary of what happened.
+        If the problem is not obvious: what did you expect to happen?
       placeholder: Tell us what you see!
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Which CPUs/GPUs and which GGML backends are you using?
+      placeholder: >
+        e.g. Ryzen 5950X + RTX 4090 (CUDA)
     validations:
       required: true
   - type: textarea
@@ -40,6 +53,40 @@ body:
         - Windows
         - BSD
         - Other? (Please let us know in description)
+    validations:
+      required: false
+  - type: textarea
+    id: model
+    attributes:
+      label: Model
+      description: >
+        If applicable: which model at which quantization were you using when encountering the bug?
+        If you downloaded a GGUF file off of Huggingface, please provide a link.
+      placeholder: >
+        e.g. Meta LLaMA 3.1 Instruct 8b q4_K_M
+    validations:
+      required: false
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: >
+        Please tell us how to reproduce the bug.
+        If you can narrow down the bug to specific hardware, compile flags, or command line arguments,
+        that information would be very much appreciated by us.
+      placeholder: >
+        e.g. when I run llama-cli with -ngl 99 I get garbled outputs.
+        When I use -ngl 0 it works correctly.
+        Here are the exact commands that I used: ...
+    validations:
+      required: true
+  - type: textarea
+    id: first_bad_commit
+    attributes:
+      label: First Bad Commit
+      description: >
+        If the bug was not present on an earlier version: when did it start appearing?
+        If possible, please do a git bisect and identify the exact commit that introduced the bug.
     validations:
       required: false
   - type: textarea
