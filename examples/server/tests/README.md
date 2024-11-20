@@ -1,18 +1,8 @@
 # Server tests
 
-Python based server tests scenario using [BDD](https://en.wikipedia.org/wiki/Behavior-driven_development)
-and [behave](https://behave.readthedocs.io/en/latest/):
-
-* [issues.feature](./features/issues.feature) Pending issues scenario
-* [parallel.feature](./features/parallel.feature) Scenario involving multi slots and concurrent requests
-* [security.feature](./features/security.feature) Security, CORS and API Key
-* [server.feature](./features/server.feature) Server base scenario: completion, embedding, tokenization, etc...
+Python based server tests scenario using [pytest](https://docs.pytest.org/en/stable/).
 
 Tests target GitHub workflows job runners with 4 vCPU.
-
-Requests are
-using [aiohttp](https://docs.aiohttp.org/en/stable/client_reference.html), [asyncio](https://docs.python.org/fr/3/library/asyncio.html)
-based http client.
 
 Note: If the host architecture inference speed is faster than GitHub runners one, parallel scenario may randomly fail.
 To mitigate it, you can increase values in `n_predict`, `kv_size`.
