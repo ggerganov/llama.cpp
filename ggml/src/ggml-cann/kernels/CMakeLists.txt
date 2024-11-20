@@ -2,7 +2,7 @@
 set(SOC_VERSION "")
 function(detect_ascend_soc_type SOC_VERSION)
     execute_process(
-        COMMAND bash -c "npu-smi info|awk -F' ' 'NF > 0 && NR==7 {print $3}'" 
+        COMMAND bash -c "npu-smi info|awk -F' ' 'NF > 0 && NR==7 {print $3}'"
         OUTPUT_VARIABLE npu_info
         RESULT_VARIABLE npu_result
         OUTPUT_STRIP_TRAILING_WHITESPACE
