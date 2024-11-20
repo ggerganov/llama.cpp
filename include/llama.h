@@ -451,6 +451,7 @@ extern "C" {
     // Functions to access the model's GGUF metadata scalar values
     // - The functions return the length of the string on success, or -1 on failure
     // - The output string is always null-terminated and cleared on failure
+    // - When retrieving a string, an extra byte must be allocated to account for the null terminator
     // - GGUF array values are not supported by these functions
 
     // Get metadata value as a string by key name
