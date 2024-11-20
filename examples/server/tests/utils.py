@@ -262,7 +262,7 @@ class ServerPreset:
         server.n_predict = 64
         server.seed = 42
         return server
-    
+
     @staticmethod
     def bert_bge_small() -> ServerProcess:
         server = ServerProcess()
