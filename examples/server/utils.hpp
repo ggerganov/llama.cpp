@@ -338,7 +338,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     }
 
     if (!is_custom) formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
-    LOG_WRN("formatted_chat using '%s': '%s'\n", tmpl.c_str(), formatted_chat.c_str());
+    LOG_DBG("formatted_chat using '%s': '%s'\n", tmpl.c_str(), formatted_chat.c_str());
 
     return formatted_chat;
 }

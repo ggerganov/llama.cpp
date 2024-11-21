@@ -798,7 +798,6 @@ struct server_context {
             slot.oaicompat = false;
             slot.oaicompat_model = "";
         }
-        std::string default_empty = "";
 
         slot.params.stream              = json_value(data, "stream",             false);
         slot.params.cache_prompt        = json_value(data, "cache_prompt",       false);
