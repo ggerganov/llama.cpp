@@ -47,7 +47,7 @@ static __global__ void argmax_f32(const float * x, int32_t * dst, const int64_t 
         if (warp_id == 0 && lane_id < n_warps) {
             maxval = shared_maxval[lane_id];
             argmax = shared_argmax[lane_id];
-            const unsigned int mask = (1 << n_warps) - 1;
+            const unsigned int mask = (1u << n_warps) - 1u;
 #pragma unroll
             for (int offset = 16; offset > 0; offset >>= 1) {
                 const float val = __shfl_xor_sync(mask, maxval, offset, WARP_SIZE);
@@ -82,7 +82,8 @@ void ggml_cuda_argmax(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     cudaStream_t stream = ctx.stream();
 
     const int64_t num_blocks = nrows;
-    const dim3 blocks_dim(std::min<int64_t>(ne00, 1024), 1, 1);
+    const int64_t num_threads = std::min<int64_t>(1024, (ne00 + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE);
+    const dim3 blocks_dim(num_threads, 1, 1);
     const dim3 blocks_num(num_blocks, 1, 1);
 
     argmax_f32<<<blocks_num, blocks_dim, 0, stream>>>(src0_d, dst_d, ne00);
