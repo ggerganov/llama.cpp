@@ -295,6 +295,9 @@ struct ggml_cgraph {
     enum ggml_cgraph_eval_order order;
 };
 
+// returns a slice of cgraph with nodes [i0, i1)
+// the slice does not have leafs or gradients
+// if you need the gradients, get them from the original graph
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);
 
 // Memory allocation
