@@ -24,7 +24,7 @@ var sources = [
 
 var resources: [Resource] = []
 var linkerSettings: [LinkerSetting] = []
-var cSettings: [CSetting] =  [
+var cSettings: [CSetting] = [
     .unsafeFlags(["-Wno-shorten-64-to-32", "-O3", "-DNDEBUG"]),
     .unsafeFlags(["-fno-objc-arc"]),
     .headerSearchPath("ggml/src"),
@@ -34,6 +34,8 @@ var cSettings: [CSetting] =  [
     // .define("ACCELERATE_NEW_LAPACK"),
     // .define("ACCELERATE_LAPACK_ILP64")
 ]
+var cxxSettings: [CXXSetting] = []
+var cxxStandard: CXXLanguageStandard = .cxx11
 
 #if canImport(Darwin)
 sources.append("ggml/src/ggml-common.h")
@@ -50,6 +52,14 @@ cSettings.append(
 
 #if os(Linux)
     cSettings.append(.define("_GNU_SOURCE"))
+#endif
+
+#if canImport(WinSDK)
+    // See https://github.com/llvm/llvm-project/issues/40056
+    cxxSettings.append(.unsafeFlags(["-Xclang", "-fno-split-cold-code"]))
+
+    // MSVC errors below C++ 14
+    cxxStandard = .cxx14
 #endif
 
 let package = Package(
@@ -82,8 +92,9 @@ let package = Package(
             resources: resources,
             publicHeadersPath: "spm-headers",
             cSettings: cSettings,
+            cxxSettings: cxxSettings,
             linkerSettings: linkerSettings
         )
     ],
-    cxxLanguageStandard: .cxx11
+    cxxLanguageStandard: cxxStandard
 )
