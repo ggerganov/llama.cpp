@@ -3226,7 +3226,6 @@ int main(int argc, char ** argv) {
             LOG_WRN("%s: Prefix and suffix will be used for a custom chat template. This may cause the model to output suboptimal responses\n", __func__);
         } else if (!ctx_server.validate_model_chat_template()) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
-            params.chat_template = "chatml";
         }
     } else if (!params.input_prefix.empty() || !params.input_suffix.empty()) {
         LOG_WRN("%s: Prefix and suffix are defined, but will not be used because a chat template '%s' is chosen.\n", __func__, params.chat_template.c_str());
