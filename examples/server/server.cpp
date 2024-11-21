@@ -743,7 +743,7 @@ struct server_context {
                 }
 
                 // length of the Longest Common Subsequence between the current slot's prompt and the input prompt
-                int cur_lcs_len = longest_common_subsequence(slot.cache_tokens, task.prompt_tokens);
+                int cur_lcs_len = common_lcs(slot.cache_tokens, task.prompt_tokens);
 
                 // fraction of the common subsequence length compared to the current slot's prompt length
                 float cur_similarity = static_cast<float>(cur_lcs_len) / static_cast<int>(slot.cache_tokens.size());
@@ -1960,7 +1960,7 @@ struct server_context {
 
                             if (slot.params.cache_prompt) {
                                 // reuse any previously computed tokens that are common with the new prompt
-                                slot.n_past = longest_common_prefix(slot.cache_tokens, prompt_tokens);
+                                slot.n_past = common_lcp(slot.cache_tokens, prompt_tokens);
 
                                 // reuse chunks from the cached prompt by shifting their KV cache in the new position
                                 if (params.n_cache_reuse > 0) {

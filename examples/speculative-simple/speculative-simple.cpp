@@ -14,14 +14,6 @@
 #define SPEC_VOCAB_MAX_SIZE_DIFFERENCE  128
 #define SPEC_VOCAB_CHECK_START_TOKEN_ID 5
 
-struct seq_draft {
-    std::vector<int> i_batch_tgt;
-
-    std::vector<llama_token> tokens;
-
-    struct common_sampler * smpl = nullptr;
-};
-
 int main(int argc, char ** argv) {
     common_params params;
 
@@ -165,26 +157,20 @@ int main(int argc, char ** argv) {
     // note: keep the last token separate!
     llama_token id_last = inp.back();
 
+    auto prompt_dft = std::vector<llama_token>(inp.begin(), inp.end() - 1);
+
     int n_past = inp.size() - 1;
 
     // init the speculator
     struct common_speculative_params params_spec;
     params_spec.n_draft   = n_draft;
     params_spec.n_min     = 5;
+    params_spec.n_reuse   = 256;
+    params_spec.p_min     = 0.9f;
     params_spec.model_dft = model_dft;
     params_spec.ctx_dft   = ctx_dft;
 
     struct common_speculative * spec = common_speculative_init(params_spec);
-
-    // feed the prompt to the speculator
-    //
-    // this has to be kept synchronized with the target context
-    //
-    // TODO: simplify this by moving the context management logic in the common_speculative instance
-    //       for example, the common_speculative_add_draft can pass the entire context (or part of it) and the
-    //       speculator will automatically compute any new tokens that are not present in its context
-    //
-    common_speculative_set_prompt(spec, inp.data(), n_input - 1);
 
     llama_batch batch_tgt = llama_batch_init(llama_n_batch(ctx_tgt), 0, 1);
 
@@ -204,7 +190,7 @@ int main(int argc, char ** argv) {
         // offloaded to a remote device. it doesn't even have to be based on an LLM. instead, it can provide tokens
         // from a cache or lookup tables.
         //
-        common_speculative_add_draft(spec, batch_tgt, id_last, n_past);
+        common_speculative_add_draft(spec, batch_tgt, prompt_dft, id_last, n_past + 1);
 
         // evaluate the target model on [id_last, draft0, draft1, ..., draftN-1]
         {
@@ -220,7 +206,7 @@ int main(int argc, char ** argv) {
         // available logits from the batch and sample the next token until we run out of logits or the sampler
         // disagrees with the draft
         //
-        const auto ids = common_speculative_sample(spec, smpl, ctx_tgt);
+        const auto ids = common_sampler_sample_n(smpl, ctx_tgt, batch_tgt);
 
         GGML_ASSERT(ids.size() > 0); // there will always be at least one accepted token
 
@@ -266,8 +252,10 @@ int main(int argc, char ** argv) {
                 LOG_DBG("clear kv cache from any extra tokens, n_past = %d\n", n_past);
 
                 llama_kv_cache_seq_rm(ctx_tgt, 0, n_past, -1);
-                llama_kv_cache_seq_rm(ctx_dft, 0, n_past, -1);
             }
+
+            prompt_dft.push_back(id_last);
+            prompt_dft.insert(prompt_dft.end(), ids.begin(), ids.end() - 1);
 
             // remember the last accepted token for the next iteration
             id_last = id;

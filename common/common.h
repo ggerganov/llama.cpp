@@ -33,6 +33,8 @@ struct common_lora_adapter_container : common_lora_adapter_info {
     struct llama_lora_adapter * adapter;
 };
 
+using llama_tokens = std::vector<llama_token>;
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const * LLAMA_COMMIT;
@@ -461,7 +463,9 @@ struct llama_model * common_load_model_from_hf(const char * repo, const char * f
 // clear LoRA adapters from context, then apply new list of adapters
 void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters);
 
+//
 // Batch utils
+//
 
 void common_batch_clear(struct llama_batch & batch);
 
@@ -471,6 +475,16 @@ void common_batch_add(
                           llama_pos   pos,
     const std::vector<llama_seq_id> & seq_ids,
                                bool   logits);
+
+//
+// Token utils
+//
+
+// longest common prefix
+size_t common_lcp(const llama_tokens & a, const llama_tokens & b);
+
+// longet common subsequence
+size_t common_lcs(const llama_tokens & a, const llama_tokens & b);
 
 //
 // Vocab utils

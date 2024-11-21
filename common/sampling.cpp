@@ -342,6 +342,28 @@ std::vector<llama_token> common_sampler_sample_n(struct common_sampler * gsmpl, 
     return result;
 }
 
+std::vector<llama_token> common_sampler_sample_n(struct common_sampler * gsmpl, struct llama_context * ctx, const struct llama_batch & batch, bool grammar_first) {
+    std::vector<int> idxs;
+    idxs.reserve(batch.n_tokens);
+
+    std::vector<llama_token> draft;
+    draft.reserve(batch.n_tokens);
+
+    for (int i = 0; i < batch.n_tokens; i++) {
+        if (batch.logits[i] == 0) {
+            continue;
+        }
+
+        if (idxs.size() > 0) {
+            GGML_ASSERT(batch.pos[idxs.back()] + 1 == batch.pos[i]);
+            draft.push_back(batch.token[i]);
+        }
+        idxs.push_back(i);
+    }
+
+    return common_sampler_sample_n(gsmpl, ctx, idxs, draft, grammar_first);
+}
+
 uint32_t common_sampler_get_seed(const struct common_sampler * gsmpl) {
     return llama_sampler_get_seed(gsmpl->chain);
 }
