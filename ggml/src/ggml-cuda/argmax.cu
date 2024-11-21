@@ -5,7 +5,7 @@
 #include "common.cuh"
 #include "sum.cuh"
 
-static __global__ void argmax_f32(const float * x, int32_t * dst, const int64_t ncols, const int64_t nrows) {
+static __global__ void argmax_f32(const float * x, int32_t * dst, const int64_t ncols) {
     const int64_t row = blockIdx.x;
 
     float maxval = -FLT_MAX;
@@ -85,5 +85,5 @@ void ggml_cuda_argmax(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const dim3 blocks_dim(std::min<int64_t>(ne00, 1024), 1, 1);
     const dim3 blocks_num(num_blocks, 1, 1);
 
-    argmax_f32<<<blocks_num, blocks_dim, 0, stream>>>(src0_d, dst_d, ne00, nrows);
+    argmax_f32<<<blocks_num, blocks_dim, 0, stream>>>(src0_d, dst_d, ne00);
 }
