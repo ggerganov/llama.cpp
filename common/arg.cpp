@@ -1940,17 +1940,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(common_arg(
-        {"-ld", "--logdir"}, "LOGDIR",
-        "path under which to save YAML logs (no logging if unset)",
-        [](common_params & params, const std::string & value) {
-            params.logdir = value;
-
-            if (params.logdir.back() != DIRECTORY_SEPARATOR) {
-                params.logdir += DIRECTORY_SEPARATOR;
-            }
-        }
-    ));
-    add_opt(common_arg(
         {"--positive-file"}, "FNAME",
         string_format("positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str()),
         [](common_params & params, const std::string & value) {

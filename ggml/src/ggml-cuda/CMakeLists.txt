@@ -6,15 +6,18 @@ if (CUDAToolkit_FOUND)
     message(STATUS "CUDA Toolkit found")
 
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        # 52 == lowest CUDA 12 standard
-        # 60 == FP16 CUDA intrinsics
-        # 61 == integer CUDA intrinsics
-        # 70 == compute capability at which unrolling a loop in mul_mat_q kernels is faster
-        if (GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
+        # native == GPUs available at build time
+        # 52     == Maxwell, lowest CUDA 12 standard
+        # 60     == P100, FP16 CUDA intrinsics
+        # 61     == Pascal, __dp4a instruction (per-byte integer dot product)
+        # 70     == V100, FP16 tensor cores
+        # 75     == Turing, int8 tensor cores
+        if (GGML_NATIVE AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.6" AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+            set(CMAKE_CUDA_ARCHITECTURES "native")
+        elseif(GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
             set(CMAKE_CUDA_ARCHITECTURES "60;61;70;75")
         else()
             set(CMAKE_CUDA_ARCHITECTURES "52;61;70;75")
-            #set(CMAKE_CUDA_ARCHITECTURES "OFF") # use this to compile much faster, but only F16 models work
         endif()
     endif()
     message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
@@ -51,19 +54,10 @@ if (CUDAToolkit_FOUND)
     target_link_libraries(ggml-cuda PRIVATE ggml-base)
     target_include_directories(ggml-cuda PRIVATE . ..)
 
-    # TODO: change the definitions to this target only
-
-    add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-    add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-    add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
     if (GGML_CUDA_GRAPHS)
         add_compile_definitions(GGML_CUDA_USE_GRAPHS)
-    endif()
-
-    if (GGML_CUDA_FORCE_DMMV)
-        add_compile_definitions(GGML_CUDA_FORCE_DMMV)
     endif()
 
     if (GGML_CUDA_FORCE_MMQ)
@@ -76,10 +70,6 @@ if (CUDAToolkit_FOUND)
 
     if (GGML_CUDA_NO_VMM)
         add_compile_definitions(GGML_CUDA_NO_VMM)
-    endif()
-
-    if (DEFINED GGML_CUDA_DMMV_Y)
-        add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_DMMV_Y}) # for backwards compatibility
     endif()
 
     if (GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
@@ -159,7 +149,7 @@ if (CUDAToolkit_FOUND)
         list(APPEND CUDA_FLAGS -Xcompiler ${CUDA_CXX_FLAGS_JOINED})
     endif()
 
-    add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
+    target_compile_options(ggml-cuda PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 else()
     message(FATAL_ERROR "CUDA Toolkit not found")
 endif()

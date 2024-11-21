@@ -207,9 +207,11 @@ add_library(ggml-base
             ../include/ggml-alloc.h
             ../include/ggml-backend.h
             ../include/ggml-cpp.h
+            ../include/ggml-opt.h
             ggml.c
             ggml-alloc.c
             ggml-backend.cpp
+            ggml-opt.cpp
             ggml-threading.cpp
             ggml-threading.h
             ggml-quants.c
@@ -237,8 +239,8 @@ function(ggml_add_backend backend)
             if (${BUILD_SHARED_LIBS})
                 target_compile_definitions(${backend_target} PRIVATE GGML_BACKEND_BUILD)
                 target_compile_definitions(${backend_target} PUBLIC  GGML_BACKEND_SHARED)
-                install(TARGETS ${backend_target} LIBRARY)
             endif()
+            install(TARGETS ${backend_target} LIBRARY)
             target_link_libraries(ggml PUBLIC ${backend_target})
             string(TOUPPER "GGML_USE_${backend}" backend_use)
             target_compile_definitions(ggml PUBLIC ${backend_use})

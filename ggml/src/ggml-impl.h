@@ -196,7 +196,7 @@ void ggml_hash_set_reset(struct ggml_hash_set * hash_set);
 static bool ggml_hash_contains(const struct ggml_hash_set * hash_set, struct ggml_tensor * key);
 
 // returns GGML_HASHSET_FULL if table is full, otherwise the current index of the key or where it should be inserted
-static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, struct ggml_tensor * key);
+static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, const struct ggml_tensor * key);
 
 // returns GGML_HASHSET_ALREADY_EXISTS if key already exists, index otherwise, asserts if table is full
 static size_t ggml_hash_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key);
@@ -210,7 +210,7 @@ static inline size_t ggml_hash(const struct ggml_tensor * p) {
     return (size_t)(uintptr_t)p >> 4;
 }
 
-static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, struct ggml_tensor * key) {
+static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, const struct ggml_tensor * key) {
     size_t h = ggml_hash(key) % hash_set->size;
 
     // linear probing
@@ -281,19 +281,23 @@ enum ggml_cgraph_eval_order {
 };
 
 struct ggml_cgraph {
-    int size;
-    int n_nodes;
-    int n_leafs;
+    int size;    // maximum number of nodes/leafs/grads/grad_accs
+    int n_nodes; // number of nodes currently in use
+    int n_leafs; // number of leafs currently in use
 
-    struct ggml_tensor ** nodes;
-    struct ggml_tensor ** grads;
-    struct ggml_tensor ** leafs;
+    struct ggml_tensor ** nodes;     // tensors with data that can change if the graph is evaluated
+    struct ggml_tensor ** grads;     // the outputs of these tensors are the gradients of the nodes
+    struct ggml_tensor ** grad_accs; // accumulators for node gradients
+    struct ggml_tensor ** leafs;     // tensors with constant data
 
     struct ggml_hash_set visited_hash_set;
 
     enum ggml_cgraph_eval_order order;
 };
 
+// returns a slice of cgraph with nodes [i0, i1)
+// the slice does not have leafs or gradients
+// if you need the gradients, get them from the original graph
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);
 
 // Memory allocation

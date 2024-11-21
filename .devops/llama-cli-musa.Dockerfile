@@ -15,7 +15,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN cmake -B build -DGGML_MUSA=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
+RUN cmake -B build -DGGML_NATIVE=OFF -DGGML_MUSA=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
     cmake --build build --config Release --target llama-cli -j$(nproc) && \
     mkdir -p /app/lib && \
     find build -name "*.so" -exec cp {} /app/lib \;

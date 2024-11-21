@@ -19,7 +19,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN cmake -B build -DGGML_MUSA=ON -DLLAMA_CURL=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
+RUN cmake -B build -DGGML_NATIVE=OFF -DGGML_MUSA=ON -DLLAMA_CURL=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
     cmake --build build --config Release -j$(nproc) && \
     cp build/bin/* .
 

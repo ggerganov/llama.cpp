@@ -75,7 +75,6 @@ if (BLAS_FOUND)
 
     message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
 
-    #add_compile_options(${BLAS_LINKER_FLAGS})
     target_compile_options(ggml-blas PRIVATE ${BLAS_LINKER_FLAGS})
 
     if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${GGML_BLAS_VENDOR} MATCHES "Generic" OR ${GGML_BLAS_VENDOR} MATCHES "Intel"))

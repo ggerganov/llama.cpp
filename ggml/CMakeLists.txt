@@ -109,6 +109,7 @@ if (NOT MSVC)
 endif()
 option(GGML_LASX        "ggml: enable lasx"             ON)
 option(GGML_LSX         "ggml: enable lsx"              ON)
+option(GGML_RVV         "ggml: enable rvv"              ON)
 option(GGML_SVE         "ggml: enable SVE"              OFF)
 
 if (WIN32)
@@ -128,14 +129,9 @@ option(GGML_LLAMAFILE                       "ggml: use LLAMAFILE"               
 
 option(GGML_CUDA                            "ggml: use CUDA"                                  OFF)
 option(GGML_MUSA                            "ggml: use MUSA"                                  OFF)
-option(GGML_CUDA_FORCE_DMMV                 "ggml: use dmmv instead of mmvq CUDA kernels"     OFF)
 option(GGML_CUDA_FORCE_MMQ                  "ggml: use mmq kernels instead of cuBLAS"         OFF)
 option(GGML_CUDA_FORCE_CUBLAS               "ggml: always use cuBLAS instead of mmq kernels"  OFF)
-set   (GGML_CUDA_DMMV_X   "32" CACHE STRING "ggml: x stride for dmmv CUDA kernels")
-set   (GGML_CUDA_MMV_Y     "1" CACHE STRING "ggml: y block size for mmv CUDA kernels")
 option(GGML_CUDA_F16                        "ggml: use 16 bit floats for some calculations"   OFF)
-set   (GGML_CUDA_KQUANTS_ITER "2" CACHE STRING
-                                            "ggml: iters./thread per block for Q2_K/Q6_K")
 set   (GGML_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                             "ggml: max. batch size for using peer access")
 option(GGML_CUDA_NO_PEER_COPY               "ggml: do not use peer to peer copies"            OFF)
@@ -169,6 +165,8 @@ option(GGML_SYCL                            "ggml: use SYCL"                    
 option(GGML_SYCL_F16                        "ggml: use 16 bit floats for sycl calculations"   OFF)
 set   (GGML_SYCL_TARGET "INTEL" CACHE STRING
                                             "ggml: sycl target device")
+set   (GGML_SYCL_DEVICE_ARCH "" CACHE STRING
+                                            "ggml: sycl device architecture")
 
 # extra artifacts
 option(GGML_BUILD_TESTS    "ggml: build tests"    ${GGML_STANDALONE})
@@ -228,6 +226,7 @@ set(GGML_PUBLIC_HEADERS
     include/ggml-cann.h
     include/ggml-cuda.h
     include/ggml-kompute.h
+    include/ggml-opt.h
     include/ggml-metal.h
     include/ggml-rpc.h
     include/ggml-sycl.h
@@ -237,12 +236,8 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #if (GGML_METAL)
 #    set_target_properties(ggml PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/ggml-metal.metal")
 #endif()
-install(TARGETS ggml PUBLIC_HEADER)
-
-if (BUILD_SHARED_LIBS)
-    install(TARGETS ggml      LIBRARY)
-    install(TARGETS ggml-base LIBRARY)
-endif()
+install(TARGETS ggml LIBRARY PUBLIC_HEADER)
+install(TARGETS ggml-base LIBRARY)
 
 # FIXME: this should be done in the backend cmake files
 if (GGML_METAL)

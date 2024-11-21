@@ -303,14 +303,11 @@ else:
 
     show = []
     # Show CPU and/or GPU by default even if the hardware for all results is the same:
-    if "gpu_blas" not in properties_different and "n_gpu_layers" not in properties_different:
-        gpu_blas = bool(rows_full[0][KEY_PROPERTIES.index("gpu_blas")])
+    if "n_gpu_layers" not in properties_different:
         ngl = int(rows_full[0][KEY_PROPERTIES.index("n_gpu_layers")])
 
-        if not gpu_blas or ngl != 99 and "cpu_info" not in properties_different:
+        if ngl != 99 and "cpu_info" not in properties_different:
             show.append("cpu_info")
-        if gpu_blas and "gpu_info" not in properties_different:
-            show.append("gpu_info")
 
     show += properties_different
 
