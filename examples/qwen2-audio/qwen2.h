@@ -29,6 +29,15 @@
 extern "C" {
 #endif
 
+struct omni_context_params
+{
+    const char *model;
+    const char *mmproj;
+    const char *file;
+    const char *prompt;
+    int32_t n_gpu_layers;
+};
+
 OMNI_AUDIO_API bool omni_context_params_parse(int argc, char **argv, struct omni_context_params * params);
 
 OMNI_AUDIO_API struct omni_context_params * omni_context_default_params();

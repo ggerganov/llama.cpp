@@ -27,14 +27,6 @@ void* internal_chars = nullptr;
 
 static const char *AUDIO_TOKEN = "<|AUDIO|>";
 
-struct omni_context_params
-{
-    const char *model;
-    const char *mmproj;
-    const char *file;
-    const char *prompt;
-    int32_t n_gpu_layers;
-};
 
 struct omni_context
 {
