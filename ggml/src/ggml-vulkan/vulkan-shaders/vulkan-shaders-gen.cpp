@@ -40,7 +40,7 @@ std::string input_dir = "vulkan-shaders";
 std::string output_dir = "/tmp";
 std::string target_hpp = "ggml-vulkan-shaders.hpp";
 std::string target_cpp = "ggml-vulkan-shaders.cpp";
-bool no_clean = false;
+std::string no_clean = "FALSE";
 
 const std::vector<std::string> type_names = {
     "f32",
@@ -463,7 +463,7 @@ void write_output_files() {
         }
         fprintf(src, "\n};\n\n");
 
-        if (!no_clean) {
+        if (no_clean != "TRUE") {
             std::remove(path.c_str());
         }
     }
@@ -496,7 +496,7 @@ int main(int argc, char** argv) {
         target_cpp = args["--target-cpp"]; // Path to generated cpp file
     }
     if (args.find("--no-clean") != args.end()) {
-        no_clean = true; // Keep temporary SPIR-V files in output-dir after build
+        no_clean = to_uppercase(args["--no-clean"]); // Keep temporary SPIR-V files in output-dir after build
     }
 
     if (!directory_exists(input_dir)) {

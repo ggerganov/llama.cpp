@@ -65,7 +65,7 @@ if (Vulkan_FOUND)
             --output-dir ${_ggml_vk_output_dir}
             --target-hpp ${_ggml_vk_header}
             --target-cpp ${_ggml_vk_source}
-            --no-clean
+            --no-clean true
 
         DEPENDS ${_ggml_vk_shader_deps}
         COMMENT "Generate vulkan shaders"
