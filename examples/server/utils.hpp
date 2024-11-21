@@ -636,17 +636,24 @@ static json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Apply chat template to the list of messages
-    std::string chat_tmpl = chat_template;
-    std::string prefix = "";
-    std::string suffix = "";
+    std::string chat_tmpl = (body.contains("chat_template") ? body.at("chat_template").get<std::string>() : chat_template);
+    std::string prefix = (body.contains("input_prefix") ? body.at("input_prefix").get<std::string>() : "");
+    std::string suffix = (body.contains("input_suffix") ? body.at("input_suffix").get<std::string>() : "");
 
     // if template is sent in data, ignore prefix and suffix
-    if (body.contains("chat_template")) {
-        chat_tmpl = body.at("chat_template").get<std::string>();
+    if (!chat_tmpl.empty()) {
         LOG_WRN("\nUsing '%s' template, prefix and suffix are ignored.\n", chat_tmpl.c_str());
+        prefix = "";
+        suffix = "";
     } else {
-        prefix = (body.contains("input_prefix") ? body.at("input_prefix").get<std::string>() : input_prefix);
-        suffix = (body.contains("input_suffix") ? body.at("input_suffix").get<std::string>() : input_suffix);
+        if (prefix.empty()) {
+            prefix = input_prefix;
+        }
+
+        if (suffix.empty()) {
+            suffix = input_suffix;
+        }
+        LOG_WRN("\nUsing prefix '%s' and suffix '%s'.\n", prefix.c_str(), suffix.c_str());
     }
 
     llama_params["prompt"] = format_chat(model, chat_tmpl, prefix, suffix, body.at("messages"));
