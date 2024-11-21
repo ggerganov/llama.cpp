@@ -119,36 +119,6 @@
               </li>
             </ul>
           </div>
-
-          <!-- Templates -->
-          <div class="dropdown dropdown-end dropdown-bottom">
-            <div tabindex="0" role="button" class="btn m-1">
-              Templates
-              <svg width="12px" height="12px" class="inline-block h-2 w-2 fill-current opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048">
-                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
-              </svg>
-            </div>
-            <ul tabindex="0" class="dropdown-content bg-base-300 rounded-box z-[1] w-52 p-2 shadow-2xl h-80 overflow-y-auto">
-              <li>
-                <button
-                  class="btn btn-sm btn-block w-full btn-ghost justify-start"
-                  :class="{ 'btn-active': config.chat_template === 'chatml' }"
-                  @click="config.chat_template = 'chatml'">
-                  auto
-                </button>
-              </li>
-              <li v-for="tmpl in templates">
-                <input
-                  type="radio"
-                  name="tmpl-dropdown"
-                  class="theme-controller btn btn-sm btn-block w-full btn-ghost justify-start"
-                  :aria-label="tmpl"
-                  :value="tmpl"
-                  :checked="config.chat_template === tmpl"
-                  @click="setSelectedTemplate(tmpl)" />
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
 
@@ -319,7 +289,6 @@
       // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
       apiKey: '',
       systemMessage: 'You are a helpful assistant.',
-      chat_template: 'chatml',
       input_prefix: '',
       input_suffix: '',
       // make sure these default values are in sync with `common.h`
@@ -347,7 +316,6 @@
     const CONFIG_INFO = {
       apiKey: 'Set the API Key if you are using --api-key option for the server.',
       systemMessage: 'The starting message that defines how model should behave.',
-      chat_template: 'The fromat used for messages.',
       input_prefix: 'Prefix for user messages in custom chat templates.',
       input_suffix: 'Suffix for user messages in custom chat templates.',
       samplers: 'The order at which samplers are applied, in simplified way. Default is "dkypmxt": dry->top_k->typ_p->top_p->min_p->xtc->temperature',
@@ -375,7 +343,6 @@
     const CONFIG_NUMERIC_KEYS = Object.entries(CONFIG_DEFAULT).filter(e => isNumeric(e[1])).map(e => e[0]);
     // list of themes supported by daisyui
     const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'];
-    const CHAT_TEMPLATES = ['chatml', 'llama2', 'mistral', 'phi3', 'zephyr', 'monarch', 'gemma', 'gemma2', 'orion', 'openchat', 'vicuna', 'vicuna-orca', 'deepseek', 'command-r', 'llama3', 'chatglm3', 'chatglm4', 'minicpm', 'deepseek2', 'exaone3', 'rwkv-world', 'granite', 'custom'];
 
     // markdown support
     const VueMarkdown = defineComponent(
@@ -522,7 +489,6 @@
           editingMsg: null,
           // const
           themes: THEMES,
-          templates: CHAT_TEMPLATES,
           configDefault: {...CONFIG_DEFAULT},
           configInfo: {...CONFIG_INFO},
         }
@@ -541,9 +507,6 @@
         setSelectedTheme(theme) {
           this.selectedTheme = theme;
           StorageUtils.setTheme(theme);
-        },
-        setSelectedTemplate(template) {
-          this.config.chat_template = template;
         },
         newConversation() {
           if (this.isGenerating) return;
@@ -604,7 +567,6 @@
               stream: true,
               cache_prompt: true,
               samplers: this.config.samplers,
-              chat_template: this.config.chat_template,
               input_prefix: this.config.input_prefix,
               input_suffix: this.config.input_suffix,
               temperature: this.config.temperature,

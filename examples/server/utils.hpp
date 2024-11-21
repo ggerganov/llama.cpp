@@ -304,6 +304,8 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     std::vector<common_chat_msg> chat;
     std::string formatted_chat;
 
+    bool is_custom = !prefix.empty() || !suffix.empty();
+
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
 
@@ -326,7 +328,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
             throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
         }
 
-        if (tmpl == "custom") {
+        if (is_custom) {
             // simple format using prefix and suffix
             if (role == "user") formatted_chat += prefix + content + suffix;
             else formatted_chat += content;
@@ -335,7 +337,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         }
     }
 
-    if (tmpl != "custom") formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
+    if (!is_custom) formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
     LOG_WRN("formatted_chat using '%s': '%s'\n", tmpl.c_str(), formatted_chat.c_str());
 
     return formatted_chat;
@@ -351,7 +353,7 @@ inline std::string format_chat_example(const struct llama_model * model, const s
 
     std::string formatted_example;
 
-    if (tmpl == "custom") {
+    if (!prefix.empty() || !suffix.empty()) {
         for (auto message : msgs) {
             if (message.role == "user") formatted_example += prefix + message.content + suffix;
             else formatted_example += message.content;
@@ -634,7 +636,20 @@ static json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, input_prefix, input_suffix, body.at("messages"));
+    std::string chat_tmpl = chat_template;
+    std::string prefix = "";
+    std::string suffix = "";
+
+    // if template is sent in data, ignore prefix and suffix
+    if (body.contains("chat_template")) {
+        chat_tmpl = body.at("chat_template").get<std::string>();
+        LOG_WRN("\nUsing '%s' template, prefix and suffix are ignored.\n", chat_tmpl.c_str());
+    } else {
+        prefix = (body.contains("input_prefix") ? body.at("input_prefix").get<std::string>() : input_prefix);
+        suffix = (body.contains("input_suffix") ? body.at("input_suffix").get<std::string>() : input_suffix);
+    }
+
+    llama_params["prompt"] = format_chat(model, chat_tmpl, prefix, suffix, body.at("messages"));
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
