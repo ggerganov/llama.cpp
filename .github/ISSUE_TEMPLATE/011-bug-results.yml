@@ -1,5 +1,5 @@
-name: Bug (model evaluation)
-description: Something goes wrong when evaluating a model without any complex components such as the server on top.
+name: Bug (model use)
+description: Something goes wrong when using a model (in general, not specific to a single llama.cpp module).
 title: "Eval bug: "
 labels: ["bug-unconfirmed", "model evaluation"]
 body:
