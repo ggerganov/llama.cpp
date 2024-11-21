@@ -34,6 +34,21 @@ body:
         - Other? (Please let us know in description)
     validations:
       required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Which llama.cpp modules do you know to be affected?
+      multiple: true
+      options:
+        - libllama (core library)
+        - llama-cli
+        - llama-server
+        - llama-bench
+        - llama-quantize
+        - Python/Bash scripts
+        - Other (Please specify in the next section)
+    validations:
+      required: true
   - type: textarea
     id: steps_to_reproduce
     attributes:
