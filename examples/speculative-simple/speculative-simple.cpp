@@ -41,8 +41,9 @@ int main(int argc, char ** argv) {
 
     // load the target model
     common_init_result llama_init_tgt = common_init_from_params(params);
+
     model_tgt = llama_init_tgt.model;
-    ctx_tgt = llama_init_tgt.context;
+    ctx_tgt   = llama_init_tgt.context;
 
     // load the draft model
     params.model = params.model_draft;
@@ -53,8 +54,9 @@ int main(int argc, char ** argv) {
 
     params.cpuparams_batch.n_threads = params.draft_cpuparams_batch.n_threads;
     common_init_result llama_init_dft = common_init_from_params(params);
+
     model_dft = llama_init_dft.model;
-    ctx_dft = llama_init_dft.context;
+    ctx_dft   = llama_init_dft.context;
 
     if (!common_speculative_are_compatible(ctx_tgt, ctx_dft)) {
         return 1;
