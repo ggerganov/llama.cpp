@@ -13,9 +13,6 @@
 int main(int argc, char ** argv) {
     common_params params;
 
-    // minimum size of the draft to use
-    const int n_min = 5;
-
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
     }
@@ -142,7 +139,7 @@ int main(int argc, char ** argv) {
         // evaluate the target model on [id_last, draft0, draft1, ..., draftN-1]
         {
             // do not waste time on small drafts
-            if (draft.size() < n_min) {
+            if (draft.size() < params.n_draft_min) {
                 draft.clear();
             }
 
