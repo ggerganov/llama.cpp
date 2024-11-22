@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.19)
+cmake_policy(SET CMP0114 NEW)
+
 find_package(Vulkan COMPONENTS glslc REQUIRED)
 
 if (Vulkan_FOUND)
@@ -73,9 +76,32 @@ if (Vulkan_FOUND)
         add_compile_definitions(GGML_VULKAN_RUN_TESTS)
     endif()
 
-    add_subdirectory(vulkan-shaders)
-
-    set (_ggml_vk_genshaders_cmd vulkan-shaders-gen)
+    if (NOT CMAKE_CROSSCOMPILING)
+        add_subdirectory(vulkan-shaders)
+    else()
+        include(ExternalProject)
+        # Native build through ExternalProject_Add
+        ExternalProject_Add(
+            vulkan-shaders-gen
+            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders
+            CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+                    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
+                    -DCMAKE_TOOLCHAIN_FILE=
+                    -DCMAKE_SYSROOT=
+                    -DCMAKE_C_FLAGS=-O2
+                    -DCMAKE_CXX_FLAGS=-O2
+                    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER
+                    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+                    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER
+                    -DCMAKE_C_COMPILER=gcc
+                    -DCMAKE_CXX_COMPILER=g++
+            BUILD_COMMAND ${CMAKE_COMMAND} --build .
+            INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            INSTALL_DIR ${CMAKE_BINARY_DIR}
+        )
+        ExternalProject_Add_StepTargets(vulkan-shaders-gen build install)
+    endif()
+    set (_ggml_vk_genshaders_cmd ${CMAKE_BINARY_DIR}/bin/vulkan-shaders-gen)
     set (_ggml_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
     set (_ggml_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
     set (_ggml_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
@@ -86,6 +112,10 @@ if (Vulkan_FOUND)
     if (NOT CMAKE_CROSSCOMPILING)
         set(_ggml_vk_genshaders_cmd "$<TARGET_FILE_DIR:vulkan-shaders-gen>/${_ggml_vk_genshaders_cmd}")
     endif ()
+
+    if (CMAKE_CROSSCOMPILING)
+        set(_ggml_vk_shader_deps ${_ggml_vk_shader_deps} vulkan-shaders-gen-build vulkan-shaders-gen-install)
+    endif()
 
     add_custom_command(
         OUTPUT ${_ggml_vk_header}
