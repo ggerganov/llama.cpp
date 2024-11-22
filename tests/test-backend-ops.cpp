@@ -681,6 +681,7 @@ struct test_case {
 
         // run
         int64_t total_time_us = 0;
+        int64_t total_mem = 0;
         int total_runs = 0;
         do {
             int64_t start_time = ggml_time_us();
@@ -688,6 +689,7 @@ struct test_case {
             int64_t end_time = ggml_time_us();
 
             total_time_us += end_time - start_time;
+            total_mem += mem;
             total_runs += n_runs;
         } while (total_time_us < 1000*1000); // run for at least 1 second
 
@@ -717,7 +719,7 @@ struct test_case {
         } else {
             printf("%8zu kB/run - \033[1;34m%7.2f GB/s\033[0m",
                 op_size(out) / 1024,
-                mem / (total_time_us / 1e6) / 1024.0 / 1024.0 / 1024.0);
+                total_mem / (total_time_us / 1e6) / 1024.0 / 1024.0 / 1024.0);
         }
         printf("\n");
 
@@ -809,15 +811,14 @@ struct test_case {
 
         ggml_build_forward_expand(gf, out);
         ggml_graph_cpy(gf, gb);
-        ggml_build_backward_expand(ctx, gf, gb, false);
+        ggml_build_backward_expand(ctx, ctx, gb, false);
         if (expect.size() != 1 || expect[0] != 0.0f) {
             GGML_ASSERT(ggml_graph_n_nodes(gb) > ggml_graph_n_nodes(gf));
             for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-                GGML_ASSERT(!(t->flags & GGML_TENSOR_FLAG_PARAM) || t->grad->op != GGML_OP_NONE);
+                GGML_ASSERT(!(t->flags & GGML_TENSOR_FLAG_PARAM) || ggml_graph_get_grad(gb, t)->op != GGML_OP_NONE);
             }
         }
 
-        // TODO: refactor so that this check is only needed once
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (!ggml_backend_supports_op(backend, t)) {
                 printf("not supported [%s] ", ggml_backend_name(backend));
@@ -860,7 +861,13 @@ struct test_case {
             const char * bn = ggml_backend_name(backend);
             const int64_t ne = ggml_nelements(t);
 
-            std::vector<float> ga = tensor_to_float(t->grad);
+            std::vector<float> ga;
+            struct ggml_tensor * grad = ggml_graph_get_grad(gb, t);
+            if (grad) {
+                ga = tensor_to_float(grad);
+            } else {
+                ga.resize(ne); // default value is 0.0f
+            }
 
             for (int64_t i = 0; i < ne; ++i) { // gradient algebraic
                 // check for nans
@@ -1145,6 +1152,26 @@ struct test_argmax : public test_case {
         ggml_set_name(out, "out");
 
         return out;
+    }
+
+    void initialize_tensors(ggml_context * ctx) override {
+        std::random_device rd;
+        std::default_random_engine rng(rd());
+        for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+            if (t->type == GGML_TYPE_F32) {
+                // initialize with unique values to avoid ties
+                for (int64_t r = 0; r < ggml_nrows(t); r++) {
+                    std::vector<float> data(t->ne[0]);
+                    for (int i = 0; i < t->ne[0]; i++) {
+                        data[i] = i;
+                    }
+                    std::shuffle(data.begin(), data.end(), rng);
+                    ggml_backend_tensor_set(t, data.data(), r * t->nb[1], t->ne[0] * sizeof(float));
+                }
+            } else {
+                init_tensor_uniform(t);
+            }
+        }
     }
 
     double max_nmse_err() override {
@@ -2498,6 +2525,35 @@ struct test_sum_rows : public test_case {
     }
 };
 
+// GGML_OP_MEAN
+struct test_mean : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+
+    std::string vars() override {
+        return VARS_TO_STR2(type, ne);
+    }
+
+    test_mean(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne = {10, 5, 4, 3})
+        : type(type), ne(ne) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_set_param(ctx, a);
+        ggml_set_name(a, "a");
+
+        ggml_tensor * out = ggml_mean(ctx, a);
+        ggml_set_name(out, "out");
+
+        return out;
+    }
+
+    float grad_eps() override {
+        return 0.1f * ne[0]*ne[1]*ne[2]*ne[3];
+    }
+};
+
 // GGML_OP_UPSCALE
 struct test_upscale : public test_case {
     const ggml_type type;
@@ -2740,6 +2796,13 @@ struct test_flash_attn_ext : public test_case {
         return 5e-4;
     }
 
+    uint64_t op_flops(ggml_tensor * t) override {
+        GGML_UNUSED(t);
+        // Just counting matmul costs:
+        // Q*K^T is nb x hs x kv, P*V is nb x kv x hs, per head
+        return 2 * 2 * nh * nb * hs * kv;
+    }
+
     test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8,
                         bool mask = true, float max_bias = 0.0f, float logit_softcap = 0.0f, ggml_type type_KV = GGML_TYPE_F16)
         : hs(hs), nh(nh), kv(kv), nb(nb), mask(mask), max_bias(max_bias), logit_softcap(logit_softcap), type_KV(type_KV) {}
@@ -2825,24 +2888,14 @@ struct test_cross_entropy_loss : public test_case {
 struct test_opt_step_adamw : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
-    const float alpha;
-    const float beta1;
-    const float beta2;
-    const float eps;
-    const float wd;
 
     std::string vars() override {
-        return VARS_TO_STR7(type, ne, alpha, beta1, beta2, eps, wd);
+        return VARS_TO_STR2(type, ne);
     }
 
     test_opt_step_adamw(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 5, 4, 3},
-            float alpha = 1e-3f,
-            float beta1 = 0.9f,
-            float beta2 = 0.999f,
-            float eps = 1e-8f,
-            float wd = 0.0f)
-        : type(type), ne(ne), alpha(alpha), beta1(beta1), beta2(beta2), eps(eps), wd(wd) {}
+            std::array<int64_t, 4> ne = {10, 5, 4, 3})
+        : type(type), ne(ne) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], ne[2], ne[3]);
@@ -2852,7 +2905,16 @@ struct test_opt_step_adamw : public test_case {
         ggml_tensor * grad = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], ne[2], ne[3]);
         ggml_set_name(grad, "grad");
 
-        ggml_tensor * out = ggml_opt_step_adamw(ctx, a, grad, alpha, beta1, beta2, eps, wd);
+        ggml_tensor * grad_m = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], ne[2], ne[3]);
+        ggml_set_name(grad_m, "grad_m");
+
+        ggml_tensor * grad_v = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], ne[2], ne[3]);
+        ggml_set_name(grad_v, "grad_v");
+
+        ggml_tensor * adamw_params = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 7);
+        ggml_set_name(adamw_params, "adamw_params");
+
+        ggml_tensor * out = ggml_opt_step_adamw(ctx, a, grad, grad_m, grad_v, adamw_params);
         ggml_set_name(out, "out");
 
         return out;
@@ -2860,7 +2922,7 @@ struct test_opt_step_adamw : public test_case {
 
     void initialize_tensors(ggml_context * ctx) override {
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-            init_tensor_uniform(t, 0.0f, 1.0f); // grad_v needs non-negative values.
+            init_tensor_uniform(t, 0.0f, 1.0f); // grad_v and adamw_params need non-negative values.
         }
     }
 
@@ -3398,6 +3460,11 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_conv_transpose_1d({2,1,1,1}, {3,1,1,1}, 1, 0, 1));
 
     test_cases.emplace_back(new test_argmax());
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32, 1, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {100, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {2000, 10, 1, 1}));
+
     test_cases.emplace_back(new test_count_equal());
 
     for (int ne3 : {1, 3}) { // CUDA backward pass only supports ne3 == 1
@@ -3726,6 +3793,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
 
     test_cases.emplace_back(new test_sum());
     test_cases.emplace_back(new test_sum_rows());
+    test_cases.emplace_back(new test_mean());
     test_cases.emplace_back(new test_upscale());
     test_cases.emplace_back(new test_upscale(GGML_TYPE_F32, { 512, 512, 3, 1 }, 2, true));
     test_cases.emplace_back(new test_upscale_ext());
@@ -3745,7 +3813,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
                     for (int nh : { 32, }) {
                         for (int kv : { 512, 1024, }) {
                             for (int nb : { 1, 3, 32, 35, }) {
-                                for (ggml_type type_KV : {GGML_TYPE_F16, GGML_TYPE_Q8_0, GGML_TYPE_Q4_0}) {
+                                for (ggml_type type_KV : {GGML_TYPE_F16, GGML_TYPE_BF16, GGML_TYPE_Q8_0, GGML_TYPE_Q4_0}) {
                                     test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb, mask, max_bias, logit_softcap, type_KV));
                                 }
                             }
@@ -3757,9 +3825,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     }
 
     test_cases.emplace_back(new test_cross_entropy_loss());
-    for (float wd : {0.0f, 1e-2f}) {
-        test_cases.emplace_back(new test_opt_step_adamw(GGML_TYPE_F32, {10, 5, 4, 3}, 1.0f, 1e-3f, 0.9f, 0.999f, wd));
-    }
+    test_cases.emplace_back(new test_opt_step_adamw(GGML_TYPE_F32, {10, 5, 4, 3}));
 
     // these tests are disabled to save execution time, but they can be handy for debugging
 #if 0
@@ -3778,6 +3844,20 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
 
     test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1,   1, 1, 1}));
     test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1, 512, 1, 1}));
+
+    test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, GGML_TYPE_F16, {512, 3072, 1, 1}));
+
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {4096, 4096, 5, 1}, false, 1.0f, 0.0f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {77, 4096, 5, 1}, false, 1.0f, 0.0f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {1024, 1024, 10, 1}, false, 1.0f, 0.0f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {77, 1024, 10, 1}, false, 1.0f, 0.0f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {256, 256, 20, 1}, false, 1.0f, 0.0f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {64, 64, 20, 1}, false, 1.0f, 0.0f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {77, 64, 20, 1}, false, 1.0f, 0.0f));
+
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32000, 512, 1, 1}));
 
     for (int bs : {1, 512}) {
         for (ggml_type type_a : all_types) {
@@ -3927,14 +4007,14 @@ int main(int argc, char ** argv) {
         ggml_backend_free(backend);
     }
 
+    ggml_quantize_free();
+
     printf("%zu/%zu backends passed\n", n_ok, ggml_backend_dev_count());
 
     if (n_ok != ggml_backend_dev_count()) {
         printf("\033[1;31mFAIL\033[0m\n");
         return 1;
     }
-
-    ggml_quantize_free();
 
     printf("\033[1;32mOK\033[0m\n");
     return 0;

@@ -267,11 +267,12 @@ int main(int argc, char ** argv) {
                         for (size_t i = 0; i < dist_tgt.size; i++) {
                             if (dist_tgt.data[i].id == drafts[s].tokens[i_dft]) {
                                 p_tgt = dist_tgt.data[i].p;
+                                break;
                             }
+                        }
+                        for (size_t i = 0; i < dist_dft.size; i++) {
                             if (dist_dft.data[i].id == drafts[s].tokens[i_dft]) {
                                 p_dft = dist_dft.data[i].p;
-                            }
-                            if (p_tgt && p_dft) {
                                 break;
                             }
                         }

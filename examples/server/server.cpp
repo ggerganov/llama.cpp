@@ -14,22 +14,13 @@
 #define MIMETYPE_JSON "application/json; charset=utf-8"
 
 // auto generated files (update with ./deps.sh)
-#include "colorthemes.css.hpp"
-#include "style.css.hpp"
-#include "theme-beeninorder.css.hpp"
-#include "theme-ketivah.css.hpp"
-#include "theme-mangotango.css.hpp"
-#include "theme-playground.css.hpp"
-#include "theme-polarnight.css.hpp"
-#include "theme-snowstorm.css.hpp"
 #include "index.html.hpp"
-#include "index-new.html.hpp"
-#include "index.js.hpp"
 #include "completion.js.hpp"
-#include "system-prompts.js.hpp"
-#include "prompt-formats.js.hpp"
-#include "json-schema-to-grammar.mjs.hpp"
 #include "loading.html.hpp"
+#include "deps_daisyui.min.css.hpp"
+#include "deps_markdown-it.js.hpp"
+#include "deps_tailwindcss.js.hpp"
+#include "deps_vue.esm-browser.js.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -109,6 +100,12 @@ struct server_task_result {
 
     bool stop;
     bool error;
+};
+
+struct server_static_file {
+    const unsigned char * data;
+    unsigned int size;
+    const char * mime_type;
 };
 
 struct slot_params {
@@ -664,11 +661,16 @@ struct server_context {
     }
 
     bool validate_model_chat_template() const {
-        llama_chat_message chat[] = {{"user", "test"}};
-
-        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
-
-        return res > 0;
+        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
+        std::string template_key = "tokenizer.chat_template";
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        if (res >= 0) {
+            llama_chat_message chat[] = {{"user", "test"}};
+            std::string tmpl = std::string(model_template.data(), model_template.size());
+            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
+            return chat_res > 0;
+        }
+        return false;
     }
 
     void init() {
@@ -925,14 +927,22 @@ struct server_context {
 
         {
             const auto & samplers = data.find("samplers");
-            if (samplers != data.end() && samplers->is_array()) {
-                std::vector<std::string> sampler_names;
-                for (const auto & name : *samplers) {
-                    if (name.is_string()) {
-                        sampler_names.emplace_back(name);
+            if (samplers != data.end()) {
+                if (samplers->is_array()) {
+                    std::vector<std::string> sampler_names;
+                    for (const auto & name : *samplers) {
+                        if (name.is_string()) {
+                            sampler_names.emplace_back(name);
+                        }
                     }
+                    slot.sparams.samplers = common_sampler_types_from_names(sampler_names, false);
+                } else if (samplers->is_string()){
+                    std::string sampler_string;
+                    for (const auto & name : *samplers) {
+                        sampler_string += name;
+                    }
+                    slot.sparams.samplers = common_sampler_types_from_chars(sampler_string);
                 }
-                slot.sparams.samplers = common_sampler_types_from_names(sampler_names, false);
             } else {
                 slot.sparams.samplers = default_sparams.samplers;
             }
@@ -2263,6 +2273,16 @@ int main(int argc, char ** argv) {
     LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     LOG_INF("\n");
 
+    // static files
+    std::map<std::string, server_static_file> static_files = {
+        { "/",                        { index_html,              index_html_len,              "text/html; charset=utf-8" }},
+        { "/completion.js",           { completion_js,           completion_js_len,           "text/javascript; charset=utf-8" }},
+        { "/deps_daisyui.min.css",    { deps_daisyui_min_css,    deps_daisyui_min_css_len,    "text/css; charset=utf-8" }},
+        { "/deps_markdown-it.js",     { deps_markdown_it_js,     deps_markdown_it_js_len,     "text/javascript; charset=utf-8" }},
+        { "/deps_tailwindcss.js",     { deps_tailwindcss_js,     deps_tailwindcss_js_len,     "text/javascript; charset=utf-8" }},
+        { "/deps_vue.esm-browser.js", { deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8" }},
+    };
+
     std::unique_ptr<httplib::Server> svr;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
@@ -2285,16 +2305,6 @@ int main(int argc, char ** argv) {
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
     svr->set_default_headers({{"Server", "llama.cpp"}});
-
-    // CORS preflight
-    svr->Options(R"(.*)", [](const httplib::Request &, httplib::Response & res) {
-        // Access-Control-Allow-Origin is already set by middleware
-        res.set_header("Access-Control-Allow-Credentials", "true");
-        res.set_header("Access-Control-Allow-Methods",     "POST");
-        res.set_header("Access-Control-Allow-Headers",     "*");
-        return res.set_content("", "text/html"); // blank response, no data
-    });
-
     svr->set_logger(log_server_request);
 
     auto res_error = [](httplib::Response & res, const json & error_data) {
@@ -2353,7 +2363,7 @@ int main(int argc, char ** argv) {
     // Middlewares
     //
 
-    auto middleware_validate_api_key = [&params, &res_error](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_validate_api_key = [&params, &res_error, &static_files](const httplib::Request & req, httplib::Response & res) {
         static const std::unordered_set<std::string> public_endpoints = {
             "/health",
             "/models",
@@ -2365,8 +2375,8 @@ int main(int argc, char ** argv) {
             return true;
         }
 
-        // If path is public, skip validation
-        if (public_endpoints.find(req.path) != public_endpoints.end()) {
+        // If path is public or is static file, skip validation
+        if (public_endpoints.find(req.path) != public_endpoints.end() || static_files.find(req.path) != static_files.end()) {
             return true;
         }
 
@@ -2407,6 +2417,14 @@ int main(int argc, char ** argv) {
     // register server middlewares
     svr->set_pre_routing_handler([&middleware_validate_api_key, &middleware_server_state](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        // If this is OPTIONS request, skip validation because browsers don't include Authorization header
+        if (req.method == "OPTIONS") {
+            res.set_header("Access-Control-Allow-Credentials", "true");
+            res.set_header("Access-Control-Allow-Methods",     "GET, POST");
+            res.set_header("Access-Control-Allow-Headers",     "*");
+            res.set_content("", "text/html"); // blank response, no data
+            return httplib::Server::HandlerResponse::Handled; // skip further processing
+        }
         if (!middleware_server_state(req, res)) {
             return httplib::Server::HandlerResponse::Handled;
         }
@@ -3102,13 +3120,6 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
-    auto handle_static_file = [](unsigned char * content, size_t len, const char * mime_type) {
-        return [content, len, mime_type](const httplib::Request &, httplib::Response & res) {
-            res.set_content(reinterpret_cast<const char*>(content), len, mime_type);
-            return false;
-        };
-    };
-
     //
     // Router
     //
@@ -3116,33 +3127,20 @@ int main(int argc, char ** argv) {
     // register static assets routes
     if (!params.public_path.empty()) {
         // Set the base directory for serving static files
-        svr->set_base_dir(params.public_path);
-    }
-
-    if (!params.api_keys.empty()) {
-        // for now, if API key is set, web UI is unusable
-        svr->Get("/", [&](const httplib::Request &, httplib::Response & res) {
-            return res.set_content("Web UI is disabled because API key is set.", "text/html; charset=utf-8");
-        });
+        bool is_found = svr->set_mount_point("/", params.public_path);
+        if (!is_found) {
+            LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
+            return 1;
+        }
     } else {
         // using embedded static files
-        svr->Get("/",                           handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
-        svr->Get("/index.js",                   handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/completion.js",              handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/json-schema-to-grammar.mjs", handle_static_file(json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
-
-        // add new-ui files
-        svr->Get("/colorthemes.css",       handle_static_file(colorthemes_css, colorthemes_css_len, "text/css; charset=utf-8"));
-        svr->Get("/style.css",             handle_static_file(style_css, style_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-beeninorder.css", handle_static_file(theme_beeninorder_css, theme_beeninorder_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-ketivah.css",     handle_static_file(theme_ketivah_css, theme_ketivah_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-mangotango.css",  handle_static_file(theme_mangotango_css, theme_mangotango_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-playground.css",  handle_static_file(theme_playground_css, theme_playground_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-polarnight.css",  handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
-        svr->Get("/theme-snowstorm.css",   handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
-        svr->Get("/index-new.html",        handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
-        svr->Get("/system-prompts.js",     handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
-        svr->Get("/prompt-formats.js",     handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
+        for (const auto & it : static_files) {
+            const server_static_file & static_file = it.second;
+            svr->Get(it.first.c_str(), [&static_file](const httplib::Request &, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(static_file.data), static_file.size, static_file.mime_type);
+                return false;
+            });
+        }
     }
 
     // register API routes

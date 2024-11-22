@@ -126,9 +126,9 @@ effectiveStdenv.mkDerivation (finalAttrs: {
   };
 
   postPatch = ''
-    substituteInPlace ./ggml/src/ggml-metal.m \
+    substituteInPlace ./ggml/src/ggml-metal/ggml-metal.m \
       --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
-    substituteInPlace ./ggml/src/ggml-metal.m \
+    substituteInPlace ./ggml/src/ggml-metal/ggml-metal.m \
       --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
   '';
 
@@ -173,7 +173,7 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       (cmakeBool "GGML_NATIVE" false)
       (cmakeBool "GGML_BLAS" useBlas)
       (cmakeBool "GGML_CUDA" useCuda)
-      (cmakeBool "GGML_HIPBLAS" useRocm)
+      (cmakeBool "GGML_HIP" useRocm)
       (cmakeBool "GGML_METAL" useMetalKit)
       (cmakeBool "GGML_VULKAN" useVulkan)
       (cmakeBool "GGML_STATIC" enableStatic)

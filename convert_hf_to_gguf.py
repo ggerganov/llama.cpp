@@ -3040,6 +3040,11 @@ class OlmoModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
+@Model.register("Olmo1124ForCausalLM")
+class Olmo1124Model(Model):
+    model_arch = gguf.MODEL_ARCH.OLMO_1124
+
+
 @Model.register("OlmoeForCausalLM")
 class OlmoeModel(Model):
     model_arch = gguf.MODEL_ARCH.OLMOE
@@ -3748,10 +3753,7 @@ class JaisModel(Model):
 
         # Embeddings scale
         self.embeddings_scale = 1.0
-        # note: For some JAIS flavors, output is tied to (same as) wte in original model
-        self.output_is_wte = False
         if 'mup_embeddings_scale' in self.hparams:
-            self.output_is_wte = True   # Hack (?)
             self.embeddings_scale = self.hparams['mup_embeddings_scale']
         elif 'embeddings_scale' in self.hparams:
             self.embeddings_scale = self.hparams['embeddings_scale']
@@ -3808,10 +3810,7 @@ class JaisModel(Model):
 
         if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
             tensors.append((new_name, data_torch * self.embeddings_scale))
-            if self.output_is_wte:
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch * self.width_scale))
         elif new_name == self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT):
-            assert not self.output_is_wte
             tensors.append((new_name, data_torch * self.width_scale))
         else:
             tensors.append((new_name, data_torch))

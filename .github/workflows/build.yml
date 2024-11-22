@@ -55,7 +55,13 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF ..
+          cmake .. \
+            -DLLAMA_FATAL_WARNINGS=ON \
+            -DLLAMA_CURL=ON \
+            -DGGML_METAL_USE_BF16=ON \
+            -DGGML_METAL_EMBED_LIBRARY=ON \
+            -DGGML_RPC=ON \
+            -DBUILD_SHARED_LIBS=OFF
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -113,7 +119,12 @@ jobs:
           sysctl -a
           # Metal is disabled due to intermittent failures with Github runners not having a GPU:
           # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
-          cmake -B build -DLLAMA_FATAL_WARNINGS=ON -DGGML_METAL=OFF -DLLAMA_CURL=ON -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF
+          cmake -B build \
+            -DLLAMA_FATAL_WARNINGS=ON \
+            -DLLAMA_CURL=ON \
+            -DGGML_METAL=OFF \
+            -DGGML_RPC=ON \
+            -DBUILD_SHARED_LIBS=OFF
           cmake --build build --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -394,14 +405,35 @@ jobs:
       - name: Build with native CMake HIP support
         id: cmake_build
         run: |
-          cmake -B build -S . -DCMAKE_HIP_COMPILER="$(hipconfig -l)/clang" -DGGML_HIPBLAS=ON
+          cmake -B build -S . -DCMAKE_HIP_COMPILER="$(hipconfig -l)/clang" -DGGML_HIP=ON
           cmake --build build --config Release -j $(nproc)
 
       - name: Build with legacy HIP support
         id: cmake_build_legacy_hip
         run: |
-          cmake -B build2 -S . -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc -DGGML_HIPBLAS=ON
+          cmake -B build2 -S . -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc -DGGML_HIP=ON
           cmake --build build2 --config Release -j $(nproc)
+
+  ubuntu-22-cmake-musa:
+    runs-on: ubuntu-22.04
+    container: mthreads/musa:rc3.1.0-devel-ubuntu22.04
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        run: |
+          apt-get update
+          apt-get install -y build-essential git cmake libcurl4-openssl-dev
+
+      - name: Build with native CMake MUSA support
+        id: cmake_build
+        run: |
+          cmake -B build -S . -DGGML_MUSA=ON
+          cmake --build build --config Release -j $(nproc)
 
   ubuntu-22-cmake-sycl:
     runs-on: ubuntu-22.04
@@ -569,6 +601,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DGGML_METAL_USE_BF16=ON \
             -DGGML_METAL_EMBED_LIBRARY=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
@@ -599,6 +632,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DGGML_METAL_USE_BF16=ON \
             -DGGML_METAL_EMBED_LIBRARY=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
@@ -734,7 +768,7 @@ jobs:
         id: clone_kompute
         if: ${{ matrix.build == 'kompute-x64' }}
         run: |
-          git submodule update --init ggml/src/kompute
+          git submodule update --init ggml/src/ggml-kompute/kompute
 
       - name: Download OpenBLAS
         id: get_openblas
@@ -917,7 +951,7 @@ jobs:
         shell: bash
 
     env:
-      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7dff44ba-e3af-4448-841c-0d616c8da6e7/w_BaseKit_p_2024.1.0.595_offline.exe
+      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b380d914-366b-4b77-a74a-05e3c38b3514/intel-oneapi-base-toolkit-2025.0.0.882_offline.exe
       WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel
       ONEAPI_ROOT: "C:/Program Files (x86)/Intel/oneAPI"
     steps:
@@ -1001,7 +1035,7 @@ jobs:
         run: |
           $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
           $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
-          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release -DGGML_RPC=ON
+          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIP=ON -DCMAKE_BUILD_TYPE=Release -DGGML_RPC=ON
           cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
 
   windows-latest-cmake-hip-release:
@@ -1037,7 +1071,7 @@ jobs:
         run: |
           $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
           $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
-          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release -DAMDGPU_TARGETS=${{ matrix.gpu_target }} -DGGML_RPC=ON
+          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DGGML_HIP=ON -DCMAKE_BUILD_TYPE=Release -DAMDGPU_TARGETS=${{ matrix.gpu_target }} -DGGML_RPC=ON
           cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
           md "build\bin\rocblas\library\"
           cp "${env:HIP_PATH}\bin\hipblas.dll" "build\bin\"

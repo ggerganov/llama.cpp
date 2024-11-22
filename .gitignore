@@ -3,6 +3,7 @@
 *.a
 *.bat
 *.bin
+*.d
 *.dll
 *.dot
 *.etag
@@ -133,3 +134,7 @@ poetry.toml
 
 # Test models for lora adapters
 /lora-tests
+
+# Local scripts
+/run-vim.sh
+/run-chat.sh
