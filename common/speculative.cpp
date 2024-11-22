@@ -150,7 +150,7 @@ llama_tokens common_speculative_gen_draft(
             cur++;
         }
 
-        if ((cur >= params.n_reuse || prompt_tgt.size() <= n_ctx) && cur > reuse_n) {
+        if ((cur >= params.n_reuse || n_ctx >= (int) prompt_tgt.size()) && cur > reuse_n) {
             reuse_i = i;
             reuse_n = cur;
         }
@@ -229,7 +229,7 @@ llama_tokens common_speculative_gen_draft(
 
         result.push_back(id);
 
-        if (result.size() >= params.n_draft) {
+        if (params.n_draft <= (int) result.size()) {
             break;
         }
 
