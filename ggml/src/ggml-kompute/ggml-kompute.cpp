@@ -28,8 +28,10 @@
 #include "shaderop_getrows_q4_0.h"
 #include "shaderop_getrows_q4_1.h"
 #include "shaderop_getrows_q6_k.h"
-#include "shaderop_rope_f16.h"
-#include "shaderop_rope_f32.h"
+#include "shaderop_rope_norm_f16.h"
+#include "shaderop_rope_norm_f32.h"
+#include "shaderop_rope_neox_f16.h"
+#include "shaderop_rope_neox_f32.h"
 #include "shaderop_cpy_f16_f16.h"
 #include "shaderop_cpy_f16_f32.h"
 #include "shaderop_cpy_f32_f16.h"
@@ -345,7 +347,7 @@ void ggml_vk_allocate_descriptor_pool(struct ggml_kompute_context * ctx, size_t 
     std::vector<vk::DescriptorPoolSize> descriptorPoolSizes = {
         vk::DescriptorPoolSize(
           vk::DescriptorType::eStorageBuffer,
-          3 * size // Descriptor count is number of possible tensors to pass into an algorithm
+          4 * size // Descriptor count is number of possible tensors to pass into an algorithm
           )
     };
 
@@ -1220,10 +1222,11 @@ static void ggml_vk_rope(
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
+    const std::shared_ptr<kp::Tensor>& inC,
     const std::shared_ptr<kp::Tensor>& out,
-    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
+    uint32_t inAOff, uint32_t inBOff, uint32_t inCOff, uint32_t outOff,
     ggml_type src0t, int32_t n_dims, int32_t mode, int32_t n_ctx_orig,
-    float freq_base, float freq_scale, float ext_factor, float attn_factor, float beta_fast, float beta_slow,
+    float freq_base, float freq_scale, bool has_freq_factors, float ext_factor, float attn_factor, float beta_fast, float beta_slow,
     int32_t ne01, int32_t ne02, int32_t ne03,
     uint32_t nb00, uint32_t nb01, uint32_t nb02, uint32_t nb03,
     int32_t ne0,
@@ -1231,11 +1234,17 @@ static void ggml_vk_rope(
 ) {
     GGML_ASSERT(src0t == GGML_TYPE_F16 || src0t == GGML_TYPE_F32);
 
-    static const auto spirv_f16 = getSpirvShader(
-        kp::shader_data::op_rope_f16_comp_spv, kp::shader_data::op_rope_f16_comp_spv_len
+    static const auto spirv_norm_f16 = getSpirvShader(
+        kp::shader_data::op_rope_norm_f16_comp_spv, kp::shader_data::op_rope_norm_f16_comp_spv_len
     );
-    static const auto spirv_f32 = getSpirvShader(
-        kp::shader_data::op_rope_f32_comp_spv, kp::shader_data::op_rope_f32_comp_spv_len
+    static const auto spirv_norm_f32 = getSpirvShader(
+        kp::shader_data::op_rope_norm_f32_comp_spv, kp::shader_data::op_rope_norm_f32_comp_spv_len
+    );
+    static const auto spirv_neox_f16 = getSpirvShader(
+        kp::shader_data::op_rope_neox_f16_comp_spv, kp::shader_data::op_rope_neox_f16_comp_spv_len
+    );
+    static const auto spirv_neox_f32 = getSpirvShader(
+        kp::shader_data::op_rope_neox_f32_comp_spv, kp::shader_data::op_rope_neox_f32_comp_spv_len
     );
 
     int type_size = src0t == GGML_TYPE_F16 ? 2 : 4;
@@ -1250,32 +1259,40 @@ static void ggml_vk_rope(
     GGML_ASSERT(nb0  % type_size == 0);
 
     struct PushConstants {
-        uint32_t inAOff, inBOff, outOff;
+        uint32_t inAOff, inBOff, inCOff, outOff;
         int32_t n_dims, mode, n_ctx_orig;
-        float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
+        float freq_base, freq_scale;
+        bool has_freq_factors;
+        float ext_factor, attn_factor, beta_fast, beta_slow;
         uint32_t nb00, nb01, nb02, nb03;
         int32_t ne0;
         uint32_t nb0, nb1, nb2, nb3;
     } pushConsts {
-        safe_divide(inAOff, type_size), safe_divide(inBOff, 4), safe_divide(outOff, type_size),
+        safe_divide(inAOff, type_size), safe_divide(inBOff, 4), safe_divide(inCOff, type_size), safe_divide(outOff, type_size),
         n_dims, mode, n_ctx_orig,
-        freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow,
+        freq_base, freq_scale,
+        has_freq_factors,
+        ext_factor, attn_factor, beta_fast, beta_slow,
         nb00, nb01, nb02, nb03,
         ne0,
         nb0, nb1, nb2, nb3
     };
 
-    auto name = std::string(__func__) + (src0t == GGML_TYPE_F16 ? "_f16" : "_f32");
+    auto & inC_ = inC ? inC : inA;
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
+    const bool is_f16 = src0t == GGML_TYPE_F16;
+
+    auto name = std::string(__func__) + (is_neox ? "_neox" : "_norm") + (src0t == GGML_TYPE_F16 ? "_f16" : "_f32");
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(name)) {
+        auto & spirv = is_neox ? is_f16 ? spirv_neox_f16 : spirv_neox_f32 : is_f16 ? spirv_norm_f16 : spirv_norm_f32;
         s_algo = komputeManager()->algorithm<float, PushConstants>(
-            name, s_kompute_context->pool.get(), {inA, inB, out},
-            src0t == GGML_TYPE_F16 ? spirv_f16 : spirv_f32,
+            name, s_kompute_context->pool.get(), {inA, inB, inC_, out}, spirv,
             {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts}
         );
     } else {
         s_algo = komputeManager()->getAlgorithm(name);
-        s_algo->setTensors({inA, inB, out});
+        s_algo->setTensors({inA, inB, inC_, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
@@ -1522,9 +1539,11 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
             const static std::shared_ptr<kp::Tensor> nullTensor = nullptr;
             uint32_t off_src0 = 0;
             uint32_t off_src1 = 0;
+            uint32_t off_src2 = 0;
             uint32_t off_dst  = 0;
             const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(src0, &off_src0) : nullTensor;
             const std::shared_ptr<kp::Tensor>& id_src1 = src1 ? ggml_vk_get_tensor(src1, &off_src1) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_src2 = src2 ? ggml_vk_get_tensor(src2, &off_src2) : nullTensor;
             const std::shared_ptr<kp::Tensor>& id_dst  = dst  ? ggml_vk_get_tensor(dst,  &off_dst)  : nullTensor;
 
             switch (dst->op) {
@@ -1721,13 +1740,6 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                     } break;
                 case GGML_OP_ROPE:
                     {
-#pragma message("TODO: implement phi3 frequency factors support")
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225")
-                        GGML_ASSERT(dst->src[2] == nullptr && "phi3 frequency factors not implemented yet");
-
-#pragma message("TODO: update rope NORM mode to match NEOX mode")
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
-
                         GGML_ASSERT(ne10 == ne02);
                         GGML_ASSERT(src0t == dstt);
                         // const int n_past = ((int32_t *) dst->op_params)[0];
@@ -1735,6 +1747,8 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                         const int mode       = ((int32_t *) dst->op_params)[2];
                         // skip 3, n_ctx used in GLM RoPE, unimplemented in Vulkan
                         const int n_ctx_orig = ((int32_t *) dst->op_params)[4];
+
+                        const bool has_freq_factors = dst->src[2] != nullptr;
 
                         float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
                         memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));
@@ -1744,8 +1758,8 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                         memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
                         memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
                         ggml_vk_rope(
-                            seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, src0t, n_dims, mode, n_ctx_orig,
-                            freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow,
+                            seq, id_src0, id_src1, id_src2, id_dst, off_src0, off_src1, off_src2, off_dst, src0t, n_dims, mode, n_ctx_orig,
+                            freq_base, freq_scale, has_freq_factors, ext_factor, attn_factor, beta_fast, beta_slow,
                             ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, nb0, nb1, nb2, nb3
                         );
                     } break;
