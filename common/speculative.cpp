@@ -10,24 +10,19 @@
 #define SPEC_VOCAB_CHECK_START_TOKEN_ID 5
 
 struct common_speculative {
-    struct common_speculative_params params;
-
-    llama_batch batch;
-
     struct llama_context * ctx;
     struct common_sampler * smpl;
 
+    llama_batch batch;
     llama_tokens prompt;
 };
 
 struct common_speculative * common_speculative_init(
-        struct common_speculative_params params,
         struct llama_context * ctx_dft) {
     auto * result = new common_speculative {
-        /* .params = */ params,
-        /* .batch  = */ llama_batch_init(llama_n_batch(ctx_dft), 0, 1),
         /* .ctx    = */ ctx_dft,
         /* .smpl   = */ nullptr,
+        /* .batch  = */ llama_batch_init(llama_n_batch(ctx_dft), 0, 1),
         /* .prompt = */ {},
     };
 
@@ -130,12 +125,11 @@ bool common_speculative_are_compatible(
     return true;
 }
 
-void common_speculative_add_draft(
+llama_tokens common_speculative_gen_draft(
         struct common_speculative * spec,
-        struct llama_batch & batch_tgt,
+        struct common_speculative_params params,
         const llama_tokens & prompt_tgt,
-        llama_token id_last,
-        llama_token n_past_tgt) {
+        llama_token id_last) {
     auto & batch  = spec->batch;
     auto & ctx    = spec->ctx;
     auto & smpl   = spec->smpl;
@@ -144,7 +138,7 @@ void common_speculative_add_draft(
     int reuse_i = 0;
     int reuse_n = 0;
 
-    const int n_ctx = llama_n_ctx(ctx) - spec->params.n_draft;
+    const int n_ctx = llama_n_ctx(ctx) - params.n_draft;
 
     const int i_start = std::max<int>(0, (int) prompt_tgt.size() - n_ctx);
 
@@ -156,7 +150,7 @@ void common_speculative_add_draft(
             cur++;
         }
 
-        if ((cur >= spec->params.n_reuse || prompt_tgt.size() <= n_ctx) && cur > reuse_n) {
+        if ((cur >= params.n_reuse || prompt_tgt.size() <= n_ctx) && cur > reuse_n) {
             reuse_i = i;
             reuse_n = cur;
         }
@@ -207,8 +201,11 @@ void common_speculative_add_draft(
 
     common_sampler_reset(smpl);
 
+    llama_tokens result;
+    result.reserve(params.n_draft);
+
     // sample n_draft tokens from the draft model
-    for (int i = 0; i < spec->params.n_draft; ++i) {
+    for (int i = 0; i < params.n_draft; ++i) {
         common_batch_clear(batch);
 
         common_sampler_sample(smpl, ctx, 0, true);
@@ -224,15 +221,15 @@ void common_speculative_add_draft(
         const llama_token id = cur_p->data[0].id;
 
         // only collect very high-confidence draft tokens
-        if (cur_p->data[0].p < spec->params.p_min) {
+        if (cur_p->data[0].p < params.p_min) {
             break;
         }
 
         common_sampler_accept(smpl, id, true);
 
-        common_batch_add(batch_tgt, id, n_past_tgt + i, { 0 }, true);
+        result.push_back(id);
 
-        if (batch_tgt.n_tokens > spec->params.n_draft) {
+        if (result.size() >= params.n_draft) {
             break;
         }
 
@@ -244,9 +241,5 @@ void common_speculative_add_draft(
         prompt.push_back(id);
     }
 
-    // don't waste time on small batches
-    // TODO: do not evaluate the draft model for that many rounds
-    if (batch_tgt.n_tokens < spec->params.n_min) {
-        batch_tgt.n_tokens = 1;
-    }
+    return result;
 }

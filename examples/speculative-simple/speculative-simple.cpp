@@ -13,6 +13,9 @@
 int main(int argc, char ** argv) {
     common_params params;
 
+    // minimum size of the draft to use
+    const int n_min = 5;
+
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
     }
@@ -92,31 +95,29 @@ int main(int argc, char ** argv) {
     // everything until here is standard initialization
     // the relevant stuff for speculative decoding starts here
 
-    const int n_input = inp.size();
-
     const auto t_enc_start = ggml_time_us();
 
     // target model sampling context
     struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
 
     // eval the prompt
-    llama_decode(ctx_tgt, llama_batch_get_one(inp.data(), n_input - 1));
+    llama_decode(ctx_tgt, llama_batch_get_one(inp.data(), inp.size() - 1));
 
     // note: keep the last token separate!
     llama_token id_last = inp.back();
 
-    auto prompt_dft = std::vector<llama_token>(inp.begin(), inp.end() - 1);
+    // all tokens currently in the target context
+    auto prompt_tgt = std::vector<llama_token>(inp.begin(), inp.end() - 1);
 
     int n_past = inp.size() - 1;
 
     // init the speculator
     struct common_speculative_params params_spec;
     params_spec.n_draft   = n_draft;
-    params_spec.n_min     = 5;
     params_spec.n_reuse   = 256;
     params_spec.p_min     = 0.9f;
 
-    struct common_speculative * spec = common_speculative_init(params_spec, ctx_dft);
+    struct common_speculative * spec = common_speculative_init(ctx_dft);
 
     llama_batch batch_tgt = llama_batch_init(llama_n_batch(ctx_tgt), 0, 1);
 
@@ -125,21 +126,30 @@ int main(int argc, char ** argv) {
     const auto t_dec_start = ggml_time_us();
 
     while (true) {
-        // always have a token to evaluate from before
-        common_batch_clear(batch_tgt);
-        common_batch_add  (batch_tgt, id_last, n_past, { 0 }, true);
-
-        // optionally, append draft tokens to the target batch
+        // optionally, generate draft tokens that can be appended to the target batch
         //
         // this is the most important part of the speculation. the more probable tokens that are provided here
         // the better the performance will be. in theory, this computation can be performed asynchronously and even
         // offloaded to a remote device. it doesn't even have to be based on an LLM. instead, it can provide tokens
         // from a cache or lookup tables.
         //
-        common_speculative_add_draft(spec, batch_tgt, prompt_dft, id_last, n_past + 1);
+        llama_tokens draft = common_speculative_gen_draft(spec, params_spec, prompt_tgt, id_last);
+
+        // always have a token to evaluate from before - id_last
+        common_batch_clear(batch_tgt);
+        common_batch_add  (batch_tgt, id_last, n_past++, { 0 }, true);
 
         // evaluate the target model on [id_last, draft0, draft1, ..., draftN-1]
         {
+            // do not waste time on small drafts
+            if (draft.size() < n_min) {
+                draft.clear();
+            }
+
+            for (size_t i = 0; i < draft.size(); ++i) {
+                common_batch_add(batch_tgt, draft[i], n_past + i, { 0 }, true);
+            }
+
             //LOG_DBG("target batch: %s\n", string_from(ctx_tgt, batch_tgt).c_str());
 
             llama_decode(ctx_tgt, batch_tgt);
@@ -152,11 +162,11 @@ int main(int argc, char ** argv) {
         // available logits from the batch and sample the next token until we run out of logits or the sampler
         // disagrees with the draft
         //
-        const auto ids = common_sampler_sample_n(smpl, ctx_tgt, batch_tgt);
+        const auto ids = common_sampler_sample_n(smpl, ctx_tgt, draft);
 
         GGML_ASSERT(ids.size() > 0); // there will always be at least one accepted token
 
-        n_past    += ids.size();
+        n_past    += ids.size() - 1;
         n_drafted += batch_tgt.n_tokens - 1;
         n_accept  += ids.size() - 1;
 
@@ -192,7 +202,7 @@ int main(int argc, char ** argv) {
                 break;
             }
 
-            LOG_DBG("accepted %d draft tokens, the last target token is: (%d, '%s')\n", (int) ids.size() - 1, id, token_str.c_str());
+            LOG_DBG("accepted %d/%d draft tokens, the last target token is: (%d, '%s')\n", (int) ids.size() - 1, (int) draft.size(), id, token_str.c_str());
 
             {
                 LOG_DBG("clear kv cache from any extra tokens, n_past = %d\n", n_past);
@@ -200,8 +210,8 @@ int main(int argc, char ** argv) {
                 llama_kv_cache_seq_rm(ctx_tgt, 0, n_past, -1);
             }
 
-            prompt_dft.push_back(id_last);
-            prompt_dft.insert(prompt_dft.end(), ids.begin(), ids.end() - 1);
+            prompt_tgt.push_back(id_last);
+            prompt_tgt.insert(prompt_tgt.end(), ids.begin(), ids.end() - 1);
 
             // remember the last accepted token for the next iteration
             id_last = id;
@@ -209,6 +219,8 @@ int main(int argc, char ** argv) {
     }
 
     auto t_dec_end = ggml_time_us();
+
+    const int n_input = inp.size();
 
     LOG("\n\n");
 
