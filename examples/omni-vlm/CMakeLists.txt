@@ -40,7 +40,14 @@ target_compile_features(${TARGET} PRIVATE cxx_std_11)
 #=== for omni-vlm-wrapper
 add_library(omni_vlm_wrapper_shared SHARED omni-vlm-wrapper.cpp $<TARGET_OBJECTS:omni_vlm>)
 target_link_libraries(omni_vlm_wrapper_shared PRIVATE common ggml_llama llama ${CMAKE_THREAD_LIBS_INIT})
-install(TARGETS omni_vlm_wrapper_shared LIBRARY)
+# For Nexa SDK library installation
+set_target_properties(omni_vlm_wrapper_shared PROPERTIES
+                     PUBLIC_HEADER "omni-vlm-wrapper.h"
+                     POSITION_INDEPENDENT_CODE ON
+                     OUTPUT_NAME "omni_vlm_wrapper_shared")
+install(TARGETS omni_vlm_wrapper_shared 
+        LIBRARY
+        PUBLIC_HEADER DESTINATION include)
 
 # set(TARGET omni-vlm-wrapper-cli)
 # add_executable(${TARGET} omni-vlm-wrapper-cli.cpp)
