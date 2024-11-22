@@ -1,0 +1,73 @@
+name: Bug (compilation)
+description: Something goes wrong when trying to compile llama.cpp.
+title: "Compile bug: "
+labels: ["bug-unconfirmed", "compilation"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for taking the time to fill out this bug report!
+        This issue template is intended for bug reports where the compilation of llama.cpp fails.
+        Before opening an issue, please confirm that the compilation still fails with `-DGGML_CCACHE=OFF`.
+        If the compilation succeeds with ccache disabled you should be able to permanently fix the issue
+        by clearing `~/.cache/ccache` (on Linux).
+  - type: textarea
+    id: commit
+    attributes:
+      label: Git commit
+      description: Which commit are you trying to compile?
+      placeholder: |
+        $git rev-parse HEAD
+        84a07a17b1b08cf2b9747c633a2372782848a27f
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Which operating systems do you know to be affected?
+      multiple: true
+      options:
+        - Linux
+        - Mac
+        - Windows
+        - BSD
+        - Other? (Please let us know in description)
+    validations:
+      required: true
+  - type: dropdown
+    id: backends
+    attributes:
+        label: GGML backends
+        description: Which GGML backends do you know to be affected?
+        options: [AMX, BLAS, CPU, CUDA, HIP, Kompute, Metal, Musa, RPC, SYCL, Vulkan]
+        multiple: true
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: >
+        Please tell us how to reproduce the bug and any additional information that you think could be useful for fixing it.
+        If you can narrow down the bug to specific compile flags, that information would be very much appreciated by us.
+      placeholder: >
+        Here are the exact commands that I used: ...
+    validations:
+      required: true
+  - type: textarea
+    id: first_bad_commit
+    attributes:
+      label: First Bad Commit
+      description: >
+        If the bug was not present on an earlier version: when did it start appearing?
+        If possible, please do a git bisect and identify the exact commit that introduced the bug.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+          Please copy and paste any relevant log output, including the command that you entered and any generated text.
+          This will be automatically formatted into code, so no need for backticks.
+      render: shell
+    validations:
+      required: true
