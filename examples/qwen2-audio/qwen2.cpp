@@ -18,10 +18,12 @@
 #include <thread>
 #include <vector>
 #include <cstring>
+#include <iostream>
 
 //
 // Constants
 //
+void* internal_chars = nullptr;
 
 static const char *AUDIO_TOKEN = "<|AUDIO|>";
 
@@ -565,16 +567,16 @@ bool omni_params_parse(int argc, char **argv, omni_params &params)
 static omni_params get_omni_params_from_context_params(omni_context_params &params)
 {
     omni_params all_params;
-    
+
     // Initialize gpt params
     all_params.gpt.n_gpu_layers = params.n_gpu_layers;
     all_params.gpt.model = params.model;
     all_params.gpt.prompt = params.prompt;
-    
+
     // Initialize whisper params
     all_params.whisper.model = params.mmproj;
     all_params.whisper.fname_inp = {params.file};
-    
+
     if (all_params.gpt.n_threads <= 0)
     {
         all_params.gpt.n_threads = std::thread::hardware_concurrency();
@@ -703,6 +705,12 @@ struct omni_context *omni_init_context(omni_context_params &params)
 
 void omni_free(struct omni_context *ctx_omni)
 {
+
+    if(internal_chars != nullptr)
+    {
+        free(internal_chars);
+        internal_chars = nullptr;
+    }
     if (ctx_omni->ctx_whisper)
     {
         whisper_free(ctx_omni->ctx_whisper);
@@ -710,12 +718,13 @@ void omni_free(struct omni_context *ctx_omni)
     }
     if (ctx_omni->projector)
     {
-        ctx_omni->projector->free();
+        delete ctx_omni->projector;
     }
 
     llama_free(ctx_omni->ctx_llama);
     llama_free_model(ctx_omni->model);
     llama_backend_free();
+    free(ctx_omni);
 }
 
 static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_embed, int n_batch, int *n_past)
@@ -755,6 +764,7 @@ static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_e
         }
         *n_past += n_eval;
     }
+    free(audio_embed_data);
     return true;
 }
 
@@ -792,7 +802,7 @@ ggml_tensor *omni_process_audio(struct omni_context *ctx_omni, omni_params &para
     return embed_proj;
 }
 
-void omni_process_prompt(struct omni_context *ctx_omni, ggml_tensor *audio_embed, omni_params &params, const std::string &prompt)
+const char* omni_process_prompt(struct omni_context *ctx_omni, ggml_tensor *audio_embed, omni_params &params, const std::string &prompt)
 {
     int n_past = 0;
 
@@ -841,12 +851,11 @@ void omni_process_prompt(struct omni_context *ctx_omni, ggml_tensor *audio_embed
     for (int i = 0; i < max_tgt_len; i++)
     {
         const char * tmp = sample(ctx_sampling, ctx_omni->ctx_llama, &n_past);
-        response += tmp;
         if (strcmp(tmp, "</s>") == 0)
             break;
         if (strstr(tmp, "###"))
             break; // Yi-VL behavior
-        printf("%s", tmp);
+        // printf("%s", tmp);
         if (strstr(response.c_str(), "<|im_end|>"))
             break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
         if (strstr(response.c_str(), "<|im_start|>"))
@@ -855,16 +864,23 @@ void omni_process_prompt(struct omni_context *ctx_omni, ggml_tensor *audio_embed
             break; // mistral llava-1.6
 
         fflush(stdout);
+        response += tmp;
     }
 
     llama_sampling_free(ctx_sampling);
     printf("\n");
+
+    if(internal_chars != nullptr) { free(internal_chars); }
+    internal_chars = malloc(sizeof(char)*(response.size()+1));
+    strncpy((char*)(internal_chars), response.c_str(), response.size());
+    ((char*)(internal_chars))[response.size()] = '\0';
+    return (const char*)(internal_chars);
 }
 
-void omni_process_full(struct omni_context *ctx_omni, omni_context_params &params)
+const char* omni_process_full(struct omni_context *ctx_omni, omni_context_params &params)
 {
     omni_params all_params = get_omni_params_from_context_params(params);
 
     ggml_tensor *audio_embed = omni_process_audio(ctx_omni, all_params);
-    omni_process_prompt(ctx_omni, audio_embed, all_params, all_params.gpt.prompt);
+    return omni_process_prompt(ctx_omni, audio_embed, all_params, all_params.gpt.prompt);
 }

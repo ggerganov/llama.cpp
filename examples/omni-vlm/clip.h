@@ -39,8 +39,11 @@ struct clip_image_f32_batch {
     size_t size;
 };
 
-CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
+CLIP_API struct clip_ctx * clip_model_load    (const char * fname, const char * omni_vlm_version, int verbosity);
 CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity);
+
+// struct gpt_params;
+// CLIP_API void clip_set_omni_vlm_version(struct clip_ctx * ctx_clip, const struct gpt_params * params);
 
 CLIP_API void clip_free(struct clip_ctx * ctx);
 
@@ -83,7 +86,7 @@ CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ct
 CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec);
 CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
 
-CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype);
+CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype, const char * omni_vlm_version);
 
 CLIP_API int clip_is_minicpmv(const struct clip_ctx * ctx);
 
