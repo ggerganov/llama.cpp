@@ -5,20 +5,13 @@
 #include "log.h"
 #include "llama.h"
 
-#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 
-#define SPEC_VOCAB_MAX_SIZE_DIFFERENCE  128
-#define SPEC_VOCAB_CHECK_START_TOKEN_ID 5
-
 int main(int argc, char ** argv) {
     common_params params;
-
-    // needed to get candidate probs even for temp <= 0.0
-    params.sparams.n_probs = 128;
 
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
@@ -63,53 +56,8 @@ int main(int argc, char ** argv) {
     model_dft = llama_init_dft.model;
     ctx_dft = llama_init_dft.context;
 
-    const bool vocab_type_tgt = llama_vocab_type(model_tgt);
-    LOG_DBG("vocab_type tgt: %d\n", vocab_type_tgt);
-
-    const bool vocab_type_dft = llama_vocab_type(model_dft);
-    LOG_DBG("vocab_type dft: %d\n", vocab_type_dft);
-
-    if (vocab_type_tgt != vocab_type_dft) {
-        LOG_ERR("%s: draft model vocab type must match target model to use speculation but ", __func__);
-        LOG_ERR("vocab_type_dft = %d while vocab_type_tgt = %d\n", vocab_type_dft, vocab_type_tgt);
+    if (!common_speculative_are_compatible(ctx_tgt, ctx_dft)) {
         return 1;
-    }
-
-    if (
-        llama_add_bos_token(model_tgt) != llama_add_bos_token(model_dft) ||
-        llama_add_eos_token(model_tgt) != llama_add_eos_token(model_dft) ||
-        llama_token_bos(model_tgt) != llama_token_bos(model_dft) ||
-        llama_token_eos(model_tgt) != llama_token_eos(model_dft)
-    ) {
-        LOG_ERR("%s: draft model special tokens must match target model to use speculation\n", __func__);
-        return 1;
-    }
-
-    {
-        const int n_vocab_tgt = llama_n_vocab(model_tgt);
-        const int n_vocab_dft = llama_n_vocab(model_dft);
-        const int vocab_diff  = n_vocab_tgt > n_vocab_dft
-            ? n_vocab_tgt - n_vocab_dft
-            : n_vocab_dft - n_vocab_tgt;
-
-        if (vocab_diff > SPEC_VOCAB_MAX_SIZE_DIFFERENCE) {
-            LOG_ERR("%s: draft model vocab must closely match target model to use speculation but ", __func__);
-            LOG_ERR("target vocab size %d does not match draft vocab size %d - difference %d, max allowed %d\n",
-                    n_vocab_tgt, llama_n_vocab(model_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
-            return 1;
-        }
-
-        for (int i = SPEC_VOCAB_CHECK_START_TOKEN_ID; i < std::min(n_vocab_tgt, n_vocab_dft); ++i) {
-            const char * token_text_tgt = llama_token_get_text(model_tgt, i);
-            const char * token_text_dft = llama_token_get_text(model_dft, i);
-            if (std::strcmp(token_text_tgt, token_text_dft) != 0) {
-                LOG_ERR("%s: draft model vocab must match target model to use speculation but ", __func__);
-                LOG_ERR("token %d content differs - target '%s', draft '%s'\n", i,
-                        common_token_to_piece(ctx_tgt, i).c_str(),
-                        common_token_to_piece(ctx_dft, i).c_str());
-                return 1;
-            }
-        }
     }
 
     // Tokenize the prompt
@@ -167,10 +115,8 @@ int main(int argc, char ** argv) {
     params_spec.n_min     = 5;
     params_spec.n_reuse   = 256;
     params_spec.p_min     = 0.9f;
-    params_spec.model_dft = model_dft;
-    params_spec.ctx_dft   = ctx_dft;
 
-    struct common_speculative * spec = common_speculative_init(params_spec);
+    struct common_speculative * spec = common_speculative_init(params_spec, ctx_dft);
 
     llama_batch batch_tgt = llama_batch_init(llama_n_batch(ctx_tgt), 0, 1);
 

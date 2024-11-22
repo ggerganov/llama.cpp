@@ -11,15 +11,17 @@ struct common_speculative_params {
     int n_reuse = 256;
 
     float p_min = 0.9f;
-
-    struct llama_model * model_dft = nullptr;
-
-    struct llama_context * ctx_dft = nullptr;
 };
 
-struct common_speculative * common_speculative_init(struct common_speculative_params params);
+struct common_speculative * common_speculative_init(
+        struct common_speculative_params params,
+        struct llama_context * ctx_dft);
 
 void common_speculative_free(struct common_speculative * spec);
+
+bool common_speculative_are_compatible(
+        const struct llama_context * ctx_tgt,
+        const struct llama_context * ctx_dft);
 
 // sample up to n_draft tokens and add them to the batch using the draft model
 //
