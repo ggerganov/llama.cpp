@@ -65,6 +65,13 @@ static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUA
 #define VK_LOG_DEBUG(msg) ((void) 0)
 #endif // GGML_VULKAN_DEBUG
 
+#ifdef GGML_VULKAN_V1_2_162
+#ifdef VK_NULL_HANDLE
+    #undef VK_NULL_HANDLE
+    #define VK_NULL_HANDLE nullptr
+#endif // VK_NULL_HANDLE
+#endif // GGML_VULKAN_V1_2_162
+
 struct ggml_backend_vk_context;
 
 struct vk_queue {
@@ -865,6 +872,16 @@ static void ggml_vk_submit(vk_context& ctx, vk::Fence fence) {
                 tl_signal_vals[idx].push_back(submission.signal_semaphores[i].value);
                 tl_signal_semaphores[idx].push_back(submission.signal_semaphores[i].s);
             }
+#if defined(GGML_VULKAN_V1_2_162)
+            vk::TimelineSemaphoreSubmitInfo timeline_info(
+                (uint32_t) submission.wait_semaphores.size(),
+                tl_wait_vals[idx].data(),
+                (uint32_t) submission.signal_semaphores.size(),
+                tl_signal_vals[idx].data()
+            );
+            timeline_info.setPNext(nullptr);
+            tl_submit_infos.push_back(timeline_info);
+#else
             tl_submit_infos.push_back({
                 (uint32_t) submission.wait_semaphores.size(),
                 tl_wait_vals[idx].data(),
@@ -873,6 +890,7 @@ static void ggml_vk_submit(vk_context& ctx, vk::Fence fence) {
             });
             tl_submit_infos[idx].sType = vk::StructureType::eTimelineSemaphoreSubmitInfo;
             tl_submit_infos[idx].pNext = nullptr;
+#endif
             vk::SubmitInfo si{
                 (uint32_t) submission.wait_semaphores.size(),
                 tl_wait_semaphores[idx].data(),
@@ -1846,13 +1864,17 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         vk::PhysicalDeviceProperties2 props2;
         vk::PhysicalDeviceMaintenance3Properties props3;
+#ifndef GGML_VULKAN_V1_2_162
         vk::PhysicalDeviceMaintenance4Properties props4;
+#endif // GGML_VULKAN_V1_2_162
         vk::PhysicalDeviceSubgroupProperties subgroup_props;
         props2.pNext = &props3;
         props3.pNext = &subgroup_props;
+#ifndef GGML_VULKAN_V1_2_162
         if (maintenance4_support) {
             subgroup_props.pNext = &props4;
         }
+#endif // GGML_VULKAN_V1_2_162
         device->physical_device.getProperties2(&props2);
         device->properties = props2.properties;
 
@@ -1860,8 +1882,10 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         if (GGML_VK_FORCE_MAX_ALLOCATION_SIZE != nullptr) {
             device->max_memory_allocation_size = std::stoi(GGML_VK_FORCE_MAX_ALLOCATION_SIZE);
+#ifndef GGML_VULKAN_V1_2_162
         } else if (maintenance4_support) {
             device->max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
+#endif // GGML_VULKAN_V1_2_162
         } else {
             device->max_memory_allocation_size = props3.maxMemoryAllocationSize;
         }
