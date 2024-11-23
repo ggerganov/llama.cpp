@@ -4396,3 +4396,5 @@ ggml_backend_reg_t ggml_backend_metal_reg(void) {
 
     return &g_ggml_backend_metal_reg;
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_metal_reg)

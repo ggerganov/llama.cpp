@@ -377,6 +377,9 @@ void common_init() {
 #endif
 
     LOG_INF("build: %d (%s) with %s for %s%s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET, build_type);
+
+    // load dynamic backends
+    ggml_backend_load_all();
 }
 
 std::string common_params_get_system_info(const common_params & params) {

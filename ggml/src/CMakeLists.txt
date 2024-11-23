@@ -202,6 +202,10 @@ endif()
 
 # ggml
 
+if (GGML_BACKEND_DL)
+    add_compile_definitions(GGML_BACKEND_DL)
+endif()
+
 add_library(ggml-base
             ../include/ggml.h
             ../include/ggml-alloc.h
@@ -239,11 +243,18 @@ function(ggml_add_backend backend)
             if (${BUILD_SHARED_LIBS})
                 target_compile_definitions(${backend_target} PRIVATE GGML_BACKEND_BUILD)
                 target_compile_definitions(${backend_target} PUBLIC  GGML_BACKEND_SHARED)
+                if (GGML_BACKEND_DL)
+                    target_compile_definitions(${backend_target} PRIVATE GGML_BACKEND_DL)
+                endif()
             endif()
-            install(TARGETS ${backend_target} LIBRARY)
-            target_link_libraries(ggml PUBLIC ${backend_target})
-            string(TOUPPER "GGML_USE_${backend}" backend_use)
-            target_compile_definitions(ggml PUBLIC ${backend_use})
+            if (GGML_BACKEND_DL)
+                install(TARGETS ${backend_target} RUNTIME)
+            else()
+                install(TARGETS ${backend_target} LIBRARY)
+                target_link_libraries(ggml PUBLIC ${backend_target})
+                string(TOUPPER "GGML_USE_${backend}" backend_use)
+                target_compile_definitions(ggml PUBLIC ${backend_use})
+            endif()
         endif()
     endif()
 endfunction()

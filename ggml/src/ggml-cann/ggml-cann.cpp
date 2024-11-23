@@ -2126,3 +2126,5 @@ void ggml_backend_cann_get_device_memory(int32_t device, size_t* free,
     ggml_cann_set_device(device);
     ACL_CHECK(aclrtGetMemInfo(ACL_HBM_MEM, free, total));
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_cann_reg)

@@ -512,3 +512,5 @@ ggml_backend_reg_t ggml_backend_blas_reg(void) {
 
     return &ggml_backend_blas_reg;
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_blas_reg)

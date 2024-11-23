@@ -1,11 +1,13 @@
 #include "ggml-backend-impl.h"
 #include "ggml-backend.h"
-#include "ggml-cpu.h"
 #include "ggml-impl.h"
 #include <cstring>
 #include <vector>
 
 // Backend registry
+#ifdef GGML_USE_CPU
+#include "ggml-cpu.h"
+#endif
 
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
@@ -75,8 +77,9 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_KOMPUTE
         register_backend(ggml_backend_kompute_reg());
 #endif
-
+#ifdef GGML_USE_CPU
         register_backend(ggml_backend_cpu_reg());
+#endif
     }
 
     void register_backend(ggml_backend_reg_t reg) {
@@ -192,4 +195,87 @@ ggml_backend_t ggml_backend_init_best(void) {
         return NULL;
     }
     return ggml_backend_dev_init(dev, NULL);
+}
+
+#ifdef _WIN32
+#    define WIN32_LEAN_AND_MEAN
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
+#else
+#    include <dlfcn.h>
+#endif
+
+typedef ggml_backend_reg_t (*ggml_backend_init_t)(void);
+
+ggml_backend_reg_t ggml_backend_load(const char * path) {
+#ifdef _WIN32
+    HMODULE handle = LoadLibraryA(path);
+    if (!handle) {
+        GGML_LOG_ERROR("%s: failed to load %s: %lu\n", __func__, path, GetLastError());
+        return NULL;
+    }
+    ggml_backend_init_t backend_init = (ggml_backend_init_t) GetProcAddress(handle, "ggml_backend_init");
+    if (!backend_init) {
+        GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %lu\n", __func__, path, GetLastError());
+        FreeLibrary(handle);
+        return NULL;
+    }
+    ggml_backend_reg_t reg = backend_init();
+    if (!reg) {
+        GGML_LOG_ERROR("%s: failed to initialize backend from %s\n", __func__, path);
+        FreeLibrary(handle);
+        return NULL;
+    }
+    GGML_LOG_DEBUG("%s: loaded %s backend from %s\n", __func__, ggml_backend_reg_name(reg), path);
+    ggml_backend_register(reg);
+    return reg;
+#else
+    void * handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+    if (!handle) {
+        GGML_LOG_ERROR("%s: failed to load %s: %s\n", __func__, path, dlerror());
+        return NULL;
+    }
+    auto * backend_init = (ggml_backend_init_t) dlsym(handle, "ggml_backend_init");
+    if (!backend_init) {
+        GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %s\n", __func__, path, dlerror());
+        dlclose(handle);
+        return NULL;
+    }
+    ggml_backend_reg_t reg = backend_init();
+    if (!reg) {
+        GGML_LOG_ERROR("%s: failed to initialize backend from %s\n", __func__, path);
+        dlclose(handle);
+        return NULL;
+    }
+    GGML_LOG_DEBUG("%s: loaded %s backend from %s\n", __func__, ggml_backend_reg_name(reg), path);
+    ggml_backend_register(reg);
+    return reg;
+#endif
+}
+
+void ggml_backend_load_all() {
+#ifdef _WIN32
+    #define GGML_BACKEND_PATH(backend) "ggml-" backend ".dll"
+#elif defined(__APPLE__)
+    // path is hardcoded to the cmake build directory for now
+    // FIXME: should also search default system paths
+    #define GGML_BACKEND_PATH(backend) "build/ggml/src/ggml-" backend "/libggml-" backend ".dylib"
+#else
+    #define GGML_BACKEND_PATH(backend) "build/ggml/src/ggml-" backend "/libggml-" backend ".so"
+#endif
+
+    ggml_backend_load(GGML_BACKEND_PATH("amx"));
+    ggml_backend_load(GGML_BACKEND_PATH("blas"));
+    ggml_backend_load(GGML_BACKEND_PATH("cann"));
+    ggml_backend_load(GGML_BACKEND_PATH("cuda"));
+    ggml_backend_load(GGML_BACKEND_PATH("hip"));
+    ggml_backend_load(GGML_BACKEND_PATH("kompute"));
+    ggml_backend_load(GGML_BACKEND_PATH("metal"));
+    ggml_backend_load(GGML_BACKEND_PATH("rpc"));
+    ggml_backend_load(GGML_BACKEND_PATH("sycl"));
+    ggml_backend_load(GGML_BACKEND_PATH("vulkan"));
+    ggml_backend_load(GGML_BACKEND_PATH("musa"));
+    ggml_backend_load(GGML_BACKEND_PATH("cpu"));
 }

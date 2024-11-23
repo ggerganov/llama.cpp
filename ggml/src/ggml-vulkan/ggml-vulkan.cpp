@@ -7365,3 +7365,5 @@ static void ggml_vk_check_results_1(ggml_tensor * tensor) {
     VK_LOG_DEBUG("END ggml_vk_check_results_1(" << tensor->name << ")");
 }
 #endif
+
+GGML_BACKEND_DL_IMPL(ggml_backend_vk_reg)

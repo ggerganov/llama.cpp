@@ -444,3 +444,5 @@ ggml_backend_reg_t ggml_backend_amx_reg(void) {
 }
 
 #endif
+
+GGML_BACKEND_DL_IMPL(ggml_backend_amx_reg)

@@ -1477,6 +1477,17 @@ int main(int argc, char ** argv) {
 
     cmd_params params = parse_cmd_params(argc, argv);
 
+    // initialize backends
+    ggml_backend_load_all();
+    auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    if (!cpu_dev) {
+        fprintf(stderr, "%s: error: CPU backend is not loaded\n", __func__);
+        return 1;
+    }
+    auto * cpu_reg = ggml_backend_dev_backend_reg(cpu_dev);
+    auto * ggml_threadpool_new_fn = (decltype(ggml_threadpool_new) *) ggml_backend_reg_get_proc_address(cpu_reg, "ggml_threadpool_new");
+    auto * ggml_threadpool_free_fn = (decltype(ggml_threadpool_free) *) ggml_backend_reg_get_proc_address(cpu_reg, "ggml_threadpool_free");
+
     // initialize llama.cpp
     if (!params.verbose) {
         llama_log_set(llama_null_log_callback, NULL);
@@ -1551,7 +1562,7 @@ int main(int argc, char ** argv) {
         tpp.poll       = t.poll;
         tpp.prio       = params.prio;
 
-        struct ggml_threadpool * threadpool = ggml_threadpool_new(&tpp);
+        struct ggml_threadpool * threadpool = ggml_threadpool_new_fn(&tpp);
         if (!threadpool) {
             fprintf(stderr, "%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
             exit(1);
@@ -1612,7 +1623,7 @@ int main(int argc, char ** argv) {
 
         llama_free(ctx);
 
-        ggml_threadpool_free(threadpool);
+        ggml_threadpool_free_fn(threadpool);
     }
 
     llama_free_model(lmodel);

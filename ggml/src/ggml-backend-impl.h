@@ -204,12 +204,30 @@ extern "C" {
         void * context;
     };
 
-
     // Internal backend registry API
     void ggml_backend_register(ggml_backend_reg_t reg);
     void ggml_backend_device_register(ggml_backend_dev_t device);
-    // TODO: backends can be loaded as a dynamic library, in which case it needs to export this function
-    // typedef ggml_backend_register_t * (*ggml_backend_init)(void);
+
+    // Add backend dynamic loading support to the backend
+    #ifdef GGML_BACKEND_DL
+        #ifdef __cplusplus
+        #    define GGML_BACKEND_DL_IMPL(reg_fn)                             \
+                extern "C" {                                                 \
+                    GGML_BACKEND_API ggml_backend_reg_t ggml_backend_init(); \
+                }                                                            \
+                ggml_backend_reg_t ggml_backend_init() {                     \
+                    return reg_fn();                                         \
+                }
+        #else
+        #    define GGML_BACKEND_DL_IMPL(reg_fn)                          \
+                GGML_BACKEND_API ggml_backend_reg_t ggml_backend_init();  \
+                ggml_backend_reg_t ggml_backend_init() {                  \
+                    return reg_fn();                                      \
+                }
+        #endif
+    #else
+    #    define GGML_BACKEND_DL_IMPL(reg_fn)
+    #endif
 
 #ifdef  __cplusplus
 }

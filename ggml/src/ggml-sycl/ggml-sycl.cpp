@@ -4678,3 +4678,4 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
     return sycl_backend;
 }
 
+GGML_BACKEND_DL_IMPL(ggml_backend_sycl_reg)

@@ -1401,3 +1401,5 @@ ggml_backend_dev_t ggml_backend_rpc_add_device(const char * endpoint) {
 
     return dev;
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_rpc_reg)
