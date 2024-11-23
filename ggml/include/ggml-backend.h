@@ -222,8 +222,10 @@ extern "C" {
     // = ggml_backend_dev_init(ggml_backend_dev_by_type(GPU) OR ggml_backend_dev_by_type(CPU), NULL)
     GGML_API ggml_backend_t ggml_backend_init_best(void);
 
-    // Load a backend from a dynamic library
+    // Load a backend from a dynamic library and register it
     GGML_API ggml_backend_reg_t ggml_backend_load(const char * path);
+    // Unload a backend if loaded dynamically and unregister it
+    GGML_API void               ggml_backend_unload(ggml_backend_reg_t reg);
     // Load all known backends from dynamic libraries
     GGML_API void               ggml_backend_load_all(void);
 
