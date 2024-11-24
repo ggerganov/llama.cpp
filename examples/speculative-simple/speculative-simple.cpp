@@ -46,8 +46,11 @@ int main(int argc, char ** argv) {
     ctx_tgt   = llama_init_tgt.context;
 
     // load the draft model
-    params.model = params.speculative.model;
+    params.model        = params.speculative.model;
+    params.n_ctx        = params.speculative.n_ctx;
+    params.n_batch      = params.speculative.n_ctx > 0 ? params.speculative.n_ctx : params.n_batch;
     params.n_gpu_layers = params.speculative.n_gpu_layers;
+
     if (params.speculative.cpuparams.n_threads > 0) {
         params.cpuparams.n_threads = params.speculative.cpuparams.n_threads;
     }
@@ -66,8 +69,14 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> inp;
     inp = common_tokenize(ctx_tgt, params.prompt, true, true);
 
-    if ((int) inp.size() > llama_n_ctx(ctx_tgt)) {
-        LOG_ERR("%s: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), llama_n_ctx(ctx_tgt));
+    if (llama_n_ctx(ctx_tgt) < (int) inp.size()) {
+        LOG_ERR("%s: the prompt exceeds the context size (%d tokens, ctx %d)\n", __func__, (int) inp.size(), llama_n_ctx(ctx_tgt));
+
+        return 1;
+    }
+
+    if (llama_n_batch(ctx_tgt) < (int) inp.size()) {
+        LOG_ERR("%s: the prompt exceeds the batch size (%d tokens, batch %d)\n", __func__, (int) inp.size(), llama_n_batch(ctx_tgt));
 
         return 1;
     }
@@ -114,7 +123,7 @@ int main(int argc, char ** argv) {
     // init the speculator
     struct common_speculative_params params_spec;
     params_spec.n_draft = n_draft;
-    params_spec.n_reuse = 256;
+    params_spec.n_reuse = llama_n_ctx(ctx_dft) - n_draft;
     params_spec.p_min   = p_min;
 
     struct common_speculative * spec = common_speculative_init(ctx_dft);

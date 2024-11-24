@@ -142,6 +142,8 @@ llama_tokens common_speculative_gen_draft(
 
     const int i_start = std::max<int>(0, (int) prompt_tgt.size() - n_ctx);
 
+    // reuse as much as possible from the old draft context
+    // ideally, the draft context should be as big as the target context and we will always reuse the entire prompt
     for (int i = 0; i < (int) prompt.size(); ++i) {
         int cur = 0;
         while (i_start + cur < (int) prompt_tgt.size() &&
@@ -166,6 +168,8 @@ llama_tokens common_speculative_gen_draft(
 
         prompt.clear();
     } else {
+        // this happens when a previous draft has been discarded (for example, due to being too small), but the
+        // target model agreed with it. in this case, we simply pass back the previous results to save compute
         if (reuse_i + reuse_n < (int) prompt.size() && prompt[reuse_i + reuse_n] == id_last) {
             for (int i = reuse_i + reuse_n + 1; i < (int) prompt.size(); ++i) {
                 result.push_back(prompt[i]);
@@ -174,42 +178,51 @@ llama_tokens common_speculative_gen_draft(
                     break;
                 }
             }
+
             return result;
         }
 
-        llama_kv_cache_seq_rm (ctx, 0, 0, reuse_i);
-        llama_kv_cache_seq_rm (ctx, 0, reuse_i + reuse_n, -1);
-        llama_kv_cache_seq_add(ctx, 0, reuse_i, -1, -reuse_i);
+        if (reuse_i > 0) {
+            llama_kv_cache_seq_rm (ctx, 0, 0, reuse_i);
+            llama_kv_cache_seq_add(ctx, 0, reuse_i, -1, -reuse_i);
 
-        prompt.erase(prompt.begin(), prompt.begin() + reuse_i);
-        prompt.erase(prompt.begin() + reuse_n, prompt.end());
+            prompt.erase(prompt.begin(), prompt.begin() + reuse_i);
+        }
+
+        if (reuse_n < (int) prompt.size()) {
+            llama_kv_cache_seq_rm (ctx, 0, reuse_n, -1);
+
+            prompt.erase(prompt.begin() + reuse_n, prompt.end());
+        }
     }
 
+    // prepare a batch to evaluate any new tokens in the prompt
     common_batch_clear(batch);
 
-    for (int i = i_start + reuse_n; i < (int) prompt_tgt.size(); ++i) {
+    for (size_t i = i_start + reuse_n; i < prompt_tgt.size(); ++i) {
         //LOG_DBG("i = %d, i_start = %d, reuse_n = %d, i - i_start = %d, id = %6d\n", i, i_start, reuse_n, i - i_start, prompt_tgt[i]);
         common_batch_add(batch, prompt_tgt[i], i - i_start, { 0 }, false);
 
         prompt.push_back(prompt_tgt[i]);
     }
 
-    const llama_pos n_past = prompt_tgt.size() - i_start;
-
-    LOG_DBG("%s: n_past = %d\n", __func__, n_past);
-
+    // we should rarely end-up here during normal decoding
     if (batch.n_tokens > 0) {
-        LOG_DBG("%s: draft batch: %s\n", __func__, string_from(ctx, batch).c_str());
+        //LOG_DBG("%s: draft prompt batch: %s\n", __func__, string_from(ctx, batch).c_str());
 
         llama_decode(ctx, batch);
     }
+
+    const llama_pos n_past = prompt.size();
+
+    LOG_DBG("%s: n_past = %d\n", __func__, n_past);
 
     common_batch_clear(batch);
     common_batch_add  (batch, id_last, n_past, { 0 }, true);
 
     prompt.push_back(id_last);
 
-    LOG_DBG("%s: prompt_last: %s\n", __func__, string_from(ctx, prompt).c_str());
+    //LOG_DBG("%s: draft prompt: %s\n", __func__, string_from(ctx, prompt).c_str());
 
     llama_decode(ctx, batch);
 

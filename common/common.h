@@ -156,7 +156,7 @@ struct common_params_sampling {
 };
 
 struct common_params_speculative {
-    int32_t n_ctx        =  4096; // draft context size
+    int32_t n_ctx        =     0; // draft context size
     int32_t n_max        =    16; // maximum number of tokens to draft during speculative decoding
     int32_t n_min        =     5; // minimum number of draft tokens to use for speculative decoding
     int32_t n_gpu_layers =    -1; // number of layers to store in VRAM for the draft model (-1 - use default)
