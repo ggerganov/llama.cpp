@@ -24,7 +24,7 @@ int main(int argc, char ** argv) {
 
     common_init();
 
-    if (params.model_draft.empty()) {
+    if (params.speculative.model.empty()) {
         LOG_ERR("%s: --model-draft is required\n", __func__);
         return 1;
     }
@@ -46,13 +46,13 @@ int main(int argc, char ** argv) {
     ctx_tgt   = llama_init_tgt.context;
 
     // load the draft model
-    params.model = params.model_draft;
-    params.n_gpu_layers = params.n_gpu_layers_draft;
-    if (params.draft_cpuparams.n_threads > 0) {
-        params.cpuparams.n_threads = params.draft_cpuparams.n_threads;
+    params.model = params.speculative.model;
+    params.n_gpu_layers = params.speculative.n_gpu_layers;
+    if (params.speculative.cpuparams.n_threads > 0) {
+        params.cpuparams.n_threads = params.speculative.cpuparams.n_threads;
     }
 
-    params.cpuparams_batch.n_threads = params.draft_cpuparams_batch.n_threads;
+    params.cpuparams_batch.n_threads = params.speculative.cpuparams_batch.n_threads;
     common_init_result llama_init_dft = common_init_from_params(params);
 
     model_dft = llama_init_dft.model;
@@ -66,11 +66,9 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> inp;
     inp = common_tokenize(ctx_tgt, params.prompt, true, true);
 
-    const int max_context_size     = llama_n_ctx(ctx_tgt);
-    const int max_tokens_list_size = max_context_size - 4;
+    if ((int) inp.size() > llama_n_ctx(ctx_tgt)) {
+        LOG_ERR("%s: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), llama_n_ctx(ctx_tgt));
 
-    if ((int) inp.size() > max_tokens_list_size) {
-        LOG_ERR("%s: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), max_tokens_list_size);
         return 1;
     }
 
@@ -81,7 +79,10 @@ int main(int argc, char ** argv) {
     }
 
     // how many tokens to draft each time
-    int n_draft = params.n_draft;
+    int n_draft     = params.speculative.n_max;
+    int n_draft_min = params.speculative.n_min;
+
+    float p_min = params.speculative.p_min;
 
     int n_predict = 0;
     int n_drafted = 0;
@@ -97,7 +98,7 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // target model sampling context
-    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sampling);
 
     // eval the prompt
     llama_decode(ctx_tgt, llama_batch_get_one(inp.data(), inp.size() - 1));
@@ -112,9 +113,9 @@ int main(int argc, char ** argv) {
 
     // init the speculator
     struct common_speculative_params params_spec;
-    params_spec.n_draft   = n_draft;
-    params_spec.n_reuse   = 256;
-    params_spec.p_min     = 0.9f;
+    params_spec.n_draft = n_draft;
+    params_spec.n_reuse = 256;
+    params_spec.p_min   = p_min;
 
     struct common_speculative * spec = common_speculative_init(ctx_dft);
 
@@ -143,7 +144,7 @@ int main(int argc, char ** argv) {
         // evaluate the target model on [id_last, draft0, draft1, ..., draftN-1]
         {
             // do not waste time on small drafts
-            if (draft.size() < params.n_draft_min) {
+            if (draft.size() < n_draft_min) {
                 draft.clear();
             }
 

@@ -925,9 +925,9 @@ struct common_init_result common_init_from_params(common_params & params) {
         common_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
-    if (params.sparams.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
+    if (params.sampling.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
         LOG_WRN("%s: warning: model does not have an EOS token, ignoring --ignore-eos\n", __func__);
-        params.sparams.ignore_eos = false;
+        params.sampling.ignore_eos = false;
     }
 
     if (params.warmup) {

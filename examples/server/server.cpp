@@ -175,7 +175,7 @@ struct server_slot {
     // sampling
     json json_schema;
 
-    struct common_sampler_params sparams;
+    struct common_params_sampling sparams;
     struct common_sampler * smpl = nullptr;
 
     llama_token sampled;
@@ -687,7 +687,7 @@ struct server_context {
 
             SLT_INF(slot, "new slot n_ctx_slot = %d\n", slot.n_ctx);
 
-            slot.sparams = params.sparams;
+            slot.sparams = params.sampling;
 
             slot.callback_on_release = [this](int) {
                 queue_tasks.pop_deferred_task();
@@ -788,7 +788,7 @@ struct server_context {
     bool launch_slot_with_task(server_slot & slot, const server_task & task) {
         slot_params default_params;
         // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
-        auto default_sparams = params.sparams;
+        auto default_sparams = params.sampling;
         const auto & data = task.data;
 
         if (data.count("__oaicompat") != 0) {

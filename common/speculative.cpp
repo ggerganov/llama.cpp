@@ -29,32 +29,32 @@ struct common_speculative * common_speculative_init(
     // TODO: optimize or pass from outside?
 #if 0
     {
-        common_sampler_params sparams;
-        sparams.no_perf = false;
+        common_params_sampling params;
+        params.no_perf = false;
 
-        sparams.top_k = 40;
-        sparams.top_p = 0.9;
+        params.top_k = 40;
+        params.top_p = 0.9;
 
-        sparams.samplers = {
+        params.samplers = {
             COMMON_SAMPLER_TYPE_TOP_K,
             COMMON_SAMPLER_TYPE_TOP_P,
             COMMON_SAMPLER_TYPE_INFILL,
         };
 
-        result->smpl = common_sampler_init(llama_get_model(ctx_dft), sparams);
+        result->smpl = common_sampler_init(llama_get_model(ctx_dft), params);
     }
 #else
     {
-        common_sampler_params sparams;
-        sparams.no_perf = false;
+        common_params_sampling params;
+        params.no_perf = false;
 
-        sparams.top_k = 10;
+        params.top_k = 10;
 
-        sparams.samplers = {
+        params.samplers = {
             COMMON_SAMPLER_TYPE_TOP_K,
         };
 
-        result->smpl = common_sampler_init(llama_get_model(ctx_dft), sparams);
+        result->smpl = common_sampler_init(llama_get_model(ctx_dft), params);
     }
 #endif
 

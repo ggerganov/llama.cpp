@@ -100,7 +100,7 @@ int main(int argc, char ** argv) {
 
     common_init();
 
-    auto & sparams = params.sparams;
+    auto & sparams = params.sampling;
 
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)

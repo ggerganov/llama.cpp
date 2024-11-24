@@ -103,8 +103,8 @@ enum dimre_method {
     DIMRE_METHOD_MEAN,
 };
 
-// sampler parameters
-struct common_sampler_params {
+// sampling parameters
+struct common_params_sampling {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
 
     int32_t n_prev             = 64;    // number of previous tokens to remember
@@ -155,20 +155,30 @@ struct common_sampler_params {
     std::string print() const;
 };
 
+struct common_params_speculative {
+    int32_t n_ctx        =  4096; // draft context size
+    int32_t n_max        =     5; // maximum number of tokens to draft during speculative decoding
+    int32_t n_min        =     0; // minimum number of draft tokens to use for speculative decoding
+    int32_t n_gpu_layers =    -1; // number of layers to store in VRAM for the draft model (-1 - use default)
+    float   p_split      =  0.1f; // speculative decoding split probability
+    float   p_min        =  0.9f; // minimum speculative decoding probability (greedy)
+
+    struct cpu_params cpuparams;
+    struct cpu_params cpuparams_batch;
+
+    std::string model = ""; // draft model for speculative decoding                          // NOLINT
+};
+
 struct common_params {
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =  4096; // context size
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_ubatch              =   512; // physical batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                =     0; // number of tokens to keep from initial prompt
-    int32_t n_draft               =     5; // number of tokens to draft during speculative decoding
-    int32_t n_draft_min           =     0; // minimum number of draft tokens to use for speculative decoding
     int32_t n_chunks              =    -1; // max number of chunks to process (-1 = unlimited)
     int32_t n_parallel            =     1; // number of parallel sequences to decode
     int32_t n_sequences           =     1; // number of sequences to decode
-    float   p_split               =  0.1f; // speculative decoding split probability
     int32_t n_gpu_layers          =    -1; // number of layers to store in VRAM (-1 - use default)
-    int32_t n_gpu_layers_draft    =    -1; // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu              =     0; // the GPU that is used for scratch and small tensors
     float   tensor_split[128]     =   {0}; // how split tensors should be distributed across GPUs
     int32_t grp_attn_n            =     1; // group-attention factor
@@ -185,8 +195,6 @@ struct common_params {
 
     struct cpu_params cpuparams;
     struct cpu_params cpuparams_batch;
-    struct cpu_params draft_cpuparams;
-    struct cpu_params draft_cpuparams_batch;
 
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
@@ -198,10 +206,10 @@ struct common_params {
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
-    struct common_sampler_params sparams;
+    struct common_params_sampling sampling;
+    struct common_params_speculative speculative;
 
     std::string model                = ""; // model path                                                    // NOLINT
-    std::string model_draft          = ""; // draft model for speculative decoding                          // NOLINT
     std::string model_alias          = "unknown"; // model alias                                            // NOLINT
     std::string model_url            = ""; // model url to download                                         // NOLINT
     std::string hf_token             = ""; // HF token                                                      // NOLINT

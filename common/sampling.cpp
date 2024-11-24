@@ -99,7 +99,7 @@ struct ring_buffer {
 };
 
 struct common_sampler {
-    common_sampler_params params;
+    common_params_sampling params;
 
     struct llama_sampler * grmr;
     struct llama_sampler * chain;
@@ -125,7 +125,7 @@ struct common_sampler {
     }
 };
 
-std::string common_sampler_params::print() const {
+std::string common_params_sampling::print() const {
     char result[1024];
 
     snprintf(result, sizeof(result),
@@ -141,7 +141,7 @@ std::string common_sampler_params::print() const {
     return std::string(result);
 }
 
-struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_sampler_params & params) {
+struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_params_sampling & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
     lparams.no_perf = params.no_perf;
