@@ -27,7 +27,7 @@ struct common_speculative * common_speculative_init(
     };
 
     // TODO: optimize or pass from outside?
-#if 1
+#if 0
     {
         common_sampler_params sparams;
         sparams.no_perf = false;
@@ -156,13 +156,27 @@ llama_tokens common_speculative_gen_draft(
         }
     }
 
-    LOG_DBG("%s: reuse_i = %d, reuse_n = %d\n", __func__, reuse_i, reuse_n);
+    LOG_DBG("%s: reuse_i = %d, reuse_n = %d, prompt = %d\n", __func__, reuse_i, reuse_n, (int) prompt.size());
+
+    llama_tokens result;
+    result.reserve(params.n_draft);
 
     if (reuse_n == 0) {
         llama_kv_cache_clear(ctx);
 
         prompt.clear();
     } else {
+        if (reuse_i + reuse_n < (int) prompt.size() && prompt[reuse_i + reuse_n] == id_last) {
+            for (int i = reuse_i + reuse_n + 1; i < (int) prompt.size(); ++i) {
+                result.push_back(prompt[i]);
+
+                if (result.size() >= params.n_draft) {
+                    break;
+                }
+            }
+            return result;
+        }
+
         llama_kv_cache_seq_rm (ctx, 0, 0, reuse_i);
         llama_kv_cache_seq_rm (ctx, 0, reuse_i + reuse_n, -1);
         llama_kv_cache_seq_add(ctx, 0, reuse_i, -1, -reuse_i);
@@ -200,9 +214,6 @@ llama_tokens common_speculative_gen_draft(
     llama_decode(ctx, batch);
 
     common_sampler_reset(smpl);
-
-    llama_tokens result;
-    result.reserve(params.n_draft);
 
     // sample n_draft tokens from the draft model
     for (int i = 0; i < params.n_draft; ++i) {

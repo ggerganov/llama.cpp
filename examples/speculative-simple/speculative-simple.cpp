@@ -134,6 +134,8 @@ int main(int argc, char ** argv) {
         //
         llama_tokens draft = common_speculative_gen_draft(spec, params_spec, prompt_tgt, id_last);
 
+        //LOG_DBG("draft: %s\n", string_from(ctx_dft, draft).c_str());
+
         // always have a token to evaluate from before - id_last
         common_batch_clear(batch_tgt);
         common_batch_add  (batch_tgt, id_last, n_past++, { 0 }, true);
