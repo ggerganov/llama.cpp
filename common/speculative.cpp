@@ -170,7 +170,7 @@ llama_tokens common_speculative_gen_draft(
             for (int i = reuse_i + reuse_n + 1; i < (int) prompt.size(); ++i) {
                 result.push_back(prompt[i]);
 
-                if (result.size() >= params.n_draft) {
+                if (params.n_draft <= (int) result.size()) {
                     break;
                 }
             }
