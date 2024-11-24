@@ -163,7 +163,9 @@ int main(int argc, char ** argv) {
         // available logits from the batch and sample the next token until we run out of logits or the sampler
         // disagrees with the draft
         //
-        const auto ids = common_sampler_sample_n(smpl, ctx_tgt, draft);
+        const auto ids = common_sampler_sample_and_accept_n(smpl, ctx_tgt, draft);
+
+        //LOG_DBG("ids: %s\n", string_from(ctx_tgt, ids).c_str());
 
         GGML_ASSERT(ids.size() > 0); // there will always be at least one accepted token
 

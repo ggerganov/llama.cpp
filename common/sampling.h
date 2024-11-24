@@ -62,19 +62,24 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
 
 // generalized version of common_sampler_sample
 //
-// will cross-reference the sampled tokens with a batch of draft tokens
-// if the sampler disagrees at some point, we stop and return the sampled tokens up to now
+// will cross-reference the sampled tokens with a batch of draft tokens and accept those that match
+// if the sampler disagrees at some point, we stop and return the accepted tokens up to now
 //
-// `common_sampler_sample_n(gsmpl, ctx, { idx }, {})` is equivalent to `common_sampler_sample(gsmpl, ctx, idx)`
+//      common_sampler_sample_n(gsmpl, ctx, { idx }, {});
+//
+// is equivalent to
+//
+//      common_sampler_sample(gsmpl, ctx, idx);
+//      common_sampler_accept(gsmpl, token, true);
 //
 // requires: idxs.size() == draft.size() + 1
 //
 // returns at least 1 token, up to idxs.size()
 //
-std::vector<llama_token> common_sampler_sample_n(struct common_sampler * gsmpl, struct llama_context * ctx, const std::vector<int> & idxs, const llama_tokens & draft, bool grammar_first = false);
+std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler * gsmpl, struct llama_context * ctx, const std::vector<int> & idxs, const llama_tokens & draft, bool grammar_first = false);
 
 // assume idxs == [ 0, 1, 2, ..., draft.size() ]
-std::vector<llama_token> common_sampler_sample_n(struct common_sampler * gsmpl, struct llama_context * ctx, const llama_tokens & draft, bool grammar_first = false);
+std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler * gsmpl, struct llama_context * ctx, const llama_tokens & draft, bool grammar_first = false);
 
 uint32_t common_sampler_get_seed(const struct common_sampler * gsmpl);
 
