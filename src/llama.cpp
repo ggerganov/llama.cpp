@@ -22209,7 +22209,7 @@ int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int 
 const char * llama_print_system_info(void) {
     static std::string s;
 
-    for (int i = 0; i < ggml_backend_reg_count(); i++) {
+    for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
         auto * reg = ggml_backend_reg_get(i);
         auto * get_features_fn = (ggml_backend_get_features_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_get_features");
         if (get_features_fn) {

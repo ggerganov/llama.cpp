@@ -5,6 +5,17 @@
 #include <cstring>
 #include <vector>
 
+#ifdef _WIN32
+#    define WIN32_LEAN_AND_MEAN
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
+#else
+#    include <dlfcn.h>
+#endif
+
+
 // Backend registry
 #ifdef GGML_USE_CPU
 #include "ggml-cpu.h"
@@ -90,7 +101,8 @@ struct ggml_backend_registry {
 
     ~ggml_backend_registry() {
         while (!backends.empty()) {
-            ggml_backend_unload(backends.back().reg);
+            // use silent since the log system may have been destroyed at this point
+            unload_backend(backends.back().reg, true);
         }
     }
 
@@ -114,6 +126,43 @@ struct ggml_backend_registry {
         GGML_LOG_DEBUG("%s: registered device %s (%s)\n", __func__, ggml_backend_dev_name(device), ggml_backend_dev_description(device));
 #endif
         devices.push_back(device);
+    }
+
+    void unload_backend(ggml_backend_reg_t reg, bool silent) {
+        if (!silent) {
+            GGML_LOG_INFO("%s: unloading %s backend\n", __func__, ggml_backend_reg_name(reg));
+        }
+        auto it = std::find_if(backends.begin(), backends.end(),
+                                [reg](ggml_backend_reg_entry entry) { return entry.reg == reg; });
+
+        if (it == backends.end()) {
+            if (!silent) {
+                GGML_LOG_ERROR("%s: backend not found\n", __func__);
+            }
+            return;
+        }
+
+        if (!silent) {
+            GGML_LOG_DEBUG("%s: unloading %s backend\n", __func__, ggml_backend_reg_name(reg));
+        }
+
+        // remove devices
+        devices.erase(
+            std::remove_if(devices.begin(), devices.end(),
+                            [reg](ggml_backend_dev_t dev) { return ggml_backend_dev_backend_reg(dev) == reg; }),
+            devices.end());
+
+        // unload library
+        if (it->handle) {
+#ifdef _WIN32
+            FreeLibrary((HMODULE) it->handle);
+#else
+            dlclose(it->handle);
+#endif
+        }
+
+        // remove backend
+        backends.erase(it);
     }
 };
 
@@ -209,16 +258,6 @@ ggml_backend_t ggml_backend_init_best(void) {
     return ggml_backend_dev_init(dev, nullptr);
 }
 
-#ifdef _WIN32
-#    define WIN32_LEAN_AND_MEAN
-#    ifndef NOMINMAX
-#        define NOMINMAX
-#    endif
-#    include <windows.h>
-#else
-#    include <dlfcn.h>
-#endif
-
 typedef ggml_backend_reg_t (*ggml_backend_init_t)(void);
 
 ggml_backend_reg_t ggml_backend_load(const char * path) {
@@ -264,33 +303,7 @@ ggml_backend_reg_t ggml_backend_load(const char * path) {
 }
 
 void ggml_backend_unload(ggml_backend_reg_t reg) {
-    auto it = std::find_if(get_reg().backends.begin(), get_reg().backends.end(),
-                           [reg](ggml_backend_reg_entry entry) { return entry.reg == reg; });
-
-    if (it == get_reg().backends.end()) {
-        GGML_LOG_ERROR("%s: backend not found\n", __func__);
-        return;
-    }
-
-    GGML_LOG_DEBUG("%s: unloading %s backend\n", __func__, ggml_backend_reg_name(reg));
-
-    // remove devices
-    get_reg().devices.erase(
-        std::remove_if(get_reg().devices.begin(), get_reg().devices.end(),
-                       [reg](ggml_backend_dev_t dev) { return ggml_backend_dev_backend_reg(dev) == reg; }),
-        get_reg().devices.end());
-
-    // unload library
-    if (it->handle) {
-#ifdef _WIN32
-        FreeLibrary((HMODULE) it->handle);
-#else
-        dlclose(it->handle);
-#endif
-    }
-
-    // remove backend
-    get_reg().backends.erase(it);
+    get_reg().unload_backend(reg, true);
 }
 
 void ggml_backend_load_all() {
