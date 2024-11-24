@@ -250,9 +250,14 @@ ggml_backend_reg_t ggml_backend_load(const char * path) {
     ggml_backend_reg_t reg = backend_init();
     if (!reg) {
         GGML_LOG_ERROR("%s: failed to initialize backend from %s\n", __func__, path);
+#ifdef _WIN32
+        FreeLibrary(handle);
+#else
         dlclose(handle);
+#endif
         return nullptr;
     }
+
     GGML_LOG_DEBUG("%s: loaded %s backend from %s\n", __func__, ggml_backend_reg_name(reg), path);
     get_reg().register_backend(reg, handle);
     return reg;

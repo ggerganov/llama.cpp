@@ -230,6 +230,10 @@ add_library(ggml
 
 target_link_libraries(ggml PUBLIC ggml-base)
 
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_link_libraries(ggml PRIVATE dl)
+endif()
+
 function(ggml_add_backend backend)
     string(TOUPPER "GGML_${backend}" backend_id)
     if (${backend_id})
