@@ -1369,8 +1369,9 @@ static const struct ggml_backend_reg_i ggml_backend_rpc_reg_i = {
 
 ggml_backend_reg_t ggml_backend_rpc_reg(void) {
     static struct ggml_backend_reg ggml_backend_rpc_reg = {
-        /* .iface   = */ ggml_backend_rpc_reg_i,
-        /* .context = */ NULL,
+        /* .api_version = */ GGML_BACKEND_API_VERSION,
+        /* .iface       = */ ggml_backend_rpc_reg_i,
+        /* .context     = */ NULL,
     };
 
     return &ggml_backend_rpc_reg;

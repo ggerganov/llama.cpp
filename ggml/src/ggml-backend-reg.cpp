@@ -167,9 +167,14 @@ struct ggml_backend_registry {
         }
 #endif
         ggml_backend_reg_t reg = backend_init();
-        if (!reg) {
+        if (!reg || reg->api_version != GGML_BACKEND_API_VERSION) {
             if (!silent) {
-                GGML_LOG_ERROR("%s: failed to initialize backend from %s\n", __func__, path);
+                if (!reg) {
+                    GGML_LOG_ERROR("%s: failed to initialize backend from %s: ggml_backend_init returned NULL\n", __func__, path);
+                } else {
+                    GGML_LOG_ERROR("%s: failed to initialize backend from %s: incompatible API version (backend: %d, current: %d)\n",
+                                   __func__, path, reg->api_version, GGML_BACKEND_API_VERSION);
+                }
             }
     #ifdef _WIN32
             FreeLibrary(handle);

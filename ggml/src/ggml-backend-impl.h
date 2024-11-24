@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+    #define GGML_BACKEND_API_VERSION 1
+
     //
     // Backend buffer type
     //
@@ -199,7 +201,7 @@ extern "C" {
     };
 
     struct ggml_backend_reg {
-        // int api_version; // TODO: for dynamic loading
+        int api_version; // initialize to GGML_BACKEND_API_VERSION
         struct ggml_backend_reg_i iface;
         void * context;
     };

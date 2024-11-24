@@ -4408,8 +4408,9 @@ ggml_backend_reg_t ggml_backend_metal_reg(void) {
     // TODO: make this thread-safe somehow?
     {
         g_ggml_backend_metal_reg = (struct ggml_backend_reg) {
-            /* .iface   = */ ggml_backend_metal_reg_i,
-            /* .context = */ NULL,
+            /* .api_version = */ GGML_BACKEND_API_VERSION,
+            /* .iface       = */ ggml_backend_metal_reg_i,
+            /* .context     = */ NULL,
         };
 
         g_ggml_backend_metal_device = (struct ggml_backend_device) {
