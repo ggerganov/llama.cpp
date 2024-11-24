@@ -113,6 +113,7 @@ llama_target_and_test(test-arg-parser.cpp)
 llama_target_and_test(test-quantize-fns.cpp)
 llama_target_and_test(test-quantize-perf.cpp)
 llama_target_and_test(test-sampling.cpp)
+llama_target_and_test(test-cli.cpp WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 llama_target_and_test(test-chat-template.cpp)
 
 llama_target_and_test(test-grammar-parser.cpp)

@@ -47,6 +47,7 @@ TEST_TARGETS = \
 	tests/test-autorelease \
 	tests/test-backend-ops \
 	tests/test-chat-template \
+	tests/test-cli \
 	tests/test-double-float \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
@@ -1505,6 +1506,11 @@ tests/test-autorelease: tests/test-autorelease.cpp tests/get-model.cpp \
 
 tests/test-chat-template: tests/test-chat-template.cpp \
 	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-cli: tests/test-cli.cpp \
+	$(OBJ_ALL) | llama-cli
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

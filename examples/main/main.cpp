@@ -70,11 +70,11 @@ static void sigint_handler(int signo) {
             need_insert_eot = true;
         } else {
             console::cleanup();
-            LOG("\n");
+            LOG_INF("\n");
             common_perf_print(*g_ctx, *g_smpl);
 
             // make sure all logs are flushed
-            LOG("Interrupted by user\n");
+            LOG_INF("Interrupted by user\n");
             common_log_pause(common_log_main());
 
             _exit(130);
@@ -673,7 +673,8 @@ int main(int argc, char ** argv) {
                 const std::string token_str = common_token_to_piece(ctx, id, params.special);
 
                 // Console/Stream Output
-                LOG("%s", token_str.c_str());
+                fprintf(stdout, "%s", token_str.c_str());
+                fflush(stdout);
 
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
@@ -876,11 +877,11 @@ int main(int argc, char ** argv) {
     }
 
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
-        LOG("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
+        LOG_INF("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
-    LOG("\n\n");
+    LOG_INF("\n\n");
     common_perf_print(ctx, smpl);
 
     common_sampler_free(smpl);
