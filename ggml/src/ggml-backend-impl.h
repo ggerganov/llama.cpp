@@ -63,20 +63,20 @@ extern "C" {
         enum ggml_backend_buffer_usage usage;
     };
 
-    ggml_backend_buffer_t ggml_backend_buffer_init(
+    GGML_API ggml_backend_buffer_t ggml_backend_buffer_init(
                    ggml_backend_buffer_type_t buft,
             struct ggml_backend_buffer_i      iface,
                    void *                     context,
                    size_t                     size);
 
     // do not use directly, use ggml_backend_tensor_copy instead
-    bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml_tensor * dst);
+    GGML_API bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml_tensor * dst);
 
     // multi-buffer
     // buffer that contains a collection of buffers
-    ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers);
-    bool                  ggml_backend_buffer_is_multi_buffer(ggml_backend_buffer_t buffer);
-    void                  ggml_backend_multi_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
+    GGML_API ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers);
+    GGML_API bool                  ggml_backend_buffer_is_multi_buffer(ggml_backend_buffer_t buffer);
+    GGML_API void                  ggml_backend_multi_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
 
     //
     // Backend (stream)
@@ -205,10 +205,12 @@ extern "C" {
     };
 
     // Internal backend registry API
-    void ggml_backend_register(ggml_backend_reg_t reg);
-    void ggml_backend_device_register(ggml_backend_dev_t device);
+    GGML_API void ggml_backend_register(ggml_backend_reg_t reg);
+    GGML_API void ggml_backend_device_register(ggml_backend_dev_t device);
 
     // Add backend dynamic loading support to the backend
+    typedef ggml_backend_reg_t (*ggml_backend_init_t)(void);
+
     #ifdef GGML_BACKEND_DL
         #ifdef __cplusplus
         #    define GGML_BACKEND_DL_IMPL(reg_fn)                                 \

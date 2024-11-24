@@ -9,12 +9,10 @@ if (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LWR MA
 
     file(GLOB   GGML_SOURCES_AMX "*.cpp")
 
-    add_library(ggml-amx
-                ${GGML_HEADERS_AMX}
-                ${GGML_SOURCES_AMX})
-
-    target_link_libraries(ggml-amx PRIVATE ggml-base)
-    target_include_directories(ggml-amx PRIVATE . ..)
+    ggml_add_backend_library(ggml-amx
+                             ${GGML_HEADERS_AMX}
+                             ${GGML_SOURCES_AMX}
+                            )
 
     # this is duplicated from the CPU backend, since the AMX backend also depends on the architecture flags
     # TODO: integrate AMX backend into the CPU backend

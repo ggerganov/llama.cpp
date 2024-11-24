@@ -3,6 +3,7 @@
 #include "ggml-impl.h"
 #include <algorithm>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #ifdef _WIN32
@@ -11,10 +12,13 @@
 #        define NOMINMAX
 #    endif
 #    include <windows.h>
+#elif defined(__APPLE__)
+#    include <mach-o/dyld.h>
+#    include <dlfcn.h>
 #else
 #    include <dlfcn.h>
+#    include <unistd.h>
 #endif
-
 
 // Backend registry
 #ifdef GGML_USE_CPU
@@ -128,10 +132,59 @@ struct ggml_backend_registry {
         devices.push_back(device);
     }
 
-    void unload_backend(ggml_backend_reg_t reg, bool silent) {
-        if (!silent) {
-            GGML_LOG_INFO("%s: unloading %s backend\n", __func__, ggml_backend_reg_name(reg));
+    ggml_backend_reg_t load_backend(const char * path, bool silent) {
+#ifdef _WIN32
+        HMODULE handle = LoadLibraryA(path);
+        if (!handle) {
+            if (!silent) {
+                GGML_LOG_ERROR("%s: failed to load %s: %lu\n", __func__, path, GetLastError());
+            }
+            return nullptr;
         }
+        ggml_backend_init_t backend_init = (ggml_backend_init_t) GetProcAddress(handle, "ggml_backend_init");
+        if (!backend_init) {
+            if (!silent) {
+                GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %lu\n", __func__, path, GetLastError());
+            }
+            FreeLibrary(handle);
+            return nullptr;
+        }
+#else
+        void * handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+        if (!handle) {
+            if (!silent) {
+                GGML_LOG_ERROR("%s: failed to load %s: %s\n", __func__, path, dlerror());
+            }
+            return nullptr;
+        }
+        auto * backend_init = (ggml_backend_init_t) dlsym(handle, "ggml_backend_init");
+        if (!backend_init) {
+            if (!silent) {
+                GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %s\n", __func__, path, dlerror());
+            }
+            dlclose(handle);
+            return nullptr;
+        }
+#endif
+        ggml_backend_reg_t reg = backend_init();
+        if (!reg) {
+            if (!silent) {
+                GGML_LOG_ERROR("%s: failed to initialize backend from %s\n", __func__, path);
+            }
+    #ifdef _WIN32
+            FreeLibrary(handle);
+    #else
+            dlclose(handle);
+    #endif
+            return nullptr;
+        }
+
+        GGML_LOG_INFO("%s: loaded %s backend from %s\n", __func__, ggml_backend_reg_name(reg), path);
+        register_backend(reg, handle);
+        return reg;
+    }
+
+    void unload_backend(ggml_backend_reg_t reg, bool silent) {
         auto it = std::find_if(backends.begin(), backends.end(),
                                 [reg](ggml_backend_reg_entry entry) { return entry.reg == reg; });
 
@@ -258,48 +311,9 @@ ggml_backend_t ggml_backend_init_best(void) {
     return ggml_backend_dev_init(dev, nullptr);
 }
 
-typedef ggml_backend_reg_t (*ggml_backend_init_t)(void);
-
+// Dynamic loading
 ggml_backend_reg_t ggml_backend_load(const char * path) {
-#ifdef _WIN32
-    HMODULE handle = LoadLibraryA(path);
-    if (!handle) {
-        GGML_LOG_ERROR("%s: failed to load %s: %lu\n", __func__, path, GetLastError());
-        return nullptr;
-    }
-    ggml_backend_init_t backend_init = (ggml_backend_init_t) GetProcAddress(handle, "ggml_backend_init");
-    if (!backend_init) {
-        GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %lu\n", __func__, path, GetLastError());
-        FreeLibrary(handle);
-        return nullptr;
-    }
-#else
-    void * handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-    if (!handle) {
-        GGML_LOG_ERROR("%s: failed to load %s: %s\n", __func__, path, dlerror());
-        return nullptr;
-    }
-    auto * backend_init = (ggml_backend_init_t) dlsym(handle, "ggml_backend_init");
-    if (!backend_init) {
-        GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %s\n", __func__, path, dlerror());
-        dlclose(handle);
-        return nullptr;
-    }
-#endif
-    ggml_backend_reg_t reg = backend_init();
-    if (!reg) {
-        GGML_LOG_ERROR("%s: failed to initialize backend from %s\n", __func__, path);
-#ifdef _WIN32
-        FreeLibrary(handle);
-#else
-        dlclose(handle);
-#endif
-        return nullptr;
-    }
-
-    GGML_LOG_DEBUG("%s: loaded %s backend from %s\n", __func__, ggml_backend_reg_name(reg), path);
-    get_reg().register_backend(reg, handle);
-    return reg;
+    return get_reg().load_backend(path, false);
 }
 
 void ggml_backend_unload(ggml_backend_reg_t reg) {
@@ -307,26 +321,82 @@ void ggml_backend_unload(ggml_backend_reg_t reg) {
 }
 
 void ggml_backend_load_all() {
-#ifdef _WIN32
-    #define GGML_BACKEND_PATH(backend) "ggml-" backend ".dll"
-#elif defined(__APPLE__)
-    // path is hardcoded to the cmake build directory for now
-    // FIXME: should also search default system paths
-    #define GGML_BACKEND_PATH(backend) "build/ggml/src/ggml-" backend "/libggml-" backend ".dylib"
-#else
-    #define GGML_BACKEND_PATH(backend) "build/ggml/src/ggml-" backend "/libggml-" backend ".so"
+    std::vector<std::string> search_prefix;
+
+    // add the executable directory to the search path
+    // FIXME: this is convenient for development, but it should probably be disabled in production
+
+#if defined(__APPLE__)
+    // get executable path
+    std::vector<char> path;
+    uint32_t size;
+    while (true) {
+        size = path.size();
+        if (_NSGetExecutablePath(path.data(), &size) == 0) {
+            break;
+        }
+        path.resize(size);
+    }
+    std::string base_path(path.data(), size);
+    // remove executable name
+    auto last_slash = base_path.find_last_of('/');
+    if (last_slash != std::string::npos) {
+        base_path = base_path.substr(0, last_slash);
+    }
+    search_prefix.push_back(base_path + "/");
+#elif defined(__linux__)
+    std::string base_path = ".";
+    std::vector<char> path(1024);
+    while (true) {
+        // get executable path
+        ssize_t len = readlink("/proc/self/exe", path.data(), path.size());
+        if (len == -1) {
+            break;
+        }
+        if (len < (ssize_t) path.size()) {
+            base_path = std::string(path.data(), len);
+            // remove executable name
+            auto last_slash = base_path.find_last_of('/');
+            if (last_slash != std::string::npos) {
+                base_path = base_path.substr(0, last_slash);
+            }
+            break;
+        }
+        path.resize(path.size() * 2);
+    }
+
+    search_prefix.push_back(base_path + "/");
 #endif
 
-    ggml_backend_load(GGML_BACKEND_PATH("amx"));
-    ggml_backend_load(GGML_BACKEND_PATH("blas"));
-    ggml_backend_load(GGML_BACKEND_PATH("cann"));
-    ggml_backend_load(GGML_BACKEND_PATH("cuda"));
-    ggml_backend_load(GGML_BACKEND_PATH("hip"));
-    ggml_backend_load(GGML_BACKEND_PATH("kompute"));
-    ggml_backend_load(GGML_BACKEND_PATH("metal"));
-    ggml_backend_load(GGML_BACKEND_PATH("rpc"));
-    ggml_backend_load(GGML_BACKEND_PATH("sycl"));
-    ggml_backend_load(GGML_BACKEND_PATH("vulkan"));
-    ggml_backend_load(GGML_BACKEND_PATH("musa"));
-    ggml_backend_load(GGML_BACKEND_PATH("cpu"));
+    auto & reg = get_reg();
+
+    auto try_load = [&](const std::string & name) {
+        std::string os_name;
+#ifdef _WIN32
+        os_name = "ggml-" + name + ".dll";
+#else
+        os_name = "libggml-" + name + ".so";
+#endif
+        if (reg.load_backend(os_name.c_str(), true)) {
+            return;
+        }
+        for (const auto & prefix : search_prefix) {
+            if (reg.load_backend((prefix + os_name).c_str(), true)) {
+                return;
+            }
+        }
+    };
+
+    try_load("amx");
+    try_load("blas");
+    try_load("cann");
+    try_load("cuda");
+    try_load("hip");
+    try_load("kompute");
+    try_load("metal");
+    try_load("rpc");
+    try_load("sycl");
+    try_load("vulkan");
+    try_load("musa");
+    try_load("cpu");
 }

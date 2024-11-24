@@ -46,13 +46,10 @@ if (CUDAToolkit_FOUND)
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
     endif()
 
-    add_library(ggml-cuda
-                ${GGML_HEADERS_CUDA}
-                ${GGML_SOURCES_CUDA}
-                )
-
-    target_link_libraries(ggml-cuda PRIVATE ggml-base)
-    target_include_directories(ggml-cuda PRIVATE . ..)
+    ggml_add_backend_library(ggml-cuda
+                             ${GGML_HEADERS_CUDA}
+                             ${GGML_SOURCES_CUDA}
+                            )
 
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
