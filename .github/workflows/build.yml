@@ -964,10 +964,6 @@ jobs:
       - name: Install
         run:  |
           scripts/install-oneapi.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
-          ls -la "${{ env.ONEAPI_ROOT }}"
-          ls -la "${{ env.ONEAPI_ROOT }}/dnnl"
-          ls -la "${{ env.ONEAPI_ROOT }}/dnnl/latest"
-          ls -la "${{ env.ONEAPI_ROOT }}/dnnl/latest/bin"
 
       - name: Build
         id: cmake_build
@@ -991,10 +987,6 @@ jobs:
         if: ${{ ( github.event_name == 'pull_request' && github.base_ref == 'master' ) }}
         run: |
           echo "cp oneAPI running time dll files in ${{ env.ONEAPI_ROOT }} to ./build/bin"
-          ls -la "${{ env.ONEAPI_ROOT }}"
-          ls -la "${{ env.ONEAPI_ROOT }}/dnnl"
-          ls -la "${{ env.ONEAPI_ROOT }}/dnnl/latest"
-          ls -la "${{ env.ONEAPI_ROOT }}/dnnl/latest/bin"
 
           cp "${{ env.ONEAPI_ROOT }}/mkl/latest/bin/mkl_sycl_blas.5.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/mkl/latest/bin/mkl_core.2.dll" ./build/bin
