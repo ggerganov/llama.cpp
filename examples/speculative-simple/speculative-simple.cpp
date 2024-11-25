@@ -190,7 +190,7 @@ int main(int argc, char ** argv) {
         // in this case, we do it for a group of accepted tokens at once
         //
         {
-            llama_token id;
+            llama_token id = 0;
             std::string token_str;
 
             for (size_t i = 0; i < ids.size(); ++i) {
