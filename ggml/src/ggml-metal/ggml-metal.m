@@ -1927,7 +1927,7 @@ static void ggml_metal_encode_node(
 
                 // find the break-even point where the matrix-matrix kernel becomes more efficient compared
                 // to the matrix-vector kernel
-                int ne11_mm_min = 1;
+                int ne11_mm_min = 4;
 
 #if 0
                 // the numbers below are measured on M2 Ultra for 7B and 13B models
