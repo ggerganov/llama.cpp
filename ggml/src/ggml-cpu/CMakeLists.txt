@@ -97,6 +97,24 @@ if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
         endif ()
 
         set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_PREV})
+    elseif (APPLE)
+        if (GGML_NATIVE)
+            set(MARCH_FLAGS "-march=armv8.2a")
+
+            check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_DOTPROD)
+            if (GGML_COMPILER_SUPPORT_DOTPROD)
+                set(MARCH_FLAGS "${MARCH_FLAGS}+dotprod")
+                add_compile_definitions(__ARM_FEATURE_DOTPROD)
+            endif ()
+
+            check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmlaq_f32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_MATMUL_INT8)
+            if (GGML_COMPILER_SUPPORT_MATMUL_INT8)
+                add_compile_definitions(__ARM_FEATURE_MATMUL_INT8)
+                set(MARCH_FLAGS "${MARCH_FLAGS}+i8mm")
+            endif ()
+
+            list(APPEND ARCH_FLAGS "${MARCH_FLAGS}")
+        endif ()
     else()
         check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
         if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
