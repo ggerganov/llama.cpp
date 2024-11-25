@@ -345,6 +345,9 @@ bool common_params_parse(int argc, char ** argv, common_params & params, llama_e
 }
 
 common_params_context common_params_parser_init(common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
+    // load dynamic backends
+    ggml_backend_load_all();
+
     common_params_context ctx_arg(params);
     ctx_arg.print_usage = print_usage;
     ctx_arg.ex          = ex;
@@ -1345,12 +1348,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--list-devices"},
         "print list of available devices and exit",
         [](common_params &) {
+            printf("Available devices:\n");
             for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
                 auto * dev = ggml_backend_dev_get(i);
                 if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
                     size_t free, total;
                     ggml_backend_dev_memory(dev, &free, &total);
-                    printf("%s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
+                    printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
                 }
             }
             exit(0);
