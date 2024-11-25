@@ -1079,19 +1079,26 @@ static void ggml_vk_mul_mat_q4_k(
     const std::shared_ptr<kp::Tensor>& inB,
     const std::shared_ptr<kp::Tensor>& out,
     uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-    int32_t ne00, int32_t ne01, int32_t ne02, int32_t ne10,
-    int32_t ne11, int32_t ne12, int32_t ne13, int32_t ne0,
-    int32_t ne1, int32_t r2, int32_t r3
+    int32_t ne00, int32_t ne01, int32_t ne02,
+    int32_t ne10, int32_t ne11, int32_t ne12, int32_t ne13,
+    int32_t ne0, int32_t ne1,
+    uint32_t nb01, uint32_t nb02, uint32_t nb03,
+    uint32_t nb11, uint32_t nb12, uint32_t nb13,
+    uint32_t r2, uint32_t r3
 ) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_k_comp_spv,
         kp::shader_data::op_mul_mat_q4_k_comp_spv_len);
 
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff;
-        int32_t ne00, ne10, ne0, ne1, ne01, ne02, ne12, r2, r3;
+        int32_t ne00, ne10, ne0, ne1, ne01, ne02, ne12;
+        uint32_t nb01, nb02, nb03, nb11, nb12, nb13;
+        uint32_t r2, r3;
     } pushConsts {
-        0, 0, 0,
-        ne00, ne10, ne0, ne1, ne01, ne02, ne12, r2, r3
+        inAOff, safe_divide(inBOff, 4), safe_divide(outOff, 4),
+        ne00, ne10, ne0, ne1, ne01, ne02, ne12,
+        nb01, nb02, nb03, nb11, nb12, nb13,
+        r2, r3
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
@@ -1705,7 +1712,8 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                             case GGML_TYPE_Q4_K:
                                 ggml_vk_mul_mat_q4_k(
                                     seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
-                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, ne12/ne02, ne13/ne03
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1,
+                                    nb01, nb02, nb03, nb11, nb12, nb13, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q6_K:
