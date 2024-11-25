@@ -179,7 +179,7 @@ enum llm_arch {
     LLM_ARCH_COMMAND_R,
     LLM_ARCH_DBRX,
     LLM_ARCH_OLMO,
-    LLM_ARCH_OLMO_1124,
+    LLM_ARCH_OLMO2,
     LLM_ARCH_OLMOE,
     LLM_ARCH_OPENELM,
     LLM_ARCH_ARCTIC,
@@ -233,7 +233,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_COMMAND_R,       "command-r"    },
     { LLM_ARCH_DBRX,            "dbrx"         },
     { LLM_ARCH_OLMO,            "olmo"         },
-    { LLM_ARCH_OLMO_1124,       "olmo_1124"    },
+    { LLM_ARCH_OLMO2,           "olmo2"        },
     { LLM_ARCH_OLMOE,           "olmoe"        },
     { LLM_ARCH_OPENELM,         "openelm"      },
     { LLM_ARCH_ARCTIC,          "arctic"       },
@@ -1210,7 +1210,7 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
         },
     },
     {
-        LLM_ARCH_OLMO_1124,
+        LLM_ARCH_OLMO2,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
@@ -5900,7 +5900,7 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-        case LLM_ARCH_OLMO_1124:
+        case LLM_ARCH_OLMO2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
@@ -8593,7 +8593,7 @@ static bool llm_load_tensors(
                         layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, 0);
                     }
                 } break;
-            case LLM_ARCH_OLMO_1124:
+            case LLM_ARCH_OLMO2:
                 {
                     model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
 
@@ -14483,7 +14483,7 @@ struct llm_build_context {
         return gf;
     }
 
-    struct ggml_cgraph * build_olmo_1124() {
+    struct ggml_cgraph * build_olmo2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
@@ -16799,9 +16799,9 @@ static struct ggml_cgraph * llama_build_graph(
             {
                 result = llm.build_olmo();
             } break;
-        case LLM_ARCH_OLMO_1124:
+        case LLM_ARCH_OLMO2:
             {
-                result = llm.build_olmo_1124();
+                result = llm.build_olmo2();
             } break;
         case LLM_ARCH_OLMOE:
             {
@@ -20084,7 +20084,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_QWEN:
         case LLM_ARCH_QWEN2:
         case LLM_ARCH_QWEN2MOE:
-        case LLM_ARCH_OLMO_1124:
+        case LLM_ARCH_OLMO2:
         case LLM_ARCH_OLMOE:
         case LLM_ARCH_PHI2:
         case LLM_ARCH_PHI3:
