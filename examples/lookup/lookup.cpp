@@ -22,7 +22,7 @@ int main(int argc, char ** argv){
     common_init();
 
     // max. number of additional tokens to draft if match is found
-    const int n_draft = params.n_draft;
+    const int n_draft = params.speculative.n_max;
 
     const bool dump_kv_cache = params.dump_kv_cache;
 
@@ -102,7 +102,7 @@ int main(int argc, char ** argv){
 
     bool has_eos = false;
 
-    struct common_sampler * smpl = common_sampler_init(model, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model, params.sampling);
 
     std::vector<llama_token> draft;
 
