@@ -1018,6 +1018,8 @@ static void ggml_vk_mul_mat_impl(
     int32_t ne00, int32_t ne01, int32_t ne02,
     int32_t ne10, int32_t ne11, int32_t ne12, int32_t ne13,
     int32_t ne0, int32_t ne1,
+    uint32_t nb01, uint32_t nb02, uint32_t nb03,
+    uint32_t nb11, uint32_t nb12, uint32_t nb13,
     uint32_t r2, uint32_t r3
 ) {
     struct PushConstants {
@@ -1025,19 +1027,23 @@ static void ggml_vk_mul_mat_impl(
         int32_t ne00, ne01, ne02;
         int32_t ne10, ne12;
         int32_t ne0, ne1;
+        uint32_t nb01, nb02, nb03;
+        uint32_t nb11, nb12, nb13;
         uint32_t r2, r3;
     } pushConsts {
         safe_divide(inAOff, block_size), safe_divide(inBOff, 4), safe_divide(outOff, 4),
         ne00, ne01, ne02,
         ne10, ne12,
         ne0, ne1,
+        nb01, nb02, nb03,
+        nb11, nb12, nb13,
         r2, r3
     };
 
     auto name = std::string(__func__) + "_" + suffix;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(name)) {
-        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
+        const uint32_t local_x = (ggml_vk_current_device().subgroupSize * 2) / 8;
         s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(name, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12*ne13)}, {local_x}, {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(name);
@@ -1694,19 +1700,22 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                             case GGML_TYPE_Q8_0:
                                 ggml_vk_mul_mat_q8_0(
                                     seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
-                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1,
+                                    nb01, nb02, nb03, nb11, nb12, nb13, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q4_0:
                                 ggml_vk_mul_mat_q4_0(
                                     seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
-                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1,
+                                    nb01, nb02, nb03, nb11, nb12, nb13, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q4_1:
                                 ggml_vk_mul_mat_q4_1(
                                     seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
-                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1,
+                                    nb01, nb02, nb03, nb11, nb12, nb13, r2, r3
                                 );
                                 break;
                             case GGML_TYPE_Q4_K:
