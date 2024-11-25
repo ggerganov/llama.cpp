@@ -1343,7 +1343,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             params.devices = parse_device_list(value);
         }
-    ).set_env("LLAMA_ARG_DEVICES"));
+    ).set_env("LLAMA_ARG_DEVICE"));
     add_opt(common_arg(
         {"--list-devices"},
         "print list of available devices and exit",
