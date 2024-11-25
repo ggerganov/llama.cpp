@@ -19364,6 +19364,7 @@ void llama_lora_adapter_free(struct llama_lora_adapter * adapter) {
 //
 struct llama_model_params llama_model_default_params() {
     struct llama_model_params result = {
+        /*.devices                     =*/ nullptr,
         /*.n_gpu_layers                =*/ 0,
         /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
         /*.main_gpu                    =*/ 0,
@@ -19576,19 +19577,24 @@ struct llama_model * llama_load_model_from_file(
     }
 
     // create list of devices to use with this model
-    // currently, we use all available devices
-    // TODO: rework API to give user more control over device selection
-    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
-        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-        switch (ggml_backend_dev_type(dev)) {
-            case GGML_BACKEND_DEVICE_TYPE_CPU:
-            case GGML_BACKEND_DEVICE_TYPE_ACCEL:
-                // skip CPU backends since they are handled separately
-                break;
+    if (params.devices) {
+        for (ggml_backend_dev_t * dev = params.devices; *dev; ++dev) {
+            model->devices.push_back(*dev);
+        }
+    } else {
+        // use all available devices
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            switch (ggml_backend_dev_type(dev)) {
+                case GGML_BACKEND_DEVICE_TYPE_CPU:
+                case GGML_BACKEND_DEVICE_TYPE_ACCEL:
+                    // skip CPU backends since they are handled separately
+                    break;
 
-            case GGML_BACKEND_DEVICE_TYPE_GPU:
-                model->devices.push_back(dev);
-                break;
+                case GGML_BACKEND_DEVICE_TYPE_GPU:
+                    model->devices.push_back(dev);
+                    break;
+            }
         }
     }
 
