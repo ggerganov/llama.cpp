@@ -964,6 +964,10 @@ jobs:
       - name: Install
         run:  |
           scripts/install-oneapi.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
+          ls -la "${{ env.ONEAPI_ROOT }}"
+          ls -la "${{ env.ONEAPI_ROOT }}/dnnl"
+          ls -la "${{ env.ONEAPI_ROOT }}/dnnl/latest"
+          ls -la "${{ env.ONEAPI_ROOT }}/dnnl/latest/bin"
 
       - name: Build
         id: cmake_build
