@@ -4372,19 +4372,45 @@ static ggml_backend_dev_t ggml_backend_metal_reg_device_get(ggml_backend_reg_t r
     GGML_UNUSED(index);
 }
 
+static struct ggml_backend_feature g_ggml_backend_metal_features[] = {
+#if defined(GGML_METAL_EMBED_LIBRARY)
+    { "EMBED_LIBRARY", "1" },
+#endif
+#if defined(GGML_METAL_USE_BF16)
+    { "BF16", "1" },
+#endif
+    { nil, nil },
+};
+
+static struct ggml_backend_feature * ggml_backend_metal_get_features(ggml_backend_reg_t reg) {
+    return g_ggml_backend_metal_features;
+
+    GGML_UNUSED(reg);
+}
+
+static void * ggml_backend_metal_get_proc_address(ggml_backend_reg_t reg, const char * name) {
+    if (strcmp(name, "ggml_backend_get_features") == 0) {
+        return (void *)ggml_backend_metal_get_features;
+    }
+
+    return NULL;
+
+    GGML_UNUSED(reg);
+}
 static struct ggml_backend_reg_i ggml_backend_metal_reg_i = {
     /* .get_name         = */ ggml_backend_metal_reg_get_name,
     /* .device_count     = */ ggml_backend_metal_reg_device_count,
     /* .device_get       = */ ggml_backend_metal_reg_device_get,
-    /* .get_proc_address = */ NULL,
+    /* .get_proc_address = */ ggml_backend_metal_get_proc_address,
 };
 
 ggml_backend_reg_t ggml_backend_metal_reg(void) {
     // TODO: make this thread-safe somehow?
     {
         g_ggml_backend_metal_reg = (struct ggml_backend_reg) {
-            /* .iface   = */ ggml_backend_metal_reg_i,
-            /* .context = */ NULL,
+            /* .api_version = */ GGML_BACKEND_API_VERSION,
+            /* .iface       = */ ggml_backend_metal_reg_i,
+            /* .context     = */ NULL,
         };
 
         g_ggml_backend_metal_device = (struct ggml_backend_device) {
@@ -4396,3 +4422,5 @@ ggml_backend_reg_t ggml_backend_metal_reg(void) {
 
     return &g_ggml_backend_metal_reg;
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_metal_reg)

@@ -6738,8 +6738,9 @@ static const struct ggml_backend_reg_i ggml_backend_vk_reg_i = {
 
 ggml_backend_reg_t ggml_backend_vk_reg() {
     static ggml_backend_reg reg = {
-        /* .iface   = */ ggml_backend_vk_reg_i,
-        /* .context = */ nullptr,
+        /* .api_version = */ GGML_BACKEND_API_VERSION,
+        /* .iface       = */ ggml_backend_vk_reg_i,
+        /* .context     = */ nullptr,
     };
 
     return &reg;
@@ -7365,3 +7366,5 @@ static void ggml_vk_check_results_1(ggml_tensor * tensor) {
     VK_LOG_DEBUG("END ggml_vk_check_results_1(" << tensor->name << ")");
 }
 #endif
+
+GGML_BACKEND_DL_IMPL(ggml_backend_vk_reg)

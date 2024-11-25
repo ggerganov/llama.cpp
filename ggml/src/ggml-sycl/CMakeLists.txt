@@ -16,12 +16,10 @@ endif()
 message(STATUS "SYCL found")
 #todo: AOT
 
-add_library(ggml-sycl
-            ggml-sycl.cpp
-            ../../include/ggml-sycl.h)
-
-target_link_libraries(ggml-sycl PRIVATE ggml-base)
-target_include_directories(ggml-sycl PRIVATE . ..)
+ggml_add_backend_library(ggml-sycl
+                         ggml-sycl.cpp
+                         ../../include/ggml-sycl.h
+                        )
 
 if (GGML_SYCL_F16)
     if (GGML_SYCL_TARGET STREQUAL "AMD")

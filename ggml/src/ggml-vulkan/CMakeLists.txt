@@ -3,13 +3,13 @@ find_package(Vulkan COMPONENTS glslc REQUIRED)
 if (Vulkan_FOUND)
     message(STATUS "Vulkan found")
 
-    add_library(ggml-vulkan
-                ggml-vulkan.cpp
-                ../../include/ggml-vulkan.h
-                )
+    ggml_add_backend_library(ggml-vulkan
+                             ggml-vulkan.cpp
+                             ../../include/ggml-vulkan.h
+                            )
 
-    target_link_libraries(ggml-vulkan PRIVATE ggml-base Vulkan::Vulkan)
-    target_include_directories(ggml-vulkan PRIVATE . .. ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
+    target_include_directories(ggml-vulkan PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
     # Workaround to the "can't dereference invalidated vector iterator" bug in clang-cl debug build
     # Posssibly relevant: https://stackoverflow.com/questions/74748276/visual-studio-no-displays-the-correct-length-of-stdvector

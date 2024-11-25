@@ -47,12 +47,10 @@ if (MUSAToolkit_FOUND)
         set_property(SOURCE ${SOURCE} PROPERTY COMPILE_FLAGS "-x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22")
     endforeach()
 
-    add_library(ggml-musa
-                ${GGML_HEADERS_MUSA}
-                ${GGML_SOURCES_MUSA})
-
-    target_link_libraries(ggml-musa PRIVATE ggml-base)
-    target_include_directories(ggml-musa PRIVATE . ..)
+    ggml_add_backend_library(ggml-musa
+                             ${GGML_HEADERS_MUSA}
+                             ${GGML_SOURCES_MUSA}
+                            )
 
     # TODO: do not use CUDA definitions for MUSA
     target_compile_definitions(ggml PUBLIC GGML_USE_CUDA)

@@ -4,18 +4,15 @@ find_library(METALKIT_FRAMEWORK MetalKit   REQUIRED)
 
 message(STATUS "Metal framework found")
 
-add_library(ggml-metal
-            ggml-metal.m
-            )
+ggml_add_backend_library(ggml-metal
+                         ggml-metal.m
+                        )
 
 target_link_libraries(ggml-metal PRIVATE
-                      ggml-base
                       ${FOUNDATION_LIBRARY}
                       ${METAL_FRAMEWORK}
                       ${METALKIT_FRAMEWORK}
                       )
-
-target_include_directories(ggml-metal PRIVATE . ..)
 
 if (GGML_METAL_NDEBUG)
     add_compile_definitions(GGML_METAL_NDEBUG)

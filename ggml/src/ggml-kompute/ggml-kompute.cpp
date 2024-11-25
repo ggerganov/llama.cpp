@@ -2176,9 +2176,12 @@ static const struct ggml_backend_reg_i ggml_backend_kompute_reg_i = {
 
 ggml_backend_reg_t ggml_backend_kompute_reg() {
     static ggml_backend_reg reg = {
-        /* .iface   = */ ggml_backend_kompute_reg_i,
-        /* .context = */ nullptr,
+        /* .api_version = */ GGML_BACKEND_API_VERSION,
+        /* .iface       = */ ggml_backend_kompute_reg_i,
+        /* .context     = */ nullptr,
     };
 
     return &reg;
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_kompute_reg)

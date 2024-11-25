@@ -61,9 +61,9 @@ if (CANN_INSTALL_DIR)
 
     file(GLOB GGML_SOURCES_CANN "*.cpp")
 
-    add_library(ggml-cann ${GGML_SOURCES_CANN})
-    target_link_libraries(ggml-cann PRIVATE ggml-base ${CANN_LIBRARIES})
-    target_include_directories(ggml-cann PRIVATE . .. ${CANN_INCLUDE_DIRS})
+    ggml_add_backend_library(ggml-cann ${GGML_SOURCES_CANN})
+    target_link_libraries(ggml-cann PRIVATE ${CANN_LIBRARIES})
+    target_include_directories(ggml-cann PRIVATE ${CANN_INCLUDE_DIRS})
     target_link_directories(ggml-cann PRIVATE ${CANN_INSTALL_DIR}/lib64)
 
     target_compile_definitions(ggml-cann PRIVATE "-D${SOC_TYPE_COMPILE_OPTION}")

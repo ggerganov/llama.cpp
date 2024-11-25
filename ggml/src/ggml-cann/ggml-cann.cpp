@@ -2064,16 +2064,17 @@ ggml_backend_reg_t ggml_backend_cann_reg() {
                 dev_ctx->name = GGML_CANN_NAME + std::to_string(i);
                 ggml_cann_set_device(i);
                 ggml_backend_dev_t dev = new ggml_backend_device {
-                    /* .interface = */ ggml_backend_cann_device_interface,
-                    /* .reg       = */ &reg,
-                    /* .context   = */ dev_ctx
+                    /* .iface   = */ ggml_backend_cann_device_interface,
+                    /* .reg     = */ &reg,
+                    /* .context = */ dev_ctx
                 };
                 ctx->devices.push_back(dev);
             }
 
             reg = ggml_backend_reg {
-                /* .interface = */ ggml_backend_cann_reg_interface,
-                /* .context   = */ ctx
+                /* .api_version = */ GGML_BACKEND_API_VERSION,
+                /* .iface       = */ ggml_backend_cann_reg_interface,
+                /* .context     = */ ctx
             };
         }
 
@@ -2126,3 +2127,5 @@ void ggml_backend_cann_get_device_memory(int32_t device, size_t* free,
     ggml_cann_set_device(device);
     ACL_CHECK(aclrtGetMemInfo(ACL_HBM_MEM, free, total));
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_cann_reg)

@@ -1,14 +1,13 @@
-add_library(ggml-cpu
-            ggml-cpu.c
-            ggml-cpu.cpp
-            ggml-cpu-aarch64.c
-            ggml-cpu-aarch64.h
-            ggml-cpu-quants.c
-            ggml-cpu-quants.h
-            )
+ggml_add_backend_library(ggml-cpu
+                         ggml-cpu.c
+                         ggml-cpu.cpp
+                         ggml-cpu-aarch64.c
+                         ggml-cpu-aarch64.h
+                         ggml-cpu-quants.c
+                         ggml-cpu-quants.h
+                        )
 
-target_link_libraries(ggml-cpu PRIVATE ggml-base)
-target_include_directories(ggml-cpu PRIVATE . ..)
+target_include_directories(ggml-cpu PRIVATE .)
 
 if (APPLE AND GGML_ACCELERATE)
     find_library(ACCELERATE_FRAMEWORK Accelerate)

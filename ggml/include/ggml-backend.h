@@ -190,6 +190,14 @@ extern "C" {
     typedef void                         (*ggml_backend_set_n_threads_t)(ggml_backend_t backend, int n_threads);
     // Get additional buffer types provided by the device (returns a NULL-terminated array)
     typedef ggml_backend_buffer_type_t * (*ggml_backend_dev_get_extra_bufts_t)(ggml_backend_dev_t device);
+    // Set the abort callback for the backend
+    typedef void                         (*ggml_backend_set_abort_callback_t)(ggml_backend_t backend, ggml_abort_callback abort_callback, void * abort_callback_data);
+    // Get a list of feature flags supported by the backend (returns a NULL-terminated array)
+    struct ggml_backend_feature {
+        const char * name;
+        const char * value;
+    };
+    typedef struct ggml_backend_feature * (*ggml_backend_get_features_t)(ggml_backend_reg_t reg);
 
     //
     // Backend registry
@@ -213,6 +221,13 @@ extern "C" {
     GGML_API ggml_backend_t ggml_backend_init_by_type(enum ggml_backend_dev_type type, const char * params);
     // = ggml_backend_dev_init(ggml_backend_dev_by_type(GPU) OR ggml_backend_dev_by_type(CPU), NULL)
     GGML_API ggml_backend_t ggml_backend_init_best(void);
+
+    // Load a backend from a dynamic library and register it
+    GGML_API ggml_backend_reg_t ggml_backend_load(const char * path);
+    // Unload a backend if loaded dynamically and unregister it
+    GGML_API void               ggml_backend_unload(ggml_backend_reg_t reg);
+    // Load all known backends from dynamic libraries
+    GGML_API void               ggml_backend_load_all(void);
 
     //
     // Backend scheduler

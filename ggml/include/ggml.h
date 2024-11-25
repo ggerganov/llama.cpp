@@ -2215,6 +2215,37 @@ extern "C" {
 
     GGML_API const struct ggml_type_traits * ggml_get_type_traits(enum ggml_type type);
 
+    // ggml threadpool
+    // TODO: currently, only a few functions are in the base ggml API, while the rest are in the CPU backend
+    // the goal should be to create an API that other backends can use move everything to the ggml base
+
+    // scheduling priorities
+    enum ggml_sched_priority {
+        GGML_SCHED_PRIO_NORMAL,
+        GGML_SCHED_PRIO_MEDIUM,
+        GGML_SCHED_PRIO_HIGH,
+        GGML_SCHED_PRIO_REALTIME
+    };
+
+    // threadpool params
+    // Use ggml_threadpool_params_default() or ggml_threadpool_params_init() to populate the defaults
+    struct ggml_threadpool_params {
+        bool                cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores (all-zeros means use default affinity settings)
+        int                 n_threads;                   // number of threads
+        enum ggml_sched_priority prio;                   // thread priority
+        uint32_t            poll;                        // polling level (0 - no polling, 100 - aggressive polling)
+        bool                strict_cpu;                  // strict cpu placement
+        bool                paused;                      // start in paused state
+    };
+
+    struct ggml_threadpool;     // forward declaration, see ggml.c
+
+    typedef struct ggml_threadpool * ggml_threadpool_t;
+
+    GGML_API struct ggml_threadpool_params ggml_threadpool_params_default(int n_threads);
+    GGML_API void                          ggml_threadpool_params_init   (struct ggml_threadpool_params * p, int n_threads);
+    GGML_API bool                          ggml_threadpool_params_match  (const struct ggml_threadpool_params * p0, const struct ggml_threadpool_params * p1);
+
 #ifdef  __cplusplus
 }
 #endif
