@@ -6,6 +6,5 @@ target_compile_features(${TARGET} PRIVATE cxx_std_11)
 
 set(TEST_TARGET test-eval-callback)
 add_test(NAME ${TEST_TARGET}
-        COMMAND llama-eval-callback --hf-repo ggml-org/models --hf-file tinyllamas/stories260K.gguf --model stories260K.gguf --prompt hello --seed 42 -ngl 0
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../) # HACK for dl backends
+        COMMAND llama-eval-callback --hf-repo ggml-org/models --hf-file tinyllamas/stories260K.gguf --model stories260K.gguf --prompt hello --seed 42 -ngl 0)
 set_property(TEST ${TEST_TARGET} PROPERTY LABELS eval-callback curl)
