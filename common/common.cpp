@@ -377,9 +377,6 @@ void common_init() {
 #endif
 
     LOG_INF("build: %d (%s) with %s for %s%s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET, build_type);
-
-    // load dynamic backends
-    ggml_backend_load_all();
 }
 
 std::string common_params_get_system_info(const common_params & params) {
@@ -982,9 +979,12 @@ void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_l
     }
 }
 
-struct llama_model_params common_model_params_to_llama(const common_params & params) {
+struct llama_model_params common_model_params_to_llama(common_params & params) {
     auto mparams = llama_model_default_params();
 
+    if (!params.devices.empty()) {
+        mparams.devices = params.devices.data();
+    }
     if (params.n_gpu_layers != -1) {
         mparams.n_gpu_layers = params.n_gpu_layers;
     }

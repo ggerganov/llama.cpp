@@ -253,6 +253,15 @@ void ggml_backend_device_register(ggml_backend_dev_t device) {
 }
 
 // Backend (reg) enumeration
+static bool striequals(const char * a, const char * b) {
+    for (; *a && *b; a++, b++) {
+        if (std::tolower(*a) != std::tolower(*b)) {
+            return false;
+        }
+    }
+    return *a == *b;
+}
+
 size_t ggml_backend_reg_count() {
     return get_reg().backends.size();
 }
@@ -265,7 +274,7 @@ ggml_backend_reg_t ggml_backend_reg_get(size_t index) {
 ggml_backend_reg_t ggml_backend_reg_by_name(const char * name) {
     for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
         ggml_backend_reg_t reg = ggml_backend_reg_get(i);
-        if (std::strcmp(ggml_backend_reg_name(reg), name) == 0) {
+        if (striequals(ggml_backend_reg_name(reg), name)) {
             return reg;
         }
     }
@@ -285,7 +294,7 @@ ggml_backend_dev_t ggml_backend_dev_get(size_t index) {
 ggml_backend_dev_t ggml_backend_dev_by_name(const char * name) {
     for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-        if (strcmp(ggml_backend_dev_name(dev), name) == 0) {
+        if (striequals(ggml_backend_dev_name(dev), name)) {
             return dev;
         }
     }

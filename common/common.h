@@ -156,6 +156,7 @@ struct common_params_sampling {
 };
 
 struct common_params_speculative {
+    std::vector<ggml_backend_dev_t> devices; // devices to use for offloading
     int32_t n_ctx        =     0; // draft context size
     int32_t n_max        =    16; // maximum number of tokens to draft during speculative decoding
     int32_t n_min        =     5; // minimum number of draft tokens to use for speculative decoding
@@ -178,9 +179,6 @@ struct common_params {
     int32_t n_chunks              =    -1; // max number of chunks to process (-1 = unlimited)
     int32_t n_parallel            =     1; // number of parallel sequences to decode
     int32_t n_sequences           =     1; // number of sequences to decode
-    int32_t n_gpu_layers          =    -1; // number of layers to store in VRAM (-1 - use default)
-    int32_t main_gpu              =     0; // the GPU that is used for scratch and small tensors
-    float   tensor_split[128]     =   {0}; // how split tensors should be distributed across GPUs
     int32_t grp_attn_n            =     1; // group-attention factor
     int32_t grp_attn_w            =   512; // group-attention width
     int32_t n_print               =    -1; // print token count every n tokens (-1 = disabled)
@@ -193,6 +191,13 @@ struct common_params {
     int32_t yarn_orig_ctx         =     0; // YaRN original context length
     float   defrag_thold          =  0.1f; // KV cache defragmentation threshold
 
+    // offload params
+    std::vector<ggml_backend_dev_t> devices;         // devices to use for offloading
+    int32_t n_gpu_layers                    =    -1; // number of layers to store in VRAM (-1 - use default)
+    int32_t main_gpu                        =     0; // the GPU that is used for scratch and small tensors
+    float   tensor_split[128]               =   {0}; // how split tensors should be distributed across GPUs
+    enum llama_split_mode        split_mode = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
+
     struct cpu_params cpuparams;
     struct cpu_params cpuparams_batch;
 
@@ -201,7 +206,6 @@ struct common_params {
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
-    enum llama_split_mode        split_mode        = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
@@ -462,7 +466,7 @@ struct common_init_result {
 
 struct common_init_result     common_init_from_params(common_params & params);
 
-struct llama_model_params     common_model_params_to_llama  (const common_params & params);
+struct llama_model_params     common_model_params_to_llama  (      common_params & params);
 struct llama_context_params   common_context_params_to_llama(const common_params & params);
 struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
 

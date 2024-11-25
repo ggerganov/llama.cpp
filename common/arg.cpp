@@ -298,6 +298,27 @@ static void common_params_print_usage(common_params_context & ctx_arg) {
     print_options(specific_options);
 }
 
+static std::vector<ggml_backend_dev_t> parse_device_list(const std::string & value) {
+    std::vector<ggml_backend_dev_t> devices;
+    auto dev_names = string_split<std::string>(value, ',');
+    if (dev_names.empty()) {
+        throw std::invalid_argument("no devices specified");
+    }
+    if (dev_names.size() == 1 && dev_names[0] == "none") {
+        devices.push_back(nullptr);
+    } else {
+        for (const auto & device : dev_names) {
+            auto * dev = ggml_backend_dev_by_name(device.c_str());
+            if (!dev || ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_GPU) {
+                throw std::invalid_argument(string_format("invalid device: %s", device.c_str()));
+            }
+            devices.push_back(dev);
+        }
+        devices.push_back(nullptr);
+    }
+    return devices;
+}
+
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
     auto ctx_arg = common_params_parser_init(params, ex, print_usage);
     const common_params params_org = ctx_arg.params; // the example can modify the default params
@@ -324,6 +345,9 @@ bool common_params_parse(int argc, char ** argv, common_params & params, llama_e
 }
 
 common_params_context common_params_parser_init(common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
+    // load dynamic backends
+    ggml_backend_load_all();
+
     common_params_context ctx_arg(params);
     ctx_arg.print_usage = print_usage;
     ctx_arg.ex          = ex;
@@ -1313,6 +1337,30 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_NUMA"));
     add_opt(common_arg(
+        {"-dev", "--device"}, "<dev1,dev2,..>",
+        "comma-separated list of devices to use for offloading (none = don't offload)\n"
+        "use --list-devices to see a list of available devices",
+        [](common_params & params, const std::string & value) {
+            params.devices = parse_device_list(value);
+        }
+    ).set_env("LLAMA_ARG_DEVICE"));
+    add_opt(common_arg(
+        {"--list-devices"},
+        "print list of available devices and exit",
+        [](common_params &) {
+            printf("Available devices:\n");
+            for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+                auto * dev = ggml_backend_dev_get(i);
+                if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+                    size_t free, total;
+                    ggml_backend_dev_memory(dev, &free, &total);
+                    printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
+                }
+            }
+            exit(0);
+        }
+    ));
+    add_opt(common_arg(
         {"-ngl", "--gpu-layers", "--n-gpu-layers"}, "N",
         "number of layers to store in VRAM",
         [](common_params & params, int value) {
@@ -1336,10 +1384,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             } else if (arg_next == "layer") {
                 params.split_mode = LLAMA_SPLIT_MODE_LAYER;
             } else if (arg_next == "row") {
-#ifdef GGML_USE_SYCL
-                fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
-                exit(1);
-#endif // GGML_USE_SYCL
                 params.split_mode = LLAMA_SPLIT_MODE_ROW;
             } else {
                 throw std::invalid_argument("invalid value");
@@ -2040,6 +2084,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("size of the prompt context for the draft model (default: %d, 0 = loaded from model)", params.speculative.n_ctx),
         [](common_params & params, int value) {
             params.speculative.n_ctx = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"-devd", "--device-draft"}, "<dev1,dev2,..>",
+        "comma-separated list of devices to use for offloading the draft model (none = don't offload)\n"
+        "use --list-devices to see a list of available devices",
+        [](common_params & params, const std::string & value) {
+            params.speculative.devices = parse_device_list(value);
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(

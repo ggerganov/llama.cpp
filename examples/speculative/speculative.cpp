@@ -76,6 +76,7 @@ int main(int argc, char ** argv) {
     ctx_tgt = llama_init_tgt.context;
 
     // load the draft model
+    params.devices = params.speculative.devices;
     params.model = params.speculative.model;
     params.n_gpu_layers = params.speculative.n_gpu_layers;
     if (params.speculative.cpuparams.n_threads > 0) {
