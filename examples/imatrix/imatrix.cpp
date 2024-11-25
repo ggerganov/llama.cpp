@@ -638,6 +638,10 @@ int main(int argc, char ** argv) {
     }
 
     if (params.prompt.empty()) {
+        if (params.in_files.empty()) {
+            LOG_ERR("Error: No prompt provided and no precomputed matrices (--in-file) to combine.\n");
+            return 1;
+        }
         LOG_INF("No prompt provided; combining precomputed matrices only.\n");
     } else {
         if (!compute_imatrix(ctx, params)) {
