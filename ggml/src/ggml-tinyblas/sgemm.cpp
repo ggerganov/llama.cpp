@@ -50,8 +50,6 @@
 
 #include "sgemm.h"
 #include "ggml-impl.h"
-// hack until moved into the CPU backend
-#include "../ggml-cpu-impl.h"
 #include "ggml-quants.h"
 
 #ifdef _MSC_VER
@@ -133,6 +131,16 @@ inline __m256 madd(__m256 a, __m256 b, __m256 c) {
 template <>
 inline __m512 madd(__m512 a, __m512 b, __m512 c) {
     return _mm512_fmadd_ps(a, b, c);
+}
+#endif
+#if defined(__AVX512BF16__)
+template <>
+inline __m512 madd(__m512bh a, __m512bh b, __m512 c) {
+    return _mm512_dpbf16_ps(c, a, b);
+}
+template <>
+inline __m256 madd(__m256bh a, __m256bh b, __m256 c) {
+    return _mm256_dpbf16_ps(c, a, b);
 }
 #endif
 #endif
@@ -226,6 +234,13 @@ template <> inline __m256 load(const float *p) {
 }
 #endif // __AVX__
 
+#if defined(__AVX2__) || defined(__AVX512F__)
+template <> inline __m256 load(const ggml_bf16_t *p) {
+    return _mm256_castsi256_ps(
+        _mm256_slli_epi32(_mm256_cvtepu16_epi32(_mm_loadu_si128((const __m128i *)p)), 16));
+}
+#endif // __AVX2__
+
 #if defined(__F16C__)
 template <> inline __m256 load(const ggml_fp16_t *p) {
     return _mm256_cvtph_ps(_mm_loadu_si128((const __m128i *)p));
@@ -239,7 +254,26 @@ template <> inline __m512 load(const float *p) {
 template <> inline __m512 load(const ggml_fp16_t *p) {
     return _mm512_cvtph_ps(_mm256_loadu_si256((const __m256i *)p));
 }
+template <> inline __m512 load(const ggml_bf16_t *p) {
+    return _mm512_castsi512_ps(
+        _mm512_slli_epi32(_mm512_cvtepu16_epi32(_mm256_loadu_si256((const __m256i *)p)), 16));
+}
 #endif // __AVX512F__
+
+#if defined(__AVX512BF16__)
+template <> inline __m512bh load(const ggml_bf16_t *p) {
+    return (__m512bh)_mm512_loadu_ps((const float *)p);
+}
+template <> inline __m256bh load(const ggml_bf16_t *p) {
+    return (__m256bh)_mm256_loadu_ps((const float *)p);
+}
+template <> inline __m512bh load(const float *p) {
+    return _mm512_cvtne2ps_pbh(_mm512_loadu_ps(p + 16), _mm512_loadu_ps(p));
+}
+template <> inline __m256bh load(const float *p) {
+    return _mm512_cvtneps_pbh(_mm512_loadu_ps(p));
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTANTS
@@ -1627,259 +1661,494 @@ class tinyBLAS_PPC {
 #endif
 } // namespace
 
-/**
- * Performs optimized matrix multiplication on CPU.
- *
- * This subroutine may compute C = Aᵀ * B with column major ordering.
- * Despite its name, this isn't a generalized implementation. Work is
- * only performed when a handwritten kernel is written and available.
- * Otherwise the caller should fall back to a general matmul routine.
- *
- * For example, for single-threaded single-precision GEMM you can say
- *
- *     llamafile_sgemm(m, n, k, A, lda, B, ldb, C, ldc,
- *                     0, 1,
- *                     GGML_TYPE_F32, GGML_TYPE_F32, GGML_TYPE_F32);
- *
- * @param m is rows in `A` and `C`
- * @param n is cols in `B` and `C`
- * @param k is cols in `A` and rows in `B`
- * @param A is first input matrix (always transposed)
- * @param lda is row stride of `A`
- * @param B is second input matrix (never transposed)
- * @param ldb is row stride of `B`
- * @param C is input/output array of output matrices
- * @param ldc is row stride of `C`
- * @param ith is thread id (must be less than `nth`)
- * @param nth is number of threads (must be greater than zero)
- * @param Atype is GGML data type of `A`
- * @param Btype is GGML data type of `B`
- * @param Ctype is GGML data type of `C`
- * @return true if this function was able to service the matmul request
- */
-bool llamafile_sgemm(int64_t m, int64_t n, int64_t k, const void *A, int64_t lda, const void *B, int64_t ldb, void *C,
-                     int64_t ldc, int ith, int nth, int Atype, int Btype, int Ctype) {
+namespace ggml::backend::tinyblas {
 
-    assert(m >= 0);
-    assert(n >= 0);
-    assert(k >= 0);
-    assert(lda >= k);
-    assert(ldb >= k);
-    assert(ldc >= m);
-    assert(nth > 0);
-    assert(ith < nth);
+    /**
+     * Performs optimized matrix multiplication on CPU.
+     *
+     * This subroutine may compute C = Aᵀ * B with column major ordering.
+     * Despite its name, this isn't a generalized implementation. Work is
+     * only performed when a handwritten kernel is written and available.
+     * Otherwise the caller should fall back to a general matmul routine.
+     *
+     * For example, for single-threaded single-precision GEMM you can say
+     *
+     *     llamafile_sgemm(m, n, k, A, lda, B, ldb, C, ldc, 0, 1);
+     *
+     * @param m is rows in `A` and `C`
+     * @param n is cols in `B` and `C`
+     * @param k is cols in `A` and rows in `B`
+     * @param A is first input matrix (always transposed)
+     * @param lda is row stride of `A`
+     * @param B is second input matrix (never transposed)
+     * @param ldb is row stride of `B`
+     * @param C is input/output array of output matrices
+     * @param ldc is row stride of `C`
+     * @param ith is thread id (must be less than `nth`)
+     * @param nth is number of threads (must be greater than zero)
+     * @return true if this function was able to service the matmul request
+     */
 
-    // only enable sgemm for prompt processing
-    if (n < 2)
-        return false;
-
-    if (Ctype != GGML_TYPE_F32)
-        return false;
-
-    switch (Atype) {
-
-    case GGML_TYPE_F32: {
-        if (Btype != GGML_TYPE_F32)
-            return false;
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const float *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
 #if defined(__AVX512F__)
-        if (k % 16)
-            return false;
-        tinyBLAS<16, __m512, __m512, float, float, float> tb{
-            k, (const float *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#elif defined(__AVX__) || defined(__AVX2__)
-        if (k % 8)
-            return false;
-        tinyBLAS<8, __m256, __m256, float, float, float> tb{
-            k, (const float *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#elif defined(__ARM_NEON)
-        if (n < 4)
-            return false;
-        if (k % 4)
-            return false;
-        tinyBLAS<4, float32x4_t, float32x4_t, float, float, float> tb{
-            k, (const float *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#elif defined(__MMA__)
-        if (k % 8)
-            return false;
-        tinyBLAS_PPC<float, float, float> tb{
-            k, (const float *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#else
-        return false;
+        if ((k % 16) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<16, __m512, __m512, float, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
 #endif
+#if defined(__AVX__) || defined(__AVX2__)
+        if ((k % 8)==0) {
+            if constexpr (RUN) {
+                tinyBLAS<8, __m256, __m256, float, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+#if defined(__ARM_NEON)
+        if ((k % 4) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<4, float32x4_t, float32x4_t, float, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+        // TODO: voir a mettre ca dans un autre fichier...
+#if defined(__MMA__)
+        if ((k % 8) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS_PPC<float, float, float> tb{ k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+        return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const float *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const float *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
 
-    case GGML_TYPE_F16: {
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const ggml_fp16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
 #if defined(__AVX512F__)
-        if (k % 16)
-            return false;
-        if (Btype != GGML_TYPE_F32)
-            return false;
-        tinyBLAS<16, __m512, __m512, ggml_fp16_t, float, float> tb{
-            k, (const ggml_fp16_t *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
+        if ((k % 16) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<16, __m512, __m512, ggml_fp16_t, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+#if (defined(__AVX__) || defined(__AVX2__)) && defined(__F16C__)
+        if ((k % 8) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<8, __m256, __m256, ggml_fp16_t, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+#if defined(__ARM_NEON) && !defined(_MSC_VER)
+        if ((k % 4) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<4, float32x4_t, float32x4_t, ggml_fp16_t, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+        return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
+    }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const ggml_fp16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const ggml_fp16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const ggml_fp16_t *A, int64_t lda, const ggml_fp16_t *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
+#if defined(__AVX512F__)
+        if ((k % 16) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<16, __m512, __m512, ggml_fp16_t, ggml_fp16_t, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+#if (defined(__AVX__) || defined(__AVX2__)) && defined(__F16C__)
+        if ((k % 8) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<8, __m256, __m256, ggml_fp16_t, ggml_fp16_t, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+#if defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) && !defined(_MSC_VER)
+        if ((k % 8) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<8, float16x8_t, float16x8_t, ggml_fp16_t, ggml_fp16_t, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+        return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
+    }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const ggml_fp16_t *A, int64_t lda, const ggml_fp16_t *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const ggml_fp16_t *A, int64_t lda, const ggml_fp16_t *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const ggml_bf16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
+#if defined(__AVX512BF16__)
+        // wait for convert B => bf16?
+        //if ((k % 32) == 0) {
+        //    if constexpr (RUN) {
+        //        tinyBLAS<32, __m512, __m512bh, ggml_bf16_t, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+        //        tb.matmul(m, n);
+        //    }
+        //    return true;
+        //}
+#elif defined(__AVX512F__)
+        if ((k % 16) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<16, __m512, __m512, ggml_bf16_t, float, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
 #elif (defined(__AVX__) || defined(__AVX2__)) && defined(__F16C__)
-        if (k % 8)
-            return false;
-        if (Btype != GGML_TYPE_F32)
-            return false;
-        tinyBLAS<8, __m256, __m256, ggml_fp16_t, float, float> tb{
-            k, (const ggml_fp16_t *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#elif defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) && !defined(_MSC_VER)
-        if (n < 8)
-            return false;
-        if (k % 8)
-            return false;
-        if (Btype != GGML_TYPE_F16)
-            return false;
-        tinyBLAS<8, float16x8_t, float16x8_t, ggml_fp16_t, ggml_fp16_t, float> tb{
-            k, (const ggml_fp16_t *)A, lda,
-            (const ggml_fp16_t *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#elif defined(__ARM_NEON) && !defined(_MSC_VER)
-        if (k % 4)
-            return false;
-        if (Btype != GGML_TYPE_F32)
-            return false;
-        tinyBLAS<4, float32x4_t, float32x4_t, ggml_fp16_t, float, float> tb{
-            k, (const ggml_fp16_t *)A, lda,
-            (const float *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
-        return true;
-#else
-        return false;
+        // TODO
 #endif
+        return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const ggml_bf16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const ggml_bf16_t *A, int64_t lda, const float *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
 
-    case GGML_TYPE_Q8_0: {
-        if (Btype != GGML_TYPE_Q8_0)
-           return false;
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const ggml_bf16_t *A, int64_t lda, const ggml_bf16_t *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
+#if defined(__AVX512BF16__)
+        if ((k % 32) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<32, __m512, __m512bh, ggml_bf16_t, ggml_bf16_t, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+        // 2eme chance...
+        if ((k % 16) == 0) {
+            if constexpr (RUN) {
+                tinyBLAS<16, __m256, __m256bh, ggml_bf16_t, ggml_bf16_t, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+                tb.matmul(m, n);
+            }
+            return true;
+        }
+#endif
+        return false;
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
+    }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const ggml_bf16_t *A, int64_t lda, const ggml_bf16_t *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const ggml_bf16_t *A, int64_t lda, const ggml_bf16_t *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const block_q8_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
+
 #if defined(__AVX2__) || defined(__AVX512F__) || defined(__AVX__)
-        tinyBLAS_Q0_AVX<block_q8_0, block_q8_0, float> tb{
-            k, (const block_q8_0 *)A, lda,
-            (const block_q8_0 *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
+        if constexpr (RUN) {
+            tinyBLAS_Q0_AVX<block_q8_0, block_q8_0, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+            tb.matmul(m, n);
+        }
         return true;
 #elif defined(__ARM_FEATURE_DOTPROD)
-        tinyBLAS_Q0_ARM<block_q8_0> tb{
-            k, (const block_q8_0 *)A, lda,
-            (const block_q8_0 *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
+        if constexpr (RUN) {
+            tinyBLAS_Q0_ARM<block_q8_0> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+            tb.matmul(m, n);
+        }
         return true;
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const block_q8_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const block_q8_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
 
-    case GGML_TYPE_Q4_0: {
-        if (Btype != GGML_TYPE_Q8_0)
-            return false;
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const block_q4_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
+
 #if defined(__AVX2__) || defined(__AVX512F__) || defined(__AVX__)
-        tinyBLAS_Q0_AVX<block_q4_0, block_q8_0, float> tb{
-            k, (const block_q4_0 *)A, lda,
-            (const block_q8_0 *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
+        if constexpr (RUN) {
+            tinyBLAS_Q0_AVX<block_q4_0, block_q8_0, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+            tb.matmul(m, n);
+        }
         return true;
 #elif defined(__ARM_FEATURE_DOTPROD)
-        tinyBLAS_Q0_ARM<block_q4_0> tb{
-            k, (const block_q4_0 *)A, lda,
-            (const block_q8_0 *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
+        if constexpr (RUN) {
+            tinyBLAS_Q0_ARM<block_q4_0> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+            tb.matmul(m, n);
+        }
         return true;
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const block_q4_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const block_q4_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
 
-    case GGML_TYPE_Q5_0: {
-        if (Btype != GGML_TYPE_Q8_0)
-            return false;
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const block_q5_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
+
 #if defined(__AVX2__) || defined(__AVX512F__) || defined(__AVX__)
-        tinyBLAS_Q0_AVX<block_q5_0, block_q8_0, float> tb{
-            k, (const block_q5_0 *)A, lda,
-            (const block_q8_0 *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
+        if constexpr (RUN) {
+            tinyBLAS_Q0_AVX<block_q5_0, block_q8_0, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+            tb.matmul(m, n);
+        }
         return true;
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const block_q5_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const block_q5_0 *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
 
-    case GGML_TYPE_IQ4_NL: {
-        if (Btype != GGML_TYPE_Q8_0)
-            return false;
+    template<bool RUN>
+    bool gemm(int64_t m, int64_t n, int64_t k,
+            const block_iq4_nl *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth) {
+        assert(m >= 0);
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(lda >= k);
+        assert(ldb >= k);
+        assert(ldc >= m);
+        assert(nth > 0);
+        assert(ith < nth);
 #if defined(__AVX2__) || defined(__AVX512F__) || defined(__AVX__)
-        tinyBLAS_Q0_AVX<block_iq4_nl, block_q8_0, float> tb{
-            k, (const block_iq4_nl *)A, lda,
-            (const block_q8_0 *)B, ldb,
-            (float *)C, ldc,
-            ith, nth};
-        tb.matmul(m, n);
+        if constexpr (RUN) {
+            tinyBLAS_Q0_AVX<block_iq4_nl, block_q8_0, float> tb{k, A, lda, B, ldb, C, ldc, ith, nth};
+            tb.matmul(m, n);
+        }
         return true;
 #else
         return false;
 #endif
+        GGML_UNUSED(m);
+        GGML_UNUSED(n);
+        GGML_UNUSED(k);
+        GGML_UNUSED(A);
+        GGML_UNUSED(lda);
+        GGML_UNUSED(B);
+        GGML_UNUSED(ldb);
+        GGML_UNUSED(C);
+        GGML_UNUSED(ldc);
+        GGML_UNUSED(ith);
+        GGML_UNUSED(nth);
     }
-
-    default:
-        return false;
-    }
-
-    (void)m;
-    (void)n;
-    (void)k;
-    (void)A;
-    (void)lda;
-    (void)B;
-    (void)ldb;
-    (void)C;
-    (void)ldc;
-    (void)ith;
-    (void)nth;
-    (void)Atype;
-    (void)Btype;
-    (void)Ctype;
+    template bool gemm<true>(int64_t m, int64_t n, int64_t k,
+            const block_iq4_nl *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
+    template bool gemm<false>(int64_t m, int64_t n, int64_t k,
+            const block_iq4_nl *A, int64_t lda, const block_q8_0 *B, int64_t ldb, float *C, int64_t ldc,
+            int ith, int nth);
 }

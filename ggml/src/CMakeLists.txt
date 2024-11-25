@@ -258,6 +258,7 @@ ggml_add_backend(Kompute)
 ggml_add_backend(METAL)
 ggml_add_backend(RPC)
 ggml_add_backend(SYCL)
+ggml_add_backend(TINYBLAS)
 ggml_add_backend(Vulkan)
 ggml_add_backend(MUSA)
 

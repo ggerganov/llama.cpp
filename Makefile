@@ -567,8 +567,8 @@ ifdef GGML_NVPL
 endif # GGML_NVPL
 
 ifndef GGML_NO_LLAMAFILE
-	MK_CPPFLAGS  += -DGGML_USE_LLAMAFILE
-	OBJ_GGML_EXT += ggml/src/ggml-cpu/llamafile/sgemm.o
+	MK_CPPFLAGS  += -DGGML_USE_TINYBLAS
+	OBJ_GGML_EXT += ggml/src/ggml-tinyblas/ggml-tinyblas-cpp17.o ggml/src/ggml-tinyblas/sgemm-cpp17.o
 endif
 
 ifndef GGML_NO_AMX
@@ -1098,6 +1098,10 @@ $(DIR_GGML)/src/ggml-cpu/ggml-cpu-cpp.o: \
 	ggml/include/ggml-cpu.h \
 	ggml/src/ggml-impl.h
 	$(CXX) $(CXXFLAGS)   -c $< -o $@
+
+# for c++17 build
+$(DIR_GGML)/%-cpp17.o: $(DIR_GGML)/%.cpp
+	$(CXX) $(CXXFLAGS) -MMD -std=c++17 -c $< -o $@
 
 # Rules for building object files
 $(DIR_GGML)/%.o: $(DIR_GGML)/%.c

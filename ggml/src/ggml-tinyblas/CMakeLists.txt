@@ -1,14 +1,11 @@
-add_library(ggml-cpu
-            ggml-cpu.c
-            ggml-cpu.cpp
-            ggml-cpu-aarch64.c
-            ggml-cpu-aarch64.h
-            ggml-cpu-quants.c
-            ggml-cpu-quants.h
+message(STATUS "Using TINYBLAS")
+
+add_library(ggml-tinyblas
+            ggml-tinyblas.cpp
             )
 
-target_link_libraries(ggml-cpu PRIVATE ggml-base)
-target_include_directories(ggml-cpu PRIVATE . ..)
+target_link_libraries(ggml-tinyblas PRIVATE ggml-base)
+target_include_directories(ggml-tinyblas PRIVATE . ..)
 
 if (APPLE AND GGML_ACCELERATE)
     find_library(ACCELERATE_FRAMEWORK Accelerate)
@@ -19,7 +16,7 @@ if (APPLE AND GGML_ACCELERATE)
         add_compile_definitions(ACCELERATE_NEW_LAPACK)
         add_compile_definitions(ACCELERATE_LAPACK_ILP64)
 
-        target_link_libraries(ggml-cpu PRIVATE ${ACCELERATE_FRAMEWORK})
+        target_link_libraries(ggml-tinyblas PRIVATE ${ACCELERATE_FRAMEWORK})
     else()
         message(WARNING "Accelerate framework not found")
     endif()
@@ -32,27 +29,16 @@ if (GGML_OPENMP)
 
         add_compile_definitions(GGML_USE_OPENMP)
 
-        target_link_libraries(ggml-cpu PRIVATE OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
+        target_link_libraries(ggml-tinyblas PRIVATE OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
 
-        # FIXME: should be replaced with a compiler id check
-        #if (GGML_MUSA)
-        #    list(APPEND GGML_CPU_EXTRA_INCLUDES     "/usr/lib/llvm-14/lib/clang/14.0.0/include")
-        #    list(APPEND GGML_CPU_EXTRA_LIBS_PRIVATE "/usr/lib/llvm-14/lib/libomp.so")
-        #endif()
     else()
         message(WARNING "OpenMP not found")
     endif()
 endif()
 
-if (GGML_CPU_HBM)
-    find_library(memkind memkind REQUIRED)
-
-    message(STATUS "Using memkind for CPU HBM")
-
-    add_compile_definitions(GGML_USE_CPU_HBM)
-
-    target_link_libraries(ggml-cpu PUBLIC memkind)
-endif()
+target_sources(ggml-tinyblas PRIVATE
+               sgemm.cpp
+               sgemm.h)
 
 if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
     CMAKE_GENERATOR_PLATFORM_LWR STREQUAL "arm64" OR
@@ -122,7 +108,7 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
         # instruction set detection for MSVC only
         if (GGML_NATIVE)
             # TODO: improve, should not reference files from the parent folder
-            include(cmake/FindSIMD.cmake)
+            include(../ggml-cpu/cmake/FindSIMD.cmake)
         endif ()
         if (GGML_AVX512)
             list(APPEND ARCH_FLAGS /arch:AVX512)
@@ -234,23 +220,17 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
     if (GGML_LSX)
         list(APPEND ARCH_FLAGS -mlsx)
     endif()
-elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "riscv64")
-    message(STATUS "RISC-V detected")
-    if (GGML_RVV)
-        list(APPEND ARCH_FLAGS -march=rv64gcv -mabi=lp64d)
-    endif()
 else()
     message(STATUS "Unknown architecture")
 endif()
 
-if (GGML_CPU_AARCH64)
-    message(STATUS "Using runtime weight conversion of Q4_0 to Q4_0_x_x to enable optimized GEMM/GEMV kernels")
-    add_compile_definitions(GGML_USE_CPU_AARCH64)
-endif()
+target_compile_options(ggml-tinyblas PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
+target_compile_options(ggml-tinyblas PRIVATE "$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
 
-target_compile_options(ggml-cpu PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
-target_compile_options(ggml-cpu PRIVATE "$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
+#set_source_files_properties( ${GGML_SOURCES_FP8} PROPERTIES CXX_STANDARD 17)
+#set_source_files_properties( ${GGML_SOURCES_FP8} PROPERTIES COMPILE_FLAGS "-std=c++17")
+target_compile_features   (ggml-tinyblas PRIVATE cxx_std_17)
 
 if (EMSCRIPTEN)
-    set_target_properties(ggml-cpu PROPERTIES COMPILE_FLAGS "-msimd128")
+    set_target_properties(ggml-tinyblas PROPERTIES COMPILE_FLAGS "-msimd128")
 endif()

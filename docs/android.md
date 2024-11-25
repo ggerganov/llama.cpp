@@ -45,7 +45,7 @@ $ cmake \
   -DCMAKE_C_FLAGS="-march=armv8.7a" \
   -DCMAKE_CXX_FLAGS="-march=armv8.7a" \
   -DGGML_OPENMP=OFF \
-  -DGGML_LLAMAFILE=OFF \
+  -DGGML_TINYBLAS=OFF \
   -B build-android
 ```
 
