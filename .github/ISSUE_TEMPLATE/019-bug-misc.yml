@@ -14,7 +14,7 @@ body:
     id: version
     attributes:
       label: Name and Version
-      description: Which version of our software are you running? (use `--version` to get a version string)
+      description: Which version of our software is affected? (You can use `--version` to get a version string.)
       placeholder: |
         $./llama-cli --version
         version: 2999 (42b4109e)
@@ -24,7 +24,8 @@ body:
   - type: dropdown
     id: operating-system
     attributes:
-      label: Which operating systems do you know to be affected?
+      label: Operating systems
+      description: Which operating systems do you know to be affected?
       multiple: true
       options:
         - Linux
@@ -33,28 +34,30 @@ body:
         - BSD
         - Other? (Please let us know in description)
     validations:
-      required: true
+      required: false
   - type: dropdown
     id: module
     attributes:
       label: Which llama.cpp modules do you know to be affected?
       multiple: true
       options:
+        - Documentation/Github
         - libllama (core library)
         - llama-cli
         - llama-server
         - llama-bench
         - llama-quantize
         - Python/Bash scripts
+        - Test code
         - Other (Please specify in the next section)
     validations:
-      required: true
+      required: false
   - type: textarea
-    id: steps_to_reproduce
+    id: info
     attributes:
-      label: Steps to Reproduce
+      label: Problem description & steps to reproduce
       description: >
-        Please tell us how to reproduce the bug and any additional information that you think could be useful for fixing it.
+        Please give us a summary of the problem and tell us how to reproduce it (if applicable).
     validations:
       required: true
   - type: textarea
@@ -62,7 +65,7 @@ body:
     attributes:
       label: First Bad Commit
       description: >
-        If the bug was not present on an earlier version: when did it start appearing?
+        If the bug was not present on an earlier version and it's not trivial to track down: when did it start appearing?
         If possible, please do a git bisect and identify the exact commit that introduced the bug.
     validations:
       required: false
@@ -71,8 +74,8 @@ body:
     attributes:
       label: Relevant log output
       description: >
-          Please copy and paste any relevant log output, including the command that you entered and any generated text.
+          If applicable, please copy and paste any relevant log output, including the command that you entered and any generated text.
           This will be automatically formatted into code, so no need for backticks.
       render: shell
     validations:
-      required: true
+      required: false

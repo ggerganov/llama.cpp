@@ -26,7 +26,8 @@ body:
   - type: dropdown
     id: operating-system
     attributes:
-      label: Which operating systems do you know to be affected?
+      label: Operating systems
+      description: Which operating systems do you know to be affected?
       multiple: true
       options:
         - Linux
@@ -43,6 +44,8 @@ body:
         description: Which GGML backends do you know to be affected?
         options: [AMX, BLAS, CPU, CUDA, HIP, Kompute, Metal, Musa, RPC, SYCL, Vulkan]
         multiple: true
+    validations:
+      required: true
   - type: textarea
     id: hardware
     attributes:
@@ -55,20 +58,20 @@ body:
   - type: textarea
     id: model
     attributes:
-      label: Model
+      label: Models
       description: >
-        Which model at which quantization were you using when encountering the bug?
+        Which model(s) at which quantization were you using when encountering the bug?
         If you downloaded a GGUF file off of Huggingface, please provide a link.
       placeholder: >
         e.g. Meta LLaMA 3.1 Instruct 8b q4_K_M
     validations:
       required: false
   - type: textarea
-    id: steps_to_reproduce
+    id: info
     attributes:
-      label: Steps to Reproduce
+      label: Problem description & steps to reproduce
       description: >
-        Please tell us how to reproduce the bug and any additional information that you think could be useful for fixing it.
+        Please give us a summary of the problem and tell us how to reproduce it.
         If you can narrow down the bug to specific hardware, compile flags, or command line arguments,
         that information would be very much appreciated by us.
       placeholder: >
