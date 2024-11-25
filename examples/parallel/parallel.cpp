@@ -160,7 +160,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.smpl = common_sampler_init(model, params.sparams);
+        client.smpl = common_sampler_init(model, params.sampling);
     }
 
     std::vector<llama_token> tokens_system;

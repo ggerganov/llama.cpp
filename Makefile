@@ -966,6 +966,7 @@ OBJ_COMMON = \
 	$(DIR_COMMON)/console.o \
 	$(DIR_COMMON)/ngram-cache.o \
 	$(DIR_COMMON)/sampling.o \
+	$(DIR_COMMON)/speculative.o \
 	$(DIR_COMMON)/build-info.o \
 	$(DIR_COMMON)/json-schema-to-grammar.o
 
