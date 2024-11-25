@@ -1,12 +1,16 @@
 const paramDefaults = {
   stream: true,
-  n_predict: 500,
   temperature: 0.2,
-  stop: ["</s>"]
 };
 
 let generation_settings = null;
 
+export class CompletionError extends Error {
+  constructor(message, name, data) {
+    super(message);
+    this.name = name;
+  }
+};
 
 // Completes the prompt as a generator. Recommended for most use cases.
 //
@@ -29,7 +33,7 @@ export async function* llama(prompt, params = {}, config = {}) {
 
   const completionParams = { ...paramDefaults, ...params, prompt };
 
-  const response = await fetch(`${api_url}/completion`, {
+  const response = await fetch(`${api_url}${config.endpoint || '/completion'}`, {
     method: 'POST',
     body: JSON.stringify(completionParams),
     headers: {
@@ -40,6 +44,18 @@ export async function* llama(prompt, params = {}, config = {}) {
     },
     signal: controller.signal,
   });
+
+  const status = response.status;
+  if (status !== 200) {
+    try {
+      const body = await response.json();
+      if (body && body.error && body.error.message) {
+        throw new CompletionError(body.error.message, 'ServerError');
+      }
+    } catch (err) {
+      throw new CompletionError(err.message, 'ServerError');
+    }
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -78,7 +94,12 @@ export async function* llama(prompt, params = {}, config = {}) {
       for (const line of lines) {
         const match = regex.exec(line);
         if (match) {
-          result[match[1]] = match[2]
+          result[match[1]] = match[2];
+          if (result.data === '[DONE]') {
+            cont = false;
+            break;
+          }
+
           // since we know this is llama.cpp, let's just decode the json in data
           if (result.data) {
             result.data = JSON.parse(result.data);

@@ -110,23 +110,25 @@ llama_test(test-tokenizer-1-spm  NAME test-tokenizer-1-llama-spm ARGS ${CMAKE_CU
 # llama_target_and_test(test-double-float.cpp) # SLOW
 llama_target_and_test(test-log.cpp)
 llama_target_and_test(test-arg-parser.cpp)
-llama_target_and_test(test-quantize-fns.cpp)
-llama_target_and_test(test-quantize-perf.cpp)
 llama_target_and_test(test-sampling.cpp)
 llama_target_and_test(test-chat-template.cpp)
 
 llama_target_and_test(test-grammar-parser.cpp)
-llama_target_and_test(test-llama-grammar.cpp)
 llama_target_and_test(test-grammar-integration.cpp)
-llama_target_and_test(test-grad0.cpp)
-llama_target_and_test(test-barrier.cpp)
+llama_target_and_test(test-llama-grammar.cpp)
 # llama_target_and_test(test-opt.cpp) # SLOW
 llama_target_and_test(test-backend-ops.cpp)
 
-llama_target_and_test(test-rope.cpp)
-
 llama_target_and_test(test-model-load-cancel.cpp  LABEL "model")
 llama_target_and_test(test-autorelease.cpp        LABEL "model")
+
+if (NOT GGML_BACKEND_DL)
+    # these tests use the backends directly and cannot be built with dynamic loading
+    llama_target_and_test(test-barrier.cpp)
+    llama_target_and_test(test-quantize-fns.cpp)
+    llama_target_and_test(test-quantize-perf.cpp)
+    llama_target_and_test(test-rope.cpp)
+endif()
 
 # TODO: disabled on loongarch64 because the ggml-ci node lacks Python 3.8
 if (NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")

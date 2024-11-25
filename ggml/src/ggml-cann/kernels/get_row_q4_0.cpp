@@ -110,9 +110,12 @@ class GET_ROW_Q4_0 {
         LocalTensor<float> output_local = output_queue.AllocTensor<float>();
 
         // TODO: cast more data to speed up.
+#ifdef ASCEND_310P
+        // TODO: 310P support quantification
+#else
         Cast(cast_local, input_local, RoundMode::CAST_NONE, QK4_0);
         Cast(output_local, cast_local, RoundMode::CAST_NONE, QK4_0);
-
+#endif
         // Only mul need compile by group.
         half scale = scale_gm.GetValue(scale_offset);
 
