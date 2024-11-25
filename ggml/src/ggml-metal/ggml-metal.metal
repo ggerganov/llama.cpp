@@ -5447,12 +5447,12 @@ kernel void kernel_mul_mm(
     const int im = tgpig.z;
 
     // if this block is of 64x32 shape or smaller
-    short n_rows = (args.ne0 - r0*BLOCK_SIZE_M < BLOCK_SIZE_M) ? (args.ne0 - r0*BLOCK_SIZE_M) : BLOCK_SIZE_M;
-    short n_cols = (args.ne1 - r1*BLOCK_SIZE_N < BLOCK_SIZE_N) ? (args.ne1 - r1*BLOCK_SIZE_N) : BLOCK_SIZE_N;
+    const short n_rows = (args.ne0 - r0*BLOCK_SIZE_M < BLOCK_SIZE_M) ? (args.ne0 - r0*BLOCK_SIZE_M) : BLOCK_SIZE_M;
+    const short n_cols = (args.ne1 - r1*BLOCK_SIZE_N < BLOCK_SIZE_N) ? (args.ne1 - r1*BLOCK_SIZE_N) : BLOCK_SIZE_N;
 
     // a thread shouldn't load data outside of the matrix
-    short thread_row = ((short)tiitg/THREAD_PER_ROW) < n_rows ? ((short)tiitg/THREAD_PER_ROW) : n_rows - 1;
-    short thread_col = ((short)tiitg/THREAD_PER_COL) < n_cols ? ((short)tiitg/THREAD_PER_COL) : n_cols - 1;
+    const short thread_row = ((short)tiitg/THREAD_PER_ROW) < n_rows ? ((short)tiitg/THREAD_PER_ROW) : n_rows - 1;
+    const short thread_col = ((short)tiitg/THREAD_PER_COL) < n_cols ? ((short)tiitg/THREAD_PER_COL) : n_cols - 1;
 
     simdgroup_T8x8     ma[4];
     simdgroup_float8x8 mb[2];
@@ -5467,20 +5467,23 @@ kernel void kernel_mul_mm(
     const int i12 = im%args.ne12;
     const int i13 = im/args.ne12;
 
-    uint64_t offset0 = (i12/args.r2)*args.nb02 + (i13/args.r3)*args.nb03;
-    short    offset1 = il/nl;
+    const uint64_t offset0 = (i12/args.r2)*args.nb02 + (i13/args.r3)*args.nb03;
+    const short    offset1 = il/nl;
 
-    device const block_q * x = (device const block_q *)(src0 + (r0*BLOCK_SIZE_M + thread_row)*args.nb01 + offset0) + offset1;
+    device const block_q * x = (device const block_q *)(src0
+        + args.nb01*(r0*BLOCK_SIZE_M + thread_row) + offset0) + offset1;
+
     device const float   * y = (device const float   *)(src1
         + args.nb13*i13
         + args.nb12*i12
-        + args.nb11*(r1 * BLOCK_SIZE_N + thread_col)
+        + args.nb11*(r1*BLOCK_SIZE_N + thread_col)
         + args.nb10*(BLOCK_SIZE_K / THREAD_PER_COL * (tiitg % THREAD_PER_COL)));
 
     for (int loop_k = 0; loop_k < args.ne00; loop_k += BLOCK_SIZE_K) {
         // load data and store to threadgroup memory
         T4x4 temp_a;
         dequantize_func(x, il, temp_a);
+
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
         #pragma unroll(16)
@@ -5490,44 +5493,46 @@ kernel void kernel_mul_mm(
             +                     (tiitg/THREAD_PER_ROW)%8  + (i&7)*8) = temp_a[i/4][i%4];
         }
 
-        *(threadgroup float2x4 *)(sb + (tiitg % THREAD_PER_COL)*8*32 + 8*(tiitg/THREAD_PER_COL)) = *((device float2x4 *) y);
+        *(threadgroup float2x4 *)(sb + 32*8*(tiitg%THREAD_PER_COL) + 8*(tiitg/THREAD_PER_COL)) = *((device float2x4 *) y);
 
         il = (il + 2 < nl) ? il + 2 : il % 2;
-        x  = (il < 2) ? x + (2+nl-1)/nl : x;
+        x  = (il < 2) ? x + (2 + nl - 1)/nl : x;
         y += BLOCK_SIZE_K;
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
         // load matrices from threadgroup memory and conduct outer products
-        threadgroup T     * lsma = (sa + THREAD_MAT_M*SG_MAT_SIZE*(sgitg%2));
-        threadgroup float * lsmb = (sb + THREAD_MAT_N*SG_MAT_SIZE*(sgitg/2));
+        threadgroup const T     * lsma = (sa + THREAD_MAT_M*SG_MAT_SIZE*(sgitg%2));
+        threadgroup const float * lsmb = (sb + THREAD_MAT_N*SG_MAT_SIZE*(sgitg/2));
 
         #pragma unroll(4)
-        for (short ik = 0; ik < BLOCK_SIZE_K / 8; ik++) {
+        for (short ik = 0; ik < BLOCK_SIZE_K/8; ik++) {
             #pragma unroll(4)
             for (short i = 0; i < 4; i++) {
                 simdgroup_load(ma[i], lsma + SG_MAT_SIZE * i);
             }
+
             simdgroup_barrier(mem_flags::mem_none);
+
             #pragma unroll(2)
             for (short i = 0; i < 2; i++) {
                 simdgroup_load(mb[i], lsmb + SG_MAT_SIZE * i);
             }
 
-            lsma += BLOCK_SIZE_M/SG_MAT_ROW * SG_MAT_SIZE;
-            lsmb += BLOCK_SIZE_N/SG_MAT_ROW * SG_MAT_SIZE;
-
             #pragma unroll(8)
             for (short i = 0; i < 8; i++){
                 simdgroup_multiply_accumulate(mc[i], mb[i/4], ma[i%4], mc[i]);
             }
+
+            lsma += (BLOCK_SIZE_M/SG_MAT_ROW)*SG_MAT_SIZE;
+            lsmb += (BLOCK_SIZE_N/SG_MAT_ROW)*SG_MAT_SIZE;
         }
     }
 
     if ((r0 + 1) * BLOCK_SIZE_M <= args.ne0 && (r1 + 1) * BLOCK_SIZE_N <= args.ne1) {
         device float * C = (device float *) dst +
-            (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) + \
-            (BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)) * args.ne0 + im*args.ne1*args.ne0;
+            (BLOCK_SIZE_M * r0 + 32*(sgitg &  1)) + \
+            (BLOCK_SIZE_N * r1 + 16*(sgitg >> 1)) * args.ne0 + im*args.ne1*args.ne0;
 
         for (short i = 0; i < 8; i++) {
             simdgroup_store(mc[i], C + 8 * (i%4) + 8 * args.ne0 * (i/4), args.ne0);
@@ -5536,7 +5541,7 @@ kernel void kernel_mul_mm(
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
         threadgroup_barrier(mem_flags::mem_threadgroup);
         threadgroup float * temp_str = ((threadgroup float *) shmem) \
-                                      + 32 * (sgitg&1) + (16 * (sgitg>>1))*BLOCK_SIZE_M;
+                                     + 32*(sgitg&1) + (16*(sgitg >> 1))*BLOCK_SIZE_M;
         for (short i = 0; i < 8; i++) {
             simdgroup_store(mc[i], temp_str + 8*(i%4) + 8*BLOCK_SIZE_M*(i/4), BLOCK_SIZE_M);
         }

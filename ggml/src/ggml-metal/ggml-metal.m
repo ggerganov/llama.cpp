@@ -1951,316 +1951,316 @@ static void ggml_metal_encode_node(
                         }
 #endif
 
-                        // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
-                        // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
-                        if ([device supportsFamily:MTLGPUFamilyApple7] &&
-                                !ggml_is_transposed(src0) &&
-                                !ggml_is_transposed(src1) &&
-                                src1t == GGML_TYPE_F32 &&
-                                ne00 % 32 == 0 && ne00 >= 64 &&
-                                (ne11 > ne11_mm_min || (ggml_is_quantized(src0t) && ne12 > 1))) {
-                            //printf("matrix: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
+                // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
+                // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
+                if ([device supportsFamily:MTLGPUFamilyApple7] &&
+                        !ggml_is_transposed(src0) &&
+                        !ggml_is_transposed(src1) &&
+                        src1t == GGML_TYPE_F32 &&
+                        ne00 % 32 == 0 && ne00 >= 64 &&
+                        (ne11 > ne11_mm_min || (ggml_is_quantized(src0t) && ne12 > 1))) {
+                    //printf("matrix: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
 
-                            // some Metal matrix data types require aligned pointers
-                            // ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf (Table 2.5)
-                            switch (src0->type) {
-                                case GGML_TYPE_F32:  GGML_ASSERT(nb01 % 16 == 0); break;
-                                case GGML_TYPE_F16:  GGML_ASSERT(nb01 % 8  == 0); break;
-                                case GGML_TYPE_BF16: GGML_ASSERT(nb01 % 8  == 0); break;
-                                default: break;
-                            }
+                    // some Metal matrix data types require aligned pointers
+                    // ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf (Table 2.5)
+                    switch (src0->type) {
+                        case GGML_TYPE_F32:  GGML_ASSERT(nb01 % 16 == 0); break;
+                        case GGML_TYPE_F16:  GGML_ASSERT(nb01 % 8  == 0); break;
+                        case GGML_TYPE_BF16: GGML_ASSERT(nb01 % 8  == 0); break;
+                        default: break;
+                    }
 
-                            id<MTLComputePipelineState> pipeline = nil;
+                    id<MTLComputePipelineState> pipeline = nil;
 
-                            switch (src0->type) {
-                                case GGML_TYPE_F32:     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_F32_F32    ].pipeline; break;
-                                case GGML_TYPE_F16:     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_F16_F32    ].pipeline; break;
-                                case GGML_TYPE_BF16:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_BF16_F32   ].pipeline; break;
-                                case GGML_TYPE_Q4_0:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q4_0_F32   ].pipeline; break;
-                                case GGML_TYPE_Q4_1:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q4_1_F32   ].pipeline; break;
-                                case GGML_TYPE_Q5_0:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q5_0_F32   ].pipeline; break;
-                                case GGML_TYPE_Q5_1:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q5_1_F32   ].pipeline; break;
-                                case GGML_TYPE_Q8_0:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q8_0_F32   ].pipeline; break;
-                                case GGML_TYPE_Q2_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q2_K_F32   ].pipeline; break;
-                                case GGML_TYPE_Q3_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q3_K_F32   ].pipeline; break;
-                                case GGML_TYPE_Q4_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q4_K_F32   ].pipeline; break;
-                                case GGML_TYPE_Q5_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q5_K_F32   ].pipeline; break;
-                                case GGML_TYPE_Q6_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q6_K_F32   ].pipeline; break;
-                                case GGML_TYPE_IQ2_XXS: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ2_XXS_F32].pipeline; break;
-                                case GGML_TYPE_IQ2_XS:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ2_XS_F32 ].pipeline; break;
-                                case GGML_TYPE_IQ3_XXS: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ3_XXS_F32].pipeline; break;
-                                case GGML_TYPE_IQ3_S:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ3_S_F32  ].pipeline; break;
-                                case GGML_TYPE_IQ2_S:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ2_S_F32  ].pipeline; break;
-                                case GGML_TYPE_IQ1_S:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ1_S_F32  ].pipeline; break;
-                                case GGML_TYPE_IQ1_M:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ1_M_F32  ].pipeline; break;
-                                case GGML_TYPE_IQ4_NL:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ4_NL_F32 ].pipeline; break;
-                                case GGML_TYPE_IQ4_XS:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ4_XS_F32 ].pipeline; break;
-                                default: GGML_ABORT("MUL MAT-MAT not implemented");
-                            }
+                    switch (src0->type) {
+                        case GGML_TYPE_F32:     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_F32_F32    ].pipeline; break;
+                        case GGML_TYPE_F16:     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_F16_F32    ].pipeline; break;
+                        case GGML_TYPE_BF16:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_BF16_F32   ].pipeline; break;
+                        case GGML_TYPE_Q4_0:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q4_0_F32   ].pipeline; break;
+                        case GGML_TYPE_Q4_1:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q4_1_F32   ].pipeline; break;
+                        case GGML_TYPE_Q5_0:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q5_0_F32   ].pipeline; break;
+                        case GGML_TYPE_Q5_1:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q5_1_F32   ].pipeline; break;
+                        case GGML_TYPE_Q8_0:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q8_0_F32   ].pipeline; break;
+                        case GGML_TYPE_Q2_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q2_K_F32   ].pipeline; break;
+                        case GGML_TYPE_Q3_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q3_K_F32   ].pipeline; break;
+                        case GGML_TYPE_Q4_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q4_K_F32   ].pipeline; break;
+                        case GGML_TYPE_Q5_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q5_K_F32   ].pipeline; break;
+                        case GGML_TYPE_Q6_K:    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_Q6_K_F32   ].pipeline; break;
+                        case GGML_TYPE_IQ2_XXS: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ2_XXS_F32].pipeline; break;
+                        case GGML_TYPE_IQ2_XS:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ2_XS_F32 ].pipeline; break;
+                        case GGML_TYPE_IQ3_XXS: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ3_XXS_F32].pipeline; break;
+                        case GGML_TYPE_IQ3_S:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ3_S_F32  ].pipeline; break;
+                        case GGML_TYPE_IQ2_S:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ2_S_F32  ].pipeline; break;
+                        case GGML_TYPE_IQ1_S:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ1_S_F32  ].pipeline; break;
+                        case GGML_TYPE_IQ1_M:   pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ1_M_F32  ].pipeline; break;
+                        case GGML_TYPE_IQ4_NL:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ4_NL_F32 ].pipeline; break;
+                        case GGML_TYPE_IQ4_XS:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MM_IQ4_XS_F32 ].pipeline; break;
+                        default: GGML_ABORT("MUL MAT-MAT not implemented");
+                    }
 
-                            ggml_metal_kargs_mul_mm args = {
-                                /*.ne00 =*/ ne00,
-                                /*.ne02 =*/ ne02,
-                                /*.nb01 =*/ nb01,
-                                /*.nb02 =*/ nb02,
-                                /*.nb03 =*/ nb03,
-                                /*.ne12 =*/ ne12,
-                                /*.nb10 =*/ nb10,
-                                /*.nb11 =*/ nb11,
-                                /*.nb12 =*/ nb12,
-                                /*.nb13 =*/ nb13,
-                                /*.ne0  =*/ ne0,
-                                /*.ne1  =*/ ne1,
-                                /*.r2   =*/ r2,
-                                /*.r3   =*/ r3,
-                            };
+                    ggml_metal_kargs_mul_mm args = {
+                        /*.ne00 =*/ ne00,
+                        /*.ne02 =*/ ne02,
+                        /*.nb01 =*/ nb01,
+                        /*.nb02 =*/ nb02,
+                        /*.nb03 =*/ nb03,
+                        /*.ne12 =*/ ne12,
+                        /*.nb10 =*/ nb10,
+                        /*.nb11 =*/ nb11,
+                        /*.nb12 =*/ nb12,
+                        /*.nb13 =*/ nb13,
+                        /*.ne0  =*/ ne0,
+                        /*.ne1  =*/ ne1,
+                        /*.r2   =*/ r2,
+                        /*.r3   =*/ r3,
+                    };
 
-                            [encoder setComputePipelineState:pipeline];
-                            [encoder setBytes:&args    length:sizeof(args) atIndex:0];
-                            [encoder setBuffer:id_src0 offset:offs_src0    atIndex:1];
-                            [encoder setBuffer:id_src1 offset:offs_src1    atIndex:2];
-                            [encoder setBuffer:id_dst  offset:offs_dst     atIndex:3];
+                    [encoder setComputePipelineState:pipeline];
+                    [encoder setBytes:&args    length:sizeof(args) atIndex:0];
+                    [encoder setBuffer:id_src0 offset:offs_src0    atIndex:1];
+                    [encoder setBuffer:id_src1 offset:offs_src1    atIndex:2];
+                    [encoder setBuffer:id_dst  offset:offs_dst     atIndex:3];
 
-                            [encoder setThreadgroupMemoryLength:8192 atIndex:0];
-                            [encoder dispatchThreadgroups:MTLSizeMake( (ne11 + 31)/32, (ne01 + 63)/64, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
-                        } else {
-                            int nth0 = 32;
-                            int nth1 = 1;
-                            int nrows = 1;
-                            //printf("vector: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
+                    [encoder setThreadgroupMemoryLength:8192 atIndex:0];
+                    [encoder dispatchThreadgroups:MTLSizeMake( (ne11 + 31)/32, (ne01 + 63)/64, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+                } else {
+                    int nth0 = 32;
+                    int nth1 = 1;
+                    int nrows = 1;
+                    //printf("vector: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
 
-                            id<MTLComputePipelineState> pipeline = nil;
+                    id<MTLComputePipelineState> pipeline = nil;
 
-                            // use custom matrix x vector kernel
-                            switch (src0t) {
-                                case GGML_TYPE_F32:
-                                    {
-                                        GGML_ASSERT(src1t == GGML_TYPE_F32);
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F32_F32].pipeline;
+                    // use custom matrix x vector kernel
+                    switch (src0t) {
+                        case GGML_TYPE_F32:
+                            {
+                                GGML_ASSERT(src1t == GGML_TYPE_F32);
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F32_F32].pipeline;
+                                nrows = 4;
+                            } break;
+                        case GGML_TYPE_F16:
+                            {
+                                nth0 = 32;
+                                nth1 = 1;
+                                if (src1t == GGML_TYPE_F32) {
+                                    if (ne11 * ne12 < 4) {
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_1ROW].pipeline;
+                                    } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_L4].pipeline;
+                                        nrows = ne11;
+                                    } else {
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32].pipeline;
                                         nrows = 4;
-                                    } break;
-                                case GGML_TYPE_F16:
-                                    {
-                                        nth0 = 32;
-                                        nth1 = 1;
-                                        if (src1t == GGML_TYPE_F32) {
-                                            if (ne11 * ne12 < 4) {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_1ROW].pipeline;
-                                            } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_L4].pipeline;
-                                                nrows = ne11;
-                                            } else {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32].pipeline;
-                                                nrows = 4;
-                                            }
-                                        } else {
-                                            pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F16].pipeline;
-                                            nrows = 4;
-                                        }
-                                    } break;
-                                case GGML_TYPE_BF16:
-                                    {
-                                        nth0 = 32;
-                                        nth1 = 1;
-                                        if (src1t == GGML_TYPE_F32) {
-                                            if (ne11 * ne12 < 4) {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_F32_1ROW].pipeline;
-                                            } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_F32_L4].pipeline;
-                                                nrows = ne11;
-                                            } else {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_F32].pipeline;
-                                                nrows = 4;
-                                            }
-                                        } else {
-                                            pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_BF16].pipeline;
-                                            nrows = 4;
-                                        }
-                                    } break;
-                                case GGML_TYPE_Q4_0:
-                                    {
-                                        nth0 = 8;
-                                        nth1 = 8;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_0_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q4_1:
-                                    {
-                                        nth0 = 8;
-                                        nth1 = 8;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_1_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q5_0:
-                                    {
-                                        nth0 = 8;
-                                        nth1 = 8;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_0_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q5_1:
-                                    {
-                                        nth0 = 8;
-                                        nth1 = 8;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_1_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q8_0:
-                                    {
-                                        nth0 = 8;
-                                        nth1 = 8;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q8_0_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q2_K:
-                                    {
-                                        nth0 = 2;
-                                        nth1 = 32;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q2_K_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q3_K:
-                                    {
-                                        nth0 = 2;
-                                        nth1 = 32;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q3_K_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q4_K:
-                                    {
-                                        nth0 = 4; //1;
-                                        nth1 = 8; //32;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_K_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q5_K:
-                                    {
-                                        nth0 = 2;
-                                        nth1 = 32;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_K_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_Q6_K:
-                                    {
-                                        nth0 = 2;
-                                        nth1 = 32;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q6_K_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ2_XXS:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ2_XXS_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ2_XS:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ2_XS_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ3_XXS:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ3_XXS_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ3_S:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ3_S_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ2_S:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ2_S_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ1_S:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ1_S_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ1_M:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ1_M_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ4_NL:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ4_NL_F32].pipeline;
-                                    } break;
-                                case GGML_TYPE_IQ4_XS:
-                                    {
-                                        nth0 = 4;
-                                        nth1 = 16;
-                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ4_XS_F32].pipeline;
-                                    } break;
-                                default:
-                                    {
-                                        GGML_LOG_ERROR("Asserting on type %d\n", (int)src0t);
-                                        GGML_ABORT("not implemented");
                                     }
-                            };
+                                } else {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F16].pipeline;
+                                    nrows = 4;
+                                }
+                            } break;
+                        case GGML_TYPE_BF16:
+                            {
+                                nth0 = 32;
+                                nth1 = 1;
+                                if (src1t == GGML_TYPE_F32) {
+                                    if (ne11 * ne12 < 4) {
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_F32_1ROW].pipeline;
+                                    } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_F32_L4].pipeline;
+                                        nrows = ne11;
+                                    } else {
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_F32].pipeline;
+                                        nrows = 4;
+                                    }
+                                } else {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_BF16_BF16].pipeline;
+                                    nrows = 4;
+                                }
+                            } break;
+                        case GGML_TYPE_Q4_0:
+                            {
+                                nth0 = 8;
+                                nth1 = 8;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_0_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q4_1:
+                            {
+                                nth0 = 8;
+                                nth1 = 8;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_1_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q5_0:
+                            {
+                                nth0 = 8;
+                                nth1 = 8;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_0_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q5_1:
+                            {
+                                nth0 = 8;
+                                nth1 = 8;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_1_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q8_0:
+                            {
+                                nth0 = 8;
+                                nth1 = 8;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q8_0_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q2_K:
+                            {
+                                nth0 = 2;
+                                nth1 = 32;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q2_K_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q3_K:
+                            {
+                                nth0 = 2;
+                                nth1 = 32;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q3_K_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q4_K:
+                            {
+                                nth0 = 4; //1;
+                                nth1 = 8; //32;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q4_K_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q5_K:
+                            {
+                                nth0 = 2;
+                                nth1 = 32;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q5_K_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_Q6_K:
+                            {
+                                nth0 = 2;
+                                nth1 = 32;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_Q6_K_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ2_XXS:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ2_XXS_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ2_XS:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ2_XS_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ3_XXS:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ3_XXS_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ3_S:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ3_S_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ2_S:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ2_S_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ1_S:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ1_S_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ1_M:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ1_M_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ4_NL:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ4_NL_F32].pipeline;
+                            } break;
+                        case GGML_TYPE_IQ4_XS:
+                            {
+                                nth0 = 4;
+                                nth1 = 16;
+                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_IQ4_XS_F32].pipeline;
+                            } break;
+                        default:
+                            {
+                                GGML_LOG_ERROR("Asserting on type %d\n", (int)src0t);
+                                GGML_ABORT("not implemented");
+                            }
+                    };
 
-                            ggml_metal_kargs_mul_mv args = {
-                                /*.ne00 =*/ ne00,
-                                /*.ne01 =*/ ne01,
-                                /*.ne02 =*/ ne02,
-                                /*.nb00 =*/ nb00,
-                                /*.nb01 =*/ nb01,
-                                /*.nb02 =*/ nb02,
-                                /*.nb03 =*/ nb03,
-                                /*.ne10 =*/ ne10,
-                                /*.ne11 =*/ ne11,
-                                /*.ne12 =*/ ne12,
-                                /*.nb10 =*/ nb10,
-                                /*.nb11 =*/ nb11,
-                                /*.nb12 =*/ nb12,
-                                /*.nb13 =*/ nb13,
-                                /*.ne0  =*/ ne0,
-                                /*.ne1  =*/ ne1,
-                                /*.r2   =*/ r2,
-                                /*.r3   =*/ r3,
-                            };
+                    ggml_metal_kargs_mul_mv args = {
+                        /*.ne00 =*/ ne00,
+                        /*.ne01 =*/ ne01,
+                        /*.ne02 =*/ ne02,
+                        /*.nb00 =*/ nb00,
+                        /*.nb01 =*/ nb01,
+                        /*.nb02 =*/ nb02,
+                        /*.nb03 =*/ nb03,
+                        /*.ne10 =*/ ne10,
+                        /*.ne11 =*/ ne11,
+                        /*.ne12 =*/ ne12,
+                        /*.nb10 =*/ nb10,
+                        /*.nb11 =*/ nb11,
+                        /*.nb12 =*/ nb12,
+                        /*.nb13 =*/ nb13,
+                        /*.ne0  =*/ ne0,
+                        /*.ne1  =*/ ne1,
+                        /*.r2   =*/ r2,
+                        /*.r3   =*/ r3,
+                    };
 
-                            [encoder setComputePipelineState:pipeline];
-                            [encoder setBytes:&args length:sizeof(args) atIndex:0];
-                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
-                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
-                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
+                    [encoder setComputePipelineState:pipeline];
+                    [encoder setBytes:&args length:sizeof(args) atIndex:0];
+                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:1];
+                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:2];
+                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:3];
 
-                            if (src0t == GGML_TYPE_Q4_0  || src0t == GGML_TYPE_Q4_1  || src0t == GGML_TYPE_Q5_0 ||
-                                src0t == GGML_TYPE_Q5_1  || src0t == GGML_TYPE_Q8_0  || src0t == GGML_TYPE_Q2_K ||
-                                src0t == GGML_TYPE_IQ1_S || src0t == GGML_TYPE_IQ1_M || src0t == GGML_TYPE_IQ2_S) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_IQ2_XXS || src0t == GGML_TYPE_IQ2_XS) {
-                                const int mem_size = src0t == GGML_TYPE_IQ2_XXS ? 256*8+128 : 512*8+128;
-                                [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_IQ3_XXS || src0t == GGML_TYPE_IQ3_S) {
-                                const int mem_size = src0t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4;
-                                [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_IQ4_NL || src0t == GGML_TYPE_IQ4_XS) {
-                                const int mem_size = 32*sizeof(float);
-                                [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_Q4_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_Q3_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_Q5_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                            else if (src0t == GGML_TYPE_Q6_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            } else {
-                                const int64_t ny = (ne11 + nrows - 1)/nrows;
-                                [encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                            }
-                        }
+                    if (src0t == GGML_TYPE_Q4_0  || src0t == GGML_TYPE_Q4_1  || src0t == GGML_TYPE_Q5_0 ||
+                        src0t == GGML_TYPE_Q5_1  || src0t == GGML_TYPE_Q8_0  || src0t == GGML_TYPE_Q2_K ||
+                        src0t == GGML_TYPE_IQ1_S || src0t == GGML_TYPE_IQ1_M || src0t == GGML_TYPE_IQ2_S) {
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_IQ2_XXS || src0t == GGML_TYPE_IQ2_XS) {
+                        const int mem_size = src0t == GGML_TYPE_IQ2_XXS ? 256*8+128 : 512*8+128;
+                        [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_IQ3_XXS || src0t == GGML_TYPE_IQ3_S) {
+                        const int mem_size = src0t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4;
+                        [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_IQ4_NL || src0t == GGML_TYPE_IQ4_XS) {
+                        const int mem_size = 32*sizeof(float);
+                        [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_Q4_K) {
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_Q3_K) {
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_Q5_K) {
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                    else if (src0t == GGML_TYPE_Q6_K) {
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    } else {
+                        const int64_t ny = (ne11 + nrows - 1)/nrows;
+                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                    }
+                }
             } break;
         case GGML_OP_MUL_MAT_ID:
             {
