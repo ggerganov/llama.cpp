@@ -134,14 +134,24 @@ struct ggml_backend_registry {
 
     ggml_backend_reg_t load_backend(const char * path, bool silent) {
 #ifdef _WIN32
+        // suppress error dialogs for missing DLLs
+        DWORD old_mode = SetErrorMode(SEM_FAILCRITICALERRORS);
+        SetErrorMode(old_mode | SEM_FAILCRITICALERRORS);
+
         HMODULE handle = LoadLibraryA(path);
+
         if (!handle) {
             if (!silent) {
                 GGML_LOG_ERROR("%s: failed to load %s: %lu\n", __func__, path, GetLastError());
             }
+            SetErrorMode(old_mode);
             return nullptr;
         }
+
         ggml_backend_init_t backend_init = (ggml_backend_init_t) GetProcAddress(handle, "ggml_backend_init");
+
+        SetErrorMode(old_mode);
+
         if (!backend_init) {
             if (!silent) {
                 GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %lu\n", __func__, path, GetLastError());
@@ -151,13 +161,16 @@ struct ggml_backend_registry {
         }
 #else
         void * handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+
         if (!handle) {
             if (!silent) {
                 GGML_LOG_ERROR("%s: failed to load %s: %s\n", __func__, path, dlerror());
             }
             return nullptr;
         }
+
         auto * backend_init = (ggml_backend_init_t) dlsym(handle, "ggml_backend_init");
+
         if (!backend_init) {
             if (!silent) {
                 GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s: %s\n", __func__, path, dlerror());
@@ -167,6 +180,7 @@ struct ggml_backend_registry {
         }
 #endif
         ggml_backend_reg_t reg = backend_init();
+
         if (!reg || reg->api_version != GGML_BACKEND_API_VERSION) {
             if (!silent) {
                 if (!reg) {
@@ -176,11 +190,11 @@ struct ggml_backend_registry {
                                    __func__, path, reg->api_version, GGML_BACKEND_API_VERSION);
                 }
             }
-    #ifdef _WIN32
+#ifdef _WIN32
             FreeLibrary(handle);
-    #else
+#else
             dlclose(handle);
-    #endif
+#endif
             return nullptr;
         }
 
