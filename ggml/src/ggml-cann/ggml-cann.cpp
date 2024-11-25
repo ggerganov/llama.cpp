@@ -342,7 +342,6 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
 
     /**
      * @brief Constructor to initialize the buffer pool with virtual memory for
-     * @brief Constructor to initialize the buffer pool with virtual memory for
      * a specific device.
      *
      * @param device The device ID to associate with this buffer pool.
@@ -1872,17 +1871,17 @@ struct ggml_backend_cann_device_context {
 };
 
 static const char * ggml_backend_cann_device_get_name(ggml_backend_dev_t dev) {
-    ggml_backend_cann_context * ctx = (ggml_backend_cann_context *)dev->context;
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
     return ctx->name.c_str();
 }
 
 static const char* ggml_backend_cann_device_get_description(ggml_backend_dev_t dev) {
-    ggml_backend_cann_context * ctx = (ggml_backend_cann_context *)dev->context;
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
     return ctx->description.c_str();
 }
 
 static void ggml_backend_cann_device_get_memory(ggml_backend_dev_t dev, size_t * free, size_t * total) {
-    ggml_backend_cann_context * ctx = (ggml_backend_cann_context *)dev->context;
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
     ggml_backend_cann_get_device_memory(ctx->device, free, total);
 }
 
@@ -1909,7 +1908,7 @@ static void ggml_backend_cann_device_get_props(ggml_backend_dev_t dev, ggml_back
 
 static ggml_backend_t ggml_backend_cann_device_init(ggml_backend_dev_t dev, const char * params) {
     GGML_UNUSED(params);
-    ggml_backend_cann_context * ctx = (ggml_backend_cann_context *)dev->context;
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
     return ggml_backend_cann_init(ctx->device);
 }
 
@@ -1929,7 +1928,7 @@ static ggml_backend_t ggml_backend_cann_device_init(ggml_backend_dev_t dev, cons
 static bool ggml_backend_cann_supports_buft(
     ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
     if (ggml_backend_buft_is_cann(buft)) {
-        ggml_backend_cann_context * dev_ctx = (ggml_backend_cann_context *)dev->context;
+        ggml_backend_cann_device_context * dev_ctx = (ggml_backend_cann_device_context *)dev->context;
         ggml_backend_cann_buffer_type_context * buft_ctx =
                         (ggml_backend_cann_buffer_type_context *)buft->context;
         return buft_ctx->device == dev_ctx->device;
@@ -1938,7 +1937,7 @@ static bool ggml_backend_cann_supports_buft(
 }
 
 static ggml_backend_buffer_type_t ggml_backend_cann_device_get_buffer_type(ggml_backend_dev_t dev) {
-    ggml_backend_cann_context * ctx = (ggml_backend_cann_context*)dev->context;
+    ggml_backend_cann_device_context * ctx = (ggml_backend_cann_device_context *)dev->context;
     return ggml_backend_cann_buffer_type(ctx->device);
 }
 
@@ -1959,7 +1958,7 @@ static ggml_backend_buffer_type_t ggml_backend_cann_device_get_host_buffer_type(
  */
 static ggml_backend_event_t ggml_backend_cann_device_event_new(
     ggml_backend_dev_t dev) {
-    ggml_backend_cann_context * dev_ctx = (ggml_backend_cann_context *)dev->context;
+    ggml_backend_cann_device_context * dev_ctx = (ggml_backend_cann_device_context *)dev->context;
 
     ggml_cann_set_device(dev_ctx->device);
 
@@ -2067,7 +2066,11 @@ ggml_backend_reg_t ggml_backend_cann_reg() {
             ggml_backend_cann_reg_context * ctx = new ggml_backend_cann_reg_context;
 
             for (int i = 0; i < ggml_cann_info().device_count; i++) {
-                ggml_backend_cann_context* dev_ctx = new ggml_backend_cann_context(i);
+                ggml_backend_cann_device_context* dev_ctx = new ggml_backend_cann_device_context();
+                dev_ctx->description = aclrtGetSocName();
+                dev_ctx->device = i;
+                dev_ctx->name = GGML_CANN_NAME + std::to_string(i);
+                ggml_cann_set_device(i);
                 ggml_backend_dev_t dev = new ggml_backend_device {
                     /* .interface = */ ggml_backend_cann_device_interface,
                     /* .reg       = */ &reg,
@@ -2095,12 +2098,17 @@ ggml_backend_t ggml_backend_cann_init(int32_t device) {
         return nullptr;
     }
 
-    ggml_backend_dev_t dev = ggml_backend_reg_dev_get(ggml_backend_cann_reg(), device);
+    ggml_backend_cann_context* ctx = new ggml_backend_cann_context(device);
+    if (ctx == nullptr) {
+        GGML_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
+        return nullptr;
+    }
+    ggml_cann_set_device(ctx->device);
     ggml_backend_t cann_backend =
         new ggml_backend{/* .guid      = */ ggml_backend_cann_guid(),
                          /* .interface = */ ggml_backend_cann_interface,
-                         /* .device    = */ dev,
-                         /* .context   = */ dev->context};
+                         /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), device),
+                         /* .context   = */ ctx};
 
     return cann_backend;
 }
