@@ -241,6 +241,10 @@ struct server_slot {
         return state != SLOT_STATE_IDLE;
     }
 
+    bool can_speculate() const {
+        return ctx_dft && params.speculative.n_max > 0 && params.cache_prompt;
+    }
+
     void add_token(const completion_token_output & token) {
         if (!is_processing()) {
             SLT_WRN(*this, "%s", "slot is not processing\n");
@@ -1270,7 +1274,7 @@ struct server_context {
             {"min_keep",                  slot.params.sampling.min_keep},
             {"grammar",                   slot.params.sampling.grammar},
             {"samplers",                  samplers},
-            {"speculative",               slot.params.speculative.model.empty() ? false : true},
+            {"speculative",               slot.can_speculate()},
             {"speculative.n_max",         slot.params.speculative.n_max},
             {"speculative.n_min",         slot.params.speculative.n_min},
             {"speculative.p_min",         slot.params.speculative.p_min},
@@ -2302,11 +2306,10 @@ struct server_context {
                 }
 
                 // check if the slot supports speculative decoding
-                if (!slot.ctx_dft || slot.params.speculative.n_max <= 0 || !slot.params.cache_prompt) {
+                if (!slot.can_speculate()) {
                     continue;
                 }
 
-                // TODO: configurable through requests
                 struct common_speculative_params params_spec;
                 params_spec.n_draft   = slot.params.speculative.n_max;
                 params_spec.n_reuse   = llama_n_ctx(slot.ctx_dft) - slot.params.speculative.n_max;
