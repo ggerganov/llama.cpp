@@ -298,6 +298,19 @@ else ()
     ggml_add_cpu_backend_variant_impl("")
 endif()
 
+# TODO: This is intrusive. We intend to remove SMALL_ALLOC path once the we fully
+# migrate to the non SMALL_ALLOC path. Also need to converge on the backend name
+# so we don't need this name conversion.
+if (GGML_OPENCL)
+    set(GGML_OPENCL2 ON)
+    add_compile_definitions(GGML_USE_OPENCL)
+    if (GGML_OPENCL_SMALL_ALLOC)
+        add_compile_definitions(GGML_OPENCL_SMALL_ALLOC)
+    endif ()
+else ()
+    set(GGML_OPENCL2 OFF)
+endif ()
+
 ggml_add_backend(BLAS)
 ggml_add_backend(CANN)
 ggml_add_backend(CUDA)
@@ -308,6 +321,8 @@ ggml_add_backend(MUSA)
 ggml_add_backend(RPC)
 ggml_add_backend(SYCL)
 ggml_add_backend(Vulkan)
+ggml_add_backend(OpenCL2)
+ggml_add_backend(MUSA)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)

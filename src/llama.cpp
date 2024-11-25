@@ -9296,7 +9296,11 @@ static bool llm_load_tensors(
             }
         }
         else {
+#ifdef GGML_USE_OPENCL
+            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft_for_weights(ctx, buft);
+#else // GGML_USE_OPENCL
             ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
+#endif
             if (buf == nullptr) {
                 throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
             }

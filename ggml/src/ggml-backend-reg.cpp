@@ -46,6 +46,10 @@
 #include "ggml-vulkan.h"
 #endif
 
+#ifdef GGML_USE_OPENCL2
+#include "ggml-opencl2.h"
+#endif
+
 #ifdef GGML_USE_BLAS
 #include "ggml-blas.h"
 #endif
@@ -145,6 +149,9 @@ struct ggml_backend_registry {
 #endif
 #ifdef GGML_USE_VULKAN
         register_backend(ggml_backend_vk_reg());
+#endif
+#ifdef GGML_USE_OPENCL2
+        register_backend(ggml_backend_opencl2_reg());
 #endif
 #ifdef GGML_USE_CANN
         register_backend(ggml_backend_cann_reg());
