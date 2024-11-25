@@ -692,6 +692,7 @@ struct server_context {
 
             auto params_dft = params_base;
 
+            params_dft.devices      = params_base.speculative.devices;
             params_dft.model        = params_base.speculative.model;
             params_dft.n_ctx        = params_base.speculative.n_ctx;
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
