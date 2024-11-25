@@ -637,9 +637,14 @@ int main(int argc, char ** argv) {
         LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
 
-    if (!compute_imatrix(ctx, params)) {
-        return 1;
+    if (params.prompt.empty()) {
+        LOG_INF("No prompt provided; combining precomputed matrices only.\n");
+    } else {
+        if (!compute_imatrix(ctx, params)) {
+            return 1;
+        }
     }
+
 
     g_collector.save_imatrix();
 
