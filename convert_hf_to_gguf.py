@@ -3040,9 +3040,9 @@ class OlmoModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("Olmo1124ForCausalLM")
-class Olmo1124Model(Model):
-    model_arch = gguf.MODEL_ARCH.OLMO_1124
+@Model.register("Olmo2ForCausalLM")
+class Olmo2Model(Model):
+    model_arch = gguf.MODEL_ARCH.OLMO2
 
 
 @Model.register("OlmoeForCausalLM")
