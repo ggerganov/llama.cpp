@@ -1126,28 +1126,37 @@ static void ggml_vk_mul_mat_q6_k(
     const std::shared_ptr<kp::Tensor>& inB,
     const std::shared_ptr<kp::Tensor>& out,
     uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-    int32_t ne00, int32_t ne10, int32_t ne0, int32_t ne1,
-    int32_t ne01, int32_t ne11, int32_t ne12, int32_t ne02
+    int32_t ne00, int32_t ne01, int32_t ne02,
+    int32_t ne10, int32_t ne11, int32_t ne12, int32_t ne13,
+    int32_t ne0, int32_t ne1,
+    uint32_t nb01, uint32_t nb02, uint32_t nb03,
+    uint32_t nb11, uint32_t nb12, uint32_t nb13,
+    uint32_t r2, uint32_t r3
 ) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q6_k_comp_spv,
         kp::shader_data::op_mul_mat_q6_k_comp_spv_len);
 
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff;
-        int32_t ne00, ne10, ne0, ne1, ne01, gqa;
+        int32_t ne00, ne10, ne0, ne1, ne01, ne02, ne12;
+        uint32_t nb01, nb02, nb03, nb11, nb12, nb13;
+        uint32_t r2, r3;
     } pushConsts {
         inAOff, safe_divide(inBOff, 4), safe_divide(outOff, 4),
-        ne00, ne10, ne0, ne1, ne01, ne12/ne02
+        ne00, ne10, ne0, ne1, ne01, ne02, ne12,
+        nb01, nb02, nb03, nb11, nb12, nb13,
+        r2, r3
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__)) {
-        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)}, {local_x}, {pushConsts});
+        const uint32_t local_x = 2;
+        const uint32_t local_y = ggml_vk_current_device().subgroupSize;
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)*unsigned(ne13)}, {local_x, local_y}, {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)});
+        s_algo->setWorkgroup({unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)*unsigned(ne13)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
@@ -1450,8 +1459,8 @@ static bool ggml_backend_kompute_device_supports_op(ggml_backend_dev_t dev, cons
 
             switch (op->src[0]->type) {
                 case GGML_TYPE_F32:
-                case GGML_TYPE_Q6_K:
                     return op->ne[3] == 1;
+                case GGML_TYPE_Q6_K:
                 case GGML_TYPE_F16:
                 case GGML_TYPE_Q8_0:
                 case GGML_TYPE_Q4_0:
@@ -1729,7 +1738,8 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                             case GGML_TYPE_Q6_K:
                                 ggml_vk_mul_mat_q6_k(
                                     seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
-                                    ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1,
+                                    nb01, nb02, nb03, nb11, nb12, nb13, r2, r3
                                 );
                                 break;
                             default: {
