@@ -752,7 +752,7 @@ vulkan-shaders-gen: ggml/src/ggml-vulkan/vulkan-shaders/vulkan-shaders-gen.cpp
 
 endif # GGML_VULKAN
 
-ifdef GGML_HIPBLAS
+ifdef GGML_HIP
 	ifeq ($(wildcard /opt/rocm),)
 		ROCM_PATH      ?= /usr
 		AMDGPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
@@ -807,7 +807,7 @@ ggml/src/ggml-cuda/%.o: \
 	ggml/src/ggml-common.h \
 	ggml/src/ggml-cuda/common.cuh
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
-endif # GGML_HIPBLAS
+endif # GGML_HIP
 
 ifdef GGML_MUSA
 	ifeq ($(wildcard /opt/musa),)
