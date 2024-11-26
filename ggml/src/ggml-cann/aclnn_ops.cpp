@@ -2427,6 +2427,7 @@ static void aclnn_mat_mul(ggml_backend_cann_context& ctx, aclTensor* acl_input,
                           aclTensor* acl_weight, aclTensor* acl_dst) {
     int8_t cube_math_type = 1;  // ALLOW_FP32_DOWN_PRECISION, when input is
                                 // fp32, atlas a2 will transpose it to HFLOAT32.
+    
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
     void* workspaceAddr = nullptr;
@@ -2531,7 +2532,7 @@ static void aclnn_mat_mul_3d(ggml_backend_cann_context& ctx, aclTensor* acl_inpu
  * multiplication will be stored.
  */
 static void ggml_cann_mat_mul_fp(ggml_backend_cann_context& ctx,
-                                  ggml_tensor* dst) {
+                                 ggml_tensor* dst) {
     ggml_tensor* weight = dst->src[0];  // weight
     ggml_tensor* input = dst->src[1];   // input
 
@@ -2596,8 +2597,8 @@ static void ggml_cann_mat_mul_fp(ggml_backend_cann_context& ctx,
  * multiplication will be stored.
  */
 static void ggml_cann_mul_mat_quant(ggml_backend_cann_context& ctx,
-                                     ggml_tensor* dst,
-                                     const enum ggml_type type) {
+                                   ggml_tensor* dst,
+                                   const enum ggml_type type) {
     ggml_tensor* src0 = dst->src[0];  // weight
     ggml_tensor* src1 = dst->src[1];  // input
 
@@ -2617,8 +2618,7 @@ static void ggml_cann_mul_mat_quant(ggml_backend_cann_context& ctx,
     size_t weight_stride = src0->ne[1] * src0->ne[0] * weight_elem_size;
     size_t weight_size = weight_stride * src0->ne[2] * src0->ne[3];
 
-    // scale stored at the end of weight.
-    // scale need transpose.
+    // scale stored at the end of weight. Also need transpose.
     size_t scale_elem_size = sizeof(uint16_t);
     size_t scale_nb[] = {src0->ne[0] / QK8_0 * scale_elem_size, scale_elem_size};
     size_t scale_stride = src0->ne[1] * src0->ne[0] / QK8_0 * scale_elem_size;
@@ -2677,8 +2677,7 @@ static void ggml_cann_mul_mat_quant(ggml_backend_cann_context& ctx,
             int64_t batch0 = (n0 * src0->ne[2]) + c0;
 
             aclTensor* acl_input_tensor = ggml_cann_create_tensor(
-                (char*)input_buffer + batch1 * input_stride,
-                ACL_FLOAT16,
+                (char*)input_buffer + batch1 * input_stride, ACL_FLOAT16,
                 input_elem_size, input_ne, input_nb, 2);
 
             // first split

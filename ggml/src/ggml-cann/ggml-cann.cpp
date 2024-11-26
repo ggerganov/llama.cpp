@@ -301,7 +301,7 @@ struct ggml_cann_pool_leg : public ggml_cann_pool {
  */
 struct ggml_cann_pool_vmm : public ggml_cann_pool {
     /**
-     * @brief The maximum size of the virtual memory pool.
+     * @brief The maximum size of the virtual memory pool (32 GB).
      */
     size_t max_size;
 
@@ -483,12 +483,14 @@ std::unique_ptr<ggml_cann_pool> ggml_backend_cann_context::new_pool_for_device(
  */
 struct ggml_backend_cann_buffer_context {
     int32_t device;  ///< The device ID associated with this buffer context.
-    void* dev_ptr = nullptr;
+    void* dev_ptr =
+        nullptr;  ///< Pointer to the device memory allocated for the buffer.
 
     /**
      * @brief Constructor to initialize the CANN buffer context.
      *
      * @param device The device ID associated with this buffer context.
+     * @param dev_ptr Pointer to the device memory allocated for the buffer.
      */
     ggml_backend_cann_buffer_context(int32_t device, void* dev_ptr)
         : device(device),
@@ -497,7 +499,7 @@ struct ggml_backend_cann_buffer_context {
     /**
      * @brief Destructor to free the device memory allocated for the buffer.
      */
-    ~ggml_backend_cann_buffer_context() { ACL_CHECK(aclrtFree(dev_ptr));}
+    ~ggml_backend_cann_buffer_context() { ACL_CHECK(aclrtFree(dev_ptr)); }
 };
 
 /**
