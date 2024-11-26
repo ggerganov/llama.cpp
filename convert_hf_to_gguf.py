@@ -2707,7 +2707,7 @@ class XLMRobertaModel(BertModel):
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
         self.gguf_writer.add_add_space_prefix(add_prefix)
-        self.gguf_writer.add_token_type_count(1)
+        self.gguf_writer.add_token_type_count(self.hparams.get("type_vocab_size", 1))
         self.gguf_writer.add_remove_extra_whitespaces(remove_whitespaces)
         if precompiled_charsmap:
             self.gguf_writer.add_precompiled_charsmap(precompiled_charsmap)
@@ -3038,6 +3038,11 @@ class OlmoModel(Model):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("Olmo2ForCausalLM")
+class Olmo2Model(Model):
+    model_arch = gguf.MODEL_ARCH.OLMO2
 
 
 @Model.register("OlmoeForCausalLM")

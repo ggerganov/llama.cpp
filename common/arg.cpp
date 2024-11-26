@@ -233,10 +233,11 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         }
     }
 
-    postprocess_cpu_params(params.cpuparams, nullptr);
+    postprocess_cpu_params(params.cpuparams,       nullptr);
     postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
-    postprocess_cpu_params(params.draft_cpuparams, &params.cpuparams);
-    postprocess_cpu_params(params.draft_cpuparams_batch, &params.cpuparams_batch);
+
+    postprocess_cpu_params(params.speculative.cpuparams,       &params.cpuparams);
+    postprocess_cpu_params(params.speculative.cpuparams_batch, &params.cpuparams_batch);
 
     if (params.prompt_cache_all && (params.interactive || params.interactive_first)) {
         throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
@@ -251,7 +252,7 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         for (auto & antiprompt : params.antiprompt) {
             string_process_escapes(antiprompt);
         }
-        for (auto & seq_breaker : params.sparams.dry_sequence_breakers) {
+        for (auto & seq_breaker : params.sampling.dry_sequence_breakers) {
             string_process_escapes(seq_breaker);
         }
     }
@@ -297,6 +298,27 @@ static void common_params_print_usage(common_params_context & ctx_arg) {
     print_options(specific_options);
 }
 
+static std::vector<ggml_backend_dev_t> parse_device_list(const std::string & value) {
+    std::vector<ggml_backend_dev_t> devices;
+    auto dev_names = string_split<std::string>(value, ',');
+    if (dev_names.empty()) {
+        throw std::invalid_argument("no devices specified");
+    }
+    if (dev_names.size() == 1 && dev_names[0] == "none") {
+        devices.push_back(nullptr);
+    } else {
+        for (const auto & device : dev_names) {
+            auto * dev = ggml_backend_dev_by_name(device.c_str());
+            if (!dev || ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_GPU) {
+                throw std::invalid_argument(string_format("invalid device: %s", device.c_str()));
+            }
+            devices.push_back(dev);
+        }
+        devices.push_back(nullptr);
+    }
+    return devices;
+}
+
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
     auto ctx_arg = common_params_parser_init(params, ex, print_usage);
     const common_params params_org = ctx_arg.params; // the example can modify the default params
@@ -323,13 +345,16 @@ bool common_params_parse(int argc, char ** argv, common_params & params, llama_e
 }
 
 common_params_context common_params_parser_init(common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
+    // load dynamic backends
+    ggml_backend_load_all();
+
     common_params_context ctx_arg(params);
     ctx_arg.print_usage = print_usage;
     ctx_arg.ex          = ex;
 
     std::string sampler_type_chars;
     std::string sampler_type_names;
-    for (const auto & sampler : params.sparams.samplers) {
+    for (const auto & sampler : params.sampling.samplers) {
         sampler_type_chars += common_sampler_type_to_chr(sampler);
         sampler_type_names += common_sampler_type_to_str(sampler) + ";";
     }
@@ -407,26 +432,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             }
         }
     ));
-    add_opt(common_arg(
-        {"-td", "--threads-draft"}, "N",
-        "number of threads to use during generation (default: same as --threads)",
-        [](common_params & params, int value) {
-            params.draft_cpuparams.n_threads = value;
-            if (params.draft_cpuparams.n_threads <= 0) {
-                params.draft_cpuparams.n_threads = std::thread::hardware_concurrency();
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"-tbd", "--threads-batch-draft"}, "N",
-        "number of threads to use during batch and prompt processing (default: same as --threads-draft)",
-        [](common_params & params, int value) {
-            params.draft_cpuparams_batch.n_threads = value;
-            if (params.draft_cpuparams_batch.n_threads <= 0) {
-                params.draft_cpuparams_batch.n_threads = std::thread::hardware_concurrency();
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"-C", "--cpu-mask"}, "M",
         "CPU affinity mask: arbitrarily long hex. Complements cpu-range (default: \"\")",
@@ -516,108 +521,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
-        {"-Cd", "--cpu-mask-draft"}, "M",
-        "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
-        [](common_params & params, const std::string & mask) {
-            params.draft_cpuparams.mask_valid = true;
-            if (!parse_cpu_mask(mask, params.draft_cpuparams.cpumask)) {
-                throw std::invalid_argument("invalid cpumask");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"-Crd", "--cpu-range-draft"}, "lo-hi",
-        "Ranges of CPUs for affinity. Complements --cpu-mask-draft",
-        [](common_params & params, const std::string & range) {
-            params.draft_cpuparams.mask_valid = true;
-            if (!parse_cpu_range(range, params.draft_cpuparams.cpumask)) {
-                throw std::invalid_argument("invalid range");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--cpu-strict-draft"}, "<0|1>",
-        "Use strict CPU placement for draft model (default: same as --cpu-strict)",
-        [](common_params & params, int value) {
-            params.draft_cpuparams.strict_cpu = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--prio-draft"}, "N",
-        string_format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams.priority),
-        [](common_params & params, int prio) {
-            if (prio < 0 || prio > 3) {
-                throw std::invalid_argument("invalid value");
-            }
-            params.draft_cpuparams.priority = (enum ggml_sched_priority) prio;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--poll-draft"}, "<0|1>",
-        "Use polling to wait for draft model work (default: same as --poll])",
-        [](common_params & params, int value) {
-            params.draft_cpuparams.poll = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"-Cbd", "--cpu-mask-batch-draft"}, "M",
-        "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
-        [](common_params & params, const std::string & mask) {
-            params.draft_cpuparams_batch.mask_valid = true;
-            if (!parse_cpu_mask(mask, params.draft_cpuparams_batch.cpumask)) {
-                throw std::invalid_argument("invalid cpumask");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"-Crbd", "--cpu-range-batch-draft"}, "lo-hi",
-        "Ranges of CPUs for affinity. Complements --cpu-mask-draft-batch)",
-        [](common_params & params, const std::string & range) {
-            params.draft_cpuparams_batch.mask_valid = true;
-            if (!parse_cpu_range(range, params.draft_cpuparams_batch.cpumask)) {
-                throw std::invalid_argument("invalid cpumask");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--cpu-strict-batch-draft"}, "<0|1>",
-        "Use strict CPU placement for draft model (default: --cpu-strict-draft)",
-        [](common_params & params, int value) {
-            params.draft_cpuparams_batch.strict_cpu = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--prio-batch-draft"}, "N",
-        string_format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams_batch.priority),
-        [](common_params & params, int prio) {
-            if (prio < 0 || prio > 3) {
-                throw std::invalid_argument("invalid value");
-            }
-            params.draft_cpuparams_batch.priority = (enum ggml_sched_priority) prio;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--poll-batch-draft"}, "<0|1>",
-        "Use polling to wait for draft model work (default: --poll-draft)",
-        [](common_params & params, int value) {
-            params.draft_cpuparams_batch.poll = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
-        {"--draft"}, "N",
-        string_format("number of tokens to draft for speculative decoding (default: %d)", params.n_draft),
-        [](common_params & params, int value) {
-            params.n_draft = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP}));
-    add_opt(common_arg(
-        {"-ps", "--p-split"}, "N",
-        string_format("speculative decoding split probability (default: %.1f)", (double)params.p_split),
-        [](common_params & params, const std::string & value) {
-            params.p_split = std::stof(value);
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
-    add_opt(common_arg(
         {"-lcs", "--lookup-cache-static"}, "FNAME",
         "path to static lookup cache to use for lookup decoding (not updated by generation)",
         [](common_params & params, const std::string & value) {
@@ -701,7 +604,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("disable internal libllama performance timings (default: %s)", params.no_perf ? "true" : "false"),
         [](common_params & params) {
             params.no_perf = true;
-            params.sparams.no_perf = true;
+            params.sampling.no_perf = true;
         }
     ).set_env("LLAMA_ARG_NO_PERF"));
     add_opt(common_arg(
@@ -883,155 +786,155 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
         [](common_params & params, const std::string & value) {
             const auto sampler_names = string_split<std::string>(value, ';');
-            params.sparams.samplers = common_sampler_types_from_names(sampler_names, true);
+            params.sampling.samplers = common_sampler_types_from_names(sampler_names, true);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"-s", "--seed"}, "SEED",
-        string_format("RNG seed (default: %d, use random seed for %d)", params.sparams.seed, LLAMA_DEFAULT_SEED),
+        string_format("RNG seed (default: %d, use random seed for %d)", params.sampling.seed, LLAMA_DEFAULT_SEED),
         [](common_params & params, const std::string & value) {
-            params.sparams.seed = std::stoul(value);
+            params.sampling.seed = std::stoul(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--sampling-seq"}, "SEQUENCE",
         string_format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
         [](common_params & params, const std::string & value) {
-            params.sparams.samplers = common_sampler_types_from_chars(value);
+            params.sampling.samplers = common_sampler_types_from_chars(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--ignore-eos"},
         "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)",
         [](common_params & params) {
-            params.sparams.ignore_eos = true;
+            params.sampling.ignore_eos = true;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--penalize-nl"},
-        string_format("penalize newline tokens (default: %s)", params.sparams.penalize_nl ? "true" : "false"),
+        string_format("penalize newline tokens (default: %s)", params.sampling.penalize_nl ? "true" : "false"),
         [](common_params & params) {
-            params.sparams.penalize_nl = true;
+            params.sampling.penalize_nl = true;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--temp"}, "N",
-        string_format("temperature (default: %.1f)", (double)params.sparams.temp),
+        string_format("temperature (default: %.1f)", (double)params.sampling.temp),
         [](common_params & params, const std::string & value) {
-            params.sparams.temp = std::stof(value);
-            params.sparams.temp = std::max(params.sparams.temp, 0.0f);
+            params.sampling.temp = std::stof(value);
+            params.sampling.temp = std::max(params.sampling.temp, 0.0f);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--top-k"}, "N",
-        string_format("top-k sampling (default: %d, 0 = disabled)", params.sparams.top_k),
+        string_format("top-k sampling (default: %d, 0 = disabled)", params.sampling.top_k),
         [](common_params & params, int value) {
-            params.sparams.top_k = value;
+            params.sampling.top_k = value;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--top-p"}, "N",
-        string_format("top-p sampling (default: %.1f, 1.0 = disabled)", (double)params.sparams.top_p),
+        string_format("top-p sampling (default: %.1f, 1.0 = disabled)", (double)params.sampling.top_p),
         [](common_params & params, const std::string & value) {
-            params.sparams.top_p = std::stof(value);
+            params.sampling.top_p = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--min-p"}, "N",
-        string_format("min-p sampling (default: %.1f, 0.0 = disabled)", (double)params.sparams.min_p),
+        string_format("min-p sampling (default: %.1f, 0.0 = disabled)", (double)params.sampling.min_p),
         [](common_params & params, const std::string & value) {
-            params.sparams.min_p = std::stof(value);
+            params.sampling.min_p = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--xtc-probability"}, "N",
-        string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sparams.xtc_probability),
+        string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sampling.xtc_probability),
         [](common_params & params, const std::string & value) {
-            params.sparams.xtc_probability = std::stof(value);
+            params.sampling.xtc_probability = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--xtc-threshold"}, "N",
-        string_format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sparams.xtc_threshold),
+        string_format("xtc threshold (default: %.1f, 1.0 = disabled)", (double)params.sampling.xtc_threshold),
         [](common_params & params, const std::string & value) {
-            params.sparams.xtc_threshold = std::stof(value);
+            params.sampling.xtc_threshold = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--typical"}, "N",
-        string_format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typ_p),
+        string_format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sampling.typ_p),
         [](common_params & params, const std::string & value) {
-            params.sparams.typ_p = std::stof(value);
+            params.sampling.typ_p = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--repeat-last-n"}, "N",
-        string_format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", params.sparams.penalty_last_n),
+        string_format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", params.sampling.penalty_last_n),
         [](common_params & params, int value) {
-            params.sparams.penalty_last_n = value;
-            params.sparams.n_prev = std::max(params.sparams.n_prev, params.sparams.penalty_last_n);
+            params.sampling.penalty_last_n = value;
+            params.sampling.n_prev = std::max(params.sampling.n_prev, params.sampling.penalty_last_n);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--repeat-penalty"}, "N",
-        string_format("penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)", (double)params.sparams.penalty_repeat),
+        string_format("penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)", (double)params.sampling.penalty_repeat),
         [](common_params & params, const std::string & value) {
-            params.sparams.penalty_repeat = std::stof(value);
+            params.sampling.penalty_repeat = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--presence-penalty"}, "N",
-        string_format("repeat alpha presence penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_present),
+        string_format("repeat alpha presence penalty (default: %.1f, 0.0 = disabled)", (double)params.sampling.penalty_present),
         [](common_params & params, const std::string & value) {
-            params.sparams.penalty_present = std::stof(value);
+            params.sampling.penalty_present = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--frequency-penalty"}, "N",
-        string_format("repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)params.sparams.penalty_freq),
+        string_format("repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)params.sampling.penalty_freq),
         [](common_params & params, const std::string & value) {
-            params.sparams.penalty_freq = std::stof(value);
+            params.sampling.penalty_freq = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dry-multiplier"}, "N",
-        string_format("set DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)params.sparams.dry_multiplier),
+        string_format("set DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)params.sampling.dry_multiplier),
         [](common_params & params, const std::string & value) {
-            params.sparams.dry_multiplier = std::stof(value);
+            params.sampling.dry_multiplier = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dry-base"}, "N",
-        string_format("set DRY sampling base value (default: %.2f)", (double)params.sparams.dry_base),
+        string_format("set DRY sampling base value (default: %.2f)", (double)params.sampling.dry_base),
         [](common_params & params, const std::string & value) {
             float potential_base = std::stof(value);
             if (potential_base >= 1.0f)
             {
-                params.sparams.dry_base = potential_base;
+                params.sampling.dry_base = potential_base;
             }
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dry-allowed-length"}, "N",
-        string_format("set allowed length for DRY sampling (default: %d)", params.sparams.dry_allowed_length),
+        string_format("set allowed length for DRY sampling (default: %d)", params.sampling.dry_allowed_length),
         [](common_params & params, int value) {
-            params.sparams.dry_allowed_length = value;
+            params.sampling.dry_allowed_length = value;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dry-penalty-last-n"}, "N",
-        string_format("set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sparams.dry_penalty_last_n),
+        string_format("set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sampling.dry_penalty_last_n),
         [](common_params & params, int value) {
-            params.sparams.dry_penalty_last_n = value;
+            params.sampling.dry_penalty_last_n = value;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dry-sequence-breaker"}, "STRING",
         string_format("add sequence breaker for DRY sampling, clearing out default breakers (%s) in the process; use \"none\" to not use any sequence breakers\n",
-            params.sparams.dry_sequence_breakers.empty() ? "none" :
-            std::accumulate(std::next(params.sparams.dry_sequence_breakers.begin()),
-                params.sparams.dry_sequence_breakers.end(),
-                std::string("'") + (params.sparams.dry_sequence_breakers[0] == "\n" ? "\\n" : params.sparams.dry_sequence_breakers[0]) + "'",
+            params.sampling.dry_sequence_breakers.empty() ? "none" :
+            std::accumulate(std::next(params.sampling.dry_sequence_breakers.begin()),
+                params.sampling.dry_sequence_breakers.end(),
+                std::string("'") + (params.sampling.dry_sequence_breakers[0] == "\n" ? "\\n" : params.sampling.dry_sequence_breakers[0]) + "'",
                 [](const std::string& a, const std::string& b) {
                     std::string formatted_b = (b == "\n") ? "\\n" : b;
                     return a + ", '" + formatted_b + "'";
@@ -1040,51 +943,51 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             static bool defaults_cleared = false;
 
             if (!defaults_cleared) {
-                params.sparams.dry_sequence_breakers.clear();
+                params.sampling.dry_sequence_breakers.clear();
                 defaults_cleared = true;
             }
 
             if (value == "none") {
-                params.sparams.dry_sequence_breakers.clear();
+                params.sampling.dry_sequence_breakers.clear();
             } else {
-                params.sparams.dry_sequence_breakers.emplace_back(value);
+                params.sampling.dry_sequence_breakers.emplace_back(value);
             }
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dynatemp-range"}, "N",
-        string_format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sparams.dynatemp_range),
+        string_format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)params.sampling.dynatemp_range),
         [](common_params & params, const std::string & value) {
-            params.sparams.dynatemp_range = std::stof(value);
+            params.sampling.dynatemp_range = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--dynatemp-exp"}, "N",
-        string_format("dynamic temperature exponent (default: %.1f)", (double)params.sparams.dynatemp_exponent),
+        string_format("dynamic temperature exponent (default: %.1f)", (double)params.sampling.dynatemp_exponent),
         [](common_params & params, const std::string & value) {
-            params.sparams.dynatemp_exponent = std::stof(value);
+            params.sampling.dynatemp_exponent = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat"}, "N",
         string_format("use Mirostat sampling.\nTop K, Nucleus and Locally Typical samplers are ignored if used.\n"
-        "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sparams.mirostat),
+        "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sampling.mirostat),
         [](common_params & params, int value) {
-            params.sparams.mirostat = value;
+            params.sampling.mirostat = value;
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat-lr"}, "N",
-        string_format("Mirostat learning rate, parameter eta (default: %.1f)", (double)params.sparams.mirostat_eta),
+        string_format("Mirostat learning rate, parameter eta (default: %.1f)", (double)params.sampling.mirostat_eta),
         [](common_params & params, const std::string & value) {
-            params.sparams.mirostat_eta = std::stof(value);
+            params.sampling.mirostat_eta = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
         {"--mirostat-ent"}, "N",
-        string_format("Mirostat target entropy, parameter tau (default: %.1f)", (double)params.sparams.mirostat_tau),
+        string_format("Mirostat target entropy, parameter tau (default: %.1f)", (double)params.sampling.mirostat_tau),
         [](common_params & params, const std::string & value) {
-            params.sparams.mirostat_tau = std::stof(value);
+            params.sampling.mirostat_tau = std::stof(value);
         }
     ).set_sparam());
     add_opt(common_arg(
@@ -1100,7 +1003,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             try {
                 if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
                     const float bias = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
-                    params.sparams.logit_bias.push_back({key, bias});
+                    params.sampling.logit_bias.push_back({key, bias});
                 } else {
                     throw std::invalid_argument("invalid input format");
                 }
@@ -1111,9 +1014,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--grammar"}, "GRAMMAR",
-        string_format("BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", params.sparams.grammar.c_str()),
+        string_format("BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", params.sampling.grammar.c_str()),
         [](common_params & params, const std::string & value) {
-            params.sparams.grammar = value;
+            params.sampling.grammar = value;
         }
     ).set_sparam());
     add_opt(common_arg(
@@ -1127,7 +1030,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             std::copy(
                 std::istreambuf_iterator<char>(file),
                 std::istreambuf_iterator<char>(),
-                std::back_inserter(params.sparams.grammar)
+                std::back_inserter(params.sampling.grammar)
             );
         }
     ).set_sparam());
@@ -1135,7 +1038,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"-j", "--json-schema"}, "SCHEMA",
         "JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object\nFor schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead",
         [](common_params & params, const std::string & value) {
-            params.sparams.grammar = json_schema_to_grammar(json::parse(value));
+            params.sampling.grammar = json_schema_to_grammar(json::parse(value));
         }
     ).set_sparam());
     add_opt(common_arg(
@@ -1434,6 +1337,30 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_NUMA"));
     add_opt(common_arg(
+        {"-dev", "--device"}, "<dev1,dev2,..>",
+        "comma-separated list of devices to use for offloading (none = don't offload)\n"
+        "use --list-devices to see a list of available devices",
+        [](common_params & params, const std::string & value) {
+            params.devices = parse_device_list(value);
+        }
+    ).set_env("LLAMA_ARG_DEVICE"));
+    add_opt(common_arg(
+        {"--list-devices"},
+        "print list of available devices and exit",
+        [](common_params &) {
+            printf("Available devices:\n");
+            for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+                auto * dev = ggml_backend_dev_get(i);
+                if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+                    size_t free, total;
+                    ggml_backend_dev_memory(dev, &free, &total);
+                    printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
+                }
+            }
+            exit(0);
+        }
+    ));
+    add_opt(common_arg(
         {"-ngl", "--gpu-layers", "--n-gpu-layers"}, "N",
         "number of layers to store in VRAM",
         [](common_params & params, int value) {
@@ -1444,17 +1371,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             }
         }
     ).set_env("LLAMA_ARG_N_GPU_LAYERS"));
-    add_opt(common_arg(
-        {"-ngld", "--gpu-layers-draft", "--n-gpu-layers-draft"}, "N",
-        "number of layers to store in VRAM for the draft model",
-        [](common_params & params, int value) {
-            params.n_gpu_layers_draft = value;
-            if (!llama_supports_gpu_offload()) {
-                fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers-draft option will be ignored\n");
-                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"-sm", "--split-mode"}, "{none,layer,row}",
         "how to split the model across multiple GPUs, one of:\n"
@@ -1468,10 +1384,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             } else if (arg_next == "layer") {
                 params.split_mode = LLAMA_SPLIT_MODE_LAYER;
             } else if (arg_next == "row") {
-#ifdef GGML_USE_SYCL
-                fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
-                exit(1);
-#endif // GGML_USE_SYCL
                 params.split_mode = LLAMA_SPLIT_MODE_ROW;
             } else {
                 throw std::invalid_argument("invalid value");
@@ -1593,13 +1505,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.model = value;
         }
     ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA}).set_env("LLAMA_ARG_MODEL"));
-    add_opt(common_arg(
-        {"-md", "--model-draft"}, "FNAME",
-        "draft model for speculative decoding (default: unused)",
-        [](common_params & params, const std::string & value) {
-            params.model_draft = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"-mu", "--model-url"}, "MODEL_URL",
         "model download url (default: unused)",
@@ -1940,17 +1845,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(common_arg(
-        {"-ld", "--logdir"}, "LOGDIR",
-        "path under which to save YAML logs (no logging if unset)",
-        [](common_params & params, const std::string & value) {
-            params.logdir = value;
-
-            if (params.logdir.back() != DIRECTORY_SEPARATOR) {
-                params.logdir += DIRECTORY_SEPARATOR;
-            }
-        }
-    ));
-    add_opt(common_arg(
         {"--positive-file"}, "FNAME",
         string_format("positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str()),
         [](common_params & params, const std::string & value) {
@@ -2047,6 +1941,177 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             common_log_set_timestamps(common_log_main(), true);
         }
     ).set_env("LLAMA_LOG_TIMESTAMPS"));
+
+    // speculative parameters
+    add_opt(common_arg(
+        {"-td", "--threads-draft"}, "N",
+        "number of threads to use during generation (default: same as --threads)",
+        [](common_params & params, int value) {
+            params.speculative.cpuparams.n_threads = value;
+            if (params.speculative.cpuparams.n_threads <= 0) {
+                params.speculative.cpuparams.n_threads = std::thread::hardware_concurrency();
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"-tbd", "--threads-batch-draft"}, "N",
+        "number of threads to use during batch and prompt processing (default: same as --threads-draft)",
+        [](common_params & params, int value) {
+            params.speculative.cpuparams_batch.n_threads = value;
+            if (params.speculative.cpuparams_batch.n_threads <= 0) {
+                params.speculative.cpuparams_batch.n_threads = std::thread::hardware_concurrency();
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"-Cd", "--cpu-mask-draft"}, "M",
+        "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
+        [](common_params & params, const std::string & mask) {
+            params.speculative.cpuparams.mask_valid = true;
+            if (!parse_cpu_mask(mask, params.speculative.cpuparams.cpumask)) {
+                throw std::invalid_argument("invalid cpumask");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"-Crd", "--cpu-range-draft"}, "lo-hi",
+        "Ranges of CPUs for affinity. Complements --cpu-mask-draft",
+        [](common_params & params, const std::string & range) {
+            params.speculative.cpuparams.mask_valid = true;
+            if (!parse_cpu_range(range, params.speculative.cpuparams.cpumask)) {
+                throw std::invalid_argument("invalid range");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--cpu-strict-draft"}, "<0|1>",
+        "Use strict CPU placement for draft model (default: same as --cpu-strict)",
+        [](common_params & params, int value) {
+            params.speculative.cpuparams.strict_cpu = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--prio-draft"}, "N",
+        string_format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.speculative.cpuparams.priority),
+        [](common_params & params, int prio) {
+            if (prio < 0 || prio > 3) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.speculative.cpuparams.priority = (enum ggml_sched_priority) prio;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--poll-draft"}, "<0|1>",
+        "Use polling to wait for draft model work (default: same as --poll])",
+        [](common_params & params, int value) {
+            params.speculative.cpuparams.poll = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"-Cbd", "--cpu-mask-batch-draft"}, "M",
+        "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
+        [](common_params & params, const std::string & mask) {
+            params.speculative.cpuparams_batch.mask_valid = true;
+            if (!parse_cpu_mask(mask, params.speculative.cpuparams_batch.cpumask)) {
+                throw std::invalid_argument("invalid cpumask");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"-Crbd", "--cpu-range-batch-draft"}, "lo-hi",
+        "Ranges of CPUs for affinity. Complements --cpu-mask-draft-batch)",
+        [](common_params & params, const std::string & range) {
+            params.speculative.cpuparams_batch.mask_valid = true;
+            if (!parse_cpu_range(range, params.speculative.cpuparams_batch.cpumask)) {
+                throw std::invalid_argument("invalid cpumask");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--cpu-strict-batch-draft"}, "<0|1>",
+        "Use strict CPU placement for draft model (default: --cpu-strict-draft)",
+        [](common_params & params, int value) {
+            params.speculative.cpuparams_batch.strict_cpu = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--prio-batch-draft"}, "N",
+        string_format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.speculative.cpuparams_batch.priority),
+        [](common_params & params, int prio) {
+            if (prio < 0 || prio > 3) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.speculative.cpuparams_batch.priority = (enum ggml_sched_priority) prio;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--poll-batch-draft"}, "<0|1>",
+        "Use polling to wait for draft model work (default: --poll-draft)",
+        [](common_params & params, int value) {
+            params.speculative.cpuparams_batch.poll = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--draft-max", "--draft", "--draft-n"}, "N",
+        string_format("number of tokens to draft for speculative decoding (default: %d)", params.speculative.n_max),
+        [](common_params & params, int value) {
+            params.speculative.n_max = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--draft-min", "--draft-n-min"}, "N",
+        string_format("minimum number of draft tokens to use for speculative decoding (default: %d)", params.speculative.n_min),
+        [](common_params & params, int value) {
+            params.speculative.n_min = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--draft-p-split"}, "P",
+        string_format("speculative decoding split probability (default: %.1f)", (double)params.speculative.p_split),
+        [](common_params & params, const std::string & value) {
+            params.speculative.p_split = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    add_opt(common_arg(
+        {"--draft-p-min"}, "P",
+        string_format("minimum speculative decoding probability (greedy) (default: %.1f)", (double)params.speculative.p_min),
+        [](common_params & params, const std::string & value) {
+            params.speculative.p_min = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"-cd", "--ctx-size-draft"}, "N",
+        string_format("size of the prompt context for the draft model (default: %d, 0 = loaded from model)", params.speculative.n_ctx),
+        [](common_params & params, int value) {
+            params.speculative.n_ctx = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"-devd", "--device-draft"}, "<dev1,dev2,..>",
+        "comma-separated list of devices to use for offloading the draft model (none = don't offload)\n"
+        "use --list-devices to see a list of available devices",
+        [](common_params & params, const std::string & value) {
+            params.speculative.devices = parse_device_list(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"-ngld", "--gpu-layers-draft", "--n-gpu-layers-draft"}, "N",
+        "number of layers to store in VRAM for the draft model",
+        [](common_params & params, int value) {
+            params.speculative.n_gpu_layers = value;
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers-draft option will be ignored\n");
+                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"-md", "--model-draft"}, "FNAME",
+        "draft model for speculative decoding (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.speculative.model = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
 
     return ctx_arg;
 }
