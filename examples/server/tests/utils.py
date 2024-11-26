@@ -74,7 +74,12 @@ class ServerProcess:
     process: subprocess.Popen | None = None
 
     def __init__(self):
-        pass
+        if "N_GPU_LAYERS" in os.environ:
+            self.n_gpu_layer = int(os.environ["N_GPU_LAYERS"])
+        if "DEBUG" in os.environ:
+            self.debug = True
+        if "PORT" in os.environ:
+            self.server_port = int(os.environ["PORT"])
 
     def start(self, timeout_seconds: int = 10) -> None:
         if "LLAMA_SERVER_BIN_PATH" in os.environ:

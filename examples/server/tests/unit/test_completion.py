@@ -62,6 +62,7 @@ def test_consistent_result_same_seed(n_slots: int):
             "prompt": "I believe the meaning of life is",
             "seed": 42,
             "temperature": 1.0,
+            "cache_prompt": False,
         })
         if last_res is not None:
             assert res.body["content"] == last_res.body["content"]
@@ -79,6 +80,7 @@ def test_different_result_different_seed(n_slots: int):
             "prompt": "I believe the meaning of life is",
             "seed": seed,
             "temperature": 1.0,
+            "cache_prompt": False,
         })
         if last_res is not None:
             assert res.body["content"] != last_res.body["content"]
@@ -97,6 +99,7 @@ def test_consistent_result_different_batch_size(n_batch: int, temperature: float
             "prompt": "I believe the meaning of life is",
             "seed": 42,
             "temperature": temperature,
+            "cache_prompt": False,
         })
         if last_res is not None:
             assert res.body["content"] == last_res.body["content"]

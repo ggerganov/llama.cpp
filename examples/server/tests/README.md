@@ -29,7 +29,7 @@ It's possible to override some scenario steps values with environment variables:
 |--------------------------|------------------------------------------------------------------------------------------------|
 | `PORT`                   | `context.server_port` to set the listening port of the server during scenario, default: `8080` |
 | `LLAMA_SERVER_BIN_PATH`  | to change the server binary path, default: `../../../build/bin/llama-server`                         |
-| `DEBUG`                  | "ON" to enable steps and server verbose mode `--verbose`                                       |
+| `DEBUG`                  | to enable steps and server verbose mode `--verbose`                                       |
 | `N_GPU_LAYERS`           | number of model layers to offload to VRAM `-ngl --n-gpu-layers`                                |
 
 To run slow tests:
@@ -41,7 +41,7 @@ SLOW_TESTS=1 ./tests.sh
 To run with stdout/stderr display in real time (verbose output, but useful for debugging):
 
 ```shell
-./tests.sh -s -v -x
+DEBUG=1 ./tests.sh -s -v -x
 ```
 
 To see all available arguments, please refer to [pytest documentation](https://docs.pytest.org/en/stable/how-to/usage.html)
