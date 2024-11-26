@@ -122,6 +122,10 @@ static ggml_cann_device_info ggml_cann_init() {
         ACL_CHECK(aclrtMemGetAllocationGranularity(
             &prop, ACL_RT_MEM_ALLOC_GRANULARITY_RECOMMENDED,
             &info.devices[id].vmm_granularity));
+
+        size_t free, total;
+        ggml_backend_cann_get_device_memory(id, &free, &total);
+        info.devices[id].total_vram = free;
     }
 
     // TODO: add more device info later.
@@ -208,6 +212,11 @@ struct ggml_cann_pool_leg : public ggml_cann_pool {
      * @return A pointer to the allocated buffer.
      */
     void* alloc(size_t size, size_t* actual_size) override {
+        const size_t alignment = 128;
+        size = GGML_PAD(size, alignment);
+        if (size == 0) {
+            size = alignment;
+        }
 #ifdef DEBUG_CANN_MALLOC
         int nnz = 0;
         size_t max_size = 0;
@@ -246,13 +255,11 @@ struct ggml_cann_pool_leg : public ggml_cann_pool {
             return ptr;
         }
         void* ptr;
-        size_t look_ahead_size = (size_t)(1.05 * size);
-        look_ahead_size = 256 * ((look_ahead_size + 255) / 256);
         ggml_cann_set_device(device);
         ACL_CHECK(
-            aclrtMalloc(&ptr, look_ahead_size, ACL_MEM_MALLOC_HUGE_FIRST));
-        *actual_size = look_ahead_size;
-        pool_size += look_ahead_size;
+            aclrtMalloc(&ptr, size, ACL_MEM_MALLOC_HUGE_FIRST));
+        *actual_size = size;
+        pool_size += size;
 #ifdef DEBUG_CANN_MALLOC
         GGML_LOG_INFO(
             "%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, "
@@ -296,7 +303,7 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
     /**
      * @brief The maximum size of the virtual memory pool (32 GB).
      */
-    static const size_t CANN_POOL_VMM_MAX_SIZE = 1ull << 35;  // 32 GB
+    size_t max_size;
 
     /**
      * @brief The device ID associated with this buffer pool.
@@ -341,7 +348,11 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
      */
     explicit ggml_cann_pool_vmm(int device)
         : device(device),
-          granularity(ggml_cann_info().devices[device].vmm_granularity) {}
+          granularity(ggml_cann_info().devices[device].vmm_granularity) {
+        auto dev = ggml_cann_info().devices[device];
+        granularity = dev.vmm_granularity;
+        max_size = dev.total_vram;
+    }
 
     /**
      * @brief Destructor to free all buffers in the virtual memory pool.
@@ -370,17 +381,19 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
         // round up the allocation size to the alignment to ensure that all
         // allocations are aligned for all data types
         const size_t alignment = 128;
-        size = alignment * ((size + alignment - 1) / alignment);
+        size = GGML_PAD(size, alignment);
+        if (size == 0) {
+            size = alignment;
+        }
 
         size_t avail = pool_size - pool_used;
 
         if (size > avail) {
             // round up to the next multiple of the granularity
             size_t reserve_size = size - avail;
-            reserve_size =
-                granularity * ((reserve_size + granularity - 1) / granularity);
+            reserve_size = GGML_PAD(reserve_size, granularity);
 
-            GGML_ASSERT(pool_size + reserve_size <= CANN_POOL_VMM_MAX_SIZE);
+            GGML_ASSERT(pool_size + reserve_size <= max_size);
 
             // allocate more physical memory
             aclrtPhysicalMemProp prop = {};
@@ -396,7 +409,7 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
             // reserve virtual address space (if not already reserved)
             if (pool_addr == 0) {
                 ACL_CHECK(aclrtReserveMemAddress(
-                    &pool_addr, CANN_POOL_VMM_MAX_SIZE, 0, NULL, 1));
+                    &pool_addr, max_size, 0, NULL, 1));
             }
 
             // map at the end of the pool
@@ -409,10 +422,11 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
             // add to the pool
             pool_size += reserve_size;
 
-            // GGML_LOG_INFO("cann pool[%d]: size increased to %llu MB (
-            // reserved %llu MB)\n",
-            //       device, (unsigned long long) (pool_size/1024/1024),
-            //       (unsigned long long) (reserve_size/1024/1024));
+#ifdef DEBUG_CANN_MALLOC
+             GGML_LOG_INFO("cann pool[%d]: size increased to %llu MB (reserved %llu MB)\n",
+                   device, (unsigned long long) (pool_size/1024/1024),
+                   (unsigned long long) (reserve_size/1024/1024));
+#endif
         }
 
         GGML_ASSERT(pool_addr != 0);
@@ -457,7 +471,6 @@ struct ggml_cann_pool_vmm : public ggml_cann_pool {
  */
 std::unique_ptr<ggml_cann_pool> ggml_backend_cann_context::new_pool_for_device(
     int device) {
-    // return std::unique_ptr<ggml_cann_pool>(new ggml_cann_pool_leg(device));
     return std::unique_ptr<ggml_cann_pool>(new ggml_cann_pool_vmm(device));
 }
 
@@ -1130,10 +1143,10 @@ ggml_backend_cann_buffer_type(int32_t device) {
     static bool ggml_backend_cann_buffer_type_initialized = false;
 
     if (!ggml_backend_cann_buffer_type_initialized) {
-        for (int32_t i = 0; i < GGML_CANN_MAX_DEVICES; i++) {
+        for (int32_t i = 0; i < ggml_cann_info().device_count; i++) {
             ggml_backend_cann_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_cann_buffer_type_interface,
-                /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), device),
+                /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_cann_reg(), i),
                 /* .context  = */
                  new ggml_backend_cann_buffer_type_context{
                     i, "CANN" + std::to_string(i)},
@@ -1199,10 +1212,15 @@ static void * ggml_cann_host_malloc(size_t size) {
         return nullptr;
     }
 
+    const size_t alignment = 128;
+    size = GGML_PAD(size, alignment);
+    if (size == 0) {
+        size = alignment;
+    }
+
     void * hostPtr = nullptr;
     aclError err = aclrtMallocHost((void **) &hostPtr, size);
     if (err != ACL_SUCCESS) {
-
         GGML_LOG_WARN("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
                            size / 1024.0 / 1024.0, aclGetRecentErrMsg());
         return nullptr;
