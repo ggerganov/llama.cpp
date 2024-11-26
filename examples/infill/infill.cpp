@@ -73,7 +73,7 @@ int main(int argc, char ** argv) {
 
     common_init();
 
-    auto & sparams = params.sparams;
+    auto & sparams = params.sampling;
 
     console::init(params.simple_io, params.use_color);
     atexit([]() { console::cleanup(); });

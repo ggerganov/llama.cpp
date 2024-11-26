@@ -237,7 +237,7 @@ static struct common_sampler * llama_init(struct llava_context * ctx_llava, comm
 
     LOG_INF("\n");
 
-    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sparams);
+    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sampling);
     return smpl;
 }
 

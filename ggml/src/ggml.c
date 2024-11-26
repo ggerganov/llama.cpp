@@ -2255,6 +2255,7 @@ struct ggml_tensor * ggml_argmax(
         struct ggml_context * ctx,
         struct ggml_tensor  * a) {
     GGML_ASSERT(ggml_is_matrix(a));
+    GGML_ASSERT(a->ne[0] <= INT32_MAX);
 
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, a->ne[1]);
 
@@ -4138,6 +4139,7 @@ struct ggml_tensor * ggml_argsort(
         struct ggml_context  * ctx,
         struct ggml_tensor   * a,
         enum ggml_sort_order   order) {
+    GGML_ASSERT(a->ne[0] <= INT32_MAX);
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_I32, GGML_MAX_DIMS, a->ne);
 
     ggml_set_op_params_i32(result, 0, (int32_t) order);
@@ -5019,8 +5021,10 @@ static void ggml_hash_map_free(struct hash_map * map) {
 }
 
 // utility functions to change gradients
-// if a is in acc_table, modify gradients in-place and mark result as gradient accumulator
-// else if a is in zero_table, replace a
+// isrc is the index of tensor in cgraph->visited_has_set.keys
+// the corresponding gradient (accumulators) are also at position isrc
+// if tensor has a gradient accumulator, modify that accumulator in-place
+// else if there is no gradient for tensor, set the corresponding value
 // else, just add/subtract/etc. the gradients
 
 static void ggml_add_or_set(
@@ -5028,11 +5032,14 @@ static void ggml_add_or_set(
         struct ggml_cgraph  * cgraph,
         size_t                isrc,
         struct ggml_tensor  * tensor) {
+    struct ggml_tensor * src = cgraph->visited_hash_set.keys[isrc];
+    GGML_ASSERT(src);
     if (cgraph->grads[isrc]) {
-        cgraph->grads[isrc] = ggml_add_impl(ctx, cgraph->grads[isrc], tensor, cgraph->grad_accs[isrc]);
+        cgraph->grads[isrc] = ggml_add_impl(ctx, cgraph->grads[isrc], tensor, /*inplace =*/ cgraph->grad_accs[isrc]);
     } else {
         cgraph->grads[isrc] = tensor;
     }
+    ggml_format_name(cgraph->grads[isrc], "grad for %s", src->name);
     ggml_build_forward_expand(cgraph, cgraph->grads[isrc]);
 }
 
@@ -5040,18 +5047,20 @@ static void ggml_acc_or_set(
         struct ggml_context * ctx,
         struct ggml_cgraph  * cgraph,
         size_t                isrc,
-        struct ggml_tensor  * src,
         struct ggml_tensor  * tensor,
         const  size_t         nb1,
         const  size_t         nb2,
         const  size_t         nb3,
         const  size_t         offset) {
+    struct ggml_tensor * src = cgraph->visited_hash_set.keys[isrc];
+    GGML_ASSERT(src);
     if (cgraph->grads[isrc]) {
         cgraph->grads[isrc] = ggml_acc_impl(ctx, cgraph->grads[isrc], tensor, nb1, nb2, nb3, offset, cgraph->grad_accs[isrc]);
     } else {
         struct ggml_tensor * a_zero = ggml_scale(ctx, src, 0.0f); // FIXME this is going to produce NaN if a contains inf/NaN
         cgraph->grads[isrc] = ggml_acc_impl(ctx, a_zero, tensor, nb1, nb2, nb3, offset, false);
     }
+    ggml_format_name(cgraph->grads[isrc], "grad for %s", cgraph->visited_hash_set.keys[isrc]->name);
     ggml_build_forward_expand(cgraph, cgraph->grads[isrc]);
 }
 
@@ -5059,13 +5068,15 @@ static void ggml_add1_or_set(
         struct ggml_context * ctx,
         struct ggml_cgraph  * cgraph,
         size_t                isrc,
-        struct ggml_tensor  * src,
         struct ggml_tensor  * tensor) {
+    struct ggml_tensor * src = cgraph->visited_hash_set.keys[isrc];
+    GGML_ASSERT(src);
     if (cgraph->grads[isrc]) {
         cgraph->grads[isrc] = ggml_add1_impl(ctx, cgraph->grads[isrc], tensor, cgraph->grad_accs[isrc]);
     } else {
         cgraph->grads[isrc] = ggml_repeat(ctx, tensor, src);
     }
+    ggml_format_name(cgraph->grads[isrc], "grad for %s", src->name);
     ggml_build_forward_expand(cgraph, cgraph->grads[isrc]);
 }
 
@@ -5074,11 +5085,14 @@ static void ggml_sub_or_set(
         struct ggml_cgraph  * cgraph,
         size_t                isrc,
         struct ggml_tensor  * tensor) {
+    struct ggml_tensor * src = cgraph->visited_hash_set.keys[isrc];
+    GGML_ASSERT(src);
     if (cgraph->grads[isrc]) {
         cgraph->grads[isrc] = ggml_sub_impl(ctx, cgraph->grads[isrc], tensor, cgraph->grad_accs[isrc]);
     } else {
         cgraph->grads[isrc] = ggml_neg(ctx, tensor);
     }
+    ggml_format_name(cgraph->grads[isrc], "grad for %s", src->name);
     ggml_build_forward_expand(cgraph, cgraph->grads[isrc]);
 }
 
@@ -5095,12 +5109,12 @@ static void ggml_compute_backward(
     struct ggml_tensor * src1 = tensor->src[1];
     struct ggml_tensor * src2 = tensor->src[2];
     struct ggml_hash_set * hash_set = &cgraph->visited_hash_set;
-    const size_t isrc0 = ggml_hash_find(hash_set, src0);
-    const size_t isrc1 = ggml_hash_find(hash_set, src1);
-    const size_t isrc2 = ggml_hash_find(hash_set, src2);
-    const bool src0_needs_grads = isrc0 != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, isrc0) && grads_needed[isrc0];
-    const bool src1_needs_grads = isrc1 != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, isrc1) && grads_needed[isrc1];
-    const bool src2_needs_grads = isrc2 != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, isrc2) && grads_needed[isrc2];
+    const size_t isrc0 = src0 ? ggml_hash_find(hash_set, src0) : (size_t) -1;
+    const size_t isrc1 = src1 ? ggml_hash_find(hash_set, src1) : (size_t) -1;
+    const size_t isrc2 = src2 ? ggml_hash_find(hash_set, src2) : (size_t) -1;
+    const bool src0_needs_grads = src0 && isrc0 != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, isrc0) && grads_needed[isrc0];
+    const bool src1_needs_grads = src1 && isrc1 != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, isrc1) && grads_needed[isrc1];
+    const bool src2_needs_grads = src2 && isrc2 != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, isrc2) && grads_needed[isrc2];
 
     switch (tensor->op) {
         case GGML_OP_DUP: {
@@ -5200,7 +5214,7 @@ static void ggml_compute_backward(
         } break;
         case GGML_OP_SUM: {
             if (src0_needs_grads) {
-                ggml_add1_or_set(ctx, cgraph, isrc0, src0, grad);
+                ggml_add1_or_set(ctx, cgraph, isrc0, grad);
             }
         } break;
         case GGML_OP_SUM_ROWS: {
@@ -5210,7 +5224,7 @@ static void ggml_compute_backward(
         } break;
         case GGML_OP_MEAN: {
             if (src0_needs_grads) {
-                ggml_add1_or_set(ctx, cgraph, isrc0, src0, ggml_scale_impl(ctx, grad, 1.0f/src0->ne[0], false));
+                ggml_add1_or_set(ctx, cgraph, isrc0, ggml_scale_impl(ctx, grad, 1.0f/src0->ne[0], false));
             }
         } break;
         case GGML_OP_REPEAT: {
@@ -5363,7 +5377,7 @@ static void ggml_compute_backward(
                     nb3 = (nb3 / n0) * ng;
                 }
 
-                ggml_acc_or_set(ctx, cgraph, isrc0, src0, grad, nb1, nb2, nb3, offset);
+                ggml_acc_or_set(ctx, cgraph, isrc0, grad, nb1, nb2, nb3, offset);
             }
         } break;
         case GGML_OP_PERMUTE: {
@@ -5597,10 +5611,9 @@ void ggml_build_backward_expand(
 
     const int n_nodes_f = cgraph->n_nodes;
 
-    const size_t hash_size = ggml_hash_size(2*cgraph->size);
-    memset(cgraph->grads,     0, hash_size*sizeof(struct ggml_tensor *));
-    memset(cgraph->grad_accs, 0, hash_size*sizeof(struct ggml_tensor *));
-    bool * grads_needed = calloc(hash_size, sizeof(bool));
+    memset(cgraph->grads,     0, cgraph->visited_hash_set.size*sizeof(struct ggml_tensor *));
+    memset(cgraph->grad_accs, 0, cgraph->visited_hash_set.size*sizeof(struct ggml_tensor *));
+    bool * grads_needed = calloc(cgraph->visited_hash_set.size, sizeof(bool));
 
     {
         bool any_params = false;
@@ -5621,7 +5634,7 @@ void ggml_build_backward_expand(
             continue;
         }
 
-        bool node_needs_grad = node->flags & GGML_TENSOR_FLAG_PARAM;
+        bool node_needs_grad = (node->flags & GGML_TENSOR_FLAG_PARAM) || (node->flags & GGML_TENSOR_FLAG_LOSS);
         bool ignore_src[GGML_MAX_SRC] = {false};
         switch (node->op) {
             // gradients in node->src[0] for one reason or another have no effect on output gradients
@@ -5638,7 +5651,7 @@ void ggml_build_backward_expand(
             } break;
 
             // gradients in node->src[1] for one reason or another have no effect on output gradients
-            case GGML_OP_CPY:           // gradients in CPY target  are irrelevant
+            case GGML_OP_CPY:           // gradients in CPY target are irrelevant
             case GGML_OP_GET_ROWS:      // row indices not differentiable
             case GGML_OP_GET_ROWS_BACK: // same as for GET_ROWS
             case GGML_OP_ROPE:          // positions not differentiable
@@ -5665,9 +5678,12 @@ void ggml_build_backward_expand(
             node->op == GGML_OP_RESHAPE || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_TRANSPOSE);
 
         const size_t igrad = ggml_hash_find(&cgraph->visited_hash_set, node);
+        GGML_ASSERT(igrad != GGML_HASHSET_FULL);
+        GGML_ASSERT(ggml_bitset_get(cgraph->visited_hash_set.used, igrad));
         if ((accumulate && (node->flags & GGML_TENSOR_FLAG_PARAM)) || (node->flags & GGML_TENSOR_FLAG_LOSS)) {
-            cgraph->grads[igrad]     = ggml_dup_tensor(ctx_static, node);
-            cgraph->grad_accs[igrad] = cgraph->grads[igrad];
+            cgraph->grad_accs[igrad] = ggml_dup_tensor(ctx_static, node);
+            cgraph->grads[igrad]     = cgraph->grad_accs[igrad];
+            ggml_format_name(cgraph->grad_accs[igrad], "grad acc for %s", node->name);
         }
         grads_needed[igrad] = true;
     }
@@ -5761,15 +5777,15 @@ struct ggml_cgraph * ggml_new_graph(struct ggml_context * ctx) {
 
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph0, int i0, int i1) {
     struct ggml_cgraph cgraph = {
-        /*.size         =*/ 0,
-        /*.n_nodes      =*/ i1 - i0,
-        /*.n_leafs      =*/ 0,
-        /*.nodes        =*/ cgraph0->nodes + i0,
-        /*.grads        =*/ cgraph0->grads ? cgraph0->grads + i0 : NULL,
-        /*.grad_accs    =*/ cgraph0->grad_accs ? cgraph0->grad_accs + i0 : NULL,
-        /*.leafs        =*/ NULL,
-        /*.hash_table   =*/ { 0, NULL, NULL },
-        /*.order        =*/ cgraph0->order,
+        /*.size             =*/ 0,
+        /*.n_nodes          =*/ i1 - i0,
+        /*.n_leafs          =*/ 0,
+        /*.nodes            =*/ cgraph0->nodes + i0,
+        /*.grads            =*/ NULL, // gradients would need visited_hash_set
+        /*.grad_accs        =*/ NULL,
+        /*.leafs            =*/ NULL,
+        /*.visited_hash_set =*/ { 0, NULL, NULL },
+        /*.order            =*/ cgraph0->order,
     };
 
     return cgraph;
@@ -5799,12 +5815,22 @@ void ggml_graph_cpy(struct ggml_cgraph * src, struct ggml_cgraph * dst) {
         }
     }
 
+    if (dst->grads) {
+        memset(dst->grads,     0, dst->visited_hash_set.size*sizeof(struct ggml_tensor *));
+        memset(dst->grad_accs, 0, dst->visited_hash_set.size*sizeof(struct ggml_tensor *));
+    }
     if (src->grads) {
         GGML_ASSERT(dst->grads     != NULL);
         GGML_ASSERT(dst->grad_accs != NULL);
         for (int i = 0; i < src->n_nodes; ++i) {
             const size_t igrad_src = ggml_hash_find(&src->visited_hash_set, src->nodes[i]);
             const size_t igrad_dst = ggml_hash_find(&dst->visited_hash_set, dst->nodes[i]);
+
+            GGML_ASSERT(igrad_src != GGML_HASHSET_FULL);
+            GGML_ASSERT(ggml_bitset_get(src->visited_hash_set.used, igrad_src));
+            GGML_ASSERT(igrad_dst != GGML_HASHSET_FULL);
+            GGML_ASSERT(ggml_bitset_get(dst->visited_hash_set.used, igrad_dst));
+
             dst->grads[igrad_dst]     = src->grads[igrad_src];
             dst->grad_accs[igrad_dst] = src->grad_accs[igrad_src];
         }
@@ -5839,12 +5865,8 @@ void ggml_graph_reset(struct ggml_cgraph * cgraph) {
 
         if (node->op == GGML_OP_OPT_STEP_ADAMW) {
             // clear momenta
-            if (node->src[2]->data) {
-                ggml_set_zero(node->src[2]);
-            }
-            if (node->src[3]->data) {
-                ggml_set_zero(node->src[3]);
-            }
+            ggml_set_zero(node->src[2]);
+            ggml_set_zero(node->src[3]);
         }
 
         // initial gradients of loss should be 1, 0 otherwise
@@ -7548,4 +7570,27 @@ void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
 void ggml_log_set(ggml_log_callback log_callback, void * user_data) {
     g_logger_state.log_callback = log_callback ? log_callback : ggml_log_callback_default;
     g_logger_state.log_callback_user_data = user_data;
+}
+
+void ggml_threadpool_params_init(struct ggml_threadpool_params * p, int n_threads) {
+    p->n_threads  = n_threads;
+    p->prio       = 0;     // default priority (usually means normal or inherited)
+    p->poll       = 50;    // hybrid-polling enabled
+    p->strict_cpu = false; // no strict placement (all threads share same cpumask)
+    p->paused     = false; // threads are ready to go
+    memset(p->cpumask, 0, GGML_MAX_N_THREADS); // all-zero means use the default affinity (usually inherited)
+}
+
+struct ggml_threadpool_params ggml_threadpool_params_default(int n_threads) {
+    struct ggml_threadpool_params p;
+    ggml_threadpool_params_init(&p, n_threads);
+    return p;
+}
+
+bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, const struct ggml_threadpool_params * p1) {
+    if (p0->n_threads      != p1->n_threads  )    return false;
+    if (p0->prio           != p1->prio       )    return false;
+    if (p0->poll           != p1->poll       )    return false;
+    if (p0->strict_cpu     != p1->strict_cpu )    return false;
+    return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
 }
