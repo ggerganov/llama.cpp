@@ -62,7 +62,7 @@ def test_consistent_result_same_seed(n_slots: int):
             "prompt": "I believe the meaning of life is",
             "seed": 42,
             "temperature": 1.0,
-            "cache_prompt": False,
+            "cache_prompt": False,  # TODO: remove this once test_cache_vs_nocache_prompt is fixed
         })
         if last_res is not None:
             assert res.body["content"] == last_res.body["content"]
@@ -80,7 +80,7 @@ def test_different_result_different_seed(n_slots: int):
             "prompt": "I believe the meaning of life is",
             "seed": seed,
             "temperature": 1.0,
-            "cache_prompt": False,
+            "cache_prompt": False,  # TODO: remove this once test_cache_vs_nocache_prompt is fixed
         })
         if last_res is not None:
             assert res.body["content"] != last_res.body["content"]
@@ -99,11 +99,30 @@ def test_consistent_result_different_batch_size(n_batch: int, temperature: float
             "prompt": "I believe the meaning of life is",
             "seed": 42,
             "temperature": temperature,
-            "cache_prompt": False,
+            "cache_prompt": False,  # TODO: remove this once test_cache_vs_nocache_prompt is fixed
         })
         if last_res is not None:
             assert res.body["content"] == last_res.body["content"]
         last_res = res
+
+
+@pytest.mark.skip(reason="This test fails on linux, need to be fixed")
+def test_cache_vs_nocache_prompt():
+    global server
+    server.start()
+    res_cache = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "seed": 42,
+        "temperature": 1.0,
+        "cache_prompt": True,
+    })
+    res_no_cache = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "seed": 42,
+        "temperature": 1.0,
+        "cache_prompt": False,
+    })
+    assert res_cache.body["content"] == res_no_cache.body["content"]
 
 
 def test_completion_with_tokens_input():
