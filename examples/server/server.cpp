@@ -2315,6 +2315,7 @@ struct server_context {
                 params_spec.n_draft   = slot.params.speculative.n_max;
                 params_spec.n_reuse   = llama_n_ctx(slot.ctx_dft) - slot.params.speculative.n_max;
                 params_spec.p_min     = slot.params.speculative.p_min;
+                params_spec.infill    = slot.inf_type == SERVER_TASK_INF_TYPE_INFILL;
 
                 llama_tokens draft = common_speculative_gen_draft(slot.spec, params_spec, slot.cache_tokens, id);
 

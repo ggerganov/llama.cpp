@@ -10,6 +10,8 @@ struct common_speculative_params {
     int n_reuse = 256;
 
     float p_min = 0.9f; // min probabiliy required to accept a token in the draft
+
+    bool infill = false; // use infill sampling (useful for FIM)
 };
 
 struct common_speculative * common_speculative_init(struct llama_context * ctx_dft);
