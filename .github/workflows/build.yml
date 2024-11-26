@@ -552,35 +552,49 @@ jobs:
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
 
-# TODO: tmp disabled. see for possible re-enable:
-#       https://github.com/ggerganov/llama.cpp/pull/10525
-#  macOS-latest-swift:
-#    runs-on: macos-latest
-#
-#    strategy:
-#      matrix:
-#        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
-#
-#    steps:
-#      - name: Clone
-#        id: checkout
-#        uses: actions/checkout@v4
-#
-#      - name: Dependencies
-#        id: depends
-#        continue-on-error: true
-#        run: |
-#          brew update
-#
-#      - name: xcodebuild for swift package
-#        id: xcodebuild
-#        run: |
-#          xcodebuild -scheme llama -destination "${{ matrix.destination }}"
-#
-#      - name: Build Swift Example
-#        id: make_build_swift_example
-#        run: |
-#            make swift
+  macOS-latest-swift:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build llama.cpp with CMake
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -G Xcode .. \
+            -DGGML_METAL_USE_BF16=ON \
+            -DGGML_METAL_EMBED_LIBRARY=ON \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+          sudo cmake --install . --config Release
+
+      - name: xcodebuild for swift package
+        id: xcodebuild
+        run: |
+          xcodebuild -scheme llama-Package -destination "${{ matrix.destination }}"
+
+      - name: Build Swift Example
+        id: make_build_swift_example
+        run: |
+            make swift
 
   windows-msys2:
     runs-on: windows-latest
