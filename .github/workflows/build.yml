@@ -871,8 +871,65 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip
           name: llama-bin-win-${{ matrix.build }}.zip
 
+  ubuntu-latest-cmake-cuda:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.6.2-devel-ubuntu24.04
+
+    steps:
+        - name: Clone
+          id: checkout
+          uses: actions/checkout@v4
+
+        - name: Install dependencies
+          env:
+            DEBIAN_FRONTEND: noninteractive
+          run: |
+              apt update
+              apt install -y cmake build-essential ninja-build libgomp1 git
+
+        - name: Build with CMake
+          run: |
+            cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89-real -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined -DLLAMA_FATAL_WARNINGS=ON
+            cmake --build build
+
   windows-latest-cmake-cuda:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        cuda: ['12.6.2']
+        build: ['cuda']
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        id: cuda-toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+        with:
+          cuda: ${{ matrix.cuda }}
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
+
+      - name: Install Ninja
+        id: install_ninja
+        run: |
+          choco install ninja
+
+      - name: Build
+        id: cmake_build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cmake -S . -B build -G "Ninja Multi-Config" -DGGML_NATIVE=OFF -DGGML_CUDA=ON -DBUILD_SHARED_LIBS=ON -DGGML_RPC=ON -DCMAKE_CUDA_ARCHITECTURES=89-real
+          cmake --build build --config Release -t ggml-cuda
+          cmake --build build --config Release
+
+  windows-2019-cmake-cuda:
     runs-on: windows-2019
+    if: ${{ github.event == 'push' && github.ref == 'refs/heads/master' }}
 
     strategy:
       matrix:
@@ -1173,7 +1230,7 @@ jobs:
       - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
-      - windows-latest-cmake-cuda
+      - windows-2019-cmake-cuda
       - windows-latest-cmake-hip-release
       - macOS-latest-cmake-arm64
       - macOS-latest-cmake-x64
