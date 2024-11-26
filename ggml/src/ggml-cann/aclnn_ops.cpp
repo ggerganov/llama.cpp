@@ -2427,7 +2427,6 @@ static void aclnn_mat_mul(ggml_backend_cann_context& ctx, aclTensor* acl_input,
                           aclTensor* acl_weight, aclTensor* acl_dst) {
     int8_t cube_math_type = 1;  // ALLOW_FP32_DOWN_PRECISION, when input is
                                 // fp32, atlas a2 will transpose it to HFLOAT32.
-    
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
     void* workspaceAddr = nullptr;
