@@ -3987,10 +3987,7 @@ class ChatGLMModel(Model):
             rope_dim = self.hparams["attention_dim"]
         else:
             rope_dim = self.hparams["hidden_size"] // self.hparams["num_attention_heads"]
-        if "THUDM/glm4-nano" in self.hparams.get("_name_or_path", "") or "THUDM/glm4-mini" in self.hparams.get("_name_or_path", ""):
-            self.gguf_writer.add_rope_dimension_count(rope_dim)
-        else:
-            self.gguf_writer.add_rope_dimension_count(int(rope_dim/2))
+        self.gguf_writer.add_rope_dimension_count(int(rope_dim * self.hparams.get("partial_rotary_factor", 0.5)))
         self.gguf_writer.add_add_bos_token(False)
         rope_freq = 10000
         if "rope_ratio" in self.hparams:
