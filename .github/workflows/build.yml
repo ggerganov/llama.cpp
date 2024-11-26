@@ -728,7 +728,7 @@ jobs:
             cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
   windows-latest-cmake:
-    runs-on: windows-2019
+    runs-on: windows-latest
 
     env:
       OPENBLAS_VERSION: 0.3.23
@@ -929,7 +929,7 @@ jobs:
 
   windows-2019-cmake-cuda:
     runs-on: windows-2019
-    if: ${{ github.event == 'push' && github.ref == 'refs/heads/master' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
 
     strategy:
       matrix:
