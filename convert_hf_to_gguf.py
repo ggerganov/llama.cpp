@@ -516,7 +516,10 @@ class Model:
 
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(self.dir_model)
-        vocab_size = self.hparams.get("vocab_size", len(tokenizer.vocab))
+        vocab_size = max(
+            self.hparams.get("vocab_size", len(tokenizer.vocab)),
+            len(tokenizer.vocab)
+        )
         assert max(tokenizer.vocab.values()) < vocab_size
 
         tokpre = self.get_vocab_base_pre(tokenizer)
@@ -3036,7 +3039,7 @@ class Mamba2Model(Model):
 
         # Fail early for models which don't have a block expansion factor of 2
         # TODO: does this really matter?
-        assert d_inner == 2 * d_model
+        # assert d_inner == 2 * d_model
         assert d_inner % head_dim == 0
 
         self.gguf_writer.add_context_length(2**20)  # arbitrary value; for those who use the default
@@ -3086,6 +3089,72 @@ class Mamba2Model(Model):
             return data_torch.reshape((n_group, d_inner // n_group))
 
         return data_torch.squeeze()
+
+
+@Model.register("JambaForCausalLM")
+class JambaModel(Model):
+    """Jamba is a hybrid SSM + Attention model and can support either Mamba or
+    Mamba2 style SSMs
+    """
+    model_arch = gguf.MODEL_ARCH.JAMBA
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Determine if this is using Mamba or Mamba2
+        self._mamba_version = self.hparams.get("mamba_version", "v1")
+        self._mamba_model_class: type[Model] = {
+            "v1": MambaModel,
+            "v2": Mamba2Model,
+        }.get(self._mamba_version, Model)
+        assert (
+            self._mamba_model_class is not Model
+        ), f"Unsupported mamba_version: {self._mamba_version}"
+
+        # Use Llama conversion for attention / FF / MoE
+        self._transformer_model_class: type[Model] = LlamaModel
+
+        # Lists of which layers use ssm vs attention
+        self._attn_layers = self.hparams.get("attn_layer_indices", [])
+        if not self._attn_layers:
+            attn_period = self.hparams.get("attn_layer_period")
+            assert attn_period, "Didn't find attn_layer_indices or attn_layer_period"
+            attn_offset = self.hparams.get("attn_layer_offset")
+            assert attn_offset is not None, "No attention layer offset set with attn_layer_period"
+            self._attn_layers = [
+                i for i in range(self.block_count)
+                if i % attn_period == attn_offset
+            ]
+        self._ssm_layers = [
+            i for i in range(self.block_count)
+            if i not in self._attn_layers
+        ]
+
+    def set_vocab(self):
+        self._mamba_model_class.set_vocab(self)
+
+    def set_gguf_parameters(self):
+        # Set the mamba-type parameters
+        self._mamba_model_class.set_gguf_parameters(self)
+
+        # TODO: All the rest!
+
+    def modify_tensors(
+        self, data_torch: Tensor, name: str, bid: int | None
+    ) -> Iterable[tuple[str, Tensor]]:
+        # Determine whether this is a mamaba layer or an attention layer
+        if bid in self._ssm_layers:
+            for mamba_new_name, data_torch in self._mamba_model_class.modify_tensors(
+                self, data_torch, name, bid
+            ):
+                yield mamba_new_name, data_torch
+        elif bid in self._attn_layers:
+            for llama_new_name, data_torch in self._transformer_model_class.modify_tensors(
+                self, data_torch, name, bid
+            ):
+                yield llama_new_name, data_torch
+        else:
+            yield name, data_torch
 
 
 @Model.register("CohereForCausalLM")
