@@ -70,13 +70,13 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> inp;
     inp = common_tokenize(ctx_tgt, params.prompt, true, true);
 
-    if (llama_n_ctx(ctx_tgt) < (int) inp.size()) {
+    if (llama_n_ctx(ctx_tgt) < (uint32_t) inp.size()) {
         LOG_ERR("%s: the prompt exceeds the context size (%d tokens, ctx %d)\n", __func__, (int) inp.size(), llama_n_ctx(ctx_tgt));
 
         return 1;
     }
 
-    if (llama_n_batch(ctx_tgt) < (int) inp.size()) {
+    if (llama_n_batch(ctx_tgt) < (uint32_t) inp.size()) {
         LOG_ERR("%s: the prompt exceeds the batch size (%d tokens, batch %d)\n", __func__, (int) inp.size(), llama_n_batch(ctx_tgt));
 
         return 1;
@@ -155,7 +155,7 @@ int main(int argc, char ** argv) {
         // evaluate the target model on [id_last, draft0, draft1, ..., draftN-1]
         {
             // do not waste time on small drafts
-            if (draft.size() < n_draft_min) {
+            if (draft.size() < (size_t) n_draft_min) {
                 draft.clear();
             }
 
