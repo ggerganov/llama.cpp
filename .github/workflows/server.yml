@@ -122,14 +122,14 @@ jobs:
         id: server_integration_tests
         run: |
           cd examples/server/tests
-          PORT=8888 ./tests.sh
+          ./tests.sh
 
       - name: Slow tests
         id: server_integration_tests_slow
         if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
-          PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
+          SLOW_TESTS=1 ./tests.sh
 
 
   server-windows:
@@ -180,11 +180,12 @@ jobs:
         run: |
           cd examples/server/tests
           $env:PYTHONIOENCODING = ":replace"
-          behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
+          pytest -v -x
 
       - name: Slow tests
         id: server_integration_tests_slow
         if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
-          behave.exe --stop --no-skipped --no-capture --tags slow
+          $env:SLOW_TESTS = "1"
+          pytest -v -x

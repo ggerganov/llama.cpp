@@ -1,5 +1,5 @@
 aiohttp~=3.9.3
-behave~=1.2.6
+pytest~=8.3.3
 huggingface_hub~=0.23.2
 numpy~=1.26.4
 openai~=1.30.3
