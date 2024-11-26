@@ -32,23 +32,16 @@ It's possible to override some scenario steps values with environment variables:
 | `DEBUG`                  | "ON" to enable steps and server verbose mode `--verbose`                                       |
 | `N_GPU_LAYERS`           | number of model layers to offload to VRAM `-ngl --n-gpu-layers`                                |
 
-### Run @bug, @wip or @wrong_usage annotated scenario
-
-Feature or Scenario must be annotated with `@llama.cpp` to be included in the default scope.
-
-- `@bug` annotation aims to link a scenario with a GitHub issue.
-- `@wrong_usage` are meant to show user issue that are actually an expected behavior
-- `@wip` to focus on a scenario working in progress
-- `@slow` heavy test, disabled by default
-
-To run a scenario annotated with `@bug`, start:
+To run slow tests:
 
 ```shell
-DEBUG=ON ./tests.sh --no-skipped --tags bug --stop
+SLOW_TESTS=1 ./tests.sh
 ```
 
-After changing logic in `steps.py`, ensure that `@bug` and `@wrong_usage` scenario are updated.
+To run with stdout/stderr display in real time (verbose output, but useful for debugging):
 
 ```shell
-./tests.sh --no-skipped --tags bug,wrong_usage || echo "should failed but compile"
+./tests.sh -s -v -x
 ```
+
+To see all available arguments, please refer to [pytest documentation](https://docs.pytest.org/en/stable/how-to/usage.html)
