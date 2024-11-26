@@ -3817,7 +3817,7 @@ class JaisModel(Model):
         self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
 
 
-@Model.register("ChatGLMModel", "ChatGLMForConditionalGeneration")
+@Model.register("GlmForCausalLM", "ChatGLMModel", "ChatGLMForConditionalGeneration")
 class ChatGLMModel(Model):
     model_arch = gguf.MODEL_ARCH.CHATGLM
 
@@ -3923,47 +3923,56 @@ class ChatGLMModel(Model):
 
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
-        vocab_size = hparams["padded_vocab_size"]
+        vocab_size = hparams.get("padded_vocab_size",hparams["vocab_size"])
         assert max(tokenizer.get_vocab().values()) < vocab_size
 
-        tokpre = self.get_vocab_base_pre(tokenizer)
+        if(hparams["partial_rotary_factor"] == 1.0):
+            # only for glm-edge series
+            tokens, toktypes, tokpre = self.get_vocab_base()
+            self.gguf_writer.add_tokenizer_model("gpt2")
+            self.gguf_writer.add_tokenizer_pre(tokpre)
+            self.gguf_writer.add_token_list(tokens)
+            self.gguf_writer.add_token_types(toktypes)
+            special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
+        else:
+            # for glm4 series
+            tokpre = self.get_vocab_base_pre(tokenizer)
+            merges = []
+            vocab = {}
+            mergeable_ranks = tokenizer._mergeable_ranks
+            for token, rank in mergeable_ranks.items():
+                vocab[ChatGLMModel.token_bytes_to_string(token)] = rank
+                if len(token) == 1:
+                    continue
+                merged = ChatGLMModel.bpe(mergeable_ranks, token, max_rank=rank)
+                assert len(merged) >= 2 and len(merged) <= 7
+                merges.append(' '.join(map(ChatGLMModel.token_bytes_to_string, merged)))
 
-        merges = []
-        vocab = {}
-        mergeable_ranks = tokenizer.mergeable_ranks
-        for token, rank in mergeable_ranks.items():
-            vocab[ChatGLMModel.token_bytes_to_string(token)] = rank
-            if len(token) == 1:
-                continue
-            merged = ChatGLMModel.bpe(mergeable_ranks, token, max_rank=rank)
-            assert len(merged) >= 2 and len(merged) <= 7
-            merges.append(' '.join(map(ChatGLMModel.token_bytes_to_string, merged)))
+            # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
+            added_vocab = tokenizer.get_added_vocab()
+            reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in {**vocab, **added_vocab}.items()}
 
-        # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
-        added_vocab = tokenizer.get_added_vocab()
-        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in {**vocab, **added_vocab}.items()}
-
-        for i in range(vocab_size):
-            if i not in reverse_vocab:
-                tokens.append(f"[PAD{i}]")
-                toktypes.append(gguf.TokenType.UNUSED)
-            elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                if tokenizer.added_tokens_decoder[i].special:
-                    toktypes.append(gguf.TokenType.CONTROL)
+            for i in range(vocab_size):
+                if i not in reverse_vocab:
+                    tokens.append(f"[PAD{i}]")
+                    toktypes.append(gguf.TokenType.UNUSED)
+                elif reverse_vocab[i] in added_vocab:
+                    tokens.append(reverse_vocab[i])
+                    if tokenizer.added_tokens_decoder[i].special:
+                        toktypes.append(gguf.TokenType.CONTROL)
+                    else:
+                        toktypes.append(gguf.TokenType.USER_DEFINED)
                 else:
-                    toktypes.append(gguf.TokenType.USER_DEFINED)
-            else:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.NORMAL)
+                    tokens.append(reverse_vocab[i])
+                    toktypes.append(gguf.TokenType.NORMAL)
 
-        self.gguf_writer.add_tokenizer_model("gpt2")
-        self.gguf_writer.add_tokenizer_pre(tokpre)
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
+            self.gguf_writer.add_tokenizer_model("gpt2")
+            self.gguf_writer.add_tokenizer_pre(tokpre)
+            self.gguf_writer.add_token_list(tokens)
+            self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-        special_vocab.merges = merges
+            special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
+            special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
         special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab._set_special_token("eot", tokenizer.get_added_vocab()["<|user|>"])
@@ -3974,14 +3983,14 @@ class ChatGLMModel(Model):
     def set_gguf_parameters(self):
         n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
         n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
-        n_head_kv = self.hparams.get("multi_query_group_num", n_head)
+        n_head_kv = self.hparams.get("multi_query_group_num", self.hparams.get("num_key_value_heads", n_head))
         self.gguf_writer.add_context_length(self.hparams.get("seq_length", n_embed))
         self.gguf_writer.add_embedding_length(n_embed)
-        self.gguf_writer.add_feed_forward_length(self.hparams.get("ffn_hidden_size", 4 * n_embed))
-        self.gguf_writer.add_block_count(self.hparams["num_layers"])
+        self.gguf_writer.add_feed_forward_length(self.hparams.get("ffn_hidden_size", self.hparams.get("intermediate_size", 4 * n_embed)))
+        self.gguf_writer.add_block_count(self.hparams.get("num_layers", self.hparams["num_hidden_layers"]))
         self.gguf_writer.add_head_count(n_head)
         self.gguf_writer.add_head_count_kv(n_head_kv)
-        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layernorm_epsilon"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams.get("layernorm_epsilon",1e-5))
         self.gguf_writer.add_file_type(self.ftype)
         if "attention_dim" in self.hparams:
             rope_dim = self.hparams["attention_dim"]
