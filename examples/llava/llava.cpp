@@ -2,6 +2,7 @@
 #include "llava.h"
 
 #include "llama.h"
+#include "log.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -11,13 +12,8 @@
 #include <limits>
 #include <vector>
 
-#define die(msg)          do { fputs("error: " msg "\n", stderr);                exit(1); } while (0)
-#define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
-
-#define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
-#define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_DBG(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#define die(msg)          do { LOG_ERR("%s", "error: " msg "\n");        exit(1); } while (0)
+#define die_fmt(fmt, ...) do { LOG_ERR("error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
 
 // RGB uint8 image
 struct clip_image_u8 {

@@ -7,6 +7,7 @@
 #include "ggml-cpu.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
+#include "log.h"
 
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
@@ -39,11 +40,6 @@
 #include <sstream>
 #include <cinttypes>
 #include <limits>
-
-#define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
-#define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_DBG(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
 
 //#define CLIP_DEBUG_FUNCTIONS
 
