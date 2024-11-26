@@ -46,6 +46,7 @@ int main(int argc, char ** argv) {
     ctx_tgt   = llama_init_tgt.context;
 
     // load the draft model
+    params.devices      = params.speculative.devices;
     params.model        = params.speculative.model;
     params.n_ctx        = params.speculative.n_ctx;
     params.n_batch      = params.speculative.n_ctx > 0 ? params.speculative.n_ctx : params.n_batch;

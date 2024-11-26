@@ -474,9 +474,15 @@ void write_output_files() {
 
 int main(int argc, char** argv) {
     std::map<std::string, std::string> args;
-    for (int i = 1; i < argc; i += 2) {
-        if (i + 1 < argc) {
-            args[argv[i]] = argv[i + 1];
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg.rfind("--", 0) == 0) {
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                args[arg] = argv[i + 1];
+                ++i;
+            } else {
+                args[arg] = "";
+            }
         }
     }
 

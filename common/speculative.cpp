@@ -90,9 +90,10 @@ bool common_speculative_are_compatible(
     if (llama_add_bos_token(model_tgt) != llama_add_bos_token(model_dft) ||
         llama_add_eos_token(model_tgt) != llama_add_eos_token(model_dft) ||
         llama_token_bos(model_tgt) != llama_token_bos(model_dft) ||
-        llama_token_eos(model_tgt) != llama_token_eos(model_dft)
-    ) {
+        llama_token_eos(model_tgt) != llama_token_eos(model_dft)) {
         LOG_ERR("%s: draft model special tokens must match target model to use speculation\n", __func__);
+        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(model_tgt), llama_add_bos_token(model_tgt), llama_token_eos(model_tgt), llama_add_eos_token(model_tgt));
+        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(model_dft), llama_add_bos_token(model_dft), llama_token_eos(model_dft), llama_add_eos_token(model_dft));
         return false;
     }
 

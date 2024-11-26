@@ -6,13 +6,13 @@ if (NOT glslc_executable)
     message(FATAL_ERROR "glslc not found")
 endif()
 
-add_library(ggml-kompute
-            ggml-kompute.cpp
-            ../../include/ggml-kompute.h
-            )
+ggml_add_backend_library(ggml-kompute
+                         ggml-kompute.cpp
+                         ../../include/ggml-kompute.h
+                        )
 
 target_link_libraries(ggml-kompute PRIVATE ggml-base kompute)
-target_include_directories(ggml-kompute PRIVATE . .. ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(ggml-kompute PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 add_compile_definitions(VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
 

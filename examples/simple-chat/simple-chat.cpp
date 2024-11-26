@@ -62,6 +62,9 @@ int main(int argc, char ** argv) {
         }
     }, nullptr);
 
+    // load dynamic backends
+    ggml_backend_load_all();
+
     // initialize the model
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = ngl;
