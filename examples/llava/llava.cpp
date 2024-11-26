@@ -299,6 +299,20 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         clip_add_load_image_size(ctx_clip, load_image_size);
         LOG_INF("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
     }
+    else if (clip_is_glm(ctx_clip)){
+        struct clip_image_size * load_image_size = clip_image_size_init();
+        load_image_size->width = img_res_v.data[0].nx;
+        load_image_size->height = img_res_v.data[0].ny;
+        clip_add_load_image_size(ctx_clip, load_image_size);
+        
+        bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd);
+        int pos = int(load_image_size->width/clip_patch_size(ctx_clip)/2);
+        *n_img_pos = (pos * pos + 2);
+        if (!encoded) {
+            LOG_ERR("Unable to encode image \n");
+            return false;
+        }
+    }
     else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0) {
         // flat / default llava-1.5 type embedding
         *n_img_pos = clip_n_patches(ctx_clip);
@@ -382,6 +396,9 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
     int num_max_patches = 6;
     if (clip_is_minicpmv(ctx_clip)) {
         num_max_patches = 10;
+    }
+    if (clip_is_glm(ctx_clip)) {
+        num_max_patches = 1;
     }
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*num_max_patches); // TODO: base on gridsize/llava model
     if (!image_embd) {
