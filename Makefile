@@ -1,3 +1,7 @@
+ifndef LLAMA_MAKEFILE
+$(error The Makefile build is deprecated. Use the CMake build instead)
+endif
+
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	libllava.a \
