@@ -1669,12 +1669,14 @@ static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
             }
         case GGML_OP_MUL_MAT: {
             switch (op->src[0]->type) {
+                case GGML_TYPE_Q8_0:
+                    // Current groupsize should not be greater than k-1 in
+                    // aclnnWeightQuantBatchMatmulV2GetWorkspaceSize
+                    if (op->src[0]->ne[0] <= QK8_0) {
+                        return false;
+                    }
                 case GGML_TYPE_F16:
                 case GGML_TYPE_F32:
-                case GGML_TYPE_Q8_0:
-                    // TODO: fix me
-                    // Current groupsize should not be greater than k-1 in
-                    // aclnnWeightQuantBatchMatmulV2GetWorkspaceSize().
                 case GGML_TYPE_Q4_0:
                     return true;
                 default:
@@ -1706,9 +1708,61 @@ static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
                     return false;
             }
         }
+        case GGML_OP_CONT: {
+            // TODO: support GGML_TYPE_BF16
+            switch (op->src[0]->type) {
+                case GGML_TYPE_F32:
+                case GGML_TYPE_F16:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        case GGML_OP_ROPE: {
+            // TODO: with ops-test v == 1
+            float * freq_scale = (float*)((int32_t*)op->op_params + 6);
+            float * ext_factor = (float*)((int32_t*)op->op_params + 7);
+            float * attn_factor = (float*)((int32_t*)op->op_params + 8);
+            // TODO: with freq_factors
+            if (op->src[2] != NULL) {
+                return false;
+            }
+            // TODO: n_dims <= ne0
+            if (op->src[0]->ne[0] != op->op_params[1]) {
+                return false;
+            }
+            // TODO: ext_factor != 0
+            if (*ext_factor != 0) {
+                return false;
+            }
+            // TODO: freq_scale != 1
+            if (*freq_scale != 1) {
+                return false;
+            }
+            // TODO: attn_factor != 1
+            if (*attn_factor != 1) {
+                return false;
+            }
+            //TODO: type == GGML_TYPE_F16
+            switch (op->src[0]->type) {
+                case GGML_TYPE_F32:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        case GGML_OP_UPSCALE: {
+            // aclnnUpsampleNearest2dGetWorkspaceSize not support
+            // selfDimN[2]/outDimN[2] or selfDimC[3]/outDimC[3] not equal
+            if (op->src[0]->ne[2] * op->ne[3] != op->src[0]->ne[3] * op->ne[2]) {
+                return false;
+            }
+            return true;
+        }
+        case GGML_OP_IM2COL:
+        case GGML_OP_CONCAT:
         case GGML_OP_DUP:
         case GGML_OP_REPEAT:
-        case GGML_OP_CONCAT:
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
@@ -1722,17 +1776,13 @@ static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
         case GGML_OP_SCALE:
         case GGML_OP_SQR:
         case GGML_OP_CLAMP:
-        case GGML_OP_CONT:
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
-        case GGML_OP_ROPE:
-        case GGML_OP_IM2COL:
         case GGML_OP_POOL_2D:
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGSORT:
         case GGML_OP_ACC:
         case GGML_OP_GROUP_NORM:
-        case GGML_OP_UPSCALE:
         case GGML_OP_PAD:
         case GGML_OP_ARANGE:
         case GGML_OP_TIMESTEP_EMBEDDING:
