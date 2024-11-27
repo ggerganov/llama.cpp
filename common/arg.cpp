@@ -128,7 +128,11 @@ static void common_params_handle_model_default(common_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = fs_get_cache_file(string_split<std::string>(params.hf_file, '/').back());
+            // this is to avoid different repo having same file name, or same file name in different subdirs
+            std::string filename = params.hf_repo + "_" + params.hf_file;
+            // to make sure we don't have any slashes in the filename
+            string_replace_all(filename, "/", "_");
+            params.model = fs_get_cache_file(filename);
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
