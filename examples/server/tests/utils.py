@@ -319,7 +319,6 @@ class ServerPreset:
         server.model_hf_repo = "ggml-org/models"
         server.model_hf_file = "jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
         server.model_alias = "jina-reranker"
-        server.model_file = "./tmp/jina-reranker-v1-tiny-en.gguf"
         server.n_ctx = 512
         server.n_batch = 512
         server.n_slots = 1
