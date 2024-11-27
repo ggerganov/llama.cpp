@@ -805,21 +805,46 @@ struct ggml_tensor_extra_cl {
 // `offset`, which indicate their locations in the scratch buffer.
 struct ggml_tensor_extra_cl_q4_0 {
     // Quantized values.
-    cl_mem q;
+    cl_mem q = nullptr;
     // Quantized values in image1d_buffer_t.
-    cl_mem q_img;
+    cl_mem q_img = nullptr;
     // Scales.
-    cl_mem d;
+    cl_mem d = nullptr;
     // Scales in image1d_buffer_t.
-    cl_mem d_img;
+    cl_mem d_img = nullptr;
     // Size of quantized values.
-    size_t size_q;
+    size_t size_q = 0;
     // Size of scales.
-    size_t size_d;
+    size_t size_d = 0;
+
+    ~ggml_tensor_extra_cl_q4_0() {
+        reset();
+    }
 
     void reset() {
-        q = nullptr;
-        d = nullptr;
+        // When SMALL_ALLOC is not enabled, q and d are subbuffers into
+        // the bigger buffer allocated in ggml_backend_buffer.
+        // They must be properly released so that the original buffer can be
+        // properly released to avoid memory leak.
+        // When SMALL_ALLOC is enabled, q and d point to the buffers in
+        // ggml_backend_opencl2_buffer_context. These buffers get released when
+        // the context is deleted, so there is no need to release them here.
+        if (q != nullptr) {
+#ifndef GGML_OPENCL_SMALL_ALLOC
+            CL_CHECK(clReleaseMemObject(q));
+#endif
+            q = nullptr;
+        }
+        if (d != nullptr) {
+#ifndef GGML_OPENCL_SMALL_ALLOC
+            CL_CHECK(clReleaseMemObject(d));
+#endif
+            d = nullptr;
+        }
+        // Currently, q_img and d_img are only initialized when SMALL_ALLOC is
+        // enabled. They point to the images in ggml_backend_opencl2_buffer_context.
+        // So, there is no need to release them here.
+        // TODO: initialize them for non SMALL_PATH path, or remove them.
         q_img = nullptr;
         d_img = nullptr;
         size_q = 0;
@@ -1428,7 +1453,8 @@ static void ggml_backend_opencl2_buffer_set_tensor(ggml_backend_buffer_t buffer,
         GGML_ASSERT(extra_orig && "Tesnors in OpenCL backend should have been allocated and initialized");
 
         // Allocate the new extra and create aliases from the original.
-        ggml_tensor_extra_cl_q4_0 * extra = new ggml_tensor_extra_cl_q4_0();
+        ggml_backend_opencl2_buffer_context * ctx = (ggml_backend_opencl2_buffer_context *) buffer->context;
+        ggml_tensor_extra_cl_q4_0 * extra = ctx->ggml_opencl2_alloc_temp_tensor_extra_q4_0();
 
         size_t size_d = ggml_nelements(tensor)/ggml_blck_size(tensor->type)*sizeof(ggml_fp16_t);
         size_t size_q = ggml_nelements(tensor)/ggml_blck_size(tensor->type)*ggml_blck_size(tensor->type)/2;
