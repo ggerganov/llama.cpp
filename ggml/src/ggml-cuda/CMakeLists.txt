@@ -46,13 +46,10 @@ if (CUDAToolkit_FOUND)
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
     endif()
 
-    add_library(ggml-cuda
-                ${GGML_HEADERS_CUDA}
-                ${GGML_SOURCES_CUDA}
-                )
-
-    target_link_libraries(ggml-cuda PRIVATE ggml-base)
-    target_include_directories(ggml-cuda PRIVATE . ..)
+    ggml_add_backend_library(ggml-cuda
+                             ${GGML_HEADERS_CUDA}
+                             ${GGML_SOURCES_CUDA}
+                            )
 
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
@@ -135,7 +132,7 @@ if (CUDAToolkit_FOUND)
 
         message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
 
-        get_flags(${CUDA_CCID} ${CUDA_CCVER})
+        ggml_get_flags(${CUDA_CCID} ${CUDA_CCVER})
         list(APPEND CUDA_CXX_FLAGS ${CXX_FLAGS} ${GF_CXX_FLAGS})  # This is passed to -Xcompiler later
     endif()
 

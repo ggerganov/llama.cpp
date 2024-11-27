@@ -2,6 +2,8 @@
 
 find_package(Threads REQUIRED)
 
+llama_add_compile_flags()
+
 # Build info header
 #
 
@@ -66,6 +68,8 @@ add_library(${TARGET} STATIC
     ngram-cache.h
     sampling.cpp
     sampling.h
+    speculative.cpp
+    speculative.h
     )
 
 if (BUILD_SHARED_LIBS)

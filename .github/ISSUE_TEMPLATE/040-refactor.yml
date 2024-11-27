@@ -1,5 +1,5 @@
 name: Refactor (Maintainers)
-description: Used to track refactoring opportunities
+description: Used to track refactoring opportunities.
 title: "Refactor: "
 labels: ["refactor"]
 body:

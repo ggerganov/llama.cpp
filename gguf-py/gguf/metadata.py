@@ -545,7 +545,10 @@ class Metadata:
             gguf_writer.add_size_label(self.size_label)
 
         if self.license is not None:
-            gguf_writer.add_license(self.license)
+            if isinstance(self.license, list):
+                gguf_writer.add_license(",".join(self.license))
+            else:
+                gguf_writer.add_license(self.license)
         if self.license_name is not None:
             gguf_writer.add_license_name(self.license_name)
         if self.license_link is not None:

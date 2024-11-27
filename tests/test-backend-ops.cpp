@@ -16,7 +16,6 @@
 
 
 #include <ggml.h>
-#include <ggml-cpu.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 
@@ -26,7 +25,6 @@
 #include <cstdint>
 #include <cstring>
 #include <cinttypes>
-#include <functional>
 #include <memory>
 #include <random>
 #include <stdio.h>
@@ -639,19 +637,20 @@ struct test_case {
 
         // determine number of runs
         int n_runs;
+        bool is_cpu = ggml_backend_dev_type(ggml_backend_get_device(backend)) == GGML_BACKEND_DEVICE_TYPE_CPU;
         if (op_flops(out) > 0) {
             // based on flops
             const uint64_t GFLOP = 1000 * 1000 * 1000;
             const uint64_t target_flops_cpu =   8ULL * GFLOP;
             const uint64_t target_flops_gpu = 100ULL * GFLOP;
-            uint64_t target_flops = ggml_backend_is_cpu(backend) ? target_flops_cpu : target_flops_gpu;
+            uint64_t target_flops = is_cpu ? target_flops_cpu : target_flops_gpu;
             n_runs = std::min<int>(ggml_graph_size(gf) - ggml_graph_n_nodes(gf), target_flops / op_flops(out)) + 1;
         } else {
             // based on memory size
             const size_t GB = 1ULL << 30;
             const size_t target_size_cpu =  8 * GB;
             const size_t target_size_gpu = 32 * GB;
-            size_t target_size = ggml_backend_is_cpu(backend) ? target_size_cpu : target_size_gpu;
+            size_t target_size = is_cpu ? target_size_cpu : target_size_gpu;
             n_runs = std::min<int>(ggml_graph_size(gf) - ggml_graph_n_nodes(gf), target_size / op_size(out)) + 1;
         }
 
@@ -819,7 +818,6 @@ struct test_case {
             }
         }
 
-        // TODO: refactor so that this check is only needed once
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (!ggml_backend_supports_op(backend, t)) {
                 printf("not supported [%s] ", ggml_backend_name(backend));
@@ -1153,6 +1151,26 @@ struct test_argmax : public test_case {
         ggml_set_name(out, "out");
 
         return out;
+    }
+
+    void initialize_tensors(ggml_context * ctx) override {
+        std::random_device rd;
+        std::default_random_engine rng(rd());
+        for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+            if (t->type == GGML_TYPE_F32) {
+                // initialize with unique values to avoid ties
+                for (int64_t r = 0; r < ggml_nrows(t); r++) {
+                    std::vector<float> data(t->ne[0]);
+                    for (int i = 0; i < t->ne[0]; i++) {
+                        data[i] = i;
+                    }
+                    std::shuffle(data.begin(), data.end(), rng);
+                    ggml_backend_tensor_set(t, data.data(), r * t->nb[1], t->ne[0] * sizeof(float));
+                }
+            } else {
+                init_tensor_uniform(t);
+            }
+        }
     }
 
     double max_nmse_err() override {
@@ -3441,6 +3459,11 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_conv_transpose_1d({2,1,1,1}, {3,1,1,1}, 1, 0, 1));
 
     test_cases.emplace_back(new test_argmax());
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32, 1, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {100, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {2000, 10, 1, 1}));
+
     test_cases.emplace_back(new test_count_equal());
 
     for (int ne3 : {1, 3}) { // CUDA backward pass only supports ne3 == 1
@@ -3773,7 +3796,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_upscale());
     test_cases.emplace_back(new test_upscale(GGML_TYPE_F32, { 512, 512, 3, 1 }, 2, true));
     test_cases.emplace_back(new test_upscale_ext());
-    test_cases.emplace_back(new test_group_norm());
+    test_cases.emplace_back(new test_group_norm(GGML_TYPE_F32, {64, 64, 320, 1}));
+    test_cases.emplace_back(new test_group_norm(GGML_TYPE_F32, {9, 9, 1280, 1}));
     test_cases.emplace_back(new test_acc());
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_arange());
@@ -3831,6 +3855,10 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {64, 64, 20, 1}, false, 1.0f, 0.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {77, 64, 20, 1}, false, 1.0f, 0.0f));
 
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32000, 512, 1, 1}));
+
     for (int bs : {1, 512}) {
         for (ggml_type type_a : all_types) {
             for (ggml_type type_b : {GGML_TYPE_F32}) {
@@ -3845,7 +3873,11 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
     if (mode == MODE_TEST) {
         auto test_cases = make_test_cases_eval();
-        ggml_backend_t backend_cpu = ggml_backend_cpu_init();
+        ggml_backend_t backend_cpu = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
+        if (backend_cpu == NULL) {
+            printf("  Failed to initialize CPU backend\n");
+            return false;
+        }
 
         size_t n_ok = 0;
         for (auto & test : test_cases) {
@@ -3925,7 +3957,9 @@ int main(int argc, char ** argv) {
         }
     }
 
-    // enumerate backends
+    // load and enumerate backends
+    ggml_backend_load_all();
+
     printf("Testing %zu devices\n\n", ggml_backend_dev_count());
 
     size_t n_ok = 0;
@@ -3941,15 +3975,14 @@ int main(int argc, char ** argv) {
             continue;
         }
 
-        ggml_backend_t backend = ggml_backend_dev_init(dev, NULL);
-        GGML_ASSERT(backend != NULL);
-
-        if (backend_filter == NULL && ggml_backend_is_cpu(backend) && mode != MODE_GRAD) {
+        if (backend_filter == NULL && ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU && mode != MODE_GRAD) {
             printf("  Skipping CPU backend\n");
-            ggml_backend_free(backend);
             n_ok++;
             continue;
         }
+
+        ggml_backend_t backend = ggml_backend_dev_init(dev, NULL);
+        GGML_ASSERT(backend != NULL);
 
         ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
         auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");

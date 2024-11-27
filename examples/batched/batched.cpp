@@ -68,10 +68,10 @@ int main(int argc, char ** argv) {
 
     llama_sampler * smpl = llama_sampler_chain_init(sparams);
 
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(params.sparams.top_k));
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(params.sparams.top_p, params.sparams.min_keep));
-    llama_sampler_chain_add(smpl, llama_sampler_init_temp (params.sparams.temp));
-    llama_sampler_chain_add(smpl, llama_sampler_init_dist (params.sparams.seed));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(params.sampling.top_k));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(params.sampling.top_p, params.sampling.min_keep));
+    llama_sampler_chain_add(smpl, llama_sampler_init_temp (params.sampling.temp));
+    llama_sampler_chain_add(smpl, llama_sampler_init_dist (params.sampling.seed));
 
     if (ctx == NULL) {
         LOG_ERR("%s: error: failed to create the llama_context\n" , __func__);

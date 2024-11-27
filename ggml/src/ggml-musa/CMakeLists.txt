@@ -20,6 +20,11 @@ find_package(MUSAToolkit)
 if (MUSAToolkit_FOUND)
     message(STATUS "MUSA Toolkit found")
 
+    if (NOT DEFINED MUSA_ARCHITECTURES)
+        set(MUSA_ARCHITECTURES "21;22")
+    endif()
+    message(STATUS "Using MUSA architectures: ${MUSA_ARCHITECTURES}")
+
     file(GLOB   GGML_HEADERS_MUSA "../ggml-cuda/*.cuh")
     list(APPEND GGML_HEADERS_MUSA "../../include/ggml-cuda.h")
 
@@ -44,15 +49,17 @@ if (MUSAToolkit_FOUND)
 
     set_source_files_properties(${GGML_SOURCES_MUSA} PROPERTIES LANGUAGE CXX)
     foreach(SOURCE ${GGML_SOURCES_MUSA})
-        set_property(SOURCE ${SOURCE} PROPERTY COMPILE_FLAGS "-x musa -mtgpu --cuda-gpu-arch=mp_21 --cuda-gpu-arch=mp_22")
+        set(COMPILE_FLAGS "-x musa -mtgpu")
+        foreach(ARCH ${MUSA_ARCHITECTURES})
+            set(COMPILE_FLAGS "${COMPILE_FLAGS} --cuda-gpu-arch=mp_${ARCH}")
+        endforeach()
+        set_property(SOURCE ${SOURCE} PROPERTY COMPILE_FLAGS ${COMPILE_FLAGS})
     endforeach()
 
-    add_library(ggml-musa
-                ${GGML_HEADERS_MUSA}
-                ${GGML_SOURCES_MUSA})
-
-    target_link_libraries(ggml-musa PRIVATE ggml-base)
-    target_include_directories(ggml-musa PRIVATE . ..)
+    ggml_add_backend_library(ggml-musa
+                             ${GGML_HEADERS_MUSA}
+                             ${GGML_SOURCES_MUSA}
+                            )
 
     # TODO: do not use CUDA definitions for MUSA
     target_compile_definitions(ggml PUBLIC GGML_USE_CUDA)

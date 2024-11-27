@@ -5,6 +5,8 @@ if (WIN32)
     endif()
 endif()
 
+llama_add_compile_flags()
+
 #
 # libraries
 #

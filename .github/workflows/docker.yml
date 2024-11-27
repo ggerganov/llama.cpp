@@ -10,12 +10,10 @@
 name: Publish Docker image
 
 on:
-  #pull_request:
-  push:
-    branches:
-      - master
-    paths: ['.github/workflows/docker.yml', '.devops/*.Dockerfile', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.cuh', '**/*.swift', '**/*.m', '**/*.metal']
-  workflow_dispatch: # allows manual triggering, useful for debugging
+  workflow_dispatch: # allows manual triggering
+  schedule:
+    # Rebuild daily rather than on every push because it is expensive
+    - cron: '12 4 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
@@ -29,7 +27,6 @@ permissions:
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
-    #if: github.event.pull_request.draft == false
 
     runs-on: ubuntu-latest
     env:
@@ -117,7 +114,7 @@ jobs:
           swap-storage: true
 
       - name: Build and push Docker image (tagged + versioned)
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         uses: docker/build-push-action@v6
         with:
           context: .

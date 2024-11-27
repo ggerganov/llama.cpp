@@ -24,7 +24,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-function(get_flags CCID CCVER)
+function(ggml_get_flags CCID CCVER)
     set(C_FLAGS "")
     set(CXX_FLAGS "")
 
@@ -41,6 +41,7 @@ function(get_flags CCID CCVER)
     elseif (CCID STREQUAL "GNU")
         set(C_FLAGS   -Wdouble-promotion)
         set(CXX_FLAGS -Wno-array-bounds)
+
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
@@ -69,7 +70,7 @@ if (GGML_ALL_WARNINGS)
         list(APPEND C_FLAGS   ${WARNING_FLAGS})
         list(APPEND CXX_FLAGS ${WARNING_FLAGS})
 
-        get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
+        ggml_get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
 
         add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_FLAGS};${GF_C_FLAGS}>"
                             "$<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS};${GF_CXX_FLAGS}>")
@@ -202,6 +203,10 @@ endif()
 
 # ggml
 
+if (GGML_BACKEND_DL AND NOT BUILD_SHARED_LIBS)
+    message(FATAL_ERROR "GGML_BACKEND_DL requires BUILD_SHARED_LIBS")
+endif()
+
 add_library(ggml-base
             ../include/ggml.h
             ../include/ggml-alloc.h
@@ -226,6 +231,31 @@ add_library(ggml
 
 target_link_libraries(ggml PUBLIC ggml-base)
 
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_link_libraries(ggml PRIVATE dl)
+endif()
+
+function(ggml_add_backend_library backend)
+    if (GGML_BACKEND_DL)
+        add_library(${backend} MODULE ${ARGN})
+        # write the shared library to the output directory
+        set_target_properties(${backend} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        target_compile_definitions(${backend} PRIVATE GGML_BACKEND_DL)
+    else()
+        add_library(${backend} ${ARGN})
+        target_link_libraries(ggml PUBLIC ${backend})
+        install(TARGETS ${backend} LIBRARY)
+    endif()
+
+    target_link_libraries(${backend} PRIVATE ggml-base)
+    target_include_directories(${backend} PRIVATE ..)
+
+    if (${BUILD_SHARED_LIBS})
+        target_compile_definitions(${backend} PRIVATE GGML_BACKEND_BUILD)
+        target_compile_definitions(${backend} PUBLIC  GGML_BACKEND_SHARED)
+    endif()
+endfunction()
+
 function(ggml_add_backend backend)
     string(TOUPPER "GGML_${backend}" backend_id)
     if (${backend_id})
@@ -236,14 +266,10 @@ function(ggml_add_backend backend)
         # however, currently it is necessary for AMX, since it is enabled by default on llama.cpp
         if (${backend_id})
             message(STATUS "Including ${backend} backend")
-            if (${BUILD_SHARED_LIBS})
-                target_compile_definitions(${backend_target} PRIVATE GGML_BACKEND_BUILD)
-                target_compile_definitions(${backend_target} PUBLIC  GGML_BACKEND_SHARED)
+            if (NOT GGML_BACKEND_DL)
+                string(TOUPPER "GGML_USE_${backend}" backend_use)
+                target_compile_definitions(ggml PUBLIC ${backend_use})
             endif()
-            install(TARGETS ${backend_target} LIBRARY)
-            target_link_libraries(ggml PUBLIC ${backend_target})
-            string(TOUPPER "GGML_USE_${backend}" backend_use)
-            target_compile_definitions(ggml PUBLIC ${backend_use})
         endif()
     endif()
 endfunction()
@@ -256,10 +282,10 @@ ggml_add_backend(CUDA)
 ggml_add_backend(HIP)
 ggml_add_backend(Kompute)
 ggml_add_backend(METAL)
+ggml_add_backend(MUSA)
 ggml_add_backend(RPC)
 ggml_add_backend(SYCL)
 ggml_add_backend(Vulkan)
-ggml_add_backend(MUSA)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)

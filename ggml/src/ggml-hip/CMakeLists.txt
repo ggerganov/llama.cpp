@@ -64,12 +64,10 @@ else()
     list(APPEND GGML_SOURCES_ROCM ${SRCS})
 endif()
 
-add_library(ggml-hip
-            ${GGML_HEADERS_ROCM}
-            ${GGML_SOURCES_ROCM})
-
-target_link_libraries(ggml-hip PRIVATE ggml-base)
-target_include_directories(ggml-hip PRIVATE . ..)
+ggml_add_backend_library(ggml-hip
+                         ${GGML_HEADERS_ROCM}
+                         ${GGML_SOURCES_ROCM}
+                        )
 
 # TODO: do not use CUDA definitions for HIP
 target_compile_definitions(ggml PUBLIC GGML_USE_CUDA)

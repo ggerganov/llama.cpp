@@ -282,8 +282,8 @@ int main(int argc, char ** argv) {
                 return a.second > b.second;
             });
 
-            LOG("Top %d similar chunks:\n", params.sparams.top_k);
-            for (int i = 0; i < std::min(params.sparams.top_k, (int) chunks.size()); i++) {
+            LOG("Top %d similar chunks:\n", params.sampling.top_k);
+            for (int i = 0; i < std::min(params.sampling.top_k, (int) chunks.size()); i++) {
                 LOG("filename: %s\n", chunks[similarities[i].first].filename.c_str());
                 LOG("filepos: %lld\n", (long long int) chunks[similarities[i].first].filepos);
                 LOG("similarity: %f\n", similarities[i].second);

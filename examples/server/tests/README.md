@@ -1,18 +1,8 @@
 # Server tests
 
-Python based server tests scenario using [BDD](https://en.wikipedia.org/wiki/Behavior-driven_development)
-and [behave](https://behave.readthedocs.io/en/latest/):
-
-* [issues.feature](./features/issues.feature) Pending issues scenario
-* [parallel.feature](./features/parallel.feature) Scenario involving multi slots and concurrent requests
-* [security.feature](./features/security.feature) Security, CORS and API Key
-* [server.feature](./features/server.feature) Server base scenario: completion, embedding, tokenization, etc...
+Python based server tests scenario using [pytest](https://docs.pytest.org/en/stable/).
 
 Tests target GitHub workflows job runners with 4 vCPU.
-
-Requests are
-using [aiohttp](https://docs.aiohttp.org/en/stable/client_reference.html), [asyncio](https://docs.python.org/fr/3/library/asyncio.html)
-based http client.
 
 Note: If the host architecture inference speed is faster than GitHub runners one, parallel scenario may randomly fail.
 To mitigate it, you can increase values in `n_predict`, `kv_size`.
@@ -39,26 +29,19 @@ It's possible to override some scenario steps values with environment variables:
 |--------------------------|------------------------------------------------------------------------------------------------|
 | `PORT`                   | `context.server_port` to set the listening port of the server during scenario, default: `8080` |
 | `LLAMA_SERVER_BIN_PATH`  | to change the server binary path, default: `../../../build/bin/llama-server`                         |
-| `DEBUG`                  | "ON" to enable steps and server verbose mode `--verbose`                                       |
+| `DEBUG`                  | to enable steps and server verbose mode `--verbose`                                       |
 | `N_GPU_LAYERS`           | number of model layers to offload to VRAM `-ngl --n-gpu-layers`                                |
 
-### Run @bug, @wip or @wrong_usage annotated scenario
-
-Feature or Scenario must be annotated with `@llama.cpp` to be included in the default scope.
-
-- `@bug` annotation aims to link a scenario with a GitHub issue.
-- `@wrong_usage` are meant to show user issue that are actually an expected behavior
-- `@wip` to focus on a scenario working in progress
-- `@slow` heavy test, disabled by default
-
-To run a scenario annotated with `@bug`, start:
+To run slow tests:
 
 ```shell
-DEBUG=ON ./tests.sh --no-skipped --tags bug --stop
+SLOW_TESTS=1 ./tests.sh
 ```
 
-After changing logic in `steps.py`, ensure that `@bug` and `@wrong_usage` scenario are updated.
+To run with stdout/stderr display in real time (verbose output, but useful for debugging):
 
 ```shell
-./tests.sh --no-skipped --tags bug,wrong_usage || echo "should failed but compile"
+DEBUG=1 ./tests.sh -s -v -x
 ```
+
+To see all available arguments, please refer to [pytest documentation](https://docs.pytest.org/en/stable/how-to/usage.html)
