@@ -109,10 +109,11 @@ static ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 #if defined(__ARM_ARCH)
 struct ggml_arm_arch_features_type {
     int has_neon;
+    int has_dotprod;
     int has_i8mm;
     int has_sve;
     int sve_cnt;
-} ggml_arm_arch_features = {-1, -1, -1, 0};
+} ggml_arm_arch_features = {-1, -1, -1, -1, 0};
 #endif
 
 
@@ -2448,6 +2449,7 @@ static void ggml_init_arm_arch_features(void) {
     uint32_t hwcap2 = getauxval(AT_HWCAP2);
 
     ggml_arm_arch_features.has_neon = !!(hwcap & HWCAP_ASIMD);
+    ggml_arm_arch_features.has_dotprod = !!(hwcap && HWCAP_ASIMDDP);
     ggml_arm_arch_features.has_i8mm = !!(hwcap2 & HWCAP2_I8MM);
     ggml_arm_arch_features.has_sve  = !!(hwcap & HWCAP_SVE);
 
@@ -2461,6 +2463,11 @@ static void ggml_init_arm_arch_features(void) {
         oldp = 0;
     }
     ggml_arm_arch_features.has_neon = oldp;
+
+    if (sysctlbyname("hw.optional.arm.FEAT_DotProd", &oldp, &size, NULL, 0) != 0) {
+        oldp = 0;
+    }
+    ggml_arm_arch_features.has_dotprod = oldp;
 
     if (sysctlbyname("hw.optional.arm.FEAT_I8MM", &oldp, &size, NULL, 0) != 0) {
         oldp = 0;
@@ -13885,6 +13892,14 @@ int ggml_cpu_has_vsx(void) {
 int ggml_cpu_has_neon(void) {
 #if defined(__ARM_ARCH) && defined(__ARM_NEON)
     return ggml_arm_arch_features.has_neon;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_dotprod(void) {
+#if defined(__ARM_ARCH) && defined(__ARM_FEATURE_DOTPROD)
+    return ggml_arm_arch_features.has_dotprod;
 #else
     return 0;
 #endif

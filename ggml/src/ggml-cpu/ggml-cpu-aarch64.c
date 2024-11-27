@@ -530,7 +530,7 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
-    if (ggml_cpu_has_neon()) {
+    if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
@@ -1017,8 +1017,8 @@ void ggml_gemv_iq4_nl_4x4_q8_0(int n, float * restrict s, size_t bs, const void 
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
-#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
-    if (ggml_cpu_has_neon()) {
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
+    if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
         const int8x16_t kvalues = vld1q_s8(kvalues_iq4nl);
         const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
         float * res_ptr = s;
@@ -1115,7 +1115,7 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
-    if (ggml_cpu_has_neon()) {
+    if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
@@ -3504,8 +3504,8 @@ void ggml_gemm_iq4_nl_4x4_q8_0(int n, float * restrict s, size_t bs, const void 
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
-#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
-    if (ggml_cpu_has_neon()) {
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
+    if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
         const int8x16_t kvalues = vld1q_s8(kvalues_iq4nl);
 
         for (int y = 0; y < nr / 4; y++) {
@@ -3834,11 +3834,11 @@ enum ggml_type ggml_aarch64_get_optimal_repack_type(const struct ggml_tensor * c
         if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
             return GGML_TYPE_Q4_0_4_8;
         }
-        if (ggml_cpu_has_neon()) {
+        if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
             return GGML_TYPE_Q4_0_4_4;
         }
     } else if (cur->type == GGML_TYPE_IQ4_NL) {
-        if (ggml_cpu_has_neon()) {
+        if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
             return GGML_TYPE_IQ4_NL_4_4;
         }
     }
