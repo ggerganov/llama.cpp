@@ -997,9 +997,10 @@ static bool ggml_metal_supports_op(const struct ggml_backend_metal_device_contex
             return ggml_is_contiguous(op->src[0]);
         case GGML_OP_SUM_ROWS:
         case GGML_OP_SOFT_MAX:
-        case GGML_OP_RMS_NORM:
         case GGML_OP_GROUP_NORM:
             return has_simdgroup_reduction;
+        case GGML_OP_RMS_NORM:
+            return has_simdgroup_reduction && (op->ne[0] % 4 == 0);
         case GGML_OP_NORM:
         case GGML_OP_ROPE:
             return true;
@@ -2672,7 +2673,6 @@ static void ggml_metal_encode_node(
             } break;
         case GGML_OP_GROUP_NORM:
             {
-                GGML_ASSERT(ne00 % 4 == 0);
                 GGML_ASSERT(ggml_is_contiguous(src0));
 
                 float eps;
