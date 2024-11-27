@@ -3012,7 +3012,6 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
 
     // freq_factors
     if (src2) {
-        std::cout << "freq_factors is not null" << std::endl;
         aclTensor* acl_freq_factors_tensor = ggml_cann_create_tensor(
             src2->data, ggml_cann_type_mapping(src2->type),
             ggml_type_size(src2->type), arange_ne, arange_nb, GGML_MAX_DIMS);
