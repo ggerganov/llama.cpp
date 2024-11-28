@@ -3,6 +3,39 @@ cmake_policy(SET CMP0114 NEW)
 
 find_package(Vulkan COMPONENTS glslc REQUIRED)
 
+function(detect_host_compiler)
+    if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+        find_program(MSVC_COMPILER cl)
+        find_program(GNU_C_COMPILER gcc)
+        find_program(GNU_CXX_COMPILER g++)
+        if (MSVC_COMPILER)
+            set(HOST_C_COMPILER "${MSVC_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${MSVC_COMPILER}" PARENT_SCOPE)
+        elseif (CLANG_C_COMPILER AND CLANG_CXX_COMPILER)
+            set(HOST_C_COMPILER "${CLANG_C_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${CLANG_CXX_COMPILER}" PARENT_SCOPE)
+        else()
+            message(WARNING "Neither MSVC nor clang found")
+        endif()
+    elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+        find_program(CLANG_C_COMPILER clang)
+        find_program(CLANG_CXX_COMPILER clang++)
+        find_program(GNU_C_COMPILER gcc)
+        find_program(GNU_CXX_COMPILER g++)
+        if (GNU_C_COMPILER AND GNU_CXX_COMPILER)
+            set(HOST_C_COMPILER "${GNU_C_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${GNU_CXX_COMPILER}" PARENT_SCOPE)
+        elseif (CLANG_C_COMPILER AND CLANG_CXX_COMPILER)
+            set(HOST_C_COMPILER "${CLANG_C_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${CLANG_CXX_COMPILER}" PARENT_SCOPE)
+        else()
+            message(WARNING "Neither clang nor gcc found")
+        endif()
+    else()
+        message(WARNING "Unsupported host system: ${CMAKE_HOST_SYSTEM_NAME}")
+    endif()
+endfunction()
+
 if (Vulkan_FOUND)
     message(STATUS "Vulkan found")
 
@@ -79,22 +112,36 @@ if (Vulkan_FOUND)
     if (NOT CMAKE_CROSSCOMPILING)
         add_subdirectory(vulkan-shaders)
     else()
+        if (GGML_SHADERS_GEN_TOOLCHAIN)
+            set(HOST_CMAKE_TOOLCHAIN_FILE ${GGML_SHADERS_GEN_TOOLCHAIN})
+        else()
+            detect_host_compiler()
+            if (NOT HOST_C_COMPILER OR NOT HOST_CXX_COMPILER)
+                message(FATAL_ERROR "Host compiler not found")
+            else()
+                message(STATUS "Host compiler: ${HOST_C_COMPILER} ${HOST_CXX_COMPILER}")
+            endif()
+            file(WRITE ${CMAKE_BINARY_DIR}/host_toolchain.cmake
+                "set(CMAKE_BUILD_TYPE Release)\n"
+                "set(CMAKE_C_FLAGS -O2)\n"
+                "set(CMAKE_CXX_FLAGS -O2)\n"
+                "set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)\n"
+                "set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)\n"
+                "set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)\n"
+                "set(CMAKE_C_COMPILER ${HOST_C_COMPILER})\n"
+                "set(CMAKE_CXX_COMPILER ${HOST_CXX_COMPILER})\n"
+            )
+            set(HOST_CMAKE_TOOLCHAIN_FILE ${CMAKE_BINARY_DIR}/host_toolchain.cmake)
+        endif()
+        message(STATUS "vulkan-shaders-gen toolchain file: ${HOST_CMAKE_TOOLCHAIN_FILE}")
+
         include(ExternalProject)
         # Native build through ExternalProject_Add
         ExternalProject_Add(
             vulkan-shaders-gen
             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders
-            CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+            CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=${HOST_CMAKE_TOOLCHAIN_FILE}
                     -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
-                    -DCMAKE_TOOLCHAIN_FILE=
-                    -DCMAKE_SYSROOT=
-                    -DCMAKE_C_FLAGS=-O2
-                    -DCMAKE_CXX_FLAGS=-O2
-                    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER
-                    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
-                    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER
-                    -DCMAKE_C_COMPILER=gcc
-                    -DCMAKE_CXX_COMPILER=g++
             BUILD_COMMAND ${CMAKE_COMMAND} --build .
             INSTALL_COMMAND ${CMAKE_COMMAND} --install .
             INSTALL_DIR ${CMAKE_BINARY_DIR}
