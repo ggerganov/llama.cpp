@@ -17561,6 +17561,12 @@ static int llama_decode_internal(
     };
 
     while (lctx.sbatch.n_tokens > 0) {
+        // If aborted, break out
+        if (lctx.abort_callback != nullptr && lctx.abort_callback(lctx.abort_callback_data)) {
+            LLAMA_LOG_ERROR("%s: token decode aborted\n", __func__);
+            return -1;
+        }
+
         llama_ubatch ubatch;
         if (kv_self.recurrent) {
             if (embd_pooled) {
