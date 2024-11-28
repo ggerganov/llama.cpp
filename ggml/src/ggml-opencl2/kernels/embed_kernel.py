@@ -1,19 +1,27 @@
+#
+
 import sys
+import logging
+logger = logging.getLogger("opencl-embed-kernerl")
+
 
 def main():
-  if len(sys.argv) != 3:
-    print("Usage: python embed_kernel.py <input_file> <output_file>")
-    exit(1)
+    logging.basicConfig(level=logging.INFO)
 
-  ifile = open(sys.argv[1], "r")
-  ofile = open(sys.argv[2], "w")
+    if len(sys.argv) != 3:
+        logger.info("Usage: python embed_kernel.py <input_file> <output_file>")
+        sys.exit(1)
 
-  ofile.write("R\"(\n\n")
-  ofile.write(ifile.read())
-  ofile.write("\n)\"")
+    ifile = open(sys.argv[1], "r")
+    ofile = open(sys.argv[2], "w")
 
-  ifile.close()
-  ofile.close()
+    ofile.write("R\"(\n\n")
+    ofile.write(ifile.read())
+    ofile.write("\n)\"")
+
+    ifile.close()
+    ofile.close()
+
 
 if __name__ == "__main__":
-  main()
+    main()
