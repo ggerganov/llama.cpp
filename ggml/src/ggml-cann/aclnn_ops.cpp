@@ -3188,13 +3188,13 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
                                 sin_reshape_ne, sin_reshape_nb, GGML_MAX_DIMS);
     aclnn_cache_init(ctx, dst, acl_cos_reshape_tensor, acl_sin_reshape_tensor,
                      theta_scale, freq_scale, attn_factor, is_neox);
-    
+
     aclTensor* acl_src = ggml_cann_create_tensor(src0);
     aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
 #ifdef ASCEND_310P
     // Special ROPE operation for 310P
-    
+
     // roll input
     void* input_roll_buffer;
     aclTensor* acl_minus_one_tensor;
@@ -3366,7 +3366,7 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
 
     // src0 == GGML_TYPE_F16
     // TODO: optimization this `if` code
-    if(src0->type == GGML_TYPE_F16) {
+    if (src0->type == GGML_TYPE_F16) {
         ggml_cann_pool_alloc sin_final_allocator(
             ctx.pool(), src0->ne[0] * src0->ne[2] * ggml_type_size(src0->type));
         ggml_cann_pool_alloc cos_final_allocator(
@@ -3380,12 +3380,14 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         for (int i = 1; i < GGML_MAX_DIMS; i++) {
             sin_final_nb[i] = sin_final_nb[i - 1] * sin_final_ne[i - 1];
         }
-        aclTensor* acl_sin_final_tensor =
-            ggml_cann_create_tensor(sin_final_buffer, ggml_cann_type_mapping(src0->type), ggml_type_size(src0->type),
-                                sin_final_ne, sin_final_nb, GGML_MAX_DIMS);
-        aclTensor* acl_cos_final_tensor =
-            ggml_cann_create_tensor(cos_final_buffer, ggml_cann_type_mapping(src0->type), ggml_type_size(src0->type),
-                                sin_final_ne, sin_final_nb, GGML_MAX_DIMS);
+        aclTensor* acl_sin_final_tensor = ggml_cann_create_tensor(
+            sin_final_buffer, ggml_cann_type_mapping(src0->type),
+            ggml_type_size(src0->type), sin_final_ne, sin_final_nb,
+            GGML_MAX_DIMS);
+        aclTensor* acl_cos_final_tensor = ggml_cann_create_tensor(
+            cos_final_buffer, ggml_cann_type_mapping(src0->type),
+            ggml_type_size(src0->type), sin_final_ne, sin_final_nb,
+            GGML_MAX_DIMS);
 
         aclnn_cast(ctx, acl_sin_reshape_tensor, acl_sin_final_tensor,
                    ggml_cann_type_mapping(src0->type));
