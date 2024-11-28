@@ -6,9 +6,9 @@
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-layout (constant_id = 0) const uint SUBGROUP_SIZE = 32;
+layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 
-shared FLOAT_TYPE tmp[SUBGROUP_SIZE];
+shared FLOAT_TYPE tmp[BLOCK_SIZE];
 
 void main() {
     const uint row = gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z;
