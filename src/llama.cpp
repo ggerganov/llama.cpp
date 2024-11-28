@@ -2606,6 +2606,7 @@ struct llama_cparams {
 };
 
 // TODO: separate into "llama_layer_enc" and "llama_layer_dec"
+// the code in llama_save_model_to_file assumes llama_layer to consist exclusively of struct ggml_tensor *
 struct llama_layer {
     llama_layer() {
         // initialize all pointers to NULL
@@ -2743,9 +2744,9 @@ struct llama_layer {
     struct ggml_tensor * channel_mix_value;
 
     // long rope factors
-    struct ggml_tensor * rope_long  = nullptr;
-    struct ggml_tensor * rope_short = nullptr;
-    struct ggml_tensor * rope_freqs = nullptr;
+    struct ggml_tensor * rope_long;
+    struct ggml_tensor * rope_short;
+    struct ggml_tensor * rope_freqs;
 
     // bitnet scale
     struct ggml_tensor * wq_scale;
@@ -2867,21 +2868,21 @@ struct llama_model {
     llama_hparams hparams = {};
     llama_vocab   vocab;
 
-    struct ggml_tensor * tok_embd = nullptr;
-    struct ggml_tensor * type_embd = nullptr;
-    struct ggml_tensor * pos_embd = nullptr;
-    struct ggml_tensor * tok_norm = nullptr;
+    struct ggml_tensor * tok_embd   = nullptr;
+    struct ggml_tensor * type_embd  = nullptr;
+    struct ggml_tensor * pos_embd   = nullptr;
+    struct ggml_tensor * tok_norm   = nullptr;
     struct ggml_tensor * tok_norm_b = nullptr;
 
-    struct ggml_tensor * output_norm = nullptr;
-    struct ggml_tensor * output_norm_b = nullptr;
-    struct ggml_tensor * output = nullptr;
-    struct ggml_tensor * output_b = nullptr;
+    struct ggml_tensor * output_norm     = nullptr;
+    struct ggml_tensor * output_norm_b   = nullptr;
+    struct ggml_tensor * output          = nullptr;
+    struct ggml_tensor * output_b        = nullptr;
     struct ggml_tensor * output_norm_enc = nullptr;
 
     // classifier
-    struct ggml_tensor * cls = nullptr;
-    struct ggml_tensor * cls_b = nullptr;
+    struct ggml_tensor * cls       = nullptr;
+    struct ggml_tensor * cls_b     = nullptr;
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
@@ -4493,30 +4494,30 @@ struct llama_model_loader {
             }
 
             switch (type_max) {
-                case GGML_TYPE_F32:     ftype = LLAMA_FTYPE_ALL_F32;        break;
-                case GGML_TYPE_F16:     ftype = LLAMA_FTYPE_MOSTLY_F16;     break;
-                case GGML_TYPE_BF16:    ftype = LLAMA_FTYPE_MOSTLY_BF16;    break;
-                case GGML_TYPE_Q4_0:    ftype = LLAMA_FTYPE_MOSTLY_Q4_0;    break;
-                case GGML_TYPE_Q4_1:    ftype = LLAMA_FTYPE_MOSTLY_Q4_1;    break;
-                case GGML_TYPE_Q5_0:    ftype = LLAMA_FTYPE_MOSTLY_Q5_0;    break;
-                case GGML_TYPE_Q5_1:    ftype = LLAMA_FTYPE_MOSTLY_Q5_1;    break;
-                case GGML_TYPE_Q8_0:    ftype = LLAMA_FTYPE_MOSTLY_Q8_0;    break;
-                case GGML_TYPE_Q2_K:    ftype = LLAMA_FTYPE_MOSTLY_Q2_K;    break;
-                case GGML_TYPE_Q3_K:    ftype = LLAMA_FTYPE_MOSTLY_Q3_K_M;  break;
-                case GGML_TYPE_Q4_K:    ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M;  break;
-                case GGML_TYPE_Q5_K:    ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M;  break;
-                case GGML_TYPE_Q6_K:    ftype = LLAMA_FTYPE_MOSTLY_Q6_K;    break;
-                case GGML_TYPE_TQ1_0:   ftype = LLAMA_FTYPE_MOSTLY_TQ1_0;   break;
-                case GGML_TYPE_TQ2_0:   ftype = LLAMA_FTYPE_MOSTLY_TQ2_0;   break;
-                case GGML_TYPE_IQ2_XXS: ftype = LLAMA_FTYPE_MOSTLY_IQ2_XXS; break;
-                case GGML_TYPE_IQ2_XS:  ftype = LLAMA_FTYPE_MOSTLY_IQ2_XS;  break;
-                case GGML_TYPE_IQ2_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ2_S;   break;
-                case GGML_TYPE_IQ3_XXS: ftype = LLAMA_FTYPE_MOSTLY_IQ3_XXS; break;
-                case GGML_TYPE_IQ1_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ1_S;   break;
-                case GGML_TYPE_IQ1_M:   ftype = LLAMA_FTYPE_MOSTLY_IQ1_M;   break;
-                case GGML_TYPE_IQ4_NL:  ftype = LLAMA_FTYPE_MOSTLY_IQ4_NL;  break;
-                case GGML_TYPE_IQ4_XS:  ftype = LLAMA_FTYPE_MOSTLY_IQ4_XS;  break;
-                case GGML_TYPE_IQ3_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ3_S;   break;
+                case GGML_TYPE_F32:      ftype = LLAMA_FTYPE_ALL_F32;         break;
+                case GGML_TYPE_F16:      ftype = LLAMA_FTYPE_MOSTLY_F16;      break;
+                case GGML_TYPE_BF16:     ftype = LLAMA_FTYPE_MOSTLY_BF16;     break;
+                case GGML_TYPE_Q4_0:     ftype = LLAMA_FTYPE_MOSTLY_Q4_0;     break;
+                case GGML_TYPE_Q4_1:     ftype = LLAMA_FTYPE_MOSTLY_Q4_1;     break;
+                case GGML_TYPE_Q5_0:     ftype = LLAMA_FTYPE_MOSTLY_Q5_0;     break;
+                case GGML_TYPE_Q5_1:     ftype = LLAMA_FTYPE_MOSTLY_Q5_1;     break;
+                case GGML_TYPE_Q8_0:     ftype = LLAMA_FTYPE_MOSTLY_Q8_0;     break;
+                case GGML_TYPE_Q2_K:     ftype = LLAMA_FTYPE_MOSTLY_Q2_K;     break;
+                case GGML_TYPE_Q3_K:     ftype = LLAMA_FTYPE_MOSTLY_Q3_K_M;   break;
+                case GGML_TYPE_Q4_K:     ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M;   break;
+                case GGML_TYPE_Q5_K:     ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M;   break;
+                case GGML_TYPE_Q6_K:     ftype = LLAMA_FTYPE_MOSTLY_Q6_K;     break;
+                case GGML_TYPE_TQ1_0:    ftype = LLAMA_FTYPE_MOSTLY_TQ1_0;    break;
+                case GGML_TYPE_TQ2_0:    ftype = LLAMA_FTYPE_MOSTLY_TQ2_0;    break;
+                case GGML_TYPE_IQ2_XXS:  ftype = LLAMA_FTYPE_MOSTLY_IQ2_XXS;  break;
+                case GGML_TYPE_IQ2_XS:   ftype = LLAMA_FTYPE_MOSTLY_IQ2_XS;   break;
+                case GGML_TYPE_IQ2_S:    ftype = LLAMA_FTYPE_MOSTLY_IQ2_S;    break;
+                case GGML_TYPE_IQ3_XXS:  ftype = LLAMA_FTYPE_MOSTLY_IQ3_XXS;  break;
+                case GGML_TYPE_IQ1_S:    ftype = LLAMA_FTYPE_MOSTLY_IQ1_S;    break;
+                case GGML_TYPE_IQ1_M:    ftype = LLAMA_FTYPE_MOSTLY_IQ1_M;    break;
+                case GGML_TYPE_IQ4_NL:   ftype = LLAMA_FTYPE_MOSTLY_IQ4_NL;   break;
+                case GGML_TYPE_IQ4_XS:   ftype = LLAMA_FTYPE_MOSTLY_IQ4_XS;   break;
+                case GGML_TYPE_IQ3_S:    ftype = LLAMA_FTYPE_MOSTLY_IQ3_S;    break;
                 case GGML_TYPE_Q4_0_4_4: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_4; break;
                 case GGML_TYPE_Q4_0_4_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_8; break;
                 case GGML_TYPE_Q4_0_8_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_8_8; break;
@@ -4617,12 +4618,13 @@ struct llama_model_loader {
             GGUFMeta::GKV<GGUFMeta::ArrayInfo>::get_kv(meta.get(), kid);
 
         switch (arr_info.gt) {
-            case GGUF_TYPE_FLOAT32: GGML_ASSERT((std::is_same<T, float>::value)); break;
+            case GGUF_TYPE_UINT32:
             case GGUF_TYPE_INT32:   GGML_ASSERT(
                                             (std::is_same<T,  int32_t>::value) ||
                                             (std::is_same<T, uint32_t>::value));  break;
+            case GGUF_TYPE_FLOAT32: GGML_ASSERT((std::is_same<T, float>::value)); break;
             default:
-                throw std::runtime_error(format("%s is not a float32, int32 array", key.c_str()));
+                throw std::runtime_error(format("%s is not a float32/uint32/int32 array", key.c_str()));
         }
 
         result.resize(arr_info.length);
@@ -4646,12 +4648,13 @@ struct llama_model_loader {
             GGUFMeta::GKV<GGUFMeta::ArrayInfo>::get_kv(meta.get(), kid);
 
         switch (arr_info.gt) {
-            case GGUF_TYPE_FLOAT32: GGML_ASSERT((std::is_same<T, float>::value)); break;
+            case GGUF_TYPE_UINT32:
             case GGUF_TYPE_INT32:   GGML_ASSERT(
                                             (std::is_same<T,  int32_t>::value) ||
                                             (std::is_same<T, uint32_t>::value));  break;
+            case GGUF_TYPE_FLOAT32: GGML_ASSERT((std::is_same<T, float>::value)); break;
             default:
-                throw std::runtime_error(format("%s is not a float32, int32 array", key.c_str()));
+                throw std::runtime_error(format("%s is not a float32/uint32/int32 array", key.c_str()));
         }
 
         if (arr_info.length > N_MAX) {
@@ -6171,13 +6174,10 @@ static void llm_load_vocab(
 
     // determine vocab type
     {
-        std::string tokenizer_model;
-        std::string tokenizer_pre;
+        ml.get_key(LLM_KV_TOKENIZER_MODEL, vocab.tokenizer_model);
+        ml.get_key(LLM_KV_TOKENIZER_PRE,   vocab.tokenizer_pre, false);
 
-        ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_model);
-        ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
-
-        if (tokenizer_model == "no_vocab") {
+        if (vocab.tokenizer_model == "no_vocab") {
             vocab.type = LLAMA_VOCAB_TYPE_NONE;
 
             // default special tokens
@@ -6198,7 +6198,7 @@ static void llm_load_vocab(
             return;
         }
 
-        if (tokenizer_model == "llama") {
+        if (vocab.tokenizer_model == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
@@ -6209,7 +6209,7 @@ static void llm_load_vocab(
             vocab.special_pad_id  = LLAMA_TOKEN_NULL;
             vocab.special_cls_id  = LLAMA_TOKEN_NULL;
             vocab.special_mask_id = LLAMA_TOKEN_NULL;
-        } else if (tokenizer_model == "bert") {
+        } else if (vocab.tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
             // default special tokens
@@ -6220,7 +6220,7 @@ static void llm_load_vocab(
             vocab.special_pad_id  = 0;
             vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
-        } else if (tokenizer_model == "gpt2") {
+        } else if (vocab.tokenizer_model == "gpt2") {
             vocab.type = LLAMA_VOCAB_TYPE_BPE;
 
             // read bpe merges and populate bpe ranks
@@ -6255,7 +6255,7 @@ static void llm_load_vocab(
             vocab.special_pad_id  = LLAMA_TOKEN_NULL;
             vocab.special_cls_id  = LLAMA_TOKEN_NULL;
             vocab.special_mask_id = LLAMA_TOKEN_NULL;
-        } else if (tokenizer_model == "t5") {
+        } else if (vocab.tokenizer_model == "t5") {
             vocab.type = LLAMA_VOCAB_TYPE_UGM;
 
             // default special tokens
@@ -6284,7 +6284,7 @@ static void llm_load_vocab(
                 }
 #endif
             }
-        } else if (tokenizer_model == "rwkv") {
+        } else if (vocab.tokenizer_model == "rwkv") {
             vocab.type = LLAMA_VOCAB_TYPE_RWKV;
 
             // default special tokens
@@ -6294,14 +6294,14 @@ static void llm_load_vocab(
             vocab.special_sep_id = LLAMA_TOKEN_NULL;
             vocab.special_pad_id = LLAMA_TOKEN_NULL;
         } else {
-            throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
+            throw std::runtime_error(format("unknown tokenizer: '%s'", vocab.tokenizer_model.c_str()));
         }
 
         // for now, only BPE models have pre-tokenizers
         if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
             vocab.tokenizer_add_space_prefix = false;
             vocab.tokenizer_clean_spaces = true;
-            if (tokenizer_pre.empty()) {
+            if (vocab.tokenizer_pre.empty()) {
                 LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
                 LLAMA_LOG_WARN("%s:                                             \n", __func__);
                 LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
@@ -6310,109 +6310,109 @@ static void llm_load_vocab(
                 LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
                 LLAMA_LOG_WARN("%s:                                             \n", __func__);
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-            } else if (tokenizer_pre == "default") {
+            } else if (vocab.tokenizer_pre == "default") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             } else if (
-                    tokenizer_pre == "llama3"   ||
-                    tokenizer_pre == "llama-v3" ||
-                    tokenizer_pre == "llama-bpe") {
+                    vocab.tokenizer_pre == "llama3"   ||
+                    vocab.tokenizer_pre == "llama-v3" ||
+                    vocab.tokenizer_pre == "llama-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
             } else if (
-                    tokenizer_pre == "deepseek-llm") {
+                    vocab.tokenizer_pre == "deepseek-llm") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                    tokenizer_pre == "deepseek-coder") {
+                    vocab.tokenizer_pre == "deepseek-coder") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                    tokenizer_pre == "falcon") {
+                    vocab.tokenizer_pre == "falcon") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
             } else if (
-                    tokenizer_pre == "mpt") {
+                    vocab.tokenizer_pre == "mpt") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MPT;
             } else if (
-                    tokenizer_pre == "starcoder") {
+                    vocab.tokenizer_pre == "starcoder") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STARCODER;
             } else if (
-                    tokenizer_pre == "gpt-2"   ||
-                    tokenizer_pre == "phi-2"   ||
-                    tokenizer_pre == "jina-es" ||
-                    tokenizer_pre == "jina-de" ||
-                    tokenizer_pre == "jina-v1-en" ||
-                    tokenizer_pre == "jina-v2-es" ||
-                    tokenizer_pre == "jina-v2-de" ||
-                    tokenizer_pre == "jina-v2-code") {
+                    vocab.tokenizer_pre == "gpt-2"   ||
+                    vocab.tokenizer_pre == "phi-2"   ||
+                    vocab.tokenizer_pre == "jina-es" ||
+                    vocab.tokenizer_pre == "jina-de" ||
+                    vocab.tokenizer_pre == "jina-v1-en" ||
+                    vocab.tokenizer_pre == "jina-v2-es" ||
+                    vocab.tokenizer_pre == "jina-v2-de" ||
+                    vocab.tokenizer_pre == "jina-v2-code") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
             } else if (
-                    tokenizer_pre == "refact") {
+                    vocab.tokenizer_pre == "refact") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_REFACT;
             } else if (
-                tokenizer_pre == "command-r") {
+                vocab.tokenizer_pre == "command-r") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_COMMAND_R;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                tokenizer_pre == "qwen2") {
+                vocab.tokenizer_pre == "qwen2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_QWEN2;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                tokenizer_pre == "stablelm2") {
+                vocab.tokenizer_pre == "stablelm2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STABLELM2;
             } else if (
-                tokenizer_pre == "olmo") {
+                vocab.tokenizer_pre == "olmo") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_OLMO;
             } else if (
-                tokenizer_pre == "dbrx") {
+                vocab.tokenizer_pre == "dbrx") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DBRX;
             } else if (
-                tokenizer_pre == "smaug-bpe") {
+                vocab.tokenizer_pre == "smaug-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMAUG;
             } else if (
-                tokenizer_pre == "poro-chat") {
+                vocab.tokenizer_pre == "poro-chat") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_PORO;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                tokenizer_pre == "chatglm-bpe") {
+                vocab.tokenizer_pre == "chatglm-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM4;
                 vocab.special_bos_id = LLAMA_TOKEN_NULL;
             } else if (
-                tokenizer_pre == "viking") {
+                vocab.tokenizer_pre == "viking") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                tokenizer_pre == "jais") {
+                vocab.tokenizer_pre == "jais") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
             } else if (
-                tokenizer_pre == "tekken") {
+                vocab.tokenizer_pre == "tekken") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
                 vocab.tokenizer_clean_spaces = false;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
             } else if (
-                tokenizer_pre == "smollm") {
+                vocab.tokenizer_pre == "smollm") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMOLLM;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
-                tokenizer_pre == "codeshell") {
+                vocab.tokenizer_pre == "codeshell") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CODESHELL;
             } else if (
-                tokenizer_pre == "bloom") {
+                vocab.tokenizer_pre == "bloom") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_BLOOM;
             } else if (
-                tokenizer_pre == "gpt3-finnish") {
+                vocab.tokenizer_pre == "gpt3-finnish") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH;
             } else if (
-                tokenizer_pre == "exaone") {
+                vocab.tokenizer_pre == "exaone") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_EXAONE;
             } else if (
-                tokenizer_pre == "chameleon") {
+                vocab.tokenizer_pre == "chameleon") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHAMELEON;
                 vocab.tokenizer_add_bos = true;
                 vocab.tokenizer_clean_spaces = false;
             } else {
-                throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+                throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", vocab.tokenizer_pre.c_str()));
             }
         } else if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
@@ -18781,29 +18781,29 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q2_K:    default_type = GGML_TYPE_Q2_K;    break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_XS:  default_type = GGML_TYPE_IQ3_S;   break;
+        case LLAMA_FTYPE_MOSTLY_Q2_K:     default_type = GGML_TYPE_Q2_K;     break;
+        case LLAMA_FTYPE_MOSTLY_IQ3_XS:   default_type = GGML_TYPE_IQ3_S;    break;
         case LLAMA_FTYPE_MOSTLY_Q3_K_S:
         case LLAMA_FTYPE_MOSTLY_Q3_K_M:
-        case LLAMA_FTYPE_MOSTLY_Q3_K_L:  default_type = GGML_TYPE_Q3_K;    break;
+        case LLAMA_FTYPE_MOSTLY_Q3_K_L:   default_type = GGML_TYPE_Q3_K;     break;
         case LLAMA_FTYPE_MOSTLY_Q4_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q4_K_M:  default_type = GGML_TYPE_Q4_K;    break;
+        case LLAMA_FTYPE_MOSTLY_Q4_K_M:   default_type = GGML_TYPE_Q4_K;     break;
         case LLAMA_FTYPE_MOSTLY_Q5_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q5_K_M:  default_type = GGML_TYPE_Q5_K;    break;
-        case LLAMA_FTYPE_MOSTLY_Q6_K:    default_type = GGML_TYPE_Q6_K;    break;
-        case LLAMA_FTYPE_MOSTLY_TQ1_0:   default_type = GGML_TYPE_TQ1_0;   break;
-        case LLAMA_FTYPE_MOSTLY_TQ2_0:   default_type = GGML_TYPE_TQ2_0;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_XXS: default_type = GGML_TYPE_IQ2_XXS; break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_XS:  default_type = GGML_TYPE_IQ2_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_S:   default_type = GGML_TYPE_IQ2_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_M:   default_type = GGML_TYPE_IQ2_S;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_XXS: default_type = GGML_TYPE_IQ3_XXS; break;
-        case LLAMA_FTYPE_MOSTLY_IQ1_S:   default_type = GGML_TYPE_IQ1_S;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ1_M:   default_type = GGML_TYPE_IQ1_M;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ4_NL:  default_type = GGML_TYPE_IQ4_NL;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ4_XS:  default_type = GGML_TYPE_IQ4_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_S:   default_type = GGML_TYPE_IQ3_S;   break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_M:   default_type = GGML_TYPE_IQ3_S;   break;
+        case LLAMA_FTYPE_MOSTLY_Q5_K_M:   default_type = GGML_TYPE_Q5_K;     break;
+        case LLAMA_FTYPE_MOSTLY_Q6_K:     default_type = GGML_TYPE_Q6_K;     break;
+        case LLAMA_FTYPE_MOSTLY_TQ1_0:    default_type = GGML_TYPE_TQ1_0;    break;
+        case LLAMA_FTYPE_MOSTLY_TQ2_0:    default_type = GGML_TYPE_TQ2_0;    break;
+        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:  default_type = GGML_TYPE_IQ2_XXS;  break;
+        case LLAMA_FTYPE_MOSTLY_IQ2_XS:
+        case LLAMA_FTYPE_MOSTLY_IQ2_S:    default_type = GGML_TYPE_IQ2_XS;   break;
+        case LLAMA_FTYPE_MOSTLY_IQ2_M:    default_type = GGML_TYPE_IQ2_S;    break;
+        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:  default_type = GGML_TYPE_IQ3_XXS;  break;
+        case LLAMA_FTYPE_MOSTLY_IQ1_S:    default_type = GGML_TYPE_IQ1_S;    break;
+        case LLAMA_FTYPE_MOSTLY_IQ1_M:    default_type = GGML_TYPE_IQ1_M;    break;
+        case LLAMA_FTYPE_MOSTLY_IQ4_NL:   default_type = GGML_TYPE_IQ4_NL;   break;
+        case LLAMA_FTYPE_MOSTLY_IQ4_XS:   default_type = GGML_TYPE_IQ4_XS;   break;
+        case LLAMA_FTYPE_MOSTLY_IQ3_S:
+        case LLAMA_FTYPE_MOSTLY_IQ3_M:    default_type = GGML_TYPE_IQ3_S;    break;
         case LLAMA_FTYPE_MOSTLY_Q4_0_4_4: default_type = GGML_TYPE_Q4_0_4_4; break;
         case LLAMA_FTYPE_MOSTLY_Q4_0_4_8: default_type = GGML_TYPE_Q4_0_4_8; break;
         case LLAMA_FTYPE_MOSTLY_Q4_0_8_8: default_type = GGML_TYPE_Q4_0_8_8; break;
@@ -18817,7 +18817,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    // mmap consistently increases speed Linux, and also increases speed on Windows with
+    // mmap consistently increases speed on Linux, and also increases speed on Windows with
     // hot cache. It may cause a slowdown on macOS, possibly related to free memory.
 #if defined(__linux__) || defined(_WIN32)
     constexpr bool use_mmap = true;
@@ -18827,7 +18827,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     llama_model_kv_override * kv_overrides = nullptr;
     if (params->kv_overrides) {
-        auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
+        auto * v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
     llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
@@ -19672,6 +19672,280 @@ struct llama_model * llama_load_model_from_file(
     }
 
     return model;
+}
+
+struct llama_model_saver {
+    struct gguf_context * gguf_ctx = nullptr;
+    const struct llama_model & model;
+    const struct LLM_KV llm_kv;
+
+    llama_model_saver(const struct llama_model & model) : model(model), llm_kv(model.arch) {
+        gguf_ctx = gguf_init_empty();
+    }
+
+    ~llama_model_saver() {
+        gguf_free(gguf_ctx);
+    }
+
+    void add_kv(const enum llm_kv key, const uint32_t value) {
+        gguf_set_val_u32(gguf_ctx, llm_kv(key).c_str(), value);
+    }
+
+    void add_kv(const enum llm_kv key, const int32_t value) {
+        gguf_set_val_i32(gguf_ctx, llm_kv(key).c_str(), value);
+    }
+
+    void add_kv(const enum llm_kv key, const float value) {
+        gguf_set_val_f32(gguf_ctx, llm_kv(key).c_str(), value);
+    }
+
+    void add_kv(const enum llm_kv key, const bool value) {
+        gguf_set_val_bool(gguf_ctx, llm_kv(key).c_str(), value);
+    }
+
+    void add_kv(const enum llm_kv key, const char * value) {
+        gguf_set_val_str(gguf_ctx, llm_kv(key).c_str(), value);
+    }
+
+    void add_kv(const enum llm_kv key, const char value) {
+        GGML_UNUSED(key);
+        GGML_UNUSED(value);
+        GGML_ABORT("fatal error"); // this should never be called, only needed to make the template below compile
+    }
+
+    template <typename Container>
+    void add_kv(const enum llm_kv key, const Container & value, const bool per_layer = false) {
+        const size_t n_values = per_layer ? size_t(model.hparams.n_layer) : value.size();
+        GGML_ASSERT(n_values <= value.size());
+
+        if (n_values == 0) {
+            return;
+        }
+
+        if (per_layer) {
+            bool all_values_the_same = true;
+            for (size_t i = 1; i < n_values; ++i) {
+                if (value[i] != value[0]) {
+                    all_values_the_same = false;
+                    break;
+                }
+            }
+            if (all_values_the_same) {
+                add_kv(key, value[0]);
+                return;
+            }
+        }
+
+        if (std::is_same<typename Container::value_type, uint8_t>::value) {
+            gguf_set_arr_data(gguf_ctx, llm_kv(key).c_str(), GGUF_TYPE_UINT8, value.data(), n_values);
+        } else if (std::is_same<typename Container::value_type, int8_t>::value) {
+            gguf_set_arr_data(gguf_ctx, llm_kv(key).c_str(), GGUF_TYPE_INT8, value.data(), n_values);
+        } else if (std::is_same<typename Container::value_type, uint32_t>::value) {
+            gguf_set_arr_data(gguf_ctx, llm_kv(key).c_str(), GGUF_TYPE_UINT32, value.data(), n_values);
+        } else if (std::is_same<typename Container::value_type, int32_t>::value) {
+            gguf_set_arr_data(gguf_ctx, llm_kv(key).c_str(), GGUF_TYPE_INT32, value.data(), n_values);
+        } else if (std::is_same<typename Container::value_type, float>::value) {
+            gguf_set_arr_data(gguf_ctx, llm_kv(key).c_str(), GGUF_TYPE_FLOAT32, value.data(), n_values);
+        } else if (std::is_same<Container, std::string>::value) {
+            gguf_set_val_str(gguf_ctx, llm_kv(key).c_str(), reinterpret_cast<const char *>(value.data()));
+        } else {
+            GGML_ABORT("fatal error");
+        }
+    }
+
+    void add_kv(const enum llm_kv key, const std::vector<std::string> & value) {
+        std::vector<const char *> tmp(value.size());
+        for (size_t i = 0; i < value.size(); ++i) {
+            tmp[i] = value[i].c_str();
+        }
+        gguf_set_arr_str(gguf_ctx, llm_kv(key).c_str(), tmp.data(), tmp.size());
+    }
+
+    void add_tensor(const struct ggml_tensor * tensor) {
+        if (!tensor) {
+            return;
+        }
+        gguf_add_tensor(gguf_ctx, tensor);
+    }
+
+    void add_kv_from_model() {
+        const llama_hparams & hparams = model.hparams;
+        const llama_vocab   & vocab   = model.vocab;
+
+        const int32_t n_vocab = vocab.n_vocab;
+        std::vector<std::string> tokens(n_vocab);
+        std::vector<float>       scores(n_vocab);
+        std::vector<int32_t>     token_types(n_vocab);
+
+        for (int32_t i = 0; i < n_vocab; ++i) {
+            const llama_vocab::token_data & token_data = vocab.id_to_token[i];
+
+            tokens[i] = token_data.text;
+            scores[i] = token_data.score;
+
+            switch(token_data.attr) {
+                case LLAMA_TOKEN_ATTR_UNKNOWN:      token_types[i] = LLAMA_TOKEN_TYPE_UNKNOWN;      break;
+                case LLAMA_TOKEN_ATTR_UNUSED:       token_types[i] = LLAMA_TOKEN_TYPE_UNUSED;       break;
+                case LLAMA_TOKEN_ATTR_NORMAL:       token_types[i] = LLAMA_TOKEN_TYPE_NORMAL;       break;
+                case LLAMA_TOKEN_ATTR_CONTROL:      token_types[i] = LLAMA_TOKEN_TYPE_CONTROL;      break;
+                case LLAMA_TOKEN_ATTR_USER_DEFINED: token_types[i] = LLAMA_TOKEN_TYPE_USER_DEFINED; break;
+                case LLAMA_TOKEN_ATTR_BYTE:         token_types[i] = LLAMA_TOKEN_TYPE_BYTE;         break;
+                case LLAMA_TOKEN_ATTR_UNDEFINED:
+                default:                            token_types[i] = LLAMA_TOKEN_TYPE_UNDEFINED;    break;
+            }
+        }
+
+        // add_kv(LLM_KV_GENERAL_TYPE,                      ???);
+        add_kv(LLM_KV_GENERAL_ARCHITECTURE,              llama_model_arch_name(model.arch));
+        // add_kv(LLM_KV_GENERAL_QUANTIZATION_VERSION,      ???);
+        // add_kv(LLM_KV_GENERAL_ALIGNMENT,                 ???);
+        add_kv(LLM_KV_GENERAL_NAME,                      model.name);
+        // add_kv(LLM_KV_GENERAL_AUTHOR,                    ???);
+        // add_kv(LLM_KV_GENERAL_VERSION,                   ???);
+        // add_kv(LLM_KV_GENERAL_URL,                       ???);
+        // add_kv(LLM_KV_GENERAL_DESCRIPTION,               ???);
+        // add_kv(LLM_KV_GENERAL_LICENSE,                   ???);
+        // add_kv(LLM_KV_GENERAL_SOURCE_URL,                ???);
+        // add_kv(LLM_KV_GENERAL_SOURCE_HF_REPO,            ???);
+
+        add_kv(LLM_KV_VOCAB_SIZE,                        hparams.n_vocab);
+        add_kv(LLM_KV_CONTEXT_LENGTH,                    hparams.n_ctx_train);
+        add_kv(LLM_KV_EMBEDDING_LENGTH,                  hparams.n_embd);
+        add_kv(LLM_KV_BLOCK_COUNT,                       hparams.n_layer);
+        add_kv(LLM_KV_LEADING_DENSE_BLOCK_COUNT,         hparams.n_layer_dense_lead);
+        add_kv(LLM_KV_FEED_FORWARD_LENGTH,               hparams.n_ff_arr, true);
+        add_kv(LLM_KV_EXPERT_FEED_FORWARD_LENGTH,        hparams.n_ff_exp);
+        add_kv(LLM_KV_EXPERT_SHARED_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
+        add_kv(LLM_KV_USE_PARALLEL_RESIDUAL,             hparams.use_par_res);
+        // add_kv(LLM_KV_TENSOR_DATA_LAYOUT,                ???);
+        add_kv(LLM_KV_EXPERT_COUNT,                      hparams.n_expert);
+        add_kv(LLM_KV_EXPERT_USED_COUNT,                 hparams.n_expert_used);
+        add_kv(LLM_KV_EXPERT_SHARED_COUNT,               hparams.n_expert_shared);
+        add_kv(LLM_KV_EXPERT_WEIGHTS_SCALE,              hparams.expert_weights_scale);
+        add_kv(LLM_KV_POOLING_TYPE,                      uint32_t(hparams.pooling_type));
+        add_kv(LLM_KV_LOGIT_SCALE,                       hparams.f_logit_scale);
+        add_kv(LLM_KV_DECODER_START_TOKEN_ID,            hparams.dec_start_token_id);
+        add_kv(LLM_KV_ATTN_LOGIT_SOFTCAPPING,            hparams.f_attn_logit_softcapping);
+        add_kv(LLM_KV_FINAL_LOGIT_SOFTCAPPING,           hparams.f_final_logit_softcapping);
+        add_kv(LLM_KV_SWIN_NORM,                         hparams.swin_norm);
+        add_kv(LLM_KV_RESCALE_EVERY_N_LAYERS,            hparams.rescale_every_n_layers);
+        add_kv(LLM_KV_TIME_MIX_EXTRA_DIM,                hparams.time_mix_extra_dim);
+        add_kv(LLM_KV_TIME_DECAY_EXTRA_DIM,              hparams.time_decay_extra_dim);
+        add_kv(LLM_KV_RESIDUAL_SCALE,                    hparams.f_residual_scale);
+        add_kv(LLM_KV_EMBEDDING_SCALE,                   hparams.f_embedding_scale);
+
+        add_kv(LLM_KV_ATTENTION_HEAD_COUNT,              hparams.n_head_arr, true);
+        add_kv(LLM_KV_ATTENTION_HEAD_COUNT_KV,           hparams.n_head_kv_arr, true);
+        add_kv(LLM_KV_ATTENTION_MAX_ALIBI_BIAS,          hparams.f_max_alibi_bias);
+        add_kv(LLM_KV_ATTENTION_CLAMP_KQV,               hparams.f_clamp_kqv);
+        add_kv(LLM_KV_ATTENTION_KEY_LENGTH,              hparams.n_embd_head_k);
+        add_kv(LLM_KV_ATTENTION_VALUE_LENGTH,            hparams.n_embd_head_v);
+        add_kv(LLM_KV_ATTENTION_LAYERNORM_EPS,           hparams.f_norm_eps);
+        add_kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,       hparams.f_norm_rms_eps);
+        add_kv(LLM_KV_ATTENTION_CAUSAL,                  hparams.causal_attn);
+        add_kv(LLM_KV_ATTENTION_Q_LORA_RANK,             hparams.n_lora_q);
+        add_kv(LLM_KV_ATTENTION_KV_LORA_RANK,            hparams.n_lora_kv);
+        add_kv(LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT,  hparams.n_rel_attn_bkts);
+        add_kv(LLM_KV_ATTENTION_SLIDING_WINDOW,          hparams.n_swa);
+        add_kv(LLM_KV_ATTENTION_SCALE,                   hparams.f_attention_scale);
+
+        add_kv(LLM_KV_ROPE_DIMENSION_COUNT,              hparams.n_rot);
+        add_kv(LLM_KV_ROPE_FREQ_BASE,                    hparams.rope_freq_base_train);
+        // add_kv(LLM_KV_ROPE_SCALE_LINEAR,                 hparams.rope_freq_scale_train == 1.0f ? 0.0f : 1.0f/hparams.rope_freq_scale_train);
+        add_kv(LLM_KV_ROPE_SCALING_TYPE,                 LLAMA_ROPE_SCALING_TYPES.at(hparams.rope_scaling_type_train));
+        add_kv(LLM_KV_ROPE_SCALING_FACTOR,               hparams.rope_freq_scale_train == 1.0f ? 0.0f : 1.0f/hparams.rope_freq_scale_train);
+        add_kv(LLM_KV_ROPE_SCALING_ATTN_FACTOR,          hparams.rope_attn_factor);
+        add_kv(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,         hparams.n_ctx_orig_yarn);
+        add_kv(LLM_KV_ROPE_SCALING_FINETUNED,            hparams.rope_finetuned);
+        add_kv(LLM_KV_ROPE_SCALING_YARN_LOG_MUL,         hparams.rope_yarn_log_mul);
+
+        // split files are not supported
+        // add_kv(LLM_KV_SPLIT_NO,                          ???);
+        // add_kv(LLM_KV_SPLIT_COUNT,                       ???);
+        // add_kv(LLM_KV_SPLIT_TENSORS_COUNT,               ???);
+
+        add_kv(LLM_KV_SSM_INNER_SIZE,                    hparams.ssm_d_inner);
+        add_kv(LLM_KV_SSM_CONV_KERNEL,                   hparams.ssm_d_conv);
+        add_kv(LLM_KV_SSM_STATE_SIZE,                    hparams.ssm_d_state);
+        add_kv(LLM_KV_SSM_TIME_STEP_RANK,                hparams.ssm_dt_rank);
+        add_kv(LLM_KV_SSM_DT_B_C_RMS,                    hparams.ssm_dt_b_c_rms);
+
+        add_kv(LLM_KV_WKV_HEAD_SIZE,                     hparams.wkv_head_size);
+
+        add_kv(LLM_KV_TOKENIZER_MODEL,                   vocab.tokenizer_model);
+        add_kv(LLM_KV_TOKENIZER_PRE,                     vocab.tokenizer_pre);
+        add_kv(LLM_KV_TOKENIZER_LIST,                    tokens);
+        add_kv(LLM_KV_TOKENIZER_TOKEN_TYPE,              token_types);
+        add_kv(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,        hparams.n_vocab_type);
+        add_kv(LLM_KV_TOKENIZER_SCORES,                  scores);
+        // add_kv(LLM_KV_TOKENIZER_MERGES,                  ???);
+        // FIXME llama_token is type i32 but when reading in a GGUF file u32 is expected
+        add_kv(LLM_KV_TOKENIZER_BOS_ID,                  uint32_t(vocab.special_bos_id));
+        add_kv(LLM_KV_TOKENIZER_EOS_ID,                  uint32_t(vocab.special_eos_id));
+        add_kv(LLM_KV_TOKENIZER_EOT_ID,                  uint32_t(vocab.special_eot_id));
+        add_kv(LLM_KV_TOKENIZER_EOM_ID,                  uint32_t(vocab.special_eom_id));
+        add_kv(LLM_KV_TOKENIZER_UNK_ID,                  uint32_t(vocab.special_unk_id));
+        add_kv(LLM_KV_TOKENIZER_SEP_ID,                  uint32_t(vocab.special_sep_id));
+        add_kv(LLM_KV_TOKENIZER_PAD_ID,                  uint32_t(vocab.special_pad_id));
+        add_kv(LLM_KV_TOKENIZER_CLS_ID,                  uint32_t(vocab.special_cls_id));
+        add_kv(LLM_KV_TOKENIZER_MASK_ID,                 uint32_t(vocab.special_mask_id));
+        add_kv(LLM_KV_TOKENIZER_ADD_BOS,                 vocab.tokenizer_add_bos);
+        add_kv(LLM_KV_TOKENIZER_ADD_EOS,                 vocab.tokenizer_add_eos);
+        add_kv(LLM_KV_TOKENIZER_ADD_PREFIX,              vocab.tokenizer_add_space_prefix);
+        add_kv(LLM_KV_TOKENIZER_REMOVE_EXTRA_WS,         vocab.tokenizer_remove_extra_whitespaces);
+        add_kv(LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP,    vocab.precompiled_charsmap);
+        // add_kv(LLM_KV_TOKENIZER_HF_JSON,                 ???);
+        // add_kv(LLM_KV_TOKENIZER_RWKV,                    ???);
+        add_kv(LLM_KV_TOKENIZER_FIM_PRE_ID,              uint32_t(vocab.special_fim_pre_id));
+        add_kv(LLM_KV_TOKENIZER_FIM_SUF_ID,              uint32_t(vocab.special_fim_suf_id));
+        add_kv(LLM_KV_TOKENIZER_FIM_MID_ID,              uint32_t(vocab.special_fim_mid_id));
+        add_kv(LLM_KV_TOKENIZER_FIM_PAD_ID,              uint32_t(vocab.special_fim_pad_id));
+        add_kv(LLM_KV_TOKENIZER_FIM_REP_ID,              uint32_t(vocab.special_fim_rep_id));
+        add_kv(LLM_KV_TOKENIZER_FIM_SEP_ID,              uint32_t(vocab.special_fim_sep_id));
+
+        // LoRA support not implemented
+        // add_kv(LLM_KV_ADAPTER_TYPE,                      ???);
+        // add_kv(LLM_KV_ADAPTER_LORA_ALPHA,                ???);
+
+        // deprecated
+        // add_kv(LLM_KV_TOKENIZER_PREFIX_ID,               ???);
+        // add_kv(LLM_KV_TOKENIZER_SUFFIX_ID,               ???);
+        // add_kv(LLM_KV_TOKENIZER_MIDDLE_ID,               ???);
+    }
+
+    void add_tensors_from_model() {
+        add_tensor(model.tok_embd);
+        add_tensor(model.type_embd);
+        add_tensor(model.pos_embd);
+        add_tensor(model.tok_norm);
+        add_tensor(model.tok_norm_b);
+        add_tensor(model.output_norm);
+        add_tensor(model.output_norm_b);
+        add_tensor(model.output);
+        add_tensor(model.output_b);
+        add_tensor(model.output_norm_enc);
+        add_tensor(model.cls);
+        add_tensor(model.cls_b);
+        add_tensor(model.cls_out);
+        add_tensor(model.cls_out_b);
+
+        for (const struct llama_layer & layer : model.layers) {
+            for (size_t i = 0; i < sizeof(layer)/sizeof(struct ggml_tensor *); ++i) {
+                add_tensor(reinterpret_cast<const struct ggml_tensor * const *>(&layer)[i]);
+            }
+        }
+    }
+
+    void save(const std::string & path_model) {
+        gguf_write_to_file(gguf_ctx, path_model.c_str(), false);
+    }
+};
+
+void llama_save_model_to_file(const struct llama_model * model, const char * path_model) {
+    llama_model_saver ms(*model);
+    ms.add_kv_from_model();
+    ms.add_tensors_from_model();
+    ms.save(path_model);
 }
 
 void llama_free_model(struct llama_model * model) {
@@ -22362,40 +22636,25 @@ void llama_log_callback_default(ggml_log_level level, const char * text, void * 
 // training
 //
 
-ggml_opt_dataset_t llama_opt_dataset_init(struct llama_context * ctx, const llama_token * tokens, int64_t n_tokens, int32_t stride) {
-    const int32_t ne_datapoint = llama_n_ctx(ctx);
-    const int64_t ndata        = (n_tokens - ne_datapoint - 1) / stride;
-    ggml_opt_dataset_t result = ggml_opt_dataset_init(
-        GGML_TYPE_I32, GGML_TYPE_I32, ne_datapoint, ne_datapoint, ndata, /*ndata_shard =*/ 1);
-
-    llama_token * data   = (llama_token *) ggml_opt_dataset_data(result)->data;
-    llama_token * labels = (llama_token *) ggml_opt_dataset_labels(result)->data;
-
-    for (int64_t idata = 0; idata < ndata; ++idata) {
-        memcpy(data   + idata*ne_datapoint, tokens + idata*stride + 0, ne_datapoint*sizeof(llama_token));
-        memcpy(labels + idata*ne_datapoint, tokens + idata*stride + 1, ne_datapoint*sizeof(llama_token));
-    }
-
-    return result;
-}
-
 static struct ggml_opt_optimizer_params llama_get_default_optimizer_params(void * userdata) {
     struct ggml_opt_optimizer_params result = ggml_opt_get_default_optimizer_params(userdata);
     result.adamw.alpha = 1e-6f;
     return result;
 }
 
-void llama_opt_init(struct llama_context * lctx) {
+void llama_opt_init(struct llama_context * lctx, struct llama_model * model, struct llama_opt_params lopt_params) {
     GGML_ASSERT(!lctx->opt_ctx);
-    const uint32_t n_ctx    = llama_n_ctx(lctx);
-    const uint32_t n_batch  = std::min(llama_n_batch(lctx),  n_ctx);
-    const uint32_t n_ubatch = std::min(llama_n_ubatch(lctx), n_batch);
-    GGML_ASSERT(n_ctx   % n_batch  == 0);
-    GGML_ASSERT(n_batch % n_ubatch == 0);
+    model->hparams.n_ctx_train = lopt_params.n_ctx_train > 0 ? lopt_params.n_ctx_train : llama_n_ctx(lctx);
+    const uint32_t n_batch     = std::min(llama_n_batch(lctx),  model->hparams.n_ctx_train);
+    const uint32_t n_ubatch    = std::min(llama_n_ubatch(lctx), n_batch);
+    GGML_ASSERT(model->hparams.n_ctx_train % n_batch  == 0);
+    GGML_ASSERT(n_batch                    % n_ubatch == 0);
 
     ggml_opt_params opt_params = ggml_opt_default_params(lctx->sched.get(), nullptr, nullptr, nullptr, GGML_OPT_LOSS_TYPE_CROSS_ENTROPY);
-    opt_params.opt_period = n_batch / n_ubatch;
-    opt_params.get_opt_pars = llama_get_default_optimizer_params;
+    opt_params.opt_period      = n_batch / n_ubatch;
+    opt_params.get_opt_pars    = lopt_params.get_opt_pars;
+    opt_params.get_opt_pars_ud = lopt_params.get_opt_pars_ud;
+
     lctx->opt_ctx = ggml_opt_init(opt_params);
 }
 
@@ -22412,9 +22671,9 @@ static void llama_opt_epoch_iter(
         const int64_t                    ndata_in_loop,
         const int64_t                    t_loop_start) {
     GGML_ASSERT(lctx->opt_ctx);
-    const uint32_t n_ctx    = llama_n_ctx(lctx);
-    const uint32_t n_batch  = std::min(lctx->cparams.n_batch,  n_ctx);
-    const uint32_t n_ubatch = std::min(lctx->cparams.n_ubatch, n_batch);
+    const uint32_t n_ctx    = llama_n_ctx_train(&lctx->model);
+    const uint32_t n_batch  = std::min(llama_n_batch(lctx),  n_ctx);
+    const uint32_t n_ubatch = std::min(llama_n_ubatch(lctx), n_batch);
 
     lctx->is_encoding = false;
     llama_kv_cache_clear(lctx);

@@ -413,6 +413,10 @@ extern "C" {
                              const char * path_model,
               struct llama_model_params   params);
 
+    LLAMA_API void llama_save_model_to_file(
+            const struct llama_model * model,
+                        const char * path_model);
+
     LLAMA_API void llama_free_model(struct llama_model * model);
 
     // TODO: rename to llama_init_from_model
@@ -1255,9 +1259,14 @@ extern "C" {
     // training
     //
 
-    LLAMA_API ggml_opt_dataset_t llama_opt_dataset_init(struct llama_context * ctx, const llama_token * tokens, int64_t n_tokens, int32_t stride);
+    struct llama_opt_params {
+        uint32_t n_ctx_train; // assumed context size post training, use context size specified in llama_context if 0
 
-    LLAMA_API void llama_opt_init(struct llama_context * lctx);
+        ggml_opt_get_optimizer_params get_opt_pars; // callback for calculating optimizer parameters
+        void * get_opt_pars_ud;                     // userdata for calculating optimizer parameters
+    };
+
+    LLAMA_API void llama_opt_init(struct llama_context * lctx, struct llama_model * model, struct llama_opt_params lopt_params);
 
     LLAMA_API void llama_opt_epoch(
             struct llama_context    * lctx,

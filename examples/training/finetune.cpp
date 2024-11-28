@@ -79,24 +79,35 @@ int main(int argc, char ** argv) {
     constexpr float val_split = 0.05f;
 
     std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, true);
-    ggml_opt_dataset_t dataset = llama_opt_dataset_init(ctx, tokens.data(), tokens.size(), llama_n_ctx(ctx)/2);
-    llama_opt_init(ctx);
+    ggml_opt_dataset_t dataset = common_opt_dataset_init(ctx, tokens, llama_n_ctx(ctx)/2);
+
+    struct ggml_opt_optimizer_params optimizer_params = ggml_opt_get_default_optimizer_params(nullptr);
+    optimizer_params.adamw.alpha = 1e-6f; // learning rate
+
+    struct llama_opt_params lopt_params {
+        /*n_ctx_train     =*/ 0,
+        /*get_opt_pars    =*/ ggml_opt_get_constant_optimizer_params,
+        /*get_opt_pars_ud =*/ &optimizer_params,
+    };
+    llama_opt_init(ctx, model, lopt_params);
+
     const int64_t idata_split = ggml_opt_dataset_ndata(dataset) * (1.0f - val_split);
 
-    while (true) {
-        ggml_opt_result_t result_train = ggml_opt_result_init();
-        ggml_opt_result_t result_eval  = ggml_opt_result_init();
+    ggml_opt_result_t result_train = ggml_opt_result_init();
+    ggml_opt_result_t result_eval  = ggml_opt_result_init();
 
+    for (int epoch = 0; epoch < 1; ++epoch) {
         llama_opt_epoch(ctx, dataset, result_train, result_eval, idata_split,
             ggml_opt_epoch_callback_progress_bar, ggml_opt_epoch_callback_progress_bar);
         fprintf(stderr, "\n");
 
-        ggml_opt_result_free(result_train);
-        ggml_opt_result_free(result_eval);
+        ggml_opt_result_reset(result_train);
+        ggml_opt_result_reset(result_eval);
     }
+    ggml_opt_result_free(result_train);
+    ggml_opt_result_free(result_eval);
 
-    LOG("\n");
-    llama_perf_context_print(ctx);
+    llama_save_model_to_file(model, "finetuned-model.gguf");
 
     llama_free(ctx);
     llama_free_model(model);

@@ -90,9 +90,12 @@ extern "C" {
     // userdata can be used to pass arbitrary data
     typedef struct ggml_opt_optimizer_params (*ggml_opt_get_optimizer_params)(void * userdata);
 
-    // returns the default optimizer params (constant)
+    // returns the default optimizer params (constant, hard-coded values)
     // userdata is not used
     GGML_API struct ggml_opt_optimizer_params ggml_opt_get_default_optimizer_params(void * userdata);
+
+    // casts userdata to ggml_opt_optimizer_params and returns it
+    GGML_API struct ggml_opt_optimizer_params ggml_opt_get_constant_optimizer_params(void * userdata);
 
     // parameters for initializing a new optimization context
     struct ggml_opt_params {

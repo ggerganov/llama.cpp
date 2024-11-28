@@ -229,6 +229,10 @@ struct ggml_opt_optimizer_params ggml_opt_get_default_optimizer_params(void * us
     return result;
 }
 
+struct ggml_opt_optimizer_params ggml_opt_get_constant_optimizer_params(void * userdata) {
+    return *((struct ggml_opt_optimizer_params *) userdata);
+}
+
 struct ggml_opt_params ggml_opt_default_params(
         ggml_backend_sched_t      backend_sched,
         struct ggml_context     * ctx_compute,
