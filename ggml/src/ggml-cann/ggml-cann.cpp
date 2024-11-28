@@ -1738,23 +1738,14 @@ static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
         }
         case GGML_OP_ROPE: {
             // TODO: with ops-test v == 1
-            float * freq_scale = (float*)((int32_t*)op->op_params + 6);
             float * ext_factor = (float*)((int32_t*)op->op_params + 7);
             float * attn_factor = (float*)((int32_t*)op->op_params + 8);
-            // TODO: with freq_factors
-            if (op->src[2] != NULL) {
-                return false;
-            }
             // TODO: n_dims <= ne0
             if (op->src[0]->ne[0] != op->op_params[1]) {
                 return false;
             }
             // TODO: ext_factor != 0
             if (*ext_factor != 0) {
-                return false;
-            }
-            // TODO: freq_scale != 1
-            if (*freq_scale != 1) {
                 return false;
             }
             // TODO: attn_factor != 1
