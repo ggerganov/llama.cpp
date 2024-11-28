@@ -23,11 +23,11 @@ void main() {
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
-    uint it_size = gl_WorkGroupSize.x/16;
-
+    // 16 threads are used to process each block
+    const uint it_size = gl_WorkGroupSize.x/16;
     const uint tid = gl_LocalInvocationID.x;
-    const uint itid = tid/it_size;  // 0...16
-    const uint ix  = tid%it_size;
+    const uint itid = tid%16;  // 0...16
+    const uint ix  = tid/16;
 
     const uint step = 8;
 
