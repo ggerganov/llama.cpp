@@ -8,7 +8,6 @@ import os
 import re
 import json
 import sys
-import threading
 import requests
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -161,25 +160,11 @@ class ServerProcess:
         self.process = subprocess.Popen(
             [str(arg) for arg in [server_path, *server_args]],
             creationflags=flags,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=sys.stdout,
+            stderr=sys.stdout,
             env={**os.environ, "LLAMA_CACHE": "tmp"},
         )
         server_instances.add(self)
-
-        def server_log(in_stream, out_stream):
-            for line in iter(in_stream.readline, b""):
-                print(line.decode("utf-8"), end="", file=out_stream)
-
-        thread_stdout = threading.Thread(
-            target=server_log, args=(self.process.stdout, sys.stdout), daemon=True
-        )
-        thread_stdout.start()
-
-        thread_stderr = threading.Thread(
-            target=server_log, args=(self.process.stderr, sys.stderr), daemon=True
-        )
-        thread_stderr.start()
 
         print(f"server pid={self.process.pid}, pytest pid={os.getpid()}")
 
@@ -319,7 +304,6 @@ class ServerPreset:
         server.model_hf_repo = "ggml-org/models"
         server.model_hf_file = "jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
         server.model_alias = "jina-reranker"
-        server.model_file = "./tmp/jina-reranker-v1-tiny-en.gguf"
         server.n_ctx = 512
         server.n_batch = 512
         server.n_slots = 1
