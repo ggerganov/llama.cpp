@@ -17470,44 +17470,21 @@ static enum ggml_status llama_graph_compute(
     return status;
 }
 
-// decode a batch of tokens by evaluating the transformer
-// in case of unsuccessful decoding (error or warning),
-// the kv_cache state will be returned to its original state
-// (for non-recurrent models) or cleaned (for recurrent models)
-//
-//   - lctx:         llama context
-//   - inp_batch:    batch to evaluate
-//   - ubatch_build: If not null, write the first constructed llama_ubatch to this pointer and return.
-//                   Used to hijack the forward path construction code for training.
-//
-// return 0 on success
-// return positive int on warning
-// return negative int on error
-//
-static int llama_decode_internal(
-         llama_context & lctx,
-           llama_batch   inp_batch,
-          llama_ubatch * ubatch_build,
-              uint32_t   iub) {
-
-    lctx.is_encoding = false;
-
-    if (inp_batch.n_tokens == 0) {
-        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
-        return -1;
-    }
-
-    // temporary allocate memory for the input batch if needed
-    llama_batch_allocr batch_allocr(lctx, inp_batch);
-    const llama_batch & batch = batch_allocr.batch;
-    const uint32_t n_tokens_all = batch.n_tokens;
-
+static int llama_prepare_sbatch(
+        llama_context     & lctx,
+        const llama_batch & batch,
+        uint32_t          & n_outputs) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
-    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
+    const uint32_t n_tokens_all = batch.n_tokens;
+    const  int64_t n_embd       = hparams.n_embd;
 
+    // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
+    const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
+
+    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
             if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
@@ -17516,30 +17493,10 @@ static int llama_decode_internal(
             }
         }
     }
-
     GGML_ASSERT(n_tokens_all <= cparams.n_batch);
-
     GGML_ASSERT((cparams.causal_attn || cparams.n_ubatch >= n_tokens_all) && "non-causal attention requires n_ubatch >= n_tokens");
 
-    if (lctx.t_compute_start_us == 0) {
-        lctx.t_compute_start_us = ggml_time_us();
-    }
     lctx.n_queued_tokens += n_tokens_all;
-
-    auto & kv_self = lctx.kv_self;
-    llama_kv_slot_restorer kv_slot_restorer(kv_self);
-
-    const int64_t n_embd  = hparams.n_embd;
-    const int64_t n_vocab = hparams.n_vocab;
-
-    uint32_t n_outputs = 0;
-    uint32_t n_outputs_prev = 0;
-
-    const auto n_ubatch = cparams.n_ubatch;
-
-    // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
-    const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
-
     lctx.embd_seq.clear();
 
     // count outputs
@@ -17555,7 +17512,7 @@ static int llama_decode_internal(
     }
 
     lctx.sbatch.from_batch(batch, n_embd,
-        /* simple_split */ !kv_self.recurrent,
+        /* simple_split */ !lctx.kv_self.recurrent,
         /* logits_all   */ n_outputs == n_tokens_all);
 
     // reserve output buffer
@@ -17564,83 +17521,151 @@ static int llama_decode_internal(
         return -2;
     };
 
+    return 0;
+}
+
+static int llama_prepare_ubatch(
+        llama_context          & lctx,
+        llama_kv_slot_restorer & kv_slot_restorer,
+        llama_ubatch           & ubatch,
+        const uint32_t           n_outputs,
+        const uint32_t           n_tokens_all) {
+    GGML_ASSERT(lctx.sbatch.n_tokens > 0);
+
+    auto       & kv_self = lctx.kv_self;
+    const auto & cparams = lctx.cparams;
+    const auto & hparams = lctx.model.hparams;
+
+    // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
+    const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
+
+    if (lctx.kv_self.recurrent) {
+        if (embd_pooled) {
+            // Pooled embeddings cannot be split across ubatches (yet)
+            ubatch = lctx.sbatch.split_seq(cparams.n_ubatch);
+        } else {
+            // recurrent model architectures are easier to implement
+            // with equal-length sequences
+            ubatch = lctx.sbatch.split_equal(cparams.n_ubatch);
+        }
+    } else {
+        ubatch = lctx.sbatch.split_simple(cparams.n_ubatch);
+    }
+
+    // count the outputs in this u_batch
+    {
+        int32_t n_outputs_new = 0;
+
+        if (n_outputs == n_tokens_all) {
+            n_outputs_new = ubatch.n_tokens;
+        } else {
+            GGML_ASSERT(ubatch.output);
+            for (uint32_t i = 0; i < ubatch.n_tokens; i++) {
+                n_outputs_new += (int32_t) (ubatch.output[i] != 0);
+            }
+        }
+
+        // needs to happen before the graph is built
+        lctx.n_outputs = n_outputs_new;
+    }
+
+    // non-causal masks do not use the KV cache
+    if (hparams.causal_attn) {
+        llama_kv_cache_update(&lctx);
+
+        // if we have enough unused cells before the current head ->
+        //   better to start searching from the beginning of the cache, hoping to fill it
+        if (kv_self.head > kv_self.used + 2*ubatch.n_tokens) {
+            kv_self.head = 0;
+        }
+
+        const auto slot = llama_kv_cache_find_slot(kv_self, ubatch);
+        if (!slot) {
+            return 1;
+        }
+        kv_slot_restorer.save(slot);
+
+        if (!kv_self.recurrent) {
+            // a heuristic, to avoid attending the full cache if it is not yet utilized
+            // after enough generations, the benefit from this heuristic disappears
+            // if we start defragmenting the cache, the benefit from this will be more important
+            const uint32_t pad = llama_kv_cache_get_padding(cparams);
+            kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self), pad)));
+            //kv_self.n = llama_kv_cache_cell_max(kv_self);
+        }
+    }
+
+    return 0;
+}
+
+// decode a batch of tokens by evaluating the transformer
+// in case of unsuccessful decoding (error or warning),
+// the kv_cache state will be returned to its original state
+// (for non-recurrent models) or cleaned (for recurrent models)
+//
+//   - lctx:      llama context
+//   - inp_batch: batch to evaluate
+//
+// return 0 on success
+// return positive int on warning
+// return negative int on error
+//
+static int llama_decode_internal(
+         llama_context & lctx,
+           llama_batch   inp_batch) {
+
+    lctx.is_encoding = false;
+
+    if (inp_batch.n_tokens == 0) {
+        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
+        return -1;
+    }
+
+    // temporary allocate memory for the input batch if needed
+    llama_batch_allocr batch_allocr(lctx, inp_batch);
+    const llama_batch & batch = batch_allocr.batch;
+
+    const auto & model   = lctx.model;
+    const auto & hparams = model.hparams;
+    const auto & cparams = lctx.cparams;
+
+    if (lctx.t_compute_start_us == 0) {
+        lctx.t_compute_start_us = ggml_time_us();
+    }
+    auto & kv_self = lctx.kv_self;
+    llama_kv_slot_restorer kv_slot_restorer(kv_self);
+
+    const int64_t n_embd  = hparams.n_embd;
+    const int64_t n_vocab = hparams.n_vocab;
+
+    uint32_t n_outputs = 0;
+    uint32_t n_outputs_prev = 0;
+
+    {
+        const int ret = llama_prepare_sbatch(lctx, batch, n_outputs);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+
     while (lctx.sbatch.n_tokens > 0) {
         llama_ubatch ubatch;
-        if (kv_self.recurrent) {
-            if (embd_pooled) {
-                // Pooled embeddings cannot be split across ubatches (yet)
-                ubatch = lctx.sbatch.split_seq(n_ubatch);
-            } else {
-                // recurrent model architectures are easier to implement
-                // with equal-length sequences
-                ubatch = lctx.sbatch.split_equal(n_ubatch);
-            }
-        } else {
-            ubatch = lctx.sbatch.split_simple(n_ubatch);
-        }
-        const uint32_t n_tokens = ubatch.n_tokens;
-
-        // count the outputs in this u_batch
         {
-            int32_t n_outputs_new = 0;
-
-            if (n_outputs == n_tokens_all) {
-                n_outputs_new = n_tokens;
-            } else {
-                GGML_ASSERT(ubatch.output);
-                for (uint32_t i = 0; i < n_tokens; i++) {
-                    n_outputs_new += (int32_t) (ubatch.output[i] != 0);
-                }
+            const int ret = llama_prepare_ubatch(lctx, kv_slot_restorer, ubatch, n_outputs, batch.n_tokens);
+            if (ret != 0) {
+                return ret;
             }
-
-            // needs to happen before the graph is built
-            lctx.n_outputs = n_outputs_new;
         }
 
-        int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
-        ggml_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
+        const int         n_threads  = ubatch.n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+        ggml_threadpool_t threadpool = ubatch.n_tokens == 1 ? lctx.threadpool   : lctx.threadpool_batch;
 
         GGML_ASSERT(n_threads > 0);
-
-        // non-causal masks do not use the KV cache
-        if (hparams.causal_attn && (!ubatch_build || iub == 0)) {
-            llama_kv_cache_update(&lctx);
-
-            // if we have enough unused cells before the current head ->
-            //   better to start searching from the beginning of the cache, hoping to fill it
-            if (kv_self.head > kv_self.used + 2*n_tokens) {
-                kv_self.head = 0;
-            }
-
-            const auto slot = llama_kv_cache_find_slot(kv_self, ubatch);
-            if (!slot) {
-                return 1;
-            }
-            kv_slot_restorer.save(slot);
-
-            if (!kv_self.recurrent) {
-                // a heuristic, to avoid attending the full cache if it is not yet utilized
-                // after enough generations, the benefit from this heuristic disappears
-                // if we start defragmenting the cache, the benefit from this will be more important
-                const uint32_t pad = llama_kv_cache_get_padding(cparams);
-                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self), pad)));
-                //kv_self.n = llama_kv_cache_cell_max(kv_self);
-            }
-        }
 
         //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
         ggml_backend_sched_reset(lctx.sched.get());
         ggml_backend_sched_set_eval_callback(lctx.sched.get(), lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
-
-        if (ubatch_build) {
-            if (iub > 0) {
-                iub--;
-                continue;
-            }
-            *ubatch_build = ubatch;
-            return 0;
-        }
 
         ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
 
@@ -17688,7 +17713,7 @@ static int llama_decode_internal(
 
         // update the kv ring buffer
         {
-            kv_self.head += n_tokens;
+            kv_self.head += ubatch.n_tokens;
 
             // Ensure kv cache head points to a valid index.
             if (kv_self.head >= kv_self.size) {
@@ -21573,7 +21598,7 @@ int32_t llama_encode(
 int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
-    const int ret = llama_decode_internal(*ctx, batch, nullptr, 0);
+    const int ret = llama_decode_internal(*ctx, batch);
     if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
@@ -22338,7 +22363,6 @@ void llama_log_callback_default(ggml_log_level level, const char * text, void * 
 //
 
 ggml_opt_dataset_t llama_opt_dataset_init(struct llama_context * ctx, const llama_token * tokens, int64_t n_tokens, int32_t stride) {
-    const struct llama_model & model = ctx->model;
     const int32_t ne_datapoint = llama_n_ctx(ctx);
     const int64_t ndata        = (n_tokens - ne_datapoint - 1) / stride;
     ggml_opt_dataset_t result = ggml_opt_dataset_init(
@@ -22355,7 +22379,7 @@ ggml_opt_dataset_t llama_opt_dataset_init(struct llama_context * ctx, const llam
     return result;
 }
 
-struct ggml_opt_optimizer_params llama_get_default_optimizer_params(void * userdata) {
+static struct ggml_opt_optimizer_params llama_get_default_optimizer_params(void * userdata) {
     struct ggml_opt_optimizer_params result = ggml_opt_get_default_optimizer_params(userdata);
     result.adamw.alpha = 1e-6f;
     return result;
@@ -22366,6 +22390,7 @@ void llama_opt_init(struct llama_context * lctx) {
     const uint32_t n_ctx    = llama_n_ctx(lctx);
     const uint32_t n_batch  = std::min(llama_n_batch(lctx),  n_ctx);
     const uint32_t n_ubatch = std::min(llama_n_ubatch(lctx), n_batch);
+    GGML_ASSERT(n_ctx   % n_batch  == 0);
     GGML_ASSERT(n_batch % n_ubatch == 0);
 
     ggml_opt_params opt_params = ggml_opt_default_params(lctx->sched.get(), nullptr, nullptr, nullptr, GGML_OPT_LOSS_TYPE_CROSS_ENTROPY);
@@ -22374,7 +22399,7 @@ void llama_opt_init(struct llama_context * lctx) {
     lctx->opt_ctx = ggml_opt_init(opt_params);
 }
 
-void llama_opt_epoch_iter(
+static void llama_opt_epoch_iter(
         struct llama_context           * lctx,
         ggml_opt_dataset_t               dataset,
         ggml_opt_result_t                result,
@@ -22391,11 +22416,13 @@ void llama_opt_epoch_iter(
     const uint32_t n_batch  = std::min(lctx->cparams.n_batch,  n_ctx);
     const uint32_t n_ubatch = std::min(lctx->cparams.n_ubatch, n_batch);
 
+    lctx->is_encoding = false;
     llama_kv_cache_clear(lctx);
+    llama_kv_slot_restorer kv_slot_restorer(lctx->kv_self);
 
     for (uint32_t pos_ctx = 0; pos_ctx < n_ctx; pos_ctx += n_batch) {
         batch.n_tokens = n_batch;
-        for (uint32_t pos_batch = 0; pos_batch < batch.n_tokens; ++pos_batch) {
+        for (uint32_t pos_batch = 0; pos_batch < n_batch; ++pos_batch) {
             batch.token   [pos_batch]    = tokens[pos_ctx + pos_batch];
             batch.pos     [pos_batch]    = pos_ctx + pos_batch;
             batch.n_seq_id[pos_batch]    = 1;
@@ -22403,11 +22430,17 @@ void llama_opt_epoch_iter(
             batch.logits  [pos_batch]    = true;
         }
 
+        uint32_t n_outputs = 0;
+        {
+            const int err_code = llama_prepare_sbatch(*lctx, batch, n_outputs);
+            GGML_ASSERT(err_code == 0);
+        }
+
         for (uint32_t pos_batch = 0; pos_batch < n_batch; pos_batch += n_ubatch) {
             struct llama_ubatch ubatch;
             {
-                const int ret = llama_decode_internal(*lctx, batch, &ubatch, pos_batch/n_ubatch);
-                GGML_ASSERT(ret == 0);
+                const int err_code = llama_prepare_ubatch(*lctx, kv_slot_restorer, ubatch, n_outputs, batch.n_tokens);
+                GGML_ASSERT(err_code == 0);
             }
 
             struct ggml_cgraph * gf = llama_build_graph(*lctx, ubatch, false);
@@ -22457,7 +22490,6 @@ void llama_opt_epoch(
         ggml_opt_epoch_callback   callback_train,
         ggml_opt_epoch_callback   callback_eval) {
     const uint32_t n_ctx    = llama_n_ctx(lctx);
-    const uint32_t n_vocab  = llama_n_vocab(&lctx->model);
     const uint32_t n_batch  = std::min(lctx->cparams.n_batch,  n_ctx);
     const uint32_t n_ubatch = std::min(lctx->cparams.n_ubatch, n_batch);
     const  int64_t ndata    = ggml_opt_dataset_ndata(dataset);
@@ -22465,10 +22497,7 @@ void llama_opt_epoch(
     GGML_ASSERT(idata_split >= 0);
     GGML_ASSERT(idata_split <= ndata);
 
-    GGML_ASSERT(n_ctx   % n_batch  == 0);
-    GGML_ASSERT(n_batch % n_ubatch == 0);
-    const uint32_t opt_period     = n_batch / n_ubatch;
-    const uint32_t ubatch_per_ctx = n_ctx   / n_ubatch;
+    const uint32_t ubatch_per_ctx = n_ctx / n_ubatch;
 
     struct llama_batch batch = llama_batch_init(n_batch, 0, 1);
     std::vector<llama_token>        tokens(n_ctx);
