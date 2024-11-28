@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
 // SPDX-License-Identifier: MIT
 
+#define CL_TARGET_OPENCL_VERSION 220
+
+// suppress warnings in CL headers for GCC and Clang
+#pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
+#pragma GCC diagnostic ignored "-Woverlength-strings"
+
 #include "ggml-opencl2.h"
 #include "ggml-backend.h"
 #include "ggml-impl.h"
@@ -1237,10 +1243,6 @@ static void ggml_backend_opencl2_buffer_init_tensor(ggml_backend_buffer_t buffer
             tensor->extra = extra;
         }
     }
-
-    // This should be removed. Keep it to make it easier to identify the backend
-    // when debugging until backend is removed from tensor.
-    tensor->backend = GGML_BACKEND_TYPE_GPU;
 }
 
 // The optimized gemm and gemv kernels are used for large matrices without batch.
@@ -1938,18 +1940,7 @@ static struct ggml_backend_device_i ggml_backend_opencl2_device_i = {
     /* .event_synchronize    = */ NULL,
 };
 
-//
-// Backend registration
-//
-
-GGML_API ggml_backend_t ggml_backend_reg_opencl2_init(const char * params, void * user_data) {
-    return ggml_backend_opencl2_init();
-
-    GGML_UNUSED(params);
-    GGML_UNUSED(user_data);
-}
-
-// new API
+// Backend registry
 
 static const char * ggml_backend_opencl2_reg_get_name(ggml_backend_reg_t reg) {
     return "OpenCL2";
@@ -1986,6 +1977,7 @@ ggml_backend_reg_t ggml_backend_opencl2_reg(void) {
 
     if (!initialized) {
         reg = ggml_backend_reg {
+            /* .api_version = */ GGML_BACKEND_API_VERSION,
             /* .iface   = */ ggml_backend_opencl2_reg_i,
             /* .context = */ NULL,
         };
@@ -2003,6 +1995,8 @@ ggml_backend_reg_t ggml_backend_opencl2_reg(void) {
 
     return &reg;
 }
+
+GGML_BACKEND_DL_IMPL(ggml_backend_opencl2_reg)
 
 //------------------------------------------------------------------------------
 // Debugging utils
@@ -2921,13 +2915,11 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
     // init CL objects
     // <--------------------------------------------> //
     cl_int              status;
-    cl_event            evt;
     cl_image_format     img_fmt_1d;
     cl_image_desc       img_desc_1d;
     cl_buffer_region    region;
     cl_mem              A_image1d;
     cl_mem              B_image1d;
-    cl_mem              A_sub_buffer;
     cl_mem              B_sub_buffer;
     cl_mem              C_d;
     // for B transpose
@@ -3623,7 +3615,7 @@ static void ggml_cl_cpy(ggml_backend_t backend, const ggml_tensor * src0, const 
     GGML_ASSERT(src1->extra);
 
     // GGML_OP_CPY happens between src0 and src1.
-    // GGML_OP_DUP and GGML_OP_CONT happen between src0 and dst. 
+    // GGML_OP_DUP and GGML_OP_CONT happen between src0 and dst.
     UNUSED(dst);
 
     const int ne00 = src0 ? src0->ne[0] : 0;

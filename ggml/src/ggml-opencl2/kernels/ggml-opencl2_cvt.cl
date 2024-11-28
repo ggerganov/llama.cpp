@@ -11,7 +11,7 @@
 #elif defined(cl_amd_fp16)
 #pragma OPENCL EXTENSION cl_amd_fp16 : enable
 #else
-#error "Half precision floating point not supportedby OpenCL implementation on your device." 
+#error "Half precision floating point not supportedby OpenCL implementation on your device."
 #endif
 
 #ifdef cl_khr_subgroups

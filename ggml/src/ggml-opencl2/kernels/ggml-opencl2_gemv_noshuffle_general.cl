@@ -8,7 +8,7 @@
 #pragma OPENCL EXTENSION cl_qcom_extra_vector_types : enable
 #pragma OPENCL EXTENSION cl_qcom_reqd_sub_group_size : enable
 
-// assume 
+// assume
 #define QK4_0 32
 #define N_SIMDGROUP 4
 
@@ -204,7 +204,7 @@ __kernel void kernel_gemv_noshuffle(
         int ne10,               // K
         int ne12,               // 1
         int ne0,                // M
-        int ne1,                // N 
+        int ne1,                // N
         int r2,                 // 1
         int r3)
 {

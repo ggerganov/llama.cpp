@@ -6,7 +6,7 @@ if (OpenCL_FOUND)
 
     set(TARGET_NAME ggml-opencl2)
 
-    add_library(${TARGET_NAME}
+    ggml_add_backend_library(${TARGET_NAME}
                 ggml-opencl2.cpp
                 ../../include/ggml-opencl2.h)
     target_link_libraries(${TARGET_NAME} PRIVATE ggml-base ${OpenCL_LIBRARIES})

@@ -4,9 +4,9 @@
 // 16-bit transpose, loading/storing an 8x8 tile of elements
 
 kernel void kernel_transpose_16(
-    __read_only image1d_buffer_t input, 
-    __write_only image1d_buffer_t output, 
-    const uint rows, 
+    __read_only image1d_buffer_t input,
+    __write_only image1d_buffer_t output,
+    const uint rows,
     const uint cols
 ) {
 

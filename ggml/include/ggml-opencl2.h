@@ -30,8 +30,6 @@ GGML_BACKEND_API bool ggml_backend_is_opencl2(ggml_backend_t backend);
 GGML_BACKEND_API ggml_backend_buffer_type_t ggml_backend_opencl2_buffer_type(void);
 GGML_BACKEND_API ggml_backend_buffer_type_t ggml_backend_opencl2_host_buffer_type(void);
 
-GGML_BACKEND_API ggml_backend_t ggml_backend_reg_opencl2_init(const char * params, void * user_data);
-
 GGML_BACKEND_API ggml_backend_reg_t ggml_backend_opencl2_reg(void);
 
 #ifdef  __cplusplus
