@@ -1813,11 +1813,13 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
             sumv0 = vmlaq_f32(sumv0,(vcvtq_f32_s32(vmmlaq_s32((vmmlaq_s32((vmmlaq_s32((vmmlaq_s32(vdupq_n_s32(0), l0, r0)),
                                                                                 l1, r1)), l2, r2)), l3, r3))), scale);
         }
-        float32x4_t sumv1 = vextq_f32(sumv0, sumv0, 2);
+
+        float32x4_t sumv1 = vextq_f32 (sumv0, sumv0, 2);
         float32x4_t sumv2 = vzip1q_f32(sumv0, sumv1);
 
-        vst1_f32(s,      vget_low_f32(sumv2));
+        vst1_f32(s,      vget_low_f32 (sumv2));
         vst1_f32(s + bs, vget_high_f32(sumv2));
+
         return;
     }
 #endif

@@ -7576,14 +7576,6 @@ UseGgmlGemm2:;
     // This is the size of the rest of the dimensions of the result
     const int64_t nr1 = ne1 * ne2 * ne3;
 
-    // dot kernels can handle 1 row and col at a time, but mmla kernels can process 2 rows and cols
-    int64_t num_rows_per_vec_dot = vec_dot_num_rows;
-    // TODO: currently the mmla kernels support only even numbered rows/cols.
-    // this check can be removed once they are extended to support odd numbered rows/cols too
-    if ((nr0 % 2 != 0) || (ne11 % 2 != 0)) {
-        num_rows_per_vec_dot = 1;
-    }
-
     // Now select a reasonable chunk size.
     int chunk_size = 16;
 
@@ -7645,6 +7637,15 @@ UseGgmlGemm2:;
 
         const int64_t ir1_start = dr1 * ith1;
         const int64_t ir1_end = MIN(ir1_start + dr1, nr1);
+
+        // dot kernels can handle 1 row and col at a time, but mmla kernels can process 2 rows and cols
+        int64_t num_rows_per_vec_dot = vec_dot_num_rows;
+
+        // TODO: currently the mmla kernels support only even numbered rows/cols.
+        // this check can be removed once they are extended to support odd numbered rows/cols too
+        if ((nr0 % 2 != 0) || (ne11 % 2 != 0) || ((ir0_end - ir0_start) % 2 != 0) || ((ir1_end - ir1_start) % 2 != 0)) {
+            num_rows_per_vec_dot = 1;
+        }
 
         ggml_compute_forward_mul_mat_one_chunk(params, dst, type, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end);
 
