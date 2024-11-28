@@ -42,6 +42,7 @@ The llama.cpp CANN backend is designed to support Ascend NPU. It utilize the abi
 ### Ascend NPU
 
 **Verified devices**
+
 | Ascend NPU                    | Status  |
 |:-----------------------------:|:-------:|
 | Atlas 300T A2                 | Support |
