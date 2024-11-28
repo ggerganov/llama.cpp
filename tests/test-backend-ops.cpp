@@ -18,7 +18,6 @@
 #include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
-#include <ggml-opencl2.h>
 
 #include <algorithm>
 #include <array>
@@ -466,19 +465,7 @@ struct test_case {
         // post-graph sentinel
         add_sentinel(ctx);
 
-        // allocate
-        // We need to use this function to properly support GGML_OPENCL_SMALL_ALLOC.
-        // In fact, `ggml_backend_alloc_ctx_tensors_from_buft_for_weights` is a
-        // bit misdenomer. It is initially created for allocating weights. But
-        // it can be used for allocating any tensors that needs small alloc.
-        // Something like `ggml_backend_alloc_ctx_tensors_from_buft_2` or
-        // `ggml_backend_alloc_ctx_tensors_from_buft_small_alloc` would be better.
-        //
-        // This is intrusive. We intend to remove SMALL_ALLOC path once the we fully
-        // migrate to the non SMALL_ALLOC path.
-        ggml_backend_buffer_t buf = ggml_backend_is_opencl2(backend1) == false ? ggml_backend_alloc_ctx_tensors(ctx, backend1) :
-            ggml_backend_alloc_ctx_tensors_from_buft_for_weights(
-                ctx, ggml_backend_get_default_buffer_type(backend1));
+        ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend1);
         if (buf == NULL) {
             printf("failed to allocate tensors [%s] ", ggml_backend_name(backend1));
             ggml_free(ctx);
@@ -630,13 +617,7 @@ struct test_case {
         printf("%*s", last - len, "");
 
         // allocate
-#ifdef GGML_USE_OPENCL
-        ggml_backend_buffer_t buf =
-            ggml_backend_alloc_ctx_tensors_from_buft_for_weights(
-                ctx, ggml_backend_get_default_buffer_type(backend));
-#else
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
-#endif
         if (buf == NULL) {
             printf("failed to allocate tensors\n");
             ggml_free(ctx);

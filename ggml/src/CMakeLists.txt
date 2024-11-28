@@ -298,15 +298,9 @@ else ()
     ggml_add_cpu_backend_variant_impl("")
 endif()
 
-# TODO: This is intrusive. We intend to remove SMALL_ALLOC path once the we fully
-# migrate to the non SMALL_ALLOC path. Also need to converge on the backend name
-# so we don't need this name conversion.
 if (GGML_OPENCL)
     set(GGML_OPENCL2 ON)
     add_compile_definitions(GGML_USE_OPENCL)
-    if (GGML_OPENCL_SMALL_ALLOC)
-        add_compile_definitions(GGML_OPENCL_SMALL_ALLOC)
-    endif ()
 else ()
     set(GGML_OPENCL2 OFF)
 endif ()
