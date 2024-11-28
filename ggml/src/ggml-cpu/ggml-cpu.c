@@ -7641,8 +7641,8 @@ UseGgmlGemm2:;
         // dot kernels can handle 1 row and col at a time, but mmla kernels can process 2 rows and cols
         int64_t num_rows_per_vec_dot = vec_dot_num_rows;
 
-        // TODO: currently the mmla kernels support only even numbered rows/cols.
-        // this check can be removed once they are extended to support odd numbered rows/cols too
+        // these checks are needed to avoid crossing dim1 boundaries
+        // can be optimized, but the logic would become more complicated, so keeping it like this for simplicity
         if ((nr0 % 2 != 0) || (ne11 % 2 != 0) || ((ir0_end - ir0_start) % 2 != 0) || ((ir1_end - ir1_start) % 2 != 0)) {
             num_rows_per_vec_dot = 1;
         }
