@@ -457,7 +457,7 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
     const struct ggml_tensor * src1 = op->src[1];
 
     if (src0 && src0->buffer && ggml_backend_cpu_buft_is_aarch64(src0->buffer->buft)) {
-        if (op->op != GGML_OP_MUL_MAT || src0->type != GGML_TYPE_Q4_0 || ggml_aarch64_get_optimal_repack_type(src0) == GGML_TYPE_Q4_0) {
+        if (op->op != GGML_OP_MUL_MAT || src0->type == ggml_aarch64_get_optimal_repack_type(src0)) {
             return false;
         }
     }

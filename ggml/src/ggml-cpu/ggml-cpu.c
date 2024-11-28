@@ -109,10 +109,11 @@ static ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 #if defined(__ARM_ARCH)
 struct ggml_arm_arch_features_type {
     int has_neon;
+    int has_dotprod;
     int has_i8mm;
     int has_sve;
     int sve_cnt;
-} ggml_arm_arch_features = {-1, -1, -1, 0};
+} ggml_arm_arch_features = {-1, -1, -1, -1, 0};
 #endif
 
 
@@ -445,6 +446,15 @@ static const struct ggml_type_traits_cpu type_traits_cpu[GGML_TYPE_COUNT] = {
         .vec_dot                  = ggml_vec_dot_tq2_0_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
         .nrows                    = 1,
+    },
+    [GGML_TYPE_IQ4_NL_4_4] = {
+        .from_float               = NULL,
+        .vec_dot                  = NULL,
+        .vec_dot_type             = GGML_TYPE_Q8_0,
+        .nrows                    = 1,
+        .ncols                    = 4,
+        .gemv                     = ggml_gemv_iq4_nl_4x4_q8_0,
+        .gemm                     = ggml_gemm_iq4_nl_4x4_q8_0,
     },
 };
 
@@ -2439,6 +2449,7 @@ static void ggml_init_arm_arch_features(void) {
     uint32_t hwcap2 = getauxval(AT_HWCAP2);
 
     ggml_arm_arch_features.has_neon = !!(hwcap & HWCAP_ASIMD);
+    ggml_arm_arch_features.has_dotprod = !!(hwcap && HWCAP_ASIMDDP);
     ggml_arm_arch_features.has_i8mm = !!(hwcap2 & HWCAP2_I8MM);
     ggml_arm_arch_features.has_sve  = !!(hwcap & HWCAP_SVE);
 
@@ -2452,6 +2463,11 @@ static void ggml_init_arm_arch_features(void) {
         oldp = 0;
     }
     ggml_arm_arch_features.has_neon = oldp;
+
+    if (sysctlbyname("hw.optional.arm.FEAT_DotProd", &oldp, &size, NULL, 0) != 0) {
+        oldp = 0;
+    }
+    ggml_arm_arch_features.has_dotprod = oldp;
 
     if (sysctlbyname("hw.optional.arm.FEAT_I8MM", &oldp, &size, NULL, 0) != 0) {
         oldp = 0;
@@ -9133,6 +9149,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_Q4_0_4_4:
         case GGML_TYPE_Q4_0_4_8:
         case GGML_TYPE_Q4_0_8_8:
+        case GGML_TYPE_IQ4_NL_4_4:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
@@ -13875,6 +13892,14 @@ int ggml_cpu_has_vsx(void) {
 int ggml_cpu_has_neon(void) {
 #if defined(__ARM_ARCH) && defined(__ARM_NEON)
     return ggml_arm_arch_features.has_neon;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_dotprod(void) {
+#if defined(__ARM_ARCH) && defined(__ARM_FEATURE_DOTPROD)
+    return ggml_arm_arch_features.has_dotprod;
 #else
     return 0;
 #endif
