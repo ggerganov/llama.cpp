@@ -3002,7 +3002,7 @@ int main(int argc, char ** argv) {
 
         bool stream = json_value(data, "stream", false);
         bool timings = json_value(data, "timing_per_token", false);
-        
+
         const auto task_ids = server_task::get_list_id(tasks);
         const auto completion_id = gen_chatcmplid();
 
