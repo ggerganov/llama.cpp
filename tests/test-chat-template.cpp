@@ -171,7 +171,6 @@ int main(void) {
     };
     assert(fmt_sys("chatml") == "<|im_start|>system\nYou are a helpful assistant<|im_end|>\n");
     assert(fmt_sys("mistral-v1") == " [INST] You are a helpful assistant\n\n");
-    assert(fmt_sys("mistral-v2") == "[INST] You are a helpful assistant\n\n");
     assert(fmt_sys("mistral-v3") == "[INST] You are a helpful assistant\n\n");
     assert(fmt_sys("mistral-v3-tekken") == "[INST]You are a helpful assistant\n\n");
     assert(fmt_sys("mistral-v7") == "[SYSTEM_PROMPT] You are a helpful assistant[/SYSTEM_PROMPT]");
@@ -196,7 +195,6 @@ int main(void) {
     };
     assert(fmt_single("chatml") == "\n<|im_start|>user\nHow are you<|im_end|>\n<|im_start|>assistant\n");
     assert(fmt_single("mistral-v1") == " [INST] How are you [/INST]");
-    assert(fmt_single("mistral-v2") == "[INST] How are you[/INST]");
     assert(fmt_single("mistral-v3") == "[INST] How are you[/INST]");
     assert(fmt_single("mistral-v3-tekken") == "[INST]How are you[/INST]");
     assert(fmt_single("mistral-v7") == "[INST] How are you[/INST]");

@@ -21878,7 +21878,7 @@ static int32_t llama_chat_apply_template_internal(
                     ss << " " << content << "</s>";
                 }
             }
-        } else if (tmpl == "mistral-v1" || tmpl == "mistral-v2" || tmpl == "mistral-v3" || tmpl == "mistral-v3-tekken"
+        } else if (tmpl == "mistral-v1" || tmpl == "mistral-v3" || tmpl == "mistral-v3-tekken"
                    || tmpl_contains("' [INST] ' + system_message") // catches official v1 template
                    || tmpl_contains("[AVAILABLE_TOOLS]")) {        // catches official 2/v3/v3-tekken templates
             // Official mistral v1/v2/v3/v3-tekken templates
