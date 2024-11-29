@@ -223,7 +223,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 | [Vulkan](./docs/build.md#vulkan) | GPU |
 | [CANN](./docs/build.md#cann) | Ascend NPU |
 
-## Building and Usage
+## Building and usage
 
 The main product of this project is the `llama` library. It's C-style interface can be found in [include/llama.h](include/llama.h).
 The project also produces several examples and tools that can be used to get started. There are a few ways to obtain the binaries:
@@ -234,6 +234,18 @@ The project also produces several examples and tools that can be used to get sta
 - Download pre-built binaries from [releases](https://github.com/ggerganov/llama.cpp/releases)
 
 For more information, refer to [Build llama.cpp locally](./docs/build.md)
+
+### Obtaining and quantizing models
+
+The [Hugging Face](https://huggingface.co) platform hosts a large amount of LLM models compatible with `llama.cpp`. Search for the [GGUF](https://huggingface.co/models?library=gguf&sort=trending) file format.
+The platform provides multiple online tools for converting, quantizing and hosting models with `llama.cpp`:
+
+- Use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space to quantize model weights to smaller sizes
+- Use the [GGUF-my-LoRA](https://huggingface.co/spaces/ggml-org/gguf-my-lora) space to convert LoRA adapters to GGUF format (more info: https://github.com/ggerganov/llama.cpp/discussions/10123)
+- Use the [GGUF editor](https://huggingface.co/spaces/CISCai/gguf-editor) space to edit GGUF meta data in the browser (more info: https://github.com/ggerganov/llama.cpp/discussions/9268)
+- Use the [Inference Endpoints](https://ui.endpoints.huggingface.co/) to directly host `llama.cpp` in the cloud (more info: https://github.com/ggerganov/llama.cpp/discussions/9669)
+
+To learn more about model quantization, [read this documentation](./examples/quantize/README.md)
 
 ### Using the `llama-cli` tool
 
@@ -306,18 +318,6 @@ Use the `perplexity` example to measure perplexity over a given prompt (lower pe
 For more information, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity).
 
 To learn more how to measure perplexity using llama.cpp, [read this documentation](./examples/perplexity/README.md)
-
-## Obtaining and quantizing models
-
-The [Hugging Face](https://huggingface.co) platform hosts a large amount of LLM models compatible with `llama.cpp`. Search for the [GGUF](https://huggingface.co/models?library=gguf&sort=trending) file format.
-The platform provides multiple online tools for converting, quantizing and hosting models with `llama.cpp`:
-
-- Use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space to quantize model weights to smaller sizes
-- Use the [GGUF-my-LoRA](https://huggingface.co/spaces/ggml-org/gguf-my-lora) space to convert LoRA adapters to GGUF format (more info: https://github.com/ggerganov/llama.cpp/discussions/10123)
-- Use the [GGUF editor](https://huggingface.co/spaces/CISCai/gguf-editor) space to edit GGUF meta data in the browser (more info: https://github.com/ggerganov/llama.cpp/discussions/9268)
-- Use the [Inference Endpoints](https://ui.endpoints.huggingface.co/) to directly host `llama.cpp` in the cloud (more info: https://github.com/ggerganov/llama.cpp/discussions/9669)
-
-To learn more about model quantization, [read this documentation](./examples/quantize/README.md)
 
 ## Contributing
 
