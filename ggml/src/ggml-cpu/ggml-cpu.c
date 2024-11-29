@@ -9205,6 +9205,61 @@ static void ggml_rope_cache_init(
     }
 }
 
+static void ggml_mrope_cache_init(
+     float theta_base_t, float theta_base_h, float theta_base_w, float theta_base_e, int sections[4], bool indep_sects,
+     float freq_scale, const float * freq_factors, float corr_dims[2], int64_t ne0, float ext_factor, float mscale,
+     float * cache, float sin_sign, float theta_scale) {
+    // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/LlamaYaRNScaledRotaryEmbedding.py
+    float theta_t = theta_base_t;
+    float theta_h = theta_base_h;
+    float theta_w = theta_base_w;
+    float theta_e = theta_base_e;  // extra position id for vision encoder
+    int sect_dims = sections[0] + sections[1] + sections[2] + sections[3];
+    int sec_w = sections[1] + sections[0];
+    GGML_ASSERT(sect_dims <= ne0);
+    
+    for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
+        const float ff = freq_factors ? freq_factors[i0/2] : 1.0f;
+        
+        int sector = (i0 / 2) % sect_dims;
+        if (indep_sects) {
+            if (sector == 0) {
+                theta_t = theta_base_t;
+            }
+            else if (sector == sections[0]) {
+                theta_h = theta_base_h;;
+            }
+            else if (sector == sections[1]) {
+                theta_w = theta_base_w;
+            }
+            else if (sector == sections[2]) {
+                theta_e = theta_base_e;
+            }
+        }
+
+        float theta = theta_t;
+        if (sector >= sections[0] && sector < sec_w) {
+            theta = theta_h;
+        } 
+        else if (sector >= sec_w && sector < sec_w + sections[2]) {
+            theta = theta_w;
+        }
+        else if (sector >= sec_w + sections[2]) {
+            theta = theta_e;
+        }
+        
+        rope_yarn(
+            theta/ff, freq_scale, corr_dims, i0, ext_factor, mscale, &cache[i0 + 0], &cache[i0 + 1]
+        );
+        cache[i0 + 1] *= sin_sign;
+
+        theta_t *= theta_scale;
+        theta_w *= theta_scale;
+        theta_h *= theta_scale;
+        theta_e *= theta_scale;
+    }
+}
+
 static void ggml_compute_forward_rope_f32(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst,

@@ -2436,7 +2436,7 @@ struct llama_hparams {
     float                   rope_freq_scale_train;
     uint32_t                n_ctx_orig_yarn;
     float                   rope_yarn_log_mul;
-    std::array<uint32_t, 4> rope_mrope_sections;
+    std::array<int, 4> rope_mrope_sections;
 
     // for State Space Models
     uint32_t ssm_d_conv  = 0;
@@ -12540,7 +12540,8 @@ struct llm_build_context {
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
-        int * sections = (int *)hparams.rope_mrope_sections.data();
+        int sections[4];
+        std::copy(hparams.rope_mrope_sections.begin(), hparams.rope_mrope_sections.end(), sections);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;

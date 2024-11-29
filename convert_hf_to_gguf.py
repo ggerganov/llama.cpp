@@ -1991,7 +1991,7 @@ class Qwen2VLModel(Model):
             self._set_vocab_sentencepiece()
         except FileNotFoundError:
             self._set_vocab_gpt2()
-    
+
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
         for name, data in super().get_tensors():
             if name.startswith("visual."):

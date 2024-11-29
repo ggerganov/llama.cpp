@@ -26,9 +26,9 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     auto img_tokens = image_embed->n_image_pos;
     llama_pos mrope_pos[img_tokens * 4];
     
-    for (size_t y = 0; y < ph; y++)
+    for (int y = 0; y < ph; y++)
     {
-        for (size_t x = 0; x < pw; x++)
+        for (int x = 0; x < pw; x++)
         {
             int i = y * pw + x;
             mrope_pos[i] = *st_pos_id;
@@ -270,7 +270,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG("\n");
 
-    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sparams);
+    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sampling);
     if (!smpl) {
         LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -422,10 +422,7 @@ static void tmp_dump_img_embed(struct llava_context * ctx_llava, common_params *
     int ne = n_embd * 4;
     float vals[56 * 56 * 3];
     float embd[ne];
-    // for (int i = 0; i < 3*56*56; i++)
-    // {
-    //     vals[i] = 0.1;
-    // }
+
     for (int i = 0; i < 56*56; i++)
     {
         for (int c = 0; c < 3; c++)
@@ -433,7 +430,7 @@ static void tmp_dump_img_embed(struct llava_context * ctx_llava, common_params *
     }
     
     // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
-    tmp_clip_image_encode(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
+    clip_encode_float_image(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
 
     std::ofstream outFile("img_embed.bin", std::ios::binary);
     if (outFile.is_open()) {

@@ -3575,12 +3575,6 @@ struct ggml_tensor * ggml_mrope_ext(
         GGML_ASSERT(c->ne[0] >= n_dims / 2);
     }
 
-    bool is_node = false;
-
-    if (a->grad) {
-        is_node = true;
-    }
-
     struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
 
     int32_t params[11 + 4] = { /*n_past*/ 0, n_dims, mode, /*n_ctx*/ 0, n_ctx_orig };
@@ -3595,7 +3589,6 @@ struct ggml_tensor * ggml_mrope_ext(
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ROPE;
-    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = b;
     result->src[2] = c;

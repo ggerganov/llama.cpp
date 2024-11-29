@@ -2590,12 +2590,12 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             int* positions_data = (int*)malloc(ggml_nbytes(positions));
             
             int ptr = 0;
-            for (size_t y = 0; y < ph; y+=2)
+            for (int y = 0; y < ph; y+=2)
             {
-                for (size_t x = 0; x < pw; x+=2)
+                for (int x = 0; x < pw; x+=2)
                 {
-                    for (size_t dy = 0; dy < 2; dy++) {
-                        for (size_t dx = 0; dx < 2; dx++) {
+                    for (int dy = 0; dy < 2; dy++) {
+                        for (int dx = 0; dx < 2; dx++) {
                             positions_data[ptr]                 = y + dy;
                             positions_data[num_patches + ptr]     = x + dx;
                             positions_data[num_patches * 2 + ptr] = y + dy;
@@ -2820,20 +2820,15 @@ bool clip_is_qwen2vl(const struct clip_ctx * ctx) {
 }
 
 
-bool tmp_clip_image_encode (struct clip_ctx * ctx, int n_threads, float * img, int h, int w, float * vec) {
+bool clip_encode_float_image (struct clip_ctx * ctx, int n_threads, float * img, int h, int w, float * vec) {
     clip_image_f32 clip_img;
     clip_img.buf.resize(h * w * 3);
-    for (size_t i = 0; i < h*w*3; i++)
+    for (int i = 0; i < h*w*3; i++)
     {
         clip_img.buf[i] = img[i];
     }
     clip_img.nx = w;
     clip_img.ny = h;
-    // ctx->vision_model.hparams.image_size = h;
     clip_image_encode(ctx, n_threads, &clip_img, vec);
     return true;
-}
-
-void tmp_clip_set_layers (struct clip_ctx * ctx, int layers) {
-    ctx->vision_model.hparams.n_layer = layers;
 }

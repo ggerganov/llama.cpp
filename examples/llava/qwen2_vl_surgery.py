@@ -1,12 +1,11 @@
 import argparse
-import glob
-import os
-from typing import Any, Dict
+from typing import Dict
 
 import torch
+import numpy as np
 from gguf import *
 from transformers import (
-    Qwen2VLForConditionalGeneration,  
+    Qwen2VLForConditionalGeneration,
     Qwen2VLProcessor,
     AutoProcessor,
     Qwen2VLConfig
@@ -44,7 +43,7 @@ def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
             else:             # bias
                 c3 = ten.shape[0]
             assert c3 % 3 == 0
-            c = c3//3
+            c = c3 // 3
             wq = ten[:c]
             wk = ten[c: c * 2]
             wv = ten[c * 2:]
@@ -68,7 +67,7 @@ def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
             tensor_map["v.patch_embd.weight.1"] = ten[:, :, 1, ...]
         else:
             tensor_map[to_gguf_name(f"vision_model.{name}")] = ten
-    
+
     for new_name, ten in tensor_map.items():
         if ten.ndim <= 1 or new_name.endswith("_norm.weight"):
             tensor_map[new_name] = ten.astype(np.float32)
@@ -89,16 +88,14 @@ def main(args):
         ftype = 1
     else:
         raise ValueError()
-    
+
     model_name = args.model_name
     print("model_name: ", model_name)
     qwen2vl = Qwen2VLForConditionalGeneration.from_pretrained(
         model_name, torch_dtype=dtype, device_map="cpu"
     )
-    cfg: Qwen2VLConfig = qwen2vl.config
+    cfg: Qwen2VLConfig = qwen2vl.config  # type: ignore[reportAssignmentType]
     vcfg = cfg.vision_config
-    rope_cfg = cfg.rope_scaling
-
 
     fname_out = "qwen2vl-vision.gguf"
     fout = GGUFWriter(path=fname_out, arch="clip")
@@ -125,23 +122,22 @@ def main(args):
         fout.add_tensor(name, data)
 
     fout.add_uint32("clip.vision.patch_size", vcfg.patch_size)
-    fout.add_uint32("clip.vision.image_size", 14*40)  # some reasonable size that is divable by (14*2)
+    fout.add_uint32("clip.vision.image_size", 14 * 40)  # some reasonable size that is divable by (14*2)
     fout.add_uint32(k(KEY_EMBEDDING_LENGTH, VISION), vcfg.embed_dim)
     fout.add_uint32("clip.vision.projection_dim", vcfg.hidden_size)
     fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), vcfg.num_heads)
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), 1e-6)
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), vcfg.depth)
-    fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, VISION), 0)  # BUG: not sure what this does
+    fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, VISION), 0)  # not sure what this does, put 0 here as a placeholder
     fout.add_name(model_name)
     """
-    HACK: Since vision rope related parameter aren't stored in the `Qwen2VLConfig, 
+    HACK: Since vision rope related parameter aren't stored in the `Qwen2VLConfig,
             it will be hardcoded in the `clip_image_build_graph` from `clip.cpp`.
     """
 
     processor: Qwen2VLProcessor = AutoProcessor.from_pretrained(model_name)
-    # breakpoint()
-    fout.add_array("clip.vision.image_mean", processor.image_processor.image_mean)
-    fout.add_array("clip.vision.image_std", processor.image_processor.image_std)
+    fout.add_array("clip.vision.image_mean", processor.image_processor.image_mean) # type: ignore[reportAttributeAccessIssue]
+    fout.add_array("clip.vision.image_std", processor.image_processor.image_std) # type: ignore[reportAttributeAccessIssue]
 
     fout.write_header_to_file()
     fout.write_kv_data_to_file()
