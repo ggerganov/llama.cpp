@@ -1020,7 +1020,7 @@ void ggml_gemv_iq4_nl_4x4_q8_0(int n, float * restrict s, size_t bs, const void 
         float * res_ptr = s;
 
         for (int x = 0; x < nc / ncols_interleaved; x++) {
-            const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx + (x * nb);
+            const block_iq4_nlx4 * b_ptr = (const block_iq4_nlx4 *) vx + (x * nb);
 
             float32x4_t sumf = vdupq_n_f32(0);
             for (int l = 0; l < nb; l++) {
@@ -3507,7 +3507,7 @@ void ggml_gemm_iq4_nl_4x4_q8_0(int n, float * restrict s, size_t bs, const void 
         for (int y = 0; y < nr / 4; y++) {
             const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
             for (int x = 0; x < nc / ncols_interleaved; x++) {
-                const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx + (x * nb);
+                const block_iq4_nlx4 * b_ptr = (const block_iq4_nlx4 *) vx + (x * nb);
 
                 float32x4_t sumf[4];
                 for (int m = 0; m < 4; m++) {
