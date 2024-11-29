@@ -1,8 +1,7 @@
 #pragma once
 
 #include "ggml.h"
-// hack until AMX is moved into the CPU backend
-#include "../ggml-cpu/ggml-cpu-impl.h" // <immintrin.h>
+#include "ggml-cpu-impl.h"
 
 #include <algorithm>
 #include <memory>
@@ -74,16 +73,24 @@ inline void parallel_for(int nth, int n, const func_t& f) {
 #endif
 }
 
+template <typename func_t>
+inline void parallel_for_ggml(const ggml_compute_params * params, int n, const func_t & f) {
+    int tbegin, tend;
+    balance211(n, params->nth, params->ith, tbegin, tend);
+    f(tbegin, tend);
+    ggml_barrier(params->threadpool); // TODO: might not always be needed
+}
+
 // quantized types that have AMX support
 inline bool qtype_has_amx_kernels(const enum ggml_type type) {
     // TODO: fix padding for vnni format
     return (type == GGML_TYPE_Q4_0) ||
-        (type == GGML_TYPE_Q4_1);
-        //(type == GGML_TYPE_Q8_0) ||
-        //(type == GGML_TYPE_Q4_K) ||
-        //(type == GGML_TYPE_Q5_K) ||
-        //(type == GGML_TYPE_Q6_K) ||
-        //(type == GGML_TYPE_IQ4_XS);
+        (type == GGML_TYPE_Q4_1) ||
+        (type == GGML_TYPE_Q8_0) ||
+        (type == GGML_TYPE_Q4_K) ||
+        (type == GGML_TYPE_Q5_K) ||
+        (type == GGML_TYPE_Q6_K) ||
+        (type == GGML_TYPE_IQ4_XS);
 }
 
 // ggml backend context
