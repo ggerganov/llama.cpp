@@ -26,7 +26,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 ## Description
 
 The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide
-variety of hardware - locally and in the cloud.
+range of hardware - locally and in the cloud.
 
 - Plain C/C++ implementation without any dependencies
 - Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
@@ -39,7 +39,7 @@ variety of hardware - locally and in the cloud.
 The `llama.cpp` project is the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 
 <details>
-<summary>Supported models</summary>
+<summary>Models</summary>
 
 Typically finetunes of the base models below are supported as well.
 
@@ -145,7 +145,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 </details>
 
 <details>
-<summary>UI</summary>
+<summary>UIs</summary>
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
@@ -157,6 +157,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 - [janhq/jan](https://github.com/janhq/jan) (AGPL)
 - [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file) (Apache-2.0)
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
+- [llama.vim](https://github.com/ggml-org/llama.vim) (MIT)
 - [LARS](https://github.com/abgulati/LARS) (AGPL)
 - [Llama Assistant](https://github.com/vietanhdev/llama-assistant) (GPL)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
@@ -189,7 +190,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 - [akx/ollama-dl](https://github.com/akx/ollama-dl) – download models from the Ollama library to be used directly with llama.cpp
 - [crashr/gppm](https://github.com/crashr/gppm) – launch llama.cpp instances utilizing NVIDIA Tesla P40 or P100 GPUs with reduced idle power consumption
 - [gpustack/gguf-parser](https://github.com/gpustack/gguf-parser-go/tree/main/cmd/gguf-parser) - review/check the GGUF file and estimate the memory usage
-- [Styled Lines](https://marketplace.unity.com/packages/tools/generative-ai/styled-lines-llama-cpp-model-292902) (proprietary licensed, async wrapper of inference part for game development in Unity3d with prebuild Mobile and Web platform wrappers and a model example)
+- [Styled Lines](https://marketplace.unity.com/packages/tools/generative-ai/styled-lines-llama-cpp-model-292902) (proprietary licensed, async wrapper of inference part for game development in Unity3d with pre-built Mobile and Web platform wrappers and a model example)
 
 </details>
 
@@ -225,8 +226,8 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 
 ## Building and usage
 
-The main product of this project is the `llama` library. It's C-style interface can be found in [include/llama.h](include/llama.h).
-The project also produces several examples and tools that can be used to get started. There are a few ways to obtain the binaries:
+The main product of this project is the `llama` library. Its C-style interface can be found in [include/llama.h](include/llama.h).
+The project also produces several [examples and tools](./examples) that can be used to get started. There are a few ways to obtain the binaries:
 
 - Clone this repository and build locally, see [how to build](./docs/build.md)
 - On MacOS or Linux, install `llama.cpp` via [brew, flox or nix](./docs/install.md)
@@ -237,10 +238,14 @@ For more information, refer to [Build llama.cpp locally](./docs/build.md)
 
 ### Obtaining and quantizing models
 
-The [Hugging Face](https://huggingface.co) platform hosts a [large amount of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp` - simply search for the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format.
+The [Hugging Face](https://huggingface.co) platform hosts [plenty of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp` - simply search for the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format:
+
+- [Trending](https://huggingface.co/models?library=gguf&sort=trending)
+- [LLaMA](https://huggingface.co/models?sort=trending&search=llama+gguf)
+
 After downloading a model, use the CLI tools to run it locally - see below.
 
-The Hugging Face platform also provides multiple online tools for converting, quantizing and hosting models with `llama.cpp`:
+The Hugging Face platform also provides online tools for converting, quantizing and hosting models with `llama.cpp`:
 
 - Use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space to quantize model weights to smaller sizes
 - Use the [GGUF-my-LoRA](https://huggingface.co/spaces/ggml-org/gguf-my-lora) space to convert LoRA adapters to GGUF format (more info: https://github.com/ggerganov/llama.cpp/discussions/10123)
@@ -289,9 +294,21 @@ You can also use your own template via in-prefix, in-suffix and reverse-prompt p
 llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User: ' --reverse-prompt 'User:'
 ```
 
-### Web server
+### Constrained output with grammars
 
-[llama.cpp web server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
+`llama.cpp` can constrain the output of the model via custom grammars. For example, you can force the model to output only JSON:
+
+```bash
+llama-cli -m your_model.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
+```
+
+The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
+
+For authoring more complex JSON grammars, check out https://grammar.intrinsiclabs.ai/
+
+### Web server (`llama-server`)
+
+[llama.cpp's web server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
 Example usage:
 
@@ -302,21 +319,9 @@ llama-server -m your_model.gguf --port 8080
 # Chat completion endpoint: http://localhost:8080/v1/chat/completions
 ```
 
-### Constrained output with grammars
-
-`llama.cpp` can constrain the output of the model via custom grammars. For example, you can force the model to output only JSON:
-
-```bash
-llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
-```
-
-The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
-
-For authoring more complex JSON grammars, check out https://grammar.intrinsiclabs.ai/
-
 ### Perplexity (measuring model quality)
 
-Use the `perplexity` example to measure perplexity over a given prompt (lower perplexity is better).
+Use the `llama-perplexity` tool to measure perplexity over a given prompt (lower perplexity is better).
 For more information, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity).
 
 To learn more how to measure perplexity using llama.cpp, [read this documentation](./examples/perplexity/README.md)
