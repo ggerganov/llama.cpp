@@ -21864,7 +21864,7 @@ static int32_t llama_chat_apply_template_internal(
         }
     } else if (tmpl == "llama2" || tmpl.find("mistral") == 0 || tmpl_contains("[INST]")) {
         if (tmpl == "mistral-v7" || tmpl_contains("[SYSTEM_PROMPT]")) {
-            // Official mistral v7 template
+            // Official mistral 'v7' template
             // See: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411#basic-instruct-template-v7
             for (auto message : chat) {
                 std::string role(message->role);
@@ -21879,9 +21879,9 @@ static int32_t llama_chat_apply_template_internal(
                 }
             }
         } else if (tmpl == "mistral-v1" || tmpl == "mistral-v3" || tmpl == "mistral-v3-tekken"
-                   || tmpl_contains("' [INST] ' + system_message") // catches official v1 template
-                   || tmpl_contains("[AVAILABLE_TOOLS]")) {        // catches official 2/v3/v3-tekken templates
-            // Official mistral v1/v2/v3/v3-tekken templates
+                   || tmpl_contains("' [INST] ' + system_message") // catches official 'v1' template
+                   || tmpl_contains("[AVAILABLE_TOOLS]")) {        // catches official 'v3' and 'v3-tekken' templates
+            // Official mistral 'v1', 'v3' and 'v3-tekken' templates
             // See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/chat_templates.md
             // See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/templates.md
             std::string leading_space = (tmpl == "mistral-v1" || tmpl_contains(" [INST]") ? " " : "");
