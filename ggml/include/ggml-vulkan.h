@@ -11,6 +11,7 @@ extern "C" {
 #define GGML_VK_MAX_DEVICES 16
 
 GGML_BACKEND_API void ggml_vk_instance_init(void);
+GGML_BACKEND_API void ggml_vk_instance_unload(void);
 
 // backend API
 GGML_BACKEND_API ggml_backend_t ggml_backend_vk_init(size_t dev_num);
