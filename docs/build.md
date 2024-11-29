@@ -9,30 +9,6 @@ cd llama.cpp
 
 In order to build llama.cpp you have four different options.
 
-- Using `make`:
-  - On Linux or MacOS:
-
-      ```bash
-      make
-      ```
-
-  - On Windows (x86/x64 only, arm64 requires cmake):
-
-    1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
-    2. Extract `w64devkit` on your pc.
-    3. Run `w64devkit.exe`.
-    4. Use the `cd` command to reach the `llama.cpp` folder.
-    5. From here you can run:
-        ```bash
-        make
-        ```
-
-  - Notes:
-    - For `Q4_0_4_4` quantization type build, add the `GGML_NO_LLAMAFILE=1` flag. For example, use `make GGML_NO_LLAMAFILE=1`.
-    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
-    - For faster repeated compilation, install [ccache](https://ccache.dev/).
-    - For debug builds, run `make LLAMA_DEBUG=1`
-
 - Using `CMake`:
 
   ```bash
@@ -104,27 +80,6 @@ This is only available on Mac PCs and it's enabled by default. You can just buil
 
 This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
 
-- Using `make`:
-  - On Linux:
-    ```bash
-    make GGML_OPENBLAS=1
-    ```
-
-  - On Windows:
-
-    1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
-    2. Download the latest version of [OpenBLAS for Windows](https://github.com/xianyi/OpenBLAS/releases).
-    3. Extract `w64devkit` on your pc.
-    4. From the OpenBLAS zip that you just downloaded copy `libopenblas.a`, located inside the `lib` folder, inside `w64devkit\x86_64-w64-mingw32\lib`.
-    5. From the same OpenBLAS zip copy the content of the `include` folder inside `w64devkit\x86_64-w64-mingw32\include`.
-    6. Run `w64devkit.exe`.
-    7. Use the `cd` command to reach the `llama.cpp` folder.
-    8. From here you can run:
-
-        ```bash
-        make GGML_OPENBLAS=1
-        ```
-
 - Using `CMake` on Linux:
 
     ```bash
@@ -167,10 +122,6 @@ This provides GPU acceleration using the CUDA cores of your Nvidia GPU. Make sur
 
 For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](https://www.jetson-ai-lab.com/tutorial_text-generation.html). If you are using an old model(nano/TX2), need some additional operations before compiling.
 
-- Using `make`:
-  ```bash
-  make GGML_CUDA=1
-  ```
 - Using `CMake`:
 
   ```bash
@@ -196,10 +147,6 @@ The following compilation options are also available to tweak performance:
 
 This provides GPU acceleration using the MUSA cores of your Moore Threads MTT GPU. Make sure to have the MUSA SDK installed. You can download it from here: [MUSA SDK](https://developer.mthreads.com/sdk/download/musa).
 
-- Using `make`:
-  ```bash
-  make GGML_MUSA=1
-  ```
 - Using `CMake`:
 
   ```bash
@@ -219,10 +166,6 @@ This provides BLAS acceleration on HIP-supported AMD GPUs.
 Make sure to have ROCm installed.
 You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/tutorial/quick-start.html#rocm-install-quick).
 
-- Using `make`:
-  ```bash
-  make GGML_HIP=1
-  ```
 - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
   ```bash
   HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
@@ -245,11 +188,6 @@ You can download it from your Linux distro's package manager or from here: [ROCm
   HIP_DEVICE_LIB_PATH=<directory-you-just-found> \
       cmake -S . -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
       && cmake --build build -- -j 16
-  ```
-
-- Using `make` (example for target gfx1030, build with 16 CPU threads):
-  ```bash
-  make -j16 GGML_HIP=1 GGML_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
   ```
 
 - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
@@ -289,7 +227,6 @@ Libs: -lvulkan-1
 EOF
 
 ```
-Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
 
 #### Git Bash MINGW64
 
