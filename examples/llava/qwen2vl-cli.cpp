@@ -232,7 +232,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     if (image_pos != std::string::npos) {
         // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
         system_prompt = prompt.substr(0, image_pos);
-        user_prompt = prompt.substr(image_pos + std::string("<image>").length());
+        user_prompt = prompt.substr(image_pos + std::string("<|vision_pad|>").length());
         LOG_INF("system_prompt: %s\n", system_prompt.c_str());
         if (params->verbose_prompt) {
             auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
