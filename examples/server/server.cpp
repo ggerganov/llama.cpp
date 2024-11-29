@@ -697,6 +697,10 @@ struct server_context {
             params_dft.n_ctx        = params_base.speculative.n_ctx;
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
 
+            // force F16 KV cache for the draft model for extra performance
+            params_dft.cache_type_k = "f16";
+            params_dft.cache_type_v = "f16";
+
             common_init_result llama_init_dft = common_init_from_params(params_dft);
 
             model_dft = llama_init_dft.model;
