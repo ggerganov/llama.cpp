@@ -304,11 +304,11 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         load_image_size->width = img_res_v.data[0].nx;
         load_image_size->height = img_res_v.data[0].ny;
         clip_add_load_image_size(ctx_clip, load_image_size);
-        
+
         bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd);
         int pos = int(load_image_size->width/clip_patch_size(ctx_clip)/2);
         *n_img_pos = (pos * pos + 2);
-        if (!encoded) {
+        if (!encoded){
             LOG_ERR("Unable to encode image \n");
             return false;
         }
