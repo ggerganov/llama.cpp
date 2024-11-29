@@ -148,7 +148,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [Faraday](https://faraday.dev/) (proprietary)
 - [LMStudio](https://lmstudio.ai/) (proprietary)
-- [Layla](https://play.google.com/store/apps/details?id=com.laylalite) (proprietary)
+- [Layla](https://www.layla-network.ai) (proprietary)
 - [ramalama](https://github.com/containers/ramalama) (MIT)
 - [LocalAI](https://github.com/mudler/LocalAI) (MIT)
 - [LostRuins/koboldcpp](https://github.com/LostRuins/koboldcpp) (AGPL)
