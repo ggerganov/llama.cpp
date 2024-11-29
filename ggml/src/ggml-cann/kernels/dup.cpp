@@ -20,7 +20,6 @@ class DupByRows {
         // Input has four dims.
         int64_t op_block_num = GetBlockNum();
         int64_t op_block_idx = GetBlockIdx();
-        assert(op_block_idx < SUPPORTED_MAX_DIM && op_block_idx >= 0, "Invalid block index:%d, max is:%d\n", op_block_idx, SUPPORTED_MAX_DIM);
 
         // param
         num_rows = input_ne_ub[1] * input_ne_ub[2] * input_ne_ub[3];

@@ -114,7 +114,7 @@ jobs:
           swap-storage: true
 
       - name: Build and push Docker image (tagged + versioned)
-        if: github.event_name == 'push'
+        if: ${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         uses: docker/build-push-action@v6
         with:
           context: .

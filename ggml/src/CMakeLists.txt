@@ -24,7 +24,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-function(get_flags CCID CCVER)
+function(ggml_get_flags CCID CCVER)
     set(C_FLAGS "")
     set(CXX_FLAGS "")
 
@@ -41,6 +41,7 @@ function(get_flags CCID CCVER)
     elseif (CCID STREQUAL "GNU")
         set(C_FLAGS   -Wdouble-promotion)
         set(CXX_FLAGS -Wno-array-bounds)
+
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
@@ -69,7 +70,7 @@ if (GGML_ALL_WARNINGS)
         list(APPEND C_FLAGS   ${WARNING_FLAGS})
         list(APPEND CXX_FLAGS ${WARNING_FLAGS})
 
-        get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
+        ggml_get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
 
         add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_FLAGS};${GF_C_FLAGS}>"
                             "$<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS};${GF_CXX_FLAGS}>")

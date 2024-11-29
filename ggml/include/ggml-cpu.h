@@ -91,6 +91,7 @@ extern "C" {
     GGML_BACKEND_API int ggml_cpu_has_neon       (void);
     GGML_BACKEND_API int ggml_cpu_has_arm_fma    (void);
     GGML_BACKEND_API int ggml_cpu_has_fp16_va    (void);
+    GGML_BACKEND_API int ggml_cpu_has_dotprod    (void);
     GGML_BACKEND_API int ggml_cpu_has_matmul_int8(void);
     GGML_BACKEND_API int ggml_cpu_has_sve        (void);
     GGML_BACKEND_API int ggml_cpu_get_sve_cnt    (void);  // sve vector length in bytes

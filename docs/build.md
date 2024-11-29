@@ -221,7 +221,7 @@ You can download it from your Linux distro's package manager or from here: [ROCm
 
 - Using `make`:
   ```bash
-  make GGML_HIPBLAS=1
+  make GGML_HIP=1
   ```
 - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
   ```bash
@@ -249,7 +249,7 @@ You can download it from your Linux distro's package manager or from here: [ROCm
 
 - Using `make` (example for target gfx1030, build with 16 CPU threads):
   ```bash
-  make -j16 GGML_HIPBLAS=1 GGML_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
+  make -j16 GGML_HIP=1 GGML_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
   ```
 
 - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):

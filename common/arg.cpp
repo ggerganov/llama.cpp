@@ -128,7 +128,11 @@ static void common_params_handle_model_default(common_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = fs_get_cache_file(string_split<std::string>(params.hf_file, '/').back());
+            // this is to avoid different repo having same file name, or same file name in different subdirs
+            std::string filename = params.hf_repo + "_" + params.hf_file;
+            // to make sure we don't have any slashes in the filename
+            string_replace_all(filename, "/", "_");
+            params.model = fs_get_cache_file(filename);
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
@@ -1366,8 +1370,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, int value) {
             params.n_gpu_layers = value;
             if (!llama_supports_gpu_offload()) {
-                fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers option will be ignored\n");
-                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+                fprintf(stderr, "warning: no usable GPU found, --gpu-layers option will be ignored\n");
+                fprintf(stderr, "warning: one possible reason is that llama.cpp was compiled without GPU support\n");
+                fprintf(stderr, "warning: consult docs/build.md for compilation instructions\n");
             }
         }
     ).set_env("LLAMA_ARG_N_GPU_LAYERS"));
@@ -2100,8 +2105,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, int value) {
             params.speculative.n_gpu_layers = value;
             if (!llama_supports_gpu_offload()) {
-                fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers-draft option will be ignored\n");
-                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+                fprintf(stderr, "warning: no usable GPU found, --gpu-layers-draft option will be ignored\n");
+                fprintf(stderr, "warning: one possible reason is that llama.cpp was compiled without GPU support\n");
+                fprintf(stderr, "warning: consult docs/build.md for compilation instructions\n");
             }
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));

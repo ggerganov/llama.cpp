@@ -40,10 +40,17 @@
 #include <cinttypes>
 #include <limits>
 
-#define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
-#define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_DBG(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#if defined(LLAVA_LOG_OFF)
+#   define LOG_INF(...)
+#   define LOG_WRN(...)
+#   define LOG_ERR(...)
+#   define LOG_DBG(...)
+#else // defined(LLAVA_LOG_OFF)
+#   define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#   define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#   define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#   define LOG_DBG(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#endif // defined(LLAVA_LOG_OFF)
 
 //#define CLIP_DEBUG_FUNCTIONS
 
