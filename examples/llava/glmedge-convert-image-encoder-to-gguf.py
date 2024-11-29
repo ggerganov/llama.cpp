@@ -22,7 +22,7 @@ def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: b
         "vision_model.embeddings.position_ids",
     ):
         return True
-    
+
     if name in (
         "vision_model.head.probe",
         "vision_model.head.attention.in_proj_weight",
@@ -220,7 +220,7 @@ fout.add_bool("clip.use_gelu", True)
 
 
 if has_glm_projector:
-    # model.vision_model.encoder.layers.pop(-1)  # pyright: ignore[reportAttributeAccessIssue] 
+    # model.vision_model.encoder.layers.pop(-1)  # pyright: ignore[reportAttributeAccessIssue]
     projector = torch.load(args.llava_projector)
     for name, data in projector.items():
         name = get_tensor_name(name)

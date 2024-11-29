@@ -37,7 +37,7 @@ python ./examples/llava/glmedge-convert-image-encoder-to-gguf.py -m ../model_pat
 5. Use `examples/convert_hf_to_gguf.py` to convert the LLM part of GLMV-EDGE to GGUF:
 
 ```sh
-python convert_hf_to_gguf.py ../model_path 
+python convert_hf_to_gguf.py ../model_path
 ```
 
 Now both the LLM part and the image encoder are in the `model_path` directory.
