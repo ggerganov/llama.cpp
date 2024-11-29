@@ -1691,12 +1691,11 @@ namespace dpct
             auto data_c = get_memory<Tc>(c);
             oneapi::mkl::blas::column_major::gemm(
 #ifdef GGML_SYCL_NVIDIA
-            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{q},
+                oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ q },
 #else
-            q,
+                q,
 #endif
-                a_trans, b_trans, m, n, k, alpha_value, data_a, lda,
-                data_b, ldb, beta_value, data_c, ldc);
+                a_trans, b_trans, m, n, k, alpha_value, data_a, lda, data_b, ldb, beta_value, data_c, ldc);
         }
 
         template <typename VecT, class BinaryOperation, class = void>
@@ -1761,16 +1760,14 @@ namespace dpct
 
             sycl::event e = oneapi::mkl::blas::column_major::gemm_batch(
 #ifdef GGML_SYCL_NVIDIA
-            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{q},
+                oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ q },
 #else
-            q,
+                q,
 #endif
-                matrix_info->transpose_info, matrix_info->transpose_info + 1,
-                matrix_info->size_info, matrix_info->size_info + 1,
-                matrix_info->size_info + 2, matrix_info->value_info,
-                reinterpret_cast<const Ta **>(a), matrix_info->ld_info,
-                reinterpret_cast<const Tb **>(b), matrix_info->ld_info + 1,
-                matrix_info->value_info + 1, reinterpret_cast<Tc **>(c),
+                matrix_info->transpose_info, matrix_info->transpose_info + 1, matrix_info->size_info,
+                matrix_info->size_info + 1, matrix_info->size_info + 2, matrix_info->value_info,
+                reinterpret_cast<const Ta **>(a), matrix_info->ld_info, reinterpret_cast<const Tb **>(b),
+                matrix_info->ld_info + 1, matrix_info->value_info + 1, reinterpret_cast<Tc **>(c),
                 matrix_info->ld_info + 2, 1, &(matrix_info->groupsize_info));
 
             q.submit([&](sycl::handler &cgh)
@@ -1795,12 +1792,11 @@ namespace dpct
             auto data_c = get_memory<Tc>(c);
             oneapi::mkl::blas::column_major::gemm_batch(
 #ifdef GGML_SYCL_NVIDIA
-            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{q},
+                oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ q },
 #else
-            q,
+                q,
 #endif
-                a_trans, b_trans, m, n, k, alpha_value, data_a, lda,
-                stride_a, data_b, ldb, stride_b, beta_value,
+                a_trans, b_trans, m, n, k, alpha_value, data_a, lda, stride_a, data_b, ldb, stride_b, beta_value,
                 data_c, ldc, stride_c, batch_size);
         }
 

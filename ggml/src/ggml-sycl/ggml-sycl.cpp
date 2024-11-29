@@ -2562,15 +2562,13 @@ inline void ggml_sycl_op_mul_mat_sycl(
         const float beta = 0.0f;
 #if !GGML_SYCL_DNNL
         SYCL_CHECK(CHECK_TRY_ERROR(oneapi::mkl::blas::column_major::gemm(
-#ifdef GGML_SYCL_NVIDIA
-            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{*stream},
-#else
+#    ifdef GGML_SYCL_NVIDIA
+            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ *stream },
+#    else
             *stream,
-#endif
-            oneapi::mkl::transpose::trans,
-            oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
-            dpct::get_value(&alpha, *stream), src0_ddf_i, ne00,
-            src1_ddf1_i, ne10, dpct::get_value(&beta, *stream),
+#    endif
+            oneapi::mkl::transpose::trans, oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
+            dpct::get_value(&alpha, *stream), src0_ddf_i, ne00, src1_ddf1_i, ne10, dpct::get_value(&beta, *stream),
             dst_dd_i, ldc)));
 #else
         auto dnnl_stream = ctx.stream_dnnl(stream);
