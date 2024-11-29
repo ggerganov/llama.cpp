@@ -267,7 +267,7 @@ See [this page](./examples/main/README.md) for a full list of parameters.
 
 ### Conversation mode
 
-For a more ChatGPT-like experience in the terminal, run `llama-cli` in conversation mode by passing `-cnv` as a parameter:
+Run `llama-cli` in conversation/chat mode by passing the `-cnv` parameter:
 
 ```bash
 llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
