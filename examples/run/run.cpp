@@ -111,9 +111,9 @@ class ArgumentParser {
 
 class LlamaData {
    public:
-    llama_model_ptr model;
-    llama_sampler_ptr sampler;
-    llama_context_ptr context;
+    llama_cpp::model model;
+    llama_cpp::sampler sampler;
+    llama_cpp::context context;
     std::vector<llama_chat_message> messages;
 
     int init(const Options & opt) {
@@ -133,11 +133,11 @@ class LlamaData {
 
    private:
     // Initializes the model and returns a unique pointer to it
-    llama_model_ptr initialize_model(const std::string & model_path, const int ngl) {
+    llama_cpp::model initialize_model(const std::string & model_path, const int ngl) {
         llama_model_params model_params = llama_model_default_params();
         model_params.n_gpu_layers = ngl;
 
-        llama_model_ptr model(llama_load_model_from_file(model_path.c_str(), model_params));
+        llama_cpp::model model(llama_cpp::load_model_from_file(model_path, model_params));
         if (!model) {
             fprintf(stderr, "%s: error: unable to load model\n", __func__);
         }
@@ -146,12 +146,12 @@ class LlamaData {
     }
 
     // Initializes the context with the specified parameters
-    llama_context_ptr initialize_context(const llama_model_ptr & model, const int n_ctx) {
+    llama_cpp::context initialize_context(const llama_cpp::model & model, const int n_ctx) {
         llama_context_params ctx_params = llama_context_default_params();
         ctx_params.n_ctx = n_ctx;
         ctx_params.n_batch = n_ctx;
 
-        llama_context_ptr context(llama_new_context_with_model(model.get(), ctx_params));
+        llama_cpp::context context(llama_cpp::new_context_with_model(model, ctx_params));
         if (!context) {
             fprintf(stderr, "%s: error: failed to create the llama_context\n", __func__);
         }
@@ -160,8 +160,8 @@ class LlamaData {
     }
 
     // Initializes and configures the sampler
-    llama_sampler_ptr initialize_sampler() {
-        llama_sampler_ptr sampler(llama_sampler_chain_init(llama_sampler_chain_default_params()));
+    llama_cpp::sampler initialize_sampler() {
+        llama_cpp::sampler sampler(llama_cpp::sampler_chain_init(llama_sampler_chain_default_params()));
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_min_p(0.05f, 1));
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_temp(0.8f));
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
@@ -179,34 +179,20 @@ static void add_message(const char * role, const std::string & text, LlamaData &
     owned_content.push_back(std::move(content));
 }
 
-// Function to apply the chat template and resize `formatted` if needed
-static int apply_chat_template(const LlamaData & llama_data, std::vector<char> & formatted, const bool append) {
-    int result = llama_chat_apply_template(llama_data.model.get(), nullptr, llama_data.messages.data(),
-                                           llama_data.messages.size(), append, formatted.data(), formatted.size());
-    if (result > static_cast<int>(formatted.size())) {
-        formatted.resize(result);
-        result = llama_chat_apply_template(llama_data.model.get(), nullptr, llama_data.messages.data(),
-                                           llama_data.messages.size(), append, formatted.data(), formatted.size());
-    }
-
-    return result;
-}
-
 // Function to tokenize the prompt
-static int tokenize_prompt(const llama_model_ptr & model, const std::string & prompt,
+static int tokenize_prompt(const llama_cpp::model & model, const std::string & prompt,
                            std::vector<llama_token> & prompt_tokens) {
-    const int n_prompt_tokens = -llama_tokenize(model.get(), prompt.c_str(), prompt.size(), NULL, 0, true, true);
-    prompt_tokens.resize(n_prompt_tokens);
-    if (llama_tokenize(model.get(), prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), true,
-                       true) < 0) {
-        GGML_ABORT("failed to tokenize the prompt\n");
+    try {
+        prompt_tokens = llama_cpp::tokenize(model, prompt, false, true);
+        return prompt_tokens.size();
+    } catch (const std::exception & e) {
+        fprintf(stderr, "failed to tokenize the prompt: %s\n", e.what());
+        return -1;
     }
-
-    return n_prompt_tokens;
 }
 
 // Check if we have enough space in the context to evaluate this batch
-static int check_context_size(const llama_context_ptr & ctx, const llama_batch & batch) {
+static int check_context_size(const llama_cpp::context & ctx, const llama_batch & batch) {
     const int n_ctx = llama_n_ctx(ctx.get());
     const int n_ctx_used = llama_get_kv_cache_used_cells(ctx.get());
     if (n_ctx_used + batch.n_tokens > n_ctx) {
@@ -219,15 +205,14 @@ static int check_context_size(const llama_context_ptr & ctx, const llama_batch &
 }
 
 // convert the token to a string
-static int convert_token_to_string(const llama_model_ptr & model, const llama_token token_id, std::string & piece) {
-    char buf[256];
-    int n = llama_token_to_piece(model.get(), token_id, buf, sizeof(buf), 0, true);
-    if (n < 0) {
-        GGML_ABORT("failed to convert token to piece\n");
+static int convert_token_to_string(const llama_cpp::model & model, const llama_token token_id, std::string & piece) {
+    try {
+        piece = llama_cpp::token_to_piece(model, token_id, 0, true);
+        return 0;
+    } catch (const std::exception & e) {
+        fprintf(stderr, "failed to convert token to piece: %s\n", e.what());
+        return -1;
     }
-
-    piece = std::string(buf, n);
-    return 0;
 }
 
 static void print_word_and_concatenate_to_response(const std::string & piece, std::string & response) {
@@ -308,14 +293,20 @@ static int generate_response(LlamaData & llama_data, const std::string & prompt,
 // Helper function to apply the chat template and handle errors
 static int apply_chat_template_with_error_handling(const LlamaData & llama_data, std::vector<char> & formatted,
                                                    const bool is_user_input, int & output_length) {
-    const int new_len = apply_chat_template(llama_data, formatted, is_user_input);
-    if (new_len < 0) {
-        fprintf(stderr, "failed to apply the chat template\n");
+    try {
+        std::string res = llama_cpp::chat_apply_template(
+            llama_data.model,
+            "",
+            llama_data.messages,
+            is_user_input);
+        output_length = res.size();
+        formatted.resize(output_length);
+        std::memcpy(formatted.data(), res.c_str(), output_length);
+        return output_length;
+    } catch (const std::exception & e) {
+        fprintf(stderr, "failed to apply chat template: %s\n", e.what());
         return -1;
     }
-
-    output_length = new_len;
-    return 0;
 }
 
 // Helper function to handle user input
