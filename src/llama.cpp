@@ -21863,8 +21863,8 @@ static int32_t llama_chat_apply_template_internal(
             ss << "<|im_start|>assistant\n";
         }
     } else if (tmpl == "mistral-v1" || tmpl == "mistral-v2" || tmpl == "mistral-v3" || tmpl == "mistral-v3-tekken") {
-    	// See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/chat_templates.md
-    	// See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/templates.md
+        // See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/chat_templates.md
+        // See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/templates.md
         std::string leading_space = (tmpl == "mistral-v1" ? " " : "");
         std::string trailing_space = (tmpl != "mistral-v3-tekken" ? " " : "");
         bool is_inside_turn = false;
@@ -21876,9 +21876,9 @@ static int32_t llama_chat_apply_template_internal(
             std::string role(message->role);
             std::string content = trim(message->content);
             if (role == "system") {
-            	ss << content << "\n\n";
+                ss << content << "\n\n";
             } else if (role == "user") {
-            	ss << content << leading_space << "[/INST]";
+                ss << content << leading_space << "[/INST]";
             } else {
                 ss << trailing_space << content << "</s>";
                 is_inside_turn = false;
