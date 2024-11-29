@@ -227,18 +227,16 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 ## Building and usage
 
 The main product of this project is the `llama` library. Its C-style interface can be found in [include/llama.h](include/llama.h).
-The project also produces several [examples and tools](./examples) that can be used to get started. There are a few ways to obtain the binaries:
+The project also includes many example programs and tools using the `llama` library. The examples range from simple, minimal code snippets to sophisticated sub-projects such as an OpenAI-compatible HTTP server. Possible methods for obtaining the binaries:
 
 - Clone this repository and build locally, see [how to build](./docs/build.md)
 - On MacOS or Linux, install `llama.cpp` via [brew, flox or nix](./docs/install.md)
 - Use a Docker image, see [documentation for Docker](./docs/docker.md)
 - Download pre-built binaries from [releases](https://github.com/ggerganov/llama.cpp/releases)
 
-For more information, refer to [Build llama.cpp locally](./docs/build.md)
-
 ### Obtaining and quantizing models
 
-The [Hugging Face](https://huggingface.co) platform hosts [plenty of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp` - simply search for the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format:
+The [Hugging Face](https://huggingface.co) platform hosts a [number of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp` - simply search for the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format:
 
 - [Trending](https://huggingface.co/models?library=gguf&sort=trending)
 - [LLaMA](https://huggingface.co/models?sort=trending&search=llama+gguf)
@@ -269,7 +267,7 @@ See [this page](./examples/main/README.md) for a full list of parameters.
 
 ### Conversation mode
 
-For a more ChatGPT-like experience, run `llama-cli` in conversation mode by passing `-cnv` as a parameter:
+For a more ChatGPT-like experience in the terminal, run `llama-cli` in conversation mode by passing `-cnv` as a parameter:
 
 ```bash
 llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
@@ -308,7 +306,7 @@ For authoring more complex JSON grammars, check out https://grammar.intrinsiclab
 
 ### Web server (`llama-server`)
 
-[llama.cpp's web server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
+The [llama-server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
 Example usage:
 
