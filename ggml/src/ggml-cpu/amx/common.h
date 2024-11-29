@@ -74,7 +74,7 @@ inline void parallel_for(int nth, int n, const func_t& f) {
 }
 
 template <typename func_t>
-inline void parallel_for_ggml(const ggml_compute_params * params, int n, const func_t& f) {
+inline void parallel_for_ggml(const ggml_compute_params * params, int n, const func_t & f) {
     int tbegin, tend;
     balance211(n, params->nth, params->ith, tbegin, tend);
     f(tbegin, tend);
