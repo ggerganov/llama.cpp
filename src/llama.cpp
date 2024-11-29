@@ -21876,7 +21876,7 @@ static int32_t llama_chat_apply_template_internal(
             std::string role(message->role);
             std::string content = trim(message->content);
             if (role == "system") {
-            	ss << system_message << "\n\n";
+            	ss << content << "\n\n";
             } else if (role == "user") {
             	ss << content << leading_space << "[/INST]";
             } else {
