@@ -21884,6 +21884,20 @@ static int32_t llama_chat_apply_template_internal(
                 is_inside_turn = false;
             }
         }
+    } else if (tmpl == "mistral-v7" || (tmpl_contains("[SYSTEM_PROMPT]") && tmpl_contains("[INST]"))) {
+    	// See: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411#basic-instruct-template-v7
+        for (auto message : chat) {
+            std::string role(message->role);
+            std::string content(message->content);
+            if (role == "system") {
+            	ss << "[SYSTEM_PROMPT] " << content << "[/SYSTEM_PROMPT]";
+            } else if (role == "user") {
+            	ss << "[INST] " << content << "[/INST]";
+            }
+            else {
+            	ss << " " << content << "</s>";
+            }
+        }
     } else if (tmpl == "llama2" || tmpl == "mistral" || tmpl_contains("[INST]")) {
         // llama2 template and its variants
         // [variant] support system message
