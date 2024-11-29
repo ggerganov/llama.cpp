@@ -21862,6 +21862,28 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|im_start|>assistant\n";
         }
+    } else if (tmpl == "mistral-v1" || tmpl == "mistral-v2" || tmpl == "mistral-v3" || tmpl == "mistral-v3-tekken") {
+    	// See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/chat_templates.md
+    	// See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/templates.md
+        std::string leading_space = (tmpl == "mistral-v1" ? " " : "");
+        std::string trailing_space = (tmpl != "mistral-v3-tekken" ? " " : "");
+        std::string system_message = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            std::string content = trim(message->content);
+            if (role == "system") {
+                system_message = content;
+            } else if (role == "user") {
+            	ss << leading_space << "[INST]" << trailing_space;
+            	if (!system_message.empty()) {
+            		ss << system_message << "\n\n";
+            		system_message = "";
+            	}
+            	ss << content << leading_space << "[/INST]";
+            } else {
+                ss << trailing_space << content << "</s>";
+            }
+        }
     } else if (tmpl == "llama2" || tmpl == "mistral" || tmpl_contains("[INST]")) {
         // llama2 template and its variants
         // [variant] support system message
