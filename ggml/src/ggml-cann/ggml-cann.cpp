@@ -1739,7 +1739,6 @@ static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
         case GGML_OP_ROPE: {
             // TODO: with ops-test v == 1
             float * ext_factor = (float*)((int32_t*)op->op_params + 7);
-            float * attn_factor = (float*)((int32_t*)op->op_params + 8);
             // TODO: n_dims <= ne0
             if (op->src[0]->ne[0] != op->op_params[1]) {
                 return false;
@@ -1748,17 +1747,7 @@ static bool ggml_backend_cann_supports_op(ggml_backend_dev_t dev,
             if (*ext_factor != 0) {
                 return false;
             }
-            // TODO: attn_factor != 1
-            if (*attn_factor != 1) {
-                return false;
-            }
-            //TODO: type == GGML_TYPE_F16
-            switch (op->src[0]->type) {
-                case GGML_TYPE_F32:
-                    return true;
-                default:
-                    return false;
-            }
+            return true;
         }
         case GGML_OP_UPSCALE: {
             // aclnnUpsampleNearest2dGetWorkspaceSize not support
