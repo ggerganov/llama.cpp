@@ -130,7 +130,7 @@ void ggml_backend_sycl_print_sycl_devices() {
         " |compute|Max work|sub  |mem    |                     |\n");
     GGML_LOG_INFO(
         "|ID|        Device Type|                                   "
-        "Name|Version|units  |group   |group|size   |       Driver version|\n")
+        "Name|Version|units  |group   |group|size   |       Driver version|\n");
     GGML_LOG_INFO(
         "|--|-------------------|---------------------------------------|------"
         "-|-------|--------|-----|-------|---------------------|\n");
@@ -190,7 +190,7 @@ static void ggml_check_sycl() try {
             return;
         }
         GGML_ASSERT(g_all_sycl_device_count <= GGML_SYCL_MAX_DEVICES);
-        
+
         initialized = true;
         g_sycl_loaded = true;
         ggml_backend_sycl_print_sycl_devices();
@@ -1164,7 +1164,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
         GGML_LOG_DEBUG("%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, requested %u MB\n", __func__, id, nnz,
                 (uint32_t)(max_size/1024/1024), (uint32_t)(g_sycl_pool_size[id]/1024/1024), (uint32_t)(size/1024/1024));
 #endif
-    
+
         // GGML_SYCL_DEBUG("ggml_sycl_pool_malloc_leg look_ahead_size=%lu, return %p\n", look_ahead_size, ptr);
         return ptr;
     }
