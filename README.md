@@ -237,8 +237,10 @@ For more information, refer to [Build llama.cpp locally](./docs/build.md)
 
 ### Obtaining and quantizing models
 
-The [Hugging Face](https://huggingface.co) platform hosts a large amount of LLM models compatible with `llama.cpp`. Search for the [GGUF](https://huggingface.co/models?library=gguf&sort=trending) file format.
-The platform provides multiple online tools for converting, quantizing and hosting models with `llama.cpp`:
+The [Hugging Face](https://huggingface.co) platform hosts a [large amount of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp` - simply search for the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format.
+After downloading a model, use the CLI tools to run it locally - see below.
+
+The Hugging Face platform also provides multiple online tools for converting, quantizing and hosting models with `llama.cpp`:
 
 - Use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space to quantize model weights to smaller sizes
 - Use the [GGUF-my-LoRA](https://huggingface.co/spaces/ggml-org/gguf-my-lora) space to convert LoRA adapters to GGUF format (more info: https://github.com/ggerganov/llama.cpp/discussions/10123)
