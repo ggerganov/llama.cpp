@@ -26,12 +26,6 @@ if (OpenCL_FOUND)
 
     add_compile_definitions(GGML_OPENCL_SOA_Q)
 
-    if (GGML_OPENCL_SMALL_ALLOC)
-        message(STATUS "OpenCL will allocate a separate buffer for each tensor. "
-            "The default behavior allocates a large buffer to hold multiple tensors.")
-        add_compile_definitions(GGML_OPENCL_SMALL_ALLOC)
-    endif ()
-
     if (GGML_OPENCL_USE_ADRENO_KERNELS)
         message(STATUS "OpenCL will use matmul kernels optimized for Adreno")
         add_compile_definitions(GGML_OPENCL_USE_ADRENO_KERNELS)
