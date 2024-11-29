@@ -1690,7 +1690,12 @@ namespace dpct
             auto data_b = get_memory<const Tb>(b);
             auto data_c = get_memory<Tc>(c);
             oneapi::mkl::blas::column_major::gemm(
-                q, a_trans, b_trans, m, n, k, alpha_value, data_a, lda,
+#ifdef GGML_SYCL_NVIDIA
+            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{q},
+#else
+            q,
+#endif
+                a_trans, b_trans, m, n, k, alpha_value, data_a, lda,
                 data_b, ldb, beta_value, data_c, ldc);
         }
 
@@ -1755,7 +1760,12 @@ namespace dpct
             matrix_info->groupsize_info = batch_size;
 
             sycl::event e = oneapi::mkl::blas::column_major::gemm_batch(
-                q, matrix_info->transpose_info, matrix_info->transpose_info + 1,
+#ifdef GGML_SYCL_NVIDIA
+            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{q},
+#else
+            q,
+#endif
+                matrix_info->transpose_info, matrix_info->transpose_info + 1,
                 matrix_info->size_info, matrix_info->size_info + 1,
                 matrix_info->size_info + 2, matrix_info->value_info,
                 reinterpret_cast<const Ta **>(a), matrix_info->ld_info,
@@ -1784,7 +1794,12 @@ namespace dpct
             auto data_b = get_memory<const Tb>(b);
             auto data_c = get_memory<Tc>(c);
             oneapi::mkl::blas::column_major::gemm_batch(
-                q, a_trans, b_trans, m, n, k, alpha_value, data_a, lda,
+#ifdef GGML_SYCL_NVIDIA
+            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{q},
+#else
+            q,
+#endif
+                a_trans, b_trans, m, n, k, alpha_value, data_a, lda,
                 stride_a, data_b, ldb, stride_b, beta_value,
                 data_c, ldc, stride_c, batch_size);
         }

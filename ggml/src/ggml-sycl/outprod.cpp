@@ -40,7 +40,12 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, const ggml_tensor* sr
 
     try {
         // Perform matrix multiplication using oneMKL GEMM
-        oneapi::mkl::blas::column_major::gemm(*stream,
+        oneapi::mkl::blas::column_major::gemm(
+#ifdef GGML_SYCL_NVIDIA
+            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{*stream},
+#else
+            *stream,
+#endif
             oneapi::mkl::transpose::nontrans, src1_op,
             ne0, ne1, ne01,
             alpha,
