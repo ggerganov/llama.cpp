@@ -127,3 +127,22 @@ def test_completion_with_response_format(response_format: dict, n_predicted: int
         assert res.status_code != 200
         assert "error" in res.body
 
+
+@pytest.mark.parametrize("messages", [
+    None,
+    "string",
+    [123],
+    [{}],
+    [{"role": 123}],
+    [{"role": "system", "content": 123}],
+    # [{"content": "hello"}], # TODO: should not be a valid case
+    [{"role": "system", "content": "test"}, {}],
+])
+def test_invalid_chat_completion_req(messages):
+    global server
+    server.start()
+    res = server.make_request("POST", "/chat/completions", data={
+        "messages": messages,
+    })
+    assert res.status_code == 400 or res.status_code == 500
+    assert "error" in res.body
