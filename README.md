@@ -140,15 +140,13 @@ Typically finetunes of the base models below are supported as well.
 
 **UI:**
 
-Unless otherwise noted these projects are open-source with permissive licensing:
-
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [Dot](https://github.com/alexpinel/Dot) (GPL)
 - [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
-- [iohub/collama](https://github.com/iohub/coLLaMA)
+- [iohub/collama](https://github.com/iohub/coLLaMA) (Apache-2.0)
 - [janhq/jan](https://github.com/janhq/jan) (AGPL)
-- [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file) (Apache 2.0 or later)
+- [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file) (Apache-2.0)
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
 - [LARS](https://github.com/abgulati/LARS) (AGPL)
 - [Llama Assistant](https://github.com/vietanhdev/llama-assistant) (GPL)
@@ -160,18 +158,18 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [MindMac](https://mindmac.app) (proprietary)
 - [MindWorkAI/AI-Studio](https://github.com/MindWorkAI/AI-Studio) (FSL-1.1-MIT)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
-- [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile)
-- [nat/openplayground](https://github.com/nat/openplayground)
-- [nomic-ai/gpt4all](https://github.com/nomic-ai/gpt4all)
-- [ollama/ollama](https://github.com/ollama/ollama)
+- [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile) (Apache-2.0)
+- [nat/openplayground](https://github.com/nat/openplayground) (MIT)
+- [nomic-ai/gpt4all](https://github.com/nomic-ai/gpt4all) (MIT)
+- [ollama/ollama](https://github.com/ollama/ollama) (MIT)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) (AGPL)
 - [PocketPal AI](https://github.com/a-ghorbani/pocketpal-ai) (MIT)
-- [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
-- [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
+- [psugihara/FreeChat](https://github.com/psugihara/FreeChat) (MIT)
+- [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal) (MIT)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
 - [ramalama](https://github.com/containers/ramalama) (MIT)
-- [semperai/amica](https://github.com/semperai/amica)
-- [withcatai/catai](https://github.com/withcatai/catai)
+- [semperai/amica](https://github.com/semperai/amica) (MIT)
+- [withcatai/catai](https://github.com/withcatai/catai) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
