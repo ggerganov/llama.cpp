@@ -154,6 +154,10 @@ int main(void) {
         return output;
     };
     assert(fmt_sys("chatml") == "<|im_start|>system\nYou are a helpful assistant<|im_end|>\n");
+    assert(fmt_sys("mistral-v1") == " [INST] You are a helpful assistant\n\n");
+    assert(fmt_sys("mistral-v2") == "[INST] You are a helpful assistant\n\n");
+    assert(fmt_sys("mistral-v3") == "[INST] You are a helpful assistant\n\n");
+    assert(fmt_sys("mistral-v3-tekken") == "[INST]You are a helpful assistant\n\n");
     assert(fmt_sys("llama2") == "[INST] You are a helpful assistant\n");
     assert(fmt_sys("gemma")  == ""); // for gemma, system message is merged with user message
     assert(fmt_sys("llama3") == "<|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|>");
@@ -173,6 +177,10 @@ int main(void) {
         return output;
     };
     assert(fmt_single("chatml") == "\n<|im_start|>user\nHow are you<|im_end|>\n<|im_start|>assistant\n");
+    assert(fmt_single("mistral-v1") == " [INST] How are you [/INST]");
+    assert(fmt_single("mistral-v2") == "[INST] How are you[/INST]");
+    assert(fmt_single("mistral-v3") == "[INST] How are you[/INST]");
+    assert(fmt_single("mistral-v3-tekken") == "[INST]How are you[/INST]");
     assert(fmt_single("llama2") == "[INST] How are you [/INST]");
     assert(fmt_single("gemma")  == "\n<start_of_turn>user\nHow are you<end_of_turn>\n<start_of_turn>model\n");
     assert(fmt_single("llama3") == "<|start_header_id|>user<|end_header_id|>\n\nHow are you<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n");

@@ -21867,21 +21867,21 @@ static int32_t llama_chat_apply_template_internal(
     	// See: https://github.com/mistralai/cookbook/blob/main/concept-deep-dive/tokenization/templates.md
         std::string leading_space = (tmpl == "mistral-v1" ? " " : "");
         std::string trailing_space = (tmpl != "mistral-v3-tekken" ? " " : "");
-        std::string system_message = "";
+        bool is_inside_turn = false;
         for (auto message : chat) {
+            if (!is_inside_turn) {
+                ss << leading_space << "[INST]" << trailing_space;
+                is_inside_turn = true;
+            }
             std::string role(message->role);
             std::string content = trim(message->content);
             if (role == "system") {
-                system_message = content;
+            	ss << system_message << "\n\n";
             } else if (role == "user") {
-            	ss << leading_space << "[INST]" << trailing_space;
-            	if (!system_message.empty()) {
-            		ss << system_message << "\n\n";
-            		system_message = "";
-            	}
             	ss << content << leading_space << "[/INST]";
             } else {
                 ss << trailing_space << content << "</s>";
+                is_inside_turn = false;
             }
         }
     } else if (tmpl == "llama2" || tmpl == "mistral" || tmpl_contains("[INST]")) {
