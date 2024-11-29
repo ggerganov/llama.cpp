@@ -86,7 +86,7 @@ if (OpenCL_FOUND)
 
         add_custom_command(
             OUTPUT ${OPENCL2_GEMV_NOSHUFFLE_SOURCE_EMBED}
-            COMMAND python ${EMBED_KERNEL_SCRIPT}
+            COMMAND ${Python3_EXECUTABLE} ${EMBED_KERNEL_SCRIPT}
                 ${CMAKE_CURRENT_SOURCE_DIR}/kernels/ggml-opencl2_gemv_noshuffle.cl
                 ${OPENCL2_GEMV_NOSHUFFLE_SOURCE_EMBED}
             DEPENDS kernels/ggml-opencl2_gemv_noshuffle.cl ${EMBED_KERNEL_SCRIPT}
@@ -95,7 +95,7 @@ if (OpenCL_FOUND)
 
         add_custom_command(
             OUTPUT ${OPENCL2_GEMV_NOSHUFFLE_GENERAL_SOURCE_EMBED}
-            COMMAND python ${EMBED_KERNEL_SCRIPT}
+            COMMAND ${Python3_EXECUTABLE} ${EMBED_KERNEL_SCRIPT}
                 ${CMAKE_CURRENT_SOURCE_DIR}/kernels/ggml-opencl2_gemv_noshuffle_general.cl
                 ${OPENCL2_GEMV_NOSHUFFLE_GENERAL_SOURCE_EMBED}
             DEPENDS kernels/ggml-opencl2_gemv_noshuffle_general.cl ${EMBED_KERNEL_SCRIPT}
@@ -104,7 +104,7 @@ if (OpenCL_FOUND)
 
         add_custom_command(
             OUTPUT ${OPENCL2_MUL_MAT_Ab_Bi_8x4_SOURCE_EMBED}
-            COMMAND python ${EMBED_KERNEL_SCRIPT}
+            COMMAND ${Python3_EXECUTABLE} ${EMBED_KERNEL_SCRIPT}
                 ${CMAKE_CURRENT_SOURCE_DIR}/kernels/ggml-opencl2_mul_mat_Ab_Bi_8x4.cl
                 ${OPENCL2_MUL_MAT_Ab_Bi_8x4_SOURCE_EMBED}
             DEPENDS kernels/ggml-opencl2_mul_mat_Ab_Bi_8x4.cl ${EMBED_KERNEL_SCRIPT}
@@ -113,7 +113,7 @@ if (OpenCL_FOUND)
 
         add_custom_command(
             OUTPUT ${OPENCL2_TRANSPOSE_16_SOURCE_EMBED}
-            COMMAND python ${EMBED_KERNEL_SCRIPT}
+            COMMAND ${Python3_EXECUTABLE} ${EMBED_KERNEL_SCRIPT}
                 ${CMAKE_CURRENT_SOURCE_DIR}/kernels/ggml-opencl2_transpose_16.cl
                 ${OPENCL2_TRANSPOSE_16_SOURCE_EMBED}
             DEPENDS kernels/ggml-opencl2_transpose_16.cl ${EMBED_KERNEL_SCRIPT}
@@ -122,7 +122,7 @@ if (OpenCL_FOUND)
 
         add_custom_command(
             OUTPUT ${OPENCL2_TRANSPOSE_32_SOURCE_EMBED}
-            COMMAND python ${EMBED_KERNEL_SCRIPT}
+            COMMAND ${Python3_EXECUTABLE} ${EMBED_KERNEL_SCRIPT}
                 ${CMAKE_CURRENT_SOURCE_DIR}/kernels/ggml-opencl2_transpose_32.cl
                 ${OPENCL2_TRANSPOSE_32_SOURCE_EMBED}
             DEPENDS kernels/ggml-opencl2_transpose_32.cl ${EMBED_KERNEL_SCRIPT}
@@ -131,7 +131,7 @@ if (OpenCL_FOUND)
 
         add_custom_command(
             OUTPUT ${OPENCL2_TRANSPOSE_32_16_SOURCE_EMBED}
-            COMMAND python ${EMBED_KERNEL_SCRIPT}
+            COMMAND ${Python3_EXECUTABLE} ${EMBED_KERNEL_SCRIPT}
                 ${CMAKE_CURRENT_SOURCE_DIR}/kernels/ggml-opencl2_transpose_32_16.cl
                 ${OPENCL2_TRANSPOSE_32_16_SOURCE_EMBED}
             DEPENDS kernels/ggml-opencl2_transpose_32_16.cl ${EMBED_KERNEL_SCRIPT}
