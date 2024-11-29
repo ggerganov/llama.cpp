@@ -17,15 +17,6 @@ add_library(llama
             unicode-data.cpp
             )
 
-# TODO: This is intrusive. We intend to remove SMALL_ALLOC path once the we fully
-# migrate to the non SMALL_ALLOC path.
-if (GGML_OPENCL)
-    add_compile_definitions(GGML_USE_OPENCL)
-    if (GGML_OPENCL_SMALL_ALLOC)
-        add_compile_definitions(GGML_OPENCL_SMALL_ALLOC)
-    endif ()
-endif ()
-
 target_include_directories(llama PUBLIC . ../include)
 target_compile_features   (llama PUBLIC cxx_std_17) # don't bump
 

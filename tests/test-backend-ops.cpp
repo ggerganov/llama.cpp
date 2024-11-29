@@ -465,6 +465,7 @@ struct test_case {
         // post-graph sentinel
         add_sentinel(ctx);
 
+        // allocate
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend1);
         if (buf == NULL) {
             printf("failed to allocate tensors [%s] ", ggml_backend_name(backend1));
