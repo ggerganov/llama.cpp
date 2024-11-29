@@ -904,6 +904,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
 
       - name: Install Cuda Toolkit 11.7
         if: ${{ matrix.cuda == '11.7' }}
@@ -1139,6 +1141,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
 
       - name: Install
         id: depends

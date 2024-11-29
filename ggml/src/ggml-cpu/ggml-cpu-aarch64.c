@@ -1,7 +1,3 @@
-// SPDX-FileCopyrightText: Copyright 2024 Arm Limited and/or its affiliates <open-source-office@arm.com>
-// SPDX-License-Identifier: MIT
-//
-
 #define GGML_COMMON_IMPL_C
 #include "ggml-common.h"
 
