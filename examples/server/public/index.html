@@ -38,6 +38,34 @@
       --tw-text-opacity: 1;
       @apply bg-base-300 text-base-content;
     }
+    @media (max-width:640px) {
+      #app>div:not(.chat-screen):not(:hover) {
+        width: 3rem;
+        position: absolute;
+        height: 5rem;
+        background-color: var(--fallback-b2, oklch(var(--b2)));
+        border-radius: 0 10px 10px 0;
+        top: 60%;
+        z-index: 900;
+        &>* {
+          display: none
+        }
+        &::before {
+          content: "⟫";
+          height: 100%;
+          display: flex;
+          justify-content: center;
+          align-items: center
+        }
+      }
+      #app>div:not(.chat-screen):hover {
+        background-color: var(--fallback-b2, oklch(var(--b2)));
+        position: absolute;
+        width: 320px;
+        max-width: 85vw;
+        z-index: 900
+      }
+    }
   </style>
 </head>
 
