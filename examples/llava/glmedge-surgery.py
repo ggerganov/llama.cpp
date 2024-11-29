@@ -1,7 +1,7 @@
 import argparse
 import os
 import torch
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-m", "--model", help="Path to GLM model")
