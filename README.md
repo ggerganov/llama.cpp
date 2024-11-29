@@ -178,6 +178,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [LLMUnity](https://github.com/undreamai/LLMUnity) (MIT)
 - [Llama Assistant](https://github.com/vietanhdev/llama-assistant) (GPL)
 - [PocketPal AI - An iOS and Android App](https://github.com/a-ghorbani/pocketpal-ai) (MIT)
+- [GPTLocalhost (Word Add-in)](https://gptlocalhost.com/demo#llama.cpp) - run llama.cpp in Microsoft Word locally. 
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
