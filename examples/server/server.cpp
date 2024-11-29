@@ -1313,6 +1313,7 @@ struct server_context {
             {"id_slot",    slot.id},
             {"multimodal", false},
             {"index",      slot.index},
+            {"timings",    slot.get_formated_timings()},
         };
 
         if (slot.params.sampling.n_probs > 0) {
@@ -2274,11 +2275,16 @@ struct server_context {
                 common_sampler_accept(slot.smpl, id, true);
 
                 slot.n_decoded += 1;
+
+                const int64_t t_current = ggml_time_us();
+
                 if (slot.n_decoded == 1) {
-                    slot.t_start_generation = ggml_time_us();
+                    slot.t_start_generation = t_current;
                     slot.t_prompt_processing = (slot.t_start_generation - slot.t_start_process_prompt) / 1e3;
                     metrics.on_prompt_eval(slot);
                 }
+
+                slot.t_token_generation = (t_current - slot.t_start_generation) / 1e3;
 
                 completion_token_output result;
                 result.tok = id;
@@ -2995,13 +3001,15 @@ int main(int argc, char ** argv) {
         ctx_server.queue_tasks.post(tasks);
 
         bool stream = json_value(data, "stream", false);
+        bool timings = json_value(data, "timing_per_token", false);
+        
         const auto task_ids = server_task::get_list_id(tasks);
         const auto completion_id = gen_chatcmplid();
 
         if (!stream) {
             ctx_server.receive_cmpl_results(task_ids, [&](const std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
-                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose);
+                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose, timings);
                 res_ok(res, result_oai);
             }, [&](const json & error_data) {
                 res_error(res, error_data);
@@ -3009,9 +3017,9 @@ int main(int argc, char ** argv) {
 
             ctx_server.queue_results.remove_waiting_task_ids(task_ids);
         } else {
-            const auto chunked_content_provider = [task_ids, &ctx_server, completion_id](size_t, httplib::DataSink & sink) {
+            const auto chunked_content_provider = [task_ids, &ctx_server, completion_id, timings](size_t, httplib::DataSink & sink) {
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](const server_task_result & result) -> bool {
-                    std::vector<json> result_array = format_partial_response_oaicompat(result.data, completion_id);
+                    std::vector<json> result_array = format_partial_response_oaicompat(result.data, completion_id, timings);
                     for (auto & event_data : result_array) {
                         if (event_data.empty()) {
                             continue; // skip the stop token
