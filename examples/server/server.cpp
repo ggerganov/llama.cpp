@@ -1269,6 +1269,7 @@ struct server_context {
             {"n_keep",                    slot.params.n_keep},
             {"n_discard",                 slot.params.n_discard},
             {"ignore_eos",                slot.params.sampling.ignore_eos},
+            {"timing_per_token",          slot.params.sampling.timing_per_token},
             {"stream",                    slot.params.stream},
           //{"logit_bias",                slot.params.sampling.logit_bias},
             {"n_probs",                   slot.params.sampling.n_probs},
