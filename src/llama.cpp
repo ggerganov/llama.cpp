@@ -22085,7 +22085,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|assistant|>";
         }
-    } else if(tmpl == "glm-edge" || tmpl_contains("<|assistant|>")){
+    } else if(tmpl == "glm-edge" || (tmpl_contains("<|assistant|>") && !tmpl_contains("<|end|>") && !tmpl_contains("</s>"))){
         for (auto message : chat) {
             std::string role(message->role);
             ss << "<|" << role << "|>" << "\n" << message->content;
