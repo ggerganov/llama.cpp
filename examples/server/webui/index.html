@@ -8,161 +8,184 @@
 </head>
 
 <body>
-  <div id="app" class="flex flex-row opacity-0"> <!-- opacity-0 will be removed on app mounted -->
-    <!-- sidebar -->
-    <div class="flex flex-col bg-black bg-opacity-5 w-64 py-8 px-4 h-screen overflow-y-auto">
-      <h2 class="font-bold mb-4 ml-4">Conversations</h2>
+  <div id="app" class="opacity-0"> <!-- opacity-0 will be removed on app mounted -->
+    <div class="flex flex-row drawer lg:drawer-open">
+      <input id="toggle-drawer" type="checkbox" class="drawer-toggle" checked />
 
-      <!-- list of conversations -->
-      <div :class="{
-        'btn btn-ghost justify-start': true,
-        'btn-active': messages.length === 0,
-      }" @click="newConversation">
-        + New conversation
-      </div>
-      <div v-for="conv in conversations" :class="{
-        'btn btn-ghost justify-start font-normal': true,
-        'btn-active': conv.id === viewingConvId,
-      }" @click="setViewingConv(conv.id)">
-        <span class="truncate">{{ conv.messages[0].content }}</span>
-      </div>
-      <div class="text-center text-xs opacity-40 mt-auto mx-4">
-        Conversations are saved to browser's localStorage
-      </div>
-    </div>
+      <!-- sidebar -->
+      <div class="drawer-side h-screen lg:h-screen z-50 lg:max-w-64">
+        <label for="toggle-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+        <div class="flex flex-col bg-base-200 min-h-full py-4 px-4">
+          <div class="flex flex-row items-center justify-between mb-4 mt-4">
+            <h2 class="font-bold ml-4">Conversations</h2>
 
-    <div class="chat-screen flex flex-col w-screen h-screen px-8 mx-auto">
-      <!-- header -->
-      <div class="flex flex-row items-center">
-        <div class="grow text-2xl font-bold mt-8 mb-6">
-          🦙 llama.cpp
-        </div>
-
-        <!-- action buttons (top right) -->
-        <div class="flex items-center">
-          <div v-if="messages.length > 0" class="dropdown dropdown-end">
-            <!-- "more" button -->
-            <div tabindex="0" role="button" class="btn m-1">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/>
+            <!-- close sidebar button -->
+            <label for="toggle-drawer" class="btn btn-ghost lg:hidden">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-bar-left" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M12.5 15a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 1 0v13a.5.5 0 0 1-.5.5M10 8a.5.5 0 0 1-.5.5H3.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L3.707 7.5H9.5a.5.5 0 0 1 .5.5"/>
               </svg>
-            </div>
-            <!-- "more" dropdown menu -->
-            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
-              <li @click="downloadConv(viewingConvId)" :disabled="isGenerating"><a>Download</a></li>
-              <li class="text-error" @click="deleteConv(viewingConvId)" :disabled="isGenerating"><a>Delete</a></li>
-            </ul>
+            </label>
           </div>
-          <button class="btn" @click="showConfigDialog = true" :disabled="isGenerating">
-            <!-- edit config button -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
-              <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/>
-              <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
-            </svg>
-          </button>
 
-          <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
-          <div class="dropdown dropdown-end dropdown-bottom">
-            <div tabindex="0" role="button" class="btn m-1">
-              Theme
-              <svg width="12px" height="12px" class="inline-block h-2 w-2 fill-current opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048">
-                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
-              </svg>
-            </div>
-            <ul tabindex="0" class="dropdown-content bg-base-300 rounded-box z-[1] w-52 p-2 shadow-2xl h-80 overflow-y-auto">
-              <li>
-                <button
-                  class="btn btn-sm btn-block w-full btn-ghost justify-start"
-                  :class="{ 'btn-active': selectedTheme === 'auto' }"
-                  @click="setSelectedTheme('auto')">
-                  auto
-                </button>
-              </li>
-              <li v-for="theme in themes">
-                <input
-                  type="radio"
-                  name="theme-dropdown"
-                  class="theme-controller btn btn-sm btn-block w-full btn-ghost justify-start"
-                  :aria-label="theme"
-                  :value="theme"
-                  :checked="selectedTheme === theme"
-                  @click="setSelectedTheme(theme)" />
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <!-- chat messages -->
-      <div id="messages-list" class="flex flex-col grow overflow-y-auto">
-        <div class="mt-auto flex justify-center">
-          <!-- placeholder to shift the message to the bottom -->
-           {{ messages.length === 0 ? 'Send a message to start' : '' }}
-        </div>
-        <div v-for="msg in messages" class="group">
+          <!-- list of conversations -->
           <div :class="{
-            'chat': true,
-            'chat-start': msg.role !== 'user',
-            'chat-end': msg.role === 'user',
-          }">
+            'btn btn-ghost justify-start': true,
+            'btn-active': messages.length === 0,
+          }" @click="newConversation">
+            + New conversation
+          </div>
+          <div v-for="conv in conversations" :class="{
+            'btn btn-ghost justify-start font-normal': true,
+            'btn-active': conv.id === viewingConvId,
+          }" @click="setViewingConv(conv.id)">
+            <span class="truncate">{{ conv.messages[0].content }}</span>
+          </div>
+          <div class="text-center text-xs opacity-40 mt-auto mx-4">
+            Conversations are saved to browser's localStorage
+          </div>
+        </div>
+      </div>
+
+      <!-- main view -->
+      <div class="chat-screen drawer-content grow flex flex-col h-screen w-screen mx-auto px-4">
+        <!-- header -->
+        <div class="flex flex-row items-center mt-6 mb-6">
+          <!-- open sidebar button -->
+          <label for="toggle-drawer" class="btn btn-ghost lg:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
+              <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+            </svg>
+          </label>
+
+          <div class="grow text-2xl font-bold ml-2">llama.cpp</div>
+
+          <!-- action buttons (top right) -->
+          <div class="flex items-center">
+            <div v-if="messages.length > 0" class="dropdown dropdown-end">
+              <!-- "more" button -->
+              <div tabindex="0" role="button" class="btn m-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                  <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                </svg>
+              </div>
+              <!-- "more" dropdown menu -->
+              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+                <li @click="downloadConv(viewingConvId)" :disabled="isGenerating"><a>Download</a></li>
+                <li class="text-error" @click="deleteConv(viewingConvId)" :disabled="isGenerating"><a>Delete</a></li>
+              </ul>
+            </div>
+            <button class="btn" @click="showConfigDialog = true" :disabled="isGenerating">
+              <!-- settings button -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
+                <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/>
+                <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
+              </svg>
+            </button>
+
+            <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
+            <div class="dropdown dropdown-end dropdown-bottom">
+              <div tabindex="0" role="button" class="btn m-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-palette2" viewBox="0 0 16 16">
+                  <path d="M0 .5A.5.5 0 0 1 .5 0h5a.5.5 0 0 1 .5.5v5.277l4.147-4.131a.5.5 0 0 1 .707 0l3.535 3.536a.5.5 0 0 1 0 .708L10.261 10H15.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H3a3 3 0 0 1-2.121-.879A3 3 0 0 1 0 13.044m6-.21 7.328-7.3-2.829-2.828L6 7.188zM4.5 13a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0M15 15v-4H9.258l-4.015 4zM0 .5v12.495zm0 12.495V13z"/>
+                </svg>
+              </div>
+              <ul tabindex="0" class="dropdown-content bg-base-300 rounded-box z-[1] w-52 p-2 shadow-2xl h-80 overflow-y-auto">
+                <li>
+                  <button
+                    class="btn btn-sm btn-block btn-ghost justify-start"
+                    :class="{ 'btn-active': selectedTheme === 'auto' }"
+                    @click="setSelectedTheme('auto')">
+                    auto
+                  </button>
+                </li>
+                <li v-for="theme in themes">
+                  <input
+                    type="radio"
+                    name="theme-dropdown"
+                    class="theme-controller btn btn-sm btn-block btn-ghost justify-start"
+                    :aria-label="theme"
+                    :value="theme"
+                    :checked="selectedTheme === theme"
+                    @click="setSelectedTheme(theme)" />
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- chat messages -->
+        <div id="messages-list" class="flex flex-col grow overflow-y-auto">
+          <div class="mt-auto flex justify-center">
+            <!-- placeholder to shift the message to the bottom -->
+            {{ messages.length === 0 ? 'Send a message to start' : '' }}
+          </div>
+          <div v-for="msg in messages" class="group">
             <div :class="{
-              'chat-bubble markdown': true,
-              'chat-bubble-base-300': msg.role !== 'user',
+              'chat': true,
+              'chat-start': msg.role !== 'user',
+              'chat-end': msg.role === 'user',
             }">
-              <!-- textarea for editing message -->
-              <template v-if="editingMsg && editingMsg.id === msg.id">
-                <textarea
-                  class="textarea textarea-bordered bg-base-100 text-base-content w-96"
-                  v-model="msg.content"></textarea>
-                <br/>
-                <button class="btn btn-ghost mt-2 mr-2" @click="editingMsg = null">Cancel</button>
-                <button class="btn mt-2" @click="editUserMsgAndRegenerate(msg)">Submit</button>
-              </template>
-              <!-- render message as markdown -->
-              <vue-markdown v-else :source="msg.content" />
+              <div :class="{
+                'chat-bubble markdown': true,
+                'chat-bubble-base-300': msg.role !== 'user',
+              }">
+                <!-- textarea for editing message -->
+                <template v-if="editingMsg && editingMsg.id === msg.id">
+                  <textarea
+                    class="textarea textarea-bordered bg-base-100 text-base-content w-96"
+                    v-model="msg.content"></textarea>
+                  <br/>
+                  <button class="btn btn-ghost mt-2 mr-2" @click="editingMsg = null">Cancel</button>
+                  <button class="btn mt-2" @click="editUserMsgAndRegenerate(msg)">Submit</button>
+                </template>
+                <!-- render message as markdown -->
+                <vue-markdown v-else :source="msg.content" />
+              </div>
+            </div>
+
+            <!-- actions for each message -->
+            <div :class="{'text-right': msg.role === 'user'}" class="mx-4 mt-2 mb-2">
+              <!-- user message -->
+              <button v-if="msg.role === 'user'" class="badge btn-mini show-on-hover" @click="editingMsg = msg" :disabled="isGenerating">
+                ✍️ Edit
+              </button>
+              <!-- assistant message -->
+              <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
+                🔄 Regenerate
+              </button>
+              <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="copyMsg(msg)" :disabled="isGenerating">
+                📋 Copy
+              </button>
             </div>
           </div>
 
-          <!-- actions for each message -->
-          <div :class="{'text-right': msg.role === 'user'}" class="mx-4 mt-2 mb-2">
-            <!-- user message -->
-            <button v-if="msg.role === 'user'" class="badge btn-mini show-on-hover" @click="editingMsg = msg" :disabled="isGenerating">
-              ✍️ Edit
-            </button>
-            <!-- assistant message -->
-            <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
-              🔄 Regenerate
-            </button>
-            <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="copyMsg(msg)" :disabled="isGenerating">
-              📋 Copy
-            </button>
+          <!-- pending (ongoing) assistant message -->
+          <div id="pending-msg" class="chat chat-start">
+            <div v-if="pendingMsg" class="chat-bubble markdown chat-bubble-base-300">
+              <span v-if="!pendingMsg.content" class="loading loading-dots loading-md"></span>
+              <vue-markdown v-else :source="pendingMsg.content" />
+            </div>
           </div>
         </div>
 
-        <!-- pending (ongoing) assistant message -->
-        <div id="pending-msg" class="chat chat-start">
-          <div v-if="pendingMsg" class="chat-bubble markdown chat-bubble-base-300">
-            <span v-if="!pendingMsg.content" class="loading loading-dots loading-md"></span>
-            <vue-markdown v-else :source="pendingMsg.content" />
-          </div>
+        <!-- chat input -->
+        <div class="flex flex-row items-center mt-8 mb-6">
+          <textarea
+            class="textarea textarea-bordered w-full"
+            placeholder="Type a message (Shift+Enter to add a new line)"
+            v-model="inputMsg"
+            @keydown.enter.exact.prevent="sendMessage"
+            @keydown.enter.shift.exact.prevent="inputMsg += '\n'"
+            :disabled="isGenerating"
+            id="msg-input"
+          ></textarea>
+          <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage" :disabled="inputMsg.length === 0">Send</button>
+          <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">Stop</button>
         </div>
       </div>
 
-      <!-- chat input -->
-      <div class="flex flex-row items-center mt-8 mb-6">
-        <textarea
-          class="textarea textarea-bordered w-full"
-          placeholder="Type a message (Shift+Enter to add a new line)"
-          v-model="inputMsg"
-          @keydown.enter.exact.prevent="sendMessage"
-          @keydown.enter.shift.exact.prevent="inputMsg += '\n'"
-          :disabled="isGenerating"
-          id="msg-input"
-        ></textarea>
-        <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage" :disabled="inputMsg.length === 0">Send</button>
-        <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">Stop</button>
-      </div>
     </div>
+
 
     <!-- modal for editing config -->
     <dialog class="modal" :class="{'modal-open': showConfigDialog}">
@@ -217,10 +240,11 @@
         <div class="modal-action">
           <button class="btn" @click="resetConfigDialog">Reset to default</button>
           <button class="btn" @click="closeAndDiscardConfigDialog">Close</button>
-          <button class="btn btn-primary" @click="closeAndSaveConfigDialog">Save and close</button>
+          <button class="btn btn-primary" @click="closeAndSaveConfigDialog">Save</button>
         </div>
       </div>
     </dialog>
+
   </div>
 
   <!-- Template to be used by settings modal -->

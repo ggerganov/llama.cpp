@@ -227,6 +227,9 @@ const mainApp = createApp({
     resizeObserver.observe(pendingMsgElem);
   },
   methods: {
+    hideSidebar() {
+      document.getElementById('toggle-drawer').checked = false;
+    },
     setSelectedTheme(theme) {
       this.selectedTheme = theme;
       StorageUtils.setTheme(theme);
@@ -237,6 +240,7 @@ const mainApp = createApp({
       this.editingMsg = null;
       this.fetchMessages();
       chatScrollToBottom();
+      this.hideSidebar();
     },
     setViewingConv(convId) {
       if (this.isGenerating) return;
@@ -244,6 +248,7 @@ const mainApp = createApp({
       this.editingMsg = null;
       this.fetchMessages();
       chatScrollToBottom();
+      this.hideSidebar();
     },
     deleteConv(convId) {
       if (this.isGenerating) return;

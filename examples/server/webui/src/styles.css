@@ -18,3 +18,9 @@
   @apply cursor-pointer hover:shadow-md;
 }
 .chat-screen { max-width: 900px; }
+
+.chat-bubble-base-300 {
+  --tw-bg-opacity: 1;
+  --tw-text-opacity: 1;
+  @apply bg-base-300 text-base-content;
+}
