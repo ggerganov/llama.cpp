@@ -604,7 +604,7 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false, bool timings = false) {
+static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -650,7 +650,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
         res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
     }
 
-    if (timings) {
+    if (result.contains("timings")) {
         res.push_back({"timings", json_value(result, "timings", json::object())});
     }
 
@@ -658,7 +658,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(const json & result, const std::string & completion_id, bool timings = false) {
+static std::vector<json> format_partial_response_oaicompat(const json & result, const std::string & completion_id) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
@@ -745,7 +745,7 @@ static std::vector<json> format_partial_response_oaicompat(const json & result, 
         {"object",  "chat.completion.chunk"}
     };
 
-    if (timings) {
+    if (result.contains("timings")) {
         ret.push_back({"timings", json_value(result, "timings", json::object())});
     }
 
