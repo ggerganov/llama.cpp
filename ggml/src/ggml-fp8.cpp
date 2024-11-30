@@ -7,51 +7,50 @@
 
 #include "ggml-fp8.h"
 
+union fp32_int32 {
+    float f;
+    uint32_t bits;
+};
+
 template<int E>
 inline FP8<E> float_to_fp8(float value) {
     FP8<E> out;
-    union {
-        float f;
-        uint32_t bits;
-    } in = {value};
+    fp32_int32 in = {value};
     // the sign
     out.bits = (in.bits >> 24) & 0x80;
     // value without sign
     in.bits &= 0x7fffffff;
     //GGML_ASSERT(in.bits < 0x7f800000); // +/- infinity or NAN
-    if (in.f >= FP8<E>::MAX()) {
+    if (in.f >= FP8<E>::MAX) {
         out.bits |= 0x7E;
-    } else if (in.f < FP8<E>::MIN()) { // => 0.
+    } else if (in.f < FP8<E>::MIN) { // => 0.
         // OK: S.0000000
     } else {
-        in.f *= exp_m2<FP8<E>::E_BIAS()-127>();
+        in.f *= exp_f2<FP8<E>::E_BIAS-127>();
         // - trunc
         //uint32_t eps = 0;
         // - rounding half away from zero
-        //uint32_t eps = 0x400000>>FP8<E>::M();
+        //uint32_t eps = 0x400000>>FP8<E>::M;
         // - rounding half toward zero
-        //uint32_t eps = 0x3fffff>>FP8<E>::M();
+        //uint32_t eps = 0x3fffff>>FP8<E>::M;
         // - rounding to nearest even
-        uint32_t eps = (0x3fffff>>FP8<E>::M()) + ((in.bits >> (23-FP8<E>::M())) & 0x1);
+        uint32_t eps = (0x3fffff>>FP8<E>::M) + ((in.bits >> (23-FP8<E>::M)) & 0x1);
         // shift mantissa.
         in.bits += eps;
-        out.bits |= (in.bits >> (23-FP8<E>::M())) & 0x7F;
+        out.bits |= (in.bits >> (23-FP8<E>::M)) & 0x7F;
     }
     return out;
 }
 
 template<int E>
 inline float fp8_to_float(const FP8<E>& in) {
-    union {
-        float f;
-        uint32_t bits;
-    } out = {0};
+    fp32_int32 out = {0};
     out.bits = in.bits & 0x80;
     out.bits <<= 24;
     uint32_t _bits = in.bits & 0x7F;
-    _bits <<= (23-FP8<E>::M());
+    _bits <<= (23-FP8<E>::M);
     out.bits |= _bits;
-    out.f *= exp_p2<127-FP8<E>::E_BIAS()>();
+    out.f *= exp_f2<127-FP8<E>::E_BIAS>();
     return out.f;
 }
 
@@ -93,8 +92,8 @@ static inline void conv(const float* x, bloc_fp8<E, QK>* y, int64_t size) {
         for (int64_t i=0; i<QK; i++) {
             m = std::max(std::abs(x[q*QK+i]),m);
         }
-        const float D = FP8<E>::MAX()/m;
-        y[q].d = m/FP8<E>::MAX();
+        const float D = FP8<E>::MAX/m;
+        y[q].d = m/FP8<E>::MAX;
         for (int64_t i=0; i<QK; i++) {
             y[q].qs[i] = float_to_fp8<E>(x[q*QK+i]*D);
         }

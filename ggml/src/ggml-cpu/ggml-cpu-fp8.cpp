@@ -8,26 +8,28 @@
 #include "ggml-cpu-fp8.h"
 
 namespace fp8 {
+union fp32_int32 {
+    float f;
+    uint32_t bits;
+};
+
 #ifdef GGML_USE_OPENMP_SIMD
 #pragma omp declare simd
 #endif
 template<int E>
 inline uint8_t from_float(float value) {
     FP8<E> out;
-    union {
-        float f;
-        uint32_t bits;
-    } in = {value};
+    fp32_int32 in = {value};
     out.bits = (in.bits >> 24) & 0x80;
     in.bits &= 0x7fffffff;
-    if (in.f >= FP8<E>::MAX()) {
+    if (in.f >= FP8<E>::MAX) {
         out.bits |= 0x7E;
-    } else if (in.f < FP8<E>::MIN()) { // => 0.
+    } else if (in.f < FP8<E>::MIN) { // => 0.
     } else {
-        in.f *= exp_m2<FP8<E>::E_BIAS()-127>();
-        uint32_t eps = (0x3fffff>>FP8<E>::M()) + ((in.bits >> (23-FP8<E>::M())) & 0x1);
+        in.f *= exp_f2<FP8<E>::E_BIAS-127>();
+        uint32_t eps = (0x3fffff>>FP8<E>::M) + ((in.bits >> (23-FP8<E>::M)) & 0x1);
         in.bits += eps;
-        out.bits |= (in.bits >> (23-FP8<E>::M())) & 0x7F;
+        out.bits |= (in.bits >> (23-FP8<E>::M)) & 0x7F;
     }
     return out.bits;
 }
@@ -37,16 +39,13 @@ inline uint8_t from_float(float value) {
 #endif
 template<int E>
 inline float to_float(const FP8<E>& in) {
-    union {
-        float f;
-        uint32_t bits;
-    } out = {0};
+    fp32_int32 out = {0};
     out.bits = in.bits & 0x80;
     out.bits <<= 24;
     uint32_t _bits = in.bits & 0x7F;
-    _bits <<= (23-FP8<E>::M());
+    _bits <<= (23-FP8<E>::M);
     out.bits |= _bits;
-    out.f *= exp_p2<127-FP8<E>::E_BIAS()>();
+    out.f *= exp_f2<127-FP8<E>::E_BIAS>();
     return out.f;
 }
 } // namespace fp8
@@ -91,8 +90,8 @@ static inline void conv(const float* x, bloc_fp8<E, QK>* y, int64_t size) {
         for (int64_t i=0; i<QK; i++) {
             m = std::max(std::abs(x[q*QK+i]),m);
         }
-        const float D = FP8<E>::MAX()/m;
-        y[q].d = m/FP8<E>::MAX();
+        const float D = FP8<E>::MAX/m;
+        y[q].d = m/FP8<E>::MAX;
 #ifdef GGML_USE_OPENMP_SIMD
         #pragma omp simd
 #endif
@@ -154,14 +153,14 @@ float dot_reg(const bloc_fp8<E, QK>* x, const _Y* y, int64_t size) {
                 for(int64_t v=0; v<VECT_SIZE; ++v) { mantice_16bits[v] = mantice_8bits[v]; }
 
                 for(int64_t v=0; v<VECT_SIZE; ++v) { sign_16bits[v] <<= 8; }
-                for(int64_t v=0; v<VECT_SIZE; ++v) { mantice_16bits[v] <<= (7-fp8_t::M()); }
+                for(int64_t v=0; v<VECT_SIZE; ++v) { mantice_16bits[v] <<= (7-fp8_t::M); }
 
                 for(int64_t v=0; v<VECT_SIZE; ++v) { x_bf16[v] = sign_16bits[v] | mantice_16bits[v]; }
 
                 for(int64_t v=0; v<VECT_SIZE; ++v) { ux[v].bits = x_bf16[v]; }
                 for(int64_t v=0; v<VECT_SIZE; ++v) { ux[v].bits <<= 16; }
 
-                for(int64_t v=0; v<VECT_SIZE; ++v) { X[v] = ux[v].f; } // * exp_p2<127-fp8_t::E_BIAS()>(); }
+                for(int64_t v=0; v<VECT_SIZE; ++v) { X[v] = ux[v].f; } // * exp_f2<127-fp8_t::E_BIAS>(); }
                 for(int64_t v=0; v<VECT_SIZE; ++v) { Y[v] = (float)y[q*QK+i+r*VECT_SIZE+v]; }
                 for(int64_t v=0; v<VECT_SIZE; ++v) { Z0[r][v] += X[v]*Y[v]; }
             }
@@ -169,7 +168,7 @@ float dot_reg(const bloc_fp8<E, QK>* x, const _Y* y, int64_t size) {
         // apply scale
         for(int64_t r=0; r<NB_REG; ++r) {
             for(int64_t v=0; v<VECT_SIZE; ++v) {
-                Z[r][v] += Z0[r][v]*(x[q]).d * exp_p2<127-fp8_t::E_BIAS()>();
+                Z[r][v] += Z0[r][v]*(x[q]).d * exp_f2<127-fp8_t::E_BIAS>();
             }
         }
     }

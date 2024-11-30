@@ -958,14 +958,14 @@ OBJ_GGML = \
 	$(DIR_GGML)/src/ggml-alloc.o \
 	$(DIR_GGML)/src/ggml-backend.o \
 	$(DIR_GGML)/src/ggml-backend-reg.o \
-	$(DIR_GGML)/src/ggml-fp8_cpp11.o \
+	$(DIR_GGML)/src/ggml-fp8.o \
 	$(DIR_GGML)/src/ggml-opt.o \
 	$(DIR_GGML)/src/ggml-quants.o \
 	$(DIR_GGML)/src/ggml-threading.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu.o \
-	$(DIR_GGML)/src/ggml-cpu/ggml-cpu_cpp11.o \
+	$(DIR_GGML)/src/ggml-cpu/ggml-cpu_cpp.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-aarch64.o \
-	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-fp8_cpp11.o \
+	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-fp8.o \
 	$(DIR_GGML)/src/ggml-cpu/ggml-cpu-quants.o \
 	$(OBJ_GGML_EXT)
 
@@ -1106,13 +1106,10 @@ DEP_FILES = $(OBJ_GGML:.o=.d) $(OBJ_LLAMA:.o=.d) $(OBJ_COMMON:.o=.d)
 # Default target
 all: $(BUILD_TARGETS)
 
-# for c++17 build
-$(DIR_GGML)/%_cpp17.o: $(DIR_GGML)/%.cpp
-	$(CXX) $(CXXFLAGS) -MMD -std=c++17 -c $< -o $@
-
-# for c++11 build
-$(DIR_GGML)/%_cpp11.o: $(DIR_GGML)/%.cpp
-	$(CXX) $(CXXFLAGS) -MMD -std=c++11 -c $< -o $@
+# force c++ build for source file that have same name as c file
+# Note: need this exception because `ggml-cpu.c` and `ggml-cpu.cpp` both produce the same obj/dep files
+$(DIR_GGML)/%_cpp.o: $(DIR_GGML)/%.cpp
+	$(CXX) $(CXXFLAGS) -MMD -c $< -o $@
 
 # Rules for building object files
 $(DIR_GGML)/%.o: $(DIR_GGML)/%.c
