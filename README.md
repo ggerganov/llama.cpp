@@ -223,7 +223,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](./docs/deve
 | [Vulkan](./docs/build.md#vulkan) | GPU |
 | [CANN](./docs/build.md#cann) | Ascend NPU |
 
-## Building and usage
+## Building the project
 
 The main product of this project is the `llama` library. Its C-style interface can be found in [include/llama.h](include/llama.h).
 The project also includes many example programs and tools using the `llama` library. The examples range from simple, minimal code snippets to sophisticated sub-projects such as an OpenAI-compatible HTTP server. Possible methods for obtaining the binaries:
@@ -233,7 +233,7 @@ The project also includes many example programs and tools using the `llama` libr
 - Use a Docker image, see [documentation for Docker](./docs/docker.md)
 - Download pre-built binaries from [releases](https://github.com/ggerganov/llama.cpp/releases)
 
-### Obtaining and quantizing models
+## Obtaining and quantizing models
 
 The [Hugging Face](https://huggingface.co) platform hosts a [number of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp`:
 
@@ -253,25 +253,30 @@ The Hugging Face platform provides a variety of online tools for converting, qua
 
 To learn more about model quantization, [read this documentation](./examples/quantize/README.md)
 
-### Using the `llama-cli` tool
+## Sample usage
 
-Run a basic text completion:
+### [`llama-cli`](./examples/main)
+
+A CLI tool for accessing and experimenting with most of the available functionality in the terminal.
+
+<details open>
+    <summary>Run simple text completion</summary>
 
 ```bash
-llama-cli -m your_model.gguf -p "I believe the meaning of life is" -n 128
+llama-cli -m model.gguf -p "I believe the meaning of life is" -n 128
 
 # Output:
 # I believe the meaning of life is to find your own truth and to live in accordance with it. For me, this means being true to myself and following my passions, even if they don't align with societal expectations. I think that's what I love about yoga – it's not just a physical practice, but a spiritual one too. It's about connecting with yourself, listening to your inner voice, and honoring your own unique journey.
 ```
 
-See [this page](./examples/main/README.md) for a full list of parameters.
+---
+</details>
 
-### Conversation mode
-
-Run `llama-cli` in conversation/chat mode by passing the `-cnv` parameter:
+<details>
+    <summary>Run in conversation mode</summary>
 
 ```bash
-llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
+llama-cli -m model.gguf -p "You are a helpful assistant" -cnv
 
 # Output:
 # > hi, who are you?
@@ -281,49 +286,167 @@ llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
 # Easy peasy! The answer to 1+1 is... 2!
 ```
 
-By default, the chat template will be taken from the input model. If you want to use another chat template, pass `--chat-template NAME` as a parameter. See the list of [supported templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
+---
+</details>
+
+<details>
+    <summary>Run with custom chat template</summary>
+
+[Supported templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 
 ```bash
-llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --chat-template chatml
+# use the "chatml" template
+llama-cli -m model.gguf -p "You are a helpful assistant" -cnv --chat-template chatml
+
+# use a custom template
+llama-cli -m model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User: ' --reverse-prompt 'User:'
 ```
 
-You can also use your own template via in-prefix, in-suffix and reverse-prompt parameters:
+---
+</details>
+
+<details>
+    <summary>Constrain the output with a custom grammar</summary>
 
 ```bash
-llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User: ' --reverse-prompt 'User:'
-```
+llama-cli -m model.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
 
-### Constrained output with grammars
-
-`llama.cpp` can constrain the output of the model via custom grammars. For example, you can force the model to output only JSON:
-
-```bash
-llama-cli -m your_model.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
+# Output:
+# {"appointmentTime": "8pm", "appointmentDetails": "schedule a a call"}
 ```
 
 The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
 
 For authoring more complex JSON grammars, check out https://grammar.intrinsiclabs.ai/
 
-### Web server (`llama-server`)
+---
+</details>
 
-The [llama-server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
-Example usage:
+### [`llama-server`](./examples/server)
+
+A lightweight, [OpenAI API](https://github.com/openai/openai-openapi) compatible, HTTP server for serving LLMs.
+
+<details open>
+    <summary>Start a local HTTP server with default configuration on port 8080</summary>
 
 ```bash
-llama-server -m your_model.gguf --port 8080
+llama-server -m model.gguf --port 8080
 
 # Basic web UI can be accessed via browser: http://localhost:8080
 # Chat completion endpoint: http://localhost:8080/v1/chat/completions
 ```
 
-### Perplexity (measuring model quality)
+---
+</details>
 
-Use the `llama-perplexity` tool to measure perplexity over a given prompt (lower perplexity is better).
-For more information, see [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity).
+<details>
+    <summary>Support multiple-users and parallel decoding</summary>
 
-To learn more how to measure perplexity using llama.cpp, [read this documentation](./examples/perplexity/README.md)
+```bash
+# TODO
+```
+
+---
+</details>
+
+<details>
+    <summary>Enable speculative decoding</summary>
+
+```bash
+# TODO
+```
+
+---
+</details>
+
+<details>
+    <summary>Serve an embedding model</summary>
+
+```bash
+# TODO
+```
+
+---
+</details>
+
+
+### [`llama-perplexity`](./examples/perplexity)
+
+The `llama-perplexity` tool can be used to measure perplexity (and other quality metrics) of a model over a given text.
+
+For more information, see:
+- [./examples/perplexity/README.md](./examples/perplexity/README.md)
+- [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity)
+
+<details open>
+    <summary>Measure the perplexity over a text file</summary>
+
+```bash
+llama-perplexity -m model.gguf -f file.txt
+
+# Output:
+# [1]15.2701,[2]5.4007,[3]5.3073,[4]6.2965,[5]5.8940,[6]5.6096,[7]5.7942,[8]4.9297,[9]4.8358,[10]4.5653,[11]4.4790,[12]4.1959, ...
+# Final estimate: PPL = 5.4007 +/- 0.67339
+```
+
+---
+</details>
+
+<details>
+    <summary>Measure KL divergence</summary>
+
+```bash
+# TODO
+```
+
+---
+</details>
+
+
+### [`llama-bench`](./example/bench)
+
+Benchmark the performance of the inference for various parameters.
+
+<details>
+    <summary>Run default benchmark</summary>
+
+```bash
+llama-bench -m model.gguf
+
+# Output:
+# | model                          |       size |     params | backend    | threads |          test |                  t/s |
+# | ------------------------------ | ---------: | ---------: | ---------- | ------: | ------------: | -------------------: |
+# | qwen2 1.5B Q4_0                | 885.97 MiB |     1.54 B | Metal,BLAS |      16 |         pp512 |      5765.41 ± 20.55 |
+# | qwen2 1.5B Q4_0                | 885.97 MiB |     1.54 B | Metal,BLAS |      16 |         tg128 |        197.71 ± 0.81 |
+#
+# build: 3e0ba0e60 (4229)
+```
+
+---
+</details>
+
+
+### [`llama-simple`](./examples/simple)
+
+A minimal example for implementing apps using the `llama` library. Useful for developers.
+
+<details>
+    <summary>Basic text completion</summary>
+
+```bash
+llama-simple -m model.gguf
+
+# Output:
+# Hello my name is Kaitlyn and I am a 16 year old girl. I am a junior in high school and I am currently taking a class called "The Art of
+```
+
+---
+</details>
+
+
+### [`llama-embedding`](./example/embedding)
+
 
 ## Contributing
 
