@@ -236,18 +236,20 @@ The project also includes many example programs and tools using the `llama` libr
 
 ### Obtaining and quantizing models
 
-The [Hugging Face](https://huggingface.co) platform hosts a [number of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp` - simply search for the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format:
+The [Hugging Face](https://huggingface.co) platform hosts a [number of LLMs](https://huggingface.co/models?library=gguf&sort=trending) compatible with `llama.cpp`:
 
 - [Trending](https://huggingface.co/models?library=gguf&sort=trending)
 - [LLaMA](https://huggingface.co/models?sort=trending&search=llama+gguf)
 
 After downloading a model, use the CLI tools to run it locally - see below.
 
-The Hugging Face platform also provides online tools for converting, quantizing and hosting models with `llama.cpp`:
+`llama.cpp` requires the model to be stored in the [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) file format. Models in other data formats can be converted to GGUF using the `convert_*.py` Python scripts in this repo.
 
-- Use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space to quantize model weights to smaller sizes
-- Use the [GGUF-my-LoRA](https://huggingface.co/spaces/ggml-org/gguf-my-lora) space to convert LoRA adapters to GGUF format (more info: https://github.com/ggerganov/llama.cpp/discussions/10123)
-- Use the [GGUF editor](https://huggingface.co/spaces/CISCai/gguf-editor) space to edit GGUF meta data in the browser (more info: https://github.com/ggerganov/llama.cpp/discussions/9268)
+The Hugging Face platform provides a variety of online tools for converting, quantizing and hosting models with `llama.cpp`:
+
+- Use the [GGUF-my-repo space](https://huggingface.co/spaces/ggml-org/gguf-my-repo) to convert to GGUF format and quantize model weights to smaller sizes
+- Use the [GGUF-my-LoRA space](https://huggingface.co/spaces/ggml-org/gguf-my-lora) to convert LoRA adapters to GGUF format (more info: https://github.com/ggerganov/llama.cpp/discussions/10123)
+- Use the [GGUF-editor space](https://huggingface.co/spaces/CISCai/gguf-editor) to edit GGUF meta data in the browser (more info: https://github.com/ggerganov/llama.cpp/discussions/9268)
 - Use the [Inference Endpoints](https://ui.endpoints.huggingface.co/) to directly host `llama.cpp` in the cloud (more info: https://github.com/ggerganov/llama.cpp/discussions/9669)
 
 To learn more about model quantization, [read this documentation](./examples/quantize/README.md)
