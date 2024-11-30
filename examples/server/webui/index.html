@@ -15,7 +15,7 @@
       <!-- sidebar -->
       <div class="drawer-side h-screen lg:h-screen z-50 lg:max-w-64">
         <label for="toggle-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-        <div class="flex flex-col bg-base-200 min-h-full py-4 px-4">
+        <div class="flex flex-col bg-base-200 min-h-full max-w-[calc(100vw-2em)] py-4 px-4">
           <div class="flex flex-row items-center justify-between mb-4 mt-4">
             <h2 class="font-bold ml-4">Conversations</h2>
 
@@ -63,15 +63,15 @@
           <div class="flex items-center">
             <div v-if="messages.length > 0" class="dropdown dropdown-end">
               <!-- "more" button -->
-              <div tabindex="0" role="button" class="btn m-1">
+              <button tabindex="0" role="button" class="btn m-1" :disabled="isGenerating">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
                   <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
                 </svg>
-              </div>
+              </button>
               <!-- "more" dropdown menu -->
               <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
-                <li @click="downloadConv(viewingConvId)" :disabled="isGenerating"><a>Download</a></li>
-                <li class="text-error" @click="deleteConv(viewingConvId)" :disabled="isGenerating"><a>Delete</a></li>
+                <li @click="downloadConv(viewingConvId)"><a>Download</a></li>
+                <li class="text-error" @click="deleteConv(viewingConvId)"><a>Delete</a></li>
               </ul>
             </div>
             <button class="btn" @click="showConfigDialog = true" :disabled="isGenerating">
@@ -132,7 +132,7 @@
                 <!-- textarea for editing message -->
                 <template v-if="editingMsg && editingMsg.id === msg.id">
                   <textarea
-                    class="textarea textarea-bordered bg-base-100 text-base-content w-96"
+                    class="textarea textarea-bordered bg-base-100 text-base-content w-[calc(90vw-8em)] lg:w-96"
                     v-model="msg.content"></textarea>
                   <br/>
                   <button class="btn btn-ghost mt-2 mr-2" @click="editingMsg = null">Cancel</button>
