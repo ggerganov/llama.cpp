@@ -107,7 +107,6 @@ examples/server/*.mjs.hpp
 # Server Web UI temporary files
 node_modules
 examples/server/webui/dist
-examples/server/webui/package-lock.json
 
 # Python
 
