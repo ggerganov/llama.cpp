@@ -3,6 +3,7 @@
 - Test your changes:
   - Run the `test-backend-ops` tool to validate different backend implementations of the `ggml` operators
   - Execute [the full CI locally on your machine](ci/README.md) before publishing
+  - Verify that the perplexity and the performance are not affected negatively by your changes (use `llama-perplexity` and `llama-bench`)
 - Consider allowing write access to your branch for faster reviews, as reviewers can push commits directly
 - If your PR becomes stale, don't hesitate to ping the maintainers in the comments
 
