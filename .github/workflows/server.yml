@@ -76,23 +76,6 @@ jobs:
         run: |
           pip install -r examples/server/tests/requirements.txt
 
-      - name: Verify server deps
-        id: verify_server_deps
-        run: |
-          git config --global --add safe.directory $(realpath .)
-          cd examples/server
-          git ls-files --others --modified
-          git status
-          ./deps.sh
-          git status
-          not_ignored_files="$(git ls-files --others --modified)"
-          echo "Modified files: ${not_ignored_files}"
-          if [ -n "${not_ignored_files}" ]; then
-            echo "Repository is dirty or server deps are not built as expected"
-            echo "${not_ignored_files}"
-            exit 1
-          fi
-
       - name: Build (no OpenMP)
         id: cmake_build_no_openmp
         if: ${{ matrix.sanitizer == 'THREAD' }}

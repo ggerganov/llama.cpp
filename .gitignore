@@ -104,6 +104,11 @@ examples/server/*.mjs.hpp
 !examples/sycl/*.bat
 !examples/sycl/*.sh
 
+# Server Web UI temporary files
+node_modules
+examples/server/webui/dist
+examples/server/webui/package-lock.json
+
 # Python
 
 /.venv
