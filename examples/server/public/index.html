@@ -25,6 +25,12 @@
     .bg-base-200 {background-color: var(--fallback-b2,oklch(var(--b2)/1))}
     .bg-base-300 {background-color: var(--fallback-b3,oklch(var(--b3)/1))}
     .text-base-content {color: var(--fallback-bc,oklch(var(--bc)/1))}
+    .text-error {color: var(--fallback-er,oklch(var(--er)/1))}
+    .menu > li {
+      border-radius: var(--rounded-btn, .5rem);
+      @apply cursor-pointer;
+      &:hover {background-color: var(--fallback-b3,oklch(var(--b3)/1))}
+    }
     .show-on-hover {
       @apply opacity-0 group-hover:opacity-100;
     }
@@ -69,25 +75,24 @@
       <!-- header -->
       <div class="flex flex-row items-center">
         <div class="grow text-2xl font-bold mt-8 mb-6">
-          🦙 llama.cpp - chat
+          🦙 llama.cpp
         </div>
 
         <!-- action buttons (top right) -->
         <div class="flex items-center">
-          <button v-if="messages.length > 0" class="btn mr-1" @click="deleteConv(viewingConvId)" :disabled="isGenerating">
-            <!-- delete conversation button -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
-              <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
-              <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
-            </svg>
-          </button>
-          <button v-if="messages.length > 0" class="btn mr-1" @click="downloadConv(viewingConvId)" :disabled="isGenerating">
-              <!-- download conversation button -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
-                  <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
-                  <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
-            </svg>
-          </button>
+          <div v-if="messages.length > 0" class="dropdown dropdown-end">
+            <!-- "more" button -->
+            <div tabindex="0" role="button" class="btn m-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/>
+              </svg>
+            </div>
+            <!-- "more" dropdown menu -->
+            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+              <li @click="downloadConv(viewingConvId)" :disabled="isGenerating"><a>Download</a></li>
+              <li class="text-error" @click="deleteConv(viewingConvId)" :disabled="isGenerating"><a>Delete</a></li>
+            </ul>
+          </div>
           <button class="btn" @click="showConfigDialog = true" :disabled="isGenerating">
             <!-- edit config button -->
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
@@ -161,7 +166,7 @@
           <!-- actions for each message -->
           <div :class="{'text-right': msg.role === 'user'}" class="mx-4 mt-2 mb-2">
             <!-- user message -->
-            <button v-if="msg.role === 'user'" class="badge btn-minishow-on-hover " @click="editingMsg = msg" :disabled="isGenerating">
+            <button v-if="msg.role === 'user'" class="badge btn-mini show-on-hover" @click="editingMsg = msg" :disabled="isGenerating">
               ✍️ Edit
             </button>
             <!-- assistant message -->

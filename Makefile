@@ -1147,6 +1147,10 @@ clean:
 	rm -rvf *.a *.dll *.so *.dot
 	find ggml src common tests examples pocs -type f -name "*.o" -delete
 	find ggml src common tests examples pocs -type f -name "*.d" -delete
+	find examples/server -type f -name "*.js.hpp"   -delete
+	find examples/server -type f -name "*.mjs.hpp"  -delete
+	find examples/server -type f -name "*.css.hpp"  -delete
+	find examples/server -type f -name "*.html.hpp" -delete
 
 #
 # Examples
