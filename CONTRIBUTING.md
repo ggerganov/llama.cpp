@@ -1,9 +1,8 @@
 # Pull requests (for contributors)
 
 - Test your changes:
-  - Using the commands in the [`tests`](tests) folder. For instance, running the `./tests/test-backend-ops` command tests different backend implementations of the `ggml` library
+  - Run the `test-backend-ops` tool to validate different backend implementations of the `ggml` operators
   - Execute [the full CI locally on your machine](ci/README.md) before publishing
-- Optionally rate the complexity of your PR (i.e. `Review Complexity : Low`, `Review Complexity : Medium`, `Review Complexity : High`). This makes it easier for maintainers to triage the PRs
 - Consider allowing write access to your branch for faster reviews, as reviewers can push commits directly
 - If your PR becomes stale, don't hesitate to ping the maintainers in the comments
 
