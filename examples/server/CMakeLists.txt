@@ -16,12 +16,7 @@ set(TARGET_SRCS
 )
 set(PUBLIC_ASSETS
     index.html
-    completion.js
     loading.html
-    deps_daisyui.min.css
-    deps_markdown-it.js
-    deps_tailwindcss.js
-    deps_vue.esm-browser.js
 )
 
 foreach(asset ${PUBLIC_ASSETS})
