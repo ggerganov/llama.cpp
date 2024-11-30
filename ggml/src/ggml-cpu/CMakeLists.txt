@@ -301,6 +301,10 @@ target_sources(ggml-cpu PRIVATE ${GGML_CPU_SOURCES})
 set_source_files_properties(${GGML_CPU_SOURCES} PROPERTIES COMPILE_OPTIONS     "${ARCH_FLAGS}")
 set_source_files_properties(${GGML_CPU_SOURCES} PROPERTIES COMPILE_DEFINITIONS "${ARCH_DEFINITIONS}")
 
+# the feature detection code must be compiled without any architecture flags
+target_sources(ggml-cpu PRIVATE cpu-feats-x86.cpp)
+# target_sources(ggml-cpu PRIVATE cpu-feats-arm.cpp) # TODO: ARM feature detection
+
 if (EMSCRIPTEN)
     set_target_properties(ggml-cpu PROPERTIES COMPILE_FLAGS "-msimd128")
 endif()

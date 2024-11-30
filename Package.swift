@@ -88,5 +88,5 @@ let package = Package(
             linkerSettings: linkerSettings
         )
     ],
-    cxxLanguageStandard: .cxx11
+    cxxLanguageStandard: .cxx17
 )
