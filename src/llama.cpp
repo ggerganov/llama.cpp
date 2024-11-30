@@ -21894,13 +21894,13 @@ static int32_t llama_chat_apply_template_internal(
                     is_inside_turn = true;
                 }
                 std::string role(message->role);
-                std::string content = (trim_assistant_message? trim(message->content) : message->content);
+                std::string content(message->content);
                 if (role == "system") {
                     ss << content << "\n\n";
                 } else if (role == "user") {
                     ss << content << leading_space << "[/INST]";
                 } else {
-                    ss << trailing_space << content << "</s>";
+                    ss << trailing_space << (trim_assistant_message ? trim(content) : content) << "</s>";
                     is_inside_turn = false;
                 }
             }
