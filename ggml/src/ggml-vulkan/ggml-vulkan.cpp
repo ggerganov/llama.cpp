@@ -2193,7 +2193,8 @@ static vk_device ggml_vk_get_device(size_t idx) {
                 if ((vk::ComponentTypeKHR)prop.AType == vk::ComponentTypeKHR::eFloat16 &&
                     (vk::ComponentTypeKHR)prop.BType == vk::ComponentTypeKHR::eFloat16 &&
                     (vk::ComponentTypeKHR)prop.CType == vk::ComponentTypeKHR::eFloat32 &&
-                    (vk::ComponentTypeKHR)prop.ResultType == vk::ComponentTypeKHR::eFloat32
+                    (vk::ComponentTypeKHR)prop.ResultType == vk::ComponentTypeKHR::eFloat32 &&
+                    (vk::ScopeKHR)prop.scope == vk::ScopeKHR::eSubgroup
                 ) {
                     device->coop_mat_m = prop.MSize;
                     device->coop_mat_n = prop.NSize;

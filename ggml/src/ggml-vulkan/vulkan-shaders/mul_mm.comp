@@ -365,15 +365,20 @@ void main() {
 
             const vec2 loadd = vec2(data_a[ib].d);
 
-            uint8_t sc;
-            uint8_t mbyte;
-            if (is < 4) {
-                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
-                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
-            } else {
-                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
-                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
-            }
+            const uint scidx0 = (is < 4) ? is : (is + 4);
+            const uint scidx1 = (is < 4) ? is : (is - 4);
+            const uint scidxmask1 = (is < 4) ? 0x30 : 0xC0;
+            const uint scidxshift1 = (is < 4) ? 0 : 2;
+            const uint mbidx0 = is + 4;
+            const uint mbidx1 = (is < 4) ? is + 4 : is;
+            const uint mbidxmask0 = (is < 4) ? 0xF : 0xF0;
+            const uint mbidxshift0 = (is < 4) ? 0 : 4;
+            const uint mbidxmask1 = (is < 4) ? 0x30 : 0xC0;
+            const uint mbidxshift1 = (is < 4) ? 0 : 2;
+
+            const uint8_t sc = uint8_t((data_a[ib].scales[scidx0] & 0xF) | ((data_a[ib].scales[scidx1] & scidxmask1) >> scidxshift1));
+            const uint8_t mbyte = uint8_t((data_a[ib].scales[mbidx0] & mbidxmask0) >> mbidxshift0 | ((data_a[ib].scales[mbidx1] & mbidxmask1) >> mbidxshift1));
+
             const float d = loadd.x * sc;
             const float m = -loadd.y * mbyte;
 
@@ -396,15 +401,20 @@ void main() {
 
             const vec2 loadd = vec2(data_a[ib].d);
 
-            uint8_t sc;
-            uint8_t mbyte;
-            if (is < 4) {
-                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
-                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
-            } else {
-                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
-                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
-            }
+            const uint scidx0 = (is < 4) ? is : (is + 4);
+            const uint scidx1 = (is < 4) ? is : (is - 4);
+            const uint scidxmask1 = (is < 4) ? 0x30 : 0xC0;
+            const uint scidxshift1 = (is < 4) ? 0 : 2;
+            const uint mbidx0 = is + 4;
+            const uint mbidx1 = (is < 4) ? is + 4 : is;
+            const uint mbidxmask0 = (is < 4) ? 0xF : 0xF0;
+            const uint mbidxshift0 = (is < 4) ? 0 : 4;
+            const uint mbidxmask1 = (is < 4) ? 0x30 : 0xC0;
+            const uint mbidxshift1 = (is < 4) ? 0 : 2;
+
+            const uint8_t sc    = uint8_t((data_a[ib].scales[scidx0] & 0xF)                         | ((data_a[ib].scales[scidx1] & scidxmask1) >> scidxshift1));
+            const uint8_t mbyte = uint8_t(((data_a[ib].scales[mbidx0] & mbidxmask0) >> mbidxshift0) | ((data_a[ib].scales[mbidx1] & mbidxmask1) >> mbidxshift1));
+
             const float d = loadd.x * sc;
             const float m = -loadd.y * mbyte;
 
@@ -547,8 +557,8 @@ void main() {
 
 #ifdef COOPMAT
 #ifdef MUL_MAT_ID
-    for (uint cm_row = 0; cm_row < cms_per_row; cm_row++) {
-        for (uint cm_col = 0; cm_col < cms_per_col; cm_col++) {
+    [[unroll]] for (uint cm_row = 0; cm_row < cms_per_row; cm_row++) {
+        [[unroll]] for (uint cm_col = 0; cm_col < cms_per_col; cm_col++) {
             coopMatStore(sums[cm_col * cms_per_row + cm_row], coopmat_stage, warp_i * TM * TN, TM, gl_CooperativeMatrixLayoutColumnMajor);
 
             [[unroll]] for (uint col = 0; col < BN; col += storestride) {
@@ -564,8 +574,8 @@ void main() {
 #else
     const bool is_aligned = p.stride_d % 4 == 0;  // Assumption: D_TYPE == float
 
-    for (uint cm_row = 0; cm_row < cms_per_row; cm_row++) {
-        for (uint cm_col = 0; cm_col < cms_per_col; cm_col++) {
+    [[unroll]] for (uint cm_row = 0; cm_row < cms_per_row; cm_row++) {
+        [[unroll]] for (uint cm_col = 0; cm_col < cms_per_col; cm_col++) {
             const bool is_in_bounds = dr + (cm_row + 1) * TM <= p.M && dc + (cm_col + 1) * TN <= p.N;
 
             if (is_aligned && is_in_bounds) {
