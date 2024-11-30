@@ -8,7 +8,6 @@ import os
 import re
 import json
 import sys
-import threading
 import requests
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -47,6 +46,7 @@ class ServerProcess:
     model_alias: str | None = None
     model_url: str | None = None
     model_file: str | None = None
+    model_draft: str | None = None
     n_threads: int | None = None
     n_gpu_layer: int | None = None
     n_batch: int | None = None
@@ -69,6 +69,8 @@ class ServerProcess:
     response_format: str | None = None
     lora_files: List[str] | None = None
     disable_ctx_shift: int | None = False
+    draft_min: int | None = None
+    draft_max: int | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -103,6 +105,8 @@ class ServerProcess:
             server_args.extend(["--model", self.model_file])
         if self.model_url:
             server_args.extend(["--model-url", self.model_url])
+        if self.model_draft:
+            server_args.extend(["--model-draft", self.model_draft])
         if self.model_hf_repo:
             server_args.extend(["--hf-repo", self.model_hf_repo])
         if self.model_hf_file:
@@ -148,6 +152,10 @@ class ServerProcess:
             server_args.extend(["--no-context-shift"])
         if self.api_key:
             server_args.extend(["--api-key", self.api_key])
+        if self.draft_max:
+            server_args.extend(["--draft-max", self.draft_max])
+        if self.draft_min:
+            server_args.extend(["--draft-min", self.draft_min])
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -161,25 +169,11 @@ class ServerProcess:
         self.process = subprocess.Popen(
             [str(arg) for arg in [server_path, *server_args]],
             creationflags=flags,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=sys.stdout,
+            stderr=sys.stdout,
             env={**os.environ, "LLAMA_CACHE": "tmp"},
         )
         server_instances.add(self)
-
-        def server_log(in_stream, out_stream):
-            for line in iter(in_stream.readline, b""):
-                print(line.decode("utf-8"), end="", file=out_stream)
-
-        thread_stdout = threading.Thread(
-            target=server_log, args=(self.process.stdout, sys.stdout), daemon=True
-        )
-        thread_stdout.start()
-
-        thread_stderr = threading.Thread(
-            target=server_log, args=(self.process.stderr, sys.stderr), daemon=True
-        )
-        thread_stderr.start()
 
         print(f"server pid={self.process.pid}, pytest pid={os.getpid()}")
 
@@ -200,7 +194,8 @@ class ServerProcess:
         raise TimeoutError(f"Server did not start within {timeout_seconds} seconds")
 
     def stop(self) -> None:
-        server_instances.remove(self)
+        if self in server_instances:
+            server_instances.remove(self)
         if self.process:
             print(f"Stopping server with pid={self.process.pid}")
             self.process.kill()
@@ -319,7 +314,6 @@ class ServerPreset:
         server.model_hf_repo = "ggml-org/models"
         server.model_hf_file = "jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
         server.model_alias = "jina-reranker"
-        server.model_file = "./tmp/jina-reranker-v1-tiny-en.gguf"
         server.n_ctx = 512
         server.n_batch = 512
         server.n_slots = 1

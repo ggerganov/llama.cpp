@@ -49,10 +49,6 @@
 #include "ggml-rpc.h"
 #endif
 
-#ifdef GGML_USE_AMX
-#  include "ggml-amx.h"
-#endif
-
 #ifdef GGML_USE_CANN
 #include "ggml-cann.h"
 #endif
@@ -91,9 +87,6 @@ struct ggml_backend_registry {
 #endif
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
-#endif
-#ifdef GGML_USE_AMX
-        register_backend(ggml_backend_amx_reg());
 #endif
 #ifdef GGML_USE_KOMPUTE
         register_backend(ggml_backend_kompute_reg());

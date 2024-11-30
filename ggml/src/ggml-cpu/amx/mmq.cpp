@@ -4,8 +4,11 @@
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #endif
 
+#include "amx.h"
 #include "mmq.h"
 #include "ggml-impl.h"
+#include "ggml-cpu-impl.h"
+#include "ggml-cpu-quants.h"
 #include "ggml-quants.h"
 #include <algorithm>
 #include <type_traits>
@@ -33,7 +36,7 @@
 #define ALWAYS_INLINE inline
 #endif
 
-#if defined(__AMX_INT8__)
+#if defined(__AMX_INT8__) && defined(__AVX512VNNI__)
 
 namespace {
 
@@ -496,13 +499,12 @@ inline void from_float(const float * x, char * vy, int64_t k);
 
 template <>
 inline void from_float<block_q8_0>(const float * x, char * vy, int64_t k) {
-    // FIXME: using unoptimized reference impl until moved to CPU backend
-    quantize_row_q8_0_ref(x, (block_q8_0 *)vy, k);
+    quantize_row_q8_0(x, (block_q8_0 *)vy, k);
 }
 
 template <>
 inline void from_float<block_q8_1>(const float * x, char * vy, int64_t k) {
-    quantize_row_q8_1_ref(x, (block_q8_1 *)vy, k);
+    quantize_row_q8_1(x, (block_q8_1 *)vy, k);
 }
 
 template <>
@@ -950,7 +952,7 @@ template<typename TB, typename packed_B_t = packed_B_type<TB>>
 void unpack_B(packed_B_t * RESTRICT tile, const void * RESTRICT packed_B) {
     GGML_UNUSED(tile);
     GGML_UNUSED(packed_B);
-};
+}
 
 template <>
 void unpack_B<block_q4_0>(int8_t * RESTRICT tile, const void * RESTRICT packed_B) {
@@ -2327,9 +2329,7 @@ size_t ggml_backend_amx_get_alloc_size(const struct ggml_tensor * tensor) {
 
 // pack weight to vnni format
 void ggml_backend_amx_convert_weight(struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-
-    size_t alloc_size = ggml_backend_amx_get_alloc_size(tensor);
-    GGML_ASSERT(alloc_size == size);
+    GGML_ASSERT(offset == 0 && size == ggml_nbytes(tensor)); // only full tensor conversion is supported for now
 
     const enum ggml_type TYPE = tensor->type;
 
@@ -2348,6 +2348,29 @@ void ggml_backend_amx_convert_weight(struct ggml_tensor * tensor, const void * d
     });
 }
 
+size_t ggml_backend_amx_desired_wsize(const struct ggml_tensor * dst) {
+    struct ggml_tensor * src0 = dst->src[0];
+
+    const enum ggml_type TYPE = src0->type;
+
+    const bool is_floating_type = TYPE == GGML_TYPE_F16;
+    if (is_floating_type) {
+        return 0;
+    }
+
+    const int M = dst->ne[1];
+    const int K = src0->ne[0];
+
+    size_t desired_wsize = 0;
+
+    GGML_DISPATCH_QTYPES(TYPE, [&] {
+        const size_t row_size_A = K / blck_size * sizeof(vec_dot_type);
+        desired_wsize = M * row_size_A;
+    });
+
+    return desired_wsize;
+}
+
 // NB: mixed dtype gemm with Advanced Matrix Extensions (Intel AMX)
 //
 // src0: weight in shape of {N, K}, quantized
@@ -2356,13 +2379,11 @@ void ggml_backend_amx_convert_weight(struct ggml_tensor * tensor, const void * d
 //
 // the function performs: dst = src1 @ src0.T
 //
-void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor * dst) {
+void ggml_backend_amx_mul_mat(const ggml_compute_params * params, struct ggml_tensor * dst) {
     struct ggml_tensor * src0 = dst->src[0];
     struct ggml_tensor * src1 = dst->src[1];
 
     const enum ggml_type TYPE = src0->type;
-
-    const int n_threads = ctx->n_threads;
 
     // f16 only has avx512 kernels for now,
     // amx kernels will be added once 6th gen xeon is released.
@@ -2379,7 +2400,7 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
         const int MB = div_up(M, BLOCK_M);
         const int NB = div_up(N, BLOCK_N);
 
-        parallel_for(n_threads, MB * NB, [&](int begin, int end) {
+        parallel_for_ggml(params, MB * NB, [&](int begin, int end) {
             GGML_DISPATCH_FLOATING_TYPES(TYPE, [&] {
                 for (int i = begin; i < end; ++i) {
                     int mb = i / NB;
@@ -2412,27 +2433,29 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
     }
 
     // pointer to work space, used convert A from float to quantized type
-    void * wdata = nullptr;
+    void * wdata = params->wdata;
 
     //TODO: performance improvement: merge quant A
-    GGML_DISPATCH_QTYPES(TYPE, [&] {
-        const size_t row_size_A = K / blck_size * sizeof(vec_dot_type);
-        const size_t desired_wsize = M * row_size_A;
-        if (ctx->work_size < desired_wsize) {
-            ctx->work_data.reset(new char[desired_wsize]);
-            ctx->work_size = desired_wsize;
-        }
-        wdata = ctx->work_data.get();
+    if (params->ith == 0) {
+        GGML_DISPATCH_QTYPES(TYPE, [&] {
+            const size_t row_size_A = K / blck_size * sizeof(vec_dot_type);
+            const size_t desired_wsize = M * row_size_A;
+            if (params->wsize < desired_wsize) {
+                GGML_ABORT("insufficient work space size");
+            }
 
-        // Q4_0, Q4_1, Q8_0 handles 1 TILE_K per blck_size
-        // Q4_K, Q5_K, Q6_K, IQ4_XS handles 8 TILE_K per blck_size
-        GGML_ASSERT(TILE_K == blck_size || TILE_K * 8 == blck_size);
+            // Q4_0, Q4_1, Q8_0 handles 1 TILE_K per blck_size
+            // Q4_K, Q5_K, Q6_K, IQ4_XS handles 8 TILE_K per blck_size
+            GGML_ASSERT(TILE_K == blck_size || TILE_K * 8 == blck_size);
 
-        const float * A_data = static_cast<const float *>(src1->data);
-        for (int m = 0; m < M; ++m) {
-            from_float<vec_dot_type>(A_data + m * K, (char *)wdata + m * row_size_A, K);
-        }
-    });
+            const float * A_data = static_cast<const float *>(src1->data);
+            for (int m = 0; m < M; ++m) {
+                from_float<vec_dot_type>(A_data + m * K, (char *)wdata + m * row_size_A, K);
+            }
+        });
+    }
+
+    ggml_barrier(params->threadpool);
 
     if (M == 1) {
         // MB = 1 and handle 8 tiles in each block
@@ -2440,7 +2463,7 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
         constexpr int BLOCK_N = TILE_N * kTilesN;
         const int NB = div_up(N, BLOCK_N);
 
-        parallel_for(n_threads, NB, [&](int begin, int end) {
+        parallel_for_ggml(params, NB, [&](int begin, int end) {
             GGML_DISPATCH_QTYPES(TYPE, [&] {
                 const int KB = K / blck_size;
                 const int TILE_SIZE = get_tile_size<type>();
@@ -2470,7 +2493,7 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
     const int MB = div_up(M, BLOCK_M);
     const int NB = div_up(N, BLOCK_N);
 
-    parallel_for(n_threads, MB * NB, [&](int begin, int end) {
+    parallel_for_ggml(params, MB * NB, [&](int begin, int end) {
         // init tile config for each thread
         ggml_tile_config_init();
 
@@ -2498,13 +2521,4 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
     });
 }
 
-#else // if defined(__AMX_INT8__)
-
-void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor * dst) {
-    fprintf(stderr, "GGML is not compiled with AMX support!\n");
-
-    GGML_UNUSED(ctx);
-    GGML_UNUSED(dst);
-}
-
-#endif // if defined(__AMX_INT8__)
+#endif // if defined(__AMX_INT8__) && defined(__AVX512VNNI__)

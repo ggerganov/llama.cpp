@@ -652,7 +652,17 @@ bool fs_validate_filename(const std::string & filename) {
 
     std::u32string filename_utf32;
     try {
+#if defined(__clang__)
+        // disable C++17 deprecation warning for std::codecvt_utf8
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
         std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+
+#if defined(__clang__)
+#    pragma clang diagnostic pop
+#endif
+
         filename_utf32 = converter.from_bytes(filename);
 
         // If the reverse conversion mismatches, it means overlong UTF-8 sequences were used,
@@ -829,9 +839,9 @@ struct common_init_result common_init_from_params(common_params & params) {
     llama_model * model = nullptr;
 
     if (!params.hf_repo.empty() && !params.hf_file.empty()) {
-        model = common_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
+        model = common_load_model_from_hf(params.hf_repo, params.hf_file, params.model, params.hf_token, mparams);
     } else if (!params.model_url.empty()) {
-        model = common_load_model_from_url(params.model_url.c_str(), params.model.c_str(), params.hf_token.c_str(), mparams);
+        model = common_load_model_from_url(params.model_url, params.model, params.hf_token, mparams);
     } else {
         model = llama_load_model_from_file(params.model.c_str(), mparams);
     }
@@ -1342,17 +1352,17 @@ static bool common_download_file(const std::string & url, const std::string & pa
 }
 
 struct llama_model * common_load_model_from_url(
-        const char * model_url,
-        const char * path_model,
-        const char * hf_token,
+        const std::string & model_url,
+        const std::string & local_path,
+        const std::string & hf_token,
         const struct llama_model_params & params) {
     // Basic validation of the model_url
-    if (!model_url || strlen(model_url) == 0) {
+    if (model_url.empty()) {
         LOG_ERR("%s: invalid model_url\n", __func__);
         return NULL;
     }
 
-    if (!common_download_file(model_url, path_model, hf_token)) {
+    if (!common_download_file(model_url, local_path, hf_token)) {
         return NULL;
     }
 
@@ -1363,9 +1373,9 @@ struct llama_model * common_load_model_from_url(
             /*.no_alloc = */ true,
             /*.ctx      = */ NULL,
         };
-        auto * ctx_gguf = gguf_init_from_file(path_model, gguf_params);
+        auto * ctx_gguf = gguf_init_from_file(local_path.c_str(), gguf_params);
         if (!ctx_gguf) {
-            LOG_ERR("\n%s:  failed to load input GGUF from %s\n", __func__, path_model);
+            LOG_ERR("\n%s:  failed to load input GGUF from %s\n", __func__, local_path.c_str());
             return NULL;
         }
 
@@ -1384,13 +1394,13 @@ struct llama_model * common_load_model_from_url(
         // Verify the first split file format
         // and extract split URL and PATH prefixes
         {
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), path_model, 0, n_split)) {
-                LOG_ERR("\n%s: unexpected model file name: %s n_split=%d\n", __func__, path_model, n_split);
+            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), local_path.c_str(), 0, n_split)) {
+                LOG_ERR("\n%s: unexpected model file name: %s n_split=%d\n", __func__, local_path.c_str(), n_split);
                 return NULL;
             }
 
-            if (!llama_split_prefix(split_url_prefix, sizeof(split_url_prefix), model_url, 0, n_split)) {
-                LOG_ERR("\n%s: unexpected model url: %s n_split=%d\n", __func__, model_url, n_split);
+            if (!llama_split_prefix(split_url_prefix, sizeof(split_url_prefix), model_url.c_str(), 0, n_split)) {
+                LOG_ERR("\n%s: unexpected model url: %s n_split=%d\n", __func__, model_url.c_str(), n_split);
                 return NULL;
             }
         }
@@ -1417,14 +1427,14 @@ struct llama_model * common_load_model_from_url(
         }
     }
 
-    return llama_load_model_from_file(path_model, params);
+    return llama_load_model_from_file(local_path.c_str(), params);
 }
 
 struct llama_model * common_load_model_from_hf(
-        const char * repo,
-        const char * model,
-        const char * path_model,
-        const char * hf_token,
+        const std::string & repo,
+        const std::string & remote_path,
+        const std::string & local_path,
+        const std::string & hf_token,
         const struct llama_model_params & params) {
     // construct hugging face model url:
     //
@@ -1438,27 +1448,27 @@ struct llama_model * common_load_model_from_hf(
     std::string model_url = "https://huggingface.co/";
     model_url += repo;
     model_url += "/resolve/main/";
-    model_url += model;
+    model_url += remote_path;
 
-    return common_load_model_from_url(model_url.c_str(), path_model, hf_token, params);
+    return common_load_model_from_url(model_url, local_path, hf_token, params);
 }
 
 #else
 
 struct llama_model * common_load_model_from_url(
-        const char * /*model_url*/,
-        const char * /*path_model*/,
-        const char * /*hf_token*/,
+        const std::string & /*model_url*/,
+        const std::string & /*local_path*/,
+        const std::string & /*hf_token*/,
         const struct llama_model_params & /*params*/) {
     LOG_WRN("%s: llama.cpp built without libcurl, downloading from an url not supported.\n", __func__);
     return nullptr;
 }
 
 struct llama_model * common_load_model_from_hf(
-        const char * /*repo*/,
-        const char * /*model*/,
-        const char * /*path_model*/,
-        const char * /*hf_token*/,
+        const std::string & /*repo*/,
+        const std::string & /*remote_path*/,
+        const std::string & /*local_path*/,
+        const std::string & /*hf_token*/,
         const struct llama_model_params & /*params*/) {
     LOG_WRN("%s: llama.cpp built without libcurl, downloading from Hugging Face not supported.\n", __func__);
     return nullptr;
