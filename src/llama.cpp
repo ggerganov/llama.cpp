@@ -19706,6 +19706,7 @@ struct llama_model_saver {
         gguf_set_val_str(gguf_ctx, llm_kv(key).c_str(), value);
     }
 
+    [[noreturn]]
     void add_kv(const enum llm_kv key, const char value) {
         GGML_UNUSED(key);
         GGML_UNUSED(value);
