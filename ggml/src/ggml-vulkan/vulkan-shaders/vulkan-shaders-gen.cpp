@@ -60,6 +60,7 @@ const std::vector<std::string> type_names = {
     "iq4_nl"
 };
 
+namespace {
 void execute_command(const std::string& command, std::string& stdout_str, std::string& stderr_str) {
 #ifdef _WIN32
     HANDLE stdout_read, stdout_write;
@@ -288,6 +289,13 @@ void matmul_shaders(bool fp16, bool matmul_id, bool coopmat, bool coopmat2, bool
     if (fp16) {
         base_dict["FLOAT16"] = "1";
     }
+
+    base_dict["ACC_TYPE"] = f16acc ? "float16_t" : "float";
+
+    if (f16acc) {
+        base_dict["ACC_F16"] = "1";
+    }
+
     if (coopmat) {
         base_dict["COOPMAT"] = "1";
     }
@@ -326,12 +334,17 @@ void process_shaders() {
 
     // matmul
     for (const auto& matmul_id : {false, true}) {
-        // No coopmats, fp32acc
+        // No coopmats
+        // fp32
         matmul_shaders(false, matmul_id, false, false, false);
-        matmul_shaders(true, matmul_id, false, false, false);
 
-        // Coopmat, fp32acc
+        // fp16, fp32acc and fp16acc
+        matmul_shaders(true, matmul_id, false, false, false);
+        matmul_shaders(true, matmul_id, false, false, true);
+
+        // Coopmat, fp32acc and fp16acc
         matmul_shaders(true, matmul_id, true, false, false);
+        matmul_shaders(true, matmul_id, true, false, true);
 
 #if defined(VK_NV_cooperative_matrix2)
         // Coopmat2, fp32acc and fp16acc
@@ -520,6 +533,7 @@ void write_output_files() {
 
     fclose(hdr);
     fclose(src);
+}
 }
 
 int main(int argc, char** argv) {
