@@ -217,6 +217,12 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
         elseif (GGML_AVX)
             list(APPEND ARCH_FLAGS /arch:AVX)
         endif()
+        if (GGML_AVX_VNNI)
+            list(APPEND ARCH_DEFINITIONS __AVXVNNI__)
+            if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+                list(APPEND ARCH_FLAGS -mavxvnni)
+            endif()
+        endif()
     else()
         if (GGML_NATIVE)
             list(APPEND ARCH_FLAGS -march=native)
@@ -232,6 +238,9 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
         endif()
         if (GGML_AVX2)
             list(APPEND ARCH_FLAGS -mavx2)
+        endif()
+        if (GGML_AVX_VNNI)
+            list(APPEND ARCH_FLAGS -mavxvnni)
         endif()
         if (GGML_AVX512)
             list(APPEND ARCH_FLAGS -mavx512f)
@@ -300,6 +309,10 @@ endif()
 target_sources(ggml-cpu PRIVATE ${GGML_CPU_SOURCES})
 set_source_files_properties(${GGML_CPU_SOURCES} PROPERTIES COMPILE_OPTIONS     "${ARCH_FLAGS}")
 set_source_files_properties(${GGML_CPU_SOURCES} PROPERTIES COMPILE_DEFINITIONS "${ARCH_DEFINITIONS}")
+
+# the feature detection code must be compiled without any architecture flags
+target_sources(ggml-cpu PRIVATE cpu-feats-x86.cpp)
+# target_sources(ggml-cpu PRIVATE cpu-feats-arm.cpp) # TODO: ARM feature detection
 
 if (EMSCRIPTEN)
     set_target_properties(ggml-cpu PROPERTIES COMPILE_FLAGS "-msimd128")
