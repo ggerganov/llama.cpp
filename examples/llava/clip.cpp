@@ -153,20 +153,20 @@ static std::string format(const char * fmt, ...) {
 #define TN_MINICPMV_LN "resampler.ln_%s.%s"
 
 
-enum projector_type {
-    PROJECTOR_TYPE_MLP,
-    PROJECTOR_TYPE_MLP_NORM,
-    PROJECTOR_TYPE_LDP,
-    PROJECTOR_TYPE_LDPV2,
-    PROJECTOR_TYPE_RESAMPLER,
-    PROJECTOR_TYPE_UNKNOWN,
+enum class ProjectorType {
+    MLP,
+    MLP_NORM,
+    LDP,
+    LDPV2,
+    RESAMPLER,
+    UNKNOWN,
 };
 
-static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
-    { PROJECTOR_TYPE_MLP, "mlp" },
-    { PROJECTOR_TYPE_LDP, "ldp" },
-    { PROJECTOR_TYPE_LDPV2, "ldpv2"},
-    { PROJECTOR_TYPE_RESAMPLER, "resampler"},
+static std::map<ProjectorType, std::string> ProjectorTypeNames = {
+    { ProjectorType::MLP, "mlp" },
+    { ProjectorType::LDP, "ldp" },
+    { ProjectorType::LDPV2, "ldpv2"},
+    { ProjectorType::RESAMPLER, "resampler"},
 };
 
 
@@ -287,13 +287,13 @@ static void print_tensor_info(const ggml_tensor * tensor, const char * prefix = 
             tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3], ggml_type_name(tensor->type));
 }
 
-static projector_type clip_projector_type_from_string(const std::string & name) {
-    for (const auto & kv : PROJECTOR_TYPE_NAMES) { // NOLINT
+static ProjectorType clip_projector_type_from_string(const std::string & name) {
+    for (const auto & kv : ProjectorTypeNames) { // NOLINT
         if (kv.second == name) {
             return kv.first;
         }
     }
-    return PROJECTOR_TYPE_UNKNOWN;
+    return ProjectorType::UNKNOWN;
 }
 
 #ifdef CLIP_DEBUG_FUNCTIONS
@@ -552,7 +552,7 @@ struct clip_ctx {
     int minicpmv_version = 2;
 
     struct clip_vision_model vision_model;
-    projector_type proj_type = PROJECTOR_TYPE_MLP;
+    ProjectorType proj_type = ProjectorType::MLP;
 
     float image_mean[3];
     float image_std[3];
@@ -790,7 +790,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         // print_tensor_info(embeddings, "embeddings");
 
         // llava projector
-        if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
+        if (ctx->proj_type == ProjectorType::MLP) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
 
@@ -798,7 +798,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
         }
-        else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        else if (ctx->proj_type == ProjectorType::MLP_NORM) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
             // ggml_tensor_printf(embeddings, "mm_0_w",0,true,false);
@@ -819,7 +819,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.mm_4_w),
                                 model.mm_4_b);
         }
-        else if (ctx->proj_type == PROJECTOR_TYPE_LDP) {
+        else if (ctx->proj_type == ProjectorType::LDP) {
             // MobileVLM projector
             int n_patch = 24;
             struct ggml_tensor * mlp_1 = ggml_mul_mat(ctx0, model.mm_model_mlp_1_w, embeddings);
@@ -929,7 +929,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             }
             embeddings = block_1;
         }
-        else if (ctx->proj_type == PROJECTOR_TYPE_LDPV2)
+        else if (ctx->proj_type == ProjectorType::LDPV2)
         {
             int n_patch = 24;
             struct ggml_tensor * mlp_0 = ggml_mul_mat(ctx0, model.mm_model_mlp_0_w, embeddings);
@@ -960,7 +960,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     // minicpmv projector
     else if (ctx->has_minicpmv_projector)
     {
-        if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
+        if (ctx->proj_type == ProjectorType::RESAMPLER) {
             struct ggml_tensor * q = model.mm_model_query;
             { // layernorm
                 q = ggml_norm(ctx0, q, eps);
@@ -1139,12 +1139,12 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             const std::string proj_type = gguf_get_val_str(ctx, idx);
             new_clip->proj_type = clip_projector_type_from_string(proj_type);
         } else {
-            new_clip->proj_type = PROJECTOR_TYPE_MLP;
+            new_clip->proj_type = ProjectorType::MLP;
         }
 
-        if (new_clip->proj_type == PROJECTOR_TYPE_MLP) {
+        if (new_clip->proj_type == ProjectorType::MLP) {
             if (gguf_find_tensor(ctx, format(TN_LLAVA_PROJ, 3, "weight").c_str()) != -1) {
-                new_clip->proj_type = PROJECTOR_TYPE_MLP_NORM;
+                new_clip->proj_type = ProjectorType::MLP_NORM;
             }
         }
     }
@@ -1387,7 +1387,11 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
 
         // LLaVA projection
-        if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        switch (new_clip->proj_type)
+        {
+        case ProjectorType::MLP:
+        case ProjectorType::MLP_NORM:
+        {
             vision_model.mm_0_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
             vision_model.mm_0_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "bias"));
             try {
@@ -1414,7 +1418,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 vision_model.image_newline = get_tensor(new_clip->ctx_data, TN_IMAGE_NEWLINE);
                 // LOG_INF("%s: image_newline tensor (llava-1.6) found\n", __func__);
             } catch (std::runtime_error & /*e*/) { }
-        } else if (new_clip->proj_type == PROJECTOR_TYPE_LDP) {
+            break;
+        }
+        case ProjectorType::LDP:
+        {
             // MobileVLM projection
             vision_model.mm_model_mlp_1_w               = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_MLP, 1, "weight"));
             vision_model.mm_model_mlp_1_b               = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_MLP, 1, "bias"));
@@ -1440,8 +1447,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_block_2_block_2_0_w   = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "0.weight"));
             vision_model.mm_model_block_2_block_2_1_w   = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "1.weight"));
             vision_model.mm_model_block_2_block_2_1_b   = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "1.bias"));
+            break;
         }
-        else if (new_clip->proj_type == PROJECTOR_TYPE_LDPV2)
+        case ProjectorType::LDPV2:
         {
             // MobilVLM_V2 projection
             vision_model.mm_model_mlp_0_w = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_MLP, 0, "weight"));
@@ -1450,8 +1458,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_mlp_2_b = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_MLP, 2, "bias"));
             vision_model.mm_model_peg_0_w = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_PEG, 0, "weight"));
             vision_model.mm_model_peg_0_b = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_PEG, 0, "bias"));
+            break;
         }
-        else if (new_clip->proj_type == PROJECTOR_TYPE_RESAMPLER) {
+        case ProjectorType::RESAMPLER:
+        {
             // vision_model.mm_model_pos_embed = get_tensor(new_clip->ctx_data, TN_MINICPMV_POS_EMBD);
             vision_model.mm_model_pos_embed_k = get_tensor(new_clip->ctx_data, TN_MINICPMV_POS_EMBD_K);
             vision_model.mm_model_query = get_tensor(new_clip->ctx_data, TN_MINICPMV_QUERY);
@@ -1471,10 +1481,15 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_ln_kv_b = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "kv", "bias"));
             vision_model.mm_model_ln_post_w = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "weight"));
             vision_model.mm_model_ln_post_b = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "bias"));
+            break;
         }
-        else {
-            std::string proj_type = PROJECTOR_TYPE_NAMES[new_clip->proj_type];
-            throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
+        case ProjectorType::UNKNOWN:
+        {
+            LOG_ERR("%s: ProjectorType\n", __func__);
+            clip_free(new_clip);
+            gguf_free(ctx);
+            std::terminate();
+        }
         }
 
         vision_model.layers.resize(hparams.n_layer);
@@ -2189,9 +2204,9 @@ int clip_n_patches(const struct clip_ctx * ctx) {
 
     int n_patches = (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
 
-    if (ctx->proj_type == PROJECTOR_TYPE_LDP || ctx->proj_type == PROJECTOR_TYPE_LDPV2) {
+    if (ctx->proj_type == ProjectorType::LDP || ctx->proj_type == ProjectorType::LDPV2) {
         n_patches /= 4;
-    } else if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
+    } else if (ctx->proj_type == ProjectorType::RESAMPLER) {
         if (ctx->minicpmv_version == 2) {
             n_patches = 96;
         }
@@ -2597,29 +2612,31 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 }
 
 int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
-    if (ctx->proj_type == PROJECTOR_TYPE_LDP) {
+    switch (ctx->proj_type)
+    {
+    case ProjectorType::LDP:
         return ctx->vision_model.mm_model_block_1_block_2_1_b->ne[0];
-    }
-    if (ctx->proj_type == PROJECTOR_TYPE_LDPV2) {
+    case ProjectorType::LDPV2:
         return ctx->vision_model.mm_model_peg_0_b->ne[0];
-    }
-    if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
+    case ProjectorType::MLP:
         return ctx->vision_model.mm_2_b->ne[0];
-    }
-    if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+    case ProjectorType::MLP_NORM:
         return ctx->vision_model.mm_3_b->ne[0];
-    }
-    if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
+    case ProjectorType::RESAMPLER:
         if (ctx->minicpmv_version == 2) {
             return 4096;
         }
         else if (ctx->minicpmv_version == 3) {
             return 3584;
         }
+        [[fallthrough]];
+    case ProjectorType::UNKNOWN:
+        LOG_ERR("%s: ProjectorType\n", __func__);
+        std::terminate();
     }
-
-    std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
-    throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
+    // Handle unexpected ProjectorType values explicitly since Enum Class switch should have no default case
+    LOG_ERR("%s: Unhandled ProjectorType\n", __func__);
+    std::terminate();
 }
 
 int clip_is_minicpmv(const struct clip_ctx * ctx) {
