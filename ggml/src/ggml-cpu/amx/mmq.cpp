@@ -1349,10 +1349,10 @@ struct tinygemm_kernel_avx<float, ggml_fp16_t, float, BLOCK_M, BLOCK_N, BLOCK_K>
             constexpr int row = idx / COLS;
             constexpr int col = idx % COLS;
 
-            if (col == 0) {
+            if constexpr (col == 0) {
                 va = _mm512_loadu_ps(A + row * K + k);
             }
-            if (row == 0) {
+            if constexpr (row == 0) {
                 vb[col] =  _mm512_cvtph_ps(_mm256_loadu_si256((const __m256i *)(B + col * K + k)));
             }
             vc[idx] = _mm512_fmadd_ps(va, vb[col], vc[idx]);

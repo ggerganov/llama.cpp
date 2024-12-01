@@ -78,7 +78,6 @@ inline void parallel_for_ggml(const ggml_compute_params * params, int n, const f
     int tbegin, tend;
     balance211(n, params->nth, params->ith, tbegin, tend);
     f(tbegin, tend);
-    ggml_barrier(params->threadpool); // TODO: might not always be needed
 }
 
 // quantized types that have AMX support
