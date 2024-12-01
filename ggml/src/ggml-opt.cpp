@@ -486,7 +486,7 @@ static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build
     }
 
     // gb_grad == graph backward gradients, forward pass, then backward pass to calculate gradients.
-    opt_ctx->gb_grad = ggml_graph_dup(opt_ctx->ctx_compute, opt_ctx->gf);
+    opt_ctx->gb_grad = ggml_graph_dup(opt_ctx->ctx_compute, opt_ctx->gf, /*force_grads =*/ true);
     ggml_build_backward_expand(opt_ctx->ctx_compute, opt_ctx->gb_grad, opt_ctx->grad_accs.data());
 
     if (build_type == GGML_OPT_BUILD_TYPE_GRAD) {
@@ -500,7 +500,7 @@ static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build
     GGML_ASSERT(build_type == GGML_OPT_BUILD_TYPE_OPT);
 
     // gb_opt == graph backward optimize, forward pass, then backward pass to calculate gradients, then optimizer step.
-    opt_ctx->gb_opt = ggml_graph_dup(opt_ctx->ctx_compute, opt_ctx->gb_grad);
+    opt_ctx->gb_opt = ggml_graph_dup(opt_ctx->ctx_compute, opt_ctx->gb_grad, /*force_grads =*/ true);
 
     opt_ctx->adamw_params = ggml_new_tensor_1d(opt_ctx->ctx_static_cpu, GGML_TYPE_F32, 7);
     ggml_set_input(opt_ctx->adamw_params);
