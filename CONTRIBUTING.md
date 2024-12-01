@@ -13,6 +13,7 @@
 - Squash-merge PRs
 - Use the following format for the squashed commit title: `<module> : <commit title> (#<issue_number>)`. For example: `utils : fix typo in utils.py (#1234)`
 - Optionally pick a `<module>` from here: https://github.com/ggerganov/llama.cpp/wiki/Modules
+- Consider adding yourself to [CODEOWNERS](CODEOWNERS)
 
 # Coding guidelines
 
