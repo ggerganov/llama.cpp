@@ -128,7 +128,7 @@ static inline __m512i sum_i16_pairs_int_32x16(const __m512i x) {
 }
 
 static inline __m512i mul_sum_us8_pairs_int32x16(const __m512i ax, const __m512i sy) {
-#if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
+#if defined(__AVX512VNNI__)
     const __m512i zero = _mm512_setzero_si512();
     return _mm512_dpbusd_epi32(zero, ax, sy);
 #else

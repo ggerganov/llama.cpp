@@ -281,8 +281,8 @@ static int ggml_backend_cpu_x86_score() {
     score +=  ggml_cpu_has_f16c       () * 1<<1;
     score +=  ggml_cpu_has_ssse3      () * 1<<2;
     score +=  ggml_cpu_has_sse3       () * 1<<3;
-    score +=  ggml_cpu_has_avx        () * 1<<5;
     score +=  ggml_cpu_has_avx_vnni   () * 1<<4;
+    score +=  ggml_cpu_has_avx        () * 1<<5;
     score +=  ggml_cpu_has_avx2       () * 1<<6;
     score +=  ggml_cpu_has_avx512     () * 1<<7;
     // score +=  ggml_cpu_has_avx512_vbmi() * 1<<8; // not used
