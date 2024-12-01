@@ -1141,16 +1141,19 @@ $(LIB_COMMON_S): $(OBJ_COMMON)
 # Include dependency files
 -include $(DEP_FILES)
 
-# Clean rule
-clean:
-	rm -vrf $(BUILD_TARGETS) $(TEST_TARGETS)
-	rm -rvf *.a *.dll *.so *.dot
-	find ggml src common tests examples pocs -type f -name "*.o" -delete
-	find ggml src common tests examples pocs -type f -name "*.d" -delete
+# Clean generated server assets
+clean-server-assets:
 	find examples/server -type f -name "*.js.hpp"   -delete
 	find examples/server -type f -name "*.mjs.hpp"  -delete
 	find examples/server -type f -name "*.css.hpp"  -delete
 	find examples/server -type f -name "*.html.hpp" -delete
+
+# Clean rule
+clean: clean-server-assets
+	rm -vrf $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -rvf *.a *.dll *.so *.dot
+	find ggml src common tests examples pocs -type f -name "*.o" -delete
+	find ggml src common tests examples pocs -type f -name "*.d" -delete
 
 #
 # Examples
@@ -1356,13 +1359,12 @@ llama-server: \
 	examples/server/index.html.hpp \
 	examples/server/loading.html.hpp \
 	common/json.hpp \
-	common/stb_image.h \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
 
 # Portable equivalent of `cd examples/server/public && xxd -i $(notdir $<) ../$(notdir $<).hpp`:
-examples/server/%.hpp: examples/server/public/% Makefile
+examples/server/%.hpp: examples/server/public/% FORCE Makefile
 	@( export NAME=$(subst .,_,$(subst -,_,$(notdir $<))) && \
 		echo "unsigned char $${NAME}[] = {" && \
 		cat $< | od -v -t x1 -An | sed -E 's/([0-9a-fA-F]+)/0x\1, /g' && \
@@ -1537,7 +1539,7 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 # Deprecated binaries that we want to keep around long enough for people to migrate to the new filenames, then these can be removed.
 #
 # Mark legacy binary targets as .PHONY so that they are always checked.
-.PHONY: main quantize perplexity embedding server
+.PHONY: FORCE main quantize perplexity embedding server
 
 # Define the object file target
 examples/deprecation-warning/deprecation-warning.o: examples/deprecation-warning/deprecation-warning.cpp

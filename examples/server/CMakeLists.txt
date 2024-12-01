@@ -28,6 +28,7 @@ foreach(asset ${PUBLIC_ASSETS})
         OUTPUT "${output}"
         COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
     )
+    set_source_files_properties(${output} PROPERTIES GENERATED TRUE)
 endforeach()
 
 add_executable(${TARGET} ${TARGET_SRCS})
