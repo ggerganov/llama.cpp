@@ -88,10 +88,16 @@ static float dot_product_error(const ggml_type_traits * qfns, const ggml_type_tr
     const auto * vdot = ggml_get_type_traits_cpu(qfns_cpu->vec_dot_type);
 
     qfns_cpu->from_float(test_data1, tmp_q1.data(), test_size);
-    vdot->from_float(test_data2, tmp_q2.data(), test_size);
+    if (qfns_cpu->vec_dot_type != GGML_TYPE_F32) {
+        vdot->from_float(test_data2, tmp_q2.data(), test_size);
+    }
 
     float result = INFINITY;
-    qfns_cpu->vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
+    if (qfns_cpu->vec_dot_type != GGML_TYPE_F32) {
+        qfns_cpu->vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
+    } else {
+        qfns_cpu->vec_dot(test_size, &result, 0, tmp_q1.data(), 0, test_data2, 0, 1);
+    }
 
     const float dot_ref = dot_product(test_data1, test_data2, test_size);
 

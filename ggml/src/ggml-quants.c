@@ -5229,7 +5229,26 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
             {
                 VALIDATE_ROW_DATA_DVEC_F16_IMPL(block_q4_0x8, data, nbytes / sizeof(block_q4_0x8), 8);
             } break;
-
+        case GGML_TYPE_E4M3_Q:
+        case GGML_TYPE_E3M4_Q:
+            {
+                // Note realy clean, but it is the same test for E4M3.
+                const block_e3m4_q * q = (const block_e3m4_q *) data;
+                int nans = 0;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_float(q[i].d, i)) {
+                        return false;
+                    }
+                    // NAN
+                    for (size_t k = 0; k < QK_K; ++k) {
+                        nans += (q[i].qs[k] & 0x7f) == 0x7f;
+                    }
+                }
+                if (nans) {
+                    fprintf(stderr, "%s: found %d NaNs in row of %zu FP8 values\n", __func__, nans, nb*QK_K);
+                    return false;
+                }
+            } break;
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:

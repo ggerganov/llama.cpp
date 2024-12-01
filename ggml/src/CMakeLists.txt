@@ -222,7 +222,10 @@ add_library(ggml-base
             ggml-quants.c
             ggml-quants.h
             ggml-aarch64.c
-            ggml-aarch64.h)
+            ggml-aarch64.h
+            ggml-fp8.cpp
+            ggml-fp8.h
+            )
 
 target_include_directories(ggml-base PRIVATE .)
 

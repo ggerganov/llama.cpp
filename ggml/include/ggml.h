@@ -392,6 +392,10 @@ extern "C" {
         GGML_TYPE_IQ4_NL_4_4 = 36,
         // GGML_TYPE_IQ4_NL_4_8 = 37,
         // GGML_TYPE_IQ4_NL_8_8 = 38,
+        GGML_TYPE_E5M2    = 39,
+        GGML_TYPE_E4M3    = 40,
+        GGML_TYPE_E4M3_Q  = 41,
+        GGML_TYPE_E3M4_Q  = 42,
         GGML_TYPE_COUNT,
     };
 
@@ -436,6 +440,10 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0_4_4 = 25, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_4_8 = 26, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
+        GGML_FTYPE_MOSTLY_E5M2     = 28, // except 1d tensors
+        GGML_FTYPE_MOSTLY_E4M3     = 29, // except 1d tensors
+        GGML_FTYPE_MOSTLY_E4M3_Q   = 30, // except 1d tensors
+        GGML_FTYPE_MOSTLY_E3M4_Q   = 31, // except 1d tensors
     };
 
     // available tensor operations:

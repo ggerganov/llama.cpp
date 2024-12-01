@@ -20,6 +20,8 @@ var sources = [
     "ggml/src/ggml-cpu/ggml-cpu-quants.c",
     "ggml/src/ggml-threading.cpp",
     "ggml/src/ggml-quants.c",
+    "ggml/src/ggml-fp8.cpp",
+    "ggml/src/ggml-cpu/ggml-cpu-fp8.cpp",
 ]
 
 var resources: [Resource] = []
@@ -88,5 +90,5 @@ let package = Package(
             linkerSettings: linkerSettings
         )
     ],
-    cxxLanguageStandard: .cxx11
+    cxxLanguageStandard: .cxx17
 )

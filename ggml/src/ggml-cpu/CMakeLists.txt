@@ -7,6 +7,8 @@ list (APPEND GGML_CPU_SOURCES
     ggml-cpu-aarch64.h
     ggml-cpu-quants.c
     ggml-cpu-quants.h
+    ggml-cpu-fp8.cpp
+    ggml-cpu-fp8.h
     amx/amx.cpp
     amx/amx.h
     amx/mmq.cpp
@@ -42,6 +44,18 @@ if (GGML_OPENMP)
         target_link_libraries(ggml-cpu PRIVATE OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
     else()
         message(WARNING "OpenMP not found")
+    endif()
+endif()
+
+if (GGML_OPENMP_SIMD)
+    check_cxx_compiler_flag("-fopenmp-simd" SUPPORTS_OPENMP_SIMD)
+    if (SUPPORTS_OPENMP_SIMD)
+        # OpenMP_RUNTIME_MSVC=experimental / if (MSVC)
+        message(STATUS "Using OPENMP_SIMD.")
+        add_compile_definitions(GGML_USE_OPENMP_SIMD)
+        set(OPENMP_SIMD_FLAGS -fopenmp-simd)
+    else()
+        message(WARNING "C++ compiler lacks OPENMP_SIMD support.")
     endif()
 endif()
 
@@ -304,3 +318,11 @@ set_source_files_properties(${GGML_CPU_SOURCES} PROPERTIES COMPILE_DEFINITIONS "
 if (EMSCRIPTEN)
     set_target_properties(ggml-cpu PROPERTIES COMPILE_FLAGS "-msimd128")
 endif()
+
+# FP8
+if (OPENMP_SIMD_FLAGS)
+    # set_source_files_properties(ggml-cpu-fp8.cpp PROPERTIES COMPILE_FLAGS ${OPENMP_SIMD_FLAGS})
+    set_target_properties(ggml-cpu PROPERTIES COMPILE_FLAGS ${OPENMP_SIMD_FLAGS})
+endif()
+
+
