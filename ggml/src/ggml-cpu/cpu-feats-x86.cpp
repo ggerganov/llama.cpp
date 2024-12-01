@@ -76,6 +76,7 @@ struct cpuid_x86 {
     bool AVX512_VNNI(void) { return f_7_ecx[11]; }
     bool AVX512_FP16(void) { return f_7_edx[23]; }
     bool AVX512_BF16(void) { return f_7_1_eax[5]; }
+    bool AVX_VNNI(void) { return f_7_1_eax[4]; }
 
     bool AMX_TILE(void) { return f_7_edx[24]; }
     bool AMX_INT8(void) { return f_7_edx[25]; }
@@ -265,6 +266,7 @@ static int ggml_backend_cpu_x86_score() {
     if (ggml_cpu_has_ssse3() && !is.SSSE3()) { return 0; }
     if (ggml_cpu_has_sse3() && !is.SSE3()) { return 0; }
     if (ggml_cpu_has_avx() && !is.AVX()) { return 0; }
+    if (ggml_cpu_has_avx_vnni() && !is.AVX_VNNI()) { return 0; }
     if (ggml_cpu_has_avx2() && !is.AVX2()) { return 0; }
     if (ggml_cpu_has_avx512() && !is.AVX512F()) { return 0; }
     if (ggml_cpu_has_avx512_vbmi() && !is.AVX512_VBMI()) { return 0; }
@@ -279,8 +281,8 @@ static int ggml_backend_cpu_x86_score() {
     score +=  ggml_cpu_has_f16c       () * 1<<1;
     score +=  ggml_cpu_has_ssse3      () * 1<<2;
     score +=  ggml_cpu_has_sse3       () * 1<<3;
-    // score +=  ggml_cpu_has_avx_vnni   () * 1<<4; // not used
     score +=  ggml_cpu_has_avx        () * 1<<5;
+    score +=  ggml_cpu_has_avx_vnni   () * 1<<4;
     score +=  ggml_cpu_has_avx2       () * 1<<6;
     score +=  ggml_cpu_has_avx512     () * 1<<7;
     // score +=  ggml_cpu_has_avx512_vbmi() * 1<<8; // not used

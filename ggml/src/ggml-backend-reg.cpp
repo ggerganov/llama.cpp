@@ -505,7 +505,6 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent)
 }
 
 void ggml_backend_load_all() {
-    ggml_backend_load_best("amx", true);
     ggml_backend_load_best("blas", true);
     ggml_backend_load_best("cann", true);
     ggml_backend_load_best("cuda", true);
