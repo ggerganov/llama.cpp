@@ -86,6 +86,8 @@ int main(int argc, char ** argv) {
 
     struct llama_opt_params lopt_params {
         /*n_ctx_train     =*/ 0,
+        /*param_filter    =*/ llama_opt_param_filter_all,
+        /*param_filter_ud =*/ nullptr,
         /*get_opt_pars    =*/ ggml_opt_get_constant_optimizer_params,
         /*get_opt_pars_ud =*/ &optimizer_params,
     };

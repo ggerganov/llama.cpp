@@ -4830,7 +4830,6 @@ struct llama_model_loader {
             n_created++;
         }
 
-        ggml_set_param(nullptr, tensor);
         return tensor;
 
     }
@@ -22636,10 +22635,20 @@ void llama_log_callback_default(ggml_log_level level, const char * text, void * 
 // training
 //
 
-static struct ggml_opt_optimizer_params llama_get_default_optimizer_params(void * userdata) {
-    struct ggml_opt_optimizer_params result = ggml_opt_get_default_optimizer_params(userdata);
-    result.adamw.alpha = 1e-6f;
-    return result;
+bool llama_opt_param_filter_all(const struct ggml_tensor * tensor, void * userdata) {
+    GGML_UNUSED(tensor);
+    GGML_UNUSED(userdata);
+    return true;
+}
+
+static void llama_set_param(struct ggml_tensor * tensor, llama_opt_param_filter param_filter, void * userdata) {
+    if (!tensor || tensor->type != GGML_TYPE_F32) {
+        return;
+    }
+    if (!param_filter(tensor, userdata)) {
+        return;
+    }
+    ggml_set_param(tensor);
 }
 
 void llama_opt_init(struct llama_context * lctx, struct llama_model * model, struct llama_opt_params lopt_params) {
@@ -22656,6 +22665,30 @@ void llama_opt_init(struct llama_context * lctx, struct llama_model * model, str
     opt_params.get_opt_pars_ud = lopt_params.get_opt_pars_ud;
 
     lctx->opt_ctx = ggml_opt_init(opt_params);
+
+    llama_opt_param_filter param_filter = lopt_params.param_filter;
+    void * param_filter_ud              = lopt_params.param_filter_ud;
+
+    llama_set_param(model->tok_embd,        param_filter, param_filter_ud);
+    llama_set_param(model->type_embd,       param_filter, param_filter_ud);
+    llama_set_param(model->pos_embd,        param_filter, param_filter_ud);
+    llama_set_param(model->tok_norm,        param_filter, param_filter_ud);
+    llama_set_param(model->tok_norm_b,      param_filter, param_filter_ud);
+    llama_set_param(model->output_norm,     param_filter, param_filter_ud);
+    llama_set_param(model->output_norm_b,   param_filter, param_filter_ud);
+    llama_set_param(model->output,          param_filter, param_filter_ud);
+    llama_set_param(model->output_b,        param_filter, param_filter_ud);
+    llama_set_param(model->output_norm_enc, param_filter, param_filter_ud);
+    llama_set_param(model->cls,             param_filter, param_filter_ud);
+    llama_set_param(model->cls_b,           param_filter, param_filter_ud);
+    llama_set_param(model->cls_out,         param_filter, param_filter_ud);
+    llama_set_param(model->cls_out_b,       param_filter, param_filter_ud);
+
+    for (struct llama_layer & layer : model->layers) {
+        for (size_t i = 0; i < sizeof(layer)/sizeof(struct ggml_tensor *); ++i) {
+            llama_set_param(reinterpret_cast<struct ggml_tensor **>(&layer)[i], param_filter, param_filter_ud);
+        }
+    }
 }
 
 static void llama_opt_epoch_iter(

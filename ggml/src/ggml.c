@@ -6163,8 +6163,7 @@ void ggml_set_output(struct ggml_tensor * tensor) {
     tensor->flags |= GGML_TENSOR_FLAG_OUTPUT;
 }
 
-void ggml_set_param(struct ggml_context * ctx, struct ggml_tensor * tensor) {
-    GGML_UNUSED(ctx); // TODO: remove this parameter
+void ggml_set_param(struct ggml_tensor * tensor) {
     tensor->flags |= GGML_TENSOR_FLAG_PARAM;
 }
 

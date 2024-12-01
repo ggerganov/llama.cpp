@@ -773,7 +773,7 @@ extern "C" {
     // Tensor flags
     GGML_API void ggml_set_input(struct ggml_tensor * tensor);
     GGML_API void ggml_set_output(struct ggml_tensor * tensor);
-    GGML_API void ggml_set_param(struct ggml_context * ctx, struct ggml_tensor * tensor);
+    GGML_API void ggml_set_param(struct ggml_tensor * tensor);
     GGML_API void ggml_set_loss(struct ggml_tensor * tensor);
 
     //
