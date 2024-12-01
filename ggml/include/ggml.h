@@ -943,7 +943,8 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_repeat_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            bool                  gqa_mode); // use memory pattern for backward pass of mat. mul. with group-query attention
 
     // concat a and b along dim
     // used in stable-diffusion

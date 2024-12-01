@@ -2303,13 +2303,15 @@ struct ggml_tensor * ggml_repeat(
 struct ggml_tensor * ggml_repeat_back(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        struct ggml_tensor  * b) {
+        struct ggml_tensor  * b,
+        bool                  gqa_mode) {
     GGML_ASSERT(ggml_can_repeat(b, a));
 
     struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, GGML_MAX_DIMS, b->ne);
 
     result->op     = GGML_OP_REPEAT_BACK;
     result->src[0] = a;
+    result->op_params[1] = gqa_mode ? 1 : 0;
 
     return result;
 }
@@ -5129,7 +5131,7 @@ static void ggml_compute_backward(
             if (src1_needs_grads) {
                 struct ggml_tensor * tmp = grad;
                 if (!ggml_are_same_shape(src0, src1)) {
-                    tmp = ggml_repeat_back(ctx, tmp, src1);
+                    tmp = ggml_repeat_back(ctx, tmp, src1, false);
                 }
                 ggml_add_or_set(ctx, cgraph, isrc1, tmp);
             }
@@ -5174,7 +5176,7 @@ static void ggml_compute_backward(
             if (src1_needs_grads) {
                 struct ggml_tensor * tmp = ggml_mul(ctx, src0, grad);
                 if (!ggml_are_same_shape(src0, src1)) {
-                    tmp = ggml_repeat_back(ctx, tmp, src1);
+                    tmp = ggml_repeat_back(ctx, tmp, src1, false);
                 }
                 ggml_add_or_set(ctx, cgraph, isrc1, tmp);
             }
@@ -5229,7 +5231,7 @@ static void ggml_compute_backward(
         } break;
         case GGML_OP_REPEAT: {
             if (src0_needs_grads) {
-                ggml_add_or_set(ctx, cgraph, isrc0, ggml_repeat_back(ctx, grad, src0));
+                ggml_add_or_set(ctx, cgraph, isrc0, ggml_repeat_back(ctx, grad, src0, false));
             }
         } break;
         case GGML_OP_REPEAT_BACK: {
@@ -5268,8 +5270,7 @@ static void ggml_compute_backward(
                 if (!ggml_are_same_shape(tmp, src0)) {
                     GGML_ASSERT(tmp->ne[0] == src0->ne[0]);
                     GGML_ASSERT(tmp->ne[1] == src0->ne[1]);
-                    tmp = ggml_repeat_back(ctx, tmp, src0);
-                    tmp->op_params[0] = 1; // FIXME
+                    tmp = ggml_repeat_back(ctx, tmp, src0, true);
                 }
                 ggml_add_or_set(ctx, cgraph, isrc0, tmp);
             }
