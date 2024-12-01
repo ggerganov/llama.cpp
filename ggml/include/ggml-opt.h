@@ -69,9 +69,9 @@ extern "C" {
     // ====== Model / Context ======
 
     enum ggml_opt_build_type {
-        GGML_OPT_BUILD_TYPE_FORWARD,
-        GGML_OPT_BUILD_TYPE_GRAD,
-        GGML_OPT_BUILD_TYPE_OPT,
+        GGML_OPT_BUILD_TYPE_FORWARD = 10,
+        GGML_OPT_BUILD_TYPE_GRAD    = 20,
+        GGML_OPT_BUILD_TYPE_OPT     = 30,
     };
 
     // parameters that control which optimizer is used and how said optimizer tries to find the minimal loss
@@ -101,13 +101,11 @@ extern "C" {
     struct ggml_opt_params {
         ggml_backend_sched_t backend_sched; // defines which backends are used to construct the compute graphs
 
-        struct ggml_context * ctx_compute; // created in user code, holds non-static tensors
-
-        // the forward graph is defined by inputs and outputs
-        // the outputs and all tensors between inputs and outputs that have not been statically allocated
-        //     are not intended to be reusable between multiple optimization contexts
-        struct ggml_tensor * inputs;
-        struct ggml_tensor * outputs;
+        // by default the forward graph needs to be reconstructed for each eval
+        // if ctx_compute, inputs, and outputs are set the graphs are instead allocated statically
+        struct ggml_context * ctx_compute;
+        struct ggml_tensor  * inputs;
+        struct ggml_tensor  * outputs;
 
         enum ggml_opt_loss_type  loss_type;
         enum ggml_opt_build_type build_type;
@@ -121,11 +119,8 @@ extern "C" {
     // get parameters for an optimization context with defaults set where possible
     // parameters for which no sensible defaults exist are supplied as arguments to this function
     GGML_API struct ggml_opt_params ggml_opt_default_params(
-            ggml_backend_sched_t      backend_sched,
-            struct ggml_context     * ctx_compute,
-            struct ggml_tensor      * inputs,
-            struct ggml_tensor      * outputs,
-            enum ggml_opt_loss_type   loss_type);
+            ggml_backend_sched_t    backend_sched,
+            enum ggml_opt_loss_type loss_type);
 
     GGML_API ggml_opt_context_t ggml_opt_init(struct ggml_opt_params params);
     GGML_API void ggml_opt_free(ggml_opt_context_t opt_ctx);
@@ -134,6 +129,7 @@ extern "C" {
     GGML_API void ggml_opt_reset(ggml_opt_context_t opt_ctx, bool optimizer);
 
     // get underlying tensors that store data
+    // if not using static graphs these pointers become invalid with the next call to ggml_opt_alloc
     GGML_API struct ggml_tensor * ggml_opt_inputs(  ggml_opt_context_t opt_ctx); // forward graph input tensor
     GGML_API struct ggml_tensor * ggml_opt_outputs( ggml_opt_context_t opt_ctx); // forward graph output tensor
     GGML_API struct ggml_tensor * ggml_opt_labels(  ggml_opt_context_t opt_ctx); // labels to compare outputs against
@@ -141,6 +137,7 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_opt_pred(    ggml_opt_context_t opt_ctx); // predictions made by outputs
     GGML_API struct ggml_tensor * ggml_opt_ncorrect(ggml_opt_context_t opt_ctx); // number of matching predictions between outputs and labels
 
+    // get the gradient accumulator for a node from the forward graph
     GGML_API struct ggml_tensor * ggml_opt_grad_acc(ggml_opt_context_t opt_ctx, struct ggml_tensor * node);
 
     // ====== Optimization Result ======
@@ -157,15 +154,20 @@ extern "C" {
 
     // ====== Computation ======
 
-    GGML_API void ggml_opt_set_forward_graph(
-        ggml_opt_context_t opt_ctx, struct ggml_context * ctx_compute, struct ggml_cgraph * gf,
-        struct ggml_tensor * inputs, struct ggml_tensor * outputs, bool backward);
+    // if not using static graphs, this function must be called prior to ggml_opt_alloc
+    GGML_API void ggml_opt_prepare_alloc(
+        ggml_opt_context_t    opt_ctx,
+        struct ggml_context * ctx_compute,
+        struct ggml_cgraph  * gf,
+        struct ggml_tensor  * inputs,
+        struct ggml_tensor  * outputs);
 
-    // do forward pass, increment result if not NULL
-    GGML_API void ggml_opt_forward(ggml_opt_context_t opt_ctx, ggml_opt_result_t result);
+    // allocate the next graph for evaluation, either forward or forward + backward
+    // must be called exactly once prior to calling ggml_opt_eval
+    GGML_API void ggml_opt_alloc(ggml_opt_context_t opt_ctx, bool backward);
 
-    // do forward pass, increment result if not NULL, do backward pass
-    GGML_API void ggml_opt_forward_backward(ggml_opt_context_t opt_ctx, ggml_opt_result_t result);
+    // do forward pass, increment result if not NULL, do backward pass if allocated
+    GGML_API void ggml_opt_eval(ggml_opt_context_t opt_ctx, ggml_opt_result_t result);
 
     // ############################################################################
     // ## The high-level functions start here. They do not depend on any private ##

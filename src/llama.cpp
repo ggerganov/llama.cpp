@@ -22659,7 +22659,7 @@ void llama_opt_init(struct llama_context * lctx, struct llama_model * model, str
     GGML_ASSERT(model->hparams.n_ctx_train % n_batch  == 0);
     GGML_ASSERT(n_batch                    % n_ubatch == 0);
 
-    ggml_opt_params opt_params = ggml_opt_default_params(lctx->sched.get(), nullptr, nullptr, nullptr, GGML_OPT_LOSS_TYPE_CROSS_ENTROPY);
+    ggml_opt_params opt_params = ggml_opt_default_params(lctx->sched.get(), GGML_OPT_LOSS_TYPE_CROSS_ENTROPY);
     opt_params.opt_period      = n_batch / n_ubatch;
     opt_params.get_opt_pars    = lopt_params.get_opt_pars;
     opt_params.get_opt_pars_ud = lopt_params.get_opt_pars_ud;
@@ -22747,7 +22747,8 @@ static void llama_opt_epoch_iter(
                 };
                 ctx_compute = ggml_init(params);
             }
-            ggml_opt_set_forward_graph(lctx->opt_ctx, ctx_compute, gf, lctx->inp_tokens, ggml_graph_node(gf, -1), train);
+            ggml_opt_prepare_alloc(lctx->opt_ctx, ctx_compute, gf, lctx->inp_tokens, ggml_graph_node(gf, -1));
+            ggml_opt_alloc(lctx->opt_ctx, train);
             llama_set_inputs(*lctx, ubatch);
             {
                 struct ggml_tensor * labels = ggml_opt_labels(lctx->opt_ctx);
@@ -22760,11 +22761,7 @@ static void llama_opt_epoch_iter(
                     ggml_backend_tensor_set(labels, &onef, (pos_ubatch*labels->ne[0] + labels_sparse[ilabel])*sizeof(float), sizeof(float));
                 }
             }
-            if (train) {
-                ggml_opt_forward_backward(lctx->opt_ctx, result);
-            } else {
-                ggml_opt_forward(lctx->opt_ctx, result);
-            }
+            ggml_opt_eval(lctx->opt_ctx, result);
             if (callback) {
                 callback(train, lctx->opt_ctx, dataset, result, idata_in_loop + (pos_ctx + pos_batch)/n_ubatch + 1, ndata_in_loop, t_loop_start);
             }

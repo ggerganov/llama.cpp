@@ -28,17 +28,19 @@ struct ggml_opt_dataset {
 };
 
 struct ggml_opt_context {
-    ggml_backend_sched_t      backend_sched        = nullptr;
-    ggml_cgraph             * allocated_graph      = nullptr;
-    ggml_cgraph             * allocated_graph_copy = nullptr;
-    struct ggml_context     * ctx_static           = nullptr;
-    struct ggml_context     * ctx_static_cpu       = nullptr;
-    struct ggml_context     * ctx_compute          = nullptr;
-    struct ggml_context     * ctx_copy             = nullptr;
-    ggml_backend_buffer_t     buf_static           = nullptr;
-    ggml_backend_buffer_t     buf_static_cpu       = nullptr;
-    std::mt19937              rng;
-    enum ggml_opt_loss_type   loss_type;
+    ggml_backend_sched_t       backend_sched        = nullptr;
+    ggml_cgraph              * allocated_graph      = nullptr;
+    ggml_cgraph              * allocated_graph_copy = nullptr;
+    struct ggml_context      * ctx_static           = nullptr;
+    struct ggml_context      * ctx_cpu              = nullptr;
+    struct ggml_context      * ctx_compute          = nullptr;
+    struct ggml_context      * ctx_copy             = nullptr;
+    ggml_backend_buffer_t      buf_static           = nullptr;
+    ggml_backend_buffer_t      buf_cpu              = nullptr;
+    std::mt19937               rng;
+    enum ggml_opt_loss_type    loss_type;
+    enum ggml_opt_build_type   build_type;
+    enum ggml_opt_build_type   build_type_alloc;
 
     struct ggml_tensor * inputs  = nullptr;
     struct ggml_tensor * outputs = nullptr;
@@ -52,6 +54,7 @@ struct ggml_opt_context {
     struct ggml_cgraph * gb_grad = nullptr;
     struct ggml_cgraph * gb_opt  = nullptr;
     bool static_graphs           = false;
+    bool eval_ready              = false;
     std::vector<struct ggml_tensor *> grad_accs;
     std::vector<struct ggml_tensor *> grad_m;
     std::vector<struct ggml_tensor *> grad_v;
@@ -235,15 +238,12 @@ struct ggml_opt_optimizer_params ggml_opt_get_constant_optimizer_params(void * u
 
 struct ggml_opt_params ggml_opt_default_params(
         ggml_backend_sched_t      backend_sched,
-        struct ggml_context     * ctx_compute,
-        struct ggml_tensor      * inputs,
-        struct ggml_tensor      * outputs,
         enum ggml_opt_loss_type   loss_type) {
     return {
         /*backend_sched   =*/ backend_sched,
-        /*ctx_compute     =*/ ctx_compute,
-        /*inputs          =*/ inputs,
-        /*logits          =*/ outputs,
+        /*ctx_compute     =*/ nullptr,
+        /*inputs          =*/ nullptr,
+        /*logits          =*/ nullptr,
         /*loss_type       =*/ loss_type,
         /*build_type      =*/ GGML_OPT_BUILD_TYPE_OPT,
         /*opt_period      =*/ 1,
@@ -312,80 +312,64 @@ static ggml_cgraph * dup_graph(ggml_context * ctx, ggml_cgraph * src) {
     return dst;
 }
 
-static void ggml_opt_alloc_graph(ggml_opt_context_t opt_ctx, ggml_cgraph * graph) {
-    GGML_ASSERT(graph);
-    if (opt_ctx->allocated_graph == graph) {
-        return;
-    }
-
-    ggml_backend_sched_reset(opt_ctx->backend_sched); // clear allocation of previous graph
-
-    {
-        ggml_init_params params = {
-            /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE,
-            /*.mem_buffer =*/ nullptr,
-            /*.no_alloc   =*/ true,
-        };
-        ggml_free(opt_ctx->ctx_copy);
-        opt_ctx->ctx_copy = ggml_init(params);
-    }
-
-    opt_ctx->allocated_graph_copy = opt_ctx->static_graphs ? dup_graph(opt_ctx->ctx_copy, graph) : graph;
-    ggml_backend_sched_alloc_graph(opt_ctx->backend_sched, opt_ctx->allocated_graph_copy);
-    opt_ctx->allocated_graph = graph;
-}
-
-static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build_type build_type) {
+static void ggml_opt_build(ggml_opt_context_t opt_ctx) {
+    GGML_ASSERT(opt_ctx->ctx_compute && "no compute context set, either use static graphs or set one with ggml_opt_prepare_alloc");
     GGML_ASSERT((!opt_ctx->static_graphs || opt_ctx->inputs->data) && "when using static graphs the inputs must be allocated statically");
 
-    const bool accumulate = build_type == GGML_OPT_BUILD_TYPE_GRAD ||
-        (build_type == GGML_OPT_BUILD_TYPE_OPT && opt_ctx->opt_period > 1);
+    const bool accumulate = opt_ctx->build_type_alloc >= GGML_OPT_BUILD_TYPE_GRAD &&
+        !(opt_ctx->static_graphs && opt_ctx->build_type_alloc == GGML_OPT_BUILD_TYPE_OPT && opt_ctx->opt_period == 1);
 
     ggml_set_input(opt_ctx->inputs);
     ggml_set_output(opt_ctx->outputs);
 
     int n_param = 0;
     for (int i = 0; i < opt_ctx->gf->n_nodes; ++i) {
-        if (opt_ctx->gf->nodes[i]->flags & GGML_TENSOR_FLAG_PARAM) {
+        const struct ggml_tensor * node = opt_ctx->gf->nodes[i];
+        if (node->flags & GGML_TENSOR_FLAG_PARAM) {
             n_param++;
         }
+        GGML_ASSERT(!(node->flags & GGML_TENSOR_FLAG_LOSS) && "support for extra loss terms not implemented");
     }
 
     if (!opt_ctx->ctx_static) {
         // The static context is used for:
-        //   - gradients (1 tensor per param if using gradient accumulation)
+        //   - gradients (1 per loss, 1 tensor per param if using gradient accumulation)
         //   - optimizer momenta (2 tensors per param)
-        //   - labels
-        //   - loss + its gradient (up to 5 tensors)
-        //   - pred
-        //   - ncorrect (2 tensors).
+        //   - labels (if using static graphs)
+        //   - loss (if using static graphs, up to 5 tensors)
+        //   - pred (if using static graphs)
+        //   - ncorrect (if using static graphs, 2 tensors).
+        constexpr size_t n_loss = 1;
         const size_t tensors_per_param = (accumulate ? 1 : 0) +
-            (!opt_ctx->static_graphs || build_type == GGML_OPT_BUILD_TYPE_OPT ? 2 : 0);
-        const size_t tensors_const = opt_ctx->static_graphs ? 9 : 1;
-        const size_t size_meta = (tensors_per_param*n_param + tensors_const) * ggml_tensor_overhead();
+            (opt_ctx->build_type_alloc == GGML_OPT_BUILD_TYPE_OPT ? 2 : 0);
+        const size_t tensors_const = opt_ctx->static_graphs ? 9 : 0;
+        const size_t size_meta = (n_loss + tensors_per_param*n_param + tensors_const) * ggml_tensor_overhead();
         struct ggml_init_params params = {
             /*.mem_size   =*/ size_meta,
             /*.mem_buffer =*/ nullptr,
             /*.no_alloc   =*/ true,
         };
         opt_ctx->ctx_static = ggml_init(params);
-        opt_ctx->buf_static = nullptr;
     }
+    GGML_ASSERT(opt_ctx->build_type <= opt_ctx->build_type_alloc);
+
     {
-        // The static cpu context is used for:
-        //   - optimizer parameters (1 for the entire context)
+        // The cpu context is allocated statically if using static graphs, dynamically otherwise.
+        // It is used for:
+        //   - optimizer parameters (1 shared for all optimizer invocations)
         const size_t size_meta = 1 * ggml_tensor_overhead();
         struct ggml_init_params params = {
             /*.mem_size   =*/ size_meta,
             /*.mem_buffer =*/ nullptr,
             /*.no_alloc   =*/ true,
         };
-        ggml_free(opt_ctx->ctx_static_cpu);
-        opt_ctx->ctx_static_cpu = ggml_init(params);
+        ggml_free(opt_ctx->ctx_cpu);
+        opt_ctx->ctx_cpu = ggml_init(params);
 
-        ggml_backend_buffer_free(opt_ctx->buf_static_cpu);
-        opt_ctx->buf_static_cpu = nullptr;
+        ggml_backend_buffer_free(opt_ctx->buf_cpu);
+        opt_ctx->buf_cpu = nullptr;
     }
+
     struct ggml_context * ctx_results = opt_ctx->static_graphs ? opt_ctx->ctx_static : opt_ctx->ctx_compute;
 
     switch (opt_ctx->loss_type) {
@@ -450,14 +434,19 @@ static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build
         ggml_build_forward_expand(opt_ctx->gf, opt_ctx->ncorrect);
     }
 
-    if (build_type == GGML_OPT_BUILD_TYPE_FORWARD) {
-        if (!opt_ctx->buf_static) {
-            opt_ctx->buf_static = ggml_backend_alloc_ctx_tensors(opt_ctx->ctx_static, ggml_backend_sched_get_backend(opt_ctx->backend_sched, 0));
+    if (opt_ctx->buf_static) {
+        if (opt_ctx->build_type == GGML_OPT_BUILD_TYPE_FORWARD) {
+            return;
         }
+    } else if (opt_ctx->build_type_alloc == GGML_OPT_BUILD_TYPE_FORWARD) {
+        opt_ctx->buf_static = ggml_backend_alloc_ctx_tensors(
+            opt_ctx->ctx_static, ggml_backend_sched_get_backend(opt_ctx->backend_sched, 0));
         return;
     }
 
     if (opt_ctx->grad_accs.empty()) {
+        GGML_ASSERT(opt_ctx->build_type_alloc >= GGML_OPT_BUILD_TYPE_GRAD);
+
         const int n_nodes = opt_ctx->gf->n_nodes;
         opt_ctx->grad_accs.resize(n_nodes);
         for (int i = 0; i < n_nodes; ++i) {
@@ -469,7 +458,7 @@ static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build
             }
         }
 
-        if ((!opt_ctx->static_graphs && opt_ctx->opt_period > 1) || build_type == GGML_OPT_BUILD_TYPE_OPT) { // FIXME better logic
+        if (opt_ctx->build_type_alloc >= GGML_OPT_BUILD_TYPE_OPT) {
             opt_ctx->grad_m.resize(n_nodes);
             opt_ctx->grad_v.resize(n_nodes);
             for (int i = 0; i < n_nodes; ++i) {
@@ -489,20 +478,21 @@ static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build
     opt_ctx->gb_grad = ggml_graph_dup(opt_ctx->ctx_compute, opt_ctx->gf, /*force_grads =*/ true);
     ggml_build_backward_expand(opt_ctx->ctx_compute, opt_ctx->gb_grad, opt_ctx->grad_accs.data());
 
-    if (build_type == GGML_OPT_BUILD_TYPE_GRAD) {
-        if (!opt_ctx->buf_static) {
-            opt_ctx->buf_static = ggml_backend_alloc_ctx_tensors(opt_ctx->ctx_static, ggml_backend_sched_get_backend(opt_ctx->backend_sched, 0));
-            ggml_graph_reset(opt_ctx->gb_grad);
+    if (opt_ctx->buf_static) {
+        if (opt_ctx->build_type == GGML_OPT_BUILD_TYPE_GRAD) {
+            return;
         }
-        return;
+    } else if (opt_ctx->build_type_alloc == GGML_OPT_BUILD_TYPE_GRAD) {
+        opt_ctx->buf_static = ggml_backend_alloc_ctx_tensors(opt_ctx->ctx_static, ggml_backend_sched_get_backend(opt_ctx->backend_sched, 0));
+        ggml_graph_reset(opt_ctx->gb_grad);
     }
 
-    GGML_ASSERT(build_type == GGML_OPT_BUILD_TYPE_OPT);
+    GGML_ASSERT(opt_ctx->build_type_alloc == GGML_OPT_BUILD_TYPE_OPT);
 
     // gb_opt == graph backward optimize, forward pass, then backward pass to calculate gradients, then optimizer step.
     opt_ctx->gb_opt = ggml_graph_dup(opt_ctx->ctx_compute, opt_ctx->gb_grad, /*force_grads =*/ true);
 
-    opt_ctx->adamw_params = ggml_new_tensor_1d(opt_ctx->ctx_static_cpu, GGML_TYPE_F32, 7);
+    opt_ctx->adamw_params = ggml_new_tensor_1d(opt_ctx->ctx_cpu, GGML_TYPE_F32, 7);
     ggml_set_input(opt_ctx->adamw_params);
     ggml_set_name(opt_ctx->adamw_params, "adamw_params");
 
@@ -524,32 +514,39 @@ static void ggml_opt_build(ggml_opt_context_t opt_ctx, const enum ggml_opt_build
         ggml_graph_reset(opt_ctx->gb_opt);
     }
 
-    opt_ctx->buf_static_cpu = ggml_backend_alloc_ctx_tensors_from_buft(opt_ctx->ctx_static_cpu, ggml_backend_cpu_buffer_type());
+    opt_ctx->buf_cpu = ggml_backend_alloc_ctx_tensors_from_buft(opt_ctx->ctx_cpu, ggml_backend_cpu_buffer_type());
 }
 
 ggml_opt_context_t ggml_opt_init(struct ggml_opt_params params) {
     ggml_opt_context_t result = new struct ggml_opt_context;
-    result->backend_sched   = params.backend_sched;
-    result->ctx_compute     = params.ctx_compute;
-    result->loss_type       = params.loss_type;
-    result->inputs          = params.inputs;
-    result->outputs         = params.outputs;
-    result->opt_period      = params.opt_period;
-    result->get_opt_pars    = params.get_opt_pars;
-    result->get_opt_pars_ud = params.get_opt_pars_ud;
+    result->backend_sched    = params.backend_sched;
+    result->ctx_compute      = params.ctx_compute;
+    result->loss_type        = params.loss_type;
+    result->build_type       = params.build_type;
+    result->build_type_alloc = params.build_type;
+    result->inputs           = params.inputs;
+    result->outputs          = params.outputs;
+    result->opt_period       = params.opt_period;
+    result->get_opt_pars     = params.get_opt_pars;
+    result->get_opt_pars_ud  = params.get_opt_pars_ud;
 
     GGML_ASSERT(result->opt_period >= 1);
 
-    result->static_graphs = result->inputs != nullptr;
+    result->static_graphs = result->ctx_compute;
 
     if (!result->static_graphs) {
+        GGML_ASSERT(!result->inputs);
+        GGML_ASSERT(!result->outputs);
         return result;
     }
+
+    GGML_ASSERT(result->inputs);
+    GGML_ASSERT(result->outputs);
 
     result->gf = ggml_new_graph_custom(result->ctx_compute, GGML_DEFAULT_GRAPH_SIZE, /*grads =*/ true); // Forward pass.
     ggml_build_forward_expand(result->gf, result->outputs);
 
-    ggml_opt_build(result, params.build_type);
+    ggml_opt_build(result);
 
     return result;
 }
@@ -559,9 +556,9 @@ void ggml_opt_free(ggml_opt_context_t opt_ctx) {
         return;
     }
     ggml_backend_buffer_free(opt_ctx->buf_static);
-    ggml_backend_buffer_free(opt_ctx->buf_static_cpu);
+    ggml_backend_buffer_free(opt_ctx->buf_cpu);
     ggml_free(opt_ctx->ctx_static);
-    ggml_free(opt_ctx->ctx_static_cpu);
+    ggml_free(opt_ctx->ctx_cpu);
     delete opt_ctx;
 }
 
@@ -677,37 +674,80 @@ void ggml_opt_result_accuracy(ggml_opt_result_t result, double * accuracy, doubl
 
 // ====== Computation ======
 
-void ggml_opt_set_forward_graph(
-        ggml_opt_context_t opt_ctx, struct ggml_context * ctx_compute, struct ggml_cgraph * gf,
-        struct ggml_tensor * inputs, struct ggml_tensor * outputs, bool backward) {
+void ggml_opt_prepare_alloc(
+        ggml_opt_context_t    opt_ctx,
+        struct ggml_context * ctx_compute,
+        struct ggml_cgraph  * gf,
+        struct ggml_tensor  * inputs,
+        struct ggml_tensor  * outputs) {
     GGML_ASSERT(!opt_ctx->static_graphs);
     opt_ctx->ctx_compute = ctx_compute;
     opt_ctx->gf          = gf;
     opt_ctx->inputs      = inputs;
     opt_ctx->outputs     = outputs;
-
-    const int32_t opt_i_next = (opt_ctx->opt_i + 1) % opt_ctx->opt_period;
-    const enum ggml_opt_build_type build_type =
-        backward ? (opt_i_next == 0 ? GGML_OPT_BUILD_TYPE_OPT : GGML_OPT_BUILD_TYPE_GRAD) : GGML_OPT_BUILD_TYPE_FORWARD;
-    ggml_opt_build(opt_ctx, build_type);
-    switch (build_type) {
-        case GGML_OPT_BUILD_TYPE_FORWARD: {
-            ggml_opt_alloc_graph(opt_ctx, opt_ctx->gf);
-            break;
-        }
-        case GGML_OPT_BUILD_TYPE_GRAD: {
-            ggml_opt_alloc_graph(opt_ctx, opt_ctx->gb_grad);
-            break;
-        }
-        case GGML_OPT_BUILD_TYPE_OPT: {
-            ggml_opt_alloc_graph(opt_ctx, opt_ctx->gb_opt);
-            break;
-        }
-    }
 }
 
-static void ggml_opt_eval_graph(ggml_opt_context_t opt_ctx, ggml_cgraph * graph, ggml_opt_result * result) {
-    if (graph == opt_ctx->gb_opt) {
+void ggml_opt_alloc(ggml_opt_context_t opt_ctx, bool backward) {
+    GGML_ASSERT(!opt_ctx->eval_ready);
+    if (backward) {
+        const int32_t opt_i_next = (opt_ctx->opt_i + 1) % opt_ctx->opt_period;
+        opt_ctx->build_type = opt_i_next == 0 ? GGML_OPT_BUILD_TYPE_OPT : GGML_OPT_BUILD_TYPE_GRAD;
+    } else {
+        opt_ctx->build_type = GGML_OPT_BUILD_TYPE_FORWARD;
+    }
+
+    if (!opt_ctx->static_graphs) {
+        ggml_opt_build(opt_ctx);
+    }
+
+    struct ggml_cgraph * graph = nullptr;
+    switch (opt_ctx->build_type) {
+        case GGML_OPT_BUILD_TYPE_FORWARD: {
+            graph = opt_ctx->gf;
+        } break;
+        case GGML_OPT_BUILD_TYPE_GRAD: {
+            graph = opt_ctx->gb_grad;
+        } break;
+        case GGML_OPT_BUILD_TYPE_OPT: {
+            graph = opt_ctx->gb_opt;
+        } break;
+    }
+    GGML_ASSERT(graph);
+
+    if (opt_ctx->allocated_graph == graph) {
+        opt_ctx->eval_ready = true;
+        return;
+    }
+
+    ggml_backend_sched_reset(opt_ctx->backend_sched); // clear allocation of previous graph
+
+    if (opt_ctx->static_graphs) {
+        ggml_init_params params = {
+            /*.mem_size   =*/ graph->size*ggml_tensor_overhead() + ggml_graph_overhead_custom(graph->size, graph->grads),
+            /*.mem_buffer =*/ nullptr,
+            /*.no_alloc   =*/ true,
+        };
+        ggml_free(opt_ctx->ctx_copy);
+        opt_ctx->ctx_copy = ggml_init(params);
+
+        opt_ctx->allocated_graph_copy = dup_graph(opt_ctx->ctx_copy, graph);
+    } else {
+        opt_ctx->allocated_graph_copy = graph;
+    }
+
+    ggml_backend_sched_alloc_graph(opt_ctx->backend_sched, opt_ctx->allocated_graph_copy);
+    opt_ctx->allocated_graph = graph;
+
+    if (opt_ctx->build_type == GGML_OPT_BUILD_TYPE_OPT && opt_ctx->opt_period > 1 && opt_ctx->opt_i == 0) {
+        ggml_graph_reset(opt_ctx->gb_grad);
+    }
+
+    opt_ctx->eval_ready = true;
+}
+
+void ggml_opt_eval(ggml_opt_context_t opt_ctx, ggml_opt_result_t result) {
+    GGML_ASSERT(opt_ctx->eval_ready);
+    if (opt_ctx->allocated_graph == opt_ctx->gb_opt) {
         struct ggml_opt_optimizer_params opt_pars = opt_ctx->get_opt_pars(opt_ctx->get_opt_pars_ud);
 
         GGML_ASSERT(opt_pars.adamw.alpha >  0.0f);
@@ -733,13 +773,9 @@ static void ggml_opt_eval_graph(ggml_opt_context_t opt_ctx, ggml_cgraph * graph,
         adamw_par_data[6] = beta2h;
     }
 
-    if (opt_ctx->static_graphs) {
-        ggml_opt_alloc_graph(opt_ctx, graph);
-    } else {
-        GGML_ASSERT(graph == opt_ctx->allocated_graph);
-    }
     ggml_backend_sched_graph_compute(opt_ctx->backend_sched, opt_ctx->allocated_graph_copy);
     opt_ctx->iter += opt_ctx->allocated_graph == opt_ctx->gb_opt;
+    opt_ctx->opt_i = (opt_ctx->opt_i + 1) % opt_ctx->opt_period;
 
     if (!opt_ctx->static_graphs) {
         opt_ctx->gf                   = nullptr;
@@ -748,6 +784,8 @@ static void ggml_opt_eval_graph(ggml_opt_context_t opt_ctx, ggml_cgraph * graph,
         opt_ctx->allocated_graph      = nullptr;
         opt_ctx->allocated_graph_copy = nullptr;
     }
+
+    opt_ctx->eval_ready = false;
 
     if (!result) {
         return;
@@ -771,12 +809,14 @@ static void ggml_opt_eval_graph(ggml_opt_context_t opt_ctx, ggml_cgraph * graph,
     ggml_backend_tensor_get(opt_ctx->loss, &loss, 0, ggml_nbytes(opt_ctx->loss));
     result->loss.push_back(loss);
 
-    GGML_ASSERT(opt_ctx->pred->type == GGML_TYPE_I32);
-    std::vector<int32_t> pred(ndata);
-    ggml_backend_tensor_get(opt_ctx->pred, pred.data(), 0, ggml_nbytes(opt_ctx->pred));
-    result->pred.insert(result->pred.end(), pred.begin(), pred.end());
+    if (opt_ctx->pred) {
+        GGML_ASSERT(opt_ctx->pred->type == GGML_TYPE_I32);
+        std::vector<int32_t> pred(ndata);
+        ggml_backend_tensor_get(opt_ctx->pred, pred.data(), 0, ggml_nbytes(opt_ctx->pred));
+        result->pred.insert(result->pred.end(), pred.begin(), pred.end());
+    }
 
-    if (!opt_ctx->labels || result->ncorrect < 0) {
+    if (!opt_ctx->ncorrect || result->ncorrect < 0) {
         result->ncorrect = -1;
         return;
     }
@@ -786,32 +826,6 @@ static void ggml_opt_eval_graph(ggml_opt_context_t opt_ctx, ggml_cgraph * graph,
     int64_t ncorrect;
     ggml_backend_tensor_get(opt_ctx->ncorrect, &ncorrect, 0, ggml_nbytes(opt_ctx->ncorrect));
     result->ncorrect += ncorrect;
-}
-
-void ggml_opt_forward(ggml_opt_context_t opt_ctx, ggml_opt_result * result) {
-    if (!opt_ctx->static_graphs) {
-        GGML_ASSERT(opt_ctx->gf && "without static graphs a forward graph needs to be supplied");
-    }
-    ggml_opt_eval_graph(opt_ctx, opt_ctx->gf, result);
-}
-
-void ggml_opt_forward_backward(ggml_opt_context_t opt_ctx, ggml_opt_result * result) {
-    if (opt_ctx->opt_period == 1) {
-        ggml_opt_eval_graph(opt_ctx, opt_ctx->gb_opt, result);
-        return;
-    }
-
-    if (opt_ctx->opt_i == 0) {
-        ggml_opt_reset(opt_ctx, /*optimizer =*/ false);
-    }
-
-    const int32_t opt_i_next = (opt_ctx->opt_i + 1) % opt_ctx->opt_period;
-    if (opt_i_next == 0) {
-        ggml_opt_eval_graph(opt_ctx, opt_ctx->gb_opt, result);
-    } else {
-        ggml_opt_eval_graph(opt_ctx, opt_ctx->gb_grad, result);
-    }
-    opt_ctx->opt_i = opt_i_next;
 }
 
 // ====== High-Level Functions ======
@@ -842,16 +856,18 @@ void ggml_opt_epoch(
     int64_t ibatch = 0;
     int64_t t_loop_start = ggml_time_us();
     for (; ibatch < ibatch_split; ++ibatch) {
+        ggml_opt_alloc(opt_ctx, /*backward =*/ true);
         ggml_opt_dataset_get_batch(dataset, inputs, labels, ibatch);
-        ggml_opt_forward_backward(opt_ctx, result_train);
+        ggml_opt_eval(opt_ctx, result_train);
         if (callback_train) {
             callback_train(true, opt_ctx, dataset, result_train, ibatch+1, ibatch_split, t_loop_start);
         }
     }
     t_loop_start = ggml_time_us();
     for (; ibatch < nbatches; ++ibatch) {
+        ggml_opt_alloc(opt_ctx, /*backward =*/ false);
         ggml_opt_dataset_get_batch(dataset, inputs, labels, ibatch);
-        ggml_opt_forward(opt_ctx, result_eval);
+        ggml_opt_eval(opt_ctx, result_eval);
         if (callback_eval) {
             callback_eval(false, opt_ctx, dataset, result_eval, ibatch+1-ibatch_split, nbatches-ibatch_split, t_loop_start);
         }
@@ -961,7 +977,10 @@ void ggml_opt_fit(
 
     int64_t epoch = 1;
 
-    ggml_opt_params params = ggml_opt_default_params(backend_sched, ctx_compute, inputs, outputs, loss_type);
+    ggml_opt_params params = ggml_opt_default_params(backend_sched, loss_type);
+    params.ctx_compute     = ctx_compute;
+    params.inputs          = inputs;
+    params.outputs         = outputs;
     params.opt_period      = opt_period;
     params.get_opt_pars    = get_opt_pars;
     params.get_opt_pars_ud = &epoch;

@@ -6164,6 +6164,7 @@ void ggml_set_output(struct ggml_tensor * tensor) {
 }
 
 void ggml_set_param(struct ggml_tensor * tensor) {
+    GGML_ASSERT(tensor->op == GGML_OP_NONE);
     tensor->flags |= GGML_TENSOR_FLAG_PARAM;
 }
 
