@@ -142,7 +142,7 @@ extern "C" {
 
     // ====== Optimization Result ======
 
-    GGML_API ggml_opt_result_t ggml_opt_result_init();
+    GGML_API ggml_opt_result_t ggml_opt_result_init(void);
     GGML_API void ggml_opt_result_free(ggml_opt_result_t result);
     GGML_API void ggml_opt_result_reset(ggml_opt_result_t result);
 

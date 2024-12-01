@@ -2606,7 +2606,7 @@ struct llama_cparams {
 };
 
 // TODO: separate into "llama_layer_enc" and "llama_layer_dec"
-// the code in llama_save_model_to_file assumes llama_layer to consist exclusively of struct ggml_tensor *
+// the code in llama_save_model_to_file and llama_opt_init assumes llama_layer to consist exclusively of struct ggml_tensor *
 struct llama_layer {
     llama_layer() {
         // initialize all pointers to NULL
