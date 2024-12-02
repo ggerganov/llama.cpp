@@ -3573,12 +3573,16 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_rwkv_wkv6(GGML_TYPE_F32, 32, 64, 128, 4));
 
     for (int i = 1; i < 64; ++i) {
-        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16,  GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
-        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
-        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_1, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
-        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_0, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
-        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_1, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
-        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16,    GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_1,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_0,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_1,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_K,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_K,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q6_K,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_IQ4_NL, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
     }
 
 #if 1
