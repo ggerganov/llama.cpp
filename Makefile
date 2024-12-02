@@ -1,5 +1,5 @@
 ifndef LLAMA_MAKEFILE
-$(error The Makefile build is deprecated. Use the CMake build instead)
+$(error The Makefile build is deprecated. Use the CMake build instead. For more details, see https://github.com/ggerganov/llama.cpp/blob/master/docs/build.md)
 endif
 
 # Define the default target now so that it is always the first target
