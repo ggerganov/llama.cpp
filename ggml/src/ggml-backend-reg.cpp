@@ -483,6 +483,10 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent)
                                 best_score = s;
                                 best_path = entry.path().string();
                             }
+                        } else {
+                            if (!silent) {
+                                GGML_LOG_INFO("%s: failed to find ggml_backend_score in %s\n", __func__, entry.path().string().c_str());
+                            }
                         }
                     }
                 }
@@ -505,15 +509,21 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent)
 }
 
 void ggml_backend_load_all() {
-    ggml_backend_load_best("blas", true);
-    ggml_backend_load_best("cann", true);
-    ggml_backend_load_best("cuda", true);
-    ggml_backend_load_best("hip", true);
-    ggml_backend_load_best("kompute", true);
-    ggml_backend_load_best("metal", true);
-    ggml_backend_load_best("rpc", true);
-    ggml_backend_load_best("sycl", true);
-    ggml_backend_load_best("vulkan", true);
-    ggml_backend_load_best("musa", true);
-    ggml_backend_load_best("cpu", true);
+#ifdef NDEBUG
+    bool silent = true;
+#else
+    bool silent = false;
+#endif
+
+    ggml_backend_load_best("blas", silent);
+    ggml_backend_load_best("cann", silent);
+    ggml_backend_load_best("cuda", silent);
+    ggml_backend_load_best("hip", silent);
+    ggml_backend_load_best("kompute", silent);
+    ggml_backend_load_best("metal", silent);
+    ggml_backend_load_best("rpc", silent);
+    ggml_backend_load_best("sycl", silent);
+    ggml_backend_load_best("vulkan", silent);
+    ggml_backend_load_best("musa", silent);
+    ggml_backend_load_best("cpu", silent);
 }
