@@ -8,6 +8,7 @@ def create_server():
     global server
     server = ServerPreset.tinyllama_infill()
 
+
 def test_infill_without_input_extra():
     global server
     server.start()
@@ -18,6 +19,7 @@ def test_infill_without_input_extra():
     })
     assert res.status_code == 200
     assert match_regex("(One|day|she|saw|big|scary|bird)+", res.body["content"])
+
 
 def test_infill_with_input_extra():
     global server
@@ -33,3 +35,23 @@ def test_infill_with_input_extra():
     })
     assert res.status_code == 200
     assert match_regex("(cuts|Jimmy|mom|came|into|the|room)+", res.body["content"])
+
+
+@pytest.mark.parametrize("input_extra", [
+    {},
+    {"filename": "ok"},
+    {"filename": 123},
+    {"filename": 123, "text": "abc"},
+    {"filename": 123, "text": 456},
+])
+def test_invalid_input_extra_req(input_extra):
+    global server
+    server.start()
+    res = server.make_request("POST", "/infill", data={
+        "prompt": "Complete this",
+        "input_extra": [input_extra],
+        "input_prefix": "#include <cstdio>\n#include \"llama.h\"\n\nint main() {\n    int n_threads = llama_",
+        "input_suffix": "}\n",
+    })
+    assert res.status_code == 400
+    assert "error" in res.body
