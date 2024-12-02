@@ -1,3 +1,4 @@
+#include "llama-cpp.h"
 #include "llama-impl.h"
 #include "llama-vocab.h"
 #include "llama-sampling.h"
@@ -21818,6 +21819,14 @@ int32_t llama_tokenize(
     return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
+std::vector<llama_token> llama_cpp::tokenize(
+        const llama_cpp::model & model,
+             const std::string & raw_text,
+                          bool   add_special,
+                          bool   parse_special) {
+    return llama_tokenize_internal(model->vocab, raw_text, add_special, parse_special);
+}
+
 int32_t llama_token_to_piece(
     const struct llama_model * model,
                  llama_token   token,
@@ -21826,6 +21835,23 @@ int32_t llama_token_to_piece(
                      int32_t   lstrip,
                         bool   special) {
     return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
+}
+
+std::string llama_cpp::token_to_piece(
+      const llama_cpp::model & model,
+                 llama_token   token,
+                     int32_t   lstrip,
+                        bool   special) {
+    std::vector<char> buf(64);
+    int32_t n = llama_token_to_piece_impl(model->vocab, token, buf.data(), buf.size(), lstrip, special);
+    if (n > (int32_t) buf.size()) {
+        buf.resize(n);
+        llama_token_to_piece_impl(model->vocab, token, buf.data(), buf.size(), lstrip, special);
+    } else if (n < 0) {
+        // TODO: make special type of expection here
+        throw std::runtime_error("failed to convert token to piece");
+    }
+    return std::string(buf.data(), n);
 }
 
 int32_t llama_detokenize(
@@ -21837,6 +21863,23 @@ int32_t llama_detokenize(
                         bool   remove_special,
                         bool   unparse_special) {
     return llama_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
+}
+
+std::string llama_cpp::detokenize(
+            const llama_cpp::model & model,
+    const std::vector<llama_token> & tokens,
+                              bool   remove_special,
+                              bool   unparse_special) {
+    std::vector<char> buf(1024);
+    int32_t n = llama_detokenize_impl(model->vocab, tokens.data(), tokens.size(), buf.data(), buf.size(), remove_special, unparse_special);
+    if (n > (int32_t) buf.size()) {
+        buf.resize(n);
+        llama_detokenize_impl(model->vocab, tokens.data(), tokens.size(), buf.data(), buf.size(), remove_special, unparse_special);
+    } else if (n < 0) {
+        // TODO: make special type of expection here
+        throw std::runtime_error("failed to detokenize");
+    }
+    return std::string(buf.data(), n);
 }
 
 //
@@ -22214,6 +22257,24 @@ int32_t llama_chat_apply_template(
         strncpy(buf, formatted_chat.c_str(), length);
     }
     return res;
+}
+
+std::string llama_cpp::chat_apply_template(
+                   const llama_cpp::model & model,
+                        const std::string & tmpl,
+    const std::vector<llama_chat_message> & chat,
+                                     bool   add_ass) {
+    std::vector<char> buf;
+    const char * tmpl_c = tmpl.empty() ? nullptr : tmpl.c_str();
+    int32_t n = llama_chat_apply_template(model.get(), tmpl_c, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    if (n > (int32_t) buf.size()) {
+        buf.resize(n);
+        llama_chat_apply_template(model.get(), tmpl_c, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    } else if (n < 0) {
+        // TODO: make special type of expection here
+        throw std::runtime_error("failed to format chat template");
+    }
+    return std::string(buf.data(), n);
 }
 
 //
