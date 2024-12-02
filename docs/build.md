@@ -52,13 +52,6 @@ cmake --build build --config Release
     ```
     Building for arm64 can also be done with the MSVC compiler with the build-arm64-windows-MSVC preset, or the standard CMake build instructions. However, note that the MSVC compiler does not support inline ARM assembly code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
 
-## Metal Build
-
-On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
-To disable the Metal build at compile time use the `-DGGML_METAL=OFF` cmake option.
-
-When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers 0` command-line argument.
-
 ## BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Using BLAS doesn't affect the generation performance. There are currently several different BLAS implementations available for build and use:
@@ -103,6 +96,13 @@ Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/conte
 
 Any other BLAS library can be used by setting the `GGML_BLAS_VENDOR` option. See the [CMake documentation](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) for a list of supported vendors.
 
+## Metal Build
+
+On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
+To disable the Metal build at compile time use the `-DGGML_METAL=OFF` cmake option.
+
+When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers 0` command-line argument.
+
 ## SYCL
 
 SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
@@ -113,7 +113,7 @@ For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
 
 ## CUDA
 
-This provides GPU acceleration using an NVIDIA GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+This provides GPU acceleration using an NVIDIA GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from the [NVIDIA developer site](https://developer.nvidia.com/cuda-downloads).
 
 - Using `CMake`:
 
@@ -339,3 +339,11 @@ For detailed info, such as model/device supports, CANN install, please refer to 
 ## Android
 
 To read documentation for how to build on Android, [click here](./android.md)
+
+## Notes about GPU-accelerated backends
+
+The GPU may still be used to accelerate some parts of the computation even when using the `-ngl 0` option. You can fully disable GPU acceleration by using `--device none`.
+
+In most cases, it is possible to build and use multiple backends at the same time. For example, you can build llama.cpp with both CUDA and Vulkan support by using the `-DGGML_CUDA=ON -DGGML_VULKAN=ON` options with CMake. At runtime, you can specify which backend devices to use with the `--device` option. To see a list of available devices, use the `--list-devices` option.
+
+Backends can be built as dynamic libraries that can be loaded dynamically at runtime. This allows you to use the same llama.cpp binary on different machines with different GPUs. To enable this feature, use the `GGML_BACKEND_DL` option when building.
