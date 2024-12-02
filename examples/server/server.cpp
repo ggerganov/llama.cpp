@@ -2344,7 +2344,10 @@ struct server_context {
                     common_batch_add(slot.batch_spec, draft[i], slot.n_past + 1 + i, { slot.id }, true);
                 }
 
-                llama_decode(ctx, slot.batch_spec);
+                int ret = llama_decode(ctx, slot.batch_spec);
+                if (ret != 0) {
+                    continue;
+                }
 
                 // the accepted tokens from the speculation
                 const auto ids = common_sampler_sample_and_accept_n(slot.smpl, ctx, draft);
