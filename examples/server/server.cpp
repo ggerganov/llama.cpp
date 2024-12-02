@@ -177,6 +177,8 @@ struct server_slot {
     bool stopped_word   = false;
     bool stopped_limit  = false;
 
+    bool timings_per_token = false;
+
     bool oaicompat = false;
 
     std::string oaicompat_model;
@@ -882,6 +884,8 @@ struct server_context {
             slot.oaicompat_model = "";
         }
 
+        slot.timings_per_token       = json_value(data, "timings_per_token",  false);
+
         slot.params.stream           = json_value(data, "stream",             false);
         slot.params.cache_prompt     = json_value(data, "cache_prompt",       true);
         slot.params.n_predict        = json_value(data, "n_predict",          json_value(data, "max_tokens", defaults.n_predict));
@@ -1279,6 +1283,7 @@ struct server_context {
             {"speculative.n_max",         slot.params.speculative.n_max},
             {"speculative.n_min",         slot.params.speculative.n_min},
             {"speculative.p_min",         slot.params.speculative.p_min},
+            {"timings_per_token",         slot.timings_per_token},
         };
     }
 
@@ -1334,6 +1339,10 @@ struct server_context {
         if (slot.oaicompat) {
             res.data["oaicompat_token_ctr"] = slot.n_decoded;
             res.data["model"] = slot.oaicompat_model;
+        }
+
+        if (slot.timings_per_token) {
+            res.data["timings"] = slot.get_formated_timings();
         }
 
         queue_results.send(res);
@@ -2274,11 +2283,16 @@ struct server_context {
                 common_sampler_accept(slot.smpl, id, true);
 
                 slot.n_decoded += 1;
+
+                const int64_t t_current = ggml_time_us();
+
                 if (slot.n_decoded == 1) {
-                    slot.t_start_generation = ggml_time_us();
+                    slot.t_start_generation = t_current;
                     slot.t_prompt_processing = (slot.t_start_generation - slot.t_start_process_prompt) / 1e3;
                     metrics.on_prompt_eval(slot);
                 }
+
+                slot.t_token_generation = (t_current - slot.t_start_generation) / 1e3;
 
                 completion_token_output result;
                 result.tok = id;
