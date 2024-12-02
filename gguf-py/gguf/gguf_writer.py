@@ -790,6 +790,27 @@ class GGUFWriter:
     def add_ssm_dt_b_c_rms(self, value: bool) -> None:
         self.add_bool(Keys.SSM.DT_B_C_RMS.format(arch=self.arch), value)
 
+    def add_ssm_head_count(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.HEAD_COUNT.format(arch=self.arch), value)
+
+    def add_ssm_head_dim(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.HEAD_DIM.format(arch=self.arch), value)
+
+    def add_ssm_chunk_size(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.CHUNK_SIZE.format(arch=self.arch), value)
+
+    def add_ssm_conv_bias(self, value: bool) -> None:
+        self.add_bool(Keys.SSM.CONV_BIAS.format(arch=self.arch), value)
+
+    def add_ssm_proj_bias(self, value: bool) -> None:
+        self.add_bool(Keys.SSM.PROJ_BIAS.format(arch=self.arch), value)
+
+    def add_mamba_version(self, value: str) -> None:
+        self.add_string(Keys.HybridMamba.MAMBA_VERSION.format(arch=self.arch), value)
+
+    def add_attn_layer_indices(self, values: list[int]) -> None:
+        self.add_array(Keys.HybridMamba.ATTN_LAYER_INDICES.format(arch=self.arch), values)
+
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(Keys.Tokenizer.MODEL, model)
 

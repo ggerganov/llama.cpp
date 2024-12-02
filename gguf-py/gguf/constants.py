@@ -151,6 +151,15 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
         GROUP_COUNT    = "{arch}.ssm.group_count"
         DT_B_C_RMS     = "{arch}.ssm.dt_b_c_rms"
+        HEAD_COUNT     = "{arch}.ssm.head_count"
+        HEAD_DIM       = "{arch}.ssm.head_dim"
+        CHUNK_SIZE     = "{arch}.ssm.chunk_size"
+        CONV_BIAS      = "{arch}.ssm.conv_bias"
+        PROJ_BIAS      = "{arch}.ssm.proj_bias"
+
+    class HybridMamba:
+        MAMBA_VERSION      = "{arch}.mamba.version"
+        ATTN_LAYER_INDICES = "{arch}.attn.layers"
 
     class WKV:
         HEAD_SIZE = "{arch}.wkv.head_size"
