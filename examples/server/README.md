@@ -188,12 +188,6 @@ services:
 
 `llama-server` is built alongside everything else from the root of the project
 
-- Using `make`:
-
-  ```bash
-  make llama-server
-  ```
-
 - Using `CMake`:
 
   ```bash
@@ -206,15 +200,6 @@ services:
 ## Build with SSL
 
 `llama-server` can also be built with SSL support using OpenSSL 3
-
-- Using `make`:
-
-  ```bash
-  # NOTE: For non-system openssl, use the following:
-  #   CXXFLAGS="-I /path/to/openssl/include"
-  #   LDFLAGS="-L /path/to/openssl/lib"
-  make LLAMA_SERVER_SSL=true llama-server
-  ```
 
 - Using `CMake`:
 

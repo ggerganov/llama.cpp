@@ -160,66 +160,6 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
           name: llama-bin-macos-x64.zip
 
-  ubuntu-focal-make:
-    runs-on: ubuntu-20.04
-    env:
-      LLAMA_NODE_AVAILABLE: true
-      LLAMA_PYTHON_AVAILABLE: true
-
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
-
-      - name: Dependencies
-        id: depends
-        run: |
-          sudo apt-get update
-          sudo apt-get install build-essential gcc-8
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Build
-        id: make_build
-        env:
-            LLAMA_FATAL_WARNINGS: 1
-        run: |
-          CC=gcc-8 make -j $(nproc)
-
-      - name: Test
-        id: make_test
-        run: |
-          CC=gcc-8 make tests -j $(nproc)
-          make test -j $(nproc)
-
-  ubuntu-focal-make-curl:
-    runs-on: ubuntu-20.04
-
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
-
-      - name: Dependencies
-        id: depends
-        run: |
-          sudo apt-get update
-          sudo apt-get install build-essential gcc-8 libcurl4-openssl-dev
-
-      - name: Build
-        id: make_build
-        env:
-          LLAMA_FATAL_WARNINGS: 1
-          LLAMA_CURL: 1
-        run: |
-          CC=gcc-8 make -j $(nproc)
-
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
 
@@ -517,36 +457,6 @@ jobs:
           cmake -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON ..
           cmake --build . --config Release -j $(nproc)
 
-  # TODO: build with GGML_NO_METAL because test-backend-ops fail on "Apple Paravirtual device" and I don't know
-  #       how to debug it.
-  #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7131777249/job/19420981052#step:5:1124
-  macOS-latest-make:
-    runs-on: macos-latest
-
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
-
-      - name: Dependencies
-        id: depends
-        continue-on-error: true
-        run: |
-          brew update
-
-      - name: Build
-        id: make_build
-        env:
-            LLAMA_FATAL_WARNINGS: 1
-        run: |
-          GGML_NO_METAL=1 make -j $(sysctl -n hw.logicalcpu)
-
-      - name: Test
-        id: make_test
-        run: |
-          GGML_NO_METAL=1 make tests -j $(sysctl -n hw.logicalcpu)
-          GGML_NO_METAL=1 make test  -j $(sysctl -n hw.logicalcpu)
-
   # TODO: build with GGML_METAL=OFF because test-backend-ops fail on "Apple Paravirtual device" and I don't know
   #       how to debug it.
   #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7132125951/job/19422043567?pr=4359#step:5:6584
@@ -642,33 +552,35 @@ jobs:
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
 
-  macOS-latest-swift:
-    runs-on: macos-latest
-
-    strategy:
-      matrix:
-        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
-
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
-
-      - name: Dependencies
-        id: depends
-        continue-on-error: true
-        run: |
-          brew update
-
-      - name: xcodebuild for swift package
-        id: xcodebuild
-        run: |
-          xcodebuild -scheme llama -destination "${{ matrix.destination }}"
-
-      - name: Build Swift Example
-        id: make_build_swift_example
-        run: |
-            make swift
+# TODO: tmp disabled. see for possible re-enable:
+#       https://github.com/ggerganov/llama.cpp/pull/10525
+#  macOS-latest-swift:
+#    runs-on: macos-latest
+#
+#    strategy:
+#      matrix:
+#        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
+#
+#    steps:
+#      - name: Clone
+#        id: checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Dependencies
+#        id: depends
+#        continue-on-error: true
+#        run: |
+#          brew update
+#
+#      - name: xcodebuild for swift package
+#        id: xcodebuild
+#        run: |
+#          xcodebuild -scheme llama -destination "${{ matrix.destination }}"
+#
+#      - name: Build Swift Example
+#        id: make_build_swift_example
+#        run: |
+#            make swift
 
   windows-msys2:
     runs-on: windows-latest
@@ -694,21 +606,6 @@ jobs:
             mingw-w64-${{matrix.env}}-toolchain
             mingw-w64-${{matrix.env}}-cmake
             mingw-w64-${{matrix.env}}-openblas
-
-      - name: Build using make
-        shell: msys2 {0}
-        run: |
-            make -j $(nproc)
-
-      - name: Clean after building using make
-        shell: msys2 {0}
-        run: |
-            make clean
-
-      - name: Build using make w/ OpenBLAS
-        shell: msys2 {0}
-        run: |
-            make GGML_OPENBLAS=1 -j $(nproc)
 
       - name: Build using CMake
         shell: msys2 {0}
@@ -1257,9 +1154,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - ubuntu-focal-make
       - ubuntu-latest-cmake
-      - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
       - windows-2019-cmake-cuda
