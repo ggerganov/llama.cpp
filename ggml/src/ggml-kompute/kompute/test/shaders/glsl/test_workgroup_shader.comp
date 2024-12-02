@@ -1,0 +1,15 @@
+#version 450
+
+layout (local_size_x = 1) in;
+
+// The input rebuild bind index is relative to index in parameter passed
+layout(set = 0, binding = 0) writeonly buffer bout  { float toutx[]; };
+layout(set = 0, binding = 1) writeonly buffer bout2 { float touty[]; };
+
+void main() {
+    uint index   = gl_WorkGroupID.x*gl_NumWorkGroups.y + gl_WorkGroupID.y;
+
+    toutx[index] = gl_GlobalInvocationID.x;
+    touty[index] = gl_GlobalInvocationID.y;
+}
+

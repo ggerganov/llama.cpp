@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "ggml.h"
+// #include "src/ggml-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 #include <algorithm>
@@ -151,6 +152,7 @@ bool load_hparams_and_tensors_from_gguf(const std::string &fname, NexaBaseModel 
 
     ggml_free(meta);
     gguf_free(ctx_gguf);
+    gguf_free(ctx_gguf);
     return true;
 }
 
@@ -225,12 +227,12 @@ void NexaBaseModel::set_n_threads(int n_threads)
         ggml_backend_cpu_set_n_threads(backend, n_threads);
     }
 
-#ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(backend))
-    {
-        ggml_backend_metal_set_n_cb(backend, n_threads);
-    }
-#endif
+// #ifdef GGML_USE_METAL
+//     if (ggml_backend_is_metal(backend))
+//     {
+//         ggml_backend_metal_set_n_cb(backend, n_threads);
+//     }
+// #endif
 }
 
 // Free allocated memory
@@ -303,16 +305,16 @@ struct ggml_tensor * checked_get_tensor(struct ggml_context * ctx, const char * 
     return tensor;
 }
 
+// //
+// // original ggml functions
+// //
 //
-// original ggml functions
+// struct ggml_tensor * ggml_graph_node(struct ggml_cgraph * cgraph, int i) {
+//     if (i < 0) {
+//         GGML_ASSERT(cgraph->n_nodes + i >= 0);
+//         return cgraph->nodes[cgraph->n_nodes + i];
+//     }
 //
-
-struct ggml_tensor * ggml_graph_node(struct ggml_cgraph * cgraph, int i) {
-    if (i < 0) {
-        GGML_ASSERT(cgraph->n_nodes + i >= 0);
-        return cgraph->nodes[cgraph->n_nodes + i];
-    }
-
-    GGML_ASSERT(i < cgraph->n_nodes);
-    return cgraph->nodes[i];
-}
+//     GGML_ASSERT(i < cgraph->n_nodes);
+//     return cgraph->nodes[i];
+// }

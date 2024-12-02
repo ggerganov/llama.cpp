@@ -1,0 +1,28 @@
+#version 450
+
+layout(set = 0, binding = 0) buffer tensorLhs {
+   float valuesLhs[ ];
+};
+
+layout(set = 0, binding = 1) buffer tensorRhs {
+   float valuesRhs[ ];
+};
+
+layout(set = 0, binding = 2) buffer tensorOutput {
+   float valuesOutput[ ];
+};
+
+layout (constant_id = 0) const uint LEN_LHS = 0;
+layout (constant_id = 1) const uint LEN_RHS = 0;
+layout (constant_id = 2) const uint LEN_OUT = 0;
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+void main() 
+{
+	uint index = gl_GlobalInvocationID.x;
+
+    valuesOutput[index] = valuesLhs[index] * valuesRhs[index];
+}
+
+

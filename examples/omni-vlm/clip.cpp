@@ -2199,16 +2199,10 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         ggml_backend_cpu_set_n_threads(ctx->backend, n_threads);
     }
 
-#ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(ctx->backend)) {
-        ggml_backend_metal_set_n_cb(ctx->backend, n_threads);
-    }
-#endif
-
     ggml_backend_graph_compute(ctx->backend, gf);
 
     // the last node is the embedding tensor
-    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor * embeddings = ggml_graph_node(gf, -1);
 
     // copy the embeddings to the location passed by the user
     ggml_backend_tensor_get(embeddings, vec, 0, ggml_nbytes(embeddings));

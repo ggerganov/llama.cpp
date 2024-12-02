@@ -1,0 +1,14 @@
+[general]
+
+singleton=false
+load_once=true
+symbol_prefix="godot_"
+reloadable=false
+
+[entry]
+
+Windows.64="res://gdnative_shared/build/Release/kompute_godot.dll"
+
+[dependencies]
+
+Windows.64=[  ]

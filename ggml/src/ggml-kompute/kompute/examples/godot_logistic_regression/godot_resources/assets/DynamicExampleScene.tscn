@@ -1,0 +1,309 @@
+[gd_scene load_steps=10 format=2]
+
+[ext_resource path="res://godot_resources/scripts/DynamicExampleScript.gd" type="Script" id=1]
+[ext_resource path="res://godot_resources/scripts/KomputeNativeClass.gdns" type="Script" id=2]
+[ext_resource path="res://godot_resources/assets/icon.png" type="Texture" id=3]
+[ext_resource path="res://godot_resources/assets/TextFormat.theme" type="Theme" id=4]
+
+[sub_resource type="GradientTexture" id=1]
+
+[sub_resource type="StyleBoxTexture" id=2]
+texture = SubResource( 1 )
+region_rect = Rect2( 0, 0, 2048, 1 )
+
+[sub_resource type="DynamicFontData" id=3]
+font_path = "res://godot_resources/assets/roboto.ttf"
+
+[sub_resource type="DynamicFont" id=4]
+size = 27
+font_data = SubResource( 3 )
+
+[sub_resource type="Theme" id=5]
+default_font = SubResource( 4 )
+
+[node name="Parent" type="Node2D"]
+script = ExtResource( 1 )
+
+[node name="KomputeNode" type="Node2D" parent="."]
+script = ExtResource( 2 )
+
+[node name="UI" type="Node" parent="."]
+
+[node name="UIVBoxContainer" type="VBoxContainer" parent="UI"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme = ExtResource( 4 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="TitleLabel" type="Label" parent="UI/UIVBoxContainer"]
+margin_right = 1024.0
+margin_bottom = 60.0
+text = "Godot ML Kompute "
+align = 1
+
+[node name="LogoHBoxContainer" type="HBoxContainer" parent="UI/UIVBoxContainer"]
+margin_top = 64.0
+margin_right = 1024.0
+margin_bottom = 160.0
+alignment = 1
+
+[node name="TextureRect" type="TextureRect" parent="UI/UIVBoxContainer/LogoHBoxContainer"]
+margin_left = 464.0
+margin_right = 560.0
+margin_bottom = 96.0
+texture = ExtResource( 3 )
+
+[node name="XIHBoxContainer" type="HBoxContainer" parent="UI/UIVBoxContainer"]
+margin_top = 164.0
+margin_right = 1024.0
+margin_bottom = 234.0
+
+[node name="VSeparator" type="VSeparator" parent="UI/UIVBoxContainer/XIHBoxContainer"]
+margin_right = 20.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label" type="Label" parent="UI/UIVBoxContainer/XIHBoxContainer"]
+margin_left = 24.0
+margin_top = 5.0
+margin_right = 193.0
+margin_bottom = 65.0
+text = "Xi Input"
+
+[node name="VSeparator2" type="VSeparator" parent="UI/UIVBoxContainer/XIHBoxContainer"]
+margin_left = 197.0
+margin_right = 217.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="LineEdit" type="LineEdit" parent="UI/UIVBoxContainer/XIHBoxContainer"]
+margin_left = 221.0
+margin_right = 1000.0
+margin_bottom = 70.0
+size_flags_horizontal = 3
+text = "[ 0, 0, 1, 1, 1, 1 ]"
+align = 1
+
+[node name="VSeparator3" type="VSeparator" parent="UI/UIVBoxContainer/XIHBoxContainer"]
+margin_left = 1004.0
+margin_right = 1024.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="XJHBoxContainer" type="HBoxContainer" parent="UI/UIVBoxContainer"]
+margin_top = 238.0
+margin_right = 1024.0
+margin_bottom = 308.0
+
+[node name="VSeparator" type="VSeparator" parent="UI/UIVBoxContainer/XJHBoxContainer"]
+margin_right = 20.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label" type="Label" parent="UI/UIVBoxContainer/XJHBoxContainer"]
+margin_left = 24.0
+margin_top = 5.0
+margin_right = 193.0
+margin_bottom = 65.0
+text = "Xj Input"
+
+[node name="VSeparator2" type="VSeparator" parent="UI/UIVBoxContainer/XJHBoxContainer"]
+margin_left = 197.0
+margin_right = 217.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="LineEdit" type="LineEdit" parent="UI/UIVBoxContainer/XJHBoxContainer"]
+margin_left = 221.0
+margin_right = 1000.0
+margin_bottom = 70.0
+size_flags_horizontal = 3
+text = "[ 0, 0, 0, 0, 1, 1 ]"
+align = 1
+
+[node name="VSeparator3" type="VSeparator" parent="UI/UIVBoxContainer/XJHBoxContainer"]
+margin_left = 1004.0
+margin_right = 1024.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="YHBoxContainer" type="HBoxContainer" parent="UI/UIVBoxContainer"]
+margin_top = 312.0
+margin_right = 1024.0
+margin_bottom = 382.0
+
+[node name="VSeparator" type="VSeparator" parent="UI/UIVBoxContainer/YHBoxContainer"]
+margin_right = 20.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label" type="Label" parent="UI/UIVBoxContainer/YHBoxContainer"]
+margin_left = 24.0
+margin_top = 5.0
+margin_right = 192.0
+margin_bottom = 65.0
+text = "Y Input "
+
+[node name="VSeparator2" type="VSeparator" parent="UI/UIVBoxContainer/YHBoxContainer"]
+margin_left = 196.0
+margin_right = 216.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="LineEdit" type="LineEdit" parent="UI/UIVBoxContainer/YHBoxContainer"]
+margin_left = 220.0
+margin_right = 1000.0
+margin_bottom = 70.0
+size_flags_horizontal = 3
+text = "[ 0, 0, 0, 0, 1, 1 ]"
+align = 1
+
+[node name="VSeparator3" type="VSeparator" parent="UI/UIVBoxContainer/YHBoxContainer"]
+margin_left = 1004.0
+margin_right = 1024.0
+margin_bottom = 70.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Button" type="Button" parent="UI/UIVBoxContainer"]
+margin_top = 386.0
+margin_right = 1024.0
+margin_bottom = 452.0
+text = "Kompute Train & Predict ML"
+
+[node name="Panel" type="PanelContainer" parent="UI/UIVBoxContainer"]
+margin_top = 456.0
+margin_right = 1024.0
+margin_bottom = 600.0
+size_flags_vertical = 3
+custom_styles/panel = SubResource( 2 )
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/UIVBoxContainer/Panel"]
+margin_right = 1024.0
+margin_bottom = 144.0
+
+[node name="VSplitContainer2" type="VSplitContainer" parent="UI/UIVBoxContainer/Panel/VBoxContainer"]
+margin_right = 1024.0
+margin_bottom = 10.0
+rect_min_size = Vector2( 0, 10 )
+
+[node name="PredHBoxContainer" type="HBoxContainer" parent="UI/UIVBoxContainer/Panel/VBoxContainer"]
+margin_top = 14.0
+margin_right = 1024.0
+margin_bottom = 47.0
+theme = SubResource( 5 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="VSeparator3" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_right = 20.0
+margin_bottom = 33.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 24.0
+margin_right = 144.0
+margin_bottom = 33.0
+text = "Weight 1: "
+
+[node name="Weight1Label" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 148.0
+margin_right = 332.0
+margin_bottom = 33.0
+size_flags_horizontal = 3
+text = "n/a"
+align = 1
+
+[node name="VSeparator4" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 336.0
+margin_right = 356.0
+margin_bottom = 33.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="VSeparator5" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 360.0
+margin_right = 380.0
+margin_bottom = 33.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label2" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 384.0
+margin_right = 504.0
+margin_bottom = 33.0
+text = "Weight 2: "
+
+[node name="Weight2Label" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 508.0
+margin_right = 692.0
+margin_bottom = 33.0
+size_flags_horizontal = 3
+text = "n/a"
+align = 1
+
+[node name="VSeparator6" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 696.0
+margin_right = 716.0
+margin_bottom = 33.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="VSeparator7" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 720.0
+margin_right = 740.0
+margin_bottom = 33.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label3" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 744.0
+margin_right = 811.0
+margin_bottom = 33.0
+text = "Bias: "
+
+[node name="BiasLabel" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 815.0
+margin_right = 999.0
+margin_bottom = 33.0
+size_flags_horizontal = 3
+text = "n/a"
+align = 1
+
+[node name="VSeparator8" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer"]
+margin_left = 1003.0
+margin_right = 1023.0
+margin_bottom = 33.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="VSplitContainer" type="VSplitContainer" parent="UI/UIVBoxContainer/Panel/VBoxContainer"]
+margin_top = 51.0
+margin_right = 1024.0
+margin_bottom = 71.0
+rect_min_size = Vector2( 0, 20 )
+
+[node name="PredHBoxContainer2" type="HBoxContainer" parent="UI/UIVBoxContainer/Panel/VBoxContainer"]
+margin_top = 75.0
+margin_right = 1024.0
+margin_bottom = 135.0
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="VSeparator3" type="VSeparator" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer2"]
+margin_right = 20.0
+margin_bottom = 60.0
+rect_min_size = Vector2( 20, 0 )
+
+[node name="Label" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer2"]
+margin_left = 24.0
+margin_right = 399.0
+margin_bottom = 60.0
+text = "Prediction result:"
+
+[node name="PredictionsLabel" type="Label" parent="UI/UIVBoxContainer/Panel/VBoxContainer/PredHBoxContainer2"]
+margin_left = 403.0
+margin_right = 1024.0
+margin_bottom = 60.0
+size_flags_horizontal = 3
+text = "n/a"
+align = 1
+[connection signal="pressed" from="UI/UIVBoxContainer/Button" to="." method="compute_ml"]

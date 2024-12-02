@@ -1,0 +1,11 @@
+# CLI dependencies
+click==7.1.2
+
+# Dev dependencies
+black==19.10b0
+quom==1.2.0
+Sphinx==3.2.1
+sphinx_material==0.0.30
+breathe==4.20.0
+m2r2==0.2.5
+git+git://github.com/pybind/pybind11_mkdoc.git@master

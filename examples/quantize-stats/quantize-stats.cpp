@@ -1,7 +1,7 @@
-#define LLAMA_API_INTERNAL
 #include "common.h"
 #include "ggml.h"
 #include "llama.h"
+#include "llama-impl.h"
 
 #include <algorithm>
 #include <cassert>
@@ -142,7 +142,7 @@ static bool tensor_is_contiguous(const struct ggml_tensor * tensor) {
 }
 
 static void test_roundtrip_on_chunk(
-    const ggml_tensor * layer, int64_t offset, int64_t chunk_size, const ggml_type_traits_t & qfns, bool use_reference,
+    const ggml_tensor * layer, int64_t offset, int64_t chunk_size, const ggml_type_traits & qfns, const ggml_type_traits_cpu & qfns_cpu, bool use_reference,
     float * input_scratch, char * quantized_scratch, float * output_scratch, error_stats & stats
 ) {
     if (layer->type == GGML_TYPE_F16) {
@@ -156,7 +156,7 @@ static void test_roundtrip_on_chunk(
     if (use_reference) {
         qfns.from_float_ref(input_scratch, quantized_scratch, chunk_size);
     } else {
-        qfns.from_float(input_scratch, quantized_scratch, chunk_size);
+        qfns_cpu.from_float(input_scratch, quantized_scratch, chunk_size);
     }
     qfns.to_float(quantized_scratch, output_scratch, chunk_size);
 
@@ -166,7 +166,7 @@ static void test_roundtrip_on_chunk(
 
 // Run quantization function for a single layer and update error stats
 static void test_roundtrip_on_layer(
-    std::string & name, bool print_layer_stats, const ggml_type_traits_t & qfns, bool use_reference,
+    std::string & name, bool print_layer_stats, const ggml_type_traits & qfns, const ggml_type_traits_cpu & qfns_cpu, bool use_reference,
     const ggml_tensor * layer, std::vector<float> & input_scratch, std::vector<char> & quantized_scratch,
     std::vector<float> & output_scratch, error_stats & total_error, int max_thread = 0
 ) {
@@ -187,13 +187,13 @@ static void test_roundtrip_on_layer(
     int num_chunks = (nelements + chunk_size - 1)/chunk_size;
 
     if (num_chunks < 2 || max_thread < 2) {
-        test_roundtrip_on_chunk(layer, 0, nelements, qfns, use_reference, input_scratch_ptr, quantized_scratch.data(),
+        test_roundtrip_on_chunk(layer, 0, nelements, qfns, qfns_cpu, use_reference, input_scratch_ptr, quantized_scratch.data(),
                 output_scratch.data(), print_layer_stats ? layer_error : total_error);
     } else {
         auto & stats = print_layer_stats ? layer_error : total_error;
         std::mutex mutex;
         uint64_t counter = 0;
-        auto compute = [&mutex, &counter, &stats, &qfns, nelements, layer, use_reference, input_scratch_ptr,
+        auto compute = [&mutex, &counter, &stats, &qfns, &qfns_cpu, nelements, layer, use_reference, input_scratch_ptr,
              &quantized_scratch, &output_scratch, chunk_size] () {
             error_stats local_stats {};
             while (true) {
@@ -205,7 +205,7 @@ static void test_roundtrip_on_layer(
                 }
                 lock.unlock();
                 uint64_t chunk = offset + chunk_size < nelements ? chunk_size : nelements - offset;
-                test_roundtrip_on_chunk(layer, offset, chunk, qfns, use_reference, input_scratch_ptr + offset,
+                test_roundtrip_on_chunk(layer, offset, chunk, qfns, qfns_cpu, use_reference, input_scratch_ptr + offset,
                         quantized_scratch.data() + 4*offset, output_scratch.data() + offset, local_stats);
             }
         };
@@ -319,8 +319,7 @@ int main(int argc, char ** argv) {
         }
 
         auto cparams = llama_context_default_params();
-        cparams.n_ctx      = 256;
-        cparams.seed       = 1;
+        cparams.n_ctx = 256;
 
         ctx = llama_new_context_with_model(model, cparams);
 
@@ -372,8 +371,9 @@ int main(int argc, char ** argv) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
-        ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
-        if (qfns.from_float && qfns.to_float) {
+        const auto *  qfns     = ggml_get_type_traits(type);
+        const auto *  qfns_cpu = ggml_get_type_traits_cpu(type);
+        if (qfns_cpu->from_float && qfns->to_float) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));
             }
@@ -394,7 +394,7 @@ int main(int argc, char ** argv) {
                 test_roundtrip_on_layer(
                         layer_name,
                         params.per_layer_stats,
-                        qfns,
+                        *qfns, *qfns_cpu,
                         params.reference,
                         kv_tensor.second,
                         input_scratch,

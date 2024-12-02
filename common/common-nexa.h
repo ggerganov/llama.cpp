@@ -61,7 +61,7 @@ struct NexaBaseModel
     ~NexaBaseModel()
     {
         free();
-        NEXA_LOG("allocated resources freed");
+        // NEXA_LOG("allocated resources freed");
     }
 
     // Initialize the backend based on available hardware

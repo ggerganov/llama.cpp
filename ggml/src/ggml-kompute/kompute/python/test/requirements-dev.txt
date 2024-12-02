@@ -1,0 +1,4 @@
+pyshader==0.7.0
+numpy==1.22.4
+pytest==7.1.2
+

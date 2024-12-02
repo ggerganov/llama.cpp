@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="purple_200">#813BBA</color>
+    <color name="background">#FF202020</color>
+    <color name="green">#17CE92</color>
+    <color name="grey">#E5E5E5</color>
+    <color name="custom_chatbox_color">#0A1528</color>
+    <color name="inputbox_background">#313D50</color>
+    <color name="colorPrimary">#03070D</color>
+    <color name="colorPrimaryDark">#03070D</color>
+    <color name="colorAccent">#03070D</color>
+    <color name="colorBackground">#03070D</color>
+    <color name="colorText">#FFFFFF</color>
+    <color name="colorError">#B00020</color>
+</resources>

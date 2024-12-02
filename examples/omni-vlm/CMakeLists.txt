@@ -5,7 +5,7 @@ add_library(omni_vlm OBJECT
             clip.h
             )
 
-target_link_libraries(omni_vlm PRIVATE ggml_llama llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(omni_vlm PRIVATE common ggml llama ${CMAKE_THREAD_LIBS_INIT})
 
 target_include_directories(omni_vlm PUBLIC .)
 target_include_directories(omni_vlm PUBLIC ../..)
@@ -18,7 +18,7 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(omni_vlm PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(omni_vlm PRIVATE LLAMA_SHARED LLAMA_BUILD)
     add_library(omni_vlm_shared SHARED $<TARGET_OBJECTS:omni_vlm>)
-    target_link_libraries(omni_vlm_shared PRIVATE ggml_llama llama ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(omni_vlm_shared PRIVATE common ggml llama ${CMAKE_THREAD_LIBS_INIT})
     install(TARGETS omni_vlm_shared LIBRARY)
 endif()
 
@@ -39,7 +39,11 @@ target_compile_features(${TARGET} PRIVATE cxx_std_11)
 
 #=== for omni-vlm-wrapper
 add_library(omni_vlm_wrapper_shared SHARED omni-vlm-wrapper.cpp $<TARGET_OBJECTS:omni_vlm>)
+<<<<<<< HEAD
+target_link_libraries(omni_vlm_wrapper_shared PRIVATE common ggml llama ${CMAKE_THREAD_LIBS_INIT})
+=======
 target_link_libraries(omni_vlm_wrapper_shared PRIVATE common ggml_llama llama ${CMAKE_THREAD_LIBS_INIT})
+>>>>>>> master
 # For Nexa SDK library installation
 set_target_properties(omni_vlm_wrapper_shared PROPERTIES
                      PUBLIC_HEADER "omni-vlm-wrapper.h"

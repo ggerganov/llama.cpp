@@ -1,0 +1,8 @@
+[gd_resource type="NativeScript" load_steps=2 format=2]
+
+[ext_resource path="res://godot_resources/scripts/KomputeNativeLibrary.gdnlib" type="GDNativeLibrary" id=1]
+
+[resource]
+class_name = "KomputeSummator"
+library = ExtResource( 1 )
+script_class_name = "KomputeSummator"

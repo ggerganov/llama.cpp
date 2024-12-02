@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=2]
+
+[ext_resource path="res://godot_resources/scripts/DynamicExampleScript.gd" type="Script" id=1]
+[ext_resource path="res://godot_resources/scripts/KomputeNativeClass.gdns" type="Script" id=2]
+
+[node name="Parent" type="Node2D"]
+script = ExtResource( 1 )
+
+[node name="KomputeNode" type="Node2D" parent="."]
+script = ExtResource( 2 )

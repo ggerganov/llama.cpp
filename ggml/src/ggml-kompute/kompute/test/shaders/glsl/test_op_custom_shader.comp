@@ -1,0 +1,13 @@
+#version 450
+
+layout (local_size_x = 1) in;
+
+layout(set = 0, binding = 0) buffer a { float pa[]; };
+layout(set = 0, binding = 1) buffer b { float pb[]; };
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    pb[index] = pa[index];
+    pa[index] = index;
+}
+
