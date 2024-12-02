@@ -146,3 +146,20 @@ def test_invalid_chat_completion_req(messages):
     })
     assert res.status_code == 400 or res.status_code == 500
     assert "error" in res.body
+
+
+def test_chat_completion_with_timings_per_token():
+    global server
+    server.start()
+    res = server.make_stream_request("POST", "/chat/completions", data={
+        "max_tokens": 10,
+        "messages": [{"role": "user", "content": "test"}],
+        "stream": True,
+        "timings_per_token": True,
+    })
+    for data in res:
+        assert "timings" in data
+        assert "prompt_per_second" in data["timings"]
+        assert "predicted_per_second" in data["timings"]
+        assert "predicted_n" in data["timings"]
+        assert data["timings"]["predicted_n"] <= 10

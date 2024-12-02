@@ -177,7 +177,7 @@ struct server_slot {
     bool stopped_word   = false;
     bool stopped_limit  = false;
 
-    bool timing_per_token = false;
+    bool timings_per_token = false;
 
     bool oaicompat = false;
 
@@ -884,7 +884,7 @@ struct server_context {
             slot.oaicompat_model = "";
         }
 
-        slot.timing_per_token = json_value(data, "timing_per_token", false);
+        slot.timings_per_token       = json_value(data, "timings_per_token",  false);
 
         slot.params.stream           = json_value(data, "stream",             false);
         slot.params.cache_prompt     = json_value(data, "cache_prompt",       true);
@@ -1283,7 +1283,7 @@ struct server_context {
             {"speculative.n_max",         slot.params.speculative.n_max},
             {"speculative.n_min",         slot.params.speculative.n_min},
             {"speculative.p_min",         slot.params.speculative.p_min},
-            {"timing_per_token",          slot.timing_per_token},
+            {"timings_per_token",         slot.timings_per_token},
         };
     }
 
@@ -1341,7 +1341,7 @@ struct server_context {
             res.data["model"] = slot.oaicompat_model;
         }
 
-        if (slot.timing_per_token) {
+        if (slot.timings_per_token) {
             res.data["timings"] = slot.get_formated_timings();
         }
 
