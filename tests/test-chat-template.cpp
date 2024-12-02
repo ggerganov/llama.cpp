@@ -135,10 +135,10 @@ int main(void) {
 
     // list all supported templates
     std::vector<const char *> supported_tmpl(1024);
-    res = llama_chat_supported_templates(supported_tmpl.data(), supported_tmpl.size());
+    res = llama_chat_builtin_templates(supported_tmpl.data(), supported_tmpl.size());
     assert(res > 0);
     supported_tmpl.resize(res);
-    printf("Supported templates:\n");
+    printf("Built-in chat templates:\n");
     for (auto tmpl : supported_tmpl) {
         printf("  %s\n", tmpl);
     }

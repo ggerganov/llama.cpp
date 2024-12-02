@@ -22370,7 +22370,7 @@ int32_t llama_chat_apply_template(
     return res;
 }
 
-int32_t llama_chat_supported_templates(const char ** output, size_t len) {
+int32_t llama_chat_builtin_templates(const char ** output, size_t len) {
     auto it = LLM_CHAT_TEMPLATES.begin();
     for (size_t i = 0; i < std::min(len, LLM_CHAT_TEMPLATES.size()); i++) {
         output[i] = it->first.c_str();
