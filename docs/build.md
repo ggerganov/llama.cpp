@@ -63,11 +63,11 @@ When built with Metal support, you can explicitly disable GPU inference with the
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Using BLAS doesn't affect the generation performance. There are currently several different BLAS implementations available for build and use:
 
-### Accelerate Framework:
+### Accelerate Framework
 
 This is only available on Mac PCs and it's enabled by default. You can just build using the normal instructions.
 
-### OpenBLAS:
+### OpenBLAS
 
 This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS installed on your machine.
 
@@ -82,15 +82,7 @@ This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS i
 
 Check [BLIS.md](./backend/BLIS.md) for more information.
 
-## SYCL
-
-SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
-
-llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
-
-For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
-
-## Intel oneMKL
+### Intel oneMKL
 
 Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
 
@@ -106,6 +98,18 @@ Building through oneAPI compilers will make avx_vnni instruction set available f
   If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-basekit](https://hub.docker.com/r/intel/oneapi-basekit). Then, you can use the commands given above.
 
 Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
+
+### Other BLAS libraries
+
+Any other BLAS library can be used by setting the `GGML_BLAS_VENDOR` option. See the [CMake documentation](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) for a list of supported vendors.
+
+## SYCL
+
+SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
+
+llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
+
+For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
 
 ## CUDA
 
