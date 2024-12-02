@@ -20,27 +20,26 @@
 
 // AMX type_trais
 namespace ggml::cpu::amx {
-    class tensor_traits : public ggml::cpu::tensor_traits {
+class tensor_traits : public ggml::cpu::tensor_traits {
+    bool work_size(int /* n_threads */, const struct ggml_tensor * op, size_t & size) override {
+        size = ggml_backend_amx_desired_wsize(op);
+        return true;
+    }
 
-        bool work_size(int /* n_threads */, const struct ggml_tensor * op, size_t & size) override {
-            size = ggml_backend_amx_desired_wsize(op);
+    bool compute_forward(struct ggml_compute_params * params, struct ggml_tensor * op) override {
+        if (op->op == GGML_OP_MUL_MAT) {
+            ggml_backend_amx_mul_mat(params, op);
             return true;
         }
-
-        bool compute_forward(struct ggml_compute_params * params, struct ggml_tensor * op) override {
-            if (op->op == GGML_OP_MUL_MAT) {
-                ggml_backend_amx_mul_mat(params, op);
-                return true;
-            }
-            return false;
-        }
-    };
-
-    static ggml::cpu::tensor_traits* get_tensor_traits(ggml_backend_buffer_t , struct ggml_tensor *) {
-        static tensor_traits traits;
-        return &traits;
+        return false;
     }
+};
+
+static ggml::cpu::tensor_traits * get_tensor_traits(ggml_backend_buffer_t, struct ggml_tensor *) {
+    static tensor_traits traits;
+    return &traits;
 }
+}  // namespace ggml::cpu::amx
 
 // AMX buffer interface
 static void ggml_backend_amx_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -48,26 +47,28 @@ static void ggml_backend_amx_buffer_free_buffer(ggml_backend_buffer_t buffer) {
 }
 
 static void * ggml_backend_amx_buffer_get_base(ggml_backend_buffer_t buffer) {
-    return (void *)(buffer->context);
+    return (void *) (buffer->context);
 }
 
 static void ggml_backend_amx_buffer_init_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
-    tensor->extra = (void *)ggml::cpu::amx::get_tensor_traits(buffer, tensor);
+    tensor->extra = (void *) ggml::cpu::amx::get_tensor_traits(buffer, tensor);
 
     GGML_UNUSED(buffer);
 }
 
-static void ggml_backend_amx_buffer_memset_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
-    memset((char *)tensor->data + offset, value, size);
+static void ggml_backend_amx_buffer_memset_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor,
+                                                  uint8_t value, size_t offset, size_t size) {
+    memset((char *) tensor->data + offset, value, size);
 
     GGML_UNUSED(buffer);
 }
 
-static void ggml_backend_amx_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+static void ggml_backend_amx_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor,
+                                               const void * data, size_t offset, size_t size) {
     if (qtype_has_amx_kernels(tensor->type)) {
         ggml_backend_amx_convert_weight(tensor, data, offset, size);
     } else {
-        memcpy((char *)tensor->data + offset, data, size);
+        memcpy((char *) tensor->data + offset, data, size);
     }
 
     GGML_UNUSED(buffer);
@@ -136,49 +137,42 @@ static size_t ggml_backend_amx_buffer_type_get_alignment(ggml_backend_buffer_typ
 }
 
 namespace ggml::cpu::amx {
-    class extra_buffer_type : ggml::cpu::extra_buffer_type {
-        bool supports_op(ggml_backend_dev_t , const struct ggml_tensor * op) override {
-            // handle only 2d gemm for now
-            auto is_contiguous_2d = [](const struct ggml_tensor * t) {
-                return ggml_is_contiguous(t) && t->ne[3] == 1 && t->ne[2] == 1;
-            };
+class extra_buffer_type : ggml::cpu::extra_buffer_type {
+    bool supports_op(ggml_backend_dev_t, const struct ggml_tensor * op) override {
+        // handle only 2d gemm for now
+        auto is_contiguous_2d = [](const struct ggml_tensor * t) {
+            return ggml_is_contiguous(t) && t->ne[3] == 1 && t->ne[2] == 1;
+        };
 
-            if (    op->op == GGML_OP_MUL_MAT &&
-                    is_contiguous_2d(op->src[0]) &&       // src0 must be contiguous
-                    is_contiguous_2d(op->src[1]) &&       // src1 must be contiguous
-                    op->src[0]->buffer &&
-                    op->src[0]->buffer->buft == ggml_backend_amx_buffer_type() &&
-                    op->ne[0] % (TILE_N * 2) == 0 &&     // out_features is 32x
-                    (qtype_has_amx_kernels(op->src[0]->type) || (op->src[0]->type == GGML_TYPE_F16))
-            )
-            {
-                // src1 must be host buffer
-                if (op->src[1]->buffer && !ggml_backend_buft_is_host(op->src[1]->buffer->buft)) {
-                    return false;
-                }
-                // src1 must be float32
-                if (op->src[1]->type == GGML_TYPE_F32) {
-                    return true;
-                }
+        if (op->op == GGML_OP_MUL_MAT && is_contiguous_2d(op->src[0]) &&  // src0 must be contiguous
+            is_contiguous_2d(op->src[1]) &&                               // src1 must be contiguous
+            op->src[0]->buffer && op->src[0]->buffer->buft == ggml_backend_amx_buffer_type() &&
+            op->ne[0] % (TILE_N * 2) == 0 &&                              // out_features is 32x
+            (qtype_has_amx_kernels(op->src[0]->type) || (op->src[0]->type == GGML_TYPE_F16))) {
+            // src1 must be host buffer
+            if (op->src[1]->buffer && !ggml_backend_buft_is_host(op->src[1]->buffer->buft)) {
+                return false;
             }
-            return false;
+            // src1 must be float32
+            if (op->src[1]->type == GGML_TYPE_F32) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    ggml::cpu::tensor_traits * get_tensor_traits(const struct ggml_tensor * op) override {
+        if (op->op == GGML_OP_MUL_MAT && op->src[0]->buffer &&
+            op->src[0]->buffer->buft == ggml_backend_amx_buffer_type()) {
+            return (ggml::cpu::tensor_traits *) op->src[0]->extra;
         }
 
-        ggml::cpu::tensor_traits* get_tensor_traits(const struct ggml_tensor * op) override {
-            if (    op->op == GGML_OP_MUL_MAT &&
-                    op->src[0]->buffer &&
-                    op->src[0]->buffer->buft == ggml_backend_amx_buffer_type()
-            )
-            {
-                return (ggml::cpu::tensor_traits*) op->src[0]->extra;
-            }
+        return nullptr;
+    }
+};
+}  // namespace ggml::cpu::amx
 
-            return nullptr;
-        }
-    };
-}
-
-static size_t ggml_backend_amx_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor* tensor) {
+static size_t ggml_backend_amx_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     return ggml_backend_amx_get_alloc_size(tensor);
 
     GGML_UNUSED(buft);
@@ -200,25 +194,26 @@ static bool ggml_amx_init() {
     return true;
 #endif
 }
+
 ggml_backend_buffer_type_t ggml_backend_amx_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_buffer_type_amx = {
         /* .iface = */ {
-            /* .get_name         = */ ggml_backend_amx_buffer_type_get_name,
-            /* .alloc_buffer     = */ ggml_backend_amx_buffer_type_alloc_buffer,
-            /* .get_alignment    = */ ggml_backend_amx_buffer_type_get_alignment,
-            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
-            /* .get_alloc_size   = */ ggml_backend_amx_buffer_type_get_alloc_size,
-            /* .is_host          = */ nullptr,
-        },
+                        /* .get_name         = */ ggml_backend_amx_buffer_type_get_name,
+                        /* .alloc_buffer     = */ ggml_backend_amx_buffer_type_alloc_buffer,
+                        /* .get_alignment    = */ ggml_backend_amx_buffer_type_get_alignment,
+                        /* .get_max_size     = */ nullptr,  // defaults to SIZE_MAX
+                        /* .get_alloc_size   = */ ggml_backend_amx_buffer_type_get_alloc_size,
+                        /* .is_host          = */ nullptr,
+                        },
         /* .device  = */ ggml_backend_reg_dev_get(ggml_backend_cpu_reg(), 0),
         /* .context = */ new ggml::cpu::amx::extra_buffer_type(),
     };
 
     if (!ggml_amx_init()) {
-        return NULL;
+        return nullptr;
     }
 
     return &ggml_backend_buffer_type_amx;
 }
 
-#endif // defined(__AMX_INT8__) && defined(__AVX512VNNI__)
+#endif  // defined(__AMX_INT8__) && defined(__AVX512VNNI__)
