@@ -815,7 +815,10 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
     # Create a fresh python3 venv and enter it
-    python3 -m venv "$MNT/venv"
+    if ! python3 -m venv "$MNT/venv"; then
+        echo "Error: Failed to create Python virtual environment at $MNT/venv."
+        exit 1
+    fi
     source "$MNT/venv/bin/activate"
 
     pip install -r ${SRC}/requirements.txt --disable-pip-version-check

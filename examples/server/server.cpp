@@ -3347,8 +3347,18 @@ int main(int argc, char ** argv) {
         llama_backend_free();
     };
 
-    // bind HTTP listen port, run the HTTP server in a thread
-    if (!svr->bind_to_port(params.hostname, params.port)) {
+    // bind HTTP listen port
+    bool was_bound = false;
+    if (params.port == 0) {
+        int bound_port = svr->bind_to_any_port(params.hostname);
+        if ((was_bound = (bound_port >= 0))) {
+            params.port = bound_port;
+        }
+    } else {
+        was_bound = svr->bind_to_port(params.hostname, params.port);
+    }
+
+    if (!was_bound) {
         //LOG_ERROR("couldn't bind HTTP server socket", {
         //    {"hostname", params.hostname},
         //    {"port", params.port},
@@ -3357,6 +3367,8 @@ int main(int argc, char ** argv) {
         clean_up();
         return 1;
     }
+
+    // run the HTTP server in a thread
     std::thread t([&]() { svr->listen_after_bind(); });
     svr->wait_until_ready();
 
