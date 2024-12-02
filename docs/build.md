@@ -7,62 +7,52 @@ git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 ```
 
-In order to build llama.cpp you have four different options.
+The following sections describe how to build with different backends and options.
 
-- Using `CMake`:
+## CPU-only Build
 
-  ```bash
-  cmake -B build
-  cmake --build build --config Release
-  ```
+Build llama.cpp using `CMake`:
 
-  **Notes**:
+```bash
+cmake -B build
+cmake --build build --config Release
+```
 
-    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
-    - For faster repeated compilation, install [ccache](https://ccache.dev/).
-    - For debug builds, there are two cases:
+**Notes**:
 
-      1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+- For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+- For faster repeated compilation, install [ccache](https://ccache.dev/).
+- For debug builds, there are two cases:
 
-      ```bash
-      cmake -B build -DCMAKE_BUILD_TYPE=Debug
-      cmake --build build
-      ```
+    1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
-      2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
+    ```bash
+    cmake -B build -DCMAKE_BUILD_TYPE=Debug
+    cmake --build build
+    ```
 
-      ```bash
-      cmake -B build -G "Xcode"
-      cmake --build build --config Debug
-      ```
-    - Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
-      - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
-        - Tab Workload: Desktop-development with C++
-        - Tab Components (select quickly via search): C++-_CMake_ Tools for Windows, _Git_ for Windows, C++-_Clang_ Compiler for Windows, MS-Build Support for LLVM-Toolset (clang)
-      - Please remember to always use a Developer Command Prompt / PowerShell for VS2022 for git, build, test
-      - For Windows on ARM (arm64, WoA) build with:
-        ```bash
-        cmake --preset arm64-windows-llvm-release -D GGML_OPENMP=OFF
-        cmake --build build-arm64-windows-llvm-release
-        ```
-        Note: Building for arm64 could also be done just with MSVC (with the build-arm64-windows-MSVC preset, or the standard CMake build instructions). But MSVC does not support inline ARM assembly-code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
+    2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
--   Using `gmake` (FreeBSD):
-
-    1. Install and activate [DRM in FreeBSD](https://wiki.freebsd.org/Graphics)
-    2. Add your user to **video** group
-    3. Install compilation dependencies.
-
-        ```bash
-        sudo pkg install gmake automake autoconf pkgconf llvm15 openblas
-
-        gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
-        ```
+    ```bash
+    cmake -B build -G "Xcode"
+    cmake --build build --config Debug
+    ```
+- Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
+    - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
+    - Tab Workload: Desktop-development with C++
+    - Tab Components (select quickly via search): C++-_CMake_ Tools for Windows, _Git_ for Windows, C++-_Clang_ Compiler for Windows, MS-Build Support for LLVM-Toolset (clang)
+    - Please remember to always use a Developer Command Prompt / PowerShell for VS2022 for git, build, test
+    - For Windows on ARM (arm64, WoA) build with:
+    ```bash
+    cmake --preset arm64-windows-llvm-release -D GGML_OPENMP=OFF
+    cmake --build build-arm64-windows-llvm-release
+    ```
+    Note: Building for arm64 could also be done just with MSVC (with the build-arm64-windows-MSVC preset, or the standard CMake build instructions). But MSVC does not support inline ARM assembly-code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
 
 ## Metal Build
 
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
-To disable the Metal build at compile time use the `GGML_NO_METAL=1` flag or the `GGML_METAL=OFF` cmake option.
+To disable the Metal build at compile time use the `-DGGML_METAL=OFF` cmake option.
 
 When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers|-ngl 0` command-line
 argument.
@@ -159,9 +149,9 @@ The environment variable `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` can be used to enab
 
 Most of the compilation options available for CUDA should also be available for MUSA, though they haven't been thoroughly tested yet.
 
-### hipBLAS
+### HIP
 
-This provides BLAS acceleration on HIP-supported AMD GPUs.
+This provides GPU acceleration on HIP-supported AMD GPUs.
 Make sure to have ROCm installed.
 You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/tutorial/quick-start.html#rocm-install-quick).
 
@@ -227,6 +217,12 @@ EOF
 
 ```
 
+Switch into the `llama.cpp` directory and build using CMake.
+```sh
+cmake -B build -DGGML_VULKAN=ON
+cmake --build build --config Release
+```
+
 #### Git Bash MINGW64
 
 Download and install [`Git-SCM`](https://git-scm.com/downloads/win) with the default settings
@@ -246,20 +242,21 @@ cmake --build build --config Release
 
 Now you can load the model in conversation mode using `Vulkan`
 
-```
-build/bin/release/llama-cli -m "[PATH TO MODEL]" -ngl 100 -c 16384 -t 10 -n -2 -cnv
+```sh
+build/bin/Release/llama-cli -m "[PATH TO MODEL]" -ngl 100 -c 16384 -t 10 -n -2 -cnv
 ```
 
 #### MSYS2
 Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
-  ```sh
-  pacman -S git \
-      mingw-w64-ucrt-x86_64-gcc \
-      mingw-w64-ucrt-x86_64-cmake \
-      mingw-w64-ucrt-x86_64-vulkan-devel \
-      mingw-w64-ucrt-x86_64-shaderc
-  ```
-Switch into `llama.cpp` directory and build using CMake.
+```sh
+pacman -S git \
+    mingw-w64-ucrt-x86_64-gcc \
+    mingw-w64-ucrt-x86_64-cmake \
+    mingw-w64-ucrt-x86_64-vulkan-devel \
+    mingw-w64-ucrt-x86_64-shaderc
+```
+
+Switch into the `llama.cpp` directory and build using CMake.
 ```sh
 cmake -B build -DGGML_VULKAN=ON
 cmake --build build --config Release
@@ -323,11 +320,13 @@ cmake --build build --config release
 
 You can test with:
 
-`./build/bin/llama-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32`
-
-If the fllowing info is output on screen, you are using `llama.cpp by CANN backend`:
 ```bash
-llm_load_tensors:       CANN buffer size = 13313.00 MiB
+./build/bin/llama-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32
+```
+
+If the following info is output on screen, you are using `llama.cpp` with the CANN backend:
+```bash
+llm_load_tensors:       CANN model buffer size = 13313.00 MiB
 llama_new_context_with_model:       CANN compute buffer size =  1260.81 MiB
 ```
 
