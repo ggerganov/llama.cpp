@@ -990,6 +990,9 @@ extern "C" {
                                   char * buf,
                                int32_t   length);
 
+    // Get list of supported chat templates
+    int32_t llama_chat_supported_templates(const char ** output, size_t len);
+
     //
     // Sampling API
     //
