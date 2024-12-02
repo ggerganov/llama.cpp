@@ -40,14 +40,14 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, const ggml_tensor* sr
 
     try {
         // Perform matrix multiplication using oneMKL GEMM
-        oneapi::mkl::blas::column_major::gemm(
 #ifdef GGML_SYCL_NVIDIA
-            oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ *stream },
+        oneapi::mkl::blas::column_major::gemm(oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ *stream },
+                                              oneapi::mkl::transpose::nontrans, src1_op, ne0, ne1, ne01, alpha, src0_d,
+                                              ne00, src1_d, ldb, beta, dst_d, ne0);
 #else
-            *stream,
+        oneapi::mkl::blas::column_major::gemm(*stream, oneapi::mkl::transpose::nontrans, src1_op, ne0, ne1, ne01, alpha,
+                                              src0_d, ne00, src1_d, ldb, beta, dst_d, ne0);
 #endif
-            oneapi::mkl::transpose::nontrans, src1_op, ne0, ne1, ne01, alpha, src0_d, ne00, src1_d, ldb, beta, dst_d,
-            ne0);
     }
     catch (sycl::exception const& exc) {
         std::cerr << exc.what() << std::endl;
