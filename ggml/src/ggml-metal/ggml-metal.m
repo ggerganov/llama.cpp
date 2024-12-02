@@ -2028,7 +2028,7 @@ static void ggml_metal_encode_node(
                        src0t == GGML_TYPE_Q4_K ||
                        src0t == GGML_TYPE_Q5_K ||
                        src0t == GGML_TYPE_Q6_K ||
-                       false) && (ne11 >= 4 && ne11 <= 12)
+                       false) && (ne11 >= 4 && ne11 <= 8)
                      )
                     )
                    ) {
