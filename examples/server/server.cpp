@@ -719,7 +719,7 @@ struct server_context {
                 return false;
             }
 
-            cparams_dft = common_context_params_to_llama(params_base);
+            cparams_dft = common_context_params_to_llama(params_dft);
             cparams_dft.n_batch = llama_n_ctx(llama_init_dft.context);
 
             // the context is not needed - we will create one for each slot
