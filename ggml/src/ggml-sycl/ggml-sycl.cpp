@@ -47,7 +47,7 @@ static ggml_sycl_device_info ggml_sycl_init() {
 
     info.device_count = dpct::dev_mgr::instance().device_count();
     if (info.device_count == 0) {
-        fprintf(stderr, "%s: failed to initialize " GGML_SYCL_NAME ": %s\n", __func__);
+        GGML_LOG_ERROR("%s: failed to initialize " GGML_SYCL_NAME ": %s\n", __func__);
         return info;
     }
 
@@ -55,16 +55,16 @@ static ggml_sycl_device_info ggml_sycl_init() {
 
     int64_t total_vram = 0;
 #if defined(GGML_SYCL_FORCE_MMQ)
-    fprintf(stderr, "%s: GGML_SYCL_FORCE_MMQ:   yes\n", __func__);
+    GGML_LOG_INFO("%s: GGML_SYCL_FORCE_MMQ:   yes\n", __func__);
 #else
-    fprintf(stderr, "%s: GGML_SYCL_FORCE_MMQ:   no\n", __func__);
+    GGML_LOG_INFO("%s: GGML_SYCL_FORCE_MMQ:   no\n", __func__);
 #endif
 #if defined(SYCL_USE_XMX)
-    fprintf(stderr, "%s: SYCL_USE_XMX: yes\n", __func__);
+    GGML_LOG_INFO("%s: SYCL_USE_XMX: yes\n", __func__);
 #else
-    fprintf(stderr, "%s: SYCL_USE_XMX: no\n", __func__);
+    GGML_LOG_INFO("%s: SYCL_USE_XMX: no\n", __func__);
 #endif
-    fprintf(stderr, "%s: found %d " GGML_SYCL_NAME " devices:\n", __func__, info.device_count);
+    GGML_LOG_INFO("%s: found %d " GGML_SYCL_NAME " devices:\n", __func__, info.device_count);
 
     for (int i = 0; i < info.device_count; ++i) {
         info.devices[i].vmm = 0;
@@ -110,7 +110,7 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
 
     auto global_mem_size = prop.get_global_mem_size()/1000000;
 
-    fprintf(stderr, "|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|\n", id, device_type.c_str(),
+    GGML_LOG_INFO("|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|\n", id, device_type.c_str(),
             name.c_str(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
             global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str());
@@ -120,19 +120,30 @@ void ggml_backend_sycl_print_sycl_devices() {
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_print_sycl_devices\n");
     int device_count = dpct::dev_mgr::instance().device_count();
     std::map<std::string, size_t> DeviceNums;
-    fprintf(stderr, "found %d SYCL devices:\n", device_count);
-    fprintf(stderr, "|  |                   |                                       |       |Max    |        |Max  |Global |                     |\n");
-    fprintf(stderr, "|  |                   |                                       |       |compute|Max work|sub  |mem    |                     |\n");
-    fprintf(stderr, "|ID|        Device Type|                                   Name|Version|units  |group   |group|size   |       Driver version|\n");
-    fprintf(stderr, "|--|-------------------|---------------------------------------|-------|-------|--------|-----|-------|---------------------|\n");
+    GGML_LOG_INFO("Found %d SYCL devices:\n", device_count);
+
+    GGML_LOG_INFO(
+        "|  |                   |                                       |      "
+        " |Max    |        |Max  |Global |                     |\n");
+    GGML_LOG_INFO(
+        "|  |                   |                                       |      "
+        " |compute|Max work|sub  |mem    |                     |\n");
+    GGML_LOG_INFO(
+        "|ID|        Device Type|                                   "
+        "Name|Version|units  |group   |group|size   |       Driver version|\n");
+    GGML_LOG_INFO(
+        "|--|-------------------|---------------------------------------|------"
+        "-|-------|--------|-----|-------|---------------------|\n");
+
     for (int id = 0; id < device_count; ++id) {
-        sycl::device device = dpct::dev_mgr::instance().get_device(id);
-        sycl::backend backend = device.get_backend();
-        std::string backend_type = get_device_backend_and_type(device);
-        int type_id=DeviceNums[backend_type]++;
-        std::stringstream device_type;
-        device_type << "[" <<  backend_type << ":" << std::to_string(type_id) << "]";
-        print_device_detail(id, device, device_type.str());
+      sycl::device device = dpct::dev_mgr::instance().get_device(id);
+      sycl::backend backend = device.get_backend();
+      std::string backend_type = get_device_backend_and_type(device);
+      int type_id = DeviceNums[backend_type]++;
+      std::stringstream device_type;
+      device_type << "[" << backend_type << ":" << std::to_string(type_id)
+                  << "]";
+      print_device_detail(id, device, device_type.str());
     }
 }
 
@@ -154,15 +165,14 @@ static void ggml_check_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
-        fprintf(stderr, "[SYCL] call ggml_check_sycl\n");
+        GGML_LOG_INFO("[SYCL] call ggml_check_sycl\n");
         g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
-
-        fprintf(stderr, "%s: GGML_SYCL_DEBUG: %d\n", __func__, g_ggml_sycl_debug);
+        GGML_LOG_INFO("%s: GGML_SYCL_DEBUG: %d\n", __func__, g_ggml_sycl_debug);
 
 #if defined(GGML_SYCL_F16)
-        fprintf(stderr, "%s: GGML_SYCL_F16: yes\n", __func__);
+        GGML_LOG_INFO("%s: GGML_SYCL_F16: yes\n", __func__);
 #else
-        fprintf(stderr, "%s: GGML_SYCL_F16: no\n", __func__);
+        GGML_LOG_INFO("%s: GGML_SYCL_F16: no\n", __func__);
 #endif
 
 /* NOT REMOVE, keep it for next optimize for XMX.
@@ -180,9 +190,10 @@ static void ggml_check_sycl() try {
             return;
         }
         GGML_ASSERT(g_all_sycl_device_count <= GGML_SYCL_MAX_DEVICES);
-        ggml_backend_sycl_print_sycl_devices();
+
         initialized = true;
         g_sycl_loaded = true;
+        ggml_backend_sycl_print_sycl_devices();
     }
 }
 catch (sycl::exception const &exc) {
@@ -205,7 +216,7 @@ inline void check_allow_gpu_index(const int device_index) {
         __func__,
         device_index,
         ggml_sycl_info().device_count - 1);
-    fprintf(stderr, "%s\n", error_buf);
+    GGML_LOG_ERROR("%s\n", error_buf);
     assert(false);
   }
 }
@@ -475,8 +486,8 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
                                     size, *stream)));
     if (!dev_ptr) {
-        fprintf(stderr, "%s: can't malloc %lu Bytes memory on device", __func__, size);
-        return nullptr;
+      GGML_LOG_ERROR("%s: can't allocate %lu Bytes of memory on device\n", __func__, size);
+      return nullptr;
     }
     ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream);
     return ggml_backend_buffer_init(buft, ggml_backend_sycl_buffer_interface, ctx, size);
@@ -752,7 +763,7 @@ ggml_backend_sycl_split_buffer_init_tensor(ggml_backend_buffer_t buffer,
                                         size, *stream)));
         if (!buf) {
             char err_buf[1024];
-            snprintf(err_buf, 1023, "%s: can't malloc %lu Bytes memory on device", __func__, size);
+            snprintf(err_buf, 1023, "%s: can't allocate %lu Bytes of memory on device\n", __func__, size);
             throw std::runtime_error(err_buf);
         }
         // set padding to 0 to avoid possible NaN values
@@ -1142,17 +1153,18 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
             CHECK_TRY_ERROR(ptr = (void *)sycl::malloc_device(
                                 look_ahead_size, *qptr)));
         if (!ptr) {
-            fprintf(stderr, "%s: can't malloc %lu Bytes memory on device", __func__, look_ahead_size);
+            GGML_LOG_ERROR("%s: can't allocate %lu Bytes of memory on device/GPU\n", __func__, look_ahead_size);
             return nullptr;
         }
 
         *actual_size = look_ahead_size;
         pool_size += look_ahead_size;
 
-    #ifdef DEBUG_SYCL_MALLOC
-        fprintf(stderr, "%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, requested %u MB\n", __func__, id, nnz,
+#ifdef DEBUG_SYCL_MALLOC
+        GGML_LOG_DEBUG("%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, requested %u MB\n", __func__, id, nnz,
                 (uint32_t)(max_size/1024/1024), (uint32_t)(g_sycl_pool_size[id]/1024/1024), (uint32_t)(size/1024/1024));
-    #endif
+#endif
+
         // GGML_SYCL_DEBUG("ggml_sycl_pool_malloc_leg look_ahead_size=%lu, return %p\n", look_ahead_size, ptr);
         return ptr;
     }
@@ -1166,7 +1178,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
                 return;
             }
         }
-        fprintf(stderr, "WARNING: sycl buffer pool full, increase MAX_sycl_BUFFERS\n");
+        GGML_LOG_WARN("WARNING: sycl buffer pool full, increase MAX_sycl_BUFFERS\n");
         SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(ptr, *qptr)));
         pool_size -= size;
     }
@@ -2437,7 +2449,7 @@ static void ggml_sycl_op_get_rows(ggml_backend_sycl_context & ctx, const ggml_te
             break;
         default:
             // TODO: k-quants
-            fprintf(stderr, "%s: unsupported type: %s\n", __func__, ggml_type_name(src0->type));
+            GGML_LOG_ERROR("%s: unsupported type: %s\n", __func__, ggml_type_name(src0->type));
             GGML_ABORT("fatal error");
             break;
     }
@@ -3750,7 +3762,7 @@ static void ggml_sycl_cpy(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
     } else if (src0->type == GGML_TYPE_I32 && src1->type == GGML_TYPE_I32) {
         ggml_cpy_i32_i32_sycl (src0_ddc, src1_ddc, ne, ne00, ne01, ne02, nb00, nb01, nb02, nb03, ne10, ne11, ne12, nb10, nb11, nb12, nb13, main_stream);
     } else {
-        fprintf(stderr, "%s: unsupported type combination (%s to %s)\n", __func__,
+        GGML_LOG_ERROR("%s: unsupported type combination (%s to %s)\n", __func__,
                 ggml_type_name(src0->type), ggml_type_name(src1->type));
         GGML_ABORT("fatal error");
     }
@@ -3825,7 +3837,7 @@ void ggml_sycl_set_main_device(const int main_device) try {
         dpct::device_info prop;
         SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
             prop, dpct::dev_mgr::instance().get_device(main_device))));
-        fprintf(stderr, "Using device %d (%s) as main device\n",
+        GGML_LOG_INFO("Using device %d (%s) as main device\n",
                 main_device, prop.get_name());
     }
 }
@@ -4172,7 +4184,7 @@ static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_
 #endif
         bool ok = ggml_sycl_compute_forward(*sycl_ctx, node);
         if (!ok) {
-            fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
+            GGML_LOG_ERROR("%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
         }
         GGML_ASSERT(ok);
     }
@@ -4672,7 +4684,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
 
     ggml_backend_sycl_context * ctx = new ggml_backend_sycl_context(device);
     if (ctx == nullptr) {
-        fprintf(stderr, "%s: error: failed to allocate context\n", __func__);
+        GGML_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
         return nullptr;
     };
 
