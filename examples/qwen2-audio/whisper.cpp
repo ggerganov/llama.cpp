@@ -34,6 +34,7 @@
 #endif
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
@@ -216,7 +217,7 @@ static bool ggml_graph_compute_helper(
     ggml_abort_callback abort_callback,
     void *abort_callback_data)
 {
-    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads, nullptr);
 
     plan.abort_callback = abort_callback;
     plan.abort_callback_data = abort_callback_data;
@@ -239,22 +240,13 @@ static bool ggml_graph_compute_helper(
     for (int i = 0; i < ggml_backend_sched_get_n_backends(sched); ++i)
     {
         ggml_backend_t backend = ggml_backend_sched_get_backend(sched, i);
-        if (ggml_backend_is_cpu(backend))
-        {
-            ggml_backend_cpu_set_n_threads(backend, n_threads);
+        ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+        ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+
+        auto * fn_set_n_threads = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+        if (fn_set_n_threads) {
+            fn_set_n_threads(backend, n_threads);
         }
-#ifdef GGML_USE_BLAS
-        if (ggml_backend_is_blas(backend))
-        {
-            ggml_backend_blas_set_n_threads(backend, n_threads);
-        }
-#endif
-#ifdef GGML_USE_METAL
-        if (ggml_backend_is_metal(backend))
-        {
-            ggml_backend_metal_set_n_cb(backend, n_threads);
-        }
-#endif
     }
 
     bool t = ggml_backend_sched_graph_compute(sched, graph) == GGML_STATUS_SUCCESS;
@@ -1705,78 +1697,23 @@ static size_t aheads_masks_nbytes(struct whisper_aheads_masks &aheads_masks)
 
 static ggml_backend_t whisper_backend_init_gpu(const whisper_context_params &params)
 {
-    ggml_backend_t result = NULL;
+    ggml_log_set(g_state.log_callback, g_state.log_callback_user_data);
 
-#ifdef GGML_USE_CUDA
-    if (params.use_gpu)
-    {
-        WHISPER_LOG_INFO("%s: using CUDA backend\n", __func__);
-        result = ggml_backend_cuda_init(params.gpu_device);
-        if (!result)
-        {
-            WHISPER_LOG_ERROR("%s: ggml_backend_cuda_init() failed\n", __func__);
+    if (params.use_gpu) {
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+                WHISPER_LOG_INFO("%s: using %s backend\n", __func__, ggml_backend_dev_name(dev));
+                ggml_backend_t result = ggml_backend_dev_init(dev, nullptr);
+                if (!result) {
+                    WHISPER_LOG_ERROR("%s: failed to initialize %s backend\n", __func__, ggml_backend_dev_name(dev));
+                }
+                return result;
+            }
         }
     }
-#endif
 
-#ifdef GGML_USE_METAL
-    if (params.use_gpu)
-    {
-        WHISPER_LOG_INFO("%s: using Metal backend\n", __func__);
-        ggml_backend_metal_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-        result = ggml_backend_metal_init();
-        if (!result)
-        {
-            WHISPER_LOG_ERROR("%s: ggml_backend_metal_init() failed\n", __func__);
-        }
-        else if (!ggml_backend_metal_supports_family(result, 7))
-        {
-            WHISPER_LOG_ERROR("%s: Metal GPU does not support family 7 - falling back to CPU\n", __func__);
-            ggml_backend_free(result);
-            result = NULL;
-        }
-    }
-#endif
-
-#ifdef GGML_USE_SYCL
-    if (params.use_gpu)
-    {
-        WHISPER_LOG_INFO("%s: using SYCL backend\n", __func__);
-        result = ggml_backend_sycl_init(params.gpu_device);
-        if (!result)
-        {
-            WHISPER_LOG_ERROR("%s: ggml_backend_sycl_init() failed\n", __func__);
-        }
-    }
-#endif
-
-#ifdef GGML_USE_VULKAN
-    if (params.use_gpu)
-    {
-        WHISPER_LOG_INFO("%s: using Vulkan backend\n", __func__);
-        result = ggml_backend_vk_init(params.gpu_device);
-        if (!result)
-        {
-            WHISPER_LOG_ERROR("%s: ggml_backend_vk_init() failed\n", __func__);
-        }
-    }
-#endif
-
-#ifdef GGML_USE_CANN
-    if (params.use_gpu)
-    {
-        WHISPER_LOG_INFO("%s: using CANN backend\n", __func__);
-        result = ggml_backend_cann_init(params.gpu_device);
-        if (!result)
-        {
-            WHISPER_LOG_ERROR("%s: ggml_backend_cann_init() failed\n", __func__);
-        }
-    }
-#endif
-
-    GGML_UNUSED(params);
-
-    return result;
+    return nullptr;
 }
 
 static std::vector<ggml_backend_t> whisper_backend_init(const whisper_context_params &params)
@@ -5186,25 +5123,22 @@ const char *whisper_print_system_info(void)
 {
     static std::string s;
 
-    s = "";
-    s += "AVX = " + std::to_string(ggml_cpu_has_avx()) + " | ";
-    s += "AVX2 = " + std::to_string(ggml_cpu_has_avx2()) + " | ";
-    s += "AVX512 = " + std::to_string(ggml_cpu_has_avx512()) + " | ";
-    s += "FMA = " + std::to_string(ggml_cpu_has_fma()) + " | ";
-    s += "NEON = " + std::to_string(ggml_cpu_has_neon()) + " | ";
-    s += "ARM_FMA = " + std::to_string(ggml_cpu_has_arm_fma()) + " | ";
-    s += "METAL = " + std::to_string(ggml_cpu_has_metal()) + " | ";
-    s += "F16C = " + std::to_string(ggml_cpu_has_f16c()) + " | ";
-    s += "FP16_VA = " + std::to_string(ggml_cpu_has_fp16_va()) + " | ";
+    s  = "";
+    s += "AVX = "       + std::to_string(ggml_cpu_has_avx())       + " | ";
+    s += "AVX2 = "      + std::to_string(ggml_cpu_has_avx2())      + " | ";
+    s += "AVX512 = "    + std::to_string(ggml_cpu_has_avx512())    + " | ";
+    s += "FMA = "       + std::to_string(ggml_cpu_has_fma())       + " | ";
+    s += "NEON = "      + std::to_string(ggml_cpu_has_neon())      + " | ";
+    s += "ARM_FMA = "   + std::to_string(ggml_cpu_has_arm_fma())   + " | ";
+    s += "F16C = "      + std::to_string(ggml_cpu_has_f16c())      + " | ";
+    s += "FP16_VA = "   + std::to_string(ggml_cpu_has_fp16_va())   + " | ";
     s += "WASM_SIMD = " + std::to_string(ggml_cpu_has_wasm_simd()) + " | ";
-    s += "BLAS = " + std::to_string(ggml_cpu_has_blas()) + " | ";
-    s += "SSE3 = " + std::to_string(ggml_cpu_has_sse3()) + " | ";
-    s += "SSSE3 = " + std::to_string(ggml_cpu_has_ssse3()) + " | ";
-    s += "VSX = " + std::to_string(ggml_cpu_has_vsx()) + " | ";
-    s += "CUDA = " + std::to_string(ggml_cpu_has_cuda()) + " | ";
-    s += "COREML = " + std::to_string(whisper_has_coreml()) + " | ";
-    s += "OPENVINO = " + std::to_string(whisper_has_openvino()) + " | ";
-    s += "CANN = " + std::to_string(ggml_cpu_has_cann());
+    s += "SSE3 = "      + std::to_string(ggml_cpu_has_sse3())      + " | ";
+    s += "SSSE3 = "     + std::to_string(ggml_cpu_has_ssse3())     + " | ";
+    s += "VSX = "       + std::to_string(ggml_cpu_has_vsx())       + " | ";
+    s += "COREML = "    + std::to_string(whisper_has_coreml())     + " | ";
+    s += "OPENVINO = "  + std::to_string(whisper_has_openvino())   + " | ";
+
     return s.c_str();
 }
 
@@ -9466,6 +9400,8 @@ static bool whisper_encoder_load(struct whisper_model_loader *loader, whisper_co
     ggml_backend_buffer_set_usage(model.buffer, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
 
     wctx.t_load_us = ggml_time_us() - t_start_us;
+
+    gguf_free(gguf_ctx);
 
     return true;
 }

@@ -1,4 +1,4 @@
-// #include "arg.h"
+#include "arg.h"
 #include "base64.hpp"
 #include "log.h"
 #include "common.h"
@@ -12,10 +12,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-// #include <iostream>
-//
-// using std::cout;
-// using std::endl;
+#include <iostream>
+
+using std::cout;
+using std::endl;
 
 static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
@@ -24,8 +24,8 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval, *n_past, 0))) {
-            LOG_TEE("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
+        if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval))) {
+            LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
         }
         *n_past += n_eval;
@@ -41,21 +41,21 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = ::common_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
 
-static const char * sample(struct llama_sampling_context * ctx_sampling,
+static const char * sample(struct common_sampler * ctx_sampling,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = llama_sampling_sample(ctx_sampling, ctx_llama, NULL);
-    llama_sampling_accept(ctx_sampling, ctx_llama, id, true);
+    const llama_token id = common_sampler_sample(ctx_sampling, ctx_llama, -1);
+    common_sampler_accept(ctx_sampling, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past);
     return ret.c_str();
@@ -80,7 +80,7 @@ static omni_image_embed * omnivlm_image_embed_make_with_prompt(struct clip_ctx *
     size_t idx;
     find_image_tag_in_prompt(prompt, idx);
     if (idx == std::string::npos) {
-        LOG_TEE("%s: invalid base64 image tag. must be %s\n", __func__, IMG_PAD.c_str());
+        LOG_ERR("%s: invalid base64 image tag. must be %s\n", __func__, IMG_PAD.c_str());
         return NULL;
     }
 
@@ -92,7 +92,7 @@ static omni_image_embed * omnivlm_image_embed_make_with_prompt(struct clip_ctx *
 
     auto embed = omnivlm_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
     if (!embed) {
-        LOG_TEE("%s: could not load image from base64 string.\n", __func__);
+        LOG_ERR("%s: could not load image from base64 string.\n", __func__);
         return NULL;
     }
 
@@ -116,19 +116,17 @@ struct omnivlm_context {
     struct llama_model * model = NULL;
 };
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
-    LOG_TEE("\n example usage:\n");
-    LOG_TEE("\n     %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
-    LOG_TEE("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
+static void print_usage(int argc, char ** argv) {
+    LOG_ERR("\n example usage:\n");
+    LOG_ERR("\n     %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
+    LOG_ERR("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
-static struct omni_image_embed * load_image(omnivlm_context * ctx_omnivlm, gpt_params * params, const std::string & fname) {
+static struct omni_image_embed * load_image(omnivlm_context * ctx_omnivlm, common_params * params, const std::string & fname) {
 
     // load and preprocess the image
     omni_image_embed * embed = NULL;
-    embed = omnivlm_image_embed_make_with_filename(ctx_omnivlm->ctx_clip, params->n_threads, fname.c_str());
+    embed = omnivlm_image_embed_make_with_filename(ctx_omnivlm->ctx_clip, params->cpuparams.n_threads, fname.c_str());
     if (!embed) {
         fprintf(stderr, "%s: is %s really an image file?\n", __func__, fname.c_str());
         return NULL;
@@ -137,7 +135,7 @@ static struct omni_image_embed * load_image(omnivlm_context * ctx_omnivlm, gpt_p
     return embed;
 }
 
-static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_image_embed * image_embed, gpt_params * params, const std::string & prompt) {
+static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_image_embed * image_embed, common_params * params, const std::string & prompt) {
     int n_past = 0;
 
     const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
@@ -148,16 +146,16 @@ static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_ima
     system_prompt = prompt.substr(0, image_pos);
     user_prompt = prompt.substr(image_pos + std::string("<|image_pad|>").length());
     if (params->verbose_prompt) {
-        auto tmp = ::llama_tokenize(ctx_omnivlm->ctx_llama, system_prompt, true, true);
+        auto tmp = ::common_tokenize(ctx_omnivlm->ctx_llama, system_prompt, true, true);
         for (int i = 0; i < (int) tmp.size(); i++) {
-            LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_omnivlm->ctx_llama, tmp[i]).c_str());
+            LOG_ERR("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_omnivlm->ctx_llama, tmp[i]).c_str());
         }
     }
-    // LOG_TEE("user_prompt: %s\n", user_prompt.c_str());
+    // LOG_ERR("user_prompt: %s\n", user_prompt.c_str());
     if (params->verbose_prompt) {
-        auto tmp = ::llama_tokenize(ctx_omnivlm->ctx_llama, user_prompt, true, true);
+        auto tmp = ::common_tokenize(ctx_omnivlm->ctx_llama, user_prompt, true, true);
         for (int i = 0; i < (int) tmp.size(); i++) {
-            LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_omnivlm->ctx_llama, tmp[i]).c_str());
+            LOG_ERR("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_omnivlm->ctx_llama, tmp[i]).c_str());
         }
     }
 
@@ -172,9 +170,9 @@ static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_ima
     params->sparams.temp = 0.0f;
     params->sparams.top_k = 1;
     params->sparams.top_p = 1.0f;
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams);
+    struct common_sampler * ctx_sampling = common_sampler_init(ctx_omnivlm->model, params->sparams);
     if (!ctx_sampling) {
-        LOG_TEE("%s: failed to initialize sampling subsystem\n", __func__);
+        LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
     }
 
@@ -193,25 +191,25 @@ static void process_prompt(struct omnivlm_context * ctx_omnivlm, struct omni_ima
         fflush(stdout);
     }
 
-    llama_sampling_free(ctx_sampling);
+    common_sampler_free(ctx_sampling);
     printf("\n");
 }
 
-static struct llama_model * omnivlm_init(gpt_params * params) {
+static struct llama_model * omnivlm_init(common_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(*params);
+    llama_model_params model_params = common_model_params_to_llama(*params);
 
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
-        LOG_TEE("%s: unable to load model\n" , __func__);
+        LOG_ERR("%s: unable to load model\n" , __func__);
         return NULL;
     }
     return model;
 }
 
-static struct omnivlm_context * omnivlm_init_context(gpt_params * params, llama_model * model) {
+static struct omnivlm_context * omnivlm_init_context(common_params * params, llama_model * model) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
@@ -222,13 +220,13 @@ static struct omnivlm_context * omnivlm_init_context(gpt_params * params, llama_
     auto ctx_clip = clip_model_load(clip_path, params->omni_vlm_version.c_str(), /*verbosity=*/ 0);
     // clip_set_omni_vlm_version(ctx_clip, params);
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
+    llama_context_params ctx_params = common_context_params_to_llama(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
 
     if (ctx_llama == NULL) {
-        LOG_TEE("%s: failed to create the llama_context\n" , __func__);
+        LOG_ERR("%s: failed to create the llama_context\n" , __func__);
         return NULL;
     }
 
@@ -254,30 +252,29 @@ static void omnivlm_free(struct omnivlm_context * ctx_omnivlm) {
 int main(int argc, char ** argv) {
     ggml_time_init();
 
-    gpt_params params;
+    common_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
         return 1;
     }
 
     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
-        print_usage(argc, argv, {});
+        print_usage(argc, argv);
         return 1;
     }
     if (params.omni_vlm_version != "vlm-81-ocr" && params.prompt.empty()) {
-        LOG_TEE("%s : prompt is empty.\n", __func__);
-        print_usage(argc, argv, {});
+        LOG_ERR("%s : prompt is empty.\n", __func__);
+        print_usage(argc, argv);
         return 1;
     }
 
     if (params.omni_vlm_version == "vlm-81-ocr") {
         params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n <|vision_start|><|image_pad|><|vision_end|><|im_end|>";
     } else if (params.omni_vlm_version == "vlm-81-instruct" || params.omni_vlm_version == "nano-vlm-instruct") {
-        params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n" + params.prompt + "\n<|vision_start|><|image_pad|><|vision_end|><|im_end|>";
+        params.prompt = "<|im_start|>system\nYou are Nano-Omni-VLM, created by Nexa AI. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n\n<|vision_start|><|image_pad|><|vision_end|>" + params.prompt + "<|im_end|>";
     } else {
-        LOG_TEE("%s : error: you set wrong vlm version info:'%s'.\n", __func__, params.omni_vlm_version.c_str());
-        print_usage(argc, argv, {});
+        LOG_ERR("%s : error: you set wrong vlm version info:'%s'.\n", __func__, params.omni_vlm_version.c_str());
+        print_usage(argc, argv);
         return 1;
     }
 
@@ -292,13 +289,13 @@ int main(int argc, char ** argv) {
         auto * ctx_omnivlm = omnivlm_init_context(&params, model);
         auto * image_embed = load_image(ctx_omnivlm, &params, image);
         if (!image_embed) {
-            LOG_TEE("%s: failed to load image %s. Terminating\n\n", __func__, image.c_str());
+            LOG_ERR("%s: failed to load image %s. Terminating\n\n", __func__, image.c_str());
             return 1;
         }
         // process the prompt
         process_prompt(ctx_omnivlm, image_embed, &params, params.prompt);
 
-        llama_print_timings(ctx_omnivlm->ctx_llama);
+        llama_perf_context_print(ctx_omnivlm->ctx_llama);
         omnivlm_image_embed_free(image_embed);
         ctx_omnivlm->model = NULL;
         omnivlm_free(ctx_omnivlm);

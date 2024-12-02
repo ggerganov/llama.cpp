@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">LayoutTest</string>
+    <string name="user_message">User Message</string>
+</resources>

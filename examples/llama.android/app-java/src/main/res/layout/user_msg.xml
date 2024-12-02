@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="5dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_margin="5dp"
+        android:elevation="8dp"
+        app:cardBackgroundColor="@color/white"
+        app:shapeAppearanceOverlay="@style/CustomCornersUser">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:minWidth="60dp"
+            android:layout_height="wrap_content"
+            android:minHeight="35dp"
+            android:background="@color/white"
+            android:layout_gravity="end"
+            android:orientation="horizontal"
+            android:padding="5dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/idTVUser"
+                android:layout_width="wrap_content"
+                android:maxWidth="300dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginLeft="5dp"
+                android:layout_marginRight="5dp"
+                android:text="@string/user_message"
+                android:textSize="16sp"
+                android:textColor="@color/black" />
+
+            <ImageView
+                android:id="@+id/idIVUserImage"
+                android:layout_width="wrap_content"
+                android:layout_height="200dp"
+                android:visibility="gone"
+                android:adjustViewBounds="true"
+                android:scaleType="fitCenter"
+                android:maxWidth="250dp"
+                android:maxHeight="150dp" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+</LinearLayout>

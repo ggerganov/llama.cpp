@@ -15,22 +15,22 @@ CLI_ARGS_LLAMA_CLI_PERPLEXITY = [
     "export", "file", "frequency-penalty", "grammar", "grammar-file", "hellaswag",
     "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix",
     "interactive", "interactive-first", "keep", "logdir", "logit-bias", "lora", "lora-base",
-    "low-vram", "main-gpu", "memory-f32", "mirostat", "mirostat-ent", "mirostat-lr", "mlock",
+    "low-vram", "main-gpu", "mirostat", "mirostat-ent", "mirostat-lr", "mlock",
     "model", "multiline-input", "n-gpu-layers", "n-predict", "no-mmap", "no-mul-mat-q",
     "np-penalize-nl", "numa", "ppl-output-type", "ppl-stride", "presence-penalty", "prompt",
     "prompt-cache", "prompt-cache-all", "prompt-cache-ro", "repeat-last-n",
     "repeat-penalty", "reverse-prompt", "rope-freq-base", "rope-freq-scale", "rope-scale", "seed",
-    "simple-io", "tensor-split", "threads", "temp", "tfs", "top-k", "top-p", "typical",
+    "simple-io", "tensor-split", "threads", "temp", "top-k", "top-p", "typical",
     "verbose-prompt"
 ]
 
 CLI_ARGS_LLAMA_BENCH = [
-    "batch-size", "memory-f32", "low-vram", "model", "mul-mat-q", "n-gen", "n-gpu-layers",
+    "batch-size", "low-vram", "model", "mul-mat-q", "n-gen", "n-gpu-layers",
     "n-prompt", "output", "repetitions", "tensor-split", "threads", "verbose"
 ]
 
 CLI_ARGS_LLAMA_SERVER = [
-    "alias", "batch-size", "ctx-size", "embedding", "host", "memory-f32", "lora", "lora-base",
+    "alias", "batch-size", "ctx-size", "embedding", "host", "lora", "lora-base",
     "low-vram", "main-gpu", "mlock", "model", "n-gpu-layers", "n-probs", "no-mmap", "no-mul-mat-q",
     "numa", "path", "port", "rope-freq-base", "timeout", "rope-freq-scale", "tensor-split",
     "threads", "verbose"

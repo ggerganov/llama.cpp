@@ -1,0 +1,7 @@
+include CMakeLists.txt
+include LICENSE
+recursive-include src *
+recursive-include python *
+recursive-include single_include *
+recursive-include external *
+

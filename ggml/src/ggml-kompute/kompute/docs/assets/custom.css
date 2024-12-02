@@ -1,0 +1,57 @@
+
+@media (max-width: 1200px) {
+.md-header-nav__button {
+    color: #fff;
+    background-color: #ef5350 !important;
+    border-radius: 5px;
+}
+}
+
+.md-nav__title--site {
+    display: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color:white !important;
+}
+
+/* Container backgrounds */
+.md-container, .md-main, .md-nav, .md-nav__list {
+    background-color: #252632 !important;
+    color: #fff;
+}
+
+.md-header, .md-tabs {
+    background-color: #ad152c !important;
+}
+
+/* Code blocks */
+pre, code {
+    background-color: #181820 !important;
+    color: #fff !important;
+}
+
+/* All links */
+a {
+    color: #ff9292;
+}
+a:hover {
+    color: #fff;
+}
+
+/* Side Menu Links */
+.md-nav__item a {
+    color: #36D3D9;
+}
+.md-nav__item a:hover {
+    color: #0091ea;
+}
+.md-nav__item a[data-md-state="blur"] {
+    color: #1a7c80;
+}
+
+.md-source {
+	color: #fff;
+}
+
+

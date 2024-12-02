@@ -2,13 +2,14 @@
 #undef NDEBUG
 #endif
 
+#include "json-schema-to-grammar.h"
+
+#include "llama-grammar.h"
+
 #include <cassert>
 #include <fstream>
 #include <sstream>
 #include <regex>
-
-#include "json-schema-to-grammar.h"
-#include "grammar-parser.h"
 
 static std::string trim(const std::string & source) {
     std::string s(source);
@@ -40,7 +41,8 @@ struct TestCase {
     }
     void verify_expectation_parseable() const {
         try {
-            auto state = grammar_parser::parse(expected_grammar.c_str());
+            llama_grammar_parser state;
+            state.parse(expected_grammar.c_str());
             if (state.symbol_ids.find("root") == state.symbol_ids.end()) {
                 throw std::runtime_error("Grammar failed to parse:\n" + expected_grammar);
             }
@@ -694,7 +696,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "pattern": "^abc?d*efg+(hij)?kl$"
         })""",
         R"""(
-            root ::= "\"" "ab" "c"? "d"* "ef" "g"+ ("hij")? "kl" "\"" space
+            root ::= "\"" ("ab" "c"? "d"* "ef" "g"+ ("hij")? "kl") "\"" space
             space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
@@ -707,7 +709,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "pattern": "^\\[\\]\\{\\}\\(\\)\\|\\+\\*\\?$"
         })""",
         R"""(
-            root ::= "\"" "[]{}()|+*?" "\"" space
+            root ::= "\"" ("[]{}()|+*?") "\"" space
             space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
@@ -720,7 +722,20 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "pattern": "^\"$"
         })""",
         R"""(
-            root ::= "\"" "\"" "\"" space
+            root ::= "\"" ("\"") "\"" space
+            space ::= | " " | "\n" [ \t]{0,20}
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "regexp with top-level alternation",
+        R"""({
+            "type": "string",
+            "pattern": "^A|B|C|D$"
+        })""",
+        R"""(
+            root ::= "\"" ("A" | "B" | "C" | "D") "\"" space
             space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
@@ -734,7 +749,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             dot ::= [^\x0A\x0D]
-            root ::= "\"" ("(" root-1{1,3} ")")? root-1{3,3} "-" root-1{4,4} " " "a"{3,5} "nd" dot dot dot "\"" space
+            root ::= "\"" (("(" root-1{1,3} ")")? root-1{3,3} "-" root-1{4,4} " " "a"{3,5} "nd" dot dot dot) "\"" space
             root-1 ::= [0-9]
             space ::= | " " | "\n" [ \t]{0,20}
         )"""

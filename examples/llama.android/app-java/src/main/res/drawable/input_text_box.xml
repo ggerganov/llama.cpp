@@ -1,0 +1,10 @@
+<shape
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <solid android:color="@color/inputbox_background" />
+
+    <corners
+        android:radius="30dp" />
+
+</shape>

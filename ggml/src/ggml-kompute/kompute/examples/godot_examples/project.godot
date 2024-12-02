@@ -1,0 +1,29 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=4
+
+_global_script_classes=[ {
+"base": "Node2D",
+"class": "KomputeSummator",
+"language": "NativeScript",
+"path": "res://godot_resources/scripts/KomputeNativeClass.gdns"
+} ]
+_global_script_class_icons={
+"KomputeSummator": ""
+}
+
+[application]
+
+config/name="KomputeGame"
+run/main_scene="res://godot_resources/assets/DynamicExampleScene.tscn"
+config/icon="res://godot_resources/assets/icon.png"
+
+[rendering]
+
+environment/default_environment="res://godot_resources/assets/default_env.tres"

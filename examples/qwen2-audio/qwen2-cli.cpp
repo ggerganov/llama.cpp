@@ -1,4 +1,8 @@
 #include "qwen2.h"
+#include <iostream>
+
+using std::cout;
+using std::endl;
 
 int main(int argc, char **argv)
 {
@@ -11,7 +15,9 @@ int main(int argc, char **argv)
 
     omni_context *ctx_omni = omni_init_context(ctx_params);
 
-    omni_process_full(ctx_omni, ctx_params);
+    auto ret = omni_process_full(ctx_omni, ctx_params);
+    cout << "[OMNI_PROCESS_FULL OUTPUT:] ";
+    cout << ret << endl;
 
     omni_free(ctx_omni);
 

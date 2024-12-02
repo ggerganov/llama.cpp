@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.LayoutTest" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:textColor">@color/colorText</item>
+        <item name="android:windowBackground">@color/colorBackground</item>
+        <item name="colorError">@color/colorError</item>
+    </style>
+
+    <style name="Theme.LayoutTest" parent="Base.Theme.LayoutTest" />
+</resources>

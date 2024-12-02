@@ -1,4 +1,5 @@
 #include "omni.h"
+#include "arg.h"
 #include "audio-projector.h"
 #include "common-nexa.h"
 
@@ -536,13 +537,13 @@ omni_context_params omni_context_default_params()
 
 struct omni_params
 {
-    gpt_params gpt;
+    common_params gpt;
     whisper_params whisper;
 };
 
 bool omni_params_parse(int argc, char **argv, omni_params &params)
 {
-    if (!gpt_params_parse(argc, argv, params.gpt))
+    if (!common_params_parse(argc, argv, params.gpt, LLAMA_EXAMPLE_COMMON, nullptr))
     {
         return false;
     }
@@ -577,9 +578,9 @@ static omni_params get_omni_params_from_context_params(omni_context_params &para
     all_params.whisper.model = params.mmproj;
     all_params.whisper.fname_inp = {params.file};
 
-    if (all_params.gpt.n_threads <= 0)
+    if (all_params.gpt.cpuparams.n_threads <= 0)
     {
-        all_params.gpt.n_threads = std::thread::hardware_concurrency();
+        all_params.gpt.cpuparams.n_threads = std::thread::hardware_concurrency();
     }
     return all_params;
 }
@@ -594,7 +595,7 @@ static bool eval_tokens(struct llama_context *ctx_llama, std::vector<llama_token
         {
             n_eval = n_batch;
         }
-        if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval, *n_past, 0)))
+        if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval)))
         {
             LLAMA_LOG_ERROR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
@@ -614,21 +615,21 @@ static bool eval_id(struct llama_context *ctx_llama, int id, int *n_past)
 static bool eval_string(struct llama_context *ctx_llama, const char *str, int n_batch, int *n_past, bool add_bos)
 {
     std::string str2 = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
+    std::vector<llama_token> embd_inp = ::common_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
 
-static const char * sample(struct llama_sampling_context * ctx_sampling,
+static const char * sample(struct common_sampler * ctx_sampling,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = llama_sampling_sample(ctx_sampling, ctx_llama, NULL);
-    llama_sampling_accept(ctx_sampling, ctx_llama, id, true);
+    const llama_token id = common_sampler_sample(ctx_sampling, ctx_llama, -1);
+    common_sampler_accept(ctx_sampling, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_piece(ctx_llama, id);
+        ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past);
     return ret.c_str();
@@ -656,7 +657,7 @@ struct omni_context *omni_init_context(omni_context_params &params)
     llama_backend_init();
     llama_numa_init(all_params.gpt.numa);
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(all_params.gpt);
+    llama_model_params model_params = common_model_params_to_llama(all_params.gpt);
 
     llama_model *model = llama_load_model_from_file(all_params.gpt.model.c_str(), model_params);
     if (model == NULL)
@@ -665,7 +666,7 @@ struct omni_context *omni_init_context(omni_context_params &params)
         return NULL;
     }
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(all_params.gpt);
+    llama_context_params ctx_params = common_context_params_to_llama(all_params.gpt);
     ctx_params.n_ctx = all_params.gpt.n_ctx < 2048 ? 2048 : all_params.gpt.n_ctx; // we need a longer context size to process image embeddings
 
     llama_context *ctx_llama = llama_new_context_with_model(model, ctx_params);
@@ -749,10 +750,7 @@ static bool omni_eval_audio_embed(llama_context *ctx_llama, ggml_tensor *audio_e
             /* pos */       nullptr,
             /* n_seq_id */  nullptr,
             /* seq_id */    nullptr,
-            /* logits */    nullptr,
-            /* all_pos_0 */ *n_past,
-            /* all_pos_1 */  1,
-            /* all_seq_id */ 0,
+            /* logits */    nullptr
         };
         if (llama_decode(ctx_llama, batch))
         {
@@ -829,7 +827,7 @@ const char* omni_process_prompt(struct omni_context *ctx_omni, ggml_tensor *audi
 
     LOG("\n");
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.gpt.sparams);
+    struct common_sampler * ctx_sampling = common_sampler_init(ctx_omni->model, params.gpt.sparams);
     if (!ctx_sampling) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -855,7 +853,7 @@ const char* omni_process_prompt(struct omni_context *ctx_omni, ggml_tensor *audi
         response += tmp;
     }
 
-    llama_sampling_free(ctx_sampling);
+    common_sampler_free(ctx_sampling);
     printf("\n");
     if(internal_chars != nullptr) { free(internal_chars); }
     internal_chars = malloc(sizeof(char)*(response.size()+1));

@@ -44,7 +44,6 @@ option(BUILD_SHARED_LIBS "build shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
 
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-    add_compile_definitions(LLAMA_DISABLE_CXXABI) # Nexa AI : Disable cxxabi.h dependency on Windows
 endif()
 
 #
@@ -62,6 +61,9 @@ option(LLAMA_FATAL_WARNINGS "llama: enable -Werror flag" OFF)
 option(LLAMA_SANITIZE_THREAD    "llama: enable thread sanitizer"    OFF)
 option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
 option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
+
+# utils
+option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
@@ -83,11 +85,15 @@ set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
 
 # change the default for these ggml options
 if (NOT DEFINED GGML_LLAMAFILE)
-    set(GGML_LLAMAFILE ON)
+    set(GGML_LLAMAFILE_DEFAULT ON)
 endif()
 
-if (NOT DEFINED GGML_CUDA_USE_GRAPHS)
-    set(GGML_CUDA_USE_GRAPHS ON)
+if (NOT DEFINED GGML_AMX)
+    set(GGML_AMX ON)
+endif()
+
+if (NOT DEFINED GGML_CUDA_GRAPHS)
+    set(GGML_CUDA_GRAPHS_DEFAULT ON)
 endif()
 
 # transition helpers
@@ -113,9 +119,9 @@ llama_option_depr(WARNING     LLAMA_CANN                GGML_CANN)
 # build the library
 #
 
-if (NOT TARGET ggml_llama)
-    add_subdirectory(ggml_llama)
-    # ... otherwise assume ggml_llama is added by a parent CMakeLists.txt
+if (NOT TARGET ggml)
+    add_subdirectory(ggml)
+    # ... otherwise assume ggml is added by a parent CMakeLists.txt
 endif()
 add_subdirectory(src)
 
@@ -134,17 +140,22 @@ set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location o
 set(LLAMA_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
 set(LLAMA_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
 
-
 # At the moment some compile definitions are placed within the ggml/src
 # directory but not exported on the `ggml` target. This could be improved by
 # determining _precisely_ which defines are necessary for the llama-config
 # package.
 #
-get_target_property(GGML_DIRECTORY ggml_llama SOURCE_DIR)
+set(GGML_TRANSIENT_DEFINES)
+get_target_property(GGML_DIRECTORY ggml SOURCE_DIR)
 get_directory_property(GGML_DIR_DEFINES DIRECTORY ${GGML_DIRECTORY} COMPILE_DEFINITIONS)
-get_target_property(GGML_TARGET_DEFINES ggml_llama COMPILE_DEFINITIONS)
-set(GGML_TRANSIENT_DEFINES ${GGML_TARGET_DEFINES} ${GGML_DIR_DEFINES})
-get_target_property(GGML_LINK_LIBRARIES ggml_llama LINK_LIBRARIES)
+if (GGML_DIR_DEFINES)
+    list(APPEND GGML_TRANSIENT_DEFINES ${GGML_DIR_DEFINES})
+endif()
+get_target_property(GGML_TARGET_DEFINES ggml COMPILE_DEFINITIONS)
+if (GGML_TARGET_DEFINES)
+    list(APPEND GGML_TRANSIENT_DEFINES ${GGML_TARGET_DEFINES})
+endif()
+get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
 
 set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h)
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
@@ -186,17 +197,19 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
         DESTINATION lib/pkgconfig)
 
 #
-# programs, examples and tests
+# utils, programs, examples and tests
 #
 
-add_subdirectory(common)
+if (LLAMA_BUILD_COMMON)
+    add_subdirectory(common)
+endif()
 
-# if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
-#     include(CTest)
-#     add_subdirectory(tests)
-# endif ()
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+    include(CTest)
+    add_subdirectory(tests)
+endif()
 
-if (LLAMA_BUILD_EXAMPLES)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
-    # add_subdirectory(pocs)
+    add_subdirectory(pocs)
 endif()

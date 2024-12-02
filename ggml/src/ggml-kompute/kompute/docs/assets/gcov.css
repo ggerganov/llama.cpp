@@ -1,0 +1,503 @@
+/* All views: initial background and text color */
+body
+{
+  color: #fff;
+  background-color: #252632;
+}
+
+a {
+    color: #65f1ff;
+}
+a:hover {
+    color: #0091ea;
+}
+
+/* All views: main title format */
+td.title
+{
+  text-align: center;
+  padding-bottom: 10px;
+  font-family: sans-serif;
+  font-size: 20pt;
+  font-style: italic;
+  font-weight: bold;
+}
+
+/* All views: header item format */
+td.headerItem
+{
+  text-align: right;
+  padding-right: 6px;
+  font-family: sans-serif;
+  font-weight: bold;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+/* All views: header item value format */
+td.headerValue
+{
+  text-align: left;
+  font-family: sans-serif;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+/* All views: header item coverage table heading */
+td.headerCovTableHead
+{
+  text-align: center;
+  padding-right: 6px;
+  padding-left: 6px;
+  padding-bottom: 0px;
+  font-family: sans-serif;
+  font-size: 80%;
+  white-space: nowrap;
+}
+
+/* All views: header item coverage table entry */
+td.headerCovTableEntry
+{
+  text-align: right;
+  font-family: sans-serif;
+  font-weight: bold;
+  white-space: nowrap;
+  padding-left: 12px;
+  padding-right: 4px;
+  background-color: #494747;
+}
+
+/* All views: header item coverage table entry for high coverage rate */
+td.headerCovTableEntryHi
+{
+  text-align: right;
+  font-family: sans-serif;
+  font-weight: bold;
+  white-space: nowrap;
+  padding-left: 12px;
+  padding-right: 4px;
+  background-color: #00785A;
+}
+
+/* All views: header item coverage table entry for medium coverage rate */
+td.headerCovTableEntryMed
+{
+  text-align: right;
+  color: #000000;
+  font-family: sans-serif;
+  font-weight: bold;
+  white-space: nowrap;
+  padding-left: 12px;
+  padding-right: 4px;
+  background-color: #AA6B09;
+}
+
+/* All views: header item coverage table entry for ow coverage rate */
+td.headerCovTableEntryLo
+{
+  text-align: right;
+  color: #000000;
+  font-family: sans-serif;
+  font-weight: bold;
+  white-space: nowrap;
+  padding-left: 12px;
+  padding-right: 4px;
+  background-color: #ad152c;
+}
+
+/* All views: header legend value for legend entry */
+td.headerValueLeg
+{
+  text-align: left;
+  color: #000000;
+  font-family: sans-serif;
+  font-size: 80%;
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+/* All views: color of horizontal ruler */
+td.ruler
+{
+  background-color: #6688D4;
+}
+
+/* All views: version string format */
+td.versionInfo
+{
+  text-align: center;
+  padding-top: 2px;
+  font-family: sans-serif;
+  font-style: italic;
+}
+
+/* Directory view/File view (all)/Test case descriptions:
+   table headline format */
+td.tableHead
+{
+  text-align: center;
+  color: #FFFFFF;
+  background-color: #000;
+  font-family: sans-serif;
+  font-size: 120%;
+  font-weight: bold;
+  white-space: nowrap;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+span.tableHeadSort
+{
+  padding-right: 4px;
+}
+
+/* Directory view/File view (all): filename entry format */
+td
+{
+  text-align: left;
+  padding-left: 10px;
+  padding-right: 20px; 
+  background-color: #181820;
+  font-family: monospace;
+}
+
+/* Directory view/File view (all): bar-graph entry format*/
+td.coverBar
+{
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* Directory view/File view (all): bar-graph outline color */
+td.coverBarOutline
+{
+  background-color: #000000;
+}
+
+/* Directory view/File view (all): percentage entry for files with
+   high coverage rate */
+td.coverPerHi
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #00785A;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+/* Directory view/File view (all): line count entry for files with
+   high coverage rate */
+td.coverNumHi
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #00785A;
+  white-space: nowrap;
+  font-family: sans-serif;
+}
+
+/* Directory view/File view (all): percentage entry for files with
+   medium coverage rate */
+td.coverPerMed
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #AA6B09;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+/* Directory view/File view (all): line count entry for files with
+   medium coverage rate */
+td.coverNumMed
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #AA6B09;
+  white-space: nowrap;
+  font-family: sans-serif;
+}
+
+/* Directory view/File view (all): percentage entry for files with
+   low coverage rate */
+td.coverPerLo
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #ad152c;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+/* Directory view/File view (all): line count entry for files with
+   low coverage rate */
+td.coverNumLo
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #ad152c;
+  white-space: nowrap;
+  font-family: sans-serif;
+}
+
+/* File view (all): "show/hide details" link format */
+a.detail:link
+{
+  color: #B8D0FF;
+  font-size:80%;
+}
+
+/* File view (all): "show/hide details" link - visited format */
+a.detail:visited
+{
+  color: #B8D0FF;
+  font-size:80%;
+}
+
+/* File view (all): "show/hide details" link - activated format */
+a.detail:active
+{
+  color: #FFFFFF;
+  font-size:80%;
+}
+
+/* File view (detail): test name entry */
+td.testName
+{
+  text-align: right;
+  padding-right: 10px;
+  background-color: #DAE7FE;
+  font-family: sans-serif;
+}
+
+/* File view (detail): test percentage entry */
+td.testPer
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px; 
+  background-color: #DAE7FE;
+  font-family: sans-serif;
+}
+
+/* File view (detail): test lines count entry */
+td.testNum
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px; 
+  background-color: #DAE7FE;
+  font-family: sans-serif;
+}
+
+/* Test case descriptions: test name format*/
+dt
+{
+  font-family: sans-serif;
+  font-weight: bold;
+}
+
+/* Test case descriptions: description table body */
+td.testDescription
+{
+  padding-top: 10px;
+  padding-left: 30px;
+  padding-bottom: 10px;
+  padding-right: 30px;
+  background-color: #DAE7FE;
+}
+
+/* Source code view: function entry */
+td.coverFn
+{
+  text-align: left;
+  padding-left: 10px;
+  padding-right: 20px; 
+  color: #284FA8;
+  background-color: #DAE7FE;
+  font-family: monospace;
+}
+
+/* Source code view: function entry zero count*/
+td.coverFnLo
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #ad152c;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+/* Source code view: function entry nonzero count*/
+td.coverFnHi
+{
+  text-align: right;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #DAE7FE;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+/* Source code view: source code format */
+pre.source
+{
+  font-family: monospace;
+  white-space: pre;
+  margin-top: 2px;
+  color: white;
+}
+
+/* Source code view: line number format */
+span.lineNum
+{
+  background-color: #000;
+}
+
+/* Source code view: format for lines which were executed */
+td.lineCov,
+span.lineCov
+{
+  background-color: #2F364D;
+}
+
+/* Source code view: format for Cov legend */
+span.coverLegendCov
+{
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-bottom: 2px;
+  background-color: #CAD7FE;
+}
+
+/* Source code view: format for lines which were not executed */
+td.lineNoCov,
+span.lineNoCov
+{
+  background-color: #ad152c;
+}
+
+/* Source code view: format for NoCov legend */
+span.coverLegendNoCov
+{
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-bottom: 2px;
+  background-color: #FF6230;
+}
+
+/* Source code view (function table): standard link - visited format */
+td.lineNoCov > a:visited,
+td.lineCov > a:visited
+{  
+  color: black;
+  text-decoration: underline;
+}  
+
+/* Source code view: format for lines which were executed only in a
+   previous version */
+span.lineDiffCov
+{
+  background-color: #B5F7AF;
+}
+
+/* Source code view: format for branches which were executed
+ * and taken */
+span.branchCov
+{
+  background-color: #CAD7FE;
+}
+
+/* Source code view: format for branches which were executed
+ * but not taken */
+span.branchNoCov
+{
+  background-color: #FF6230;
+}
+
+/* Source code view: format for branches which were not executed */
+span.branchNoExec
+{
+  background-color: #FF6230;
+}
+
+/* Source code view: format for the source code heading line */
+pre.sourceHeading
+{
+  white-space: pre;
+  font-family: monospace;
+  font-weight: bold;
+  margin: 0px;
+}
+
+/* All views: header legend value for low rate */
+td.headerValueLegL
+{
+  font-family: sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 4px;
+  padding-right: 2px;
+  background-color: #ad152c;
+  font-size: 80%;
+}
+
+/* All views: header legend value for med rate */
+td.headerValueLegM
+{
+  font-family: sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 2px;
+  padding-right: 2px;
+  background-color: #AA6B09;
+  font-size: 80%;
+}
+
+/* All views: header legend value for hi rate */
+td.headerValueLegH
+{
+  font-family: sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 2px;
+  padding-right: 4px;
+  background-color: #00785A;
+  font-size: 80%;
+}
+
+/* All views except source code view: legend format for low coverage */
+span.coverLegendCovLo
+{
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 2px;
+  background-color: #ad152c;
+}
+
+/* All views except source code view: legend format for med coverage */
+span.coverLegendCovMed
+{
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 2px;
+  background-color: #AA6B09;
+}
+
+/* All views except source code view: legend format for hi coverage */
+span.coverLegendCovHi
+{
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 2px;
+  background-color: #00785A;
+}
+
+

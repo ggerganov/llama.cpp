@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Secure domain config for api.nexaforai.com -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.nexaforai.com</domain>
+        <!-- Pinning certificates or other configurations can be added here for enhanced security -->
+    </domain-config>
+</network-security-config>

@@ -195,7 +195,7 @@ static bool clip_omnivlm_handle_patches(clip_ctx * ctx_clip, std::vector<float *
     // ggml_tensor_printf(flatten,"flatten",__LINE__,false,false);
     ggml_build_forward_expand(gf, flatten);
     ggml_graph_compute_with_ctx(model.ctx, gf, 1);
-    struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor* result = ggml_graph_node(gf, -1);
 
     memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
     // append without newline tokens (default behavior in llava_arch when not using unpad ):
@@ -247,7 +247,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     img_res_v.size = 0;
     img_res_v.data = nullptr;
     if (!clip_image_preprocess(ctx_clip, img, &img_res_v)) {
-        LOG_TEE("%s: unable to preprocess image\n", __func__);
+        LOG_ERR("%s: unable to preprocess image\n", __func__);
         delete[] img_res_v.data;
         return false;
     }
@@ -274,7 +274,7 @@ bool omnivlm_validate_embed_size(const llama_context * ctx_llama, const clip_ctx
     int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
     auto n_image_embd = clip_n_mmproj_embd(ctx_clip);
     if (n_image_embd != n_llama_embd) {
-        LOG_TEE("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
+        LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
         return false;
     }
     return true;
@@ -288,13 +288,13 @@ bool omnivlm_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, 
 
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*num_max_patches); // TODO: base on gridsize/llava model
     if (!image_embd) {
-        LOG_TEE("Unable to allocate memory for image embeddings\n");
+        LOG_ERR("Unable to allocate memory for image embeddings\n");
         return false;
     }
 
     int n_img_pos;
     if (!encode_image_with_clip(ctx_clip, n_threads, img, image_embd, &n_img_pos)) {
-        LOG_TEE("%s: cannot encode image, aborting\n", __func__);
+        LOG_ERR("%s: cannot encode image, aborting\n", __func__);
         free(image_embd);
         return false;
     }
@@ -346,9 +346,9 @@ bool omnivlm_eval_image_embed(llama_context * ctx_llama, const struct omni_image
             n_eval = n_batch;
         }
         float * embd = image_embed->embed+i*n_embd;
-        llama_batch batch = {int32_t(n_eval), nullptr, embd, nullptr, nullptr, nullptr, nullptr, *n_past, 1, 0, };
-        if (llama_decode(ctx_llama, batch)) {
-            LOG_TEE("%s : failed to eval\n", __func__);
+        omnivlm_embd_batch omnivlm_batch = omnivlm_embd_batch(embd, n_eval, *n_past, 0);
+        if (llama_decode(ctx_llama, omnivlm_batch.batch)) {
+            LOG_ERR("%s : failed to eval\n", __func__);
             return false;
         }
         *n_past += n_eval;
@@ -360,7 +360,7 @@ struct omni_image_embed * omnivlm_image_embed_make_with_bytes(struct clip_ctx * 
     clip_image_u8 * img = clip_image_u8_init();
     if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
         clip_image_u8_free(img);
-        LOG_TEE("%s: can't load image from bytes, is it a valid image?", __func__);
+        LOG_ERR("%s: can't load image from bytes, is it a valid image?", __func__);
         return NULL;
     }
 
@@ -369,7 +369,7 @@ struct omni_image_embed * omnivlm_image_embed_make_with_bytes(struct clip_ctx * 
     bool image_embed_result = omnivlm_image_embed_make_with_clip_img(ctx_clip, n_threads, img, &image_embed, &n_image_pos);
     if (!image_embed_result) {
         clip_image_u8_free(img);
-        LOG_TEE("%s: couldn't embed the image\n", __func__);
+        LOG_ERR("%s: couldn't embed the image\n", __func__);
         return NULL;
     }
 
@@ -383,7 +383,7 @@ struct omni_image_embed * omnivlm_image_embed_make_with_bytes(struct clip_ctx * 
 static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long *sizeOut) {
     auto* file = fopen(path, "rb");
     if (file == NULL) {
-        LOG_TEE("%s: can't read file %s\n", __func__, path);
+        LOG_ERR("%s: can't read file %s\n", __func__, path);
         return false;
     }
 
@@ -393,7 +393,7 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
 
     auto buffer = (unsigned char *)malloc(fileSize); // Allocate memory to hold the file data
     if (buffer == NULL) {
-        LOG_TEE("%s: failed to alloc %ld bytes for file %s\n", __func__, fileSize, path);
+        LOG_ERR("%s: failed to alloc %ld bytes for file %s\n", __func__, fileSize, path);
         perror("Memory allocation error");
         fclose(file);
         return false;
@@ -418,7 +418,7 @@ struct omni_image_embed * omnivlm_image_embed_make_with_filename(struct clip_ctx
     long image_bytes_length;
     auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
     if (!loaded) {
-        LOG_TEE("%s: failed to load %s\n", __func__, image_path);
+        LOG_ERR("%s: failed to load %s\n", __func__, image_path);
         return NULL;
     }
 

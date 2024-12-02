@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://godot_resources/scripts/CustomModuleExampleScene.gd" type="Script" id=1]
+
+[node name="Parent" type="Node2D"]
+script = ExtResource( 1 )
+
+[node name="CustomKomputeNode" type="KomputeSummatorNode" parent="."]
