@@ -9,7 +9,7 @@ cd llama.cpp
 
 The following sections describe how to build with different backends and options.
 
-## CPU-only Build
+## CPU Build
 
 Build llama.cpp using `CMake`:
 
@@ -20,8 +20,8 @@ cmake --build build --config Release
 
 **Notes**:
 
-- For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
-- For faster repeated compilation, install [ccache](https://ccache.dev/).
+- For faster compilation, add the `-j` argument to run multiple jobs in parallel, or use a generator that does this automatically such as Ninja. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+- For faster repeated compilation, install [ccache](https://ccache.dev/)
 - For debug builds, there are two cases:
 
     1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
@@ -37,6 +37,9 @@ cmake --build build --config Release
     cmake -B build -G "Xcode"
     cmake --build build --config Debug
     ```
+
+    For more details and a list of supported generators, see the [CMake documentation](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html).
+
 - Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
     - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
     - Tab Workload: Desktop-development with C++
@@ -47,19 +50,18 @@ cmake --build build --config Release
     cmake --preset arm64-windows-llvm-release -D GGML_OPENMP=OFF
     cmake --build build-arm64-windows-llvm-release
     ```
-    Note: Building for arm64 could also be done just with MSVC (with the build-arm64-windows-MSVC preset, or the standard CMake build instructions). But MSVC does not support inline ARM assembly-code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
+    Building for arm64 can also be done with the MSVC compiler with the build-arm64-windows-MSVC preset, or the standard CMake build instructions. However, note that the MSVC compiler does not support inline ARM assembly code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
 
 ## Metal Build
 
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
 To disable the Metal build at compile time use the `-DGGML_METAL=OFF` cmake option.
 
-When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers|-ngl 0` command-line
-argument.
+When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers 0` command-line argument.
 
 ## BLAS Build
 
-Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS. There are currently several different BLAS implementations available for build and use:
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Using BLAS doesn't affect the generation performance. There are currently several different BLAS implementations available for build and use:
 
 ### Accelerate Framework:
 
@@ -80,7 +82,7 @@ This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS i
 
 Check [BLIS.md](./backend/BLIS.md) for more information.
 
-### SYCL
+## SYCL
 
 SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
 
@@ -88,7 +90,7 @@ llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series
 
 For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
 
-### Intel oneMKL
+## Intel oneMKL
 
 Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
 
@@ -105,11 +107,9 @@ Building through oneAPI compilers will make avx_vnni instruction set available f
 
 Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
 
-### CUDA
+## CUDA
 
-This provides GPU acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
-
-For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](https://www.jetson-ai-lab.com/tutorial_text-generation.html). If you are using an old model(nano/TX2), need some additional operations before compiling.
+This provides GPU acceleration using an NVIDIA GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
 
 - Using `CMake`:
 
@@ -132,7 +132,7 @@ The following compilation options are also available to tweak performance:
 | GGML_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
 | GGML_CUDA_FA_ALL_QUANTS       | Boolean                | false   | Compile support for all KV cache quantization type (combinations) for the FlashAttention CUDA kernels. More fine-grained control over KV cache size but compilation takes much longer.                                                                                                  |
 
-### MUSA
+## MUSA
 
 This provides GPU acceleration using the MUSA cores of your Moore Threads MTT GPU. Make sure to have the MUSA SDK installed. You can download it from here: [MUSA SDK](https://developer.mthreads.com/sdk/download/musa).
 
@@ -149,7 +149,7 @@ The environment variable `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` can be used to enab
 
 Most of the compilation options available for CUDA should also be available for MUSA, though they haven't been thoroughly tested yet.
 
-### HIP
+## HIP
 
 This provides GPU acceleration on HIP-supported AMD GPUs.
 Make sure to have ROCm installed.
@@ -192,11 +192,11 @@ You can download it from your Linux distro's package manager or from here: [ROCm
 The environment variable [`HIP_VISIBLE_DEVICES`](https://rocm.docs.amd.com/en/latest/understand/gpu_isolation.html#hip-visible-devices) can be used to specify which GPU(s) will be used.
 If your GPU is not officially supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 (e.g. gfx1030, gfx1031, or gfx1035) or 11.0.0 on RDNA3.
 
-### Vulkan
+## Vulkan
 
 **Windows**
 
-#### w64devkit
+### w64devkit
 
 Download and extract [`w64devkit`](https://github.com/skeeto/w64devkit/releases).
 
@@ -223,7 +223,7 @@ cmake -B build -DGGML_VULKAN=ON
 cmake --build build --config Release
 ```
 
-#### Git Bash MINGW64
+### Git Bash MINGW64
 
 Download and install [`Git-SCM`](https://git-scm.com/downloads/win) with the default settings
 
@@ -246,7 +246,7 @@ Now you can load the model in conversation mode using `Vulkan`
 build/bin/Release/llama-cli -m "[PATH TO MODEL]" -ngl 100 -c 16384 -t 10 -n -2 -cnv
 ```
 
-#### MSYS2
+### MSYS2
 Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
 ```sh
 pacman -S git \
@@ -305,7 +305,7 @@ cmake --build build --config Release
 # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
 ```
 
-### CANN
+## CANN
 This provides NPU acceleration using the AI cores of your Ascend NPU. And [CANN](https://www.hiascend.com/en/software/cann) is a hierarchical APIs to help you to quickly build AI applications and service based on Ascend NPU.
 
 For more information about Ascend NPU in [Ascend Community](https://www.hiascend.com/en/).
@@ -332,6 +332,6 @@ llama_new_context_with_model:       CANN compute buffer size =  1260.81 MiB
 
 For detailed info, such as model/device supports, CANN install, please refer to [llama.cpp for CANN](./backend/CANN.md).
 
-### Android
+## Android
 
 To read documentation for how to build on Android, [click here](./android.md)
