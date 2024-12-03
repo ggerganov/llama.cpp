@@ -1974,6 +1974,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         bool fp16_compute = false;
         bool maintenance4_support = false;
         bool sm_builtins = false;
+        bool amd_shader_core_properties2 = false;
         bool pipeline_robustness = false;
         bool coopmat2_support = false;
         device->coopmat_support = false;
@@ -1988,6 +1989,8 @@ static vk_device ggml_vk_get_device(size_t idx) {
                 fp16_compute = true;
             } else if (strcmp("VK_NV_shader_sm_builtins", properties.extensionName) == 0) {
                 sm_builtins = true;
+            } else if (strcmp("VK_AMD_shader_core_properties2", properties.extensionName) == 0) {
+                amd_shader_core_properties2 = true;
             } else if (strcmp("VK_EXT_pipeline_robustness", properties.extensionName) == 0) {
                 pipeline_robustness = true;
             } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0) {
@@ -2006,6 +2009,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         vk::PhysicalDeviceMaintenance4Properties props4;
         vk::PhysicalDeviceSubgroupProperties subgroup_props;
         vk::PhysicalDeviceShaderSMBuiltinsPropertiesNV sm_props;
+        vk::PhysicalDeviceShaderCoreProperties2AMD amd_shader_core_properties2_props;
         props2.pNext = &props3;
         props3.pNext = &subgroup_props;
 
@@ -2018,6 +2022,10 @@ static vk_device ggml_vk_get_device(size_t idx) {
         if (sm_builtins) {
             last_struct->pNext = (VkBaseOutStructure *)&sm_props;
             last_struct = (VkBaseOutStructure *)&sm_props;
+        }
+        if (amd_shader_core_properties2) {
+            last_struct->pNext = (VkBaseOutStructure *)&amd_shader_core_properties2_props;
+            last_struct = (VkBaseOutStructure *)&amd_shader_core_properties2_props;
         }
 
 #if defined(VK_NV_cooperative_matrix2)
@@ -2046,6 +2054,8 @@ static vk_device ggml_vk_get_device(size_t idx) {
         device->uma = device->properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
         if (sm_builtins) {
             device->shader_core_count = sm_props.shaderSMCount;
+        } else if (amd_shader_core_properties2) {
+            device->shader_core_count = amd_shader_core_properties2_props.activeComputeUnitCount;
         } else {
             device->shader_core_count = 0;
         }
@@ -2314,6 +2324,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         // Shaders
         // Disable matmul tile sizes early if performance low or not supported
         switch (device->vendor_id) {
+#ifndef GGML_VULKAN_RUN_TESTS
         case VK_VENDOR_ID_AMD:
         case VK_VENDOR_ID_INTEL:
             device->mul_mat_l = false;
@@ -2331,6 +2342,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
             device->mul_mat_id_m = true;
             device->mul_mat_id_s = false;
             break;
+#endif
         default:
             device->mul_mat_l = true;
             device->mul_mat_m = true;
