@@ -26,17 +26,17 @@ cmake --build build --config Release
 
     1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
-    ```bash
-    cmake -B build -DCMAKE_BUILD_TYPE=Debug
-    cmake --build build
-    ```
+       ```bash
+       cmake -B build -DCMAKE_BUILD_TYPE=Debug
+       cmake --build build
+       ```
 
     2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
-    ```bash
-    cmake -B build -G "Xcode"
-    cmake --build build --config Debug
-    ```
+       ```bash
+       cmake -B build -G "Xcode"
+       cmake --build build --config Debug
+       ```
 
     For more details and a list of supported generators, see the [CMake documentation](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html).
 
