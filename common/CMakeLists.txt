@@ -2,6 +2,8 @@
 
 find_package(Threads REQUIRED)
 
+llama_add_compile_flags()
+
 # Build info header
 #
 
@@ -51,21 +53,23 @@ endif()
 set(TARGET common)
 
 add_library(${TARGET} STATIC
+    arg.cpp
+    arg.h
     base64.hpp
-    common.h
     common.cpp
-    sampling.h
-    sampling.cpp
-    console.h
+    common.h
     console.cpp
-    grammar-parser.h
-    grammar-parser.cpp
-    json.hpp
+    console.h
     json-schema-to-grammar.cpp
-    train.h
-    train.cpp
-    ngram-cache.h
+    json.hpp
+    log.cpp
+    log.h
     ngram-cache.cpp
+    ngram-cache.h
+    sampling.cpp
+    sampling.h
+    speculative.cpp
+    speculative.h
     )
 
 if (BUILD_SHARED_LIBS)
@@ -84,5 +88,5 @@ if (LLAMA_CURL)
 endif ()
 
 target_include_directories(${TARGET} PUBLIC .)
-target_compile_features   (${TARGET} PUBLIC cxx_std_11)
+target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
