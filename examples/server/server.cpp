@@ -2325,7 +2325,7 @@ struct server_context {
                 llama_token id = slot.sampled;
 
                 struct common_speculative_params params_spec;
-                params_spec.n_draft   = slot.params.speculative.n_max;
+                params_spec.n_draft   = std::min(slot.params.speculative.n_max, slot.n_ctx - slot.n_past - 1);
                 params_spec.n_reuse   = llama_n_ctx(slot.ctx_dft) - slot.params.speculative.n_max;
                 params_spec.p_min     = slot.params.speculative.p_min;
 
