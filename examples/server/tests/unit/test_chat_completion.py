@@ -127,3 +127,39 @@ def test_completion_with_response_format(response_format: dict, n_predicted: int
         assert res.status_code != 200
         assert "error" in res.body
 
+
+@pytest.mark.parametrize("messages", [
+    None,
+    "string",
+    [123],
+    [{}],
+    [{"role": 123}],
+    [{"role": "system", "content": 123}],
+    # [{"content": "hello"}], # TODO: should not be a valid case
+    [{"role": "system", "content": "test"}, {}],
+])
+def test_invalid_chat_completion_req(messages):
+    global server
+    server.start()
+    res = server.make_request("POST", "/chat/completions", data={
+        "messages": messages,
+    })
+    assert res.status_code == 400 or res.status_code == 500
+    assert "error" in res.body
+
+
+def test_chat_completion_with_timings_per_token():
+    global server
+    server.start()
+    res = server.make_stream_request("POST", "/chat/completions", data={
+        "max_tokens": 10,
+        "messages": [{"role": "user", "content": "test"}],
+        "stream": True,
+        "timings_per_token": True,
+    })
+    for data in res:
+        assert "timings" in data
+        assert "prompt_per_second" in data["timings"]
+        assert "predicted_per_second" in data["timings"]
+        assert "predicted_n" in data["timings"]
+        assert data["timings"]["predicted_n"] <= 10

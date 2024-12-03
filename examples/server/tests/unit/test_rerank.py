@@ -36,3 +36,20 @@ def test_rerank():
     assert most_relevant["relevance_score"] > least_relevant["relevance_score"]
     assert most_relevant["index"] == 2
     assert least_relevant["index"] == 3
+
+
+@pytest.mark.parametrize("documents", [
+    [],
+    None,
+    123,
+    [1, 2, 3],
+])
+def test_invalid_rerank_req(documents):
+    global server
+    server.start()
+    res = server.make_request("POST", "/rerank", data={
+        "query": "Machine learning is",
+        "documents": documents,
+    })
+    assert res.status_code == 400
+    assert "error" in res.body

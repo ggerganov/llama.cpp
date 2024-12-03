@@ -650,6 +650,10 @@ static json format_final_response_oaicompat(const json & request, const json & r
         res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
     }
 
+    if (result.contains("timings")) {
+        res.push_back({"timings", json_value(result, "timings", json::object())});
+    }
+
     return res;
 }
 
@@ -740,6 +744,11 @@ static std::vector<json> format_partial_response_oaicompat(const json & result, 
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
+
+    if (result.contains("timings")) {
+        ret.push_back({"timings", json_value(result, "timings", json::object())});
+    }
+
     if (!finish_reason.empty()) {
         int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
         int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);

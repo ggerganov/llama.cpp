@@ -1,3 +1,7 @@
+ifndef LLAMA_MAKEFILE
+$(error The Makefile build is deprecated. Use the CMake build instead. For more details, see https://github.com/ggerganov/llama.cpp/blob/master/docs/build.md)
+endif
+
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	libllava.a \
@@ -251,11 +255,11 @@ endif
 # Compile flags
 #
 
-# keep standard at C11 and C++11
+# keep standard at C11 and C++17
 MK_CPPFLAGS  = -Iggml/include -Iggml/src -Iinclude -Isrc -Icommon -DGGML_USE_CPU
 MK_CFLAGS    = -std=c11   -fPIC
-MK_CXXFLAGS  = -std=c++11 -fPIC
-MK_NVCCFLAGS = -std=c++11
+MK_CXXFLAGS  = -std=c++17 -fPIC
+MK_NVCCFLAGS = -std=c++17
 
 ifdef LLAMA_NO_CCACHE
 GGML_NO_CCACHE := 1
@@ -575,8 +579,11 @@ endif
 
 ifndef GGML_NO_AMX
 	MK_CPPFLAGS += -DGGML_USE_AMX
-	OBJ_GGML_EXT += ggml/src/ggml-amx/ggml-amx.o ggml/src/ggml-amx/mmq.o
+	OBJ_GGML_EXT += ggml/src/ggml-cpu/amx/amx.o ggml/src/ggml-cpu/amx/mmq.o
 endif
+
+# only necessary for the CPU backend files
+MK_CPPFLAGS += -Iggml/src/ggml-cpu
 
 ifdef GGML_RPC
 	MK_CPPFLAGS  += -DGGML_USE_RPC

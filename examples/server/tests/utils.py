@@ -46,6 +46,7 @@ class ServerProcess:
     model_alias: str | None = None
     model_url: str | None = None
     model_file: str | None = None
+    model_draft: str | None = None
     n_threads: int | None = None
     n_gpu_layer: int | None = None
     n_batch: int | None = None
@@ -68,6 +69,8 @@ class ServerProcess:
     response_format: str | None = None
     lora_files: List[str] | None = None
     disable_ctx_shift: int | None = False
+    draft_min: int | None = None
+    draft_max: int | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -102,6 +105,8 @@ class ServerProcess:
             server_args.extend(["--model", self.model_file])
         if self.model_url:
             server_args.extend(["--model-url", self.model_url])
+        if self.model_draft:
+            server_args.extend(["--model-draft", self.model_draft])
         if self.model_hf_repo:
             server_args.extend(["--hf-repo", self.model_hf_repo])
         if self.model_hf_file:
@@ -147,6 +152,10 @@ class ServerProcess:
             server_args.extend(["--no-context-shift"])
         if self.api_key:
             server_args.extend(["--api-key", self.api_key])
+        if self.draft_max:
+            server_args.extend(["--draft-max", self.draft_max])
+        if self.draft_min:
+            server_args.extend(["--draft-min", self.draft_min])
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -185,7 +194,8 @@ class ServerProcess:
         raise TimeoutError(f"Server did not start within {timeout_seconds} seconds")
 
     def stop(self) -> None:
-        server_instances.remove(self)
+        if self in server_instances:
+            server_instances.remove(self)
         if self.process:
             print(f"Stopping server with pid={self.process.pid}")
             self.process.kill()

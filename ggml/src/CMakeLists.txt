@@ -261,21 +261,15 @@ function(ggml_add_backend backend)
     if (${backend_id})
         string(TOLOWER "ggml-${backend}" backend_target)
         add_subdirectory(${backend_target})
-        # check again in case the backend disabled itself
-        # note that this should NOT be the normal behavior, in case of errors the backend should fail the build
-        # however, currently it is necessary for AMX, since it is enabled by default on llama.cpp
-        if (${backend_id})
-            message(STATUS "Including ${backend} backend")
-            if (NOT GGML_BACKEND_DL)
-                string(TOUPPER "GGML_USE_${backend}" backend_use)
-                target_compile_definitions(ggml PUBLIC ${backend_use})
-            endif()
+        message(STATUS "Including ${backend} backend")
+        if (NOT GGML_BACKEND_DL)
+            string(TOUPPER "GGML_USE_${backend}" backend_use)
+            target_compile_definitions(ggml PUBLIC ${backend_use})
         endif()
     endif()
 endfunction()
 
 ggml_add_backend(CPU)
-ggml_add_backend(AMX)
 ggml_add_backend(BLAS)
 ggml_add_backend(CANN)
 ggml_add_backend(CUDA)
@@ -289,7 +283,7 @@ ggml_add_backend(Vulkan)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
-    target_compile_features   (${target} PRIVATE c_std_11) # don't bump
+    target_compile_features   (${target} PRIVATE c_std_11 cxx_std_17) # don't bump
 endforeach()
 
 target_link_libraries(ggml-base PRIVATE Threads::Threads)

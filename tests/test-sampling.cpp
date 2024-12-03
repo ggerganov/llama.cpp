@@ -284,7 +284,7 @@ static void test_perf() {
 
     data.reserve(n_vocab);
     for (int i = 0; i < n_vocab; i++) {
-        const float logit = 2.0f*((float)(rand())/RAND_MAX - 0.5f);
+        const float logit = 2.0f*((double)(rand())/RAND_MAX - 0.5);
         data.emplace_back(llama_token_data{i, logit, 0.0f});
     }
 
