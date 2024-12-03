@@ -16,12 +16,7 @@
 
 // auto generated files (update with ./deps.sh)
 #include "index.html.hpp"
-#include "completion.js.hpp"
 #include "loading.html.hpp"
-#include "deps_daisyui.min.css.hpp"
-#include "deps_markdown-it.js.hpp"
-#include "deps_tailwindcss.js.hpp"
-#include "deps_vue.esm-browser.js.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -101,12 +96,6 @@ struct server_task_result {
 
     bool stop;
     bool error;
-};
-
-struct server_static_file {
-    const unsigned char * data;
-    unsigned int size;
-    const char * mime_type;
 };
 
 struct slot_params {
@@ -2457,16 +2446,6 @@ int main(int argc, char ** argv) {
     LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     LOG_INF("\n");
 
-    // static files
-    std::map<std::string, server_static_file> static_files = {
-        { "/",                        { index_html,              index_html_len,              "text/html; charset=utf-8" }},
-        { "/completion.js",           { completion_js,           completion_js_len,           "text/javascript; charset=utf-8" }},
-        { "/deps_daisyui.min.css",    { deps_daisyui_min_css,    deps_daisyui_min_css_len,    "text/css; charset=utf-8" }},
-        { "/deps_markdown-it.js",     { deps_markdown_it_js,     deps_markdown_it_js_len,     "text/javascript; charset=utf-8" }},
-        { "/deps_tailwindcss.js",     { deps_tailwindcss_js,     deps_tailwindcss_js_len,     "text/javascript; charset=utf-8" }},
-        { "/deps_vue.esm-browser.js", { deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8" }},
-    };
-
     std::unique_ptr<httplib::Server> svr;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
@@ -2547,7 +2526,7 @@ int main(int argc, char ** argv) {
     // Middlewares
     //
 
-    auto middleware_validate_api_key = [&params, &res_error, &static_files](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_validate_api_key = [&params, &res_error](const httplib::Request & req, httplib::Response & res) {
         static const std::unordered_set<std::string> public_endpoints = {
             "/health",
             "/models",
@@ -2560,7 +2539,7 @@ int main(int argc, char ** argv) {
         }
 
         // If path is public or is static file, skip validation
-        if (public_endpoints.find(req.path) != public_endpoints.end() || static_files.find(req.path) != static_files.end()) {
+        if (public_endpoints.find(req.path) != public_endpoints.end() || req.path == "/") {
             return true;
         }
 
@@ -3317,14 +3296,11 @@ int main(int argc, char ** argv) {
             return 1;
         }
     } else {
-        // using embedded static files
-        for (const auto & it : static_files) {
-            const server_static_file & static_file = it.second;
-            svr->Get(it.first.c_str(), [&static_file](const httplib::Request &, httplib::Response & res) {
-                res.set_content(reinterpret_cast<const char*>(static_file.data), static_file.size, static_file.mime_type);
-                return false;
-            });
-        }
+        // using embedded static index.html
+        svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
+            res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+            return false;
+        });
     }
 
     // register API routes

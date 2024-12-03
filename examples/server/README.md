@@ -217,6 +217,37 @@ services:
   cmake --build build --config Release -t llama-server
   ```
 
+## Web UI
+
+The project includes a web-based user interface that enables interaction with the model through the `/chat/completions` endpoint.
+
+The web UI is developed using:
+- `vue` framework for frontend development
+- `tailwindcss` and `daisyui` for styling
+- `vite` for build tooling
+
+A pre-built version is available as a single HTML file under `/public` directory.
+
+To build or to run the dev server (with hot reload):
+
+```sh
+# make sure you have nodejs installed
+cd examples/server/webui
+npm i
+
+# to run the dev server
+npm run dev
+
+# to build the public/index.html
+npm run build
+```
+
+NOTE: if you are using the vite dev server, you can change the API base URL to llama.cpp. To do that, run this code snippet in browser's console:
+
+```js
+localStorage.setItem('base', 'http://localhost:8080')
+```
+
 ## Quick Start
 
 To get started right away, run the following command, making sure to use the correct path for the model you have:
