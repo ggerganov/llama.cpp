@@ -1870,6 +1870,8 @@ kernel void kernel_mul_mv_q8_0_f32(
     kernel_mul_mv_q8_0_f32_impl<constant ggml_metal_kargs_mul_mv &>(args, src0, src1, dst, nullptr, tgpig, tiisg, sgitg);
 }
 
+// mat-vec kernel processing in chunks of float4
+// chpb - chunks per quantization block
 template<short nxpsg, short r1ptg, typename q_t, short chpb, void (*deq_t4)(device const q_t *, short, thread float4 &) >
 void kernel_mul_mv_ext_q4_f32_impl(
         constant ggml_metal_kargs_mul_mv_ext & args,
@@ -1879,7 +1881,7 @@ void kernel_mul_mv_ext_q4_f32_impl(
         uint3   tgpig[[threadgroup_position_in_grid]],
         ushort  tiisg[[thread_index_in_simdgroup]],
         ushort  sgitg[[simdgroup_index_in_threadgroup]]) {
-    const short chpt = 4;
+    const short chpt = 4; // chunks per thread
 
   //const short nxpsg = (32);
     const short nypsg = (32/nxpsg);
@@ -1907,7 +1909,7 @@ void kernel_mul_mv_ext_q4_f32_impl(
 
     float sumf[r1ptg] = { [ 0 ... r1ptg - 1 ] = 0.0f };
 
-    short cch = tx%chpb;
+    short cch = tx%chpb; // current chunk index
 
     for (int ich = tx; 4*ich < args.ne00; ich += chpt*nxpsg) {
         float4 lx[chpt];
@@ -1938,6 +1940,7 @@ void kernel_mul_mv_ext_q4_f32_impl(
         }
     }
 
+    // reduce only the threads in each row
     for (short ir1 = 0; ir1 < r1ptg; ++ir1) {
         if (nxpsg >= 32) {
             sumf[ir1] += simd_shuffle_down(sumf[ir1], 16);
@@ -1969,6 +1972,7 @@ void kernel_mul_mv_ext_q4_f32_impl(
     }
 }
 
+// mat-vec kernel processing in chunks of float4x4
 template<short nxpsg, short r1ptg, typename q_t, short chpb, void (*deq_t4x4)(device const q_t *, short, thread float4x4 &) >
 void kernel_mul_mv_ext_q4x4_f32_impl(
         constant ggml_metal_kargs_mul_mv_ext & args,
@@ -2072,6 +2076,8 @@ void kernel_mul_mv_ext_q4x4_f32_impl(
     }
 }
 
+// dispatchers needed for compile-time nxpsg
+// epb - elements per quantization block
 template<short r1ptg, typename q_t, short epb, void (*deq_t4)(device const q_t *, short, thread float4 &)>
 kernel void kernel_mul_mv_ext_q4_f32_disp(
         constant ggml_metal_kargs_mul_mv_ext & args,

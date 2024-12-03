@@ -2008,8 +2008,10 @@ static void ggml_metal_encode_node(
 
                 // find the break-even point where the matrix-matrix kernel becomes more efficient compared
                 // to the matrix-vector kernel
-                int ne11_mm_min = 4;
+                const int ne11_mm_min = 4;
 
+                // first try to use small-batch mat-mv kernels
+                // these should be efficient for BS [2, ~8]
                 if (src1t == GGML_TYPE_F32 && (ne00%256 == 0) &&
                     (
                      (
@@ -2033,12 +2035,20 @@ static void ggml_metal_encode_node(
                     )
                    ) {
                     // TODO: determine the optimal parameters based on grid utilization
-                    const int nsg    = 2; // TODO: or 4?
-                    const int nxpsg  = ne11 < 3 ? 16 : 8;
-                    const int nypsg  = 32/nxpsg;
-                    const int r0ptg  = nypsg*nsg;
-                          int r1ptg  = 4;
+                    //       I still don't know why we should not always use the maximum available threads:
+                    //
+                    //       nsg = pipeline.maxTotalThreadsPerThreadgroup / 32
+                    //
+                    //       my current hypothesis is that the work grid is not evenly divisible for different nsg
+                    //       values and there can be some tail effects when nsg is high. need to confirm this
+                    //
+                    const int nsg    = 2;                 // num simdgroups per threadgroup
+                    const int nxpsg  = ne11 < 3 ? 16 : 8; // num threads along row per simdgroup
+                    const int nypsg  = 32/nxpsg;          // num threads along col per simdgroup (i.e. a simdgroup processes that many src0 rows at a time)
+                    const int r0ptg  = nypsg*nsg;         // num src0 rows per threadgroup
+                          int r1ptg  = 4;                 // num src1 rows per threadgroup
 
+                    // note: not sure how optimal are those across all different hardware. there might be someting cleverer
                     switch (ne11) {
                         case 2:
                             r1ptg = 2; break;
