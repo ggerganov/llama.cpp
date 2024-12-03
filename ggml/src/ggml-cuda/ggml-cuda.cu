@@ -2158,11 +2158,11 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_op_sum_rows(ctx, dst);
             break;
         case GGML_OP_SSM_CONV:
-          ggml_cuda_op_ssm_conv(ctx, dst);
-          break;
+            ggml_cuda_op_ssm_conv(ctx, dst);
+            break;
         case GGML_OP_SSM_SCAN:
-          ggml_cuda_op_ssm_scan(ctx, dst);
-          break;
+            ggml_cuda_op_ssm_scan(ctx, dst);
+            break;
         case GGML_OP_ARGSORT:
             ggml_cuda_op_argsort(ctx, dst);
             break;
@@ -2999,7 +2999,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_CLAMP:
         case GGML_OP_SSM_SCAN:
         case GGML_OP_SSM_CONV:
-          return true;
+            return true;
         case GGML_OP_CONT:
             return op->src[0]->type != GGML_TYPE_BF16;
         case GGML_OP_DIAG_MASK_INF:
