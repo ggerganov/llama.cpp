@@ -39,12 +39,12 @@
 #include <sstream>
 #include <cinttypes>
 #include <limits>
-#include <iostream>
+// #include <iostream>
 // #include <fstream>
 // #include <fstream>
 
-using std::cout;
-using std::endl;
+// using std::cout;
+// using std::endl;
 
 #define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
 #define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
