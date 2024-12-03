@@ -950,6 +950,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "POOL_2D_BACK",
     "UPSCALE",
     "PAD",
+    "PAD_REFLECT_1D",
     "ARANGE",
     "TIMESTEP_EMBEDDING",
     "ARGSORT",
@@ -983,7 +984,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "OPT_STEP_ADAMW",
 };
 
-static_assert(GGML_OP_COUNT == 81, "GGML_OP_COUNT != 81");
+static_assert(GGML_OP_COUNT == 82, "GGML_OP_COUNT != 82");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -1045,6 +1046,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "pool_2d_back(x)",
     "upscale(x)",
     "pad(x)",
+    "pad_reflect_1d(x)",
     "arange(start, stop, step)",
     "timestep_embedding(timesteps, dim, max_period)",
     "argsort(x)",
@@ -1078,7 +1080,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "adamw(x)",
 };
 
-static_assert(GGML_OP_COUNT == 81, "GGML_OP_COUNT != 81");
+static_assert(GGML_OP_COUNT == 82, "GGML_OP_COUNT != 82");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -4092,6 +4094,37 @@ struct ggml_tensor * ggml_pad(
             a->ne[3] + p3);
 
     result->op     = GGML_OP_PAD;
+    result->src[0] = a;
+
+    return result;
+}
+
+// ggml_pad_reflect_1d
+
+struct ggml_tensor * ggml_pad_reflect_1d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int                   p0,
+        int                   p1) {
+    GGML_ASSERT(p0 >= 0);
+    GGML_ASSERT(p1 >= 0);
+
+    GGML_ASSERT(p0 < a->ne[0]); // padding length on each size must be less than the
+    GGML_ASSERT(p1 < a->ne[0]); // existing length of the dimension being padded
+
+    GGML_ASSERT(ggml_is_contiguous(a));
+    GGML_ASSERT(a->type == GGML_TYPE_F32);
+
+    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, a->type,
+            a->ne[0] + p0 + p1,
+            a->ne[1],
+            a->ne[2],
+            a->ne[3]);
+
+    int32_t params[] = { p0, p1 };
+    ggml_set_op_params(result, params, sizeof(params));
+
+    result->op     = GGML_OP_PAD_REFLECT_1D;
     result->src[0] = a;
 
     return result;
