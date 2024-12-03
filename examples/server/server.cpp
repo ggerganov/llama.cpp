@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include "server.hpp"
 
 #include "arg.h"
 #include "common.h"
@@ -31,90 +32,6 @@
 #include <unordered_set>
 
 using json = nlohmann::ordered_json;
-
-enum stop_type {
-    STOP_TYPE_FULL,
-    STOP_TYPE_PARTIAL,
-};
-
-// state diagram: https://github.com/ggerganov/llama.cpp/pull/9283
-enum slot_state {
-    SLOT_STATE_IDLE,
-    SLOT_STATE_STARTED, // TODO: this state is only used for setting up the initial prompt processing; maybe merge it with launch_slot_with_task in the future
-    SLOT_STATE_PROCESSING_PROMPT,
-    SLOT_STATE_DONE_PROMPT,
-    SLOT_STATE_GENERATING,
-};
-
-enum server_state {
-    SERVER_STATE_LOADING_MODEL,  // Server is starting up, model not fully loaded yet
-    SERVER_STATE_READY,          // Server is ready and model is loaded
-};
-
-enum server_task_type {
-    SERVER_TASK_TYPE_INFERENCE,
-    SERVER_TASK_TYPE_CANCEL,
-    SERVER_TASK_TYPE_NEXT_RESPONSE,
-    SERVER_TASK_TYPE_METRICS,
-    SERVER_TASK_TYPE_SLOT_SAVE,
-    SERVER_TASK_TYPE_SLOT_RESTORE,
-    SERVER_TASK_TYPE_SLOT_ERASE,
-    SERVER_TASK_TYPE_SET_LORA,
-};
-
-enum server_task_inf_type {
-    SERVER_TASK_INF_TYPE_COMPLETION,
-    SERVER_TASK_INF_TYPE_EMBEDDING,
-    SERVER_TASK_INF_TYPE_RERANK,
-    SERVER_TASK_INF_TYPE_INFILL,
-};
-
-struct server_task {
-    int id        = -1; // to be filled by server_queue
-    int id_target = -1; // used by SERVER_TASK_TYPE_CANCEL
-
-    llama_tokens prompt_tokens;
-    server_task_type type;
-    json data;
-
-    server_task_inf_type inf_type = SERVER_TASK_INF_TYPE_COMPLETION;
-
-    // utility function
-    static std::unordered_set<int> get_list_id(const std::vector<server_task> & tasks) {
-        std::unordered_set<int> ids(tasks.size());
-        for (size_t i = 0; i < tasks.size(); i++) {
-            ids.insert(tasks[i].id);
-        }
-        return ids;
-    }
-};
-
-struct server_task_result {
-    int id       = -1;
-
-    json data;
-
-    bool stop;
-    bool error;
-};
-
-struct slot_params {
-    bool stream       = true;
-    bool cache_prompt = true; // remember the prompt to avoid reprocessing all prompt
-
-    int32_t n_keep    =  0; // number of tokens to keep from initial prompt
-    int32_t n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
-    int32_t n_predict = -1; // new tokens to predict
-    int32_t n_indent  =  0; // mininum line indentation for the generated text in number of whitespace characters
-
-    int64_t t_max_prompt_ms  = -1; // TODO: implement
-    int64_t t_max_predict_ms = -1; // if positive, limit the generation phase to this time limit
-
-    std::vector<std::string> antiprompt;
-
-    struct common_params_sampling sampling;
-    struct common_params_speculative speculative;
-};
 
 struct server_slot {
     int id;
@@ -165,8 +82,6 @@ struct server_slot {
     bool stopped_eos    = false;
     bool stopped_word   = false;
     bool stopped_limit  = false;
-
-    bool timings_per_token = false;
 
     bool oaicompat = false;
 
@@ -255,37 +170,39 @@ struct server_slot {
         }
     }
 
-    json get_formated_timings() const {
-        return json {
-            {"prompt_n",               n_prompt_tokens_processed},
-            {"prompt_ms",              t_prompt_processing},
-            {"prompt_per_token_ms",    t_prompt_processing / n_prompt_tokens_processed},
-            {"prompt_per_second",      1e3 / t_prompt_processing * n_prompt_tokens_processed},
+    result_timings get_timings() const {
+        result_timings timings;
+        timings.prompt_n = n_prompt_tokens_processed;
+        timings.prompt_ms = t_prompt_processing;
+        timings.prompt_per_token_ms = t_prompt_processing / n_prompt_tokens_processed;
+        timings.prompt_per_second = 1e3 / t_prompt_processing * n_prompt_tokens_processed;
 
-            {"predicted_n",            n_decoded},
-            {"predicted_ms",           t_token_generation},
-            {"predicted_per_token_ms", t_token_generation / n_decoded},
-            {"predicted_per_second",   1e3 / t_token_generation * n_decoded},
-        };
+        timings.predicted_n = n_decoded;
+        timings.predicted_ms = t_token_generation;
+        timings.predicted_per_token_ms = t_token_generation / n_decoded;
+        timings.predicted_per_second = 1e3 / t_token_generation * n_decoded;
+
+        return timings;
     }
 
-    size_t find_stopping_strings(const std::string & text, const size_t last_token_size, const stop_type type) {
+    size_t find_stopping_strings(const std::string & text, const size_t last_token_size, bool is_full_stop) {
         size_t stop_pos = std::string::npos;
 
         for (const std::string & word : params.antiprompt) {
             size_t pos;
 
-            if (type == STOP_TYPE_FULL) {
+            if (is_full_stop) {
                 const size_t tmp      = word.size() + last_token_size;
                 const size_t from_pos = text.size() > tmp ? text.size() - tmp : 0;
 
                 pos = text.find(word, from_pos);
             } else {
+                // otherwise, partial stop
                 pos = find_partial_stop_string(word, text);
             }
 
             if (pos != std::string::npos && (stop_pos == std::string::npos || pos < stop_pos)) {
-                if (type == STOP_TYPE_FULL) {
+                if (is_full_stop) {
                     stopped_word   = true;
                     stopping_word  = word;
                     has_next_token = false;
@@ -1108,14 +1025,14 @@ struct server_context {
             const std::string str_test = slot.generated_text.substr(pos);
             bool send_text = true;
 
-            size_t stop_pos = slot.find_stopping_strings(str_test, token_str.size(), STOP_TYPE_FULL);
+            size_t stop_pos = slot.find_stopping_strings(str_test, token_str.size(), true);
             if (stop_pos != std::string::npos) {
                 slot.generated_text.erase(
                     slot.generated_text.begin() + pos + stop_pos,
                     slot.generated_text.end());
                 pos = std::min(slot.n_sent_text, slot.generated_text.size());
             } else if (slot.has_next_token) {
-                stop_pos = slot.find_stopping_strings(str_test, token_str.size(), STOP_TYPE_PARTIAL);
+                stop_pos = slot.find_stopping_strings(str_test, token_str.size(), false);
                 send_text = stop_pos == std::string::npos;
             }
 
@@ -1229,60 +1146,6 @@ struct server_context {
         return slot.has_next_token; // continue
     }
 
-    json get_formated_generation(const server_slot & slot) const {
-        std::vector<std::string> samplers;
-        samplers.reserve(slot.params.sampling.samplers.size());
-        for (const auto & sampler : slot.params.sampling.samplers) {
-            samplers.emplace_back(common_sampler_type_to_str(sampler));
-        }
-
-        return json {
-            {"n_ctx",                     slot.n_ctx},
-            {"n_predict",                 slot.n_predict},     // Server configured n_predict
-            {"model",                     params_base.model_alias},
-            {"seed",                      slot.params.sampling.seed},
-            {"seed_cur",                  slot.smpl ? common_sampler_get_seed(slot.smpl) : 0},
-            {"temperature",               slot.params.sampling.temp},
-            {"dynatemp_range",            slot.params.sampling.dynatemp_range},
-            {"dynatemp_exponent",         slot.params.sampling.dynatemp_exponent},
-            {"top_k",                     slot.params.sampling.top_k},
-            {"top_p",                     slot.params.sampling.top_p},
-            {"min_p",                     slot.params.sampling.min_p},
-            {"xtc_probability",           slot.params.sampling.xtc_probability},
-            {"xtc_threshold",             slot.params.sampling.xtc_threshold},
-            {"typical_p",                 slot.params.sampling.typ_p},
-            {"repeat_last_n",             slot.params.sampling.penalty_last_n},
-            {"repeat_penalty",            slot.params.sampling.penalty_repeat},
-            {"presence_penalty",          slot.params.sampling.penalty_present},
-            {"frequency_penalty",         slot.params.sampling.penalty_freq},
-            {"dry_multiplier",            slot.params.sampling.dry_multiplier},
-            {"dry_base",                  slot.params.sampling.dry_base},
-            {"dry_allowed_length",        slot.params.sampling.dry_allowed_length},
-            {"dry_penalty_last_n",        slot.params.sampling.dry_penalty_last_n},
-            {"dry_sequence_breakers",     slot.params.sampling.dry_sequence_breakers},
-            {"mirostat",                  slot.params.sampling.mirostat},
-            {"mirostat_tau",              slot.params.sampling.mirostat_tau},
-            {"mirostat_eta",              slot.params.sampling.mirostat_eta},
-            {"penalize_nl",               slot.params.sampling.penalize_nl},
-            {"stop",                      slot.params.antiprompt},
-            {"max_tokens",                slot.params.n_predict}, // User configured n_predict
-            {"n_keep",                    slot.params.n_keep},
-            {"n_discard",                 slot.params.n_discard},
-            {"ignore_eos",                slot.params.sampling.ignore_eos},
-            {"stream",                    slot.params.stream},
-          //{"logit_bias",                slot.params.sampling.logit_bias},
-            {"n_probs",                   slot.params.sampling.n_probs},
-            {"min_keep",                  slot.params.sampling.min_keep},
-            {"grammar",                   slot.params.sampling.grammar},
-            {"samplers",                  samplers},
-            {"speculative",               slot.can_speculate()},
-            {"speculative.n_max",         slot.params.speculative.n_max},
-            {"speculative.n_min",         slot.params.speculative.n_min},
-            {"speculative.p_min",         slot.params.speculative.p_min},
-            {"timings_per_token",         slot.timings_per_token},
-        };
-    }
-
     void send_error(const server_task & task, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
         send_error(task.id, error, type);
     }
@@ -1294,27 +1157,18 @@ struct server_context {
     void send_error(const int id_task, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
         SRV_ERR("task id = %d, error: %s\n", id_task, error.c_str());
 
-        server_task_result res;
+        server_task_result_error res;
         res.id       = id_task;
-        res.stop     = false;
-        res.error    = true;
-        res.data     = format_error_response(error, type);
+        res.err_type = type;
+        res.err_msg  = error;
 
         queue_results.send(res);
     }
 
     void send_partial_response(server_slot & slot, completion_token_output tkn) {
-        server_task_result res;
+        server_task_result_cmpl_partial res;
         res.id       = slot.id_task;
-        res.error    = false;
-        res.stop     = false;
-        res.data     = json {
-            {"content",    tkn.text_to_send},
-            {"stop",       false},
-            {"id_slot",    slot.id},
-            {"multimodal", false},
-            {"index",      slot.index},
-        };
+        res.content  = tkn.text_to_send;
 
         if (slot.params.sampling.n_probs > 0) {
             const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
@@ -1323,30 +1177,35 @@ struct server_context {
 
             std::vector<completion_token_output> probs_output;
             if (probs_pos < probs_stop_pos) {
-                probs_output = std::vector<completion_token_output>(
+                res.probs_output = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin() + probs_pos,
                         slot.generated_token_probs.begin() + probs_stop_pos);
             }
-            slot.n_sent_token_probs = probs_stop_pos;
-
-            res.data["completion_probabilities"] = probs_vector_to_json(ctx, probs_output);
         }
 
-        if (slot.oaicompat) {
-            res.data["oaicompat_token_ctr"] = slot.n_decoded;
-            res.data["model"] = slot.oaicompat_model;
-        }
-
-        if (slot.timings_per_token) {
-            res.data["timings"] = slot.get_formated_timings();
+        if (slot.params.timings_per_token) {
+            res.timings = slot.get_timings();
         }
 
         queue_results.send(res);
     }
 
     void send_final_response(const server_slot & slot) {
-        server_task_result res;
-        res.id       = slot.id_task;
+        server_task_result_cmpl_final res;
+        res.id              = slot.id_task;
+        res.id_slot         = slot.id;
+        res.content         = slot.generated_text;
+
+        res.n_decoded       = slot.n_decoded;
+        res.n_prompt_tokens = slot.n_prompt_tokens;
+        res.has_new_line    = slot.has_new_line;
+        res.n_tokens_cached = slot.n_past;
+        res.content         = slot.generated_text;
+
+        res.params          = slot.params; // copy the parameters
+
+
+
         res.error    = false;
         res.stop     = true;
         res.data     = json {
@@ -1370,36 +1229,27 @@ struct server_context {
         };
 
         if (slot.params.sampling.n_probs > 0) {
-            std::vector<completion_token_output> probs;
             if (!slot.params.stream && slot.stopped_word) {
                 const llama_tokens stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
 
                 size_t safe_offset = std::min(slot.generated_token_probs.size(), stop_word_toks.size());
-                probs = std::vector<completion_token_output>(
+                res.probs_output = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin(),
                         slot.generated_token_probs.end() - safe_offset);
             } else {
-                probs = std::vector<completion_token_output>(
+                res.probs_output = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin(),
                         slot.generated_token_probs.end());
             }
-
-            res.data["completion_probabilities"] = probs_vector_to_json(ctx, probs);
-        }
-
-        if (slot.oaicompat) {
-            res.data["oaicompat_token_ctr"] = slot.n_decoded;
-            res.data["model"] = slot.oaicompat_model;
         }
 
         queue_results.send(res);
     }
 
     void send_embedding(const server_slot & slot, const llama_batch & batch) {
-        server_task_result res;
+        server_task_result_embd res;
         res.id    = slot.id_task;
-        res.error = false;
-        res.stop  = true;
+        res.index = slot.index;
 
         const int n_embd = llama_n_embd(model);
 
@@ -1418,20 +1268,12 @@ struct server_context {
             if (embd == NULL) {
                 SLT_ERR(slot, "failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
 
-                res.data = json {
-                    {"embedding", std::vector<float>(n_embd, 0.0f)},
-                    {"index",     slot.index},
-                };
-
+                res.embedding = std::vector<float>(n_embd, 0.0f);
                 continue;
             }
 
             common_embd_normalize(embd, embd_res.data(), n_embd);
-
-            res.data = json {
-                {"embedding", embd_res},
-                {"index",     slot.index},
-            };
+            res.embedding = embd_res;
         }
 
         SLT_DBG(slot, "%s", "sending embeddings\n");
@@ -1440,10 +1282,9 @@ struct server_context {
     }
 
     void send_rerank(const server_slot & slot, const llama_batch & batch) {
-        server_task_result res;
+        server_task_result_rerank res;
         res.id    = slot.id_task;
-        res.error = false;
-        res.stop  = true;
+        res.index = slot.index;
 
         for (int i = 0; i < batch.n_tokens; ++i) {
             if (!batch.logits[i] || batch.seq_id[i][0] != slot.id) {
@@ -1458,21 +1299,14 @@ struct server_context {
             if (embd == NULL) {
                 SLT_ERR(slot, "failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
 
-                res.data = json {
-                    {"index", slot.index},
-                    {"score", -1e6},
-                };
-
+                res.score = -1e6;
                 continue;
             }
 
-            res.data = json {
-                {"index", slot.index},
-                {"score", embd[0]},
-            };
+            res.score = embd[0];
         }
 
-        SLT_DBG(slot, "sending rerank result, res = '%s'\n", res.data.dump().c_str());
+        SLT_DBG(slot, "sending rerank result, res.score = %f\n", res.score);
 
         queue_results.send(res);
     }

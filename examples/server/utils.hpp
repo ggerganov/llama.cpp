@@ -3,6 +3,7 @@
 #include "common.h"
 #include "log.h"
 #include "llama.h"
+#include "server.hpp"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -39,17 +40,6 @@ using json = nlohmann::ordered_json;
 #define QUE_WRN(fmt, ...) LOG_WRN("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 #define QUE_ERR(fmt, ...) LOG_ERR("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 #define QUE_DBG(fmt, ...) LOG_DBG("que  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
-
-// https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
-enum error_type {
-    ERROR_TYPE_INVALID_REQUEST,
-    ERROR_TYPE_AUTHENTICATION,
-    ERROR_TYPE_SERVER,
-    ERROR_TYPE_NOT_FOUND,
-    ERROR_TYPE_PERMISSION,
-    ERROR_TYPE_UNAVAILABLE, // custom error
-    ERROR_TYPE_NOT_SUPPORTED, // custom error
-};
 
 template <typename T>
 static T json_value(const json & body, const std::string & key, const T & default_value) {
@@ -484,18 +474,6 @@ static std::string tokens_to_output_formatted_string(const llama_context * ctx, 
 
     return out;
 }
-
-struct completion_token_output {
-    llama_token tok;
-    std::string text_to_send;
-
-    struct token_prob {
-        llama_token tok;
-        float prob;
-    };
-
-    std::vector<token_prob> probs;
-};
 
 // convert a vector of completion_token_output to json
 static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
