@@ -39,12 +39,12 @@
 #include <sstream>
 #include <cinttypes>
 #include <limits>
-// #include <iostream>
+#include <iostream>
 // #include <fstream>
 // #include <fstream>
 
-// using std::cout;
-// using std::endl;
+using std::cout;
+using std::endl;
 
 #define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
 #define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
@@ -1927,16 +1927,20 @@ int clip_n_patches(const struct clip_ctx * ctx) {
 
     int n_patches = (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
 
-    if (ctx->proj_type == PROJECTOR_TYPE_LDP || ctx->proj_type == PROJECTOR_TYPE_LDPV2) {
-        n_patches /= 4;
-    } else if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
-        if (ctx->minicpmv_version == 2) {
-            n_patches = 96;
-        }
-        else if (ctx->minicpmv_version == 3) {
-            n_patches = 64;
-        }
+    if(ctx->omni_vlm_ver_type == omni_vlm_version_type::VLM_81_OCR 
+        || ctx->omni_vlm_ver_type == omni_vlm_version_type::VLM_81_INSTRUCT) {
+        n_patches /= 9;
     }
+    // if (ctx->proj_type == PROJECTOR_TYPE_LDP || ctx->proj_type == PROJECTOR_TYPE_LDPV2) {
+    //     n_patches /= 4;
+    // } else if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
+    //     if (ctx->minicpmv_version == 2) {
+    //         n_patches = 96;
+    //     }
+    //     else if (ctx->minicpmv_version == 3) {
+    //         n_patches = 64;
+    //     }
+    // }
 
     return n_patches;
 }
