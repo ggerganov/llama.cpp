@@ -2566,7 +2566,8 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         total_size_org += orig_size;
         total_size_new += new_size;
         gguf_set_tensor_type(ctx_out, name.c_str(), new_type);
-        gguf_set_tensor_data(ctx_out, name.c_str(), new_data, new_size);
+        GGML_ASSERT(gguf_get_tensor_size(ctx_out, gguf_find_tensor(ctx_out, name.c_str())) == new_size);
+        gguf_set_tensor_data(ctx_out, name.c_str(), new_data);
         fout.write((const char *)new_data, new_size);
         size_t pad = GGML_PAD(new_size, gguf_get_alignment(ctx_out)) - new_size;
         for (size_t j = 0; j < pad; ++j) {
