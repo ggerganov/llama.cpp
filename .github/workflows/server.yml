@@ -76,20 +76,26 @@ jobs:
         run: |
           pip install -r examples/server/tests/requirements.txt
 
-      - name: Verify server deps
-        id: verify_server_deps
+      # Setup nodejs (to be used for verifying bundled index.html)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify bundled index.html
+        id: verify_server_index_html
         run: |
           git config --global --add safe.directory $(realpath .)
-          cd examples/server
-          git ls-files --others --modified
+          cd examples/server/webui
           git status
-          ./deps.sh
+          npm ci
+          npm run build
           git status
-          not_ignored_files="$(git ls-files --others --modified)"
-          echo "Modified files: ${not_ignored_files}"
-          if [ -n "${not_ignored_files}" ]; then
-            echo "Repository is dirty or server deps are not built as expected"
-            echo "${not_ignored_files}"
+          modified_files="$(git status -s)"
+          echo "Modified files: ${modified_files}"
+          if [ -n "${modified_files}" ]; then
+            echo "Repository is dirty or server/webui is not built as expected"
+            echo "Hint: You may need to follow Web UI build guide in server/README.md"
+            echo "${modified_files}"
             exit 1
           fi
 
