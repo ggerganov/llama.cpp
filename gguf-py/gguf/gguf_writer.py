@@ -805,9 +805,6 @@ class GGUFWriter:
     def add_ssm_proj_bias(self, value: bool) -> None:
         self.add_bool(Keys.SSM.PROJ_BIAS.format(arch=self.arch), value)
 
-    def add_mamba_version(self, value: str) -> None:
-        self.add_string(Keys.HybridMamba.MAMBA_VERSION.format(arch=self.arch), value)
-
     def add_attn_layer_indices(self, values: list[int]) -> None:
         self.add_array(Keys.HybridMamba.ATTN_LAYER_INDICES.format(arch=self.arch), values)
 
