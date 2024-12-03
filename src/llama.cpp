@@ -310,6 +310,8 @@ enum llm_kv {
     LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT,
     LLM_KV_ATTENTION_SLIDING_WINDOW,
     LLM_KV_ATTENTION_SCALE,
+    LLM_KV_ATTENTION_LAYER_COUNT,
+    LLM_KV_ATTENTION_LAYER_INDICES,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -331,6 +333,11 @@ enum llm_kv {
     LLM_KV_SSM_TIME_STEP_RANK,
     LLM_KV_SSM_GROUP_COUNT,
     LLM_KV_SSM_DT_B_C_RMS,
+    LLM_KV_SSM_HEAD_COUNT,
+    LLM_KV_SSM_HEAD_DIM,
+    LLM_KV_SSM_CHUNK_SIZE,
+    LLM_KV_SSM_CONV_BIAS,
+    LLM_KV_SSM_PROJ_BIAS,
 
     LLM_KV_WKV_HEAD_SIZE,
 
@@ -427,6 +434,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT, "%s.attention.relative_buckets_count" },
     { LLM_KV_ATTENTION_SLIDING_WINDOW,         "%s.attention.sliding_window"         },
     { LLM_KV_ATTENTION_SCALE,                  "%s.attention.scale"                  },
+    { LLM_KV_ATTENTION_LAYER_INDICES,          "%s.attention.layer_indices"          },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,             "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                   "%s.rope.freq_base"                       },
@@ -448,6 +456,11 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_TIME_STEP_RANK,               "%s.ssm.time_step_rank" },
     { LLM_KV_SSM_GROUP_COUNT,                  "%s.ssm.group_count"    },
     { LLM_KV_SSM_DT_B_C_RMS,                   "%s.ssm.dt_b_c_rms"     },
+    { LLM_KV_SSM_HEAD_COUNT,                   "%s.ssm.head_count"     },
+    { LLM_KV_SSM_HEAD_DIM,                     "%s.ssm.head_dim"       },
+    { LLM_KV_SSM_CHUNK_SIZE,                   "%s.ssm.chunk_size"     },
+    { LLM_KV_SSM_CONV_BIAS,                    "%s.ssm.conv_bias"      },
+    { LLM_KV_SSM_PROJ_BIAS,                    "%s.ssm.proj_bias"      },
 
     { LLM_KV_WKV_HEAD_SIZE,                    "%s.wkv.head_size" },
 
@@ -2471,12 +2484,20 @@ struct llama_hparams {
     float    rope_yarn_log_mul;
 
     // for State Space Models
-    uint32_t ssm_d_conv  = 0;
-    uint32_t ssm_d_inner = 0;
-    uint32_t ssm_d_state = 0;
-    uint32_t ssm_dt_rank = 0;
-    uint32_t ssm_n_group = 0;
-    bool ssm_dt_b_c_rms = false;
+    uint32_t ssm_d_conv     = 0;
+    uint32_t ssm_d_inner    = 0;
+    uint32_t ssm_d_state    = 0;
+    uint32_t ssm_dt_rank    = 0;
+    uint32_t ssm_n_group    = 0;
+    bool     ssm_dt_b_c_rms = false;
+    uint32_t ssm_head_count = 0;
+    uint32_t ssm_head_dim   = 0;
+    uint32_t ssm_chunk_size = 0;
+    bool    ssm_conv_bias   = false;
+    bool    ssm_proj_bias   = false;
+
+    // for hybrid state space models
+    std::array<bool, LLAMA_MAX_LAYERS> ssm_layer_arr;
 
     float f_clamp_kqv      = 0.0f;
     float f_max_alibi_bias = 0.0f;
@@ -2533,6 +2554,13 @@ struct llama_hparams {
         if (this->ssm_dt_rank != other.ssm_dt_rank) return true;
         if (this->ssm_n_group != other.ssm_n_group) return true;
         if (this->ssm_dt_b_c_rms != other.ssm_dt_b_c_rms) return true;
+        if (this->ssm_head_count != other.ssm_head_count) return true;
+        if (this->ssm_head_dim != other.ssm_head_dim) return true;
+        if (this->ssm_chunk_size != other.ssm_chunk_size) return true;
+        if (this->ssm_conv_bias != other.ssm_conv_bias) return true;
+        if (this->ssm_proj_bias != other.ssm_proj_bias) return true;
+
+        if (this->ssm_layer_arr != other.ssm_layer_arr) return true;
 
         if (this->rescale_every_n_layers != other.rescale_every_n_layers) return true;
         if (this->time_mix_extra_dim     != other.time_mix_extra_dim)     return true;
@@ -2624,6 +2652,10 @@ struct llama_hparams {
             // corresponds to Mamba's ssm_states size
             return ssm_d_state * ssm_d_inner;
         }
+    }
+
+    bool ssm_layer(uint32_t il) const {
+        return ssm_layer_arr[il];
     }
 };
 
@@ -5492,6 +5524,7 @@ static void llm_load_hparams(
     std::fill(hparams.n_head_arr.begin(),    hparams.n_head_arr.end(),    0);
     std::fill(hparams.n_head_kv_arr.begin(), hparams.n_head_kv_arr.end(), 0);
     std::fill(hparams.n_ff_arr.begin(),      hparams.n_ff_arr.end(),      0);
+    std::fill(hparams.ssm_layer_arr.begin(), hparams.ssm_layer_arr.end(), false);
 
     ml.get_key_or_arr(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff_arr,   hparams.n_layer);
     ml.get_key_or_arr(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head_arr, hparams.n_layer);
@@ -5959,6 +5992,32 @@ static void llm_load_hparams(
                         } break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
+            } break;
+        case LLM_ARCH_BAMBA:
+            {
+                // Mamba2 parameters
+                ml.get_key(LLM_KV_SSM_CONV_KERNEL,    hparams.ssm_d_conv);
+                ml.get_key(LLM_KV_SSM_INNER_SIZE,     hparams.ssm_d_inner);
+                ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
+                ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
+                ml.get_key(LLM_KV_SSM_GROUP_COUNT,    hparams.ssm_n_group);
+                ml.get_key(LLM_KV_SSM_HEAD_COUNT,     hparams.ssm_head_count);
+                ml.get_key(LLM_KV_SSM_HEAD_DIM,       hparams.ssm_head_dim);
+                ml.get_key(LLM_KV_SSM_CHUNK_SIZE,     hparams.ssm_chunk_size);
+                ml.get_key(LLM_KV_SSM_CONV_BIAS,      hparams.ssm_conv_bias);
+                ml.get_key(LLM_KV_SSM_PROJ_BIAS,      hparams.ssm_proj_bias);
+
+                // Attention params
+                std::fill(hparams.ssm_layer_arr.begin(), hparams.ssm_layer_arr.end(), true);
+                std::vector<uint32_t> attn_layer_indices;
+                ml.get_arr(LLM_KV_ATTENTION_LAYER_INDICES, attn_layer_indices);
+                for (const auto attn_idx : attn_layer_indices) {
+                    GGML_ASSERT(attn_idx < hparams.n_layer);
+                    hparams.ssm_layer_arr[attn_idx] = false;
+                }
+
+                // Feed forward params
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
             } break;
         case LLM_ARCH_XVERSE:
             {
@@ -7038,6 +7097,11 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: ssm_dt_rank      = %u\n",     __func__, hparams.ssm_dt_rank);
         LLAMA_LOG_INFO("%s: ssm_n_group      = %u\n",     __func__, hparams.ssm_n_group);
         LLAMA_LOG_INFO("%s: ssm_dt_b_c_rms   = %d\n",     __func__, hparams.ssm_dt_b_c_rms);
+        LLAMA_LOG_INFO("%s: ssm_head_count   = %d\n",     __func__, hparams.ssm_head_count);
+        LLAMA_LOG_INFO("%s: ssm_head_dim     = %d\n",     __func__, hparams.ssm_head_dim);
+        LLAMA_LOG_INFO("%s: ssm_chunk_size   = %d\n",     __func__, hparams.ssm_chunk_size);
+        LLAMA_LOG_INFO("%s: ssm_conv_bias    = %d\n",     __func__, hparams.ssm_conv_bias);
+        LLAMA_LOG_INFO("%s: ssm_proj_bias    = %d\n",     __func__, hparams.ssm_proj_bias);
     }
 
     LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, llama_model_type_name(model.type));
@@ -7105,6 +7169,10 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: f_embedding_scale = %f\n", __func__, hparams.f_embedding_scale);
         LLAMA_LOG_INFO("%s: f_residual_scale  = %f\n", __func__, hparams.f_residual_scale);
         LLAMA_LOG_INFO("%s: f_attention_scale = %f\n", __func__, hparams.f_attention_scale);
+    }
+
+    if (model.arch == LLM_ARCH_BAMBA) {
+        LLAMA_LOG_INFO("%s: ssm_layer_arr = %s\n", __func__, print_f([&](uint32_t il) { return uint32_t(hparams.ssm_layer(il)); }, hparams.n_layer).c_str());
     }
 }
 
