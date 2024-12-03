@@ -2322,6 +2322,10 @@ struct server_context {
                     continue;
                 }
 
+                if (slot.state != SLOT_STATE_GENERATING) {
+                    continue;
+                }
+
                 llama_token id = slot.sampled;
 
                 struct common_speculative_params params_spec;
