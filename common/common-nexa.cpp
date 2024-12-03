@@ -152,7 +152,6 @@ bool load_hparams_and_tensors_from_gguf(const std::string &fname, NexaBaseModel 
 
     ggml_free(meta);
     gguf_free(ctx_gguf);
-    gguf_free(ctx_gguf);
     return true;
 }
 
