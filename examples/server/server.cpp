@@ -696,8 +696,9 @@ struct server_context {
 
             params_dft.devices      = params_base.speculative.devices;
             params_dft.model        = params_base.speculative.model;
-            params_dft.n_ctx        = params_base.speculative.n_ctx;
+            params_dft.n_ctx        = params_base.speculative.n_ctx == 0 ? params_base.n_ctx / params_base.n_parallel : params_base.speculative.n_ctx;
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
+            params_dft.n_parallel   = 1;
 
             common_init_result llama_init_dft = common_init_from_params(params_dft);
 
@@ -717,8 +718,14 @@ struct server_context {
                 return false;
             }
 
-            cparams_dft = common_context_params_to_llama(params_base);
-            cparams_dft.n_batch = llama_n_ctx(llama_init_dft.context);
+            const int n_ctx_dft = llama_n_ctx(llama_init_dft.context);
+
+            cparams_dft = common_context_params_to_llama(params_dft);
+            cparams_dft.n_batch = n_ctx_dft;
+
+            // force F16 KV cache for the draft model for extra performance
+            cparams_dft.type_k = GGML_TYPE_F16;
+            cparams_dft.type_v = GGML_TYPE_F16;
 
             // the context is not needed - we will create one for each slot
             llama_free(llama_init_dft.context);
@@ -2319,6 +2326,10 @@ struct server_context {
             // do speculative decoding
             for (auto & slot : slots) {
                 if (!slot.is_processing() || !slot.can_speculate()) {
+                    continue;
+                }
+
+                if (slot.state != SLOT_STATE_GENERATING) {
                     continue;
                 }
 
