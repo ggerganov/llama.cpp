@@ -20,6 +20,7 @@ def test_slot_save_restore():
         "prompt": "What is the capital of France?",
         "id_slot": 1,
         "cache_prompt": True,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert match_regex("(Whiskers|Flana)+", res.body["content"])
@@ -37,6 +38,7 @@ def test_slot_save_restore():
         "prompt": "What is the capital of Germany?",
         "id_slot": 1,
         "cache_prompt": True,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert match_regex("(Jack|said)+", res.body["content"])
@@ -54,6 +56,7 @@ def test_slot_save_restore():
         "prompt": "What is the capital of Germany?",
         "id_slot": 0,
         "cache_prompt": True,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert match_regex("(Jack|said)+", res.body["content"])
@@ -64,6 +67,7 @@ def test_slot_save_restore():
         "prompt": "What is the capital of Germany?",
         "id_slot": 1,
         "cache_prompt": True,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert match_regex("(Jack|said)+", res.body["content"])
@@ -78,6 +82,7 @@ def test_slot_erase():
         "prompt": "What is the capital of France?",
         "id_slot": 1,
         "cache_prompt": True,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert match_regex("(Whiskers|Flana)+", res.body["content"])
@@ -94,5 +99,5 @@ def test_slot_erase():
         "cache_prompt": True,
     })
     assert res.status_code == 200
-    assert match_regex("(Whiskers|Flana)+", res.body["content"])
+    assert match_regex("(Whiskers|Flana)+", res.body["choices"][0]["text"])
     assert res.body["timings"]["prompt_n"] == 21  # all tokens are processed

@@ -498,28 +498,105 @@ struct completion_token_output {
 };
 
 // convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
-    json out = json::array();
-
-    for (const auto & prob : probs) {
-        json probs_for_token = json::array();
-
-        for (const auto & p : prob.probs) {
-            const std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
-            probs_for_token.push_back(json {
-                {"tok_str", tok_str},
-                {"prob",    p.prob},
-            });
+static json probs_vector_to_json(llama_context * ctx, const std::vector<completion_token_output> & probs, bool legacy_format = true) {
+    if (legacy_format) {
+        // Legacy format (text_completion endpoint)
+        json logprobs;
+        std::vector<std::string> tokens;
+        std::vector<json> token_logprobs;  // Changed to json to allow null values
+        std::vector<json> top_logprobs;    // Changed to allow null values
+        std::vector<int> text_offset;
+        
+        int current_offset = 0;
+        
+        for (const auto & prob : probs) {
+            std::string token_str = tokens_to_output_formatted_string(ctx, prob.tok);
+            tokens.push_back(token_str);
+            text_offset.push_back(current_offset);
+            
+            // Handle token logprobs
+            if (!prob.probs.empty() && prob.probs[0].prob > 0) {
+                token_logprobs.push_back(std::log(prob.probs[0].prob));
+            } else {
+                token_logprobs.push_back(nullptr);
+            }
+            
+            // Handle top logprobs
+            json token_top_logprobs = json::object();
+            for (const auto & p : prob.probs) {
+                if (p.prob > 0) {
+                    token_top_logprobs[tokens_to_output_formatted_string(ctx, p.tok)] = std::log(p.prob);
+                }
+            }
+            top_logprobs.push_back(token_top_logprobs.empty() ? nullptr : token_top_logprobs);
+            
+            current_offset += token_str.length();
         }
+        
+        logprobs = {
+            {"tokens", tokens},
+            {"token_logprobs", token_logprobs},
+            {"top_logprobs", top_logprobs},
+            {"text_offset", text_offset}
+        };
+        
+        return logprobs;
+    } else {
+        // New format (GPT-4 style)
+        json logprobs;
+        std::vector<json> content;
+        
+        for (const auto & prob : probs) {
+            std::string token_str = tokens_to_output_formatted_string(ctx, prob.tok);
+            
+            // Create top_logprobs array for this token
+            json token_top_logprobs = json::array();
+            for (const auto & p : prob.probs) {
+                if (p.prob > 0) {
+                    // Get UTF-8 bytes for the token
+                    std::vector<int> bytes;
+                    std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
+                    for (unsigned char c : tok_str) {
+                        bytes.push_back(static_cast<int>(c));
+                    }
+                    
+                    json entry = {
+                        {"token", tok_str},
+                        {"logprob", std::log(p.prob)},
+                        {"bytes", bytes.empty() ? json(nullptr) : json(bytes)}
+                    };
+                    token_top_logprobs.push_back(entry);
+                }
+            }
 
-        const std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
-        out.push_back(json {
-            {"content", tok_str},
-            {"probs",   probs_for_token},
-        });
+            // Get main token logprob
+            float main_logprob = (!prob.probs.empty() && prob.probs[0].prob > 0) 
+                ? std::log(prob.probs[0].prob) 
+                : -9999.0f;
+
+            // Get UTF-8 bytes for the main token
+            std::vector<int> main_bytes;
+            for (unsigned char c : token_str) {
+                main_bytes.push_back(static_cast<int>(c));
+            }
+
+            // Add token info to content array
+            json token_info = {
+                {"token", token_str},
+                {"logprob", main_logprob},
+                {"bytes", main_bytes.empty() ? json(nullptr) : json(main_bytes)},
+                {"top_logprobs", token_top_logprobs}
+            };
+            content.push_back(token_info);
+        }
+        
+        logprobs = {
+            {"content", content},
+            {"refusal", nullptr}  // Add refusal field as null since we don't implement content filtering
+        };
+        
+        return logprobs;
     }
-
-    return out;
 }
 
 static bool server_sent_event(httplib::DataSink & sink, const char * event, const json & data) {
@@ -540,7 +617,8 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json & body, /* openai api json semantics */
-    const std::string & chat_template) {
+    const std::string & chat_template
+    ) {
     json llama_params;
 
     llama_params["__oaicompat"] = true;
@@ -604,42 +682,70 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false) {
+static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false, bool legacy_format = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
     std::string content      = json_value(result, "content", std::string(""));
+    bool truncated           = json_value(result, "truncated", false);
 
     std::string finish_reason = "length";
     if (stopped_word || stopped_eos) {
         finish_reason = "stop";
     }
 
-    json choices =
-        streaming ? json::array({json{{"finish_reason", finish_reason},
-                                        {"index", 0},
-                                        {"delta", json::object()}}})
-                  : json::array({json{{"finish_reason", finish_reason},
-                                        {"index", 0},
-                                        {"message", json{{"content", content},
-                                                         {"role", "assistant"}}}}});
+    json choices;
+    // Use the pre-formatted logprobs directly
+    json logprobs = result.contains("completion_probabilities") ? 
+        result["completion_probabilities"] : nullptr;
+    if (legacy_format) {
+
+        choices = json::array({json{
+            {"finish_reason", finish_reason},
+            {"index", 0},
+            {"logprobs", logprobs},
+            {"text", content}
+        }});
+    } else {
+        // Format for chat completions endpoint
+        choices = streaming ? 
+            json::array({json{
+                {"finish_reason", finish_reason},
+                {"index", 0},
+                {"delta", json::object()}
+            }}) :
+            json::array({json{
+                {"finish_reason", finish_reason},
+                {"index", 0},
+                {"message", json{
+                    {"content", content},
+                    {"role", "assistant"}
+                }}
+            }});
+    }
 
     std::time_t t = std::time(0);
 
     json res = json {
         {"choices", choices},
         {"created", t},
-        {"model",
-            json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
-        {"object", streaming ? "chat.completion.chunk" : "chat.completion"},
+        {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
+        {"object", legacy_format ? "text_completion" : 
+                  (streaming ? "chat.completion.chunk" : "chat.completion")},
         {"usage", json {
             {"completion_tokens", num_tokens_predicted},
-            {"prompt_tokens",     num_prompt_tokens},
-            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
+            {"prompt_tokens", num_prompt_tokens},
+            {"total_tokens", num_tokens_predicted + num_prompt_tokens}
         }},
-        {"id", completion_id}
+        {"id", completion_id},
+        {"truncated", truncated}
     };
+
+    // Add system_fingerprint if provided
+    if (result.contains("system_fingerprint")) {
+        res["system_fingerprint"] = result["system_fingerprint"];
+    }
 
     // extra fields for debugging purposes
     if (verbose) {
@@ -658,105 +764,127 @@ static json format_final_response_oaicompat(const json & request, const json & r
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(const json & result, const std::string & completion_id) {
-    if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
-        return std::vector<json>({result});
-    }
+static std::vector<json> format_partial_response_oaicompat(const json & result, const std::string & completion_id, bool legacy_format = false) {
+    // Early return if required fields are missing
+    // if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
+    //     return std::vector<json>({result});
+    // }
 
     bool first = json_value(result, "oaicompat_token_ctr", 0) == 0;
     std::string modelname = json_value(result, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
+    std::string content = json_value(result, "content", std::string(""));
+    std::time_t t = std::time(0);
 
-    bool stopped_word   = json_value(result, "stopped_word",  false);
-    bool stopped_eos    = json_value(result, "stopped_eos",   false);
-    bool stopped_limit  = json_value(result, "stopped_limit", false);
-    std::string content = json_value(result, "content",       std::string(""));
-
+    // Determine finish reason
     std::string finish_reason;
-    if (stopped_word || stopped_eos) {
+    if (json_value(result, "stopped_word", false) || json_value(result, "stopped_eos", false)) {
         finish_reason = "stop";
     }
-    if (stopped_limit) {
+    if (json_value(result, "stopped_limit", false)) {
         finish_reason = "length";
     }
 
-    std::time_t t = std::time(0);
-
     json choices;
-
     if (!finish_reason.empty()) {
-        choices = json::array({json{{"finish_reason", finish_reason},
-                                    {"index", 0},
-                                    {"delta", json::object()}}});
-    } else {
-        if (first) {
-            if (content.empty()) {
-                choices = json::array({json{{"finish_reason", nullptr},
-                                            {"index", 0},
-                                            {"delta", json{{"role", "assistant"}}}}});
-            } else {
-                // We have to send this as two updates to conform to openai behavior
-                json initial_ret = json{{"choices", json::array({json{
-                                        {"finish_reason", nullptr},
-                                        {"index", 0},
-                                        {"delta", json{
-                                            {"role", "assistant"}
-                                        }}}})},
-                            {"created", t},
-                            {"id", completion_id},
-                            {"model", modelname},
-                            {"object", "chat.completion.chunk"}};
-
-                json second_ret = json{
-                            {"choices", json::array({json{{"finish_reason", nullptr},
-                                                            {"index", 0},
-                                                            {"delta", json{
-                                                            {"content", content}}}
-                                                            }})},
-                            {"created", t},
-                            {"id", completion_id},
-                            {"model", modelname},
-                            {"object", "chat.completion.chunk"}};
-
-                return std::vector<json>({initial_ret, second_ret});
-            }
+        // Final message with finish reason
+        if (legacy_format) {
+            choices = json::array({json{
+                {"finish_reason", finish_reason},
+                {"index", 0},
+                {"logprobs", result.contains("completion_probabilities") ? 
+                    result["completion_probabilities"] : nullptr},
+                {"text", content}
+            }});
         } else {
-            // Some idiosyncrasy in task processing logic makes several trailing calls
-            // with empty content, we ignore these at the calee site.
-            if (content.empty()) {
-                return std::vector<json>({json::object()});
-            }
-
+            choices = json::array({json{
+                {"finish_reason", finish_reason},
+                {"index", 0},
+                {"delta", json::object()}
+            }});
+        }
+    } else {
+        // Content message
+        if (legacy_format) {
             choices = json::array({json{
                 {"finish_reason", nullptr},
                 {"index", 0},
-                {"delta",
-                json{
-                    {"content", content},
-                }},
+                {"logprobs", result.contains("completion_probabilities") ? 
+                    result["completion_probabilities"] : nullptr},
+                {"text", content}
             }});
+        } else {
+            if (first) {
+                if (content.empty()) {
+                    choices = json::array({json{
+                        {"finish_reason", nullptr},
+                        {"index", 0},
+                        {"delta", json{{"role", "assistant"}}}
+                    }});
+                } else {
+                    if (content.empty()) {
+                        return std::vector<json>({json::object()});
+                    }
+
+                    // Split into two messages for first content in chat mode
+                    json initial_ret = json{
+                        {"choices", json::array({json{
+                            {"finish_reason", nullptr},
+                            {"index", 0},
+                            {"delta", json{{"role", "assistant"}}}
+                        }})},
+                        {"created", t},
+                        {"id", completion_id},
+                        {"model", modelname},
+                        {"object", "chat.completion.chunk"}
+                    };
+
+                    json second_ret = json{
+                        {"choices", json::array({json{
+                            {"finish_reason", nullptr},
+                            {"index", 0},
+                            {"delta", json{{"content", content}}}
+                        }})},
+                        {"created", t},
+                        {"id", completion_id},
+                        {"model", modelname},
+                        {"object", "chat.completion.chunk"}
+                    };
+
+                    return std::vector<json>({initial_ret, second_ret});
+                }
+            } else {
+                choices = json::array({json{
+                    {"finish_reason", nullptr},
+                    {"index", 0},
+                    {"delta", json{{"content", content}}}
+                }});
+            }
         }
     }
 
-    json ret = json {
+    // Construct the response
+    json ret = json{
         {"choices", choices},
         {"created", t},
-        {"id",      completion_id},
-        {"model",   modelname},
-        {"object",  "chat.completion.chunk"}
+        {"id", completion_id},
+        {"model", modelname},
+        {"object", legacy_format ? "text_completion" : "chat.completion.chunk"}
     };
 
+    // Add timings if present
     if (result.contains("timings")) {
-        ret.push_back({"timings", json_value(result, "timings", json::object())});
+        ret["timings"] = json_value(result, "timings", json::object());
     }
 
+    // Add usage statistics for final messages
     if (!finish_reason.empty()) {
         int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
-        int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
-        ret.push_back({"usage", json {
+        int num_prompt_tokens = json_value(result, "tokens_evaluated", 0);
+        ret["usage"] = json{
             {"completion_tokens", num_tokens_predicted},
-            {"prompt_tokens",     num_prompt_tokens},
-            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
-        }});
+            {"prompt_tokens", num_prompt_tokens},
+            {"total_tokens", num_tokens_predicted + num_prompt_tokens}
+        };
     }
 
     return std::vector<json>({ret});

@@ -37,6 +37,7 @@ def test_with_and_without_draft():
         "prompt": "I believe the meaning of life is",
         "temperature": 0.0,
         "top_k": 1,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     content_no_draft = res.body["content"]
@@ -49,6 +50,7 @@ def test_with_and_without_draft():
         "prompt": "I believe the meaning of life is",
         "temperature": 0.0,
         "top_k": 1,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     content_draft = res.body["content"]
@@ -75,6 +77,7 @@ def test_different_draft_min_draft_max():
             "prompt": "I believe the meaning of life is",
             "temperature": 0.0,
             "top_k": 1,
+            "oai_compat": False,
         })
         assert res.status_code == 200
         if last_content is not None:
@@ -96,6 +99,7 @@ def test_multi_requests_parallel(n_slots: int, n_requests: int):
             "prompt": "I believe the meaning of life is",
             "temperature": 0.0,
             "top_k": 1,
+            "oai_compat": False,
         })))
     results = parallel_function_calls(tasks)
     for res in results:

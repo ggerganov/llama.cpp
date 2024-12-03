@@ -36,6 +36,7 @@ def test_lora(scale: float, re_content: str):
     assert res_lora_control.status_code == 200
     res = server.make_request("POST", "/completion", data={
         "prompt": "Look in thy glass",
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert match_regex(re_content, res.body["content"])

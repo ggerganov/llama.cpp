@@ -41,6 +41,7 @@ def test_correct_api_key():
     server.start()
     res = server.make_request("POST", "/completions", data={
         "prompt": "I believe the meaning of life is",
+        "oai_compat": False,
     }, headers={
         "Authorization": f"Bearer {TEST_API_KEY}",
     })

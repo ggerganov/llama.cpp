@@ -40,9 +40,19 @@ def test_load_split_model():
     server.model_alias = "tinyllama-split"
     server.start()
     res = server.make_request("POST", "/completion", data={
-        "n_predict": 16,
+        "max_tokens": 16,
         "prompt": "Hello",
         "temperature": 0.0,
     })
     assert res.status_code == 200
-    assert match_regex("(little|girl)+", res.body["content"])
+    # Verify response structure
+    assert "id" in res.body
+    assert "object" in res.body
+    assert "created" in res.body
+    assert "model" in res.body
+    assert "choices" in res.body
+    assert isinstance(res.body["choices"], list)
+    assert len(res.body["choices"]) > 0
+    assert "text" in res.body["choices"][0]
+    # Verify the actual content
+    assert match_regex("(little|girl)+", res.body["choices"][0]["text"])
