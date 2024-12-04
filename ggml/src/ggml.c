@@ -6779,8 +6779,8 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                     ok = false;
                     break;
                 }
-                const size_t type_size = ggml_type_size(info->t.type);
-                const size_t blck_size = ggml_blck_size(info->t.type);
+                const size_t  type_size = ggml_type_size(info->t.type);
+                const int64_t blck_size = ggml_blck_size(info->t.type);
 
                 // check that row size is divisible by block size
                 if (blck_size == 0 || info->t.ne[0] % blck_size != 0) {
@@ -7350,8 +7350,8 @@ void gguf_set_tensor_type(struct gguf_context * ctx, const char * name, enum ggm
         GGML_ABORT("tensor not found");
     }
     struct ggml_tensor * tensor = &ctx->info[idx].t;
-    const size_t type_size = ggml_type_size(type);
-    const int    blck_size = ggml_blck_size(type);
+    const size_t  type_size = ggml_type_size(type);
+    const int64_t blck_size = ggml_blck_size(type);
 
     tensor->type = type;
     GGML_ASSERT(tensor->ne[0] % blck_size == 0 && "tensor row size not divisible by block size of new type");
