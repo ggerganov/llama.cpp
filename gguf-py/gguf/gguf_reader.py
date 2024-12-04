@@ -95,6 +95,7 @@ class GGUFReader:
         offs = 0
 
         # Check for GGUF magic
+        self.data.seek(offs)
         if struct.unpack("<I", self.data.read(4))[0] != GGUF_MAGIC:
             raise ValueError('GGUF magic invalid')
         offs += 4
