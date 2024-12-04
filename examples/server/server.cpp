@@ -120,7 +120,7 @@ struct server_slot {
     int id;
     int id_task = -1;
 
-    llama_batch batch_spec;
+    llama_batch batch_spec = {};
 
     llama_context * ctx_dft = nullptr;
 
