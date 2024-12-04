@@ -12,6 +12,10 @@
 #include "ggml-cuda.h"
 #endif
 
+#ifdef GGML_USE_SYCL
+#include "ggml-sycl.h"
+#endif
+
 #ifdef GGML_USE_METAL
 #include "ggml-metal.h"
 #endif
@@ -1167,6 +1171,11 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 #ifdef GGML_USE_VULKAN
     new_clip->backend = ggml_backend_vk_init(0);
     LOG_INF("%s: CLIP using Vulkan backend\n", __func__);
+#endif
+
+#ifdef GGML_USE_SYCL
+    new_clip->backend = ggml_backend_sycl_init(0);
+    LOG_INF("%s: CLIP using SYCL backend\n", __func__);
 #endif
 
     if (!new_clip->backend) {
