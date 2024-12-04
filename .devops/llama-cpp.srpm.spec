@@ -19,9 +19,12 @@ Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
 License:        MIT
 Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
-BuildRequires:  coreutils make gcc-c++ git libstdc++-devel
+BuildRequires:  coreutils cmake make gcc-c++ git libstdc++-devel
 Requires:       libstdc++
 URL:            https://github.com/ggerganov/llama.cpp
+
+# CMake rpaths kill the build.
+%global __brp_check_rpaths %{nil}
 
 %define debug_package %{nil}
 %define source_date_epoch_from_changelog 0
@@ -34,13 +37,14 @@ Models are not included in this package and must be downloaded separately.
 %setup -n llama.cpp-master
 
 %build
-make -j
+cmake -B build -DBUILD_SHARED_LIBS=0
+cmake --build build --config Release -j$(nproc)
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p llama-cli %{buildroot}%{_bindir}/llama-cli
+cd build/bin
+ls
 cp -p llama-server %{buildroot}%{_bindir}/llama-server
-cp -p llama-simple %{buildroot}%{_bindir}/llama-simple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system
 %{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llama.service
@@ -69,9 +73,7 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/llama-cli
 %{_bindir}/llama-server
-%{_bindir}/llama-simple
 /usr/lib/systemd/system/llama.service
 %config /etc/sysconfig/llama
 
