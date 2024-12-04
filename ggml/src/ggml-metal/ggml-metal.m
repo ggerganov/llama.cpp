@@ -509,30 +509,31 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
         NSString * path_lib = [bundle pathForResource:@"default" ofType:@"metallib"];
         if (path_lib == nil) {
             // Try to find the resource in the directory where the current binary located.
-            NSString *currentBinary = [[NSProcessInfo processInfo] arguments][0];
-            NSString *binDir = [currentBinary stringByDeletingLastPathComponent];
-            NSString *defaultMetalibPath = [NSString pathWithComponents:@[binDir, @"default.metallib"]];
-            NSDictionary *atts = [[NSFileManager defaultManager] attributesOfItemAtPath:defaultMetalibPath error:&error];
-            if (error) {
-                GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
-                return NULL;
-            }
-            if (!atts) {
-                GGML_METAL_LOG_ERROR("%s: error: src path attribute is NULL\n", __func__);
-                return NULL;
-            }
-            if (atts[NSFileType] == NSFileTypeSymbolicLink) {
-                // Optionally, if this is a symlink, try to resolve it.
-                defaultMetalibPath = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:defaultMetalibPath error:&error];
-                if (error) {
-                    GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
-                    return NULL;
+            NSString *current_binary = [[NSProcessInfo processInfo] arguments][0];
+            NSString *bin_dir = [current_binary stringByDeletingLastPathComponent];
+            NSString *default_metallib_path = [NSString pathWithComponents:@[bin_dir, @"default.metallib"]];
+            if ([[NSFileManager defaultManager] isReadableFileAtPath:default_metallib_path]) {
+                GGML_LOG_INFO("%s: found '%s'\n", __func__, [default_metallib_path UTF8String]);
+                NSDictionary *atts = [[NSFileManager defaultManager] attributesOfItemAtPath:default_metallib_path error:&error];
+                if (atts && atts[NSFileType] == NSFileTypeSymbolicLink) {
+                    // Optionally, if this is a symlink, try to resolve it.
+                    default_metallib_path = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:default_metallib_path error:&error];
+                    if (default_metallib_path && [default_metallib_path length] > 0 && ![[default_metallib_path substringToIndex:1] isEqualToString:@"/"]) {
+                        // It is a relative path, adding the binary directory as directory prefix.
+                        default_metallib_path = [NSString pathWithComponents:@[bin_dir, default_metallib_path]];
+                    }
+                    if (!default_metallib_path || ![[NSFileManager defaultManager] isReadableFileAtPath:default_metallib_path]) {
+                        // Link to the resource could not be resolved.
+                        default_metallib_path = nil;
+                    } else {
+                        GGML_LOG_INFO("%s: symlink resolved '%s'\n", __func__, [default_metallib_path UTF8String]);
+                    }
                 }
-                if (defaultMetalibPath && [defaultMetalibPath length] > 0 && ![[defaultMetalibPath substringToIndex:1] isEqualToString:@"/"]) {
-                    defaultMetalibPath = [NSString pathWithComponents:@[binDir, defaultMetalibPath]];
-                }
+            } else {
+                // The resource couldn't be found in the binary's directory.
+                default_metallib_path = nil;
             }
-            path_lib = defaultMetalibPath;
+            path_lib = default_metallib_path;
         }
 
         if (try_metallib && path_lib != nil) {
