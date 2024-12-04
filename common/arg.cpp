@@ -348,6 +348,18 @@ bool common_params_parse(int argc, char ** argv, common_params & params, llama_e
     return true;
 }
 
+static std::string list_builtin_chat_templates() {
+    std::vector<const char *> supported_tmpl;
+    int32_t res = llama_chat_builtin_templates(nullptr, 0);
+    supported_tmpl.resize(res);
+    res = llama_chat_builtin_templates(supported_tmpl.data(), supported_tmpl.size());
+    std::ostringstream msg;
+    for (auto & tmpl : supported_tmpl) {
+        msg << tmpl << (&tmpl == &supported_tmpl.back() ? "" : ", ");
+    }
+    return msg.str();
+}
+
 common_params_context common_params_parser_init(common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
     // load dynamic backends
     ggml_backend_load_all();
@@ -1814,9 +1826,11 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"--chat-template"}, "JINJA_TEMPLATE",
-        "set custom jinja chat template (default: template taken from model's metadata)\n"
-        "if suffix/prefix are specified, template will be disabled\n"
-        "only commonly used templates are accepted:\nhttps://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
+        string_format(
+            "set custom jinja chat template (default: template taken from model's metadata)\n"
+            "if suffix/prefix are specified, template will be disabled\n"
+            "list of built-in templates:\n%s", list_builtin_chat_templates().c_str()
+        ),
         [](common_params & params, const std::string & value) {
             if (!common_chat_verify_template(value)) {
                 throw std::runtime_error(string_format(

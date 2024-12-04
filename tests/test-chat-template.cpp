@@ -82,9 +82,9 @@ int main(void) {
         // mistralai/Mistral-7B-Instruct-v0.2 (NOTE: Old pre-v1 without a system prompt)
         "[INST] You are a helpful assistant\nHello [/INST]Hi there</s>[INST] Who are you [/INST]   I am an assistant   </s>[INST] Another question [/INST]",
         // TheBloke/FusionNet_34Bx2_MoE-AWQ
-        "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\nHello [/INST] Hi there </s><s>[INST] Who are you [/INST]    I am an assistant    </s><s>[INST] Another question [/INST]",
+        "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\nHello [/INST]Hi there</s><s>[INST] Who are you [/INST]   I am an assistant   </s><s>[INST] Another question [/INST]",
         // bofenghuang/vigogne-2-70b-chat
-        "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\nHello [/INST] Hi there </s>[INST] Who are you [/INST] I am an assistant </s>[INST] Another question [/INST]",
+        "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\nHello [/INST]Hi there</s>[INST] Who are you [/INST]I am an assistant</s>[INST] Another question [/INST]",
         // mlabonne/AlphaMonarch-7B
         "system\nYou are a helpful assistant</s>\n<s>user\nHello</s>\n<s>assistant\nHi there</s>\n<s>user\nWho are you</s>\n<s>assistant\n   I am an assistant   </s>\n<s>user\nAnother question</s>\n<s>assistant\n",
         // google/gemma-7b-it
@@ -133,6 +133,17 @@ int main(void) {
     std::vector<char> formatted_chat(1024);
     int32_t res;
 
+    // list all supported templates
+    std::vector<const char *> supported_tmpl;
+    res = llama_chat_builtin_templates(nullptr, 0);
+    assert(res > 0);
+    supported_tmpl.resize(res);
+    res = llama_chat_builtin_templates(supported_tmpl.data(), supported_tmpl.size());
+    printf("Built-in chat templates:\n");
+    for (auto tmpl : supported_tmpl) {
+        printf("  %s\n", tmpl);
+    }
+
     // test invalid chat template
     res = llama_chat_apply_template(nullptr, "INVALID TEMPLATE", conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
     assert(res < 0);
@@ -174,7 +185,8 @@ int main(void) {
     assert(fmt_sys("mistral-v3") == "[INST] You are a helpful assistant\n\n");
     assert(fmt_sys("mistral-v3-tekken") == "[INST]You are a helpful assistant\n\n");
     assert(fmt_sys("mistral-v7") == "[SYSTEM_PROMPT] You are a helpful assistant[/SYSTEM_PROMPT]");
-    assert(fmt_sys("llama2") == "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\n");
+    assert(fmt_sys("llama2") == "[INST] You are a helpful assistant\n");
+    assert(fmt_sys("llama2-sys") == "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\n");
     assert(fmt_sys("mistral") == "[INST] You are a helpful assistant\n"); // for old pre-v1 templates
     assert(fmt_sys("gemma")  == ""); // for gemma, system message is merged with user message
     assert(fmt_sys("llama3") == "<|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|>");
@@ -202,6 +214,8 @@ int main(void) {
     assert(fmt_single("mistral") == "[INST] How are you [/INST]"); // for old pre-v1 templates
     assert(fmt_single("gemma")  == "\n<start_of_turn>user\nHow are you<end_of_turn>\n<start_of_turn>model\n");
     assert(fmt_single("llama3") == "<|start_header_id|>user<|end_header_id|>\n\nHow are you<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n");
+
+    printf("Test chat templates: OK\n");
 
     return 0;
 }
