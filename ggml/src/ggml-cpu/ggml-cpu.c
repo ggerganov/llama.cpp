@@ -2425,7 +2425,7 @@ bool ggml_is_numa(void) {
 #endif
 
 #if !defined(HWCAP2_I8MM)
-#define HWCAP2_I8MM 0
+#define HWCAP2_I8MM (1 << 13)
 #endif
 
 static void ggml_init_arm_arch_features(void) {
