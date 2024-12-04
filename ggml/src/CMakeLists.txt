@@ -269,7 +269,42 @@ function(ggml_add_backend backend)
     endif()
 endfunction()
 
+function(ggml_add_cpu_backend_variant tag_name)
+    set(GGML_CPU_TAG_NAME ${tag_name})
+    # other: OPENMP LLAMAFILE CPU_HBM
+    foreach (feat NATIVE
+                  AVX AVX2 AVX_VNNI FMA F16C
+                  AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16
+                  AMX_TILE AMX_INT8 AMX_BF16)
+        set(GGML_${feat} OFF)
+    endforeach()
+
+    foreach (feat ${ARGN})
+        set(GGML_${feat} ON)
+    endforeach()
+
+    ggml_add_cpu_backend_variant_impl(${tag_name})
+endfunction()
+
 ggml_add_backend(CPU)
+
+if (GGML_CPU_ALL_VARIANTS)
+    if (NOT GGML_BACKEND_DL)
+        message(FATAL_ERROR "GGML_CPU_ALL_VARIANTS requires GGML_BACKEND_DL")
+    endif()
+    ggml_add_cpu_backend_variant(sandybridge    AVX)
+    ggml_add_cpu_backend_variant(haswell        AVX F16C AVX2 FMA)
+    ggml_add_cpu_backend_variant(skylakex       AVX F16C AVX2 FMA AVX512)
+    ggml_add_cpu_backend_variant(icelake        AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI)
+    if (NOT MSVC)
+        # MSVC doesn't support AVX-VNNI or AMX
+        ggml_add_cpu_backend_variant(alderlake      AVX F16C AVX2 FMA AVX_VNNI)
+        ggml_add_cpu_backend_variant(sapphirerapids AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8)
+    endif()
+else ()
+    ggml_add_cpu_backend_variant_impl("")
+endif()
+
 ggml_add_backend(BLAS)
 ggml_add_backend(CANN)
 ggml_add_backend(CUDA)

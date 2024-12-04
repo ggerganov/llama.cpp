@@ -756,7 +756,7 @@ do {                                                              \
 #define GGML_F32Cx8_LOAD(x)     _mm256_cvtph_ps(_mm_loadu_si128((const __m128i *)(x)))
 #define GGML_F32Cx8_STORE(x, y) _mm_storeu_si128((__m128i *)(x), _mm256_cvtps_ph(y, 0))
 #else
-static inline __m256 __avx_f32cx8_load(ggml_fp16_t *x) {
+static inline __m256 __avx_f32cx8_load(const ggml_fp16_t * x) {
     float tmp[8];
 
     for (int i = 0; i < 8; i++) {
