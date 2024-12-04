@@ -15,6 +15,7 @@
 
 using json = nlohmann::ordered_json;
 
+// cast a shared_ptr to a specific type using copy constructor
 #define copy_cast_ptr(TYPEOUT, ptr) *(static_cast<TYPEOUT*>(ptr.get()))
 
 enum stop_type {
@@ -281,22 +282,33 @@ struct server_task_result_cmpl_partial : server_task_result {
     server_task_result_cmpl_partial() : server_task_result(RESULT_TYPE_CMPL_PARTIAL) {}
     int index = 0;
     std::string content;
+
+    bool truncated;
     int32_t n_decoded;
     int32_t n_prompt_tokens;
+
     stop_type stop = STOP_TYPE_NONE;
     std::vector<completion_token_output> probs_output;
     result_timings timings;
 
     json to_json() {
+        bool is_stop = stop != STOP_TYPE_NONE;
+        // non-OAI-compat JSON
         json res = json {
-            {"index",      index},
-            {"content",    content},
-            {"stop",       stop != STOP_TYPE_NONE},
-            {"id_slot",    id_slot},
+            {"index",            index},
+            {"content",          content},
+            {"stop_type",        stop_type_to_str(stop)},
+            {"stop",             is_stop},
+            {"id_slot",          id_slot},
+            {"tokens_predicted", n_decoded},
+            {"tokens_evaluated", n_prompt_tokens},
         };
-        // populate the timings object when timings_per_token is set
+        // populate the timings object when needed (usually for the last response or with timings_per_token enabled)
         if (timings.prompt_n > 0) {
             res.push_back({"timings", timings.to_json()});
+        }
+        if (is_stop) {
+            res.push_back({"truncated", truncated});
         }
         return res;
     }
@@ -464,7 +476,7 @@ struct server_task_result_slot_erase : server_task_result {
             { "n_erased", n_erased },
         };
     }
-    
+
     static server_task_result_slot_erase from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_slot_erase, result_ptr);
     }

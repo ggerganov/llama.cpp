@@ -1172,6 +1172,8 @@ struct server_context {
         res.n_decoded       = slot.n_decoded;
         res.n_prompt_tokens = slot.n_prompt_tokens;
         res.content         = tkn.text_to_send;
+        res.stop            = slot.stop;
+        res.truncated       = slot.truncated;
 
         if (slot.params.sampling.n_probs > 0) {
             const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
@@ -1186,7 +1188,8 @@ struct server_context {
             }
         }
 
-        if (slot.params.timings_per_token) {
+        // populate timings if this is final response or timings_per_token is enabled
+        if (slot.stop != STOP_TYPE_NONE || slot.params.timings_per_token) {
             res.timings = slot.get_timings();
         }
 
@@ -1195,6 +1198,7 @@ struct server_context {
 
     void send_final_response(server_slot & slot) {
         if (slot.params.stream) {
+            // if in stream mode, send the last partial response
             return send_partial_response(slot, {0, "", {}});
         }
 
@@ -1209,6 +1213,8 @@ struct server_context {
         res.n_tokens_cached = slot.n_past;
         res.content         = slot.generated_text;
         res.stop            = slot.stop;
+        res.truncated       = slot.truncated;
+        res.timings         = slot.get_timings();
 
         res.generation_params = slot.params; // copy the parameters
 
@@ -1439,6 +1445,8 @@ struct server_context {
                 break;
             }
 
+            SRV_ERR("received partial result, %s\n", result.to_json().dump().c_str());
+
             if (result.stop != STOP_TYPE_NONE) {
                 if (++n_finished == id_tasks.size()) {
                     break;
@@ -1533,7 +1541,7 @@ struct server_context {
                     res.id                  = task.id;
                     res.n_idle_slots        = n_idle_slots;
                     res.n_processing_slots  = n_processing_slots;
-                    res.n_tasks_deferred    = queue_tasks.queue_tasks_deferred.size(); 
+                    res.n_tasks_deferred    = queue_tasks.queue_tasks_deferred.size();
                     res.t_start             = metrics.t_start;
 
                     res.kv_cache_tokens_count = llama_get_kv_cache_token_count(ctx);
@@ -1627,13 +1635,13 @@ struct server_context {
                     const double t_restore_ms = (t_end - t_start) / 1000.0;
 
                     server_task_result_slot_save_load result;
-                    result.id        = task.id;
-                    result.id_slot   = id_slot;
-                    result.filename  = filename;
-                    result.is_save   = false;
-                    result.n_saved   = token_count;
-                    result.n_read    = nread;
-                    result.t_ms      = t_restore_ms;
+                    result.id         = task.id;
+                    result.id_slot    = id_slot;
+                    result.filename   = filename;
+                    result.is_save    = false;
+                    result.n_restored = token_count;
+                    result.n_read     = nread;
+                    result.t_ms       = t_restore_ms;
                     queue_results.send(result);
                 } break;
             case SERVER_TASK_TYPE_SLOT_ERASE:

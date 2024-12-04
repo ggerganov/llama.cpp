@@ -12,13 +12,13 @@ def create_server():
 
 
 @pytest.mark.parametrize(
-    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,truncated",
+    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason",
     [
-        ("llama-2", "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, False),
-        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, False),
+        ("llama-2", "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length"),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length"),
     ]
 )
-def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, truncated):
+def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason):
     global server
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
@@ -35,10 +35,7 @@ def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_conte
     choice = res.body["choices"][0]
     assert "assistant" == choice["message"]["role"]
     assert match_regex(re_content, choice["message"]["content"])
-    if truncated:
-        assert choice["finish_reason"] == "length"
-    else:
-        assert choice["finish_reason"] == "stop"
+    assert choice["finish_reason"] == finish_reason
 
 
 @pytest.mark.parametrize(
@@ -93,7 +90,7 @@ def test_chat_completion_with_openai_library():
         temperature=0.8,
     )
     print(res)
-    assert res.choices[0].finish_reason == "stop"
+    assert res.choices[0].finish_reason == "length"
     assert res.choices[0].message.content is not None
     assert match_regex("(Suddenly)+", res.choices[0].message.content)
 
