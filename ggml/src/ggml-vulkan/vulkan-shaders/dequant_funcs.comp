@@ -100,6 +100,11 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
 #endif
 
 #if defined(DATA_A_IQ4_NL)
+float iq_helper(uint i) {
+	const float x = float(i);
+    return round(((0.080958*x-1.875836)*x+25.907107)*x-127.663571);
+}
+
 vec2 dequantize(uint ib, uint iqs, uint a_offset) {
     const float d = float(data_a[a_offset + ib].d);
     const uint vui = uint(data_a[a_offset + ib].qs[iqs]);
@@ -107,6 +112,6 @@ vec2 dequantize(uint ib, uint iqs, uint a_offset) {
 }
 vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     const uint vui = uint(data_a_packed16[a_offset + ib].qs[iqs/2]);
-    return vec4(kvalues_iq4nl[vui & 0xF], kvalues_iq4nl[(vui >> 4) & 0xF], kvalues_iq4nl[(vui >> 8) & 0xF], kvalues_iq4nl[(vui >> 12) & 0xF]);
+    return vec4(iq_helper(vui & 0xF), iq_helper((vui >> 4) & 0xF), iq_helper((vui >> 8) & 0xF), iq_helper((vui >> 12) & 0xF));
 }
 #endif
