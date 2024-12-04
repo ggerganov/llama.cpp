@@ -31,7 +31,7 @@ vec2 dequantize(uint ib, uint iqs, uint a_offset) {
 }
 vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     const uint vui = uint(data_a_packed16[a_offset + ib].qs[iqs/2]);
-    return (vec4(vui & 0xF, (vui >> 4) & 0xF, (vui >> 8) & 0xF, (vui >> 12) & 0xF) - 8.0f);
+    return (vec4(vui & 0xF, (vui >> 4) & 0xF, (vui >> 8) & 0xF, vui >> 12) - 8.0f);
 }
 #endif
 
@@ -46,7 +46,7 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     const float d = float(data_a_packed16[a_offset + ib].d);
     const float m = float(data_a_packed16[a_offset + ib].m);
     const uint vui = uint(data_a_packed16[a_offset + ib].qs[iqs/2]);
-    return vec4(vui & 0xF, (vui >> 4) & 0xF, (vui >> 8) & 0xF, (vui >> 12) & 0xF) * d + m;
+    return vec4(vui & 0xF, (vui >> 4) & 0xF, (vui >> 8) & 0xF, vui >> 12) * d + m;
 }
 #endif
 
@@ -63,7 +63,7 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     const ivec2 qh0 = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
     const ivec2 qh1 = ivec2(((uint_qh >> (iqs + 1)) << 4) & 0x10, (uint_qh >> (iqs + 13)) & 0x10);
     const uint vui = uint(data_a_packed16[a_offset + ib].qs[iqs/2]);
-    return (vec4(((vui >> 0) & 0xF) | qh0.x, ((vui >> 4) & 0xF) | qh0.y, ((vui >> 8) & 0xF) | qh1.x, ((vui >> 12) & 0xF) | qh1.y) - 16.0f);
+    return (vec4(((vui >> 0) & 0xF) | qh0.x, ((vui >> 4) & 0xF) | qh0.y, ((vui >> 8) & 0xF) | qh1.x, (vui >> 12) | qh1.y) - 16.0f);
 }
 #endif
 
@@ -83,7 +83,7 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     const ivec2 qh0 = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
     const ivec2 qh1 = ivec2(((uint_qh >> (iqs + 1)) << 4) & 0x10, (uint_qh >> (iqs + 13)) & 0x10);
     const uint vui = uint(data_a_packed16[a_offset + ib].qs[iqs/2]);
-    return vec4(((vui >> 0) & 0xF) | qh0.x, ((vui >> 4) & 0xF) | qh0.y, ((vui >> 8) & 0xF) | qh1.x, ((vui >> 12) & 0xF) | qh1.y) * d + m;
+    return vec4(((vui >> 0) & 0xF) | qh0.x, ((vui >> 4) & 0xF) | qh0.y, ((vui >> 8) & 0xF) | qh1.x, (vui >> 12) | qh1.y) * d + m;
 }
 #endif
 
@@ -95,16 +95,11 @@ vec2 dequantize(uint ib, uint iqs, uint a_offset) {
 vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     uint32_t v0 = data_a_packed16[a_offset + ib].qs[iqs/2];
     uint32_t v1 = data_a_packed16[a_offset + ib].qs[iqs/2 + 1];
-    return vec4(int8_t(v0 & 0xFF), int8_t((v0 >> 8) & 0xFF), int8_t(v1 & 0xFF), int8_t((v1 >> 8) & 0xFF));
+    return vec4(int8_t(v0 & 0xFF), int8_t(v0 >> 8), int8_t(v1 & 0xFF), int8_t(v1 >> 8));
 }
 #endif
 
 #if defined(DATA_A_IQ4_NL)
-float iq_helper(uint i) {
-	const float x = float(i);
-    return round(((0.080958*x-1.875836)*x+25.907107)*x-127.663571);
-}
-
 vec2 dequantize(uint ib, uint iqs, uint a_offset) {
     const float d = float(data_a[a_offset + ib].d);
     const uint vui = uint(data_a[a_offset + ib].qs[iqs]);
@@ -112,6 +107,6 @@ vec2 dequantize(uint ib, uint iqs, uint a_offset) {
 }
 vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
     const uint vui = uint(data_a_packed16[a_offset + ib].qs[iqs/2]);
-    return vec4(iq_helper(vui & 0xF), iq_helper((vui >> 4) & 0xF), iq_helper((vui >> 8) & 0xF), iq_helper((vui >> 12) & 0xF));
+    return vec4(kvalues_iq4nl[vui & 0xF], kvalues_iq4nl[(vui >> 4) & 0xF], kvalues_iq4nl[(vui >> 8) & 0xF], kvalues_iq4nl[vui >> 12]);
 }
 #endif

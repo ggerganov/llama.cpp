@@ -59,7 +59,6 @@ void iter(inout FLOAT_TYPE temp[NUM_ROWS], const uint first_row, const uint num_
         ibi += p.ncols;
 
 #if K_PER_ITER == 8
-        // TODO: can we dequant as f16 instead of as vec?
         const vec4 v = dequantize4(ib, iqs, a_offset);
         const vec4 v2 = dequantize4(ib, iqs+(4/QUANT_R), a_offset);
         FLOAT_TYPE rowtmp = 0;
