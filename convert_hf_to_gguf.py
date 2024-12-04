@@ -3094,8 +3094,7 @@ class Mamba2Model(Model):
 
 
 # TODO: Switch to BambaForCausalLM once ready in transformers
-# @Model.register("BambaForCausalLM")
-@Model.register("JambaForCausalLM")
+@Model.register("BambaForCausalLM")
 class BambaModel(Mamba2Model):
     """Bamba is a hybrid SSM + Attention model that uses Mamba2 SSM layers"""
     model_arch = gguf.MODEL_ARCH.BAMBA
@@ -3159,8 +3158,6 @@ class BambaModel(Mamba2Model):
         self.gguf_writer.add_ssm_inner_size(self.d_inner)
         self.gguf_writer.add_ssm_head_count(self.find_hparam(["n_heads"]))
         self.gguf_writer.add_ssm_head_dim(d_head := self.find_hparam(["d_head"]))
-        self.gguf_writer.add_ssm_conv_bias(self.find_hparam(["conv_bias"], optional=True) or False)
-        self.gguf_writer.add_ssm_proj_bias(self.find_hparam(["proj_bias"], optional=True) or False)
         self.gguf_writer.add_ssm_chunk_size(self.find_hparam(["chunk_size"]))
 
         ## Attention params ##
@@ -3187,6 +3184,7 @@ class BambaModel(Mamba2Model):
     def modify_tensors(
         self, data_torch: Tensor, name: str, bid: int | None
     ) -> Iterable[tuple[str, Tensor]]:
+
         # Determine whether this is a mamaba layer or an attention layer
         if bid in self._ssm_layers:
             for mamba_new_name, data_torch in super().modify_tensors(
@@ -3199,13 +3197,11 @@ class BambaModel(Mamba2Model):
             ):
                 yield llama_new_name, data_torch
         else:
-            yield name, data_torch
+            yield self.map_tensor_name(name), data_torch
 
 
     def reshape_tensors(
-        self,
-        data_torch: Tensor,
-        new_name: str, bid: int | None,
+        self, data_torch: Tensor, new_name: str, bid: int | None,
     ) -> Tensor:
         if bid in self._ssm_layers:
             return super().reshape_tensors(data_torch, new_name, bid)

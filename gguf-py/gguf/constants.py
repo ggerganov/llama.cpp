@@ -154,8 +154,6 @@ class Keys:
         HEAD_COUNT     = "{arch}.ssm.head_count"
         HEAD_DIM       = "{arch}.ssm.head_dim"
         CHUNK_SIZE     = "{arch}.ssm.chunk_size"
-        CONV_BIAS      = "{arch}.ssm.conv_bias"
-        PROJ_BIAS      = "{arch}.ssm.proj_bias"
 
     class HybridMamba:
         ATTN_LAYER_INDICES = "{arch}.attention.layer_indices"

@@ -799,12 +799,6 @@ class GGUFWriter:
     def add_ssm_chunk_size(self, value: int) -> None:
         self.add_uint32(Keys.SSM.CHUNK_SIZE.format(arch=self.arch), value)
 
-    def add_ssm_conv_bias(self, value: bool) -> None:
-        self.add_bool(Keys.SSM.CONV_BIAS.format(arch=self.arch), value)
-
-    def add_ssm_proj_bias(self, value: bool) -> None:
-        self.add_bool(Keys.SSM.PROJ_BIAS.format(arch=self.arch), value)
-
     def add_attn_layer_indices(self, values: list[int]) -> None:
         self.add_array(Keys.HybridMamba.ATTN_LAYER_INDICES.format(arch=self.arch), values)
 
