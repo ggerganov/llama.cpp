@@ -1,4 +1,6 @@
 ARG UBUNTU_VERSION=20.04
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Africa/Johannesburg 
 # This needs to generally match the container host's environment.
 ARG CUDA_VERSION=11.3.1
 # Target the CUDA build image
