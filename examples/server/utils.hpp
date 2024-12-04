@@ -583,15 +583,14 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false, bool verbose = false) {
-    bool stopped_word        = result.count("stopped_word") != 0;
-    bool stopped_eos         = json_value(result, "stopped_eos", false);
-    int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
-    int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
-    std::string content      = json_value(result, "content", std::string(""));
-
+static json format_final_response_oaicompat(
+        const json & request,
+        server_task_result_cmpl_final & result,
+        const std::string & completion_id,
+        bool streaming = false,
+        bool verbose = false) {
     std::string finish_reason = "length";
-    if (stopped_word || stopped_eos) {
+    if (result.stop == STOP_TYPE_WORD || result.stop == STOP_TYPE_EOS) {
         finish_reason = "stop";
     }
 
@@ -601,7 +600,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
                                         {"delta", json::object()}}})
                   : json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
-                                        {"message", json{{"content", content},
+                                        {"message", json{{"content", result.content},
                                                          {"role", "assistant"}}}}});
 
     std::time_t t = std::time(0);
@@ -613,48 +612,42 @@ static json format_final_response_oaicompat(const json & request, const json & r
             json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", streaming ? "chat.completion.chunk" : "chat.completion"},
         {"usage", json {
-            {"completion_tokens", num_tokens_predicted},
-            {"prompt_tokens",     num_prompt_tokens},
-            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
+            {"completion_tokens", result.n_decoded},
+            {"prompt_tokens",     result.n_prompt_tokens},
+            {"total_tokens",      result.n_decoded + result.n_prompt_tokens}
         }},
         {"id", completion_id}
     };
 
     // extra fields for debugging purposes
     if (verbose) {
-        res["__verbose"] = result;
+        res["__verbose"] = result.to_json();
     }
 
-    if (result.contains("completion_probabilities")) {
-        res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
-    }
+    // TODO: fix this
+    // if (result.contains("completion_probabilities")) {
+    //     res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
+    // }
 
-    if (result.contains("timings")) {
-        res.push_back({"timings", json_value(result, "timings", json::object())});
+    if (result.timings.prompt_n >= 0) {
+        res.push_back({"timings", result.timings.to_json()});
     }
 
     return res;
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(const json & result, const std::string & completion_id) {
-    if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
-        return std::vector<json>({result});
-    }
-
-    bool first = json_value(result, "oaicompat_token_ctr", 0) == 0;
-    std::string modelname = json_value(result, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
-
-    bool stopped_word   = json_value(result, "stopped_word",  false);
-    bool stopped_eos    = json_value(result, "stopped_eos",   false);
-    bool stopped_limit  = json_value(result, "stopped_limit", false);
-    std::string content = json_value(result, "content",       std::string(""));
+static std::vector<json> format_partial_response_oaicompat(
+        std::string modelname,
+        server_task_result_cmpl_partial & result,
+        const std::string & completion_id) {
+    bool first = result.n_decoded == 0;
+    std::string content = result.content;
 
     std::string finish_reason;
-    if (stopped_word || stopped_eos) {
+    if (result.stop == STOP_TYPE_WORD || result.stop == STOP_TYPE_EOS) {
         finish_reason = "stop";
-    }
-    if (stopped_limit) {
+    } else if (result.stop == STOP_TYPE_LIMIT) {
         finish_reason = "length";
     }
 
@@ -724,17 +717,15 @@ static std::vector<json> format_partial_response_oaicompat(const json & result, 
         {"object",  "chat.completion.chunk"}
     };
 
-    if (result.contains("timings")) {
-        ret.push_back({"timings", json_value(result, "timings", json::object())});
+    if (result.timings.prompt_n >= 0) {
+        ret.push_back({"timings", result.timings.to_json()});
     }
 
     if (!finish_reason.empty()) {
-        int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
-        int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
         ret.push_back({"usage", json {
-            {"completion_tokens", num_tokens_predicted},
-            {"prompt_tokens",     num_prompt_tokens},
-            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
+            {"completion_tokens", result.n_decoded},
+            {"prompt_tokens",     result.n_prompt_tokens},
+            {"total_tokens",      result.n_decoded + result.n_prompt_tokens}
         }});
     }
 

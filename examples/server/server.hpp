@@ -281,6 +281,8 @@ struct server_task_result_cmpl_partial : server_task_result {
     server_task_result_cmpl_partial() : server_task_result(RESULT_TYPE_CMPL_PARTIAL) {}
     int index = 0;
     std::string content;
+    int32_t n_decoded;
+    int32_t n_prompt_tokens;
     stop_type stop = STOP_TYPE_NONE;
     std::vector<completion_token_output> probs_output;
     result_timings timings;

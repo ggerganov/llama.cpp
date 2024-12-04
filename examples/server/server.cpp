@@ -494,7 +494,9 @@ struct server_response {
     }
 
     // Send a new result to a waiting id_task
-    void send(server_task_result & result) {
+    template<typename T>
+    void send(T & result) {
+        static_assert(std::is_base_of<server_task_result, T>::value, "T must be derived from server_task_result");
         SRV_DBG("sending result for task id = %d\n", result.id);
 
         std::unique_lock<std::mutex> lock(mutex_results);
@@ -502,7 +504,7 @@ struct server_response {
             if (result.id == id_task) {
                 SRV_DBG("task id = %d pushed to result queue\n", result.id);
 
-                queue_results.push_back(std::make_unique<server_task_result>(result));
+                queue_results.push_back(std::make_unique<T>(std::move(result)));
                 condition_results.notify_all();
                 return;
             }
@@ -1166,8 +1168,10 @@ struct server_context {
 
     void send_partial_response(server_slot & slot, completion_token_output tkn) {
         server_task_result_cmpl_partial res;
-        res.id       = slot.id_task;
-        res.content  = tkn.text_to_send;
+        res.id              = slot.id_task;
+        res.n_decoded       = slot.n_decoded;
+        res.n_prompt_tokens = slot.n_prompt_tokens;
+        res.content         = tkn.text_to_send;
 
         if (slot.params.sampling.n_probs > 0) {
             const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
@@ -1189,7 +1193,11 @@ struct server_context {
         queue_results.send(res);
     }
 
-    void send_final_response(const server_slot & slot) {
+    void send_final_response(server_slot & slot) {
+        if (slot.params.stream) {
+            return send_partial_response(slot, {0, "", {}});
+        }
+
         server_task_result_cmpl_final res;
         res.id              = slot.id_task;
         res.id_slot         = slot.id;
@@ -1380,6 +1388,7 @@ struct server_context {
             const std::unordered_set<int> & id_tasks,
             const std::function<void(std::vector<T>&)> & result_handler,
             const std::function<void(json)> & error_handler) {
+        static_assert(std::is_base_of<server_task_result, T>::value, "T must be derived from server_task_result");
         std::vector<T> results(id_tasks.size());
         for (size_t i = 0; i < id_tasks.size(); i++) {
             task_result_ptr result_raw = queue_results.recv(id_tasks);
@@ -2815,7 +2824,7 @@ int main(int argc, char ** argv) {
         if (!stream) {
             ctx_server.receive_multi_results<server_task_result_cmpl_final>(task_ids, [&](std::vector<server_task_result_cmpl_final> & results) {
                 // multitask is never support in chat completion, there is only one result
-                json result_oai = format_final_response_oaicompat(data, results[0].to_json(), completion_id, /*.streaming =*/ false, verbose);
+                json result_oai = format_final_response_oaicompat(data, results[0], completion_id, /*.streaming =*/ false, verbose);
                 res_ok(res, result_oai);
             }, [&](const json & error_data) {
                 res_error(res, error_data);
@@ -2823,9 +2832,10 @@ int main(int argc, char ** argv) {
 
             ctx_server.queue_results.remove_waiting_task_ids(task_ids);
         } else {
-            const auto chunked_content_provider = [task_ids, &ctx_server, completion_id](size_t, httplib::DataSink & sink) {
+            std::string model_name = json_value(data, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
+            const auto chunked_content_provider = [task_ids, &ctx_server, completion_id, model_name](size_t, httplib::DataSink & sink) {
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result_cmpl_partial & result) -> bool {
-                    std::vector<json> result_array = format_partial_response_oaicompat(result.to_json(), completion_id);
+                    std::vector<json> result_array = format_partial_response_oaicompat(model_name, result, completion_id);
                     for (auto & event_data : result_array) {
                         if (event_data.empty()) {
                             continue; // skip the stop token
