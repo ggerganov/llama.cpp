@@ -6625,7 +6625,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                             case GGUF_TYPE_FLOAT64:
                             case GGUF_TYPE_BOOL:
                                 {
-                                    // prevent integer overflow in the malloc below
+                                    // prevent integer overflow in the calloc below
                                     if (kv->value.arr.n >= SIZE_MAX/gguf_type_size(kv->value.arr.type)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
                                         fclose(file);
@@ -6633,8 +6633,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                         return NULL;
                                     }
 
-                                    const size_t nbytes = kv->value.arr.n * gguf_type_size(kv->value.arr.type);
-                                    kv->value.arr.data = malloc(nbytes);
+                                    kv->value.arr.data = calloc(kv->value.arr.n, gguf_type_size(kv->value.arr.type));
                                     if (!kv->value.arr.data) {
                                         fprintf(stderr, "%s: failed to allocate memory for array\n", __func__);
                                         fclose(file);
@@ -6642,11 +6641,11 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                         return NULL;
                                     }
 
-                                    ok = ok && gguf_fread_el(file, kv->value.arr.data, nbytes, &offset);
+                                    ok = ok && gguf_fread_el(file, kv->value.arr.data, kv->value.arr.n * gguf_type_size(kv->value.arr.type), &offset);
                                 } break;
                             case GGUF_TYPE_STRING:
                                 {
-                                    // prevent integer overflow in the malloc below
+                                    // prevent integer overflow in the calloc below
                                     if (kv->value.arr.n >= SIZE_MAX/sizeof(struct gguf_str)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
                                         fclose(file);
@@ -6654,7 +6653,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                         return NULL;
                                     }
 
-                                    kv->value.arr.data = malloc(kv->value.arr.n * sizeof(struct gguf_str));
+                                    kv->value.arr.data = calloc(kv->value.arr.n, sizeof(struct gguf_str));
                                     if (!kv->value.arr.data) {
                                         fprintf(stderr, "%s: failed to allocate memory for array\n", __func__);
                                         fclose(file);
@@ -7152,7 +7151,7 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
     const int n_kv = gguf_get_n_kv(ctx);
 
     ctx->kv = realloc(ctx->kv, (n_kv + 1) * sizeof(struct gguf_kv));
-    GGML_ASSERT(ctx->kv); // potential memory leak
+    GGML_ASSERT(ctx->kv); // detect potential memory leak
     memset(&ctx->kv[n_kv], 0, sizeof(struct gguf_kv));
     ctx->kv[n_kv].key.n    = strlen(key);
     ctx->kv[n_kv].key.data = strdup(key);
@@ -7170,7 +7169,7 @@ void gguf_remove_key(struct gguf_context * ctx, const char * key) {
             ctx->kv[i] = ctx->kv[i+1];
         }
         ctx->kv = realloc(ctx->kv, (n_kv - 1) * sizeof(struct gguf_kv));
-        GGML_ASSERT(ctx->kv); // potential memory leak
+        GGML_ASSERT(ctx->kv); // detect potential memory leak
         ctx->header.n_kv--;
     }
 }
@@ -7268,7 +7267,7 @@ void gguf_set_arr_data(struct gguf_context * ctx, const char * key, enum gguf_ty
     ctx->kv[idx].value.arr.type = type;
     ctx->kv[idx].value.arr.n    = n;
     ctx->kv[idx].value.arr.data = realloc(ctx->kv[idx].value.arr.data, nbytes);
-    GGML_ASSERT(ctx->kv[idx].value.arr.data); // potential memory leak
+    GGML_ASSERT(ctx->kv[idx].value.arr.data); // detect potential memory leak
     memcpy(ctx->kv[idx].value.arr.data, data, nbytes);
 }
 
@@ -7280,7 +7279,7 @@ void gguf_set_arr_str(struct gguf_context * ctx, const char * key, const char **
     ctx->kv[idx].value.arr.type = GGUF_TYPE_STRING;
     ctx->kv[idx].value.arr.n    = n;
     ctx->kv[idx].value.arr.data = realloc(ctx->kv[idx].value.arr.data, nbytes);
-    GGML_ASSERT(ctx->kv[idx].value.arr.data); // potential memory leak
+    GGML_ASSERT(ctx->kv[idx].value.arr.data); // detect potential memory leak
     for (int i = 0; i < n; ++i) {
         struct gguf_str * str = &((struct gguf_str *)ctx->kv[idx].value.arr.data)[i];
         str->n    = strlen(data[i]);
@@ -7308,7 +7307,7 @@ void gguf_set_kv(struct gguf_context * ctx, const struct gguf_context * src) {
             case GGUF_TYPE_ARRAY:
                 {
                     if (src->kv[i].value.arr.type == GGUF_TYPE_STRING) {
-                        const char ** data = GGML_MALLOC(src->kv[i].value.arr.n * sizeof(char *));
+                        const char ** data = GGML_CALLOC(src->kv[i].value.arr.n, sizeof(char *));
                         for (uint64_t j = 0; j < src->kv[i].value.arr.n; ++j) {
                             data[j] = ((struct gguf_str *)src->kv[i].value.arr.data)[j].data;
                         }
@@ -7336,7 +7335,7 @@ void gguf_add_tensor(
 
     const uint64_t idx = ctx->header.n_tensors;
     ctx->info = realloc(ctx->info, (idx + 1)*sizeof(struct gguf_tensor_info));
-    GGML_ASSERT(ctx->info); // potential memory leak
+    GGML_ASSERT(ctx->info); // detect potential memory leak
     ctx->info[idx].t = *tensor;
     ctx->info[idx].offset = idx == 0 ? 0 :
         ctx->info[idx - 1].offset + GGML_PAD(ggml_nbytes(&ctx->info[idx - 1].t), ctx->alignment);
@@ -7404,7 +7403,7 @@ static void gguf_buf_grow(struct gguf_buf * buf, size_t size) {
         buf->size = 1.5f*(buf->offset + size);
         if (buf->data) {
             buf->data = realloc(buf->data, buf->size);
-            GGML_ASSERT(buf->data); // potential memory leak
+            GGML_ASSERT(buf->data); // detect potential memory leak
         }
     }
 }
