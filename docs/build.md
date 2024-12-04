@@ -39,6 +39,11 @@ cmake --build build --config Release
        ```
 
     For more details and a list of supported generators, see the [CMake documentation](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html).
+- For static builds, add `-DBUILD_SHARED_LIBS=OFF`:
+  ```
+  cmake -B build -DBUILD_SHARED_LIBS=OFF
+  cmake --build build --config Release
+  ```
 
 - Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
     - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
