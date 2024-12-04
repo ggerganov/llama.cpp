@@ -53,8 +53,10 @@ void iter(inout FLOAT_TYPE temp[NUM_ROWS], const uint first_row, const uint num_
         b1 = FLOAT_TYPE(data_b[b_offset + iybs + iqs + y_offset]);
     }
 #endif
+    uint ibi = first_row*p.ncols;
     [[unroll]] for (uint n = 0; n < num_rows; ++n) {
-        const uint ib = ((first_row + n)*p.ncols + col)/QUANT_K; // block index
+        const uint ib = (ibi + col)/QUANT_K; // block index
+        ibi += p.ncols;
 
 #if K_PER_ITER == 8
         // TODO: can we dequant as f16 instead of as vec?
