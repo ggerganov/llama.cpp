@@ -170,6 +170,9 @@ The project is under active development, and we are [looking for feedback and co
 | `-devd, --device-draft <dev1,dev2,..>` | comma-separated list of devices to use for offloading the draft model (none = don't offload)<br/>use --list-devices to see a list of available devices |
 | `-ngld, --gpu-layers-draft, --n-gpu-layers-draft N` | number of layers to store in VRAM for the draft model |
 | `-md, --model-draft FNAME` | draft model for speculative decoding (default: unused) |
+| `-ag, --aggregate` | to enable request aggregation |
+| `-bs, --buffer-size N` | to specify buffer size of the aggregation |
+| `-bks,--block-size N` | to specify the block size (array size) of requests processed together when aggregation is enabled; it should be less than the buffer size. |
 
 
 Note: If both command line argument and environment variable are both set for the same param, the argument will take precedence over env var.

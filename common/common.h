@@ -191,6 +191,9 @@ struct common_params {
     float   yarn_beta_slow        =  1.0f; // YaRN high correction dim
     int32_t yarn_orig_ctx         =     0; // YaRN original context length
     float   defrag_thold          =  0.1f; // KV cache defragmentation threshold
+    bool    aggregate             = false; // The aggregation feature essentially groups multiple requests over a specific time period before starting to process the prompts.
+    int32_t buffer_size           = 36;    // We would wait until there are buffer_size requests or 50 ms before starting to process the requests.
+    int32_t block_size            = 12;    // We group the requests in the buffer into blocks of block_size and process them as an array of prompts, similar to how /completions does.
 
     // offload params
     std::vector<ggml_backend_dev_t> devices;         // devices to use for offloading
