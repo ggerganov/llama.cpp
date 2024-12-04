@@ -1169,6 +1169,7 @@ struct server_context {
     void send_partial_response(server_slot & slot, completion_token_output tkn) {
         server_task_result_cmpl_partial res;
         res.id              = slot.id_task;
+        res.index           = slot.index;
         res.n_decoded       = slot.n_decoded;
         res.n_prompt_tokens = slot.n_prompt_tokens;
         res.content         = tkn.text_to_send;
@@ -1205,6 +1206,7 @@ struct server_context {
         server_task_result_cmpl_final res;
         res.id              = slot.id_task;
         res.id_slot         = slot.id;
+        res.index           = slot.index;
         res.content         = slot.generated_text;
 
         res.n_decoded       = slot.n_decoded;
@@ -1411,7 +1413,7 @@ struct server_context {
                 || result_raw->type == RESULT_TYPE_EMBD
                 || result_raw->type == RESULT_TYPE_RERANK
             ) {
-                auto result = T::from_ptr(result_raw);
+                T result = T::from_ptr(result_raw);
                 const size_t idx = result.index;
                 GGML_ASSERT(idx < results.size() && "index out of range");
                 results[idx] = result;
