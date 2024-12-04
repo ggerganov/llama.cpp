@@ -1,0 +1,77 @@
+# Server build and tests conversion from safetensors and inference
+name: LoRA adapters conversion and inference
+
+on:
+  workflow_dispatch: # allows manual triggering
+    inputs:
+      sha:
+        description: 'Commit SHA1 to build'
+        required: false
+        type: string
+      slow_tests:
+        description: 'Run slow tests'
+        required: true
+        type: boolean
+  push:
+    branches:
+      - master
+    paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install \
+            build-essential \
+            git \
+            cmake \
+            curl \
+          curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+          sudo apt-get install -y git-lfs
+
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
+
+      - name: Python setup
+        id: setup_python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Tests dependencies
+        id: test_dependencies
+        run: |
+          pip install -r requirements/requirements-all.txt
+
+      - name: Build
+        id: cmake_build
+        if: ${{ matrix.sanitizer != 'THREAD' }}
+        run: |
+          make llama-cli llama-export-lora \
+              -DGGML_NATIVE=OFF \
+              -DLLAMA_BUILD_SERVER=ON \
+              -DLLAMA_CURL=ON \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target llama-server
+
+      - name: Lora convert and inference tests
+        id: test_lora_conversion_inference
+        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
+        run: ./tests/test-lora-conversion-inference.sh
