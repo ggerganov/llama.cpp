@@ -791,6 +791,24 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .to_float                 = (ggml_to_float_t) ggml_bf16_to_fp32_row,
         .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_bf16_row_ref,
     },
+    [31] = { // GGML_TYPE_Q4_0_4_4
+        .type_name                = "TYPE_Q4_0_4_4 REMOVED, use Q4_0 with runtime repacking",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+    },
+    [32] = { // GGML_TYPE_Q4_0_4_8
+        .type_name                = "TYPE_Q4_0_4_8 REMOVED, use Q4_0 with runtime repacking",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+    },
+    [33] = { // GGML_TYPE_Q4_0_8_8
+        .type_name                = "TYPE_Q4_0_8_8 REMOVED, use Q4_0 with runtime repacking",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+    },
     [GGML_TYPE_TQ1_0] = {
         .type_name                = "tq1_0",
         .blck_size                = QK_K,
@@ -806,6 +824,24 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_tq2_0,
         .from_float_ref           = (ggml_from_float_t) quantize_row_tq2_0_ref,
+    },
+    [36] = { // GGML_TYPE_IQ4_NL_4_4
+        .type_name                = "TYPE_IQ4_NL_4_4 REMOVED, use IQ4_NL with runtime repacking",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+    },
+    [37] = { // GGML_TYPE_IQ4_NL_4_8
+        .type_name                = "TYPE_IQ4_NL_4_8 REMOVED, use IQ4_NL with runtime repacking",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+    },
+    [38] = { // GGML_TYPE_IQ4_NL_8_8
+        .type_name                = "TYPE_IQ4_NL_8_8 REMOVED, use IQ4_NL with runtime repacking",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
     },
 };
 
@@ -6799,7 +6835,16 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 (int64_t) info->ne[2] *
                 (int64_t) info->ne[3];
 
-            if (ggml_blck_size(info->type) == 0 || ne % ggml_blck_size(info->type) != 0) {
+            if (ggml_blck_size(info->type) == 0 ) {
+                // this tensor type support have been removed:
+                fprintf(stderr, "%s: tensor '%s' of type %d: %s\n",
+                        __func__, info->name.data, (int) info->type, ggml_type_name(info->type));
+                fclose(file);
+                gguf_free(ctx);
+                return NULL;
+            }
+
+            if (ne % ggml_blck_size(info->type) != 0) {
                 fprintf(stderr, "%s: tensor '%s' of type %d (%s) number of elements (%" PRId64 ") is not a multiple of block size (%" PRId64 ")\n",
                         __func__, info->name.data, (int) info->type, ggml_type_name(info->type), ne, ggml_blck_size(info->type));
                 fclose(file);

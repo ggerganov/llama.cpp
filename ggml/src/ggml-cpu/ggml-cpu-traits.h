@@ -19,14 +19,14 @@ namespace ggml::cpu {
 // register in tensor->extra
 class tensor_traits {
   public:
-    ~tensor_traits();
+    virtual ~tensor_traits();
     virtual bool work_size(int n_threads, const struct ggml_tensor * op, size_t & size)        = 0;
     virtual bool compute_forward(struct ggml_compute_params * params, struct ggml_tensor * op) = 0;
 };
 
 class extra_buffer_type {
   public:
-    ~extra_buffer_type();
+    virtual ~extra_buffer_type();
     virtual bool            supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) = 0;
     virtual tensor_traits * get_tensor_traits(const struct ggml_tensor * op)                   = 0;
 };

@@ -222,12 +222,12 @@ static inline __m256i mul_sum_i8_pairs_int32x8(const __m256i x, const __m256i y)
 
 static const int8_t kvalues_iq4nl[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
-static void quantize_q8_0_4x4(const float * x, void * vy, int64_t k) {
+static void quantize_q8_0_4x4(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t k) {
     assert(QK8_0 == 32);
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
 
-    block_q8_0x4 * y = (block_q8_0x4 *) vy;
+    block_q8_0x4 * GGML_RESTRICT y = (block_q8_0x4 *) vy;
 
 #if defined(__ARM_NEON)
     float32x4_t srcv[4][8];
@@ -316,12 +316,12 @@ static void quantize_q8_0_4x4(const float * x, void * vy, int64_t k) {
 #endif
 }
 
-static void quantize_q8_0_4x8(const float * x, void * vy, int64_t k) {
+static void quantize_q8_0_4x8(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t k) {
     assert(QK8_0 == 32);
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
 
-    block_q8_0x4 * y = (block_q8_0x4 *) vy;
+    block_q8_0x4 * GGML_RESTRICT y = (block_q8_0x4 *) vy;
 
 #if defined(__ARM_NEON)
     float32x4_t srcv[4][8];
@@ -531,7 +531,7 @@ static void quantize_q8_0_4x8(const float * x, void * vy, int64_t k) {
 #endif
 }
 
-static void quantize_mat_q8_0(const float * x, void * vy, int64_t nrow, int64_t n_per_row, int64_t blck_size_interleave) {
+static void quantize_mat_q8_0(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t nrow, int64_t n_per_row, int64_t blck_size_interleave) {
     assert(nrow == 4);
     UNUSED(nrow);
     if (blck_size_interleave == 4) {
@@ -543,7 +543,7 @@ static void quantize_mat_q8_0(const float * x, void * vy, int64_t nrow, int64_t 
     }
 }
 
-static void ggml_gemv_q4_0_4x4_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemv_q4_0_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 4;
@@ -628,7 +628,7 @@ static void ggml_gemv_q4_0_4x4_q8_0(int n, float * s, size_t bs, const void * vx
     }
 }
 
-static void ggml_gemv_q4_0_4x8_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemv_q4_0_4x8_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 4;
@@ -738,7 +738,7 @@ static void ggml_gemv_q4_0_4x8_q8_0(int n, float * s, size_t bs, const void * vx
     }
 }
 
-static void ggml_gemv_q4_0_8x8_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemv_q4_0_8x8_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 8;
@@ -1011,7 +1011,7 @@ static void ggml_gemv_q4_0_8x8_q8_0(int n, float * s, size_t bs, const void * vx
     }
 }
 
-static void ggml_gemv_iq4_nl_4x4_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemv_iq4_nl_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 4;
@@ -1107,7 +1107,7 @@ static void ggml_gemv_iq4_nl_4x4_q8_0(int n, float * s, size_t bs, const void * 
     }
 }
 
-static void ggml_gemm_q4_0_4x4_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemm_q4_0_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 4;
@@ -1623,7 +1623,7 @@ static void ggml_gemm_q4_0_4x4_q8_0(int n, float * s, size_t bs, const void * vx
     }
 }
 
-static void ggml_gemm_q4_0_4x8_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemm_q4_0_4x8_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 4;
@@ -2077,7 +2077,7 @@ static void ggml_gemm_q4_0_4x8_q8_0(int n, float * s, size_t bs, const void * vx
     }
 }
 
-static void ggml_gemm_q4_0_8x8_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemm_q4_0_8x8_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 8;
@@ -3497,7 +3497,7 @@ static void ggml_gemm_q4_0_8x8_q8_0(int n, float * s, size_t bs, const void * vx
     }
 }
 
-static void ggml_gemm_iq4_nl_4x4_q8_0(int n, float * s, size_t bs, const void * vx, const void * vy, int nr, int nc) {
+static void ggml_gemm_iq4_nl_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int nr, int nc) {
     const int qk = QK8_0;
     const int nb = n / qk;
     const int ncols_interleaved = 4;
@@ -3677,7 +3677,7 @@ static block_q4_0x8 make_block_q4_0x8(block_q4_0 * in, unsigned int blck_size_in
     return out;
 }
 
-static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block, const void * data, size_t data_size) {
+static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
 
@@ -3708,7 +3708,7 @@ static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block
     GGML_UNUSED(data_size);
 }
 
-static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block, const void * data, size_t data_size) {
+static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 8);
 
@@ -3772,7 +3772,7 @@ static block_iq4_nlx4 make_block_iq4_nlx4(block_iq4_nl * in, unsigned int blck_s
     return out;
 }
 
-static int repack_iq4_nl_to_iq4_nl_4_bl(struct ggml_tensor * t, int interleave_block, const void * data, size_t data_size) {
+static int repack_iq4_nl_to_iq4_nl_4_bl(struct ggml_tensor * t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_IQ4_NL);
     GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
 
@@ -3971,8 +3971,7 @@ static const tensor_traits<block_iq4_nl, 4, 4> iq4_nl_4x4_q8_0;
 
 static const ggml::cpu::tensor_traits * ggml_aarch64_get_optimal_repack_type(const struct ggml_tensor * cur) {
     if (cur->type == GGML_TYPE_Q4_0) {
-        // TODO: enable for AVX2 - currently disabled due to bad gemv performance
-        if (/* ggml_cpu_has_avx2() || */ (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0)) {
+        if (ggml_cpu_has_avx2() || (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0)) {
             return &ggml::cpu::aarch64::q4_0_8x8_q8_0;
         }
         if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {

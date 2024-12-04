@@ -392,7 +392,7 @@ extern "C" {
         // GGML_TYPE_IQ4_NL_4_4 = 36,
         // GGML_TYPE_IQ4_NL_4_8 = 37,
         // GGML_TYPE_IQ4_NL_8_8 = 38,
-        GGML_TYPE_COUNT,
+        GGML_TYPE_COUNT   = 39,
     };
 
     // precision
@@ -2202,11 +2202,19 @@ extern "C" {
     GGML_API size_t gguf_get_meta_size(const struct gguf_context * ctx);
     GGML_API void   gguf_get_meta_data(const struct gguf_context * ctx, void * data);
 
-#ifdef  __cplusplus
-// restrict not standard in C++
-#define GGML_RESTRICT
+#ifdef __cplusplus
+    // restrict not standard in C++
+#    if defined(__GNUC__)
+#        define GGML_RESTRICT __restrict__
+#    elif defined(__clang__)
+#        define GGML_RESTRICT __restrict
+#    elif defined(_MSC_VER)
+#        define GGML_RESTRICT __restrict
+#    else
+#        define GGML_RESTRICT
+#    endif
 #else
-#define GGML_RESTRICT restrict
+#    define GGML_RESTRICT restrict
 #endif
     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k);
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
