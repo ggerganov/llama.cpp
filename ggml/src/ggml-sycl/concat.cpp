@@ -106,6 +106,7 @@ static void concat_f32_sycl(const float *x, const float *y, float *dst,
           concat_f32_dim1(x, y, dst, ne0, ne01, item_ct1);
         });
     break;
+  // dim >=2 will be dispatched to the default path
   default:
     stream->parallel_for(
         sycl::nd_range<3>(gridDim *

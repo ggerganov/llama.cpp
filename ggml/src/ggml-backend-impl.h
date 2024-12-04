@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+    #define GGML_BACKEND_API_VERSION 1
+
     //
     // Backend buffer type
     //
@@ -22,7 +24,7 @@ extern "C" {
         size_t                (*get_max_size)  (ggml_backend_buffer_type_t buft);
         // (optional) data size needed to allocate the tensor, including padding (defaults to ggml_nbytes)
         size_t                (*get_alloc_size)(ggml_backend_buffer_type_t buft, const struct ggml_tensor * tensor);
-        // (optional) check if tensor data is in host memory (defaults to false)
+        // (optional) check if tensor data is in host memory and uses standard ggml tensor layout (defaults to false)
         bool                  (*is_host)       (ggml_backend_buffer_type_t buft);
     };
 
@@ -37,7 +39,6 @@ extern "C" {
     //
 
     struct ggml_backend_buffer_i {
-        const char * (*get_name)     (ggml_backend_buffer_t buffer);
         // (optional) free the buffer
         void         (*free_buffer)  (ggml_backend_buffer_t buffer);
         // base address of the buffer
@@ -64,20 +65,20 @@ extern "C" {
         enum ggml_backend_buffer_usage usage;
     };
 
-    ggml_backend_buffer_t ggml_backend_buffer_init(
+    GGML_API ggml_backend_buffer_t ggml_backend_buffer_init(
                    ggml_backend_buffer_type_t buft,
             struct ggml_backend_buffer_i      iface,
                    void *                     context,
                    size_t                     size);
 
     // do not use directly, use ggml_backend_tensor_copy instead
-    bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml_tensor * dst);
+    GGML_API bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml_tensor * dst);
 
     // multi-buffer
     // buffer that contains a collection of buffers
-    ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers);
-    bool                  ggml_backend_buffer_is_multi_buffer(ggml_backend_buffer_t buffer);
-    void                  ggml_backend_multi_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
+    GGML_API ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers);
+    GGML_API bool                  ggml_backend_buffer_is_multi_buffer(ggml_backend_buffer_t buffer);
+    GGML_API void                  ggml_backend_multi_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
 
     //
     // Backend (stream)
@@ -88,18 +89,16 @@ extern "C" {
 
         void (*free)(ggml_backend_t backend);
 
-        // buffer allocation
-        ggml_backend_buffer_type_t (*get_default_buffer_type)(ggml_backend_t backend);
-
         // (optional) asynchronous tensor data access
         void (*set_tensor_async)(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
         void (*get_tensor_async)(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
         bool (*cpy_tensor_async)(ggml_backend_t backend_src, ggml_backend_t backend_dst, const struct ggml_tensor * src, struct ggml_tensor * dst);
 
-        // (optional) complete all pending operations
+        // (optional) complete all pending operations (required if the backend supports async operations)
         void (*synchronize)(ggml_backend_t backend);
 
-        // (optional) compute graph with a plan (not used currently)
+        // (optional) graph plans (not used currently)
+        // compute graph with a plan
         ggml_backend_graph_plan_t (*graph_plan_create) (ggml_backend_t backend, const struct ggml_cgraph * cgraph);
         void                      (*graph_plan_free)   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
         // update the plan with a new graph - this should be faster than creating a new plan when the graph has the same topology
@@ -109,21 +108,6 @@ extern "C" {
 
         // compute graph (always async if supported by the backend)
         enum ggml_status          (*graph_compute)     (ggml_backend_t backend, struct ggml_cgraph * cgraph);
-
-        // IMPORTANT: these functions have been moved to the device interface and will be removed from the backend interface
-        //            new backends should implement the device interface instead
-
-        // These functions are being moved to the device interface
-        // check if the backend can compute an operation
-        bool (*supports_op)  (ggml_backend_t backend, const struct ggml_tensor * op);
-
-        // check if the backend can use tensors allocated in a buffer type
-        bool (*supports_buft)(ggml_backend_t backend, ggml_backend_buffer_type_t buft);
-
-        // check if the backend wants to run an operation, even if the weights are allocated in a CPU buffer
-        // these should be expensive operations with large batch sizes that may benefit from running on this backend
-        // even if the weight has to be copied from the CPU temporarily
-        bool (*offload_op)   (ggml_backend_t backend, const struct ggml_tensor * op);
 
         // (optional) event synchronization
         // record an event on this stream
@@ -184,9 +168,8 @@ extern "C" {
         // check if the backend can use tensors allocated in a buffer type
         bool (*supports_buft)(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft);
 
-        // check if the backend wants to run an operation, even if the weights are allocated in a CPU buffer
-        // these should be expensive operations with large batch sizes that may benefit from running on this backend
-        // even if the weight has to be copied from the CPU temporarily
+        // (optional) check if the backend wants to run an operation, even if the weights are allocated in an incompatible buffer
+        // these should be expensive operations that may benefit from running on this backend instead of the CPU backend
         bool (*offload_op)(ggml_backend_dev_t dev, const struct ggml_tensor * op);
 
         // (optional) event synchronization
@@ -215,23 +198,58 @@ extern "C" {
         // (optional) get a pointer to a function in the backend
         // backends can add custom functions that are not part of the standard ggml-backend interface
         void * (*get_proc_address)(ggml_backend_reg_t reg, const char * name);
-
-        // (optional) set the log callback for the backend
-        void (*set_log_callback)(ggml_backend_reg_t reg, ggml_log_callback log_callback, void * user_data);
     };
 
     struct ggml_backend_reg {
-        // int api_version; // TODO: for dynamic loading
+        int api_version; // initialize to GGML_BACKEND_API_VERSION
         struct ggml_backend_reg_i iface;
         void * context;
     };
 
-
     // Internal backend registry API
-    void ggml_backend_register(ggml_backend_reg_t reg);
-    void ggml_backend_device_register(ggml_backend_dev_t device);
-    // TODO: backends can be loaded as a dynamic library, in which case it needs to export this function
-    // typedef ggml_backend_register_t * (*ggml_backend_init)(void);
+    GGML_API void ggml_backend_register(ggml_backend_reg_t reg);
+    GGML_API void ggml_backend_device_register(ggml_backend_dev_t device);
+
+    // Add backend dynamic loading support to the backend
+
+    // Initialize the backend
+    typedef ggml_backend_reg_t (*ggml_backend_init_t)(void);
+    // Optional: obtain a score for the backend based on the system configuration
+    // Higher scores are preferred, 0 means the backend is not supported in the current system
+    typedef int                (*ggml_backend_score_t)(void);
+
+#ifdef GGML_BACKEND_DL
+#    ifdef __cplusplus
+#        define GGML_BACKEND_DL_IMPL(reg_fn)                             \
+            extern "C" {                                                 \
+            GGML_BACKEND_API ggml_backend_reg_t ggml_backend_init(void); \
+            }                                                            \
+            ggml_backend_reg_t ggml_backend_init(void) {                 \
+                return reg_fn();                                         \
+            }
+#        define GGML_BACKEND_DL_SCORE_IMPL(score_fn)       \
+            extern "C" {                                   \
+            GGML_BACKEND_API int ggml_backend_score(void); \
+            }                                              \
+            int ggml_backend_score(void) {                 \
+                return score_fn();                         \
+            }
+#    else
+#        define GGML_BACKEND_DL_IMPL(reg_fn)                              \
+            GGML_BACKEND_API ggml_backend_reg_t ggml_backend_init(void);  \
+            ggml_backend_reg_t                  ggml_backend_init(void) { \
+                return reg_fn();                                          \
+            }
+#        define GGML_BACKEND_DL_SCORE_IMPL(score_fn)        \
+            GGML_BACKEND_API int ggml_backend_score(void);  \
+            int                  ggml_backend_score(void) { \
+                return score_fn();                          \
+            }
+#    endif
+#else
+#    define GGML_BACKEND_DL_IMPL(reg_fn)
+#    define GGML_BACKEND_DL_SCORE_IMPL(score_fn)
+#endif
 
 #ifdef  __cplusplus
 }

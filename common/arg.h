@@ -10,7 +10,7 @@
 // CLI argument parsing
 //
 
-struct llama_arg {
+struct common_arg {
     std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
     std::vector<const char *> args;
     const char * value_hint   = nullptr; // help text or example for arg value
@@ -18,60 +18,60 @@ struct llama_arg {
     const char * env          = nullptr;
     std::string help;
     bool is_sparam = false; // is current arg a sampling param?
-    void (*handler_void)   (gpt_params & params) = nullptr;
-    void (*handler_string) (gpt_params & params, const std::string &) = nullptr;
-    void (*handler_str_str)(gpt_params & params, const std::string &, const std::string &) = nullptr;
-    void (*handler_int)    (gpt_params & params, int) = nullptr;
+    void (*handler_void)   (common_params & params) = nullptr;
+    void (*handler_string) (common_params & params, const std::string &) = nullptr;
+    void (*handler_str_str)(common_params & params, const std::string &, const std::string &) = nullptr;
+    void (*handler_int)    (common_params & params, int) = nullptr;
 
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const char * value_hint,
         const std::string & help,
-        void (*handler)(gpt_params & params, const std::string &)
+        void (*handler)(common_params & params, const std::string &)
     ) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
 
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const char * value_hint,
         const std::string & help,
-        void (*handler)(gpt_params & params, int)
+        void (*handler)(common_params & params, int)
     ) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
 
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const std::string & help,
-        void (*handler)(gpt_params & params)
+        void (*handler)(common_params & params)
     ) : args(args), help(help), handler_void(handler) {}
 
     // support 2 values for arg
-    llama_arg(
+    common_arg(
         const std::initializer_list<const char *> & args,
         const char * value_hint,
         const char * value_hint_2,
         const std::string & help,
-        void (*handler)(gpt_params & params, const std::string &, const std::string &)
+        void (*handler)(common_params & params, const std::string &, const std::string &)
     ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
 
-    llama_arg & set_examples(std::initializer_list<enum llama_example> examples);
-    llama_arg & set_env(const char * env);
-    llama_arg & set_sparam();
+    common_arg & set_examples(std::initializer_list<enum llama_example> examples);
+    common_arg & set_env(const char * env);
+    common_arg & set_sparam();
     bool in_example(enum llama_example ex);
     bool get_value_from_env(std::string & output);
     bool has_value_from_env();
     std::string to_string();
 };
 
-struct gpt_params_context {
+struct common_params_context {
     enum llama_example ex = LLAMA_EXAMPLE_COMMON;
-    gpt_params & params;
-    std::vector<llama_arg> options;
+    common_params & params;
+    std::vector<common_arg> options;
     void(*print_usage)(int, char **) = nullptr;
-    gpt_params_context(gpt_params & params) : params(params) {}
+    common_params_context(common_params & params) : params(params) {}
 };
 
 // parse input arguments from CLI
 // if one argument has invalid value, it will automatically display usage of the specific argument (and not the full usage message)
-bool gpt_params_parse(int argc, char ** argv, gpt_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
+bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
 
 // function to be used by test-arg-parser
-gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
+common_params_context common_params_parser_init(common_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);

@@ -64,15 +64,27 @@ class Keys:
         BASE_MODEL_AUTHOR          = "general.base_model.{id}.author"
         BASE_MODEL_VERSION         = "general.base_model.{id}.version"
         BASE_MODEL_ORGANIZATION    = "general.base_model.{id}.organization"
+        BASE_MODEL_DESCRIPTION     = "general.base_model.{id}.description"
         BASE_MODEL_URL             = "general.base_model.{id}.url" # Model Website/Paper
         BASE_MODEL_DOI             = "general.base_model.{id}.doi"
         BASE_MODEL_UUID            = "general.base_model.{id}.uuid"
         BASE_MODEL_REPO_URL        = "general.base_model.{id}.repo_url" # Model Source Repository (git/svn/etc...)
 
+        # Dataset Source
+        DATASET_COUNT           = "general.dataset.count"
+        DATASET_NAME            = "general.dataset.{id}.name"
+        DATASET_AUTHOR          = "general.dataset.{id}.author"
+        DATASET_VERSION         = "general.dataset.{id}.version"
+        DATASET_ORGANIZATION    = "general.dataset.{id}.organization"
+        DATASET_DESCRIPTION     = "general.dataset.{id}.description"
+        DATASET_URL             = "general.dataset.{id}.url" # Model Website/Paper
+        DATASET_DOI             = "general.dataset.{id}.doi"
+        DATASET_UUID            = "general.dataset.{id}.uuid"
+        DATASET_REPO_URL        = "general.dataset.{id}.repo_url" # Model Source Repository (git/svn/etc...)
+
         # Array based KV stores
         TAGS                       = "general.tags"
         LANGUAGES                  = "general.languages"
-        DATASETS                   = "general.datasets"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"
@@ -152,6 +164,8 @@ class Keys:
         MERGES               = "tokenizer.ggml.merges"
         BOS_ID               = "tokenizer.ggml.bos_token_id"
         EOS_ID               = "tokenizer.ggml.eos_token_id"
+        EOT_ID               = "tokenizer.ggml.eot_token_id"
+        EOM_ID               = "tokenizer.ggml.eom_token_id"
         UNK_ID               = "tokenizer.ggml.unknown_token_id"
         SEP_ID               = "tokenizer.ggml.seperator_token_id"
         PAD_ID               = "tokenizer.ggml.padding_token_id"
@@ -168,11 +182,16 @@ class Keys:
         CHAT_TEMPLATE_N      = "tokenizer.chat_template.{name}"
         CHAT_TEMPLATES       = "tokenizer.chat_templates"
         # FIM/Infill special tokens constants
+        FIM_PRE_ID           = "tokenizer.ggml.fim_pre_token_id"
+        FIM_SUF_ID           = "tokenizer.ggml.fim_suf_token_id"
+        FIM_MID_ID           = "tokenizer.ggml.fim_mid_token_id"
+        FIM_PAD_ID           = "tokenizer.ggml.fim_pad_token_id"
+        FIM_REP_ID           = "tokenizer.ggml.fim_rep_token_id"
+        FIM_SEP_ID           = "tokenizer.ggml.fim_sep_token_id"
+        # deprecated:
         PREFIX_ID            = "tokenizer.ggml.prefix_token_id"
         SUFFIX_ID            = "tokenizer.ggml.suffix_token_id"
         MIDDLE_ID            = "tokenizer.ggml.middle_token_id"
-        EOT_ID               = "tokenizer.ggml.eot_token_id"
-        EOM_ID               = "tokenizer.ggml.eom_token_id"
 
     class Adapter:
         TYPE       = "adapter.type"
@@ -224,6 +243,7 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R    = auto()
     DBRX         = auto()
     OLMO         = auto()
+    OLMO2        = auto()
     OLMOE        = auto()
     OPENELM      = auto()
     ARCTIC       = auto()
@@ -385,6 +405,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.OLMO2:          "olmo2",
     MODEL_ARCH.OLMOE:          "olmoe",
     MODEL_ARCH.OPENELM:        "openelm",
     MODEL_ARCH.ARCTIC:         "arctic",
@@ -875,6 +896,8 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.OUTPUT,
         MODEL_TENSOR.OUTPUT_NORM,
         MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ROPE_FACTORS_LONG,
+        MODEL_TENSOR.ROPE_FACTORS_SHORT,
         MODEL_TENSOR.ATTN_NORM,
         MODEL_TENSOR.ATTN_Q,
         MODEL_TENSOR.ATTN_K,
@@ -1046,6 +1069,22 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_K,
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.OLMO2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.FFN_POST_NORM,
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
@@ -1351,9 +1390,10 @@ class TokenType(IntEnum):
 
 
 class RopeScalingType(Enum):
-    NONE   = 'none'
-    LINEAR = 'linear'
-    YARN   = 'yarn'
+    NONE     = 'none'
+    LINEAR   = 'linear'
+    YARN     = 'yarn'
+    LONGROPE = 'longrope'
 
 
 class PoolingType(IntEnum):
@@ -1579,6 +1619,8 @@ KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
 KEY_TOKENIZER_MERGES     = Keys.Tokenizer.MERGES
 KEY_TOKENIZER_BOS_ID     = Keys.Tokenizer.BOS_ID
 KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
+KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
+KEY_TOKENIZER_EOM_ID     = Keys.Tokenizer.EOM_ID
 KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
 KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
 KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
@@ -1586,8 +1628,15 @@ KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
 KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
-KEY_TOKENIZER_PRIFIX_ID  = Keys.Tokenizer.PREFIX_ID
+
+KEY_TOKENIZER_FIM_PRE_ID = Keys.Tokenizer.FIM_PRE_ID
+KEY_TOKENIZER_FIM_SUF_ID = Keys.Tokenizer.FIM_SUF_ID
+KEY_TOKENIZER_FIM_MID_ID = Keys.Tokenizer.FIM_MID_ID
+KEY_TOKENIZER_FIM_PAD_ID = Keys.Tokenizer.FIM_PAD_ID
+KEY_TOKENIZER_FIM_REP_ID = Keys.Tokenizer.FIM_REP_ID
+KEY_TOKENIZER_FIM_SEP_ID = Keys.Tokenizer.FIM_SEP_ID
+
+# deprecated
+KEY_TOKENIZER_PREFIX_ID  = Keys.Tokenizer.PREFIX_ID
 KEY_TOKENIZER_SUFFIX_ID  = Keys.Tokenizer.SUFFIX_ID
 KEY_TOKENIZER_MIDDLE_ID  = Keys.Tokenizer.MIDDLE_ID
-KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
-KEY_TOKENIZER_EOM_ID     = Keys.Tokenizer.EOM_ID

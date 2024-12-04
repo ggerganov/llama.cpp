@@ -46,6 +46,13 @@ if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+    add_compile_options("$<$<COMPILE_LANGUAGE:C>:/source-charset:utf-8>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/source-charset:utf-8>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:C>:/execution-charset:utf-8>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/execution-charset:utf-8>")
+endif()
+
 #
 # option list
 #
@@ -63,7 +70,7 @@ option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
 option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 
 # utils
-option(LLAMA_BUILD_COMMON "llama: build common utils library" ON)
+option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
@@ -75,6 +82,7 @@ option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/common.cmake)
 
 # override ggml options
 set(GGML_SANITIZE_THREAD    ${LLAMA_SANITIZE_THREAD})
@@ -136,7 +144,6 @@ set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location o
 set(LLAMA_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
 set(LLAMA_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
 
-
 # At the moment some compile definitions are placed within the ggml/src
 # directory but not exported on the `ggml` target. This could be improved by
 # determining _precisely_ which defines are necessary for the llama-config
@@ -153,8 +160,11 @@ if (GGML_TARGET_DEFINES)
     list(APPEND GGML_TRANSIENT_DEFINES ${GGML_TARGET_DEFINES})
 endif()
 get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
-
-set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h)
+# all public headers
+set(LLAMA_PUBLIC_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/llama-cpp.h)
+set_target_properties(llama PROPERTIES PUBLIC_HEADER "${LLAMA_PUBLIC_HEADERS}")
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 configure_package_config_file(
@@ -201,12 +211,12 @@ if (LLAMA_BUILD_COMMON)
     add_subdirectory(common)
 endif()
 
-if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
     add_subdirectory(tests)
 endif()
 
-if (LLAMA_BUILD_EXAMPLES)
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
     add_subdirectory(pocs)
 endif()
