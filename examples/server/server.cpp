@@ -1423,7 +1423,7 @@ struct server_context {
                 T result = T::from_ptr(result_raw);
                 const size_t idx = result.index;
                 GGML_ASSERT(idx < results.size() && "index out of range");
-                results[idx] = result;
+                results[idx] = std::move(result);
             } else {
                 GGML_ASSERT(false && "unexpected result type");
             }
