@@ -237,7 +237,6 @@ struct server_task_result_cmpl_final : server_task_result {
     int index = 0;
     std::string content;
     bool stream;
-    bool timings_per_token;
     result_timings timings;
     std::string model_alias;
     std::string prompt;
@@ -245,10 +244,11 @@ struct server_task_result_cmpl_final : server_task_result {
     bool truncated;
     int32_t n_decoded;
     int32_t n_prompt_tokens;
-    int32_t has_new_line;
-    int32_t stopping_word;
     int32_t n_tokens_cached;
+    int32_t has_new_line;
+    std::string stopping_word;
     stop_type stop = STOP_TYPE_NONE;
+
     std::vector<completion_token_output> probs_output;
 
     slot_params generation_params;
@@ -291,6 +291,7 @@ struct server_task_result_cmpl_partial : server_task_result {
     int32_t n_prompt_tokens;
 
     stop_type stop = STOP_TYPE_NONE;
+
     std::vector<completion_token_output> probs_output;
     result_timings timings;
 
@@ -346,7 +347,7 @@ struct server_task_result_embd : server_task_result {
 struct server_task_result_rerank : server_task_result {
     server_task_result_rerank() : server_task_result(RESULT_TYPE_RERANK) {}
     int index = 0;
-    float score;
+    float score = -1e6;
 
     json to_json() {
         return json {

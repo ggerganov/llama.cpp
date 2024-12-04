@@ -1170,12 +1170,15 @@ struct server_context {
         server_task_result_cmpl_partial res;
         res.id              = slot.id_task;
         res.index           = slot.index;
+        res.content         = tkn.text_to_send;
+
+        res.truncated       = slot.truncated;
         res.n_decoded       = slot.n_decoded;
         res.n_prompt_tokens = slot.n_prompt_tokens;
-        res.content         = tkn.text_to_send;
-        res.stop            = slot.stop;
-        res.truncated       = slot.truncated;
 
+        res.stop            = slot.stop;
+
+        // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
             const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
             const size_t probs_pos      = std::min(slot.n_sent_token_probs,                       slot.generated_token_probs.size());
@@ -1206,20 +1209,22 @@ struct server_context {
         server_task_result_cmpl_final res;
         res.id              = slot.id_task;
         res.id_slot         = slot.id;
+
         res.index           = slot.index;
         res.content         = slot.generated_text;
+        res.timings         = slot.get_timings();
+        res.model_alias     = slot.oaicompat_model;
+        res.prompt          = common_detokenize(ctx, slot.prompt_tokens, true);
 
+        res.truncated       = slot.truncated;
         res.n_decoded       = slot.n_decoded;
         res.n_prompt_tokens = slot.n_prompt_tokens;
-        res.has_new_line    = slot.has_new_line;
         res.n_tokens_cached = slot.n_past;
-        res.content         = slot.generated_text;
+        res.has_new_line    = slot.has_new_line;
+        res.stopping_word   = slot.stopping_word;
         res.stop            = slot.stop;
-        res.truncated       = slot.truncated;
-        res.timings         = slot.get_timings();
 
-        res.generation_params = slot.params; // copy the parameters
-
+        // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
             if (!slot.params.stream && slot.stop == STOP_TYPE_WORD) {
                 const llama_tokens stop_word_toks = common_tokenize(ctx, slot.stopping_word, false);
@@ -1234,6 +1239,8 @@ struct server_context {
                         slot.generated_token_probs.end());
             }
         }
+
+        res.generation_params = slot.params; // copy the parameters
 
         queue_results.send(res);
     }
