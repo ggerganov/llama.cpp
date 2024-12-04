@@ -16,12 +16,7 @@ set(TARGET_SRCS
 )
 set(PUBLIC_ASSETS
     index.html
-    completion.js
     loading.html
-    deps_daisyui.min.css
-    deps_markdown-it.js
-    deps_tailwindcss.js
-    deps_vue.esm-browser.js
 )
 
 foreach(asset ${PUBLIC_ASSETS})
@@ -33,10 +28,19 @@ foreach(asset ${PUBLIC_ASSETS})
         OUTPUT "${output}"
         COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
     )
+    set_source_files_properties(${output} PROPERTIES GENERATED TRUE)
 endforeach()
 
 add_executable(${TARGET} ${TARGET_SRCS})
 install(TARGETS ${TARGET} RUNTIME)
+
+# clean up generated files in pre-build step
+foreach(asset ${PUBLIC_ASSETS})
+    set(output "${CMAKE_CURRENT_BINARY_DIR}/${asset}.hpp")
+    add_custom_command(TARGET ${TARGET} PRE_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E remove -f "${output}"
+    )
+endforeach()
 
 target_link_libraries(${TARGET} PRIVATE common ${CMAKE_THREAD_LIBS_INIT})
 

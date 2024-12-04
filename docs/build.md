@@ -26,19 +26,24 @@ cmake --build build --config Release
 
     1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
-    ```bash
-    cmake -B build -DCMAKE_BUILD_TYPE=Debug
-    cmake --build build
-    ```
+       ```bash
+       cmake -B build -DCMAKE_BUILD_TYPE=Debug
+       cmake --build build
+       ```
 
     2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
-    ```bash
-    cmake -B build -G "Xcode"
-    cmake --build build --config Debug
-    ```
+       ```bash
+       cmake -B build -G "Xcode"
+       cmake --build build --config Debug
+       ```
 
     For more details and a list of supported generators, see the [CMake documentation](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html).
+- For static builds, add `-DBUILD_SHARED_LIBS=OFF`:
+  ```
+  cmake -B build -DBUILD_SHARED_LIBS=OFF
+  cmake --build build --config Release
+  ```
 
 - Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
     - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):

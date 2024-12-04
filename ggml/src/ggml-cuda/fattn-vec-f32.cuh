@@ -206,7 +206,6 @@ static __global__ void flash_attn_vec_ext_f32(
         for (int j = 0; j < ncols; ++j) {
             float kqmax_new_j = kqmax_new_arr[j];
 
-            kqmax_new_j = warp_reduce_max(kqmax_new_j);
             if (threadIdx.x == 0) {
                 kqmax_shared[j][threadIdx.y] = kqmax_new_j;
             }

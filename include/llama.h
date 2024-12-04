@@ -991,7 +991,7 @@ extern "C" {
                                int32_t   length);
 
     // Get list of built-in chat templates
-    int32_t llama_chat_builtin_templates(const char ** output, size_t len);
+    LLAMA_API int32_t llama_chat_builtin_templates(const char ** output, size_t len);
 
     //
     // Sampling API

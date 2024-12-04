@@ -16,12 +16,7 @@
 
 // auto generated files (update with ./deps.sh)
 #include "index.html.hpp"
-#include "completion.js.hpp"
 #include "loading.html.hpp"
-#include "deps_daisyui.min.css.hpp"
-#include "deps_markdown-it.js.hpp"
-#include "deps_tailwindcss.js.hpp"
-#include "deps_vue.esm-browser.js.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -101,12 +96,6 @@ struct server_task_result {
 
     bool stop;
     bool error;
-};
-
-struct server_static_file {
-    const unsigned char * data;
-    unsigned int size;
-    const char * mime_type;
 };
 
 struct slot_params {
@@ -696,8 +685,9 @@ struct server_context {
 
             params_dft.devices      = params_base.speculative.devices;
             params_dft.model        = params_base.speculative.model;
-            params_dft.n_ctx        = params_base.speculative.n_ctx;
+            params_dft.n_ctx        = params_base.speculative.n_ctx == 0 ? params_base.n_ctx / params_base.n_parallel : params_base.speculative.n_ctx;
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
+            params_dft.n_parallel   = 1;
 
             common_init_result llama_init_dft = common_init_from_params(params_dft);
 
@@ -717,8 +707,14 @@ struct server_context {
                 return false;
             }
 
-            cparams_dft = common_context_params_to_llama(params_base);
-            cparams_dft.n_batch = llama_n_ctx(llama_init_dft.context);
+            const int n_ctx_dft = llama_n_ctx(llama_init_dft.context);
+
+            cparams_dft = common_context_params_to_llama(params_dft);
+            cparams_dft.n_batch = n_ctx_dft;
+
+            // force F16 KV cache for the draft model for extra performance
+            cparams_dft.type_k = GGML_TYPE_F16;
+            cparams_dft.type_v = GGML_TYPE_F16;
 
             // the context is not needed - we will create one for each slot
             llama_free(llama_init_dft.context);
@@ -2322,6 +2318,10 @@ struct server_context {
                     continue;
                 }
 
+                if (slot.state != SLOT_STATE_GENERATING) {
+                    continue;
+                }
+
                 llama_token id = slot.sampled;
 
                 struct common_speculative_params params_spec;
@@ -2446,16 +2446,6 @@ int main(int argc, char ** argv) {
     LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     LOG_INF("\n");
 
-    // static files
-    std::map<std::string, server_static_file> static_files = {
-        { "/",                        { index_html,              index_html_len,              "text/html; charset=utf-8" }},
-        { "/completion.js",           { completion_js,           completion_js_len,           "text/javascript; charset=utf-8" }},
-        { "/deps_daisyui.min.css",    { deps_daisyui_min_css,    deps_daisyui_min_css_len,    "text/css; charset=utf-8" }},
-        { "/deps_markdown-it.js",     { deps_markdown_it_js,     deps_markdown_it_js_len,     "text/javascript; charset=utf-8" }},
-        { "/deps_tailwindcss.js",     { deps_tailwindcss_js,     deps_tailwindcss_js_len,     "text/javascript; charset=utf-8" }},
-        { "/deps_vue.esm-browser.js", { deps_vue_esm_browser_js, deps_vue_esm_browser_js_len, "text/javascript; charset=utf-8" }},
-    };
-
     std::unique_ptr<httplib::Server> svr;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
@@ -2536,7 +2526,7 @@ int main(int argc, char ** argv) {
     // Middlewares
     //
 
-    auto middleware_validate_api_key = [&params, &res_error, &static_files](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_validate_api_key = [&params, &res_error](const httplib::Request & req, httplib::Response & res) {
         static const std::unordered_set<std::string> public_endpoints = {
             "/health",
             "/models",
@@ -2549,7 +2539,7 @@ int main(int argc, char ** argv) {
         }
 
         // If path is public or is static file, skip validation
-        if (public_endpoints.find(req.path) != public_endpoints.end() || static_files.find(req.path) != static_files.end()) {
+        if (public_endpoints.find(req.path) != public_endpoints.end() || req.path == "/") {
             return true;
         }
 
@@ -3306,14 +3296,11 @@ int main(int argc, char ** argv) {
             return 1;
         }
     } else {
-        // using embedded static files
-        for (const auto & it : static_files) {
-            const server_static_file & static_file = it.second;
-            svr->Get(it.first.c_str(), [&static_file](const httplib::Request &, httplib::Response & res) {
-                res.set_content(reinterpret_cast<const char*>(static_file.data), static_file.size, static_file.mime_type);
-                return false;
-            });
-        }
+        // using embedded static index.html
+        svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
+            res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+            return false;
+        });
     }
 
     // register API routes

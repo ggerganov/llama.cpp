@@ -7,7 +7,6 @@ cp -rpv ../ggml/cmake/FindSIMD.cmake ./ggml/cmake/FindSIMD.cmake
 cp -rpv ../ggml/src/ggml*.c        ./ggml/src/
 cp -rpv ../ggml/src/ggml*.cpp      ./ggml/src/
 cp -rpv ../ggml/src/ggml*.h        ./ggml/src/
-cp -rpv ../ggml/src/ggml-amx/*     ./ggml/src/ggml-amx/
 cp -rpv ../ggml/src/ggml-blas/*    ./ggml/src/ggml-blas/
 cp -rpv ../ggml/src/ggml-cann/*    ./ggml/src/ggml-cann/
 cp -rpv ../ggml/src/ggml-cpu/*     ./ggml/src/ggml-cpu/
