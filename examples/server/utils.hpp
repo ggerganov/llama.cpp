@@ -21,6 +21,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <memory>
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
