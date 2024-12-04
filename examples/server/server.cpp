@@ -1592,13 +1592,13 @@ struct server_context {
                     const double t_save_ms = (t_end - t_start) / 1000.0;
 
                     server_task_result_slot_save_load result;
-                    result.id        = task.id;
-                    result.id_slot   = id_slot;
-                    result.filename  = filename;
-                    result.is_save   = true;
-                    result.n_saved   = token_count;
-                    result.n_written = nwrite;
-                    result.t_ms      = t_save_ms;
+                    result.id       = task.id;
+                    result.id_slot  = id_slot;
+                    result.filename = filename;
+                    result.is_save  = true;
+                    result.n_tokens = token_count;
+                    result.n_bytes  = nwrite;
+                    result.t_ms     = t_save_ms;
                     queue_results.send(result);
                 } break;
             case SERVER_TASK_TYPE_SLOT_RESTORE:
@@ -1635,13 +1635,13 @@ struct server_context {
                     const double t_restore_ms = (t_end - t_start) / 1000.0;
 
                     server_task_result_slot_save_load result;
-                    result.id         = task.id;
-                    result.id_slot    = id_slot;
-                    result.filename   = filename;
-                    result.is_save    = false;
-                    result.n_restored = token_count;
-                    result.n_read     = nread;
-                    result.t_ms       = t_restore_ms;
+                    result.id       = task.id;
+                    result.id_slot  = id_slot;
+                    result.filename = filename;
+                    result.is_save  = false;
+                    result.n_tokens = token_count;
+                    result.n_bytes  = nread;
+                    result.t_ms     = t_restore_ms;
                     queue_results.send(result);
                 } break;
             case SERVER_TASK_TYPE_SLOT_ERASE:

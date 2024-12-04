@@ -16,7 +16,7 @@
 using json = nlohmann::ordered_json;
 
 // cast a shared_ptr to a specific type using copy constructor
-#define copy_cast_ptr(TYPEOUT, ptr) *(static_cast<TYPEOUT*>(ptr.get()))
+#define copy_cast_ptr(TYPEOUT, ptr) *(static_cast<TYPEOUT*>(ptr.get()));
 
 enum stop_type {
     STOP_TYPE_NONE,
@@ -210,6 +210,7 @@ struct server_task_result {
     int id_slot      = -1;
     server_task_result() = default;
     server_task_result(result_type type) : type(type) {}
+    virtual ~server_task_result() = default;
 };
 
 inline std::string stop_type_to_str(stop_type type) {
@@ -276,6 +277,8 @@ struct server_task_result_cmpl_final : server_task_result {
     static server_task_result_cmpl_final from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_cmpl_final, result_ptr);
     }
+
+    virtual ~server_task_result_cmpl_final() = default;
 };
 
 struct server_task_result_cmpl_partial : server_task_result {
@@ -316,6 +319,8 @@ struct server_task_result_cmpl_partial : server_task_result {
     static server_task_result_cmpl_partial from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_cmpl_partial, result_ptr);
     }
+
+    virtual ~server_task_result_cmpl_partial() = default;
 };
 
 struct server_task_result_embd : server_task_result {
@@ -334,6 +339,8 @@ struct server_task_result_embd : server_task_result {
     static server_task_result_embd from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_embd, result_ptr);
     }
+
+    virtual ~server_task_result_embd() = default;
 };
 
 struct server_task_result_rerank : server_task_result {
@@ -351,6 +358,8 @@ struct server_task_result_rerank : server_task_result {
     static server_task_result_rerank from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_rerank, result_ptr);
     }
+
+    virtual ~server_task_result_rerank() = default;
 };
 
 struct server_task_result_error : server_task_result {
@@ -362,6 +371,8 @@ struct server_task_result_error : server_task_result {
     static server_task_result_error from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_error, result_ptr);
     }
+
+    virtual ~server_task_result_error() = default;
 };
 
 struct server_task_result_metrics : server_task_result {
@@ -422,6 +433,8 @@ struct server_task_result_metrics : server_task_result {
     static server_task_result_metrics from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_metrics, result_ptr);
     }
+
+    virtual ~server_task_result_metrics() = default;
 };
 
 struct server_task_result_slot_save_load : server_task_result {
@@ -429,12 +442,8 @@ struct server_task_result_slot_save_load : server_task_result {
     std::string filename;
     bool is_save; // true = save, false = load
 
-    size_t n_saved;
-    size_t n_written;
-
-    size_t n_restored;
-    size_t n_read;
-
+    size_t n_tokens;
+    size_t n_bytes;
     double t_ms;
 
     json to_json() {
@@ -442,8 +451,8 @@ struct server_task_result_slot_save_load : server_task_result {
             return json {
                 { "id_slot",   id_slot },
                 { "filename",  filename },
-                { "n_saved",   n_saved },
-                { "n_written", n_written },
+                { "n_saved",   n_tokens },
+                { "n_written", n_bytes },
                 { "timings", {
                     { "save_ms", t_ms }
                 }},
@@ -452,8 +461,8 @@ struct server_task_result_slot_save_load : server_task_result {
             return json {
                 { "id_slot",    id_slot },
                 { "filename",   filename },
-                { "n_restored", n_restored },
-                { "n_read",     n_read },
+                { "n_restored", n_tokens },
+                { "n_read",     n_bytes },
                 { "timings", {
                     { "restore_ms", t_ms }
                 }},
@@ -464,6 +473,8 @@ struct server_task_result_slot_save_load : server_task_result {
     static server_task_result_slot_save_load from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_slot_save_load, result_ptr);
     }
+
+    virtual ~server_task_result_slot_save_load() = default;
 };
 
 struct server_task_result_slot_erase : server_task_result {
@@ -480,6 +491,8 @@ struct server_task_result_slot_erase : server_task_result {
     static server_task_result_slot_erase from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
         return copy_cast_ptr(server_task_result_slot_erase, result_ptr);
     }
+
+    virtual ~server_task_result_slot_erase() = default;
 };
 
 struct server_task_result_apply_lora : server_task_result {
