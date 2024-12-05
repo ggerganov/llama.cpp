@@ -17,7 +17,7 @@
 #
 #   python3 convert_hf_to_gguf_update.py <huggingface_token>
 #
-# - Copy-paste the generated get_vocab_base_pre() function into convert_hf_to_gguf.py
+# - The convert_hf_to_gguf.py script will have had its get_vocab_base_pre() function updated
 # - Update llama.cpp with the new pre-tokenizer if necessary
 #
 # TODO: generate tokenizer tests for llama.cpp
