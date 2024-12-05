@@ -1993,13 +1993,14 @@ static vk_device ggml_vk_get_device(size_t idx) {
                 amd_shader_core_properties2 = true;
             } else if (strcmp("VK_EXT_pipeline_robustness", properties.extensionName) == 0) {
                 pipeline_robustness = true;
-            } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0) {
+            } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0 &&
+                       !getenv("GGML_VK_DISABLE_COOPMAT")) {
                 device->coopmat_support = true;
                 device->coopmat_m = 0;
                 device->coopmat_n = 0;
                 device->coopmat_k = 0;
             } else if (strcmp("VK_NV_cooperative_matrix2", properties.extensionName) == 0 &&
-                       !getenv("GGML_VULKAN_DISABLE_COOPMAT2")) {
+                       !getenv("GGML_VK_DISABLE_COOPMAT2")) {
                 coopmat2_support = true;
             }
         }
@@ -2062,8 +2063,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
             device->shader_core_count = 0;
         }
 
-        const char* GGML_VK_DISABLE_F16 = getenv("GGML_VK_DISABLE_F16");
-        const bool force_disable_f16 = GGML_VK_DISABLE_F16 != nullptr;
+        const bool force_disable_f16 = getenv("GGML_VK_DISABLE_F16") != nullptr;
 
         device->fp16 = !force_disable_f16 && fp16_storage && fp16_compute;
 
