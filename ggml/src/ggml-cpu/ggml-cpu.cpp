@@ -641,7 +641,15 @@ static ggml_backend_feature * ggml_backend_cpu_get_features(ggml_backend_reg_t r
         if (ggml_cpu_has_llamafile()) {
             features.push_back({ "LLAMAFILE", "1" });
         }
-        // TODO: rename this
+    #ifdef GGML_USE_ACCELERATE
+        features.push_back({ "ACCELERATE", "1" });
+    #endif
+    #ifdef GGML_USE_CPU_HBM
+        features.push_back({ "CPU_HBM", "1" });
+    #endif
+    #ifdef GGML_USE_OPENMP
+        features.push_back({ "OPENMP", "1" });
+    #endif
     #ifdef GGML_USE_CPU_AARCH64
         features.push_back({ "AARCH64_REPACK", "1" });
     #endif

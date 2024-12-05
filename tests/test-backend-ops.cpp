@@ -3460,13 +3460,14 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_conv_transpose_1d({3,2,1,1}, {3,1,2,1}, 1, 0, 1));
     test_cases.emplace_back(new test_conv_transpose_1d({2,1,1,1}, {3,1,1,1}, 1, 0, 1));
 
-    test_cases.emplace_back(new test_argmax());
-    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32, 1, 1, 1}));
-    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {100, 10, 1, 1}));
-    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 10, 1, 1}));
-    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {2000, 10, 1, 1}));
-
     test_cases.emplace_back(new test_count_equal());
+
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32,    1, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {100,  10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {1024, 12, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {2000, 10, 1, 1}));
+    test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {5438,  3, 1, 1}));
 
     for (int ne3 : {1, 3}) { // CUDA backward pass only supports ne3 == 1
         test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 5, 4, ne3}, {1, 1, 1, 1}));
@@ -3571,6 +3572,19 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_rwkv_wkv6(GGML_TYPE_F32, 32, 64, 32, 1));
     test_cases.emplace_back(new test_rwkv_wkv6(GGML_TYPE_F32, 32, 64, 32, 4));
     test_cases.emplace_back(new test_rwkv_wkv6(GGML_TYPE_F32, 32, 64, 128, 4));
+
+    for (int i = 1; i < 9; ++i) {
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16,    GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_1,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_0,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_1,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_K,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q5_K,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q6_K,   GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_IQ4_NL, GGML_TYPE_F32, 16,  i, 256, { 1,  1}, {1, 1}));
+    }
 
 #if 1
     for (ggml_type type_a : base_types) {
@@ -3848,6 +3862,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
     test_cases.emplace_back(new test_bin_bcast(ggml_add, GGML_TYPE_F32, {4096, 1, 1, 1}, {1, 512, 1, 1}));
 
     test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, GGML_TYPE_F16, {512, 3072, 1, 1}));
+    test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, GGML_TYPE_F32, {8192, 512, 2, 1}, {0, 2, 1, 3}));
+    test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, GGML_TYPE_F32, {3072, 512, 2, 1}, {0, 2, 1, 3}));
 
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {4096, 4096, 5, 1}, false, 1.0f, 0.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {77, 4096, 5, 1}, false, 1.0f, 0.0f));

@@ -73,7 +73,6 @@ while read c; do
         src/ggml*.h \
         src/ggml*.c \
         src/ggml*.cpp \
-        src/ggml-amx/* \
         src/ggml-blas/* \
         src/ggml-cann/* \
         src/ggml-cpu/* \
@@ -124,7 +123,6 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml*.c          -> ggml/src/ggml*.c
     # src/ggml*.cpp        -> ggml/src/ggml*.cpp
     # src/ggml*.h          -> ggml/src/ggml*.h
-    # src/ggml-amx/*       -> ggml/src/ggml-amx/*
     # src/ggml-blas/*      -> ggml/src/ggml-blas/*
     # src/ggml-cann/*      -> ggml/src/ggml-cann/*
     # src/ggml-cpu/*       -> ggml/src/ggml-cpu/*
@@ -151,7 +149,6 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml(.*)\.c/\1ggml\/src\/ggml\2.c/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml(.*)\.cpp/\1ggml\/src\/ggml\2.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml(.*)\.h/\1ggml\/src\/ggml\2.h/g' \
-        -e 's/([[:space:]]|[ab]\/)src\/ggml-amx\//\1ggml\/src\/ggml-amx\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-blas\//\1ggml\/src\/ggml-blas\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\//\1ggml\/src\/ggml-cann\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cpu\//\1ggml\/src\/ggml-cpu\//g' \

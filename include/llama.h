@@ -185,7 +185,8 @@ extern "C" {
         LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
         LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
         LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
-        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
+        LLAMA_ROPE_SCALING_TYPE_LONGROPE    = 3,
+        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_LONGROPE,
     };
 
     enum llama_pooling_type {
@@ -991,7 +992,7 @@ extern "C" {
                                int32_t   length);
 
     // Get list of built-in chat templates
-    int32_t llama_chat_builtin_templates(const char ** output, size_t len);
+    LLAMA_API int32_t llama_chat_builtin_templates(const char ** output, size_t len);
 
     //
     // Sampling API
