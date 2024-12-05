@@ -333,9 +333,7 @@ enum llm_kv {
     LLM_KV_SSM_TIME_STEP_RANK,
     LLM_KV_SSM_GROUP_COUNT,
     LLM_KV_SSM_DT_B_C_RMS,
-    LLM_KV_SSM_HEAD_COUNT,
     LLM_KV_SSM_HEAD_DIM,
-    LLM_KV_SSM_CHUNK_SIZE,
 
     LLM_KV_WKV_HEAD_SIZE,
 
@@ -454,9 +452,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_TIME_STEP_RANK,               "%s.ssm.time_step_rank" },
     { LLM_KV_SSM_GROUP_COUNT,                  "%s.ssm.group_count"    },
     { LLM_KV_SSM_DT_B_C_RMS,                   "%s.ssm.dt_b_c_rms"     },
-    { LLM_KV_SSM_HEAD_COUNT,                   "%s.ssm.head_count"     },
     { LLM_KV_SSM_HEAD_DIM,                     "%s.ssm.head_dim"       },
-    { LLM_KV_SSM_CHUNK_SIZE,                   "%s.ssm.chunk_size"     },
 
     { LLM_KV_WKV_HEAD_SIZE,                    "%s.wkv.head_size" },
 
@@ -2486,9 +2482,7 @@ struct llama_hparams {
     uint32_t ssm_dt_rank    = 0;
     uint32_t ssm_n_group    = 0;
     bool     ssm_dt_b_c_rms = false;
-    uint32_t ssm_head_count = 0;
     uint32_t ssm_head_dim   = 0;
-    uint32_t ssm_chunk_size = 0;
 
     // for hybrid state space models
     std::array<bool, LLAMA_MAX_LAYERS> ssm_layer_arr;
@@ -2548,9 +2542,7 @@ struct llama_hparams {
         if (this->ssm_dt_rank != other.ssm_dt_rank) return true;
         if (this->ssm_n_group != other.ssm_n_group) return true;
         if (this->ssm_dt_b_c_rms != other.ssm_dt_b_c_rms) return true;
-        if (this->ssm_head_count != other.ssm_head_count) return true;
         if (this->ssm_head_dim != other.ssm_head_dim) return true;
-        if (this->ssm_chunk_size != other.ssm_chunk_size) return true;
 
         if (this->ssm_layer_arr != other.ssm_layer_arr) return true;
 
@@ -5994,9 +5986,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
                 ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
                 ml.get_key(LLM_KV_SSM_GROUP_COUNT,    hparams.ssm_n_group);
-                ml.get_key(LLM_KV_SSM_HEAD_COUNT,     hparams.ssm_head_count);
                 ml.get_key(LLM_KV_SSM_HEAD_DIM,       hparams.ssm_head_dim);
-                ml.get_key(LLM_KV_SSM_CHUNK_SIZE,     hparams.ssm_chunk_size);
 
                 // Attention params
                 std::fill(hparams.ssm_layer_arr.begin(), hparams.ssm_layer_arr.end(), true);
@@ -7088,9 +7078,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: ssm_dt_rank      = %u\n",     __func__, hparams.ssm_dt_rank);
         LLAMA_LOG_INFO("%s: ssm_n_group      = %u\n",     __func__, hparams.ssm_n_group);
         LLAMA_LOG_INFO("%s: ssm_dt_b_c_rms   = %d\n",     __func__, hparams.ssm_dt_b_c_rms);
-        LLAMA_LOG_INFO("%s: ssm_head_count   = %d\n",     __func__, hparams.ssm_head_count);
         LLAMA_LOG_INFO("%s: ssm_head_dim     = %d\n",     __func__, hparams.ssm_head_dim);
-        LLAMA_LOG_INFO("%s: ssm_chunk_size   = %d\n",     __func__, hparams.ssm_chunk_size);
     }
 
     LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, llama_model_type_name(model.type));
