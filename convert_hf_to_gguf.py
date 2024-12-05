@@ -3154,11 +3154,11 @@ class BambaModel(Mamba2Model):
         self.gguf_writer.add_ssm_conv_kernel(self.find_hparam(["conv_kernel", "d_conv"]))
         self.gguf_writer.add_ssm_state_size(self.find_hparam(["state_size", "d_state"]))
         self.gguf_writer.add_ssm_group_count(self.n_group)
-        self.gguf_writer.add_ssm_time_step_rank(self.find_hparam(["time_step_rank", "dt_rank"]))
         self.gguf_writer.add_ssm_inner_size(self.d_inner)
-        self.gguf_writer.add_ssm_head_count(self.find_hparam(["n_heads"]))
         self.gguf_writer.add_ssm_head_dim(d_head := self.find_hparam(["d_head"]))
-        self.gguf_writer.add_ssm_chunk_size(self.find_hparam(["chunk_size"]))
+        # NOTE: The mamba_dt_rank is _not_ the right field for how this is used
+        #   in llama.cpp
+        self.gguf_writer.add_ssm_time_step_rank(self.find_hparam(["n_heads"]))
 
         ## Attention params ##
         self.gguf_writer.add_attn_layer_indices(self._attn_layers)
@@ -3175,11 +3175,12 @@ class BambaModel(Mamba2Model):
         assert self.hparams.get("hidden_act") in [None, "silu"], "Only SILU activation supported"
         assert self.d_inner % d_head == 0, f"SSM inner size {self.d_inner} not a multiple of head dim {d_head}"
 
-        ## UNUSED?? ##
+        ## UNUSED ##
         #   "tie_word_embeddings" <-- Implied by presence of output weights
         #   "num_logits_to_keep"  <-- Always only keep final token logits
         #   "use_cache"           <-- KV Cache always enabled
         #   "use_mamba_kernels"   <-- I think this will always be true if available?
+        #   "chunk_size"          <-- This is used in the mixer implementation in transformers, but not here
 
     def modify_tensors(
         self, data_torch: Tensor, name: str, bid: int | None

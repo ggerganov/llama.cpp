@@ -151,9 +151,7 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
         GROUP_COUNT    = "{arch}.ssm.group_count"
         DT_B_C_RMS     = "{arch}.ssm.dt_b_c_rms"
-        HEAD_COUNT     = "{arch}.ssm.head_count"
         HEAD_DIM       = "{arch}.ssm.head_dim"
-        CHUNK_SIZE     = "{arch}.ssm.chunk_size"
 
     class HybridMamba:
         ATTN_LAYER_INDICES = "{arch}.attention.layer_indices"
