@@ -580,12 +580,8 @@ void main() {
 
             if (is_aligned && is_in_bounds) {
                 // Full coopMat is within bounds and stride_d is aligned with 16B
-#ifdef ACC_F16
                 coopmat<D_TYPE, gl_ScopeSubgroup, TM, TN, gl_MatrixUseAccumulator> cm_dtype = coopmat<D_TYPE, gl_ScopeSubgroup, TM, TN, gl_MatrixUseAccumulator>(sums[cm_col * cms_per_row + cm_row]);
                 coopMatStore(cm_dtype, data_d, offsets + (dc + cm_col * TN) * p.stride_d + dr + cm_row * TM, p.stride_d, gl_CooperativeMatrixLayoutColumnMajor);
-#else
-                coopMatStore(sums[cm_col * cms_per_row + cm_row], data_d, offsets + (dc + cm_col * TN) * p.stride_d + dr + cm_row * TM, p.stride_d, gl_CooperativeMatrixLayoutColumnMajor);
-#endif
             } else if (is_in_bounds) {
                 // Full coopMat is within bounds, but stride_d is not aligned
                 coopMatStore(sums[cm_col * cms_per_row + cm_row], coopmat_stage, warp_i * TM * TN, TM, gl_CooperativeMatrixLayoutColumnMajor);

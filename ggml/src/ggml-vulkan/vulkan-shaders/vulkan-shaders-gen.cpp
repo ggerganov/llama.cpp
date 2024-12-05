@@ -292,10 +292,6 @@ void matmul_shaders(bool fp16, bool matmul_id, bool coopmat, bool coopmat2, bool
 
     base_dict["ACC_TYPE"] = f16acc ? "float16_t" : "float";
 
-    if (f16acc) {
-        base_dict["ACC_F16"] = "1";
-    }
-
     if (coopmat) {
         base_dict["COOPMAT"] = "1";
     }
