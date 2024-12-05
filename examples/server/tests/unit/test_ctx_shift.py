@@ -29,6 +29,7 @@ def test_ctx_shift_enabled():
     res = server.make_request("POST", "/completion", data={
         "n_predict": 64,
         "prompt": LONG_TEXT,
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert res.body["timings"]["prompt_n"] == 109
@@ -48,6 +49,7 @@ def test_ctx_shift_disabled_short_prompt(n_predict: int, n_token_output: int, tr
     res = server.make_request("POST", "/completion", data={
         "n_predict": n_predict,
         "prompt": "Hi how are you",
+        "oai_compat": False,
     })
     assert res.status_code == 200
     assert res.body["timings"]["predicted_n"] == n_token_output
@@ -61,6 +63,7 @@ def test_ctx_shift_disabled_long_prompt():
     res = server.make_request("POST", "/completion", data={
         "n_predict": 64,
         "prompt": LONG_TEXT,
+        "oai_compat": False,
     })
     assert res.status_code != 200
     assert "error" in res.body
