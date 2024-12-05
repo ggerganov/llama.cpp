@@ -13,10 +13,11 @@ ENV TZ=Africa/Johannesburg
 # CUDA architecture to build for (defaults to all supported archs)
 ARG CUDA_DOCKER_ARCH=default
 
-RUN apt-get update && \
-    apt-get install -y build-essential git cmake libcurl4-openssl-dev
-
-WORKDIR /app
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | sudo apt-key add -WORKDIR /app && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main' && \
+    apt-get update && \
+    apt-get install -y build-essential git cmake libcurl4-openssl-dev && \
+    apt-get install cmake
 
 COPY . .
 
