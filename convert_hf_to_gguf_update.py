@@ -102,6 +102,7 @@ models = [
     {"name": "exaone",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct", },
     {"name": "phi-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/microsoft/phi-2", },
     {"name": "chameleon",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/facebook/chameleon-7b", },
+    {"name": "olmo2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/allenai/OLMo-2-1124-7B-Instruct", },
 ]
 
 

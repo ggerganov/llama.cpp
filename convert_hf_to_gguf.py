@@ -658,6 +658,9 @@ class Model:
         if chkhsh == "60824e3c0d9401f89943cbb2fff727f0e2d4c545ba4df2d6e4f09a6db0f5b450":
             # ref: https://huggingface.co/facebook/chameleon-7b
             res = "chameleon"
+        if chkhsh == "53e325976a6e142379c19b09afcae354f2f496f147afa8f9e189a33fe4e3024e":
+            # ref: https://huggingface.co/allenai/OLMo-2-1124-7B-Instruct
+            res = "olmo2"
 
         if res is None:
             logger.warning("\n")
