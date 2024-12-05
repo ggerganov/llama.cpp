@@ -307,10 +307,10 @@ struct server_task_result_cmpl_final : server_task_result {
     }
 
     virtual json to_json() override {
-        if (oaicompat) {
-            return to_json_oaicompat();
-        }
-        // otherwise, non-OAI-compat JSON
+        return oaicompat ? to_json_oaicompat_chat() : to_json_non_oaicompat();
+    }
+
+    json to_json_non_oaicompat() {
         json res = json {
             {"index",               index},
             {"content",             content},
@@ -334,7 +334,7 @@ struct server_task_result_cmpl_final : server_task_result {
         return res;
     }
 
-    json to_json_oaicompat() {
+    json to_json_oaicompat_chat() {
         std::string finish_reason = "length";
         if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
             finish_reason = "stop";
@@ -366,7 +366,7 @@ struct server_task_result_cmpl_final : server_task_result {
 
         // extra fields for debugging purposes
         if (verbose) {
-            res["__verbose"] = to_json();
+            res["__verbose"] = to_json_non_oaicompat();
         }
         if (timings.prompt_n >= 0) {
             res.push_back({"timings", timings.to_json()});
@@ -3594,12 +3594,12 @@ int main(int argc, char ** argv) {
 
     const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
         const json body = json::parse(req.body);
-        bool is_openai = false;
+        bool oaicompat = false;
 
         // an input prompt can be a string or a list of tokens (integer)
         json prompt;
         if (body.count("input") != 0) {
-            is_openai = true;
+            oaicompat = true;
             prompt = body.at("input");
         } else if (body.count("content") != 0) {
             // with "content", we only support single prompt
@@ -3638,7 +3638,7 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = is_openai
+        json root = oaicompat
             ? format_embeddings_response_oaicompat(body, responses)
             : responses[0];
         res_ok(res, root);
