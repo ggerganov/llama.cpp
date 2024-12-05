@@ -6227,6 +6227,11 @@ static void llm_load_vocab(
                     tokenizer_pre == "falcon") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
             } else if (
+                    tokenizer_pre == "falcon3") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON3;
+                vocab.tokenizer_ignore_merges = true;
+                vocab.tokenizer_add_bos = true;
+            } else if (
                     tokenizer_pre == "mpt") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MPT;
             } else if (
