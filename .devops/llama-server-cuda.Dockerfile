@@ -17,7 +17,7 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
     apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main' && \
     apt-get update && \
     apt-get install -y build-essential git cmake libcurl4-openssl-dev && \
-    apt-get install cmake
+
 
 COPY . .
 
