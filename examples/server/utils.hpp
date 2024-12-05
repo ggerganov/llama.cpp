@@ -3,7 +3,6 @@
 #include "common.h"
 #include "log.h"
 #include "llama.h"
-#include "server.hpp"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -471,31 +470,6 @@ static std::string tokens_to_output_formatted_string(const llama_context * ctx, 
         ss << std::hex << (out[0] & 0xff);
         std::string res(ss.str());
         out = "byte: \\x" + res;
-    }
-
-    return out;
-}
-
-// convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
-    json out = json::array();
-
-    for (const auto & prob : probs) {
-        json probs_for_token = json::array();
-
-        for (const auto & p : prob.probs) {
-            const std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
-            probs_for_token.push_back(json {
-                {"tok_str", tok_str},
-                {"prob",    p.prob},
-            });
-        }
-
-        const std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
-        out.push_back(json {
-            {"content", tok_str},
-            {"probs",   probs_for_token},
-        });
     }
 
     return out;
