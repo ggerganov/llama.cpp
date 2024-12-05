@@ -250,29 +250,29 @@ struct completion_token_output {
     std::string text_to_send;
     struct token_prob {
         llama_token tok;
+        std::string tok_str;
         float prob;
     };
     std::vector<token_prob> probs;
 
-    json to_json(const llama_context * ctx) const {
+    json to_json() const {
         json probs_for_token = json::array();
         for (const auto & p : probs) {
-            const std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
             probs_for_token.push_back(json {
-                {"tok_str", tok_str},
+                {"tok_str", p.tok_str},
                 {"prob",    p.prob},
             });
         }
         return probs_for_token;
     }
 
-    static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
+    static json probs_vector_to_json(const std::vector<completion_token_output> & probs) {
         json out = json::array();
         for (const auto & prob : probs) {
-            const std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
+            const std::string tok_str = prob.text_to_send;
             out.push_back(json {
                 {"content", tok_str},
-                {"probs",   prob.to_json(ctx)},
+                {"probs",   prob.to_json()},
             });
         }
         return out;
@@ -309,7 +309,7 @@ struct server_task_result_cmpl_final : server_task_result {
 
     virtual json to_json() override {
         // non-OAI-compat JSON
-        return json {
+        json res = json {
             {"index",               index},
             {"content",             content},
             {"id_slot",             id_slot},
@@ -326,6 +326,10 @@ struct server_task_result_cmpl_final : server_task_result {
             {"tokens_cached",       n_tokens_cached},
             {"timings",             timings.to_json()},
         };
+        if (!probs_output.empty()) {
+            res["completion_probabilities"] = completion_token_output::probs_vector_to_json(probs_output);
+        }
+        return res;
     }
 
     virtual json to_json_oai_compat() override {
@@ -362,12 +366,6 @@ struct server_task_result_cmpl_final : server_task_result {
         if (verbose) {
             res["__verbose"] = to_json();
         }
-
-        // TODO: fix this
-        // if (result.contains("completion_probabilities")) {
-        //     res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
-        // }
-
         if (timings.prompt_n >= 0) {
             res.push_back({"timings", timings.to_json()});
         }
@@ -417,6 +415,9 @@ struct server_task_result_cmpl_partial : server_task_result {
         // populate the timings object when needed (usually for the last response or with timings_per_token enabled)
         if (timings.prompt_n > 0) {
             res.push_back({"timings", timings.to_json()});
+        }
+        if (!probs_output.empty()) {
+            res["completion_probabilities"] = completion_token_output::probs_vector_to_json(probs_output);
         }
         if (is_stop) {
             res.push_back({"truncated", truncated});
@@ -2786,9 +2787,11 @@ struct server_context {
                 const auto * cur_p = common_sampler_get_candidates(slot.smpl);
 
                 for (size_t i = 0; i < (size_t) slot.params.sampling.n_probs; ++i) {
+                    auto tok_id = cur_p->data[i].id;
                     result.probs.push_back({
-                        cur_p->data[i].id,
-                            i >= cur_p->size ? 0.0f : cur_p->data[i].p,
+                        tok_id,
+                        tokens_to_output_formatted_string(ctx, tok_id),
+                        i >= cur_p->size ? 0.0f : cur_p->data[i].p,
                     });
                 }
 
@@ -2919,10 +2922,6 @@ int main(int argc, char ** argv) {
 
     // struct that contains llama context and inference
     server_context ctx_server;
-
-    if (params.model_alias == "unknown") {
-        params.model_alias = params.model;
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);
