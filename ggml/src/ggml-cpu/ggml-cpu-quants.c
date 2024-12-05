@@ -103,7 +103,7 @@ static inline __m256 sum_i16_pairs_float(const __m256i x) {
 }
 
 static inline __m256 mul_sum_us8_pairs_float(const __m256i ax, const __m256i sy) {
-#if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
+#if defined(__AVX__) && defined(__AVX512VNNI__) && defined(__AVX512VL__)
     const __m256i zero = _mm256_setzero_si256();
     const __m256i summed_pairs = _mm256_dpbusd_epi32(zero, ax, sy);
     return _mm256_cvtepi32_ps(summed_pairs);
