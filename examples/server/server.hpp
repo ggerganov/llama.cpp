@@ -15,9 +15,6 @@
 
 using json = nlohmann::ordered_json;
 
-// cast a shared_ptr to a specific type using copy constructor
-#define copy_cast_ptr(TYPEOUT, ptr) *(static_cast<TYPEOUT*>(ptr.get()));
-
 enum stop_type {
     STOP_TYPE_NONE,
     STOP_TYPE_EOS,
@@ -68,19 +65,6 @@ enum error_type {
     ERROR_TYPE_NOT_SUPPORTED, // custom error
 };
 
-enum result_type {
-    RESULT_TYPE_CMPL_FINAL,
-    RESULT_TYPE_CMPL_PARTIAL,
-    RESULT_TYPE_EMBD,
-    RESULT_TYPE_RERANK,
-    RESULT_TYPE_METRICS,
-    RESULT_TYPE_SLOT_SAVE_LOAD,
-    RESULT_TYPE_SLOT_ERASE,
-    RESULT_TYPE_APPLY_LORA,
-    RESULT_TYPE_ERROR,
-    RESULT_TYPE_UNKNOWN, // will throw an error
-};
-
 struct server_task {
     int id        = -1; // to be filled by server_queue
     int id_target = -1; // used by SERVER_TASK_TYPE_CANCEL
@@ -125,6 +109,12 @@ struct slot_params {
     int32_t n_ctx;
     uint32_t seed_cur;
     bool can_speculative;
+
+    // OAI-compat fields
+    bool oaicompat = false;
+    std::string oaicompat_model;
+    std::string oaicompat_cmpl_id;
+    bool verbose = false;
 
     json to_json() {
         std::vector<std::string> samplers;
@@ -205,11 +195,24 @@ struct result_timings {
 };
 
 struct server_task_result {
-    result_type type = RESULT_TYPE_UNKNOWN;
     int id           = -1;
     int id_slot      = -1;
-    server_task_result() = default;
-    server_task_result(result_type type) : type(type) {}
+    virtual bool is_error() {
+        // only used by server_task_result_error
+        return false;
+    }
+    virtual bool is_stop() {
+        // only used by server_task_result_cmpl_partial
+        return false;
+    }
+    virtual int get_index() {
+        return -1;
+    }
+    virtual json to_json() = 0;
+    virtual json to_json_oai_compat() {
+        // used by server_task_result_cmpl_final and server_task_result_cmpl_partial
+        return json();
+    }
     virtual ~server_task_result() = default;
 };
 
@@ -233,12 +236,10 @@ struct completion_token_output {
 };
 
 struct server_task_result_cmpl_final : server_task_result {
-    server_task_result_cmpl_final() : server_task_result(RESULT_TYPE_CMPL_FINAL) {}
     int index = 0;
     std::string content;
     bool stream;
     result_timings timings;
-    std::string model_alias;
     std::string prompt;
 
     bool truncated;
@@ -253,14 +254,23 @@ struct server_task_result_cmpl_final : server_task_result {
 
     slot_params generation_params;
 
-    json to_json() {
+    // OAI-compat fields
+    std::string oaicompat_model;
+    std::string oaicompat_cmpl_id;
+    bool verbose = false;
+
+    virtual int get_index() override {
+        return index;
+    }
+
+    virtual json to_json() override {
         // non-OAI-compat JSON
         return json {
             {"index",               index},
             {"content",             content},
             {"id_slot",             id_slot},
             {"stop",                true},
-            {"model",               model_alias},
+            {"model",               oaicompat_model},
             {"tokens_predicted",    n_decoded},
             {"tokens_evaluated",    n_prompt_tokens},
             {"generation_settings", generation_params.to_json()},
@@ -274,15 +284,55 @@ struct server_task_result_cmpl_final : server_task_result {
         };
     }
 
-    static server_task_result_cmpl_final from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_cmpl_final, result_ptr);
-    }
+    virtual json to_json_oai_compat() override {
+        std::string finish_reason = "length";
+        if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
+            finish_reason = "stop";
+        }
 
-    virtual ~server_task_result_cmpl_final() = default;
+        json choices = json::array({json{
+            {"finish_reason", finish_reason},
+            {"index", 0},
+            {"message", json{
+                {"content", content},
+                {"role", "assistant"}
+            }
+        }}});
+
+        std::time_t t = std::time(0);
+
+        json res = json {
+            {"choices", choices},
+            {"created", t},
+            {"model", oaicompat_model},
+            {"object", "chat.completion"},
+            {"usage", json {
+                {"completion_tokens", n_decoded},
+                {"prompt_tokens",     n_prompt_tokens},
+                {"total_tokens",      n_decoded + n_prompt_tokens}
+            }},
+            {"id", oaicompat_cmpl_id}
+        };
+
+        // extra fields for debugging purposes
+        if (verbose) {
+            res["__verbose"] = to_json();
+        }
+
+        // TODO: fix this
+        // if (result.contains("completion_probabilities")) {
+        //     res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
+        // }
+
+        if (timings.prompt_n >= 0) {
+            res.push_back({"timings", timings.to_json()});
+        }
+
+        return res;
+    }
 };
 
 struct server_task_result_cmpl_partial : server_task_result {
-    server_task_result_cmpl_partial() : server_task_result(RESULT_TYPE_CMPL_PARTIAL) {}
     int index = 0;
     std::string content;
 
@@ -295,7 +345,20 @@ struct server_task_result_cmpl_partial : server_task_result {
     std::vector<completion_token_output> probs_output;
     result_timings timings;
 
-    json to_json() {
+    // OAI-compat fields
+    std::string oaicompat_model;
+    std::string oaicompat_cmpl_id;
+    bool verbose = false;
+
+    virtual int get_index() override {
+        return index;
+    }
+
+    virtual bool is_stop() override {
+        return stop != STOP_TYPE_NONE;
+    }
+
+    virtual json to_json() override {
         bool is_stop = stop != STOP_TYPE_NONE;
         // non-OAI-compat JSON
         json res = json {
@@ -317,67 +380,186 @@ struct server_task_result_cmpl_partial : server_task_result {
         return res;
     }
 
-    static server_task_result_cmpl_partial from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_cmpl_partial, result_ptr);
-    }
+    virtual json to_json_oai_compat() override {
+        bool first = n_decoded == 0;
 
-    virtual ~server_task_result_cmpl_partial() = default;
+        std::string finish_reason;
+        if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
+            finish_reason = "stop";
+        } else if (stop == STOP_TYPE_LIMIT) {
+            finish_reason = "length";
+        }
+
+        std::time_t t = std::time(0);
+
+        json choices;
+
+        if (!finish_reason.empty()) {
+            choices = json::array({json{{"finish_reason", finish_reason},
+                                        {"index", 0},
+                                        {"delta", json::object()}}});
+        } else {
+            if (first) {
+                if (content.empty()) {
+                    choices = json::array({json{{"finish_reason", nullptr},
+                                                {"index", 0},
+                                                {"delta", json{{"role", "assistant"}}}}});
+                } else {
+                    // We have to send this as two updates to conform to openai behavior
+                    json initial_ret = json{{"choices", json::array({json{
+                                            {"finish_reason", nullptr},
+                                            {"index", 0},
+                                            {"delta", json{
+                                                {"role", "assistant"}
+                                            }}}})},
+                                {"created", t},
+                                {"id", oaicompat_cmpl_id},
+                                {"model", oaicompat_model},
+                                {"object", "chat.completion.chunk"}};
+
+                    json second_ret = json{
+                                {"choices", json::array({json{{"finish_reason", nullptr},
+                                                                {"index", 0},
+                                                                {"delta", json{
+                                                                {"content", content}}}
+                                                                }})},
+                                {"created", t},
+                                {"id", oaicompat_cmpl_id},
+                                {"model", oaicompat_model},
+                                {"object", "chat.completion.chunk"}};
+
+                    return std::vector<json>({initial_ret, second_ret});
+                }
+            } else {
+                // Some idiosyncrasy in task processing logic makes several trailing calls
+                // with empty content, we ignore these at the calee site.
+                if (content.empty()) {
+                    return std::vector<json>({json::object()});
+                }
+
+                choices = json::array({json{
+                    {"finish_reason", nullptr},
+                    {"index", 0},
+                    {"delta",
+                    json{
+                        {"content", content},
+                    }},
+                }});
+            }
+        }
+
+        json ret = json {
+            {"choices", choices},
+            {"created", t},
+            {"id",      oaicompat_cmpl_id},
+            {"model",   oaicompat_model},
+            {"object",  "chat.completion.chunk"}
+        };
+
+        if (timings.prompt_n >= 0) {
+            ret.push_back({"timings", timings.to_json()});
+        }
+
+        if (!finish_reason.empty()) {
+            ret.push_back({"usage", json {
+                {"completion_tokens", n_decoded},
+                {"prompt_tokens",     n_prompt_tokens},
+                {"total_tokens",      n_decoded + n_prompt_tokens},
+            }});
+        }
+
+        return std::vector<json>({ret});
+    }
 };
 
 struct server_task_result_embd : server_task_result {
-    server_task_result_embd() : server_task_result(RESULT_TYPE_EMBD) {}
-    result_type type = RESULT_TYPE_EMBD;
     int index = 0;
     std::vector<float> embedding;
 
-    json to_json() {
+    virtual int get_index() override {
+        return index;
+    }
+
+    virtual json to_json() override {
         return json {
             {"index",     index},
             {"embedding", embedding},
         };
     }
-
-    static server_task_result_embd from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_embd, result_ptr);
-    }
-
-    virtual ~server_task_result_embd() = default;
 };
 
 struct server_task_result_rerank : server_task_result {
-    server_task_result_rerank() : server_task_result(RESULT_TYPE_RERANK) {}
     int index = 0;
     float score = -1e6;
 
-    json to_json() {
+    virtual int get_index() override {
+        return index;
+    }
+
+    virtual json to_json() override {
         return json {
             {"index", index},
             {"score", score},
         };
     }
-
-    static server_task_result_rerank from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_rerank, result_ptr);
-    }
-
-    virtual ~server_task_result_rerank() = default;
 };
 
+// this function maybe used outside of server_task_result_error
+static json format_error_response(const std::string & message, const enum error_type type) {
+    std::string type_str;
+    int code = 500;
+    switch (type) {
+        case ERROR_TYPE_INVALID_REQUEST:
+            type_str = "invalid_request_error";
+            code = 400;
+            break;
+        case ERROR_TYPE_AUTHENTICATION:
+            type_str = "authentication_error";
+            code = 401;
+            break;
+        case ERROR_TYPE_NOT_FOUND:
+            type_str = "not_found_error";
+            code = 404;
+            break;
+        case ERROR_TYPE_SERVER:
+            type_str = "server_error";
+            code = 500;
+            break;
+        case ERROR_TYPE_PERMISSION:
+            type_str = "permission_error";
+            code = 403;
+            break;
+        case ERROR_TYPE_NOT_SUPPORTED:
+            type_str = "not_supported_error";
+            code = 501;
+            break;
+        case ERROR_TYPE_UNAVAILABLE:
+            type_str = "unavailable_error";
+            code = 503;
+            break;
+    }
+    return json {
+        {"code", code},
+        {"message", message},
+        {"type", type_str},
+    };
+}
+
 struct server_task_result_error : server_task_result {
-    server_task_result_error() : server_task_result(RESULT_TYPE_ERROR) {}
     int index = 0;
     error_type err_type = ERROR_TYPE_SERVER;
     std::string err_msg;
 
-    static server_task_result_error from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_error, result_ptr);
+    virtual bool is_error() override {
+        return true;
     }
 
-    virtual ~server_task_result_error() = default;
+    virtual json to_json() override {
+        return format_error_response(err_msg, err_type);
+    }
 };
 
 struct server_task_result_metrics : server_task_result {
-    server_task_result_metrics() : server_task_result(RESULT_TYPE_METRICS) {}
     int n_idle_slots;
     int n_processing_slots;
     int n_tasks_deferred;
@@ -404,7 +586,7 @@ struct server_task_result_metrics : server_task_result {
     // TODO: get rid of this json object and use to_json() instead
     json slots_data = json::array();
 
-    json to_json() {
+    virtual json to_json() override {
         return json {
             { "idle",                            n_idle_slots },
             { "processing",                      n_processing_slots },
@@ -430,16 +612,9 @@ struct server_task_result_metrics : server_task_result {
             { "slots",                           slots_data },
         };
     }
-
-    static server_task_result_metrics from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_metrics, result_ptr);
-    }
-
-    virtual ~server_task_result_metrics() = default;
 };
 
 struct server_task_result_slot_save_load : server_task_result {
-    server_task_result_slot_save_load() : server_task_result(RESULT_TYPE_SLOT_SAVE_LOAD) {}
     std::string filename;
     bool is_save; // true = save, false = load
 
@@ -447,7 +622,7 @@ struct server_task_result_slot_save_load : server_task_result {
     size_t n_bytes;
     double t_ms;
 
-    json to_json() {
+    virtual json to_json() override {
         if (is_save) {
             return json {
                 { "id_slot",   id_slot },
@@ -470,39 +645,21 @@ struct server_task_result_slot_save_load : server_task_result {
             };
         }
     }
-
-    static server_task_result_slot_save_load from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_slot_save_load, result_ptr);
-    }
-
-    virtual ~server_task_result_slot_save_load() = default;
 };
 
 struct server_task_result_slot_erase : server_task_result {
-    server_task_result_slot_erase() : server_task_result(RESULT_TYPE_SLOT_ERASE) {}
     size_t n_erased;
 
-    json to_json() {
+    virtual json to_json() override {
         return json {
             { "id_slot",  id_slot },
             { "n_erased", n_erased },
         };
     }
-
-    static server_task_result_slot_erase from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_slot_erase, result_ptr);
-    }
-
-    virtual ~server_task_result_slot_erase() = default;
 };
 
 struct server_task_result_apply_lora : server_task_result {
-    server_task_result_apply_lora() : server_task_result(RESULT_TYPE_APPLY_LORA) {}
-    json to_json() {
+    virtual json to_json() override {
         return json {{ "success", true }};
-    }
-
-    static server_task_result_apply_lora from_ptr(std::unique_ptr<server_task_result> & result_ptr) {
-        return copy_cast_ptr(server_task_result_apply_lora, result_ptr);
     }
 };
