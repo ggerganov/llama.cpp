@@ -308,7 +308,7 @@ struct server_task_result_cmpl_final : server_task_result {
 
     virtual json to_json() override {
         if (oaicompat) {
-            return to_json_oai_compat();
+            return to_json_oaicompat();
         }
         // otherwise, non-OAI-compat JSON
         json res = json {
@@ -334,7 +334,7 @@ struct server_task_result_cmpl_final : server_task_result {
         return res;
     }
 
-    json to_json_oai_compat() {
+    json to_json_oaicompat() {
         std::string finish_reason = "length";
         if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
             finish_reason = "stop";
@@ -406,7 +406,7 @@ struct server_task_result_cmpl_partial : server_task_result {
 
     virtual json to_json() override {
         if (oaicompat) {
-            return to_json_oai_compat();
+            return to_json_oaicompat();
         }
         bool is_stop = stop != STOP_TYPE_NONE;
         // non-OAI-compat JSON
@@ -432,7 +432,7 @@ struct server_task_result_cmpl_partial : server_task_result {
         return res;
     }
 
-    json to_json_oai_compat() {
+    json to_json_oaicompat() {
         bool first = n_decoded == 0;
 
         std::string finish_reason;
