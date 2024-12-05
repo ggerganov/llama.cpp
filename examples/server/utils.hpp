@@ -479,7 +479,7 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
     const std::string str =
         std::string(event) + ": " +
         data.dump(-1, ' ', false, json::error_handler_t::replace) +
-        "\n\n"; // note: these newlines are important (not sure why though, if you know, add a comment to explain)
+        "\n\n"; // required by RFC 8895 - A message is terminated by a blank line (two line terminators in a row).
 
     LOG_DBG("data stream, to_send: %s", str.c_str());
 
