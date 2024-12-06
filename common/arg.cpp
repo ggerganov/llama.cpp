@@ -1280,6 +1280,28 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_N_PARALLEL"));
     add_opt(common_arg(
+        {"--aggregate", "-ag"},
+        string_format("apply request aggregation (default: %s)", params.aggregate ? "enabled" : "disabled"),
+        [](common_params & params) {
+            params.aggregate = true;
+        }
+    ).set_env("LLAMA_ARG_AGGREGATION"));
+    add_opt(common_arg(
+        {"-bs", "--buffer-size"}, "N",
+        string_format("buffer size if aggregation is enabled (default: %d)", params.buffer_size),
+        [](common_params & params, int value) {
+            params.buffer_size = value;
+        }
+    ).set_env("LLAMA_ARG_BUFFER_SIZE"));
+
+    add_opt(common_arg(
+        {"-bks", "--block-size"}, "N",
+        string_format("block size if aggregation is enabled and should be equal to or less than buffer_size (default: %d)", params.block_size),
+        [](common_params & params, int value) {
+            params.block_size = value;
+        }
+    ).set_env("LLAMA_ARG_BLOCK_SIZE"));
+    add_opt(common_arg(
         {"-ns", "--sequences"}, "N",
         string_format("number of sequences to decode (default: %d)", params.n_sequences),
         [](common_params & params, int value) {
