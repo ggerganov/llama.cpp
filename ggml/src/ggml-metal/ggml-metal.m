@@ -509,9 +509,9 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
         NSString * path_lib = [bundle pathForResource:@"default" ofType:@"metallib"];
         if (path_lib == nil) {
             // Try to find the resource in the directory where the current binary located.
-            NSString *current_binary = [[NSProcessInfo processInfo] arguments][0];
-            NSString *bin_dir = [current_binary stringByDeletingLastPathComponent];
-            NSString *default_metallib_path = [NSString pathWithComponents:@[bin_dir, @"default.metallib"]];
+            NSString * current_binary = [[NSProcessInfo processInfo] arguments][0];
+            NSString * bin_dir = [current_binary stringByDeletingLastPathComponent];
+            NSString * default_metallib_path = [NSString pathWithComponents:@[bin_dir, @"default.metallib"]];
             if ([[NSFileManager defaultManager] isReadableFileAtPath:default_metallib_path]) {
                 GGML_LOG_INFO("%s: found '%s'\n", __func__, [default_metallib_path UTF8String]);
                 NSDictionary *atts = [[NSFileManager defaultManager] attributesOfItemAtPath:default_metallib_path error:&error];
