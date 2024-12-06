@@ -37,7 +37,8 @@ Here's how to run an agent w/ local tool call:
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
     --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
 
-  ./build/bin/llama-server --jinja -fa --verbose \
+  # Note the --special flag: this is needed b/c of a regression from the last merge, will fix!
+  ./build/bin/llama-server --jinja -fa --verbose --special \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
     --chat-template-file tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja
 
@@ -93,7 +94,7 @@ Here's how to run an agent w/ local tool call:
   </details>
 
   ```bash
-  uv run examples/agent/run.py "Search for, fetch and summarize the homepage of llama.cpp"
+  uv run examples/agent/run.py "Search (with brave), fetch and summarize the homepage of llama.cpp"
   ```
 
   <details><summary>See output w/ Hermes-3-Llama-3.1-8B</summary>
@@ -119,4 +120,5 @@ Here's how to run an agent w/ local tool call:
 
 ## TODO
 
+- Fix --special tokens regression after big merge
 - Implement code_interpreter using whichever tools are builtin for a given model.
