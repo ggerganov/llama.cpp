@@ -473,9 +473,11 @@ Notice that each `probs` is an array of length `n_probs`.
 - `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`. These options may differ from the original ones in some way (e.g. bad values filtered out, strings converted to tokens, etc.).
 - `model`: The path to the model loaded with `-m`
 - `prompt`: The provided `prompt`
-- `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
-- `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
-- `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
+- `stop_type`: Indicating whether the completion has stopped. Possible values are:
+  - `none`: Generating (not stopped)
+  - `eos`: Stopped because it encountered the EOS token
+  - `limit`: Stopped because `n_predict` tokens were generated before stop words or EOS was encountered
+  - `word`: Stopped due to encountering a stopping word from `stop` JSON array provided
 - `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
 - `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
 - `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
