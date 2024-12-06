@@ -61,10 +61,10 @@ services:
       dockerfile: Dockerfile.squid
     volumes:
       - ./squid/conf/squid.conf:/etc/squid/squid.conf:ro
-      - ./squid/cache:/var/spool/squid
-      - ./squid/logs:/var/log/squid
+      - ./squid/cache:/var/spool/squid:rw
+      - ./squid/logs:/var/log/squid:rw
       - ./squid/ssl_cert:/etc/squid/ssl_cert:ro
-      - ./squid/ssl_db:/var/spool/squid/ssl_db
+      - ./squid/ssl_db:/var/spool/squid/ssl_db:rw
     extra_hosts:
       - host.docker.internal:host-gateway
     networks:
