@@ -1,9 +1,10 @@
 # Pull requests (for contributors)
 
 - Test your changes:
-  - Using the commands in the [`tests`](tests) folder. For instance, running the `./tests/test-backend-ops` command tests different backend implementations of the `ggml` library
   - Execute [the full CI locally on your machine](ci/README.md) before publishing
-- Optionally rate the complexity of your PR (i.e. `Review Complexity : Low`, `Review Complexity : Medium`, `Review Complexity : High`). This makes it easier for maintainers to triage the PRs
+  - Verify that the perplexity and the performance are not affected negatively by your changes (use `llama-perplexity` and `llama-bench`)
+  - If you modified the `ggml` source, run the `test-backend-ops` tool to check whether different backend implementations of the `ggml` operators produce consistent results (this requires access to at least two different `ggml` backends)
+  - If you modified a `ggml` operator or added a new one, add the corresponding test cases to `test-backend-ops`
 - Consider allowing write access to your branch for faster reviews, as reviewers can push commits directly
 - If your PR becomes stale, don't hesitate to ping the maintainers in the comments
 
@@ -12,6 +13,7 @@
 - Squash-merge PRs
 - Use the following format for the squashed commit title: `<module> : <commit title> (#<issue_number>)`. For example: `utils : fix typo in utils.py (#1234)`
 - Optionally pick a `<module>` from here: https://github.com/ggerganov/llama.cpp/wiki/Modules
+- Consider adding yourself to [CODEOWNERS](CODEOWNERS)
 
 # Coding guidelines
 

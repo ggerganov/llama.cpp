@@ -2,6 +2,7 @@
 #define LLAMA_H
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 #include "ggml-backend.h"
 
 #include <stddef.h>
@@ -103,6 +104,7 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH   = 24,
         LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
         LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
+        LLAMA_VOCAB_PRE_TYPE_MINERVA        = 27,
     };
 
     enum llama_rope_type {
@@ -184,7 +186,8 @@ extern "C" {
         LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
         LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
         LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
-        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
+        LLAMA_ROPE_SCALING_TYPE_LONGROPE    = 3,
+        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_LONGROPE,
     };
 
     enum llama_pooling_type {
@@ -271,6 +274,9 @@ extern "C" {
     };
 
     struct llama_model_params {
+        // NULL-terminated list of devices to use for offloading (if NULL, all available devices are used)
+        ggml_backend_dev_t * devices;
+
         int32_t n_gpu_layers; // number of layers to store in VRAM
         enum llama_split_mode split_mode; // how to split the model across multiple GPUs
 
@@ -666,6 +672,9 @@ extern "C" {
     // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
+    // Check if the context supports KV cache shifting
+    LLAMA_API bool llama_kv_cache_can_shift(struct llama_context * ctx);
+
     //
     // State / sessions
     //
@@ -796,7 +805,7 @@ extern "C" {
     // Processes a batch of tokens with the ecoder part of the encoder-decoder model.
     // Stores the encoder output internally for later use by the decoder cross-attention layers.
     //   0 - success
-    // < 0 - error
+    // < 0 - error. the KV cache state is restored to the state before this call
     LLAMA_API int32_t llama_encode(
             struct llama_context * ctx,
               struct llama_batch   batch);
@@ -804,7 +813,7 @@ extern "C" {
     // Positive return values does not mean a fatal error, but rather a warning.
     //   0 - success
     //   1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
-    // < 0 - error
+    // < 0 - error. the KV cache state is restored to the state before this call
     LLAMA_API int32_t llama_decode(
             struct llama_context * ctx,
               struct llama_batch   batch);
@@ -982,6 +991,9 @@ extern "C" {
                                   bool   add_ass,
                                   char * buf,
                                int32_t   length);
+
+    // Get list of built-in chat templates
+    LLAMA_API int32_t llama_chat_builtin_templates(const char ** output, size_t len);
 
     //
     // Sampling API
@@ -1246,8 +1258,6 @@ extern "C" {
     LLAMA_API struct llama_perf_sampler_data llama_perf_sampler      (const struct llama_sampler * chain);
     LLAMA_API void                           llama_perf_sampler_print(const struct llama_sampler * chain);
     LLAMA_API void                           llama_perf_sampler_reset(      struct llama_sampler * chain);
-
-    LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
 
 #ifdef __cplusplus
 }

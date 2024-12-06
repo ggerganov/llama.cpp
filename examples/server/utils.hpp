@@ -26,7 +26,6 @@
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
 using json = nlohmann::ordered_json;
-using llama_tokens = std::vector<llama_token>;
 
 #define SLT_INF(slot, fmt, ...) LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
 #define SLT_WRN(slot, fmt, ...) LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
@@ -429,21 +428,11 @@ static std::string gen_chatcmplid() {
 // other common utils
 //
 
-static size_t longest_common_prefix(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
-    size_t i;
-    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
-
-    return i;
+static bool ends_with(const std::string & str, const std::string & suffix) {
+    return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-static size_t longest_common_prefix(const std::string & a, const std::string & b) {
-    size_t i;
-    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
-
-    return i;
-}
-
-static size_t find_partial_stop_string(const std::string & stop, const std::string & text) {
+static size_t find_partial_stop_string(const std::string &stop, const std::string &text) {
     if (!text.empty() && !stop.empty()) {
         auto it = std::find(stop.rbegin(), stop.rend(), text.back());
         while (it != stop.rend()) {
@@ -741,6 +730,10 @@ static json format_final_response_oaicompat(const json & request, const json & r
         res["completion_probabilities"] = json_value(result, "completion_probabilities", json::array());
     }
 
+    if (result.contains("timings")) {
+        res.push_back({"timings", json_value(result, "timings", json::object())});
+    }
+
     return res;
 }
 
@@ -831,6 +824,11 @@ static std::vector<json> format_partial_response_oaicompat(const json & result, 
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
+
+    if (result.contains("timings")) {
+        ret.push_back({"timings", json_value(result, "timings", json::object())});
+    }
+
     if (!finish_reason.empty()) {
         int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
         int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);

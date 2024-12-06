@@ -15,21 +15,7 @@ set(TARGET_SRCS
     httplib.h
 )
 set(PUBLIC_ASSETS
-    colorthemes.css
-    style.css
-    theme-beeninorder.css
-    theme-ketivah.css
-    theme-mangotango.css
-    theme-playground.css
-    theme-polarnight.css
-    theme-snowstorm.css
     index.html
-    index-new.html
-    index.js
-    completion.js
-    system-prompts.js
-    prompt-formats.js
-    json-schema-to-grammar.mjs
     loading.html
 )
 
@@ -42,10 +28,19 @@ foreach(asset ${PUBLIC_ASSETS})
         OUTPUT "${output}"
         COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
     )
+    set_source_files_properties(${output} PROPERTIES GENERATED TRUE)
 endforeach()
 
 add_executable(${TARGET} ${TARGET_SRCS})
 install(TARGETS ${TARGET} RUNTIME)
+
+# clean up generated files in pre-build step
+foreach(asset ${PUBLIC_ASSETS})
+    set(output "${CMAKE_CURRENT_BINARY_DIR}/${asset}.hpp")
+    add_custom_command(TARGET ${TARGET} PRE_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E remove -f "${output}"
+    )
+endforeach()
 
 target_link_libraries(${TARGET} PRIVATE common ${CMAKE_THREAD_LIBS_INIT})
 
@@ -59,4 +54,4 @@ if (WIN32)
     TARGET_LINK_LIBRARIES(${TARGET} PRIVATE ws2_32)
 endif()
 
-target_compile_features(${TARGET} PRIVATE cxx_std_11)
+target_compile_features(${TARGET} PRIVATE cxx_std_17)

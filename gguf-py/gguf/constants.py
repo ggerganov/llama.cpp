@@ -64,15 +64,27 @@ class Keys:
         BASE_MODEL_AUTHOR          = "general.base_model.{id}.author"
         BASE_MODEL_VERSION         = "general.base_model.{id}.version"
         BASE_MODEL_ORGANIZATION    = "general.base_model.{id}.organization"
+        BASE_MODEL_DESCRIPTION     = "general.base_model.{id}.description"
         BASE_MODEL_URL             = "general.base_model.{id}.url" # Model Website/Paper
         BASE_MODEL_DOI             = "general.base_model.{id}.doi"
         BASE_MODEL_UUID            = "general.base_model.{id}.uuid"
         BASE_MODEL_REPO_URL        = "general.base_model.{id}.repo_url" # Model Source Repository (git/svn/etc...)
 
+        # Dataset Source
+        DATASET_COUNT           = "general.dataset.count"
+        DATASET_NAME            = "general.dataset.{id}.name"
+        DATASET_AUTHOR          = "general.dataset.{id}.author"
+        DATASET_VERSION         = "general.dataset.{id}.version"
+        DATASET_ORGANIZATION    = "general.dataset.{id}.organization"
+        DATASET_DESCRIPTION     = "general.dataset.{id}.description"
+        DATASET_URL             = "general.dataset.{id}.url" # Model Website/Paper
+        DATASET_DOI             = "general.dataset.{id}.doi"
+        DATASET_UUID            = "general.dataset.{id}.uuid"
+        DATASET_REPO_URL        = "general.dataset.{id}.repo_url" # Model Source Repository (git/svn/etc...)
+
         # Array based KV stores
         TAGS                       = "general.tags"
         LANGUAGES                  = "general.languages"
-        DATASETS                   = "general.datasets"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"
@@ -231,6 +243,7 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R    = auto()
     DBRX         = auto()
     OLMO         = auto()
+    OLMO2        = auto()
     OLMOE        = auto()
     OPENELM      = auto()
     ARCTIC       = auto()
@@ -392,6 +405,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.OLMO2:          "olmo2",
     MODEL_ARCH.OLMOE:          "olmoe",
     MODEL_ARCH.OPENELM:        "openelm",
     MODEL_ARCH.ARCTIC:         "arctic",
@@ -882,6 +896,8 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.OUTPUT,
         MODEL_TENSOR.OUTPUT_NORM,
         MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ROPE_FACTORS_LONG,
+        MODEL_TENSOR.ROPE_FACTORS_SHORT,
         MODEL_TENSOR.ATTN_NORM,
         MODEL_TENSOR.ATTN_Q,
         MODEL_TENSOR.ATTN_K,
@@ -1053,6 +1069,22 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_K,
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.OLMO2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.FFN_POST_NORM,
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
@@ -1358,9 +1390,10 @@ class TokenType(IntEnum):
 
 
 class RopeScalingType(Enum):
-    NONE   = 'none'
-    LINEAR = 'linear'
-    YARN   = 'yarn'
+    NONE     = 'none'
+    LINEAR   = 'linear'
+    YARN     = 'yarn'
+    LONGROPE = 'longrope'
 
 
 class PoolingType(IntEnum):

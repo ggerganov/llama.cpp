@@ -39,7 +39,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--cpu-strict-batch <0\|1>` | use strict CPU placement (default: same as --cpu-strict) |
 | `--prio-batch N` | set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: 0)<br/> |
 | `--poll-batch <0\|1>` | use polling to wait for work (default: same as --poll) |
-| `-c, --ctx-size N` | size of the prompt context (default: 0, 0 = loaded from model)<br/>(env: LLAMA_ARG_CTX_SIZE) |
+| `-c, --ctx-size N` | size of the prompt context (default: 4096, 0 = loaded from model)<br/>(env: LLAMA_ARG_CTX_SIZE) |
 | `-n, --predict, --n-predict N` | number of tokens to predict (default: -1, -1 = infinity, -2 = until context filled)<br/>(env: LLAMA_ARG_N_PREDICT) |
 | `-b, --batch-size N` | logical maximum batch size (default: 2048)<br/>(env: LLAMA_ARG_BATCH) |
 | `-ub, --ubatch-size N` | physical maximum batch size (default: 512)<br/>(env: LLAMA_ARG_UBATCH) |
@@ -64,11 +64,13 @@ The project is under active development, and we are [looking for feedback and co
 | `-nkvo, --no-kv-offload` | disable KV offload<br/>(env: LLAMA_ARG_NO_KV_OFFLOAD) |
 | `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_K) |
 | `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_V) |
-| `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: -1.0, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
+| `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: 0.1, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
 | `-np, --parallel N` | number of parallel sequences to decode (default: 1)<br/>(env: LLAMA_ARG_N_PARALLEL) |
 | `--mlock` | force system to keep model in RAM rather than swapping or compressing<br/>(env: LLAMA_ARG_MLOCK) |
 | `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock)<br/>(env: LLAMA_ARG_NO_MMAP) |
 | `--numa TYPE` | attempt optimizations that help on some NUMA systems<br/>- distribute: spread execution evenly over all nodes<br/>- isolate: only spawn threads on CPUs on the node that execution started on<br/>- numactl: use the CPU map provided by numactl<br/>if run without this previously, it is recommended to drop the system page cache before using this<br/>see https://github.com/ggerganov/llama.cpp/issues/1437<br/>(env: LLAMA_ARG_NUMA) |
+| `-dev, --device <dev1,dev2,..>` | comma-separated list of devices to use for offloading (none = don't offload)<br/>use --list-devices to see a list of available devices<br/>(env: LLAMA_ARG_DEVICE) |
+| `--list-devices` | print list of available devices and exit |
 | `-ngl, --gpu-layers, --n-gpu-layers N` | number of layers to store in VRAM<br/>(env: LLAMA_ARG_N_GPU_LAYERS) |
 | `-sm, --split-mode {none,layer,row}` | how to split the model across multiple GPUs, one of:<br/>- none: use one GPU only<br/>- layer (default): split layers and KV across GPUs<br/>- row: split rows across GPUs<br/>(env: LLAMA_ARG_SPLIT_MODE) |
 | `-ts, --tensor-split N0,N1,N2,...` | fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1<br/>(env: LLAMA_ARG_TENSOR_SPLIT) |
@@ -85,7 +87,6 @@ The project is under active development, and we are [looking for feedback and co
 | `-hfr, --hf-repo REPO` | Hugging Face model repository (default: unused)<br/>(env: LLAMA_ARG_HF_REPO) |
 | `-hff, --hf-file FILE` | Hugging Face model file (default: unused)<br/>(env: LLAMA_ARG_HF_FILE) |
 | `-hft, --hf-token TOKEN` | Hugging Face access token (default: value from HF_TOKEN environment variable)<br/>(env: HF_TOKEN) |
-| `-ld, --logdir LOGDIR` | path under which to save YAML logs (no logging if unset) |
 | `--log-disable` | Log disable |
 | `--log-file FNAME` | Log to file |
 | `--log-colors` | Enable colored logging<br/>(env: LLAMA_LOG_COLORS) |
@@ -99,25 +100,27 @@ The project is under active development, and we are [looking for feedback and co
 
 | Argument | Explanation |
 | -------- | ----------- |
-| `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;typ_p;top_p;min_p;temperature) |
+| `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: dry;top_k;typ_p;top_p;min_p;xtc;temperature) |
 | `-s, --seed SEED` | RNG seed (default: -1, use random seed for -1) |
-| `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: kfypmt) |
+| `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: dkypmxt) |
 | `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
 | `--penalize-nl` | penalize newline tokens (default: false) |
 | `--temp N` | temperature (default: 0.8) |
 | `--top-k N` | top-k sampling (default: 40, 0 = disabled) |
 | `--top-p N` | top-p sampling (default: 0.9, 1.0 = disabled) |
 | `--min-p N` | min-p sampling (default: 0.1, 0.0 = disabled) |
+| `--xtc-probability N` | xtc probability (default: 0.0, 0.0 = disabled) |
+| `--xtc-threshold N` | xtc threshold (default: 0.1, 1.0 = disabled) |
 | `--typical N` | locally typical sampling, parameter p (default: 1.0, 1.0 = disabled) |
 | `--repeat-last-n N` | last n tokens to consider for penalize (default: 64, 0 = disabled, -1 = ctx_size) |
 | `--repeat-penalty N` | penalize repeat sequence of tokens (default: 1.0, 1.0 = disabled) |
 | `--presence-penalty N` | repeat alpha presence penalty (default: 0.0, 0.0 = disabled) |
 | `--frequency-penalty N` | repeat alpha frequency penalty (default: 0.0, 0.0 = disabled) |
-| `--dry-multiplier N` | DRY sampling multiplier (default: 0.0, 0.0 = disabled) |
-| `--dry-base N` | DRY sampling base value (default: 1.75) |
-| `--dry-allowed-length N` | allowed length for DRY sampling (default: 2) |
-| `--dry-penalty-last-n N` | DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size) |
-| `--dry-sequence-breaker STRING` | add sequence breaker for DRY sampling, clearing out default breakers (`['\n', ':', '"', '*']`) in the process; use `"none"` to not use any sequence breakers
+| `--dry-multiplier N` | set DRY sampling multiplier (default: 0.0, 0.0 = disabled) |
+| `--dry-base N` | set DRY sampling base value (default: 1.75) |
+| `--dry-allowed-length N` | set allowed length for DRY sampling (default: 2) |
+| `--dry-penalty-last-n N` | set DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size) |
+| `--dry-sequence-breaker STRING` | add sequence breaker for DRY sampling, clearing out default breakers ('\n', ':', '"', '*') in the process; use "none" to not use any sequence breakers<br/> |
 | `--dynatemp-range N` | dynamic temperature range (default: 0.0, 0.0 = disabled) |
 | `--dynatemp-exp N` | dynamic temperature exponent (default: 1.0) |
 | `--mirostat N` | use Mirostat sampling.<br/>Top K, Nucleus and Locally Typical samplers are ignored if used.<br/>(default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0) |
@@ -157,9 +160,16 @@ The project is under active development, and we are [looking for feedback and co
 | `--props` | enable changing global properties via POST /props (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_PROPS) |
 | `--no-slots` | disables slots monitoring endpoint<br/>(env: LLAMA_ARG_NO_ENDPOINT_SLOTS) |
 | `--slot-save-path PATH` | path to save slot kv cache (default: disabled) |
-| `--chat-template JINJA_TEMPLATE` | set custom jinja chat template (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>only commonly used templates are accepted:<br/>https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template<br/>(env: LLAMA_ARG_CHAT_TEMPLATE) |
+| `--chat-template JINJA_TEMPLATE` | set custom jinja chat template (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>list of built-in templates:<br/>chatglm3, chatglm4, chatml, command-r, deepseek, deepseek2, exaone3, gemma, granite, llama2, llama2-sys, llama2-sys-bos, llama2-sys-strip, llama3, minicpm, mistral-v1, mistral-v3, mistral-v3-tekken, mistral-v7, monarch, openchat, orion, phi3, rwkv-world, vicuna, vicuna-orca, zephyr<br/>(env: LLAMA_ARG_CHAT_TEMPLATE) |
 | `-sps, --slot-prompt-similarity SIMILARITY` | how much the prompt of a request must match the prompt of a slot in order to use that slot (default: 0.50, 0.0 = disabled)<br/> |
 | `--lora-init-without-apply` | load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: disabled) |
+| `--draft-max, --draft, --draft-n N` | number of tokens to draft for speculative decoding (default: 16) |
+| `--draft-min, --draft-n-min N` | minimum number of draft tokens to use for speculative decoding (default: 5) |
+| `--draft-p-min P` | minimum speculative decoding probability (greedy) (default: 0.9) |
+| `-cd, --ctx-size-draft N` | size of the prompt context for the draft model (default: 0, 0 = loaded from model) |
+| `-devd, --device-draft <dev1,dev2,..>` | comma-separated list of devices to use for offloading the draft model (none = don't offload)<br/>use --list-devices to see a list of available devices |
+| `-ngld, --gpu-layers-draft, --n-gpu-layers-draft N` | number of layers to store in VRAM for the draft model |
+| `-md, --model-draft FNAME` | draft model for speculative decoding (default: unused) |
 
 
 Note: If both command line argument and environment variable are both set for the same param, the argument will take precedence over env var.
@@ -187,12 +197,6 @@ services:
 
 `llama-server` is built alongside everything else from the root of the project
 
-- Using `make`:
-
-  ```bash
-  make llama-server
-  ```
-
 - Using `CMake`:
 
   ```bash
@@ -206,21 +210,43 @@ services:
 
 `llama-server` can also be built with SSL support using OpenSSL 3
 
-- Using `make`:
-
-  ```bash
-  # NOTE: For non-system openssl, use the following:
-  #   CXXFLAGS="-I /path/to/openssl/include"
-  #   LDFLAGS="-L /path/to/openssl/lib"
-  make LLAMA_SERVER_SSL=true llama-server
-  ```
-
 - Using `CMake`:
 
   ```bash
   cmake -B build -DLLAMA_SERVER_SSL=ON
   cmake --build build --config Release -t llama-server
   ```
+
+## Web UI
+
+The project includes a web-based user interface that enables interaction with the model through the `/chat/completions` endpoint.
+
+The web UI is developed using:
+- `vue` framework for frontend development
+- `tailwindcss` and `daisyui` for styling
+- `vite` for build tooling
+
+A pre-built version is available as a single HTML file under `/public` directory.
+
+To build or to run the dev server (with hot reload):
+
+```sh
+# make sure you have nodejs installed
+cd examples/server/webui
+npm i
+
+# to run the dev server
+npm run dev
+
+# to build the public/index.html
+npm run build
+```
+
+NOTE: if you are using the vite dev server, you can change the API base URL to llama.cpp. To do that, run this code snippet in browser's console:
+
+```js
+localStorage.setItem('base', 'http://localhost:8080')
+```
 
 ## Quick Start
 
@@ -316,100 +342,106 @@ node index.js
 
 ### POST `/completion`: Given a `prompt`, it returns the predicted completion.
 
-    *Options:*
+*Options:*
 
-    `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
+`prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
 
-      - The prompt is a string or an array with the first element given as a string
-      - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
+  - The prompt is a string or an array with the first element given as a string
+  - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
 
-    These input shapes and data type are allowed for `prompt`:
+These input shapes and data type are allowed for `prompt`:
 
-      - Single string: `"string"`
-      - Single sequence of tokens: `[12, 34, 56]`
-      - Mixed tokens and strings: `[12, 34, "string", 56, 78]`
+  - Single string: `"string"`
+  - Single sequence of tokens: `[12, 34, 56]`
+  - Mixed tokens and strings: `[12, 34, "string", 56, 78]`
 
-    Multiple prompts are also supported. In this case, the completion result will be an array.
+Multiple prompts are also supported. In this case, the completion result will be an array.
 
-      - Only strings: `["string1", "string2"]`
-      - Strings and sequences of tokens: `["string1", [12, 34, 56]]`
-      - Mixed types: `[[12, 34, "string", 56, 78], [12, 34, 56], "string"]`
+  - Only strings: `["string1", "string2"]`
+  - Strings and sequences of tokens: `["string1", [12, 34, 56]]`
+  - Mixed types: `[[12, 34, "string", 56, 78], [12, 34, 56], "string"]`
 
-    `temperature`: Adjust the randomness of the generated text. Default: `0.8`
+`temperature`: Adjust the randomness of the generated text. Default: `0.8`
 
-    `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` Default: `0.0`, which is disabled.
+`dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` Default: `0.0`, which is disabled.
 
-    `dynatemp_exponent`: Dynamic temperature exponent. Default: `1.0`
+`dynatemp_exponent`: Dynamic temperature exponent. Default: `1.0`
 
-    `top_k`: Limit the next token selection to the K most probable tokens.  Default: `40`
+`top_k`: Limit the next token selection to the K most probable tokens.  Default: `40`
 
-    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Default: `0.95`
+`top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Default: `0.95`
 
-    `min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token. Default: `0.05`
+`min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token. Default: `0.05`
 
-    `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. Default: `-1`, where `-1` is infinity.
+`n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. Default: `-1`, where `-1` is infinity.
 
-    `n_indent`: Specify the minimum line indentation for the generated text in number of whitespace characters. Useful for code completion tasks. Default: `0`
+`n_indent`: Specify the minimum line indentation for the generated text in number of whitespace characters. Useful for code completion tasks. Default: `0`
 
-    `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.
-    By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
+`n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.
+By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
 
-    `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
+`stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
 
-    `stop`: Specify a JSON array of stopping strings.
-    These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
+`stop`: Specify a JSON array of stopping strings.
+These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
 
-    `typical_p`: Enable locally typical sampling with parameter p. Default: `1.0`, which is disabled.
+`typical_p`: Enable locally typical sampling with parameter p. Default: `1.0`, which is disabled.
 
-    `repeat_penalty`: Control the repetition of token sequences in the generated text. Default: `1.1`
+`repeat_penalty`: Control the repetition of token sequences in the generated text. Default: `1.1`
 
-    `repeat_last_n`: Last n tokens to consider for penalizing repetition. Default: `64`, where `0` is disabled and `-1` is ctx-size.
+`repeat_last_n`: Last n tokens to consider for penalizing repetition. Default: `64`, where `0` is disabled and `-1` is ctx-size.
 
-    `penalize_nl`: Penalize newline tokens when applying the repeat penalty. Default: `true`
+`penalize_nl`: Penalize newline tokens when applying the repeat penalty. Default: `true`
 
-    `presence_penalty`: Repeat alpha presence penalty. Default: `0.0`, which is disabled.
+`presence_penalty`: Repeat alpha presence penalty. Default: `0.0`, which is disabled.
 
-    `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
+`frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
 
-    `dry_multiplier`: Set the DRY (Don't Repeat Yourself) repetition penalty multiplier. Default: `0.0`, which is disabled.
+`dry_multiplier`: Set the DRY (Don't Repeat Yourself) repetition penalty multiplier. Default: `0.0`, which is disabled.
 
-    `dry_base`: Set the DRY repetition penalty base value. Default: `1.75`
+`dry_base`: Set the DRY repetition penalty base value. Default: `1.75`
 
-    `dry_allowed_length`: Tokens that extend repetition beyond this receive exponentially increasing penalty: multiplier * base ^ (length of repeating sequence before token - allowed length). Default: `2`
+`dry_allowed_length`: Tokens that extend repetition beyond this receive exponentially increasing penalty: multiplier * base ^ (length of repeating sequence before token - allowed length). Default: `2`
 
-    `dry_penalty_last_n`: How many tokens to scan for repetitions. Default: `-1`, where `0` is disabled and `-1` is context size.
+`dry_penalty_last_n`: How many tokens to scan for repetitions. Default: `-1`, where `0` is disabled and `-1` is context size.
 
-    `dry_sequence_breakers`: Specify an array of sequence breakers for DRY sampling. Only a JSON array of strings is accepted. Default: `['\n', ':', '"', '*']`
+`dry_sequence_breakers`: Specify an array of sequence breakers for DRY sampling. Only a JSON array of strings is accepted. Default: `['\n', ':', '"', '*']`
 
-    `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
+`xtc_probability`: Set the chance for token removal via XTC sampler. Default: `0.0`, which is disabled.
 
-    `mirostat_tau`: Set the Mirostat target entropy, parameter tau. Default: `5.0`
+`xtc_threshold`: Set a minimum probability threshold for tokens to be removed via XTC sampler. Default: `0.1` (> `0.5` disables XTC)
 
-    `mirostat_eta`: Set the Mirostat learning rate, parameter eta.  Default: `0.1`
+`mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
 
-    `grammar`: Set grammar for grammar-based sampling.  Default: no grammar
+`mirostat_tau`: Set the Mirostat target entropy, parameter tau. Default: `5.0`
 
-    `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
+`mirostat_eta`: Set the Mirostat learning rate, parameter eta.  Default: `0.1`
 
-    `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
+`grammar`: Set grammar for grammar-based sampling.  Default: no grammar
 
-    `ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
+`json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
 
-    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. Default: `[]`
+`seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
-    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. Note that for temperature < 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Default: `0`
+`ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
 
-    `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum. Default: `0`
+`logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. Default: `[]`
 
-    `t_max_predict_ms`: Set a time limit in milliseconds for the prediction (a.k.a. text-generation) phase. The timeout will trigger if the generation takes more than the specified time (measured since the first token was generated) and if a new-line character has already been generated. Useful for FIM applications. Default: `0`, which is disabled.
+`n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. Note that for temperature < 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Default: `0`
 
-    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
+`min_keep`: If greater than 0, force samplers to return N possible tokens at minimum. Default: `0`
 
-    `id_slot`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot.  Default: `-1`
+`t_max_predict_ms`: Set a time limit in milliseconds for the prediction (a.k.a. text-generation) phase. The timeout will trigger if the generation takes more than the specified time (measured since the first token was generated) and if a new-line character has already been generated. Useful for FIM applications. Default: `0`, which is disabled.
 
-    `cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `false`
+`image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
-    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["top_k", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values.
+`id_slot`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot.  Default: `-1`
+
+`cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `true`
+
+`samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["dry", "top_k", "typ_p", "top_p", "min_p", "xtc", "temperature"]` - these are all the available values.
+
+    `timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
 
 **Response format**
 
@@ -452,13 +484,13 @@ Notice that each `probs` is an array of length `n_probs`.
 
 ### POST `/tokenize`: Tokenize a given text
 
-    *Options:*
+*Options:*
 
-    `content`: (Required) The text to tokenize.
+`content`: (Required) The text to tokenize.
 
-    `add_special`: (Optional) Boolean indicating if special tokens, i.e. `BOS`, should be inserted.  Default: `false`
+`add_special`: (Optional) Boolean indicating if special tokens, i.e. `BOS`, should be inserted.  Default: `false`
 
-    `with_pieces`: (Optional) Boolean indicating whether to return token pieces along with IDs.  Default: `false`
+`with_pieces`: (Optional) Boolean indicating whether to return token pieces along with IDs.  Default: `false`
 
 **Response:**
 
@@ -495,52 +527,52 @@ With input 'á' (utf8 hex: C3 A1) on tinyllama/stories260k
 
 ### POST `/detokenize`: Convert tokens to text
 
-    *Options:*
+*Options:*
 
-    `tokens`: Set the tokens to detokenize.
+`tokens`: Set the tokens to detokenize.
 
 ### POST `/embedding`: Generate embedding of a given text
 
 The same as [the embedding example](../embedding) does.
 
-    *Options:*
+*Options:*
 
-    `content`: Set the text to process.
+`content`: Set the text to process.
 
-    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `content`. You can determine the place of the image in the content as in the following: `Image: [img-21].\nCaption: This is a picture of a house`. In this case, `[img-21]` will be replaced by the embeddings of the image with id `21` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 21}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
+`image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `content`. You can determine the place of the image in the content as in the following: `Image: [img-21].\nCaption: This is a picture of a house`. In this case, `[img-21]` will be replaced by the embeddings of the image with id `21` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 21}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
 ### POST `/reranking`: Rerank documents according to a given query
 
 Similar to https://jina.ai/reranker/ but might change in the future.
 Requires a reranker model (such as [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)) and the `--embedding --pooling rank` options.
 
-    *Options:*
+*Options:*
 
-    `query`: The query against which the documents will be ranked.
+`query`: The query against which the documents will be ranked.
 
-    `documents`: An array strings representing the documents to be ranked.
+`documents`: An array strings representing the documents to be ranked.
 
-    *Aliases:*
-      - `/rerank`
-      - `/v1/rerank`
-      - `/v1/reranking`
+*Aliases:*
+  - `/rerank`
+  - `/v1/rerank`
+  - `/v1/reranking`
 
-    *Examples:*
+*Examples:*
 
-    ```shell
-    curl http://127.0.0.1:8012/v1/rerank \
-        -H "Content-Type: application/json" \
-        -d '{
-            "model": "some-model",
-                "query": "What is panda?",
-                "top_n": 3,
-                "documents": [
-                    "hi",
-                "it is a bear",
-                "The giant panda (Ailuropoda melanoleuca), sometimes called a panda bear or simply panda, is a bear species endemic to China."
-                ]
-        }' | jq
-    ```
+```shell
+curl http://127.0.0.1:8012/v1/rerank \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": "some-model",
+            "query": "What is panda?",
+            "top_n": 3,
+            "documents": [
+                "hi",
+            "it is a bear",
+            "The giant panda (Ailuropoda melanoleuca), sometimes called a panda bear or simply panda, is a bear species endemic to China."
+            ]
+    }' | jq
+```
 
 ### POST `/infill`: For code infilling.
 
@@ -606,57 +638,57 @@ To use this endpoint with POST method, you need to start server with `--props`
 
 Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only models with a [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, the ChatML template will be used.
 
-    *Options:*
+*Options:*
 
-    See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
+See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
 
-    The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
+The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
 
-    The `tools` / `tool_choice` parameters are only supported if the server is started with `--jinja`. The template included in the GGUF may not support tools, in that case you may want to override it w/ `--chat-template-file ...`.
+The `tools` / `tool_choice` parameters are only supported if the server is started with `--jinja`. The template included in the GGUF may not support tools, in that case you may want to override it w/ `--chat-template-file ...`.
 
-    *Examples:*
+*Examples:*
 
-    You can use either Python `openai` library with appropriate checkpoints:
+You can use either Python `openai` library with appropriate checkpoints:
 
-    ```python
-    import openai
+```python
+import openai
 
-    client = openai.OpenAI(
-        base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
-        api_key = "sk-no-key-required"
-    )
+client = openai.OpenAI(
+    base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
+    api_key = "sk-no-key-required"
+)
 
-    completion = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
-        {"role": "user", "content": "Write a limerick about python exceptions"}
-    ]
-    )
+completion = client.chat.completions.create(
+model="gpt-3.5-turbo",
+messages=[
+    {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
+    {"role": "user", "content": "Write a limerick about python exceptions"}
+]
+)
 
-    print(completion.choices[0].message)
-    ```
+print(completion.choices[0].message)
+```
 
-    ... or raw HTTP requests:
+... or raw HTTP requests:
 
-    ```shell
-    curl http://localhost:8080/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer no-key" \
-    -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [
-    {
-        "role": "system",
-        "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."
-    },
-    {
-        "role": "user",
-        "content": "Write a limerick about python exceptions"
-    }
-    ]
-    }'
-    ```
+```shell
+curl http://localhost:8080/v1/chat/completions \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer no-key" \
+-d '{
+"model": "gpt-3.5-turbo",
+"messages": [
+{
+    "role": "system",
+    "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."
+},
+{
+    "role": "user",
+    "content": "Write a limerick about python exceptions"
+}
+]
+}'
+```
 
     ... and even tool usage (needs `--jinja` flag):
 
@@ -737,41 +769,44 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
-    *Options:*
+*Options:*
 
-    See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
+See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
 
-    *Examples:*
+*Examples:*
 
-  - input as string
+- input as string
 
-    ```shell
-    curl http://localhost:8080/v1/embeddings \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer no-key" \
-    -d '{
-            "input": "hello",
-            "model":"GPT-4",
-            "encoding_format": "float"
-    }'
-    ```
+  ```shell
+  curl http://localhost:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer no-key" \
+  -d '{
+          "input": "hello",
+          "model":"GPT-4",
+          "encoding_format": "float"
+  }'
+  ```
 
-  - `input` as string array
+- `input` as string array
 
-    ```shell
-    curl http://localhost:8080/v1/embeddings \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer no-key" \
-    -d '{
-            "input": ["hello", "world"],
-            "model":"GPT-4",
-            "encoding_format": "float"
-    }'
-    ```
+  ```shell
+  curl http://localhost:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer no-key" \
+  -d '{
+          "input": ["hello", "world"],
+          "model":"GPT-4",
+          "encoding_format": "float"
+  }'
+  ```
 
 ### GET `/slots`: Returns the current slots processing state
 
-This endpoint can be disabled with `--no-slots`
+> [!WARNING]
+> This endpoint is intended for debugging and may be modified in future versions. For security reasons, we strongly advise against enabling it in production environments.
+
+This endpoint is disabled by default and can be enabled with `--slots`
 
 If query param `?fail_on_no_slot=1` is set, this endpoint will respond with status code 503 if there is no available slots.
 
@@ -788,6 +823,7 @@ Example:
         "grammar": "",
         "id": 0,
         "ignore_eos": false,
+        "is_processing": false,
         "logit_bias": [],
         "min_p": 0.05000000074505806,
         "mirostat": 0,
@@ -820,7 +856,6 @@ Example:
             "temperature"
         ],
         "seed": 42,
-        "state": 1,
         "stop": [
             "\n"
         ],
@@ -833,10 +868,6 @@ Example:
     }
 ]
 ```
-
-Possible values for `slot[i].state` are:
-- `0`: SLOT_STATE_IDLE
-- `1`: SLOT_STATE_PROCESSING
 
 ### GET `/metrics`: Prometheus compatible metrics exporter
 
@@ -854,9 +885,9 @@ Available metrics:
 
 ### POST `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
 
-    *Options:*
+*Options:*
 
-    `filename`: Name of the file to save the slot's prompt cache. The file will be saved in the directory specified by the `--slot-save-path` server parameter.
+`filename`: Name of the file to save the slot's prompt cache. The file will be saved in the directory specified by the `--slot-save-path` server parameter.
 
 **Response format**
 
@@ -874,9 +905,9 @@ Available metrics:
 
 ### POST `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
 
-    *Options:*
+*Options:*
 
-    `filename`: Name of the file to restore the slot's prompt cache from. The file should be located in the directory specified by the `--slot-save-path` server parameter.
+`filename`: Name of the file to restore the slot's prompt cache from. The file should be located in the directory specified by the `--slot-save-path` server parameter.
 
 **Response format**
 
@@ -1006,6 +1037,16 @@ Apart from error types supported by OAI, we also have custom types that are spec
         "type": "invalid_request_error"
     }
 }
+```
+
+### Legacy completion web UI
+
+A new chat-based UI has replaced the old completion-based since [this PR](https://github.com/ggerganov/llama.cpp/pull/10175). If you want to use the old completion, start the server with `--path ./examples/server/public_legacy`
+
+For example:
+
+```sh
+./llama-server -m my_model.gguf -c 8192 --path ./examples/server/public_legacy
 ```
 
 ### Extending or building alternative Web Front End

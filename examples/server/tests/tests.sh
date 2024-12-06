@@ -4,8 +4,7 @@ set -eu
 
 if [ $# -lt 1 ]
 then
-    # Start @llama.cpp scenario
-    behave --summary --stop --no-capture --exclude 'issues|wrong_usages' --tags llama.cpp,-slow
+    pytest -v -x
 else
-    behave "$@"
+    pytest "$@"
 fi

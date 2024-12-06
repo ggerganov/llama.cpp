@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#define SPEC_VOCAB_MAX_SIZE_DIFFERENCE  100
+#define SPEC_VOCAB_MAX_SIZE_DIFFERENCE  128
 #define SPEC_VOCAB_CHECK_START_TOKEN_ID 5
 
 struct seq_draft {
@@ -33,7 +33,7 @@ int main(int argc, char ** argv) {
     common_params params;
 
     // needed to get candidate probs even for temp <= 0.0
-    params.sparams.n_probs = 128;
+    params.sampling.n_probs = 128;
 
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
@@ -46,7 +46,7 @@ int main(int argc, char ** argv) {
 
     common_init();
 
-    if (params.model_draft.empty()) {
+    if (params.speculative.model.empty()) {
         LOG_ERR("%s: --model-draft is required\n", __func__);
         return 1;
     }
@@ -55,9 +55,9 @@ int main(int argc, char ** argv) {
     const int n_seq_dft = params.n_parallel;
 
     // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
-    const float p_split  = params.p_split;
+    const float p_draft_split = params.speculative.p_split;
 
-    std::default_random_engine rng(params.sparams.seed == LLAMA_DEFAULT_SEED ? std::random_device()() : params.sparams.seed);
+    std::default_random_engine rng(params.sampling.seed == LLAMA_DEFAULT_SEED ? std::random_device()() : params.sampling.seed);
     std::uniform_real_distribution<> u_dist;
 
     // init llama.cpp
@@ -76,13 +76,14 @@ int main(int argc, char ** argv) {
     ctx_tgt = llama_init_tgt.context;
 
     // load the draft model
-    params.model = params.model_draft;
-    params.n_gpu_layers = params.n_gpu_layers_draft;
-    if (params.draft_cpuparams.n_threads > 0) {
-        params.cpuparams.n_threads = params.draft_cpuparams.n_threads;
+    params.devices = params.speculative.devices;
+    params.model = params.speculative.model;
+    params.n_gpu_layers = params.speculative.n_gpu_layers;
+    if (params.speculative.cpuparams.n_threads > 0) {
+        params.cpuparams.n_threads = params.speculative.cpuparams.n_threads;
     }
 
-    params.cpuparams_batch.n_threads = params.draft_cpuparams_batch.n_threads;
+    params.cpuparams_batch.n_threads = params.speculative.cpuparams_batch.n_threads;
     common_init_result llama_init_dft = common_init_from_params(params);
     model_dft = llama_init_dft.model;
     ctx_dft = llama_init_dft.context;
@@ -170,7 +171,7 @@ int main(int argc, char ** argv) {
     //GGML_ASSERT(n_vocab == llama_n_vocab(model_dft));
 
     // how many tokens to draft each time
-    int n_draft = params.n_draft;
+    int n_draft = params.speculative.n_max;
 
     int n_predict = 0;
     int n_drafted = 0;
@@ -183,14 +184,14 @@ int main(int argc, char ** argv) {
     bool has_eos = false;
 
     // target model sampling context (reuse the llama_context's sampling instance)
-    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sparams);
+    struct common_sampler * smpl = common_sampler_init(model_tgt, params.sampling);
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
 
     for (int s = 0; s < n_seq_dft; ++s) {
         // allocate llama_sampler for each draft sequence
-        drafts[s].smpl = common_sampler_init(model_dft, params.sparams);
+        drafts[s].smpl = common_sampler_init(model_dft, params.sampling);
     }
 
     llama_batch batch_dft = llama_batch_init(llama_n_batch(ctx_dft), 0, 1);
@@ -230,7 +231,7 @@ int main(int argc, char ** argv) {
             // for stochastic sampling, attempt to match the token with the drafted tokens
             {
                 bool accept = false;
-                if (params.sparams.temp > 0) {
+                if (params.sampling.temp > 0) {
                     // stochastic verification
                     common_sampler_sample(smpl, ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft], true);
 
@@ -267,11 +268,12 @@ int main(int argc, char ** argv) {
                         for (size_t i = 0; i < dist_tgt.size; i++) {
                             if (dist_tgt.data[i].id == drafts[s].tokens[i_dft]) {
                                 p_tgt = dist_tgt.data[i].p;
+                                break;
                             }
+                        }
+                        for (size_t i = 0; i < dist_dft.size; i++) {
                             if (dist_dft.data[i].id == drafts[s].tokens[i_dft]) {
                                 p_dft = dist_dft.data[i].p;
-                            }
-                            if (p_tgt && p_dft) {
                                 break;
                             }
                         }
@@ -493,7 +495,7 @@ int main(int argc, char ** argv) {
 
                 // attempt to split the branch if the probability is high enough
                 for (int f = 1; f < 8; ++f) {
-                    if (n_seq_cur < n_seq_dft && cur_p->data[f].p > p_split) {
+                    if (n_seq_cur < n_seq_dft && cur_p->data[f].p > p_draft_split) {
                         LOG_DBG("splitting seq %3d into %3d\n", s, n_seq_cur);
 
                         llama_kv_cache_seq_rm(ctx_dft,    n_seq_cur, -1, -1);

@@ -1,4 +1,4 @@
-ARG ONEAPI_VERSION=2024.1.1-devel-ubuntu22.04
+ARG ONEAPI_VERSION=2025.0.0-0-devel-ubuntu22.04
 
 FROM intel/oneapi-basekit:$ONEAPI_VERSION AS build
 
@@ -15,7 +15,7 @@ RUN if [ "${GGML_SYCL_F16}" = "ON" ]; then \
         export OPT_SYCL_F16="-DGGML_SYCL_F16=ON"; \
     fi && \
     echo "Building with static libs" && \
-    cmake -B build -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
+    cmake -B build -DGGML_NATIVE=OFF -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
     ${OPT_SYCL_F16} -DBUILD_SHARED_LIBS=OFF && \
     cmake --build build --config Release --target llama-cli
 

@@ -2,6 +2,8 @@
 
 find_package(Threads REQUIRED)
 
+llama_add_compile_flags()
+
 # Build info header
 #
 
@@ -68,9 +70,9 @@ add_library(${TARGET} STATIC
     ngram-cache.h
     sampling.cpp
     sampling.h
+    speculative.cpp
+    speculative.h
     tool-call.cpp
-    train.cpp
-    train.h
     )
 
 if (BUILD_SHARED_LIBS)
@@ -89,5 +91,5 @@ if (LLAMA_CURL)
 endif ()
 
 target_include_directories(${TARGET} PUBLIC .)
-target_compile_features   (${TARGET} PUBLIC cxx_std_11)
+target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)

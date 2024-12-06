@@ -21,7 +21,7 @@ int main(int argc, char ** argv){
 
     common_init();
 
-    const int n_draft = params.n_draft;
+    const int n_draft = params.speculative.n_max;
 
     // init llama.cpp
     llama_backend_init();
@@ -40,6 +40,7 @@ int main(int argc, char ** argv){
     common_ngram_cache ngram_cache_context;
     common_ngram_cache ngram_cache_dynamic;
     common_ngram_cache ngram_cache_static;
+
     int64_t t_draft_flat_us = 0;
     int64_t t_draft_us = 0;
 
