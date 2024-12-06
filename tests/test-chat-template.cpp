@@ -7,131 +7,8 @@
 
 #include "llama.h"
 #include "common.h"
-#include "chat-template.hpp"
-#include <iostream>
-#include <fstream>
-#include <iostream>
-#include <string>
-#include <json.hpp>
 
-using json = nlohmann::ordered_json;
-
-static std::string filename_without_extension(const std::string & path) {
-    auto res = path;
-    auto pos = res.find_last_of('/');
-    if (pos != std::string::npos)
-        res = res.substr(pos + 1);
-    pos = res.find_last_of('.');
-    if (pos != std::string::npos)
-        res = res.substr(0, pos);
-    return res;
-}
-
-template <class T>
-static void assert_equals(const T & expected, const T & actual) {
-    if (expected != actual) {
-        std::cerr << "Expected: " << expected << std::endl;
-        std::cerr << "Actual: " << actual << std::endl;
-        std::cerr << std::flush;
-        throw std::runtime_error("Test failed");
-    }
-}
-
-static std::vector<std::string> find_files(const std::string & folder, const std::string & ext) {
-    auto files = fs_list_files(folder, ext);
-    if (files.empty()) {
-        files = fs_list_files("../" + folder, ext);
-    }
-    return files;
-}
-
-static std::string read_file(const std::string &path) {
-  std::ifstream fs(path, std::ios_base::binary);
-  if (!fs.is_open()) {
-    fs = std::ifstream("../" + path, std::ios_base::binary);
-    if (!fs.is_open()) {
-      throw std::runtime_error("Failed to open file: " + path);
-    }
-  }
-  fs.seekg(0, std::ios_base::end);
-  auto size = fs.tellg();
-  fs.seekg(0);
-  std::string out;
-  out.resize(static_cast<size_t>(size));
-  fs.read(&out[0], static_cast<std::streamsize>(size));
-  return out;
-}
-
-static void test_jinja_templates() {
-    auto jinja_template_files = find_files("tests/chat/templates", ".jinja");
-    auto context_files = find_files("tests/chat/contexts", ".json");
-
-    auto get_golden_file = [&](const std::string & tmpl_file, const std::string & ctx_file) {
-        auto tmpl_name = filename_without_extension(tmpl_file);
-        auto ctx_name = filename_without_extension(ctx_file);
-        auto golden_name = tmpl_name + "-" + ctx_name;
-        return "tests/chat/goldens/" + golden_name + ".txt";
-    };
-    auto fail_with_golden_instructions = [&]() {
-        throw std::runtime_error("To fetch templates and generate golden files, run `python scripts/update_jinja_goldens.py`");
-    };
-    if (jinja_template_files.empty()) {
-        std::cerr << "No Jinja templates found in tests/chat/templates" << std::endl;
-        fail_with_golden_instructions();
-    }
-    // const auto options = minja::Options {.trim_blocks = true, .lstrip_blocks = true};
-    for (const auto & tmpl_file : jinja_template_files) {
-        std::cout << "# Testing template: " << tmpl_file << std::endl << std::flush;
-        auto tmpl_str = read_file(tmpl_file);
-
-        auto found_goldens = false;
-
-        for (const auto & ctx_file : context_files) {
-            auto ctx = json::parse(read_file(ctx_file));
-
-            minja::chat_template tmpl(
-                tmpl_str,
-                ctx.at("bos_token"),
-                ctx.at("eos_token"));
-
-            auto golden_file = get_golden_file(tmpl_file, ctx_file);
-            std::string expected;
-            try {
-                expected = read_file(golden_file);
-            } catch (const std::runtime_error & e) {
-                // No golden file.
-                continue;
-            }
-            found_goldens = true;
-            std::cout << "  - " << golden_file << std::endl << std::flush;
-
-            std::string actual;
-            try {
-                actual = tmpl.apply(
-                    ctx.at("messages"),
-                    ctx.contains("tools") ? ctx.at("tools") : json(),
-                    ctx.at("add_generation_prompt"),
-                    ctx.contains("tools") ? json {
-                        {"builtin_tools", {"wolfram_alpha", "brave_search"}}
-                    } : json());
-            } catch (const std::runtime_error & e) {
-                actual = "ERROR: " + std::string(e.what());
-            }
-            if (getenv("LLAMA_UPDATE_GOLDENS")) {
-                std::ofstream(golden_file) << actual;
-            } else {
-                assert_equals(expected, actual);
-            }
-        }
-
-        if (!found_goldens) {
-            std::cerr << "No golden files found for " << tmpl_file << std::endl;
-            fail_with_golden_instructions();
-        }
-    }
-}
-
-static void test_legacy_templates() {
+int main(void) {
     llama_chat_message conversation[] = {
         {"system", "You are a helpful assistant"},
         {"user", "Hello"},
@@ -337,18 +214,6 @@ static void test_legacy_templates() {
     assert(fmt_single("mistral") == "[INST] How are you [/INST]"); // for old pre-v1 templates
     assert(fmt_single("gemma")  == "\n<start_of_turn>user\nHow are you<end_of_turn>\n<start_of_turn>model\n");
     assert(fmt_single("llama3") == "<|start_header_id|>user<|end_header_id|>\n\nHow are you<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n");
-}
-
-int main(void) {
-    test_legacy_templates();
-
-    if (getenv("LLAMA_SKIP_TESTS_SLOW_ON_EMULATOR")) {
-        fprintf(stderr, "\033[33mWARNING: Skipping slow tests on emulator.\n\033[0m");
-    } else {
-        test_jinja_templates();
-    }
-
-    printf("Test chat templates: OK\n");
 
     return 0;
 }

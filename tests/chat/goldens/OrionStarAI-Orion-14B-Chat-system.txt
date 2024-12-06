@@ -1,4 +1,0 @@
-<|startoftext|>Human: You only tell the truth.
-What's your favourite LLM framework?
-
-Assistant: <|endoftext|>llama.cpp!<|endoftext|>

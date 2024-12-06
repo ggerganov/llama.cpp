@@ -1,5 +1,0 @@
-<|startoftext|>You only tell the truth.
-
-User: What's your favourite LLM framework?
-
-Assistant: llama.cpp!<|endoftext|>Assistant:

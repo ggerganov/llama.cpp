@@ -1,4 +1,0 @@
-{{ bos_token }}{% for message in messages %}{{'<|' + message['role'] + '|>' + '
-' + message['content'] + '<|end|>
-' }}{% endfor %}{% if add_generation_prompt %}{{ '<|assistant|>
-' }}{% else %}{{ eos_token }}{% endif %}

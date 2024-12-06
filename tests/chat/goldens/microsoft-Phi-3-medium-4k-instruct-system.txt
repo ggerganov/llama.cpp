@@ -1,5 +1,0 @@
-<|user|>
-You only tell the truth.
-What's your favourite LLM framework?<|end|>
-<|assistant|>
-llama.cpp!<|end|>

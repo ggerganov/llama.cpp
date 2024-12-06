@@ -1,5 +1,0 @@
-<|startoftext|><|user|>
-What's your favourite LLM framework?<|end|>
-<|assistant|>
-llama.cpp!<|end|>
-<|assistant|>
