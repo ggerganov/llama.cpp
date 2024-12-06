@@ -514,7 +514,7 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
             NSString * default_metallib_path = [NSString pathWithComponents:@[bin_dir, @"default.metallib"]];
             if ([[NSFileManager defaultManager] isReadableFileAtPath:default_metallib_path]) {
                 GGML_LOG_INFO("%s: found '%s'\n", __func__, [default_metallib_path UTF8String]);
-                NSDictionary *atts = [[NSFileManager defaultManager] attributesOfItemAtPath:default_metallib_path error:&error];
+                NSDictionary * atts = [[NSFileManager defaultManager] attributesOfItemAtPath:default_metallib_path error:&error];
                 if (atts && atts[NSFileType] == NSFileTypeSymbolicLink) {
                     // Optionally, if this is a symlink, try to resolve it.
                     default_metallib_path = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:default_metallib_path error:&error];
