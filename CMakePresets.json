@@ -87,10 +87,10 @@
     { "name": "x64-windows-msvc-release", "inherits": [ "base", "reldbg" ] },
     { "name": "x64-windows-msvc+static-release", "inherits": [ "base", "reldbg", "static" ] },
 
-    { "name": "x64-windows-ninja-debug"  , "inherits": [ "clang-ninja", "debug"   ] },
-    { "name": "x64-windows-ninja-reldbg", "inherits": [ "clang-ninja", "reldbg" ] },
-    { "name": "x64-windows-ninja-release", "inherits": [ "clang-ninja", "release" ] },
-    { "name": "x64-windows-ninja+static-release", "inherits": [ "clang-ninja", "reldbg", "static" ] },
+    { "name": "x64-windows-llvm-debug"  , "inherits": [ "clang-ninja", "debug"   ] },
+    { "name": "x64-windows-llvm-reldbg", "inherits": [ "clang-ninja", "reldbg" ] },
+    { "name": "x64-windows-llvm-release", "inherits": [ "clang-ninja", "release" ] },
+    { "name": "x64-windows-llvm+static-release", "inherits": [ "clang-ninja", "reldbg", "static" ] },
 
     { "name": "x64-windows-sycl-debug", "inherits": [ "sycl-base", "debug" ] },
     { "name": "x64-windows-sycl-debug-f16", "inherits": [ "sycl-base", "debug", "sycl_f16" ] },
