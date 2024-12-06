@@ -22,31 +22,31 @@ Here's how to run an agent w/ local tool call:
   # (otherwise they'd use the generic tool call support, which may be less efficient
   # and consume more tokens)
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr bartowski/Qwen2.5-7B-Instruct-GGUF -hff Qwen2.5-7B-Instruct-Q4_K_M.gguf
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr NousResearch/Hermes-3-Llama-3.1-8B-GGUF -hff Hermes-3-Llama-3.1-8B.Q4_K_M.gguf \
     --chat-template-file tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr meetkai/functionary-small-v3.2-GGUF -hff functionary-small-v3.2.Q8_0.gguf \
     --chat-template-file tests/chat/templates/meetkai-functionary-medium-v3.2.jinja
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr lmstudio-community/Llama-3.2-3B-Instruct-GGUF -hff Llama-3.2-3B-Instruct-Q6_K.gguf \
     --chat-template-file tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr bartowski/Mistral-Nemo-Instruct-2407-GGUF -hff Mistral-Nemo-Instruct-2407-Q8_0.gguf \
     --chat-template-file tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja
 
   # Generic support, e.g. Phi 3.5, Gemma 2b, but really anything goes
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr bartowski/Phi-3.5-mini-instruct-GGUF -hff Phi-3.5-mini-instruct-Q4_K_M.gguf
 
-  ./llama-server --jinja -fa --verbose \
+  ./build/bin/llama-server --jinja -fa --verbose \
     -hfr bartowski/gemma-2-2b-it-GGUF -hff gemma-2-2b-it-Q4_K_M.gguf
   ```
 
