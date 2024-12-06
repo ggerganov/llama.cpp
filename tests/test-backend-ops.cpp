@@ -2697,6 +2697,33 @@ struct test_pad : public test_case {
     }
 };
 
+// GGML_OP_PAD_REFLECT_1D
+struct test_pad_reflect_1d : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne_a;
+    const int pad_0;
+    const int pad_1;
+
+    std::string vars() override {
+        return VARS_TO_STR4(type, ne_a, pad_0, pad_1);
+    }
+
+    test_pad_reflect_1d(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne_a = {512, 34, 2, 1},
+            int pad_0 = 10, int pad_1 = 9)
+        : type(type), ne_a(ne_a), pad_0(pad_0), pad_1(pad_1)  {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 2, ne_a.data());
+        ggml_set_name(a, "a");
+
+        ggml_tensor * out = ggml_pad_reflect_1d(ctx, a, pad_0, pad_1);
+        ggml_set_name(out, "out");
+
+        return out;
+    }
+};
+
 // GGML_OP_ARANGE
 struct test_arange : public test_case {
     const ggml_type type;
@@ -3494,6 +3521,10 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         test_cases.emplace_back(new test_set(GGML_TYPE_F32, GGML_TYPE_F32, {6, 5, 4, 3}, dim));
     }
 
+    for (int dim = 1; dim < GGML_MAX_DIMS; ++dim) {
+        test_cases.emplace_back(new test_set(GGML_TYPE_I32, GGML_TYPE_I32, {6, 5, 4, 3}, dim));
+    }
+
     for (ggml_type type_src : {GGML_TYPE_F16, GGML_TYPE_F32}) {
         for (ggml_type type_dst : all_types) {
            test_cases.emplace_back(new test_cpy(type_src, type_dst, {256, 4, 4, 4}));
@@ -3816,6 +3847,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_group_norm(GGML_TYPE_F32, {9, 9, 1280, 1}));
     test_cases.emplace_back(new test_acc());
     test_cases.emplace_back(new test_pad());
+    test_cases.emplace_back(new test_pad_reflect_1d());
     test_cases.emplace_back(new test_arange());
     test_cases.emplace_back(new test_timestep_embedding());
     test_cases.emplace_back(new test_leaky_relu());

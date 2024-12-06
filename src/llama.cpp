@@ -6479,6 +6479,9 @@ static void llm_load_vocab(
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHAMELEON;
                 vocab.tokenizer_add_bos = true;
                 vocab.tokenizer_clean_spaces = false;
+            } else if (
+                tokenizer_pre == "minerva-7b") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MINERVA;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
