@@ -3454,8 +3454,10 @@ int main(int argc, char ** argv) {
                     json res_json = result->to_json();
                     if (res_json.is_array()) {
                         for (const auto & res : res_json) {
-                            if (!server_sent_event(sink, "data", res)) {
-                                return false;
+                            if (!res.empty()) {
+                                if (!server_sent_event(sink, "data", res)) {
+                                    return false;
+                                }
                             }
                         }
                         return true;
