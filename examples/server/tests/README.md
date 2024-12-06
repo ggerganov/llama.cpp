@@ -44,4 +44,11 @@ To run with stdout/stderr display in real time (verbose output, but useful for d
 DEBUG=1 ./tests.sh -s -v -x
 ```
 
+Some tests (especially `@slow` ones) require model downloads. Since this can time out the tests, you can pre-download them in the cache ahead of time with:
+
+```shell
+pip install -r examples/server/tests/requirements.txt
+python scripts/fetch_server_test_models.py
+```
+
 To see all available arguments, please refer to [pytest documentation](https://docs.pytest.org/en/stable/how-to/usage.html)

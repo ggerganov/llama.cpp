@@ -48,6 +48,7 @@ BUILD_TARGETS = \
 
 # Binaries only useful for tests
 TEST_TARGETS = \
+	tests/test-antiprompts \
 	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
@@ -56,6 +57,7 @@ TEST_TARGETS = \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
+	tests/test-minja \
 	tests/test-llama-grammar \
 	tests/test-log \
 	tests/test-model-load-cancel \
@@ -63,6 +65,7 @@ TEST_TARGETS = \
 	tests/test-quantize-perf \
 	tests/test-rope \
 	tests/test-sampling \
+	tests/test-tool-call \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
@@ -978,6 +981,7 @@ OBJ_COMMON = \
 	$(DIR_COMMON)/sampling.o \
 	$(DIR_COMMON)/speculative.o \
 	$(DIR_COMMON)/build-info.o \
+	$(DIR_COMMON)/tool-call.o \
 	$(DIR_COMMON)/json-schema-to-grammar.o
 
 OBJ_ALL = $(OBJ_GGML) $(OBJ_LLAMA) $(OBJ_COMMON)
@@ -1362,7 +1366,10 @@ llama-server: \
 	examples/server/httplib.h \
 	examples/server/index.html.hpp \
 	examples/server/loading.html.hpp \
+	common/chat-template.hpp \
 	common/json.hpp \
+	common/minja.hpp \
+	common/tool-call.h \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
@@ -1458,6 +1465,21 @@ tests/test-double-float: tests/test-double-float.cpp
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-antiprompts: tests/test-antiprompts.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-tool-call: tests/test-tool-call.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-minja: tests/test-minja.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
