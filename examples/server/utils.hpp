@@ -299,8 +299,19 @@ static llama_tokens format_infill(
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
+// If messages[i]["prefix"] or messages[i]["prefix"] is present, we format the chat with custom prefix/suffix
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
+    bool is_custom = false;
+    std::ostringstream oss;
+
+    // if at least one message has custom prefix/suffix, we switch to custom formatting
+    for (const auto & msg : messages) {
+        if (msg.contains("prefix") || msg.contains("suffix")) {
+            is_custom = true;
+            break;
+        }
+    }
 
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
@@ -324,10 +335,18 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
             throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
         }
 
-        chat.push_back({role, content});
+        if (is_custom) {
+            std::string prefix = json_value(curr_msg, "prefix", std::string(""));
+            std::string suffix = json_value(curr_msg, "suffix", std::string(""));
+            oss << prefix << content << suffix;
+        } else {
+            chat.push_back({role, content});
+        }
     }
 
-    const auto formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
+    const auto formatted_chat = is_custom
+        ? oss.str()
+        : common_chat_apply_template(model, tmpl, chat, true);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
