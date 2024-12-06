@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 project("llama-cli-cmake-pkg" C CXX)
 set(TARGET llama-cli-cmake-pkg)
 
-find_package(Llama 0.0.1 REQUIRED)
+find_package(Llama QUIET)
 
 # Bake common functionality in with target. Because applications
 # using the relocatable Llama package should be outside of the
