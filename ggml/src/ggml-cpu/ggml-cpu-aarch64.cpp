@@ -3680,17 +3680,17 @@ static block_q4_0x8 make_block_q4_0x8(block_q4_0 * in, unsigned int blck_size_in
 static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
+    constexpr int nrows_interleaved = 4;
 
     block_q4_0x4 * dst = (block_q4_0x4 *)t->data;
     const block_q4_0 * src = (const block_q4_0 *)data;
     block_q4_0 dst_tmp[4];
-    int nrow = t->ne[1]*t->ne[2]*t->ne[3]; // Number of rows
-    int nrows_interleaved = 4;
+    int nrow = ggml_nrows(t);
     int nblocks = t->ne[0] / QK4_0;
 
     GGML_ASSERT(data_size == nrow * nblocks * sizeof(block_q4_0));
 
-    if (nrow % nrows_interleaved != 0 || t->ne[0] % 8 != 0) {
+    if (t->ne[1] % nrows_interleaved != 0 || t->ne[0] % 8 != 0) {
         return -1;
     }
 
@@ -3711,17 +3711,17 @@ static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block
 static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 8);
+    constexpr int nrows_interleaved = 8;
 
     block_q4_0x8 * dst = (block_q4_0x8*)t->data;
     const block_q4_0 * src = (const block_q4_0*) data;
     block_q4_0 dst_tmp[8];
-    int nrow = t->ne[1]*t->ne[2]*t->ne[3]; // Number of rows
-    int nrows_interleaved = 8;
+    int nrow = ggml_nrows(t);
     int nblocks = t->ne[0] / QK4_0;
 
     GGML_ASSERT(data_size == nrow * nblocks * sizeof(block_q4_0));
 
-    if (nrow % nrows_interleaved != 0 || t->ne[0] % 8 != 0) {
+    if (t->ne[1] % nrows_interleaved != 0 || t->ne[0] % 8 != 0) {
         return -1;
     }
 
@@ -3779,13 +3779,13 @@ static int repack_iq4_nl_to_iq4_nl_4_bl(struct ggml_tensor * t, int interleave_b
     block_iq4_nlx4 * dst = (block_iq4_nlx4 *)t->data;
     const block_iq4_nl * src = (const block_iq4_nl *)data;
     block_iq4_nl dst_tmp[4];
-    int nrow = t->ne[1]*t->ne[2]*t->ne[3]; // Number of rows
+    int nrow = ggml_nrows(t);
     int nrows_interleaved = 4;
     int nblocks = t->ne[0] / QK4_0;
 
     GGML_ASSERT(data_size == nrow * nblocks * sizeof(block_iq4_nl));
 
-    if (nrow % nrows_interleaved != 0 || t->ne[0] % 8 != 0) {
+    if (t->ne[1] % nrows_interleaved != 0 || t->ne[0] % 8 != 0) {
         return -1;
     }
 
@@ -4121,17 +4121,25 @@ static const tensor_traits<block_iq4_nl, 4, 4> iq4_nl_4x4_q8_0;
 static const ggml::cpu::tensor_traits * ggml_aarch64_get_optimal_repack_type(const struct ggml_tensor * cur) {
     if (cur->type == GGML_TYPE_Q4_0) {
         if (ggml_cpu_has_avx2() || (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && ggml_cpu_get_sve_cnt() == QK8_0)) {
-            return &ggml::cpu::aarch64::q4_0_8x8_q8_0;
+            if (cur->ne[1] % 8==0) {
+                return &ggml::cpu::aarch64::q4_0_8x8_q8_0;
+            }
         }
         if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-            return &ggml::cpu::aarch64::q4_0_4x8_q8_0;
+            if (cur->ne[1] % 4 == 0) {
+                return &ggml::cpu::aarch64::q4_0_4x8_q8_0;
+            }
         }
         if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
-            return &ggml::cpu::aarch64::q4_0_4x4_q8_0;
+            if (cur->ne[1] % 4 == 0) {
+                return &ggml::cpu::aarch64::q4_0_4x4_q8_0;
+            }
         }
     } else if (cur->type == GGML_TYPE_IQ4_NL) {
         if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
-            return &ggml::cpu::aarch64::iq4_nl_4x4_q8_0;
+            if (cur->ne[1] % 4 == 0) {
+                return &ggml::cpu::aarch64::iq4_nl_4x4_q8_0;
+            }
         }
     }
 
@@ -4184,9 +4192,12 @@ static size_t ggml_backend_cpu_aarch64_buffer_type_get_alignment(ggml_backend_bu
 namespace ggml::cpu::aarch64 {
 class extra_buffer_type : ggml::cpu::extra_buffer_type {
     bool supports_op(ggml_backend_dev_t, const struct ggml_tensor * op) override {
-        if (op->op == GGML_OP_MUL_MAT && op->src[0]->buffer && (ggml_n_dims(op->src[0]) == 2) &&
-            op->src[0]->buffer->buft == ggml_backend_cpu_aarch64_buffer_type() &&
-            ggml_aarch64_get_optimal_repack_type(op->src[0])) {
+        if (    op->op == GGML_OP_MUL_MAT &&
+                op->src[0]->buffer &&
+                (ggml_n_dims(op->src[0]) == 2) &&
+                op->src[0]->buffer->buft == ggml_backend_cpu_aarch64_buffer_type() &&
+                ggml_aarch64_get_optimal_repack_type(op->src[0])
+                ) {
             if (op->src[1]->buffer && !ggml_backend_buft_is_host(op->src[1]->buffer->buft)) {
                 return false;
             }
@@ -4197,9 +4208,12 @@ class extra_buffer_type : ggml::cpu::extra_buffer_type {
             //    return true;
             //}
             // may be possible if Q8_0 packed...
-        } else if (op->op == GGML_OP_MUL_MAT_ID && op->src[0]->buffer && (ggml_n_dims(op->src[0]) == 3) &&
-                   op->src[0]->buffer->buft == ggml_backend_cpu_aarch64_buffer_type() &&
-                   ggml_aarch64_get_optimal_repack_type(op->src[0])) {
+        } else if (op->op == GGML_OP_MUL_MAT_ID
+                && op->src[0]->buffer
+                && (ggml_n_dims(op->src[0]) == 3)
+                && op->src[0]->buffer->buft == ggml_backend_cpu_aarch64_buffer_type()
+                && ggml_aarch64_get_optimal_repack_type(op->src[0])
+                ) {
             if (op->src[1]->buffer && !ggml_backend_buft_is_host(op->src[1]->buffer->buft)) {
                 return false;
             }
