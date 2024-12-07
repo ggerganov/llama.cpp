@@ -122,11 +122,6 @@ struct slot_params {
     struct common_params_sampling sampling;
     struct common_params_speculative speculative;
 
-    // params only used in to_json()
-    int32_t n_ctx;
-    uint32_t seed_cur;
-    bool can_speculative;
-
     // OAI-compat fields
     bool        verbose        = false;
     bool        oaicompat      = false;
@@ -134,7 +129,7 @@ struct slot_params {
     std::string oaicompat_model;
     std::string oaicompat_cmpl_id;
 
-    json to_json() {
+    json to_json() const {
         std::vector<std::string> samplers;
         samplers.reserve(sampling.samplers.size());
         for (const auto & sampler : sampling.samplers) {
@@ -142,8 +137,8 @@ struct slot_params {
         }
 
         return json {
-            {"n_ctx",                     n_ctx},
             {"n_predict",                 n_predict},     // Server configured n_predict
+            {"seed",                      sampling.seed},
             {"temperature",               sampling.temp},
             {"dynatemp_range",            sampling.dynatemp_range},
             {"dynatemp_exponent",         sampling.dynatemp_exponent},
@@ -177,7 +172,6 @@ struct slot_params {
             {"min_keep",                  sampling.min_keep},
             {"grammar",                   sampling.grammar},
             {"samplers",                  samplers},
-            {"speculative",               can_speculative},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
             {"speculative.p_min",         speculative.p_min},
@@ -483,12 +477,6 @@ struct server_task_result_cmpl_partial : server_task_result {
                     return std::vector<json>({initial_ret, second_ret});
                 }
             } else {
-                // Some idiosyncrasy in task processing logic makes several trailing calls
-                // with empty content, we ignore these at the calee site.
-                if (content.empty()) {
-                    return std::vector<json>({json::object()});
-                }
-
                 choices = json::array({json{
                     {"finish_reason", nullptr},
                     {"index", 0},
@@ -722,6 +710,7 @@ struct server_slot {
 
     llama_batch batch_spec = {};
 
+    llama_context * ctx = nullptr;
     llama_context * ctx_dft = nullptr;
 
     common_speculative * spec = nullptr;
@@ -905,6 +894,27 @@ struct server_slot {
                 t_prompt_processing, n_prompt_tokens_processed, t_prompt, n_prompt_second,
                 t_token_generation, n_decoded, t_gen, n_gen_second,
                 t_prompt_processing + t_token_generation, n_prompt_tokens_processed + n_decoded);
+    }
+
+    json to_json() const {
+        return json {
+            {"id",            id},
+            {"id_task",       id_task},
+            {"n_ctx",         n_ctx},
+            {"speculative",   can_speculate()},
+            {"is_processing", is_processing()},
+            {"params",        params.to_json()},
+            {"prompt",        common_detokenize(ctx, prompt_tokens)},
+            {"next_token",
+                {
+                    {"has_next_token", has_next_token},
+                    {"has_new_line",   has_new_line},
+                    {"n_remain",       n_remaining},
+                    {"n_decoded",      n_decoded},
+                    {"stopping_word",  stopping_word},
+                }
+            },
+        };
     }
 };
 
@@ -1338,6 +1348,7 @@ struct server_context {
             server_slot slot;
 
             slot.id = i;
+            slot.ctx = ctx;
             slot.n_ctx = n_ctx_slot;
             slot.n_predict = params_base.n_predict;
 
@@ -1370,8 +1381,7 @@ struct server_context {
             slots.push_back(slot);
         }
 
-        default_generation_settings_for_props = slots[0].params.to_json();
-        default_generation_settings_for_props["seed"] = -1;
+        default_generation_settings_for_props = slots[0].to_json();
 
         // the update_slots() logic will always submit a maximum of n_batch or n_parallel tokens
         // note that n_batch can be > n_ctx (e.g. for non-causal attention models such as BERT where the KV cache is not used)
@@ -1848,17 +1858,18 @@ struct server_context {
         queue_results.send(std::move(res));
     }
 
-    void send_partial_response(server_slot & slot, completion_token_output tkn) {
+    void send_partial_response(server_slot & slot, const completion_token_output & tkn) {
         auto res = std::make_unique<server_task_result_cmpl_partial>();
-        res->id              = slot.id_task;
-        res->index           = slot.index;
-        res->content         = tkn.text_to_send;
+
+        res->id      = slot.id_task;
+        res->index   = slot.index;
+        res->content = tkn.text_to_send;
 
         res->truncated       = slot.truncated;
         res->n_decoded       = slot.n_decoded;
         res->n_prompt_tokens = slot.n_prompt_tokens;
 
-        res->stop            = slot.stop;
+        res->stop = slot.stop;
 
         res->verbose           = slot.params.verbose;
         res->oaicompat         = slot.params.oaicompat;
@@ -1869,6 +1880,7 @@ struct server_context {
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
             const llama_tokens to_send_toks = common_tokenize(ctx, tkn.text_to_send, false);
+
             const size_t probs_pos      = std::min(slot.n_sent_token_probs,                       slot.generated_token_probs.size());
             const size_t probs_stop_pos = std::min(slot.n_sent_token_probs + to_send_toks.size(), slot.generated_token_probs.size());
 
@@ -1891,7 +1903,8 @@ struct server_context {
     void send_final_response(server_slot & slot) {
         if (slot.params.stream) {
             // if in stream mode, send the last partial response
-            return send_partial_response(slot, {0, "", {}});
+            send_partial_response(slot, {0, "", {}});
+            return;
         }
 
         auto res = std::make_unique<server_task_result_cmpl_final>();
@@ -2012,6 +2025,7 @@ struct server_context {
         std::vector<server_task> tasks;
         auto create_task = [&](json & task_data, llama_tokens & prompt_tokens) {
             SRV_DBG("create task, n_tokens = %d\n", (int) prompt_tokens.size());
+
             server_task task;
             task.id            = queue_tasks.get_new_id();
             task.inf_type      = inf_type;
@@ -2205,18 +2219,7 @@ struct server_context {
                     int n_processing_slots = 0;
 
                     for (server_slot & slot : slots) {
-                        json slot_data = slot.params.to_json();
-                        slot_data["id"]            = slot.id;
-                        slot_data["id_task"]       = slot.id_task;
-                        slot_data["is_processing"] = slot.is_processing();
-                        slot_data["prompt"]        = common_detokenize(ctx, slot.prompt_tokens);
-                        slot_data["next_token"]    = {
-                            {"has_next_token", slot.has_next_token},
-                            {"has_new_line",   slot.has_new_line},
-                            {"n_remain",       slot.n_remaining},
-                            {"n_decoded",      slot.n_decoded},
-                            {"stopping_word",  slot.stopping_word},
-                        };
+                        json slot_data = slot.to_json();
 
                         if (slot.is_processing()) {
                             n_processing_slots++;
@@ -2230,6 +2233,7 @@ struct server_context {
 
                     auto res = std::make_unique<server_task_result_metrics>();
                     res->id                  = task.id;
+                    res->slots_data          = std::move(slots_data);
                     res->n_idle_slots        = n_idle_slots;
                     res->n_processing_slots  = n_processing_slots;
                     res->n_tasks_deferred    = queue_tasks.queue_tasks_deferred.size();
@@ -3003,11 +3007,11 @@ int main(int argc, char ** argv) {
         res.status = 200;
     };
 
-    svr->set_exception_handler([&res_error](const httplib::Request &, httplib::Response & res, std::exception_ptr ep) {
+    svr->set_exception_handler([&res_error](const httplib::Request &, httplib::Response & res, const std::exception_ptr & ep) {
         std::string message;
         try {
             std::rethrow_exception(ep);
-        } catch (std::exception & e) {
+        } catch (const std::exception & e) {
             message = e.what();
         } catch (...) {
             message = "Unknown Exception";
