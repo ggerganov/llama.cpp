@@ -458,7 +458,11 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
         search_paths.push_back("./");
         search_paths.push_back(get_executable_path());
     } else {
+#if defined(_WIN32)
+        search_paths.push_back(std::string(user_search_path) + "\\");
+#else
         search_paths.push_back(std::string(user_search_path) + "/");
+#endif
     }
 
     int best_score = 0;
