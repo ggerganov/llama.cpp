@@ -510,6 +510,35 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
 #endif
 
         NSString * path_lib = [bundle pathForResource:@"default" ofType:@"metallib"];
+        if (path_lib == nil) {
+            // Try to find the resource in the directory where the current binary located.
+            NSString * current_binary = [[NSProcessInfo processInfo] arguments][0];
+            NSString * bin_dir = [current_binary stringByDeletingLastPathComponent];
+            NSString * default_metallib_path = [NSString pathWithComponents:@[bin_dir, @"default.metallib"]];
+            if ([[NSFileManager defaultManager] isReadableFileAtPath:default_metallib_path]) {
+                GGML_LOG_INFO("%s: found '%s'\n", __func__, [default_metallib_path UTF8String]);
+                NSDictionary * atts = [[NSFileManager defaultManager] attributesOfItemAtPath:default_metallib_path error:&error];
+                if (atts && atts[NSFileType] == NSFileTypeSymbolicLink) {
+                    // Optionally, if this is a symlink, try to resolve it.
+                    default_metallib_path = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:default_metallib_path error:&error];
+                    if (default_metallib_path && [default_metallib_path length] > 0 && ![[default_metallib_path substringToIndex:1] isEqualToString:@"/"]) {
+                        // It is a relative path, adding the binary directory as directory prefix.
+                        default_metallib_path = [NSString pathWithComponents:@[bin_dir, default_metallib_path]];
+                    }
+                    if (!default_metallib_path || ![[NSFileManager defaultManager] isReadableFileAtPath:default_metallib_path]) {
+                        // Link to the resource could not be resolved.
+                        default_metallib_path = nil;
+                    } else {
+                        GGML_LOG_INFO("%s: symlink resolved '%s'\n", __func__, [default_metallib_path UTF8String]);
+                    }
+                }
+            } else {
+                // The resource couldn't be found in the binary's directory.
+                default_metallib_path = nil;
+            }
+            path_lib = default_metallib_path;
+        }
+
         if (try_metallib && path_lib != nil) {
             // pre-compiled library found
             NSURL * libURL = [NSURL fileURLWithPath:path_lib];
