@@ -2089,7 +2089,7 @@ static void * ggml_backend_cann_reg_get_proc_address(ggml_backend_reg_t reg, con
 static const ggml_backend_reg_i ggml_backend_cann_reg_interface = {
     /* .get_name          = */ ggml_backend_cann_reg_get_name,
     /* .get_device_count  = */ ggml_backend_cann_reg_get_device_count,
-    /* .get_device_get    = */ ggml_backend_cann_reg_get_device,
+    /* .get_device        = */ ggml_backend_cann_reg_get_device,
     /* .get_proc_address  = */ ggml_backend_cann_reg_get_proc_address,
 };
 

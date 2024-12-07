@@ -51,6 +51,24 @@ def test_completion_stream(prompt: str, n_predict: int, re_content: str, n_promp
             content += data["content"]
 
 
+def test_completion_stream_vs_non_stream():
+    global server
+    server.start()
+    res_stream = server.make_stream_request("POST", "/completion", data={
+        "n_predict": 8,
+        "prompt": "I believe the meaning of life is",
+        "stream": True,
+    })
+    res_non_stream = server.make_request("POST", "/completion", data={
+        "n_predict": 8,
+        "prompt": "I believe the meaning of life is",
+    })
+    content_stream = ""
+    for data in res_stream:
+        content_stream += data["content"]
+    assert content_stream == res_non_stream.body["content"]
+
+
 @pytest.mark.parametrize("n_slots", [1, 2])
 def test_consistent_result_same_seed(n_slots: int):
     global server
@@ -221,3 +239,24 @@ def test_completion_parallel_slots(n_slots: int, n_requests: int):
         assert len(res.body["content"]) > 10
         # FIXME: the result is not deterministic when using other slot than slot 0
         # assert match_regex(re_content, res.body["content"])
+
+
+def test_n_probs():
+    global server
+    server.start()
+    res = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "n_probs": 10,
+        "temperature": 0.0,
+        "n_predict": 5,
+    })
+    assert res.status_code == 200
+    assert "completion_probabilities" in res.body
+    assert len(res.body["completion_probabilities"]) == 5
+    for tok in res.body["completion_probabilities"]:
+        assert "probs" in tok
+        assert len(tok["probs"]) == 10
+        for prob in tok["probs"]:
+            assert "prob" in prob
+            assert "tok_str" in prob
+            assert 0.0 <= prob["prob"] <= 1.0

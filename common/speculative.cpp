@@ -62,6 +62,10 @@ struct common_speculative * common_speculative_init(
 }
 
 void common_speculative_free(struct common_speculative * spec) {
+    if (spec == nullptr) {
+        return;
+    }
+
     common_sampler_free(spec->smpl);
 
     llama_batch_free(spec->batch);
