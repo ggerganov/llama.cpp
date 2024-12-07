@@ -1657,7 +1657,7 @@ struct server_context {
         slot.params        = std::move(task.params);
         slot.prompt_tokens = std::move(task.prompt_tokens);
 
-        SLT_DBG(slot, "launching slot : %s\n", slot.to_json().dump().c_str());
+        SLT_DBG(slot, "launching slot : %s\n", safe_json_to_str(slot.to_json()).c_str());
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
@@ -2942,12 +2942,12 @@ int main(int argc, char ** argv) {
 
     auto res_error = [](httplib::Response & res, const json & error_data) {
         json final_response {{"error", error_data}};
-        res.set_content(final_response.dump(-1, ' ', false, json::error_handler_t::replace), MIMETYPE_JSON);
+        res.set_content(safe_json_to_str(final_response), MIMETYPE_JSON);
         res.status = json_value(error_data, "code", 500);
     };
 
     auto res_ok = [](httplib::Response & res, const json & data) {
-        res.set_content(data.dump(-1, ' ', false, json::error_handler_t::replace), MIMETYPE_JSON);
+        res.set_content(safe_json_to_str(data), MIMETYPE_JSON);
         res.status = 200;
     };
 
@@ -3524,7 +3524,7 @@ int main(int argc, char ** argv) {
             /* oaicompat_chat */ true);
     };
 
-    const auto handle_models = [&params, &ctx_server](const httplib::Request &, httplib::Response & res) {
+    const auto handle_models = [&params, &ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
         json models = {
             {"object", "list"},
             {"data", {
@@ -3538,7 +3538,7 @@ int main(int argc, char ** argv) {
              }}
         };
 
-        res.set_content(models.dump(), MIMETYPE_JSON);
+        res_ok(res, models);
     };
 
     const auto handle_tokenize = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {

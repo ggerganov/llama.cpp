@@ -660,3 +660,7 @@ static json format_logit_bias(const std::vector<llama_logit_bias> & logit_bias) 
     }
     return data;
 }
+
+static std::string safe_json_to_str(json data) {
+    return data.dump(-1, ' ', false, json::error_handler_t::replace);
+}
