@@ -215,7 +215,7 @@ struct common_params {
     struct common_params_speculative speculative;
 
     std::string model                = ""; // model path                                                    // NOLINT
-    std::string model_alias          = "unknown"; // model alias                                            // NOLINT
+    std::string model_alias          = ""; // model alias                                                   // NOLINT
     std::string model_url            = ""; // model url to download                                         // NOLINT
     std::string hf_token             = ""; // HF token                                                      // NOLINT
     std::string hf_repo              = ""; // HF repo                                                       // NOLINT
