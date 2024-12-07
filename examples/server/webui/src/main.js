@@ -339,15 +339,16 @@ const mainApp = createApp({
           endpoint: '/chat/completions',
         };
         for await (const chunk of llama(prompt, params, config)) {
-          const stop = chunk.data.stop;
-          const addedContent = chunk.data.choices[0].delta.content;
-          const lastContent = this.pendingMsg.content || '';
-          if (addedContent) {
-            this.pendingMsg = {
-              id: this.pendingMsg.id,
-              role: 'assistant',
-              content: lastContent + addedContent,
-            };
+          if (chunk.data.choices) {
+            const addedContent = chunk.data.choices[0].delta.content;
+            const lastContent = this.pendingMsg.content || '';
+            if (addedContent) {
+              this.pendingMsg = {
+                id: this.pendingMsg.id,
+                role: 'assistant',
+                content: lastContent + addedContent,
+              };
+            }
           }
         }
 
