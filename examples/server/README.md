@@ -618,9 +618,76 @@ This endpoint is public (no API key check). By default, it is read-only. To make
 
 ```json
 {
-  "default_generation_settings": { ... },
+  "default_generation_settings": {
+    "id": 0,
+    "id_task": -1,
+    "n_ctx": 1024,
+    "speculative": false,
+    "is_processing": false,
+    "params": {
+      "n_predict": -1,
+      "seed": 4294967295,
+      "temperature": 0.800000011920929,
+      "dynatemp_range": 0.0,
+      "dynatemp_exponent": 1.0,
+      "top_k": 40,
+      "top_p": 0.949999988079071,
+      "min_p": 0.05000000074505806,
+      "xtc_probability": 0.0,
+      "xtc_threshold": 0.10000000149011612,
+      "typical_p": 1.0,
+      "repeat_last_n": 64,
+      "repeat_penalty": 1.0,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "dry_multiplier": 0.0,
+      "dry_base": 1.75,
+      "dry_allowed_length": 2,
+      "dry_penalty_last_n": -1,
+      "dry_sequence_breakers": [
+        "\n",
+        ":",
+        "\"",
+        "*"
+      ],
+      "mirostat": 0,
+      "mirostat_tau": 5.0,
+      "mirostat_eta": 0.10000000149011612,
+      "penalize_nl": false,
+      "stop": [],
+      "max_tokens": -1,
+      "n_keep": 0,
+      "n_discard": 0,
+      "ignore_eos": false,
+      "stream": true,
+      "n_probs": 0,
+      "min_keep": 0,
+      "grammar": "",
+      "samplers": [
+        "dry",
+        "top_k",
+        "typ_p",
+        "top_p",
+        "min_p",
+        "xtc",
+        "temperature"
+      ],
+      "speculative.n_max": 16,
+      "speculative.n_min": 5,
+      "speculative.p_min": 0.8999999761581421,
+      "timings_per_token": false
+    },
+    "prompt": "",
+    "next_token": {
+      "has_next_token": true,
+      "has_new_line": false,
+      "n_remain": -1,
+      "n_decoded": 0,
+      "stopping_word": ""
+    }
+  },
   "total_slots": 1,
-  "chat_template": ""
+  "chat_template": "..."
 }
 ```
 
@@ -739,56 +806,74 @@ Example:
 
 ```json
 [
-    {
-        "dynatemp_exponent": 1.0,
-        "dynatemp_range": 0.0,
-        "frequency_penalty": 0.0,
-        "grammar": "",
-        "id": 0,
-        "ignore_eos": false,
-        "is_processing": false,
-        "logit_bias": [],
-        "min_p": 0.05000000074505806,
-        "mirostat": 0,
-        "mirostat_eta": 0.10000000149011612,
-        "mirostat_tau": 5.0,
-        "model": "llama-2-7b-32k-instruct.Q2_K.gguf",
-        "n_ctx": 2048,
-        "n_keep": 0,
-        "n_predict": 100000,
-        "n_probs": 0,
-        "next_token": {
-            "has_next_token": true,
-            "n_remain": -1,
-            "n_decoded": 0,
-            "stopped_eos": false,
-            "stopped_limit": false,
-            "stopped_word": false,
-            "stopping_word": ""
-        },
-        "penalize_nl": true,
-        "presence_penalty": 0.0,
-        "prompt": "Say hello to llama.cpp",
-        "repeat_last_n": 64,
-        "repeat_penalty": 1.100000023841858,
-        "samplers": [
-            "top_k",
-            "typical_p",
-            "top_p",
-            "min_p",
-            "temperature"
-        ],
-        "seed": 42,
-        "stop": [
-            "\n"
-        ],
-        "stream": false,
-        "task_id": 0,
-        "temperature": 0.0,
-        "top_k": 40,
-        "top_p": 0.949999988079071,
-        "typical_p": 1.0
+  {
+    "id": 0,
+    "id_task": -1,
+    "n_ctx": 1024,
+    "speculative": false,
+    "is_processing": false,
+    "params": {
+      "n_predict": -1,
+      "seed": 4294967295,
+      "temperature": 0.800000011920929,
+      "dynatemp_range": 0.0,
+      "dynatemp_exponent": 1.0,
+      "top_k": 40,
+      "top_p": 0.949999988079071,
+      "min_p": 0.05000000074505806,
+      "xtc_probability": 0.0,
+      "xtc_threshold": 0.10000000149011612,
+      "typical_p": 1.0,
+      "repeat_last_n": 64,
+      "repeat_penalty": 1.0,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "dry_multiplier": 0.0,
+      "dry_base": 1.75,
+      "dry_allowed_length": 2,
+      "dry_penalty_last_n": -1,
+      "dry_sequence_breakers": [
+        "\n",
+        ":",
+        "\"",
+        "*"
+      ],
+      "mirostat": 0,
+      "mirostat_tau": 5.0,
+      "mirostat_eta": 0.10000000149011612,
+      "penalize_nl": false,
+      "stop": [],
+      "max_tokens": -1,
+      "n_keep": 0,
+      "n_discard": 0,
+      "ignore_eos": false,
+      "stream": true,
+      "n_probs": 0,
+      "min_keep": 0,
+      "grammar": "",
+      "samplers": [
+        "dry",
+        "top_k",
+        "typ_p",
+        "top_p",
+        "min_p",
+        "xtc",
+        "temperature"
+      ],
+      "speculative.n_max": 16,
+      "speculative.n_min": 5,
+      "speculative.p_min": 0.8999999761581421,
+      "timings_per_token": false
+    },
+    "prompt": "",
+    "next_token": {
+      "has_next_token": true,
+      "has_new_line": false,
+      "n_remain": -1,
+      "n_decoded": 0,
+      "stopping_word": ""
     }
+  }
 ]
 ```
 
