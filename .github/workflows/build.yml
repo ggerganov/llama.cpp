@@ -591,11 +591,6 @@ jobs:
         run: |
           xcodebuild -scheme llama-Package -destination "${{ matrix.destination }}"
 
-      - name: Build Swift Example
-        id: make_build_swift_example
-        run: |
-            make swift
-
   windows-msys2:
     runs-on: windows-latest
 
