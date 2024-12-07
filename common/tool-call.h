@@ -18,6 +18,7 @@ enum llama_tool_call_style {
     Hermes2Pro,
     CommandRPlus,
     MistralNemo,
+    FirefunctionV2,
 };
 
 struct llama_tool_call {

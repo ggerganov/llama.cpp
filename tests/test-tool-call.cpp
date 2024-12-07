@@ -306,10 +306,11 @@ static void test_parsing() {
       "Bleh[TOOL_CALLS][{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\", \"id\": \"123456789\"}]",
       "Bleh",
       json::array({special_function_call_with_id}));
-    test_parse_tool_call(llama_tool_call_style::MistralNemo, tools,
-      "[{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\", \"id\": \"123456789\"}]",
-      "",
-      json::array({special_function_call_with_id}));
+
+    test_parse_tool_call(llama_tool_call_style::FirefunctionV2, tools,
+      "Bleh functools[{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\"}]",
+      "Bleh",
+      json::array({special_function_call}));
 }
 
 static void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
@@ -322,6 +323,7 @@ static void test_tool_call_style(const std::string & template_file, llama_tool_c
 static void test_tool_call_style_detection() {
     test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", FunctionaryV3Llama31);
     test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", FunctionaryV3Llama3);
+    test_tool_call_style("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja", FirefunctionV2);
     test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", Llama31);
     test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", Llama32);
     test_tool_call_style("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja", Hermes2Pro);
@@ -414,6 +416,7 @@ static void test_grammars() {
   test_template("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", "<s>", "</s>", { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
+  test_template("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja", "<s>", "</s>", { "<|eot_id|>" }, tool_call_message, tools);
   test_template("tests/chat/templates/google-gemma-2-2b-it.jinja", "<s>", "</s>", { "<end_of_turn>" }, tool_call_message_with_id, tools);
   test_template("tests/chat/templates/microsoft-Phi-3.5-mini-instruct.jinja", "<s>", "</s>", { "<|end|>" }, tool_call_message_with_id, tools);
 }
