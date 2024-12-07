@@ -220,9 +220,7 @@ add_library(ggml-base
             ggml-threading.cpp
             ggml-threading.h
             ggml-quants.c
-            ggml-quants.h
-            ggml-aarch64.c
-            ggml-aarch64.h)
+            ggml-quants.h)
 
 target_include_directories(ggml-base PRIVATE .)
 
