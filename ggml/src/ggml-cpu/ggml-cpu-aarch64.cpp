@@ -3748,16 +3748,18 @@ static block_iq4_nlx4 make_block_iq4_nlx4(block_iq4_nl * in, unsigned int blck_s
 
     const int end = QK4_NL * 2 / blck_size_interleave;
 
-    if (blck_size_interleave == 8) {
-        for (int i = 0; i < end; ++i) {
-            int src_id = i % 4;
-            int src_offset = (i / 4) * blck_size_interleave;
-            int dst_offset = i * blck_size_interleave;
+    // TODO: this branch seems wrong
+    //if (blck_size_interleave == 8) {
+    //    for (int i = 0; i < end; ++i) {
+    //        int src_id = i % 4;
+    //        int src_offset = (i / 4) * blck_size_interleave;
+    //        int dst_offset = i * blck_size_interleave;
 
-            // Using memcpy to avoid unaligned memory accesses
-            memcpy(&out.qs[dst_offset], &in[src_id].qs[src_offset], sizeof(uint64_t));
-        }
-    } else if (blck_size_interleave == 4) {
+    //        // Using memcpy to avoid unaligned memory accesses
+    //        memcpy(&out.qs[dst_offset], &in[src_id].qs[src_offset], sizeof(uint64_t));
+    //    }
+    //} else
+    if (blck_size_interleave == 4) {
         for (int i = 0; i < end; ++i) {
             int src_id = i % 4;
             int src_offset = (i / 4) * blck_size_interleave;
@@ -3774,7 +3776,8 @@ static block_iq4_nlx4 make_block_iq4_nlx4(block_iq4_nl * in, unsigned int blck_s
 
 static int repack_iq4_nl_to_iq4_nl_4_bl(struct ggml_tensor * t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_IQ4_NL);
-    GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
+    //GGML_ASSERT(interleave_block == 4 || interleave_block == 8);
+    GGML_ASSERT(interleave_block == 4);
 
     block_iq4_nlx4 * dst = (block_iq4_nlx4 *)t->data;
     const block_iq4_nl * src = (const block_iq4_nl *)data;
@@ -3825,9 +3828,10 @@ template <> int repack<block_iq4_nl, 4, 4>(struct ggml_tensor * t, const void * 
     return repack_iq4_nl_to_iq4_nl_4_bl(t, 4, data, data_size);
 }
 
-template <> int repack<block_iq4_nl, 8, 4>(struct ggml_tensor * t, const void * data, size_t data_size) {
-    return repack_iq4_nl_to_iq4_nl_4_bl(t, 8, data, data_size);
-}
+// TODO: needs to be revisited
+//template <> int repack<block_iq4_nl, 8, 4>(struct ggml_tensor * t, const void * data, size_t data_size) {
+//    return repack_iq4_nl_to_iq4_nl_4_bl(t, 8, data, data_size);
+//}
 
 // gemv
 template <typename BLOC_TYPE, int64_t INTER_SIZE, int64_t NB_COLS>
