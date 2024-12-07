@@ -64,6 +64,7 @@ class ServerProcess:
     server_embeddings: bool | None = False
     server_reranking: bool | None = False
     server_metrics: bool | None = False
+    server_slots: bool | None = False
     draft: int | None = None
     api_key: str | None = None
     response_format: str | None = None
@@ -129,6 +130,8 @@ class ServerProcess:
             server_args.append("--reranking")
         if self.server_metrics:
             server_args.append("--metrics")
+        if self.server_slots:
+            server_args.append("--slots")
         if self.model_alias:
             server_args.extend(["--alias", self.model_alias])
         if self.n_ctx:

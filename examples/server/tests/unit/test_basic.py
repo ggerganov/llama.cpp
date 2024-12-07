@@ -33,6 +33,17 @@ def test_server_models():
     assert len(res.body["data"]) == 1
     assert res.body["data"][0]["id"] == server.model_alias
 
+
+def test_server_slots():
+    global server
+    server.server_slots = True
+    server.start()
+    res = server.make_request("GET", "/slots")
+    assert res.status_code == 200
+    assert len(res.body) == server.n_slots
+    assert res.body[0]["n_ctx"] > 0
+
+
 def test_load_split_model():
     global server
     server.model_hf_repo = "ggml-org/models"

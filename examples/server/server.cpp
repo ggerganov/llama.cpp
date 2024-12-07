@@ -2184,6 +2184,7 @@ struct server_context {
 
                     auto res = std::make_unique<server_task_result_metrics>();
                     res->id                  = task.id;
+                    res->slots_data          = slots_data;
                     res->n_idle_slots        = n_idle_slots;
                     res->n_processing_slots  = n_processing_slots;
                     res->n_tasks_deferred    = queue_tasks.queue_tasks_deferred.size();
