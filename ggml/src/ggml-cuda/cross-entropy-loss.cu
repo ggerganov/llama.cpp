@@ -6,65 +6,32 @@
 #include <cstdint>
 
 static __global__ void cross_entropy_loss_f32(const float * logits, const float * labels, float * dst, const int nclasses, const int k) {
-    const int warp_id = threadIdx.x / WARP_SIZE;
-    const int lane_id = threadIdx.x % WARP_SIZE;
-    const int i0 = blockDim.x*blockIdx.x + warp_id*WARP_SIZE;
-
-    const int ne_tmp = WARP_SIZE*nclasses;
-
-    extern __shared__ float tmp_all[];
-    float * tmp_logits = tmp_all + (2*warp_id + 0)*ne_tmp;
-    float * tmp_labels = tmp_all + (2*warp_id + 1)*ne_tmp;
-
-    // Each warp first loads ne_tmp logits/labels into shared memory:
-    for (int i = lane_id; i < ne_tmp; i += WARP_SIZE) {
-        const int ig = i0*nclasses + i; // ig == i global
-
-        tmp_logits[i] = ig < k*nclasses ? logits[ig] : 0.0f;
-        tmp_labels[i] = ig < k*nclasses ? labels[ig] : 0.0f;
-    }
-
-    // Each thread in the warp then calculates the cross entropy loss for a single row.
-    // TODO: pad in order to avoid shared memory bank conflicts.
+    logits += blockIdx.x*nclasses;
+    labels += blockIdx.x*nclasses;
 
     // Find maximum for softmax:
-    float max = -INFINITY;
-    for (int i = 0; i < nclasses; ++i) {
-        max = fmaxf(max, tmp_logits[lane_id*nclasses + i]);
+    float max_logit = -INFINITY;
+    for (int i = threadIdx.x; i < nclasses; i += WARP_SIZE) {
+        max_logit = fmaxf(max_logit, logits[i]);
     }
+    max_logit = warp_reduce_max(max_logit);
 
     // Calculate log(softmax(logits)) which is just logits - max:
     float sum = 0.0f;
-    for (int i = 0; i < nclasses; ++i) {
-        float val = tmp_logits[lane_id*nclasses + i] - max;
-        sum += expf(val);
-        tmp_logits[lane_id*nclasses + i] = val;
+    for (int i = threadIdx.x; i < nclasses; i += WARP_SIZE) {
+        sum += expf(logits[i] - max_logit);
     }
+    sum = warp_reduce_sum(sum);
     sum = logf(sum);
 
     // log(exp(logits - max) / sum) = (logits - max) - log(sum)
     float loss = 0.0f;
-    for (int i = 0; i < nclasses; ++i) {
-        loss += (tmp_logits[lane_id*nclasses + i] - sum) * tmp_labels[lane_id*nclasses + i];
+    for (int i = threadIdx.x; i < nclasses; i += WARP_SIZE) {
+        loss += (logits[i] - max_logit - sum) * labels[i];
     }
     loss = -warp_reduce_sum(loss) / (float)k;
 
-    __syncthreads();
-
-    if (lane_id == 0) {
-        tmp_all[warp_id] = loss;
-    }
-
-    __syncthreads();
-
-    if (warp_id != 0) {
-        return;
-    }
-
-    loss = lane_id < CUDA_CROSS_ENTROPY_LOSS_BLOCK_SIZE/WARP_SIZE ? tmp_all[lane_id] : 0.0f;
-    loss = warp_reduce_sum(loss);
-
-    if (lane_id != 0) {
+    if (threadIdx.x != 0) {
         return;
     }
 
@@ -119,13 +86,14 @@ void ggml_cuda_cross_entropy_loss(ggml_backend_cuda_context & ctx, ggml_tensor *
     ggml_cuda_pool & pool = ctx.pool();
     cudaStream_t stream = ctx.stream();
 
-    const dim3 blocks_dim(CUDA_CROSS_ENTROPY_LOSS_BLOCK_SIZE, 1, 1);
-    const dim3 blocks_num((nrows + CUDA_CROSS_ENTROPY_LOSS_BLOCK_SIZE - 1) / CUDA_CROSS_ENTROPY_LOSS_BLOCK_SIZE, 1, 1);
-    const int shmem = 2*CUDA_CROSS_ENTROPY_LOSS_BLOCK_SIZE*ne00*sizeof(float);
+    const dim3 blocks_dim(WARP_SIZE, 1, 1);
+    const dim3 blocks_num(nrows, 1, 1);
+    const int shmem = 0;
 
     ggml_cuda_pool_alloc<float> dst_tmp(pool, blocks_num.x);
 
     cross_entropy_loss_f32<<<blocks_num, blocks_dim, shmem, stream>>>(src0_d, src1_d, dst_tmp.ptr, ne00, nrows);
+    CUDA_CHECK(cudaGetLastError());
 
     // Combine results from individual blocks:
     sum_f32_cuda(pool, dst_tmp.ptr, dst_d, blocks_num.x, stream);

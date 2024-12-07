@@ -61,6 +61,9 @@ struct llama_vocab {
     // set of all tokens that cause "end of generation"
     std::set<id> special_eog_ids;
 
+    std::string tokenizer_model;
+    std::string tokenizer_pre;
+
     // tokenizer flags
     bool tokenizer_add_space_prefix           = false;
     bool tokenizer_add_bos                    = false;
