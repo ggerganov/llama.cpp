@@ -801,7 +801,8 @@ struct server_task_result_metrics : server_task_result {
     uint64_t n_decode_total     = 0;
     uint64_t n_busy_slots_total = 0;
 
-    // TODO: get rid of this json object and use to_json() instead
+    // while we can also use std::vector<server_slot> this requires copying the slot object which can be quite messy
+    // therefore, we use json to temporarily store the slot.to_json() result
     json slots_data = json::array();
 
     virtual json to_json() override {
@@ -3326,9 +3327,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
+        // this endpoint is publicly available, please only return what is safe to be exposed
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
+            { "model_path",                  ctx_server.params_base.model },
             { "chat_template",               llama_get_chat_template(ctx_server.model) },
         };
 

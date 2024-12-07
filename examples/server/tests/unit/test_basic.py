@@ -22,6 +22,7 @@ def test_server_props():
     server.start()
     res = server.make_request("GET", "/props")
     assert res.status_code == 200
+    assert ".gguf" in res.body["model_path"]
     assert res.body["total_slots"] == server.n_slots
     default_val = res.body["default_generation_settings"]
     assert server.n_ctx is not None and server.n_slots is not None
