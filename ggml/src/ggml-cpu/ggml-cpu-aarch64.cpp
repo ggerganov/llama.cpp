@@ -3708,7 +3708,7 @@ static int repack_q4_0_to_q4_0_4_bl(struct ggml_tensor * t, int interleave_block
     GGML_UNUSED(data_size);
 }
 
-static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor *t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
+static int repack_q4_0_to_q4_0_8_bl(struct ggml_tensor * t, int interleave_block, const void * GGML_RESTRICT data, size_t data_size) {
     GGML_ASSERT(t->type == GGML_TYPE_Q4_0);
     GGML_ASSERT(interleave_block == 8);
     constexpr int nrows_interleaved = 8;
