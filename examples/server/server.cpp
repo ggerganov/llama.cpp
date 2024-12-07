@@ -138,6 +138,7 @@ struct slot_params {
 
         return json {
             {"n_predict",                 n_predict},     // Server configured n_predict
+            {"seed",                      sampling.seed},
             {"temperature",               sampling.temp},
             {"dynatemp_range",            sampling.dynatemp_range},
             {"dynatemp_exponent",         sampling.dynatemp_exponent},
@@ -1381,7 +1382,6 @@ struct server_context {
         }
 
         default_generation_settings_for_props = slots[0].to_json();
-        default_generation_settings_for_props["seed"] = -1;
 
         // the update_slots() logic will always submit a maximum of n_batch or n_parallel tokens
         // note that n_batch can be > n_ctx (e.g. for non-causal attention models such as BERT where the KV cache is not used)
