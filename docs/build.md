@@ -55,7 +55,7 @@ cmake --build build --config Release
     cmake --preset arm64-windows-llvm-release -D GGML_OPENMP=OFF
     cmake --build build-arm64-windows-llvm-release
     ```
-    Building for arm64 can also be done with the MSVC compiler with the build-arm64-windows-MSVC preset, or the standard CMake build instructions. However, note that the MSVC compiler does not support inline ARM assembly code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
+    Building for arm64 can also be done with the MSVC compiler with the build-arm64-windows-MSVC preset, or the standard CMake build instructions. However, note that the MSVC compiler does not support inline ARM assembly code, used e.g. for the accelerated Q4_0_N_M CPU kernels.
 
 ## BLAS Build
 

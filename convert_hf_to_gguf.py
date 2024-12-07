@@ -661,6 +661,9 @@ class Model:
         if chkhsh == "1431a23e583c97432bc230bff598d103ddb5a1f89960c8f1d1051aaa944d0b35":
             # ref: https://huggingface.co/sapienzanlp/Minerva-7B-base-v1.0
             res = "minerva-7b"
+        if chkhsh == "8b5a93ed704057481f240da0be7e7dca721d7f8f4755263b6807227a2cbeae65":
+            # ref: https://huggingface.co/sentence-transformers/stsb-roberta-base
+            res = "roberta-bpe"
 
         if res is None:
             logger.warning("\n")
@@ -2533,7 +2536,7 @@ class InternLM2Model(Model):
             return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("BertModel", "CamembertModel")
+@Model.register("BertModel", "CamembertModel", "RobertaModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -2574,7 +2577,8 @@ class BertModel(Model):
 
         # we need this to validate the size of the token_type embeddings
         # though currently we are passing all zeros to the token_type embeddings
-        self.gguf_writer.add_token_type_count(2)  # "Sequence A" or "Sequence B"
+        # "Sequence A" or "Sequence B"
+        self.gguf_writer.add_token_type_count(self.hparams.get("type_vocab_size", 1))
 
         # convert to phantom space vocab
         def phantom(tok):
