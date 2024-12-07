@@ -1106,15 +1106,16 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
           name: llama-bin-win-hip-x64-${{ matrix.gpu_target }}.zip
 
-  ios-xcode-build:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build Xcode project
-        run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
+# TODO: use CMake to build the SPM and use it in the project
+#  ios-xcode-build:
+#    runs-on: macos-latest
+#
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#
+#      - name: Build Xcode project
+#        run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
 
   android-build:
     runs-on: ubuntu-latest
@@ -1139,23 +1140,6 @@ jobs:
           cd examples/llama.android
 
           ./gradlew build --no-daemon
-
-#  freeBSD-latest:
-#    runs-on: macos-12
-#    steps:
-#    - name: Clone
-#      uses: actions/checkout@v4
-#
-#    - name: Build
-#      uses: cross-platform-actions/action@v0.19.0
-#      with:
-#        operating_system: freebsd
-#        version: '13.2'
-#        hypervisor: 'qemu'
-#        run: |
-#            sudo pkg update
-#            sudo pkg install -y gmake automake autoconf pkgconf llvm15 openblas
-#            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j `sysctl -n hw.ncpu`
 
   release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
