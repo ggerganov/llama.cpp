@@ -24,7 +24,9 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     const int ph = image_size->height / patch_size + (image_size->height % patch_size > 0);
     const int pw = image_size->width / patch_size + (image_size->width % patch_size > 0);
     auto img_tokens = image_embed->n_image_pos;
-    llama_pos mrope_pos[img_tokens * 4];
+    // llama_pos mrope_pos[img_tokens * 4];
+    std::vector<llama_pos> mrope_pos;
+    mrope_pos.resize(img_tokens * 4);
     
     for (int y = 0; y < ph; y++)
     {
@@ -350,7 +352,7 @@ static void llava_free(struct llava_context * ctx_llava) {
 
 #ifndef NDEBUG
 
-static void tmp_test_rope(struct llava_context * ctx_llava, common_params * params) {
+static void tmp_test_rope() {
     
     int n_threads = 1;
     static size_t buf_size = 512u*1024*1024;
@@ -415,13 +417,13 @@ static void tmp_test_rope(struct llava_context * ctx_llava, common_params * para
     }
 }
 
-static void tmp_dump_img_embed(struct llava_context * ctx_llava, common_params * params) {
-    // auto * image_embed = load_image(ctx_llava, params, "/home/ron/Downloads/gguf/dog.jpeg");
+static void tmp_dump_img_embed(struct llava_context * ctx_llava) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
-    // int ne = n_embd * image_embed->n_image_pos;
     int ne = n_embd * 4;
     float vals[56 * 56 * 3];
-    float embd[ne];
+    // float embd[ne];
+    std::vector<float> embd;
+    embd.resize(ne);
 
     for (int i = 0; i < 56*56; i++)
     {
@@ -429,12 +431,11 @@ static void tmp_dump_img_embed(struct llava_context * ctx_llava, common_params *
             vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
     }
     
-    // auto param = &ctx_llava->ctx_clip->vision_model.hparams;
-    clip_encode_float_image(ctx_llava->ctx_clip, 16, vals, 56, 56, embd);
+    clip_encode_float_image(ctx_llava->ctx_clip, 16, vals, 56, 56, embd.data());
 
     std::ofstream outFile("img_embed.bin", std::ios::binary);
     if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd), ne * sizeof(float));
+        outFile.write(reinterpret_cast<const char*>(embd.data()), ne * sizeof(float));
 
         outFile.close();
         std::cout << "Data successfully written to mrope.bin" << std::endl;
@@ -484,7 +485,7 @@ int main(int argc, char ** argv) {
     } else if (params.image[0].empty()) {
         auto ctx_llava = llava_init_context(&params, model);
         
-        tmp_dump_img_embed(ctx_llava, &params);
+        tmp_dump_img_embed(ctx_llava);
 
         llama_perf_context_print(ctx_llava->ctx_llama);
         ctx_llava->model = NULL;

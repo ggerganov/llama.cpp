@@ -2488,7 +2488,6 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     const int patch_size    = hparams.patch_size;
     const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
     const int num_positions = num_patches + (ctx->has_class_embedding ? 1 : 0);
-    const int num_position_ids = ctx->has_qwen2vl_merger ? num_positions * 3 : num_positions;
     if(ctx->load_image_size==nullptr){
         ctx->load_image_size= clip_image_size_init();
     }

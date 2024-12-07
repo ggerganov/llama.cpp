@@ -3337,6 +3337,7 @@ struct llama_context {
     // whether we are computing encoder output or decoder output
     bool is_encoding = false;
     
+    // TODO: find a better way to accommodate mutli-dimension position encoding methods
     // number of position id each token get, 1 for each token in most cases.
     // when using m-rope, it will be 3 position ids per token to representing 3 dimension coordinate.
     int n_pos_per_token = 1;
@@ -5719,6 +5720,7 @@ static void llm_load_hparams(
                 std::fill(hparams.rope_mrope_sections.begin(), hparams.rope_mrope_sections.end(), 0);
                 ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS, hparams.rope_mrope_sections, 4, true);
             }
+            // fall through
         case LLM_ARCH_QWEN2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
