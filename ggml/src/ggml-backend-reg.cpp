@@ -522,22 +522,22 @@ void ggml_backend_load_all() {
     ggml_backend_load_all_from_path(NULL);
 }
 
-void ggml_backend_load_all_from_path(const char * search_path) {
+void ggml_backend_load_all_from_path(const char * dir_path) {
 #ifdef NDEBUG
     bool silent = true;
 #else
     bool silent = false;
 #endif
 
-    ggml_backend_load_best("blas", silent, search_path);
-    ggml_backend_load_best("cann", silent, search_path);
-    ggml_backend_load_best("cuda", silent, search_path);
-    ggml_backend_load_best("hip", silent, search_path);
-    ggml_backend_load_best("kompute", silent, search_path);
-    ggml_backend_load_best("metal", silent, search_path);
-    ggml_backend_load_best("rpc", silent, search_path);
-    ggml_backend_load_best("sycl", silent, search_path);
-    ggml_backend_load_best("vulkan", silent, search_path);
-    ggml_backend_load_best("musa", silent, search_path);
-    ggml_backend_load_best("cpu", silent, search_path);
+    ggml_backend_load_best("blas", silent, dir_path);
+    ggml_backend_load_best("cann", silent, dir_path);
+    ggml_backend_load_best("cuda", silent, dir_path);
+    ggml_backend_load_best("hip", silent, dir_path);
+    ggml_backend_load_best("kompute", silent, dir_path);
+    ggml_backend_load_best("metal", silent, dir_path);
+    ggml_backend_load_best("rpc", silent, dir_path);
+    ggml_backend_load_best("sycl", silent, dir_path);
+    ggml_backend_load_best("vulkan", silent, dir_path);
+    ggml_backend_load_best("musa", silent, dir_path);
+    ggml_backend_load_best("cpu", silent, dir_path);
 }
