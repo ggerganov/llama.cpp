@@ -164,6 +164,9 @@ static std::vector<llama_tokens> tokenize_input_prompts(llama_context * ctx, con
     } else {
         throw std::runtime_error("\"prompt\" must be a string, an list of tokens, a list of mixed strings & tokens, or a list of prompts");
     }
+    if (result.empty()) {
+        throw std::runtime_error("\"prompt\" must not be empty");
+    }
     return result;
 }
 
@@ -496,8 +499,6 @@ static json oaicompat_completion_params_parse(
     const std::string & chat_template) {
     json llama_params;
 
-    llama_params["__oaicompat"] = true;
-
     // Apply chat template to the list of messages
     llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
 
@@ -647,4 +648,19 @@ static json format_detokenized_response(const std::string & content) {
     return json {
         {"content", content}
     };
+}
+
+static json format_logit_bias(const std::vector<llama_logit_bias> & logit_bias) {
+    json data = json::array();
+    for (const auto & lb : logit_bias) {
+        data.push_back(json{
+            {"bias", lb.bias},
+            {"token", lb.token},
+        });
+    }
+    return data;
+}
+
+static std::string safe_json_to_str(json data) {
+    return data.dump(-1, ' ', false, json::error_handler_t::replace);
 }
