@@ -519,10 +519,10 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
 }
 
 void ggml_backend_load_all() {
-    ggml_backend_load_all_in_search_path(NULL);
+    ggml_backend_load_all_from_path(NULL);
 }
 
-void ggml_backend_load_all_in_search_path(const char * search_path) {
+void ggml_backend_load_all_from_path(const char * search_path) {
 #ifdef NDEBUG
     bool silent = true;
 #else
