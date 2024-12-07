@@ -23,6 +23,10 @@ def test_server_props():
     res = server.make_request("GET", "/props")
     assert res.status_code == 200
     assert res.body["total_slots"] == server.n_slots
+    default_val = res.body["default_generation_settings"]
+    assert server.n_ctx is not None and server.n_slots is not None
+    assert default_val["n_ctx"] == server.n_ctx / server.n_slots
+    assert default_val["params"]["seed"] == server.seed
 
 
 def test_server_models():
@@ -36,12 +40,26 @@ def test_server_models():
 
 def test_server_slots():
     global server
+
+    # without slots endpoint enabled, this should return error
+    server.server_slots = False
+    server.start()
+    res = server.make_request("GET", "/slots")
+    assert res.status_code == 501 # ERROR_TYPE_NOT_SUPPORTED
+    assert "error" in res.body
+    server.stop()
+
+    # with slots endpoint enabled, this should return slots info
     server.server_slots = True
+    server.n_slots = 2
     server.start()
     res = server.make_request("GET", "/slots")
     assert res.status_code == 200
     assert len(res.body) == server.n_slots
-    assert res.body[0]["n_ctx"] > 0
+    assert server.n_ctx is not None and server.n_slots is not None
+    assert res.body[0]["n_ctx"] == server.n_ctx / server.n_slots
+    assert "params" in res.body[0]
+    assert res.body[0]["params"]["seed"] == server.seed
 
 
 def test_load_split_model():
