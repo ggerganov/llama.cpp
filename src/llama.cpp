@@ -2436,7 +2436,7 @@ struct llama_hparams {
     float                   rope_freq_scale_train;
     uint32_t                n_ctx_orig_yarn;
     float                   rope_yarn_log_mul;
-    std::array<int, 4> rope_mrope_sections;
+    std::array<int, 4> rope_sections;
 
     // for State Space Models
     uint32_t ssm_d_conv  = 0;
@@ -2493,7 +2493,7 @@ struct llama_hparams {
 
         if (this->rope_finetuned  != other.rope_finetuned)          return true;
         if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn)         return true;
-        if (this->rope_mrope_sections != other.rope_mrope_sections) return true;
+        if (this->rope_sections != other.rope_sections) return true;
 
         if (this->ssm_d_conv  != other.ssm_d_conv)  return true;
         if (this->ssm_d_inner != other.ssm_d_inner) return true;
@@ -5717,8 +5717,8 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_QWEN2VL:
             {
-                std::fill(hparams.rope_mrope_sections.begin(), hparams.rope_mrope_sections.end(), 0);
-                ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS, hparams.rope_mrope_sections, 4, true);
+                std::fill(hparams.rope_sections.begin(), hparams.rope_sections.end(), 0);
+                ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS, hparams.rope_sections, 4, true);
             }
             // fall through
         case LLM_ARCH_QWEN2:
@@ -12543,7 +12543,7 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
         int sections[4];
-        std::copy(hparams.rope_mrope_sections.begin(), hparams.rope_mrope_sections.end(), sections);
+        std::copy(hparams.rope_sections.begin(), hparams.rope_sections.end(), sections);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -12572,7 +12572,7 @@ struct llm_build_context {
                 Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
                 cb(Vcur, "Vcur", il);
 
-                Qcur = ggml_mrope_ext(
+                Qcur = ggml_rope_multi(
                     ctx0, 
                     ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
                     n_rot, sections, rope_type, n_ctx_orig, freq_base, freq_scale,
@@ -12580,7 +12580,7 @@ struct llm_build_context {
                 );
                 cb(Qcur, "Qcur", il);
 
-                Kcur = ggml_mrope_ext(
+                Kcur = ggml_rope_multi(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
                     n_rot, sections, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow

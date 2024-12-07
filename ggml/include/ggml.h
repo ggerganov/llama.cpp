@@ -1447,7 +1447,7 @@ extern "C" {
             float                 beta_fast,
             float                 beta_slow);
 
-    GGML_API struct ggml_tensor * ggml_mrope_ext(
+    GGML_API struct ggml_tensor * ggml_rope_multi(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,

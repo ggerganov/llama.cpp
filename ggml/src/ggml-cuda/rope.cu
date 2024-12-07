@@ -114,7 +114,7 @@ static __global__ void rope_neox(
 }
 
 template<typename T, bool has_ff>
-static __global__ void rope_mrope(
+static __global__ void rope_multi(
     const T * x, T * dst, int ne0, int ne2, int n_dims, const int32_t * pos, float freq_scale, int p_delta_rows,
     float ext_factor, float attn_factor, rope_corr_dims corr_dims, float theta_scale, const float * freq_factors, mrope_sections sections) {
     const int i0 = 2*(blockDim.y*blockIdx.y + threadIdx.y);
@@ -261,7 +261,7 @@ static void rope_neox_cuda(
 }
 
 template<typename T>
-static void rope_mrope_cuda(
+static void rope_multi_cuda(
     const T * x, T * dst, int ne0, int ne2, int n_dims, int nr, const int32_t * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, mrope_sections sections, cudaStream_t stream) {
     GGML_ASSERT(ne0 % 2 == 0);
@@ -272,12 +272,12 @@ static void rope_mrope_cuda(
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
     if (freq_factors == nullptr) {
-        rope_mrope<T, false><<<block_nums, block_dims, 0, stream>>>(
+        rope_multi<T, false><<<block_nums, block_dims, 0, stream>>>(
                 x, dst, ne0, ne2, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
                 theta_scale, freq_factors, sections
                 );
     } else {
-        rope_mrope<T, true><<<block_nums, block_dims, 0, stream>>>(
+        rope_multi<T, true><<<block_nums, block_dims, 0, stream>>>(
                 x, dst, ne0, ne2, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
                 theta_scale, freq_factors, sections
                 );
@@ -339,20 +339,20 @@ static void rope_neox_cuda_f32(
     rope_neox_cuda<float>(x, dst, ne0, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, stream);
 }
 
-static void rope_mrope_cuda_f16(
+static void rope_multi_cuda_f16(
     const half * x, half * dst, int ne0, int ne2, int n_dims, int nr, const int32_t * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, mrope_sections sections, cudaStream_t stream
 ) {
 
-    rope_mrope_cuda<half>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
+    rope_multi_cuda<half>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
 }
 
-static void rope_mrope_cuda_f32(
+static void rope_multi_cuda_f32(
     const float * x, float * dst, int ne0, int ne2, int n_dims, int nr, const int32_t * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, mrope_sections sections, cudaStream_t stream
 ) {
 
-    rope_mrope_cuda<float>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
+    rope_multi_cuda<float>(x, dst, ne0, ne2, n_dims, nr, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, sections, stream);
 }
 
 static void rope_vision_cuda_f16(
@@ -455,12 +455,12 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         }
     } else if (is_mrope && !is_vision) {
         if (src0->type == GGML_TYPE_F32) {
-            rope_mrope_cuda_f32(
+            rope_multi_cuda_f32(
                 (const float *)src0_d, (float *)dst_d, ne00, ne02, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
                 attn_factor, corr_dims, freq_factors, sections, stream
             );
         } else if (src0->type == GGML_TYPE_F16) {
-            rope_mrope_cuda_f16(
+            rope_multi_cuda_f16(
                 (const half *)src0_d, (half *)dst_d, ne00, ne02, n_dims, nr, pos, freq_scale, ne01, freq_base, ext_factor,
                 attn_factor, corr_dims, freq_factors, sections, stream
             );

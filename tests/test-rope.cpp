@@ -193,20 +193,20 @@ int main(int /*argc*/, const char ** /*argv*/) {
             // [[100, 101, 102, ..., 172],
             // [101, 102, 103, ..., 173],
             // [102, 103, 104, ..., 174]]
-            r0 = ggml_mrope_ext(
+            r0 = ggml_rope_multi(
                 ctx0, x, p0, nullptr,
                 n_rot, sections, mode, 32768, 1000000, 1, 0, 1, 32, 1);
             // [[-67, -67, -67, ..., -67]
             // [-67, -67, -67, ..., -67]
             // [-67, -67, -67, ..., -67]]
-            r1 = ggml_mrope_ext(
+            r1 = ggml_rope_multi(
                 ctx0, r0, p1, nullptr,
                 n_rot, sections, mode, 32768, 1000000, 1, 0, 1, 32, 1);
 
             //  [[33,  34,  35, ..., 105]
             //  [34,  35,  36, ..., 106]
             //  [35,  36,  37, ..., 107]]
-            r2 = ggml_mrope_ext(
+            r2 = ggml_rope_multi(
                 ctx0, x, p2, nullptr,
                 n_rot, sections, mode, 32768, 1000000, 1, 0, 1, 32, 1);
         }

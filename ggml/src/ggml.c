@@ -3548,7 +3548,7 @@ struct ggml_tensor * ggml_rope(
     );
 }
 
-struct ggml_tensor * ggml_mrope_ext(
+struct ggml_tensor * ggml_rope_multi(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b,
@@ -3563,7 +3563,7 @@ struct ggml_tensor * ggml_mrope_ext(
         float                 attn_factor,
         float                 beta_fast,
         float                 beta_slow) {
-
+    // Multimodal Rotary Position Embedding
     GGML_ASSERT((mode & 1) == 0 && "mode & 1 == 1 is no longer supported");
 
     GGML_ASSERT(ggml_is_vector(b));

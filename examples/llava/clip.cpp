@@ -759,7 +759,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
             Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_positions, batch_size);
             if (ctx->has_qwen2vl_merger) {
-                Q = ggml_mrope_ext(
+                Q = ggml_rope_multi(
                     ctx0, Q, positions, nullptr, 
                     d_head/2, mrope_sections, GGML_ROPE_TYPE_VISION, 32768, 10000, 1, 0, 1, 32, 1);
             }
@@ -772,7 +772,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
             K = ggml_reshape_4d(ctx0, K, d_head, n_head, num_positions, batch_size);
             if (ctx->has_qwen2vl_merger) {
-                K = ggml_mrope_ext(
+                K = ggml_rope_multi(
                     ctx0, K, positions, nullptr, 
                     d_head/2, mrope_sections, GGML_ROPE_TYPE_VISION, 32768, 10000, 1, 0, 1, 32, 1);
             }

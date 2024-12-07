@@ -1399,7 +1399,7 @@ llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
 
-llama-qwen2vl-cli: examples/llava/minicpmv-cli.cpp \
+llama-qwen2vl-cli: examples/llava/qwen2vl-cli.cpp \
 	examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
