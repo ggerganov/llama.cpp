@@ -46,6 +46,11 @@ def test_completion_stream(prompt: str, n_predict: int, re_content: str, n_promp
             assert data["timings"]["prompt_n"] == n_prompt
             assert data["timings"]["predicted_n"] == n_predicted
             assert data["truncated"] == truncated
+            assert data["stop_type"] == "limit"
+            assert "generation_settings" in data
+            assert server.n_predict is not None
+            assert data["generation_settings"]["n_predict"] == min(n_predict, server.n_predict)
+            assert data["generation_settings"]["seed"] == server.seed
             assert match_regex(re_content, content)
         else:
             content += data["content"]
