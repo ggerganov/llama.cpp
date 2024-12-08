@@ -61,11 +61,10 @@ def test_invalid_input_extra_req(input_extra):
 def test_with_qwen_model():
     global server
     server.model_file = None
-    server.model_hf_repo = "Qwen/CodeQwen1.5-7B-Chat-GGUF"
-    server.model_hf_file = "codeqwen-1_5-7b-chat-q2_k.gguf"
+    server.model_hf_repo = "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF"
+    server.model_hf_file = "qwen2.5-coder-1.5b-instruct-q2_k.gguf"
     server.start(timeout_seconds=600)
     res = server.make_request("POST", "/infill", data={
-        "prompt": "Complete this",
         "input_extra": [{
             "filename": "llama.h",
             "text": "LLAMA_API int32_t llama_n_threads();\n"
@@ -74,4 +73,4 @@ def test_with_qwen_model():
         "input_suffix": "}\n",
     })
     assert res.status_code == 200
-    assert "n_threads" in res.body["content"]
+    assert res.body["content"].startswith("n_threads")
