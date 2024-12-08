@@ -552,35 +552,44 @@ jobs:
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
 
-# TODO: tmp disabled. see for possible re-enable:
-#       https://github.com/ggerganov/llama.cpp/pull/10525
-#  macOS-latest-swift:
-#    runs-on: macos-latest
-#
-#    strategy:
-#      matrix:
-#        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
-#
-#    steps:
-#      - name: Clone
-#        id: checkout
-#        uses: actions/checkout@v4
-#
-#      - name: Dependencies
-#        id: depends
-#        continue-on-error: true
-#        run: |
-#          brew update
-#
-#      - name: xcodebuild for swift package
-#        id: xcodebuild
-#        run: |
-#          xcodebuild -scheme llama -destination "${{ matrix.destination }}"
-#
-#      - name: Build Swift Example
-#        id: make_build_swift_example
-#        run: |
-#            make swift
+  macOS-latest-swift:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build llama.cpp with CMake
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -G Xcode .. \
+            -DGGML_METAL_USE_BF16=ON \
+            -DGGML_METAL_EMBED_LIBRARY=ON \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+          sudo cmake --install . --config Release
+
+      - name: xcodebuild for swift package
+        id: xcodebuild
+        run: |
+          xcodebuild -scheme llama-Package -destination "${{ matrix.destination }}"
 
   windows-msys2:
     runs-on: windows-latest
@@ -1104,6 +1113,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -G Xcode .. \
+            -DGGML_METAL_USE_BF16=ON \
+            -DGGML_METAL_EMBED_LIBRARY=ON \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
+          sudo cmake --install . --config Release
+
+      - name: xcodebuild for swift package
+        id: xcodebuild
+        run: |
+          xcodebuild -scheme llama-Package -destination 'generic/platform=iOS'
+
       - name: Build Xcode project
         run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
 
@@ -1130,23 +1162,6 @@ jobs:
           cd examples/llama.android
 
           ./gradlew build --no-daemon
-
-#  freeBSD-latest:
-#    runs-on: macos-12
-#    steps:
-#    - name: Clone
-#      uses: actions/checkout@v4
-#
-#    - name: Build
-#      uses: cross-platform-actions/action@v0.19.0
-#      with:
-#        operating_system: freebsd
-#        version: '13.2'
-#        hypervisor: 'qemu'
-#        run: |
-#            sudo pkg update
-#            sudo pkg install -y gmake automake autoconf pkgconf llvm15 openblas
-#            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j `sysctl -n hw.ncpu`
 
   release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
