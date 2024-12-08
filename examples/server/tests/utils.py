@@ -371,3 +371,6 @@ def match_regex(regex: str, text: str) -> bool:
         ).search(text)
         is not None
     )
+
+def is_slow_test_allowed():
+    return os.environ.get("SLOW_TESTS") == "1" or os.environ.get("SLOW_TESTS") == "ON"

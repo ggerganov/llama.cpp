@@ -34,7 +34,7 @@ def test_infill_with_input_extra():
         "input_suffix": "}\n",
     })
     assert res.status_code == 200
-    assert match_regex("(cuts|Jimmy|mom|came|into|the|room)+", res.body["content"])
+    assert match_regex("(help|find|band)+", res.body["content"])
 
 
 @pytest.mark.parametrize("input_extra", [
@@ -55,3 +55,23 @@ def test_invalid_input_extra_req(input_extra):
     })
     assert res.status_code == 400
     assert "error" in res.body
+
+
+@pytest.mark.skipif(not is_slow_test_allowed(), reason="skipping slow test")
+def test_with_qwen_model():
+    global server
+    server.model_file = None
+    server.model_hf_repo = "Qwen/CodeQwen1.5-7B-Chat-GGUF"
+    server.model_hf_file = "codeqwen-1_5-7b-chat-q2_k.gguf"
+    server.start(timeout_seconds=600)
+    res = server.make_request("POST", "/infill", data={
+        "prompt": "Complete this",
+        "input_extra": [{
+            "filename": "llama.h",
+            "text": "LLAMA_API int32_t llama_n_threads();\n"
+        }],
+        "input_prefix": "#include <cstdio>\n#include \"llama.h\"\n\nint main() {\n    int n_threads = llama_",
+        "input_suffix": "}\n",
+    })
+    assert res.status_code == 200
+    assert "n_threads" in res.body["content"]
