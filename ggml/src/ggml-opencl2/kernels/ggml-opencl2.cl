@@ -298,7 +298,7 @@ kernel void kernel_add_row(
         ulong  offset1,
         global float4 * dst,
         ulong  offsetd,
-        int nb
+        int ne
 ) {
     src0 = (global float4*)((global char*)src0 + offset0);
     src1 = (global float4*)((global char*)src1 + offset1);
@@ -306,7 +306,7 @@ kernel void kernel_add_row(
 
     // This performs better than using %.
     uint gid = get_global_id(0);
-    uint idx1 = gid - (gid/nb)*nb; // get_global_id(0) % nb
+    uint idx1 = gid - (gid/ne)*ne; // get_global_id(0) % ne
     dst[gid] = src0[gid] + src1[idx1];
 }
 
@@ -324,26 +324,26 @@ kernel void kernel_mul(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne10,
         int ne11,
         int ne12,
         int ne13,
-        int nb10,
-        int nb11,
-        int nb12,
-        int nb13,
+        ulong nb10,
+        ulong nb11,
+        ulong nb12,
+        ulong nb13,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3
 ) {
     src0 = src0 + offset0;
     src1 = src1 + offset1;
@@ -376,7 +376,7 @@ kernel void kernel_mul_row(
         ulong offset1,
         global float4 * dst,
         ulong offsetd,
-        int nb
+        int ne
 ) {
     src0 = (global float4*)((global char*)src0 + offset0);
     src1 = (global float4*)((global char*)src1 + offset1);
@@ -384,7 +384,7 @@ kernel void kernel_mul_row(
 
     // This performs better than using %.
     uint gid = get_global_id(0);
-    uint idx1 = gid - (gid/nb)*nb; // get_global_id(0) % nb
+    uint idx1 = gid - (gid/ne)*ne; // get_global_id(0) % ne
     dst[gid] = src0[gid] * src1[idx1];
 }
 
@@ -509,7 +509,7 @@ kernel void kernel_norm(
         global float * dst,
         ulong offsetd,
         int ne00,
-        int nb01,
+        ulong nb01,
         float eps,
         local float * sum
 ) {
@@ -569,7 +569,7 @@ kernel void kernel_rms_norm(
         global float * dst,
         ulong offsetd,
         int ne00,
-        int nb01,
+        ulong nb01,
         float eps,
         local float * sum // Note, the size depends on number of subgroups
 ) {
@@ -869,18 +869,18 @@ kernel void kernel_rope_norm_f32(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3,
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3,
         int n_past,
         int n_dims,
         int n_ctx_orig,
@@ -948,18 +948,18 @@ kernel void kernel_rope_norm_f16(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3,
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3,
         int n_past,
         int n_dims,
         int n_ctx_orig,
@@ -1027,18 +1027,18 @@ kernel void kernel_rope_neox_f32(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3,
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3,
         int n_past,
         int n_dims,
         int n_ctx_orig,
@@ -1106,18 +1106,18 @@ kernel void kernel_rope_neox_f16(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3,
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3,
         int n_past,
         int n_dims,
         int n_ctx_orig,
@@ -1185,18 +1185,18 @@ kernel void kernel_cpy_f16_f16(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3
 ) {
     src0 = (global half*)((global char*)src0 + offset0);
     dst = (global half*)((global char*)dst + offsetd);
@@ -1229,18 +1229,18 @@ kernel void kernel_cpy_f16_f32(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3
 ) {
 
     src0 = (global half*)((global char*)src0 + offset0);
@@ -1274,18 +1274,18 @@ kernel void kernel_cpy_f32_f16(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3
 ) {
     src0 = (global float*)((global char*)src0 + offset0);
     dst = (global half*)((global char*)dst + offsetd);
@@ -1319,18 +1319,18 @@ kernel void kernel_cpy_f32_f32(
         int ne01,
         int ne02,
         int ne03,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne0,
         int ne1,
         int ne2,
         int ne3,
-        int nb0,
-        int nb1,
-        int nb2,
-        int nb3
+        ulong nb0,
+        ulong nb1,
+        ulong nb2,
+        ulong nb3
 ) {
     src0 = (global float*)((global char*)src0 + offset0);
     dst = (global float*)((global char*)dst + offsetd);
@@ -1366,13 +1366,13 @@ kernel void kernel_get_rows_f32(
         global float * dst,
         ulong offsetd,
         int ne00,
-        int nb01,
-        int nb02,
+        ulong nb01,
+        ulong nb02,
         int ne10,
-        int nb10,
-        int nb11,
-        int nb1,
-        int nb2
+        ulong nb10,
+        ulong nb11,
+        ulong nb1,
+        ulong nb2
 ) {
     src0 = (global void*)((global char*)src0 + offset0);
     src1 = (global int*)((global char*)src1 + offset1);
@@ -1399,13 +1399,13 @@ kernel void kernel_get_rows_f16(
         global float * dst,
         ulong offsetd,
         int ne00,
-        int nb01,
-        int nb02,
+        ulong nb01,
+        ulong nb02,
         int ne10,
-        int nb10,
-        int nb11,
-        int nb1,
-        int nb2
+        ulong nb10,
+        ulong nb11,
+        ulong nb1,
+        ulong nb2
 ) {
     src0 = (global void*)((global char*)src0 + offset0);
     src1 = (global int*)((global char*)src1 + offset1);
@@ -1432,13 +1432,13 @@ kernel void kernel_get_rows_q4_0(
         global float * dst,
         ulong offsetd,
         int ne00,
-        int nb01,
-        int nb02,
+        ulong nb01,
+        ulong nb02,
         int ne10,
-        int nb10,
-        int nb11,
-        int nb1,
-        int nb2
+        ulong nb10,
+        ulong nb11,
+        ulong nb1,
+        ulong nb2
 ) {
     src0 = (global void*)((global char*)src0 + offset0);
     src1 = (global int*)((global char*)src1 + offset1);
@@ -1476,17 +1476,17 @@ kernel void kernel_mul_mat_f32_f32(
         int ne00,
         int ne01,
         int ne02,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne10,
         int ne11,
         int ne12,
-        int nb10,
-        int nb11,
-        int nb12,
-        int nb13,
+        ulong nb10,
+        ulong nb11,
+        ulong nb12,
+        ulong nb13,
         int ne0,
         int ne1,
         int r2,
@@ -1575,17 +1575,17 @@ kernel void kernel_mul_mat_f16_f16(
         int ne00,
         int ne01,
         int ne02,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne10,
         int ne11,
         int ne12,
-        int nb10,
-        int nb11,
-        int nb12,
-        int nb13,
+        ulong nb10,
+        ulong nb11,
+        ulong nb12,
+        ulong nb13,
         int ne0,
         int ne1,
         int r2,
@@ -1672,17 +1672,17 @@ kernel void kernel_mul_mat_f16_f32_1row(
         int ne00,
         int ne01,
         int ne02,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne10,
         int ne11,
         int ne12,
-        int nb10,
-        int nb11,
-        int nb12,
-        int nb13,
+        ulong nb10,
+        ulong nb11,
+        ulong nb12,
+        ulong nb13,
         int ne0,
         int ne1,
         int r2,
@@ -1752,17 +1752,17 @@ kernel void kernel_mul_mat_f16_f32(
         int ne00,
         int ne01,
         int ne02,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne10,
         int ne11,
         int ne12,
-        int nb10,
-        int nb11,
-        int nb12,
-        int nb13,
+        ulong nb10,
+        ulong nb11,
+        ulong nb12,
+        ulong nb13,
         int ne0,
         int ne1,
         int r2,
@@ -1853,17 +1853,17 @@ kernel void kernel_mul_mat_f16_f32_l4(
         int ne00,
         int ne01,
         int ne02,
-        int nb00,
-        int nb01,
-        int nb02,
-        int nb03,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
         int ne10,
         int ne11,
         int ne12,
-        int nb10,
-        int nb11,
-        int nb12,
-        int nb13,
+        ulong nb10,
+        ulong nb11,
+        ulong nb12,
+        ulong nb13,
         int ne0,
         int ne1,
         int r2,
@@ -1954,7 +1954,7 @@ inline void mul_vec_q_n_f32(
         int r3
 ) {
 
-    const int nb = ne00/QK4_0;
+    const ulong nb = ne00/QK4_0;
 
     int r0 = get_group_id(0);
     int r1 = get_group_id(1);
@@ -2113,7 +2113,7 @@ inline void mul_vec_q_n_f32_v(
         int r2,
         int r3
 ) {
-    const int nb = ne00/QK4_0;
+    const ulong nb = ne00/QK4_0;
 
     int r0 = get_group_id(0);
     int r1 = get_group_id(1);
@@ -2363,7 +2363,7 @@ inline void mul_vec_q_n_f32_flat(
         int r2,
         int r3
 ) {
-    const int nb = ne00/QK4_0;
+    const ulong nb = ne00/QK4_0;
 
     int r0 = get_group_id(0);
     int r1 = get_group_id(1);
@@ -2530,7 +2530,7 @@ inline void mul_vec_q_n_f32_8x_flat(
         int r2,
         int r3
 ) {
-    const int nb = ne00/QK4_0;
+    const ulong nb = ne00/QK4_0;
 
     int r0 = get_group_id(0);
     int r1 = get_group_id(1);
