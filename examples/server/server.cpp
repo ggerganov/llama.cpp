@@ -3380,7 +3380,20 @@ int main(int argc, char ** argv) {
                 task.id    = ctx_server.queue_tasks.get_new_id();
                 task.index = i;
 
-                task.prompt_tokens    = std::move(tokenized_prompts[i]);
+                if (type == SERVER_TASK_TYPE_INFILL) {
+                    task.prompt_tokens = format_infill(
+                            ctx_server.ctx,
+                            data.at("input_prefix"),
+                            data.at("input_suffix"),
+                            data.at("input_extra"),
+                            ctx_server.params_base.n_batch,
+                            ctx_server.params_base.n_predict,
+                            ctx_server.slots[0].n_ctx, // TODO: there should be a better way
+                            ctx_server.params_base.spm_infill,
+                            tokenized_prompts[i]);
+                } else {
+                    task.prompt_tokens = std::move(tokenized_prompts[i]);
+                }
                 task.params           = server_task::params_from_json_cmpl(ctx_server.model, ctx_server.params_base, data);
                 task.id_selected_slot = json_value(data, "id_slot", -1);
 
