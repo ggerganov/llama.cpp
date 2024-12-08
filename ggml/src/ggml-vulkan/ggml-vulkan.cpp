@@ -1513,7 +1513,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
         compiles.push_back(std::async(ggml_vk_create_pipeline_func, std::ref(device), std::ref(pipeline), name, spv_size, spv_data, entrypoint, parameter_count, push_constant_size, wg_denoms, specialization_constants, align, disable_robustness));
     };
 
-#if defined(VK_NV_cooperative_matrix2)
+#if defined(VK_NV_cooperative_matrix2) && defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
     if (device->coopmat2) {
 
         auto const &fa_wg_denoms = [&](uint32_t D, uint32_t clamp, ggml_type type, bool small_rows) -> std::array<uint32_t, 3> {
@@ -1611,7 +1611,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
 #undef CREATE_MM
 #undef CREATE_MM2
     } else
-#endif  // defined(VK_NV_cooperative_matrix2)
+#endif  // defined(VK_NV_cooperative_matrix2) && defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
     if (device->coopmat_support) {
         // Create 6 variants, {s,m,l}x{unaligned,aligned}
 #define CREATE_MM(PIPELINE_NAME, NAMELC, F16ACC, WG_DENOMS, WARPTILE, PUSHCONST, PARAMCOUNT, ID) \
@@ -2153,7 +2153,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         device->coopmat_support = device->coopmat_support && coopmat_features.cooperativeMatrix;
 
         if (coopmat2_support) {
-#if defined(VK_NV_cooperative_matrix2)
+#if defined(VK_NV_cooperative_matrix2) && defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
             if (coopmat2_features.cooperativeMatrixWorkgroupScope &&
                 coopmat2_features.cooperativeMatrixFlexibleDimensions &&
                 coopmat2_features.cooperativeMatrixReductions &&
@@ -2414,14 +2414,19 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     bool fp16_storage = false;
     bool fp16_compute = false;
     bool coopmat_support = false;
+    bool coopmat2_support = false;
 
     for (auto properties : ext_props) {
         if (strcmp("VK_KHR_16bit_storage", properties.extensionName) == 0) {
             fp16_storage = true;
         } else if (strcmp("VK_KHR_shader_float16_int8", properties.extensionName) == 0) {
             fp16_compute = true;
-        } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0) {
+        } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0 &&
+                   !getenv("GGML_VK_DISABLE_COOPMAT")) {
             coopmat_support = true;
+        } else if (strcmp("VK_NV_cooperative_matrix2", properties.extensionName) == 0 &&
+                   !getenv("GGML_VK_DISABLE_COOPMAT2")) {
+            coopmat2_support = true;
         }
     }
 
@@ -2472,9 +2477,11 @@ static void ggml_vk_print_gpu_info(size_t idx) {
 
     coopmat_support = coopmat_support && coopmat_features.cooperativeMatrix;
 
+    std::string matrix_cores = coopmat2_support ? "NV_coopmat2" : coopmat_support ? "KHR_coopmat" : "none";
+
     std::string device_name = props2.properties.deviceName.data();
-    GGML_LOG_DEBUG("ggml_vulkan: %zu = %s (%s) | uma: %d | fp16: %d | warp size: %zu | matrix cores: %d\n",
-              idx, device_name.c_str(), driver_props.driverName.data(), uma, fp16, subgroup_size, coopmat_support);
+    GGML_LOG_DEBUG("ggml_vulkan: %zu = %s (%s) | uma: %d | fp16: %d | warp size: %zu | matrix cores: %s\n",
+              idx, device_name.c_str(), driver_props.driverName.data(), uma, fp16, subgroup_size, matrix_cores.c_str());
 
     if (props2.properties.deviceType == vk::PhysicalDeviceType::eCpu) {
         GGML_LOG_DEBUG("ggml_vulkan: Warning: Device type is CPU. This is probably not the device you want.\n");
