@@ -3519,7 +3519,7 @@ int main(int argc, char ** argv) {
         std::string prompt = json_value(data, "prompt", std::string());
         std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
         SRV_DBG("creating infill tasks, n_prompts = %d\n", (int) tokenized_prompts.size());
-        data["prompts"] = format_infill(
+        data["prompt"] = format_infill(
             ctx_server.ctx,
             data.at("input_prefix"),
             data.at("input_suffix"),
