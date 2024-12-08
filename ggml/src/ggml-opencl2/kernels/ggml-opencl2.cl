@@ -315,11 +315,11 @@ kernel void kernel_add_row(
 //------------------------------------------------------------------------------
 kernel void kernel_mul(
         global char * src0,
-        int offset0,
+        ulong offset0,
         global char * src1,
-        int offset1,
+        ulong offset1,
         global char * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -371,11 +371,11 @@ kernel void kernel_mul(
 // broadcast src1 into src0
 kernel void kernel_mul_row(
         global float4 * src0,
-        int offset0,
+        ulong offset0,
         global float4 * src1,
-        int offset1,
+        ulong offset1,
         global float4 * dst,
-        int offsetd,
+        ulong offsetd,
         int nb
 ) {
     src0 = (global float4*)((global char*)src0 + offset0);
@@ -393,9 +393,9 @@ kernel void kernel_mul_row(
 //------------------------------------------------------------------------------
 kernel void kernel_scale(
         global float4 * src0,
-        int offset0,
+        ulong offset0,
         global float4 * dst,
-        int offsetd,
+        ulong offsetd,
         float scale
 ) {
     src0 = (global float4*)((global char*)src0 + offset0);
@@ -411,9 +411,9 @@ kernel void kernel_scale(
 
 kernel void kernel_gelu(
     global float * src0,
-    int offset0,
+    ulong offset0,
     global float * dst,
-    int offsetd
+    ulong offsetd
 ) {
     src0 = (global float*)((global char*)src0 + offset0);
     dst = (global float*)((global char*)dst + offsetd);
@@ -425,9 +425,9 @@ kernel void kernel_gelu(
 
 kernel void kernel_gelu_4(
     global float4 * src0,
-    int offset0,
+    ulong offset0,
     global float4 * dst,
-    int offsetd
+    ulong offsetd
 ) {
     src0 = (global float4*)((global char*)src0 + offset0);
     dst = (global float4*)((global char*)dst + offsetd);
@@ -442,9 +442,9 @@ kernel void kernel_gelu_4(
 //------------------------------------------------------------------------------
 kernel void kernel_silu(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd
+        ulong offsetd
 ) {
     src0 = (global float*)((global char*)src0 + offset0);
     dst = (global float*)((global char*)dst + offsetd);
@@ -455,9 +455,9 @@ kernel void kernel_silu(
 
 kernel void kernel_silu_4(
         global float4 * src0,
-        int offset0,
+        ulong offset0,
         global float4 * dst,
-        int offsetd
+        ulong offsetd
 ) {
     src0 = (global float4*)((global char*)src0 + offset0);
     dst = (global float4*)((global char*)dst + offsetd);
@@ -471,9 +471,9 @@ kernel void kernel_silu_4(
 //------------------------------------------------------------------------------
 kernel void kernel_relu(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd
+        ulong offsetd
 ) {
     src0 = (global float*)((global char*)src0 + offset0);
     dst = (global float*)((global char*)dst + offsetd);
@@ -486,9 +486,9 @@ kernel void kernel_relu(
 //------------------------------------------------------------------------------
 kernel void kernel_clamp(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         float min,
         float max
 ) {
@@ -505,9 +505,9 @@ kernel void kernel_clamp(
 //------------------------------------------------------------------------------
 kernel void kernel_norm(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int nb01,
         float eps,
@@ -565,9 +565,9 @@ kernel void kernel_norm(
 // This kernel depends on subgroup size.
 kernel void kernel_rms_norm(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int nb01,
         float eps,
@@ -627,9 +627,9 @@ kernel void kernel_rms_norm(
 //------------------------------------------------------------------------------
 kernel void kernel_diag_mask_inf(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int n_past
@@ -650,9 +650,9 @@ kernel void kernel_diag_mask_inf(
 
 kernel void kernel_diag_mask_inf_8(
         global float4 * src0,
-        int offset0,
+        ulong offset0,
         global float4 * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int n_past
@@ -684,11 +684,11 @@ kernel void kernel_diag_mask_inf_8(
 //------------------------------------------------------------------------------
 kernel void kernel_soft_max(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -751,11 +751,11 @@ REQD_SUBGROUP_SIZE_64
 #endif
 kernel void kernel_soft_max_4(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -858,13 +858,13 @@ float2 rope_yarn_corr_dims(
 
 kernel void kernel_rope_norm_f32(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * src2,
-        int offset2,
+        ulong offset2,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -937,13 +937,13 @@ kernel void kernel_rope_norm_f32(
 
 kernel void kernel_rope_norm_f16(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * src2,
-        int offset2,
+        ulong offset2,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1016,13 +1016,13 @@ kernel void kernel_rope_norm_f16(
 
 kernel void kernel_rope_neox_f32(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * src2,
-        int offset2,
+        ulong offset2,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1095,13 +1095,13 @@ kernel void kernel_rope_neox_f32(
 
 kernel void kernel_rope_neox_f16(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * src2,
-        int offset2,
+        ulong offset2,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1178,9 +1178,9 @@ kernel void kernel_rope_neox_f16(
 
 kernel void kernel_cpy_f16_f16(
         global half * src0,
-        int offset0,
+        ulong offset0,
         global half * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1222,9 +1222,9 @@ kernel void kernel_cpy_f16_f16(
 
 kernel void kernel_cpy_f16_f32(
         global half * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1267,9 +1267,9 @@ kernel void kernel_cpy_f16_f32(
 
 kernel void kernel_cpy_f32_f16(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global half * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1312,9 +1312,9 @@ kernel void kernel_cpy_f32_f16(
 
 kernel void kernel_cpy_f32_f32(
         global float * src0,
-        int offset0,
+        ulong offset0,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1360,11 +1360,11 @@ kernel void kernel_cpy_f32_f32(
 //------------------------------------------------------------------------------
 kernel void kernel_get_rows_f32(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int nb01,
         int nb02,
@@ -1393,11 +1393,11 @@ kernel void kernel_get_rows_f32(
 
 kernel void kernel_get_rows_f16(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int nb01,
         int nb02,
@@ -1426,11 +1426,11 @@ kernel void kernel_get_rows_f16(
 
 kernel void kernel_get_rows_q4_0(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global int * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int nb01,
         int nb02,
@@ -1468,11 +1468,11 @@ kernel void kernel_get_rows_q4_0(
 
 kernel void kernel_mul_mat_f32_f32(
         global char * src0,
-        int offset0,
+        ulong offset0,
         global char * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1503,7 +1503,7 @@ kernel void kernel_mul_mat_f32_f32(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+    ulong offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
 
     global float * x = (global float *) (src0 + offset_src0);
 
@@ -1514,7 +1514,7 @@ kernel void kernel_mul_mat_f32_f32(
                 break;
             }
 
-            int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+            ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
             global float * y = (global float *) (src1 + offset_src1);
 
@@ -1536,7 +1536,7 @@ kernel void kernel_mul_mat_f32_f32(
                 break;
             }
 
-            int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+            ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
             global float  * y  = (global float  *) (src1 + offset_src1);
             global float4 * y4 = (global float4 *) y;
@@ -1567,11 +1567,11 @@ kernel void kernel_mul_mat_f32_f32(
 
 kernel void kernel_mul_mat_f16_f16(
         global char * src0,
-        int offset0,
+        ulong offset0,
         global char * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1602,7 +1602,7 @@ kernel void kernel_mul_mat_f16_f16(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+    ulong offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
 
     global half * x = (global half *) (src0 + offset_src0);
 
@@ -1613,7 +1613,7 @@ kernel void kernel_mul_mat_f16_f16(
                 break;
             }
 
-            int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+            ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
             global half * y = (global half *) (src1 + offset_src1);
 
@@ -1635,7 +1635,7 @@ kernel void kernel_mul_mat_f16_f16(
                 break;
             }
 
-            int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+            ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
             global half  * y  = (global half  *) (src1 + offset_src1);
             global half4 * y4 = (global half4 *) y;
@@ -1664,11 +1664,11 @@ kernel void kernel_mul_mat_f16_f16(
 //------------------------------------------------------------------------------
 kernel void kernel_mul_mat_f16_f32_1row(
         global char * src0,
-        int offset0,
+        ulong offset0,
         global char * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1699,8 +1699,8 @@ kernel void kernel_mul_mat_f16_f32_1row(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
-    int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+    ulong offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+    ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
     global half  * x = (global half  *) (src0 + offset_src0);
     global float * y = (global float *) (src1 + offset_src1);
@@ -1744,11 +1744,11 @@ REQD_SUBGROUP_SIZE_64
 #endif
 kernel void kernel_mul_mat_f16_f32(
         global char * src0,
-        int offset0,
+        ulong offset0,
         global char * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1779,7 +1779,7 @@ kernel void kernel_mul_mat_f16_f32(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+    ulong offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
 
     global half * x = (global half *) (src0 + offset_src0);
 
@@ -1790,7 +1790,7 @@ kernel void kernel_mul_mat_f16_f32(
                 break;
             }
 
-            int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+            ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
             global float * y = (global float *) (src1 + offset_src1);
 
@@ -1812,7 +1812,7 @@ kernel void kernel_mul_mat_f16_f32(
                 break;
             }
 
-            int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+            ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
             global float  * y  = (global float  *) (src1 + offset_src1);
             global float4 * y4 = (global float4 *) y;
@@ -1845,11 +1845,11 @@ REQD_SUBGROUP_SIZE_64
 #endif
 kernel void kernel_mul_mat_f16_f32_l4(
         global char * src0,
-        int offset0,
+        ulong offset0,
         global char * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -1880,12 +1880,12 @@ kernel void kernel_mul_mat_f16_f32_l4(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
+    ulong offset_src0 = r0*nb01 + (i12/r2)*nb02 + (i13/r3)*nb03;
 
     global half4 * x4 = (global half4 *) (src0 + offset_src0);
 
     for (int r1 = 0; r1 < nrows; ++r1) {
-        int offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
+        ulong offset_src1 = r1*nb11 + (i12   )*nb12 + (i13   )*nb13;
 
         global float4 * y4 = (global float4 *) (src1 + offset_src1);
 
@@ -1967,7 +1967,7 @@ inline void mul_vec_q_n_f32(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset0 = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
+    ulong offset0 = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
 
     global struct block_q4_0 * x = (global struct block_q4_0 *) src0 + offset0;
     global float             * y = (global float             *) src1 + r1*ne10 + im*ne00*ne1;
@@ -2026,11 +2026,11 @@ REQD_SUBGROUP_SIZE_64
 #endif
 kernel void kernel_mul_mat_q4_0_f32(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global float * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -2126,7 +2126,7 @@ inline void mul_vec_q_n_f32_v(
     int i12 = im%ne12;
     int i13 = im/ne12;
 
-    int offset0 = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
+    ulong offset0 = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
 
     global struct block_q4_0 * x = (global struct block_q4_0 *) src0 + offset0;
     global float             * y = (global float             *) src1 + r1*ne10 + im*ne00*ne1;
@@ -2232,11 +2232,11 @@ REQD_SUBGROUP_SIZE_64
 #endif
 kernel void kernel_mul_mat_q4_0_f32_v(
         global void * src0,
-        int offset0,
+        ulong offset0,
         global float * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -2380,9 +2380,9 @@ inline void mul_vec_q_n_f32_flat(
     int i13 = im/ne12;
 
     // The number of scales is the same as the number of blocks.
-    int offset0_d = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
+    ulong offset0_d = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
     // Each block contains QK4_0/2 uchars, hence offset for qs is as follows.
-    int offset0_q = (first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02)) * QK4_0/2;
+    ulong offset0_q = (first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02)) * QK4_0/2;
 
     global uchar * x = (global uchar *) src0_q + offset0_q;
     global half  * d = (global half  *) src0_d + offset0_d;
@@ -2479,9 +2479,9 @@ kernel void kernel_mul_mat_q4_0_f32_flat(
         global uchar * src0_q,
         global half  * src0_d,
         global float * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
@@ -2547,9 +2547,9 @@ inline void mul_vec_q_n_f32_8x_flat(
     int i13 = im/ne12;
 
     // The number of scales is the same as the number of blocks.
-    int offset0_d = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
+    ulong offset0_d = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
     // Each block contains QK4_0/2 uchars, hence offset for qs is as follows.
-    int offset0_q = (first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02)) * QK4_0/2;
+    ulong offset0_q = (first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02)) * QK4_0/2;
 
     global uchar * x = (global uchar *) src0_q + offset0_q;
     global half  * d = (global half  *) src0_d + offset0_d;
@@ -2666,9 +2666,9 @@ kernel void kernel_mul_mat_q4_0_f32_8x_flat(
         global uchar * src0_q,
         global half  * src0_d,
         global float * src1,
-        int offset1,
+        ulong offset1,
         global float * dst,
-        int offsetd,
+        ulong offsetd,
         int ne00,
         int ne01,
         int ne02,
