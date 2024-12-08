@@ -11,16 +11,6 @@
 extern "C" {
 #endif
 
-#define CL_CHECK(err)                                               \
-    do {                                                            \
-        cl_int err_ = (err);                                        \
-        if (err_ != CL_SUCCESS) {                                   \
-            fprintf(stderr, "ggml_opencl: %s error %d at %s:%d\n",  \
-                #err, err_, __FILE__, __LINE__);                    \
-            GGML_ASSERT(0);                                                \
-        }                                                           \
-    } while (0)
-
 //
 // backend API
 //
