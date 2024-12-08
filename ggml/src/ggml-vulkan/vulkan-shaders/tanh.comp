@@ -16,6 +16,6 @@ void main() {
     if (i >= p.KX) {
         return;
     }
-
-    data_d[i] = D_TYPE(tanh(data_a[i]));
+    float th = tanh(data_a[i]);
+    data_d[i] = D_TYPE(th==th ? th : sign(data_a[i]));
 }
