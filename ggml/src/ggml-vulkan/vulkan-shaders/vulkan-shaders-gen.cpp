@@ -342,14 +342,14 @@ void process_shaders() {
         matmul_shaders(true, matmul_id, true, false, false);
         matmul_shaders(true, matmul_id, true, false, true);
 
-#if defined(VK_NV_cooperative_matrix2)
+#if defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
         // Coopmat2, fp32acc and fp16acc
         matmul_shaders(true, matmul_id, false, true, false);
         matmul_shaders(true, matmul_id, false, true, true);
 #endif
     }
 
-#if defined(VK_NV_cooperative_matrix2)
+#if defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
     // flash attention
     for (const auto& f16acc : {false, true}) {
         std::string acctype = f16acc ? "float16_t" : "float";
