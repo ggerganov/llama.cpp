@@ -392,7 +392,7 @@ struct server_task_result {
         return false;
     }
     virtual bool is_stop() {
-        // only used by server_task_result_cmpl_final
+        // only used by server_task_result_cmpl_*
         return false;
     }
     virtual int get_index() {
