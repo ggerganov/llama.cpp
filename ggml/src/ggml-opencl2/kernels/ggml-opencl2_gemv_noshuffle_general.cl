@@ -195,9 +195,9 @@ __kernel void kernel_gemv_noshuffle(
         __read_only  image1d_buffer_t src0_q,  // quantized A
         global half2  * src0_d,  // A scales
         __read_only  image1d_buffer_t src1,    // B
-        int offset1,            // offset to B (0)
+        ulong offset1,            // offset to B (0)
         global float * dst,     // C
-        int offsetd,            // offset to C (0)
+        ulong offsetd,            // offset to C (0)
         int ne00,               // K
         int ne01,               // M
         int ne02,               // 1
