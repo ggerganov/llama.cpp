@@ -48,9 +48,9 @@ def test_invalid_input_extra_req(input_extra):
     global server
     server.start()
     res = server.make_request("POST", "/infill", data={
-        "prompt": "Complete this",
         "input_extra": [input_extra],
-        "input_prefix": "#include <cstdio>\n#include \"llama.h\"\n\nint main() {\n    int n_threads = llama_",
+        "input_prefix": "#include <cstdio>\n#include \"llama.h\"\n\nint main() {\n",
+        "prompt": "    int n_threads = llama_",
         "input_suffix": "}\n",
     })
     assert res.status_code == 400
