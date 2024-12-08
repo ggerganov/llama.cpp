@@ -556,6 +556,7 @@ struct server_task_result_cmpl_partial : server_task_result {
     int32_t n_decoded;
     int32_t n_prompt_tokens;
 
+    std::string stopping_word;
     stop_type stop = STOP_TYPE_NONE;
 
     std::vector<completion_token_output> probs_output;
@@ -586,6 +587,7 @@ struct server_task_result_cmpl_partial : server_task_result {
             {"index",            index},
             {"content",          content},
             {"stop_type",        stop_type_to_str(stop)},
+            {"stopping_word",    stopping_word},
             {"stop",             is_stop},
             {"id_slot",          id_slot},
             {"tokens_predicted", n_decoded},
@@ -1892,7 +1894,8 @@ struct server_context {
         res->n_decoded       = slot.n_decoded;
         res->n_prompt_tokens = slot.n_prompt_tokens;
 
-        res->stop = slot.stop;
+        res->stopping_word   = slot.stopping_word;
+        res->stop            = slot.stop;
 
         res->verbose           = slot.params.verbose;
         res->oaicompat         = slot.params.oaicompat;
