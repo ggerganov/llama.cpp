@@ -848,7 +848,7 @@ vec_dot_iq2_xs_q8_1(const void *__restrict__ vbq,
                     const block_q8_1 *__restrict__ bq8_1, const int &iqs,
                     const uint64_t *iq2xs_grid, const uint64_t *ksigns64) {
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    GGML_CUDA_MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    MIN_CC_DP4A // lowest compute capability for integer intrinsics
 #if QK_K == 256
     const block_iq2_xs * bq2 = (const block_iq2_xs *) vbq;
 
@@ -950,7 +950,7 @@ vec_dot_iq3_xxs_q8_1(const void *__restrict__ vbq,
                      const block_q8_1 *__restrict__ bq8_1, const int &iqs,
                      const uint32_t *iq3xxs_grid, const uint64_t *ksigns64) {
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    GGML_CUDA_MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    MIN_CC_DP4A // lowest compute capability for integer intrinsics
 #if QK_K == 256
     const block_iq3_xxs * bq2 = (const block_iq3_xxs *) vbq;
 
