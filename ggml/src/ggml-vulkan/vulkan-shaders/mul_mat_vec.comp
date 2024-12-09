@@ -31,27 +31,13 @@ void iter(inout FLOAT_TYPE temp[NUM_ROWS], const uint first_row, const uint num_
 
 #if K_PER_ITER == 8
 #if QUANT_R == 2
-    B_TYPE_VEC4 bv02 = data_b_v4[(b_offset + iybs + iqs) / 4];
-    B_TYPE_VEC4 bv13 = data_b_v4[(b_offset + iybs + iqs + y_offset) / 4];
-    FLOAT_TYPE b0 = FLOAT_TYPE(bv02.x);
-    FLOAT_TYPE b1 = FLOAT_TYPE(bv13.x);
-    FLOAT_TYPE b2 = FLOAT_TYPE(bv02.y);
-    FLOAT_TYPE b3 = FLOAT_TYPE(bv13.y);
-    FLOAT_TYPE b4 = FLOAT_TYPE(bv02.z);
-    FLOAT_TYPE b5 = FLOAT_TYPE(bv13.z);
-    FLOAT_TYPE b6 = FLOAT_TYPE(bv02.w);
-    FLOAT_TYPE b7 = FLOAT_TYPE(bv13.w);
+    const B_TYPE_VEC4 bv02 = data_b_v4[(b_offset + iybs + iqs) / 4];
+    const B_TYPE_VEC4 bv13 = data_b_v4[(b_offset + iybs + iqs + y_offset) / 4];
+    const vec4 bv0 = vec4(bv02.x, bv13.x, bv02.y, bv13.y);
+    const vec4 bv1 = vec4(bv02.z, bv13.z, bv02.w, bv13.w);
 #else
-    B_TYPE_VEC4 bv0 = data_b_v4[(b_offset + iybs + iqs) / 4];
-    B_TYPE_VEC4 bv1 = data_b_v4[(b_offset + iybs + iqs) / 4 + 1];
-    FLOAT_TYPE b0 = FLOAT_TYPE(bv0.x);
-    FLOAT_TYPE b1 = FLOAT_TYPE(bv0.y);
-    FLOAT_TYPE b2 = FLOAT_TYPE(bv0.z);
-    FLOAT_TYPE b3 = FLOAT_TYPE(bv0.w);
-    FLOAT_TYPE b4 = FLOAT_TYPE(bv1.x);
-    FLOAT_TYPE b5 = FLOAT_TYPE(bv1.y);
-    FLOAT_TYPE b6 = FLOAT_TYPE(bv1.z);
-    FLOAT_TYPE b7 = FLOAT_TYPE(bv1.w);
+    const vec4 bv0 = vec4(data_b_v4[(b_offset + iybs + iqs) / 4]);
+    const vec4 bv1 = vec4(data_b_v4[(b_offset + iybs + iqs) / 4 + 1]);
 #endif
 #else
     // Check if the second of the pair of elements is OOB, and don't fetch B or
@@ -67,22 +53,29 @@ void iter(inout FLOAT_TYPE temp[NUM_ROWS], const uint first_row, const uint num_
         b1 = FLOAT_TYPE(data_b[b_offset + iybs + iqs + y_offset]);
     }
 #endif
+    uint ibi = first_row*p.ncols;
     [[unroll]] for (uint n = 0; n < num_rows; ++n) {
-        const uint ib = ((first_row + n)*p.ncols + col)/QUANT_K; // block index
+        const uint ib = (ibi + col)/QUANT_K; // block index
+        ibi += p.ncols;
 
 #if K_PER_ITER == 8
-        const vec4 v = dequantize4(ib, iqs, a_offset);
-        const vec4 v2 = dequantize4(ib, iqs+(4/QUANT_R), a_offset);
+        vec4 v = dequantize4(ib, iqs, a_offset);
+        vec4 v2 = dequantize4(ib, iqs+(4/QUANT_R), a_offset);
+
+        const vec2 dm = get_dm(ib, a_offset);
+        if (dm.y != 0) { // quant has min component
+            v = v * dm.x + dm.y;
+            v2 = v2 * dm.x + dm.y;
+        }
 
         // matrix multiplication
-        temp[n] = fma(FLOAT_TYPE(v.x), b0, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v.y), b1, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v.z), b2, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v.w), b3, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v2.x), b4, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v2.y), b5, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v2.z), b6, temp[n]);
-        temp[n] = fma(FLOAT_TYPE(v2.w), b7, temp[n]);
+        FLOAT_TYPE rowtmp = dot(bv0, v);
+        rowtmp += dot(bv1, v2);
+
+        if (dm.y == 0)
+            rowtmp *= dm.x;
+
+        temp[n] += rowtmp;
 #else
         const vec2 v = dequantize(ib, iqs, a_offset);
 
