@@ -1745,7 +1745,8 @@ class DeciModel(Model):
             special_vocab.add_to_gguf(self.gguf_writer)
         else:
             # DeciLM-7B
-            self._set_vocab_gpt2()
+            self._set_vocab_llama_hf()
+#            self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
         if "block_configs" in self.hparams: # Llama-3_1-Nemotron-51B
@@ -1764,8 +1765,8 @@ class DeciModel(Model):
             self.gguf_writer.add_file_type(self.ftype)
         else: # DeciLM-7B
             super().set_gguf_parameters()
-            if "num_key_value_heads_per_layer" in hparams: # DeciLM-7B
-                self._num_kv_heads: list[int] = hparams["num_key_value_heads_per_layer"]
+            if "num_key_value_heads_per_layer" in self.hparams: # DeciLM-7B
+                self._num_kv_heads: list[int] = self.hparams["num_key_value_heads_per_layer"]
                 assert self.block_count == len(self._num_kv_heads)
                 self.gguf_writer.add_head_count_kv(self._num_kv_heads)
         hparams = self.hparams
