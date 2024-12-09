@@ -29,6 +29,8 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <chrono>
+#include <variant>
 
 using json = nlohmann::ordered_json;
 
@@ -1162,6 +1164,16 @@ struct server_metrics {
     }
 };
 
+struct Signal {
+    int number;
+};
+
+struct StandbyTimeout {};
+
+using ShutdownReason = std::variant<Signal, StandbyTimeout>;
+
+std::function<void(ShutdownReason)> shutdown_handler;
+
 struct server_queue {
     int id = 0;
     bool running;
@@ -1258,7 +1270,7 @@ struct server_queue {
      * - Check if multitask is finished
      * - Update all slots
      */
-    void start_loop() {
+    void start_loop(int standby_timeout) {
         running = true;
 
         while (true) {
@@ -1291,9 +1303,19 @@ struct server_queue {
                         QUE_DBG("%s", "terminate\n");
                         return;
                     }
-                    condition_tasks.wait(lock, [&]{
-                        return (!queue_tasks.empty() || !running);
-                    });
+                    const auto pred = [&] {
+                            return (!queue_tasks.empty() || !running);
+                    };
+                    if (standby_timeout > 0) {
+                        if (!condition_tasks.wait_for(lock, std::chrono::seconds(standby_timeout), pred)) {
+                            lock.release()->unlock(); // unlock the unique_lock, before calling the shutdown_handler, as it tries to lock it
+                            QUE_INF("%s", "stand-by timeout reached\n");
+                            shutdown_handler(StandbyTimeout{});
+                            break;
+                        }
+                    } else {
+                        condition_tasks.wait(lock, pred);
+                    }
                 }
             }
         }
@@ -2884,7 +2906,6 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
     LOG_DBG("response: %s\n", res.body.c_str());
 }
 
-std::function<void(int)> shutdown_handler;
 std::atomic_flag is_terminating = ATOMIC_FLAG_INIT;
 
 inline void signal_handler(int signal) {
@@ -2895,7 +2916,7 @@ inline void signal_handler(int signal) {
         exit(1);
     }
 
-    shutdown_handler(signal);
+    shutdown_handler(Signal{ signal });
 }
 
 int main(int argc, char ** argv) {
@@ -3935,13 +3956,13 @@ int main(int argc, char ** argv) {
     ctx_server.queue_tasks.on_update_slots(std::bind(
                 &server_context::update_slots, &ctx_server));
 
-    shutdown_handler = [&](int) {
+    shutdown_handler = [&](ShutdownReason) {
         ctx_server.queue_tasks.terminate();
     };
 
     LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
 
-    ctx_server.queue_tasks.start_loop();
+    ctx_server.queue_tasks.start_loop(params.standby_timeout);
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct sigaction sigint_action;

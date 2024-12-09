@@ -1786,6 +1786,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CACHE_REUSE"));
     add_opt(common_arg(
+        {"--standby-timeout"}, "N",
+        string_format("time that must pass since a request has been served, before the server stops automatically (default: %d)", params.standby_timeout),
+        [](common_params & params, int value) {
+            params.standby_timeout = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_STANDBY_TIMEOUT"));
+    add_opt(common_arg(
         {"--metrics"},
         string_format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),
         [](common_params & params) {
