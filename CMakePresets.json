@@ -11,18 +11,6 @@
             "CMAKE_INSTALL_RPATH": "$ORIGIN;$ORIGIN/.."
         }
     },
-    {
-        "name":  "clang-ninja",
-        "hidden": true,
-        "generator":   "Ninja",
-        "binaryDir":   "${sourceDir}/build-${presetName}",
-        "cacheVariables": {
-            "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-            "CMAKE_C_COMPILER":"clang.exe",
-            "CMAKE_CXX_COMPILER":"clang++.exe",
-            "CMAKE_INSTALL_RPATH": "$ORIGIN;$ORIGIN/.."
-        }
-    },
 
     {
         "name": "sycl-base",
@@ -43,6 +31,13 @@
     { "name": "static",   "hidden": true, "cacheVariables": { "GGML_STATIC":      "ON" } },
     { "name": "sycl_f16", "hidden": true, "cacheVariables": { "GGML_SYCL_F16":    "ON" } },
     { "name": "vulkan",   "hidden": true, "cacheVariables": { "GGML_VULKAN":      "ON" } },
+
+    {
+        "name": "x64-windows-llvm", "hidden": true,
+        "cacheVariables": {
+            "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/x64-windows-llvm.cmake"
+        }
+    },
 
     {
         "name": "arm64-windows-msvc", "hidden": true,
@@ -83,14 +78,14 @@
     { "name": "arm64-windows-msvc-release", "inherits": [ "base", "arm64-windows-msvc",  "reldbg" ] },
     { "name": "arm64-windows-msvc+static-release", "inherits": [ "base", "arm64-windows-msvc",  "reldbg", "static" ] },
 
+    { "name": "x64-windows-llvm-debug", "inherits": [ "base", "x64-windows-llvm", "debug" ] },
+    { "name": "x64-windows-llvm-release", "inherits": [ "base", "x64-windows-llvm", "release" ] },
+    { "name": "x64-windows-llvm-reldbg", "inherits": [ "base", "x64-windows-llvm", "reldbg" ] },
+    { "name": "x64-windows-llvm+static-release", "inherits": [ "base", "x64-windows-llvm", "reldbg", "static" ] },
+
     { "name": "x64-windows-msvc-debug", "inherits": [ "base", "debug" ] },
     { "name": "x64-windows-msvc-release", "inherits": [ "base", "reldbg" ] },
     { "name": "x64-windows-msvc+static-release", "inherits": [ "base", "reldbg", "static" ] },
-
-    { "name": "x64-windows-llvm-debug"  , "inherits": [ "clang-ninja", "debug"   ] },
-    { "name": "x64-windows-llvm-reldbg", "inherits": [ "clang-ninja", "reldbg" ] },
-    { "name": "x64-windows-llvm-release", "inherits": [ "clang-ninja", "release" ] },
-    { "name": "x64-windows-llvm+static-release", "inherits": [ "clang-ninja", "reldbg", "static" ] },
 
     { "name": "x64-windows-sycl-debug", "inherits": [ "sycl-base", "debug" ] },
     { "name": "x64-windows-sycl-debug-f16", "inherits": [ "sycl-base", "debug", "sycl_f16" ] },
