@@ -1164,15 +1164,15 @@ struct server_metrics {
     }
 };
 
-struct Signal {
+struct termination_signal {
     int number;
 };
 
-struct StandbyTimeout {};
+struct standby_timeout {};
 
-using ShutdownReason = std::variant<Signal, StandbyTimeout>;
+using shutdown_reason = std::variant<termination_signal, standby_timeout>;
 
-std::function<void(ShutdownReason)> shutdown_handler;
+std::function<void(shutdown_reason)> shutdown_handler;
 
 struct server_queue {
     int id = 0;
@@ -1310,7 +1310,7 @@ struct server_queue {
                         if (!condition_tasks.wait_for(lock, std::chrono::seconds(standby_timeout), pred)) {
                             lock.release()->unlock(); // unlock the unique_lock, before calling the shutdown_handler, as it tries to lock it
                             QUE_INF("%s", "stand-by timeout reached\n");
-                            shutdown_handler(StandbyTimeout{});
+                            shutdown_handler(::standby_timeout{});
                             break;
                         }
                     } else {
@@ -2916,7 +2916,7 @@ inline void signal_handler(int signal) {
         exit(1);
     }
 
-    shutdown_handler(Signal{ signal });
+    shutdown_handler(termination_signal{ signal });
 }
 
 int main(int argc, char ** argv) {
@@ -3956,7 +3956,7 @@ int main(int argc, char ** argv) {
     ctx_server.queue_tasks.on_update_slots(std::bind(
                 &server_context::update_slots, &ctx_server));
 
-    shutdown_handler = [&](ShutdownReason) {
+    shutdown_handler = [&](shutdown_reason) {
         ctx_server.queue_tasks.terminate();
     };
 
