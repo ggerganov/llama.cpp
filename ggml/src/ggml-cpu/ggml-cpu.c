@@ -9216,6 +9216,7 @@ static void ggml_mrope_cache_init(
     float theta_e = theta_base_e;  // extra position id for vision encoder
     int sect_dims = sections[0] + sections[1] + sections[2] + sections[3];
     int sec_w = sections[1] + sections[0];
+    int sec_e = sections[2] + sec_w;
     GGML_ASSERT(sect_dims <= ne0);
     
     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
@@ -9223,16 +9224,18 @@ static void ggml_mrope_cache_init(
         
         int sector = (i0 / 2) % sect_dims;
         if (indep_sects) {
+            // compute theta independently for each dim sections
+            // (i.e. reset corresponding theta when `i0` go from one section to another)
             if (sector == 0) {
                 theta_t = theta_base_t;
             }
             else if (sector == sections[0]) {
                 theta_h = theta_base_h;;
             }
-            else if (sector == sections[1]) {
+            else if (sector == sec_w) {
                 theta_w = theta_base_w;
             }
-            else if (sector == sections[2]) {
+            else if (sector == sec_e) {
                 theta_e = theta_base_e;
             }
         }

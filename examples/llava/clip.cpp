@@ -666,17 +666,9 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             ctx0, inp, 
             hidden_size * 2, patches_w / 2, 2, batch_size * (patches_h / 2));
         inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 0, 2, 1, 3));
-        // inp = ggml_reshape_2d(
-        //     ctx0, inp, 
-        //     hidden_size * 4, (patches_w / 2) * batch_size * (patches_h / 2));
         inp = ggml_reshape_3d(
             ctx0, inp, 
             hidden_size, patches_w * patches_h, batch_size);
-
-        // ggml_build_forward_expand(gf, inp);
-        // ggml_free(ctx0);
-
-        // return gf;
     }
     else {
         inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
@@ -830,11 +822,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         embeddings = cur;
 
     }
-    
-    // ggml_build_forward_expand(gf, embeddings);
-    // ggml_free(ctx0);
-
-    // return gf;
 
     // post-layernorm
     if (ctx->has_post_norm) {
@@ -1100,11 +1087,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
         embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
-        
-        // // First LayerNorm
-        // embeddings = ggml_norm(ctx0, embeddings, eps);
-        // embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.mm_1_w),
-        //                     model.mm_1_b);
 
         // GELU activation
         embeddings = ggml_gelu(ctx0, embeddings);
@@ -1112,11 +1094,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         // Second linear layer
         embeddings = ggml_mul_mat(ctx0, model.mm_1_w, embeddings);
         embeddings = ggml_add(ctx0, embeddings, model.mm_1_b);
-
-        // // Second LayerNorm
-        // embeddings = ggml_norm(ctx0, embeddings, eps);
-        // embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.mm_4_w),
-        //                     model.mm_4_b);
     }
 
     // build the graph
