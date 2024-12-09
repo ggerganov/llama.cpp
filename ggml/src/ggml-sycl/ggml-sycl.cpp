@@ -2640,6 +2640,7 @@ static void ggml_sycl_op_pool2d(ggml_backend_sycl_context & ctx, const ggml_tens
 
     (void) src1;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2657,6 +2658,7 @@ inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2676,6 +2678,7 @@ inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, const ggml_te
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2697,6 +2700,7 @@ inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, const ggml_ten
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2716,6 +2720,7 @@ inline void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, const ggml_tens
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_diag_mask_inf(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2738,6 +2743,7 @@ inline void ggml_sycl_op_diag_mask_inf(ggml_backend_sycl_context & ctx, const gg
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -2761,6 +2767,7 @@ inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, const ggml_tenso
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -2786,6 +2793,7 @@ inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, const ggml_tenso
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 static void ggml_sycl_set_peer_access(const int n_tokens, int main_device) {

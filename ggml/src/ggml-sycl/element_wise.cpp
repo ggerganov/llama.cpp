@@ -237,7 +237,7 @@ void upscale_f32(const float  *x, float *dst, const int nb00, const int nb01,
     int i02 = i12 / sf2;
     int i03 = i13 / sf3;
 
-    dst[index] = *(float *)((char *)x + i03 * nb03 + i02 * nb02 + i01 * nb01 + i00 * nb00);
+    dst[index] = *(float *)((const char *)x + i03 * nb03 + i02 * nb02 + i01 * nb01 + i00 * nb00);
 }
 
 void pad_f32(const float  *x, float *dst, const int ne0, const int ne00, const int ne01, const int ne02,
@@ -523,6 +523,7 @@ inline void ggml_sycl_op_silu(ggml_backend_sycl_context & ctx, const ggml_tensor
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_gelu(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -538,6 +539,7 @@ inline void ggml_sycl_op_gelu(ggml_backend_sycl_context & ctx, const ggml_tensor
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 inline void ggml_sycl_op_gelu_quick(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
                                     const ggml_tensor *src1, ggml_tensor *dst,
@@ -553,6 +555,7 @@ inline void ggml_sycl_op_gelu_quick(ggml_backend_sycl_context & ctx, const ggml_
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_tanh(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -567,6 +570,7 @@ inline void ggml_sycl_op_tanh(ggml_backend_sycl_context & ctx, const ggml_tensor
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_relu(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -582,6 +586,7 @@ inline void ggml_sycl_op_relu(ggml_backend_sycl_context & ctx, const ggml_tensor
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_hardsigmoid(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -598,6 +603,7 @@ inline void ggml_sycl_op_hardsigmoid(ggml_backend_sycl_context & ctx, const ggml
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_hardswish(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -613,6 +619,7 @@ inline void ggml_sycl_op_hardswish(ggml_backend_sycl_context & ctx, const ggml_t
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_exp(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -628,6 +635,7 @@ inline void ggml_sycl_op_exp(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_log(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -643,6 +651,7 @@ inline void ggml_sycl_op_log(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_sigmoid(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -658,6 +667,7 @@ inline void ggml_sycl_op_sigmoid(ggml_backend_sycl_context & ctx, const ggml_ten
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_sqrt(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -673,6 +683,7 @@ inline void ggml_sycl_op_sqrt(ggml_backend_sycl_context & ctx, const ggml_tensor
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_sin(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -688,6 +699,7 @@ inline void ggml_sycl_op_sin(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_cos(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -703,6 +715,7 @@ inline void ggml_sycl_op_cos(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_step(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -718,6 +731,7 @@ inline void ggml_sycl_op_step(ggml_backend_sycl_context & ctx, const ggml_tensor
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_neg(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -733,6 +747,7 @@ inline void ggml_sycl_op_neg(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_leaky_relu(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -752,6 +767,7 @@ inline void ggml_sycl_op_leaky_relu(ggml_backend_sycl_context & ctx, const ggml_
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_sqr(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -767,6 +783,7 @@ inline void ggml_sycl_op_sqr(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_upscale(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -790,6 +807,7 @@ inline void ggml_sycl_op_upscale(ggml_backend_sycl_context & ctx, const ggml_ten
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_pad(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -808,6 +826,7 @@ inline void ggml_sycl_op_pad(ggml_backend_sycl_context & ctx, const ggml_tensor 
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_acc(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -828,6 +847,7 @@ inline void ggml_sycl_op_acc(ggml_backend_sycl_context & ctx, const ggml_tensor 
     acc_f32_sycl(src0_dd, src1_dd, dst_dd, ggml_nelements(dst), src1->ne[0], src1->ne[1], src1->ne[2], nb1, nb2, offset, main_stream);
 
     (void) dst;
+    (void) ctx;
 }
 
 inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,

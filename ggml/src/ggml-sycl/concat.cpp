@@ -47,7 +47,7 @@ static void concat_f32_dim1(const float *x, const float *y, float *dst,
   // operation
   int offset_dst = nidx + item_ct1.get_group(1) * ne0 +
                    item_ct1.get_group(0) * ne0 * item_ct1.get_group_range(1);
-  if (item_ct1.get_group(1) < ne01) { // src0
+  if (item_ct1.get_group(1) < (size_t) ne01) { // src0
     int offset_src =
         nidx + item_ct1.get_group(1) * ne0 + item_ct1.get_group(0) * ne0 * ne01;
     dst[offset_dst] = x[offset_src];
@@ -70,7 +70,7 @@ static void concat_f32_dim2(const float *x, const float *y, float *dst,
   // operation
   int offset_dst = nidx + item_ct1.get_group(1) * ne0 +
                    item_ct1.get_group(0) * ne0 * item_ct1.get_group_range(1);
-  if (item_ct1.get_group(0) < ne02) { // src0
+  if (item_ct1.get_group(0) < (size_t) ne02) { // src0
     int offset_src = nidx + item_ct1.get_group(1) * ne0 +
                      item_ct1.get_group(0) * ne0 * item_ct1.get_group_range(1);
     dst[offset_dst] = x[offset_src];

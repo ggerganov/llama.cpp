@@ -352,6 +352,7 @@ void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, const ggml_tensor* 
     (void)src1;
     (void)dst;
     (void)src1_dd;
+    (void) ctx;
 }
 
 void ggml_sycl_op_rms_norm(ggml_backend_sycl_context& ctx, const ggml_tensor* src0,

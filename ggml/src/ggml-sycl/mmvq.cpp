@@ -753,10 +753,10 @@ static void mul_mat_vec_iq2_xs_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, QK_WARP_SIZE);
     {
-
-        stream->submit([&](sycl::handler &cgh) {
-            auto iq2xs_grid_ptr_ct1 = &iq2xs_grid[0];
-            auto ksigns64_ptr_ct1 = &ksigns64[0];
+        stream->submit([&](sycl::handler & cgh) {
+            //TODO: What's the purpose of these?
+            //auto iq2xs_grid_ptr_ct1 = &iq2xs_grid[0];
+            //auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -780,8 +780,9 @@ static void mul_mat_vec_iq2_s_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq2xs_grid_ptr_ct1 = &iq2xs_grid[0];
-            auto ksigns64_ptr_ct1 = &ksigns64[0];
+            // TODO: What's the purpose of these?
+            // auto iq2xs_grid_ptr_ct1 = &iq2xs_grid[0];
+            // auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -805,8 +806,9 @@ static void mul_mat_vec_iq3_xxs_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq3xxs_grid_ptr_ct1 = &iq3xxs_grid[0];
-            auto ksigns64_ptr_ct1 = &ksigns64[0];
+            // TODO: What's the purpose of these?
+            // auto iq3xxs_grid_ptr_ct1 = &iq3xxs_grid[0];
+            // auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -830,7 +832,8 @@ static void mul_mat_vec_iq3_s_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq3s_grid_ptr_ct1 = &iq3s_grid[0];
+            // TODO: What's the purpose of this?
+            // auto iq3s_grid_ptr_ct1 = &iq3s_grid[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -854,8 +857,9 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq1s_grid_ptr_ct1 = &iq1s_grid_gpu[0];
-            auto ksigns64_ptr_ct1 = &ksigns64[0];
+            // TODO: What's the purpose of these?
+            // auto iq1s_grid_ptr_ct1 = &iq1s_grid_gpu[0];
+            // auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -954,7 +958,8 @@ void ggml_sycl_op_mul_mat_vec_q(
     const size_t q8_1_bs = QK8_1;
     // the main device has a larger memory buffer to hold the results from all GPUs
     // nrows_dst == nrows of the matrix that the kernel writes into
-    const int64_t nrows_dst = id == ctx.device ? ne00 : row_diff;
+    // TODO: nrows_dst is unused. Please check.
+    // const int64_t nrows_dst = id == ctx.device ? ne00 : row_diff;
     for (int i = 0; i < src1_ncols; i++)
     {
         const size_t src1_ddq_i_offset = i * src1_padded_col_size * q8_1_ts / q8_1_bs;
