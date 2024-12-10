@@ -28,6 +28,7 @@ class TensorNameMap:
             "transformer.token_embeddings",              # openelm
             "shared",                                    # t5
             "rwkv.embeddings",                           # rwkv
+            "backbone.embed",                            # outetts
         ),
 
         # Token type embeddings
@@ -42,6 +43,11 @@ class TensorNameMap:
             "emb_ln",                     # nomic-bert
             "transformer.norm",           # openelm
             "rwkv.blocks.0.pre_ln",       # rwkv
+            "backbone.norm.scale",        # outetts
+        ),
+
+        MODEL_TENSOR.TOKEN_EMBD_SHIFT: (
+            "backbone.norm.shift",        # outetts
         ),
 
         # Position embeddings
@@ -60,6 +66,7 @@ class TensorNameMap:
             "lm_head.linear",            # phi2
             "output_layer",              # chatglm
             "head",                      # rwkv
+            "head.out",                  # outetts
         ),
 
         # Output norm
@@ -80,6 +87,7 @@ class TensorNameMap:
             "transformer.norm",                        # openelm
             "model.norm",                              # nemotron
             "rwkv.ln_out",                             # rwkv
+            "backbone.final_layer_norm",               # outetts
         ),
 
         # Rope frequencies
@@ -90,6 +98,10 @@ class TensorNameMap:
 
         MODEL_TENSOR.ROPE_FACTORS_LONG: (),
         MODEL_TENSOR.ROPE_FACTORS_SHORT: (),
+
+        MODEL_TENSOR.HANN_WINDOW: (
+            "head.istft.window", # outetts
+        ),
     }
 
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
@@ -681,6 +693,8 @@ class TensorNameMap:
             "encoder.block.{bid}.layer.1.DenseReluDense.wo", # t5
         ),
 
+        ############################################################################
+        # TODO: these do not belong to block_mappings_cfg - move them to mappings_cfg
         MODEL_TENSOR.ENC_OUTPUT_NORM: (
             "encoder.final_layer_norm", # t5
         ),
@@ -692,6 +706,75 @@ class TensorNameMap:
 
         MODEL_TENSOR.CLS_OUT: (
             "classifier.out_proj", # roberta
+        ),
+        #############################################################################
+
+        MODEL_TENSOR.CONV_NEXT_DW: (
+            "backbone.convnext.{bid}.dwconv", # outetts
+        ),
+
+        MODEL_TENSOR.CONV_NEXT_NORM: (
+            "backbone.convnext.{bid}.norm.scale", # outetts
+        ),
+
+        MODEL_TENSOR.CONV_NEXT_SHIFT: (
+            "backbone.convnext.{bid}.norm.shift", # outetts
+        ),
+
+        MODEL_TENSOR.CONV_NEXT_PW1: (
+            "backbone.convnext.{bid}.pwconv1", # outetts
+        ),
+
+        MODEL_TENSOR.CONV_NEXT_PW2: (
+            "backbone.convnext.{bid}.pwconv2", # outetts
+        ),
+
+        MODEL_TENSOR.CONV_NEXT_GAMMA: (
+            "backbone.convnext.{bid}.gamma", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_CONV1: (
+            "backbone.pos_net.{bid}.conv1", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_CONV2: (
+            "backbone.pos_net.{bid}.conv2", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_NORM: (
+            "backbone.pos_net.{bid}.norm", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_NORM1: (
+            "backbone.pos_net.{bid}.norm1", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_NORM2: (
+            "backbone.pos_net.{bid}.norm2", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_ATTN_NORM: (
+            "backbone.pos_net.{bid}.norm", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_ATTN_Q: (
+            "backbone.pos_net.{bid}.q", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_ATTN_K: (
+            "backbone.pos_net.{bid}.k", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_ATTN_V: (
+            "backbone.pos_net.{bid}.v", # outetts
+        ),
+
+        MODEL_TENSOR.POS_NET_ATTN_OUT: (
+            "backbone.pos_net.{bid}.proj_out", # outetts
+        ),
+
+        MODEL_TENSOR.QNTZ_CBOOK_EMBD: (
+            "feature_extractor.encodec.quantizer.vq.layers.{bid}._codebook.embed", # outetts
         ),
     }
 

@@ -261,11 +261,13 @@ class MODEL_ARCH(IntEnum):
     GRANITE      = auto()
     GRANITE_MOE  = auto()
     CHAMELEON    = auto()
+    OUTETTS_VOC  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
     TOKEN_EMBD           = auto()
     TOKEN_EMBD_NORM      = auto()
+    TOKEN_EMBD_SHIFT     = auto()
     TOKEN_TYPES          = auto()
     POS_EMBD             = auto()
     OUTPUT               = auto()
@@ -370,6 +372,24 @@ class MODEL_TENSOR(IntEnum):
     ENC_OUTPUT_NORM      = auto()
     CLS                  = auto() # classifier
     CLS_OUT              = auto() # classifier output projection
+    CONV_NEXT_DW         = auto()
+    CONV_NEXT_NORM       = auto()
+    CONV_NEXT_SHIFT      = auto()
+    CONV_NEXT_PW1        = auto()
+    CONV_NEXT_PW2        = auto()
+    CONV_NEXT_GAMMA      = auto()
+    POS_NET_CONV1        = auto()
+    POS_NET_CONV2        = auto()
+    POS_NET_NORM         = auto()
+    POS_NET_NORM1        = auto()
+    POS_NET_NORM2        = auto()
+    POS_NET_ATTN_NORM    = auto()
+    POS_NET_ATTN_Q       = auto()
+    POS_NET_ATTN_K       = auto()
+    POS_NET_ATTN_V       = auto()
+    POS_NET_ATTN_OUT     = auto()
+    QNTZ_CBOOK_EMBD      = auto()
+    HANN_WINDOW          = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -425,11 +445,13 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GRANITE:        "granite",
     MODEL_ARCH.GRANITE_MOE:    "granitemoe",
     MODEL_ARCH.CHAMELEON:      "chameleon",
+    MODEL_ARCH.OUTETTS_VOC:    "outetts-voc",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.TOKEN_EMBD:                "token_embd",
     MODEL_TENSOR.TOKEN_EMBD_NORM:           "token_embd_norm",
+    MODEL_TENSOR.TOKEN_EMBD_SHIFT:          "token_embd_shift",
     MODEL_TENSOR.TOKEN_TYPES:               "token_types",
     MODEL_TENSOR.POS_EMBD:                  "position_embd",
     MODEL_TENSOR.OUTPUT_NORM:               "output_norm",
@@ -534,6 +556,24 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ENC_OUTPUT_NORM:           "enc.output_norm",
     MODEL_TENSOR.CLS:                       "cls",
     MODEL_TENSOR.CLS_OUT:                   "cls.output",
+    MODEL_TENSOR.CONV_NEXT_DW:              "conv_next.{bid}.dw",
+    MODEL_TENSOR.CONV_NEXT_NORM:            "conv_next.{bid}.norm",
+    MODEL_TENSOR.CONV_NEXT_SHIFT:           "conv_next.{bid}.shift",
+    MODEL_TENSOR.CONV_NEXT_PW1:             "conv_next.{bid}.pw1",
+    MODEL_TENSOR.CONV_NEXT_PW2:             "conv_next.{bid}.pw2",
+    MODEL_TENSOR.CONV_NEXT_GAMMA:           "conv_next.{bid}.gamma",
+    MODEL_TENSOR.POS_NET_CONV1:             "pos_net.{bid}.conv1",
+    MODEL_TENSOR.POS_NET_CONV2:             "pos_net.{bid}.conv2",
+    MODEL_TENSOR.POS_NET_NORM:              "pos_net.{bid}.norm",
+    MODEL_TENSOR.POS_NET_NORM1:             "pos_net.{bid}.norm1",
+    MODEL_TENSOR.POS_NET_NORM2:             "pos_net.{bid}.norm2",
+    MODEL_TENSOR.POS_NET_ATTN_NORM:         "pos_net.{bid}.attn_norm",
+    MODEL_TENSOR.POS_NET_ATTN_Q:            "pos_net.{bid}.attn_q",
+    MODEL_TENSOR.POS_NET_ATTN_K:            "pos_net.{bid}.attn_k",
+    MODEL_TENSOR.POS_NET_ATTN_V:            "pos_net.{bid}.attn_v",
+    MODEL_TENSOR.POS_NET_ATTN_OUT:          "pos_net.{bid}.attn_output",
+    MODEL_TENSOR.QNTZ_CBOOK_EMBD:           "qntz.cbook.{bid}.embd",
+    MODEL_TENSOR.HANN_WINDOW:               "hann_window",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -1371,6 +1411,31 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.OUTETTS_VOC: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.TOKEN_EMBD_SHIFT,
+        MODEL_TENSOR.CONV_NEXT_DW,
+        MODEL_TENSOR.CONV_NEXT_NORM,
+        MODEL_TENSOR.CONV_NEXT_SHIFT,
+        MODEL_TENSOR.CONV_NEXT_PW1,
+        MODEL_TENSOR.CONV_NEXT_PW2,
+        MODEL_TENSOR.CONV_NEXT_GAMMA,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.POS_NET_CONV1,
+        MODEL_TENSOR.POS_NET_CONV2,
+        MODEL_TENSOR.POS_NET_NORM,
+        MODEL_TENSOR.POS_NET_NORM1,
+        MODEL_TENSOR.POS_NET_NORM2,
+        MODEL_TENSOR.POS_NET_ATTN_NORM,
+        MODEL_TENSOR.POS_NET_ATTN_Q,
+        MODEL_TENSOR.POS_NET_ATTN_K,
+        MODEL_TENSOR.POS_NET_ATTN_V,
+        MODEL_TENSOR.POS_NET_ATTN_OUT,
+        MODEL_TENSOR.QNTZ_CBOOK_EMBD,
+        MODEL_TENSOR.HANN_WINDOW,
     ],
     # TODO
 }
