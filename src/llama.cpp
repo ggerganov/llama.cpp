@@ -3061,6 +3061,15 @@ struct llama_model {
     struct ggml_tensor * posnet_0_norm1 = nullptr;
     struct ggml_tensor * posnet_0_norm1_b = nullptr;
 
+    struct ggml_tensor * posnet_0_conv1 = nullptr;
+    struct ggml_tensor * posnet_0_conv1_b = nullptr;
+
+    struct ggml_tensor * posnet_0_norm2 = nullptr;
+    struct ggml_tensor * posnet_0_norm2_b = nullptr;
+
+    struct ggml_tensor * posnet_0_conv2 = nullptr;
+    struct ggml_tensor * posnet_0_conv2_b = nullptr;
+
     std::vector<llama_layer> layers;
 
     // gguf metadata
@@ -7362,6 +7371,9 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_DEC_CROSS_ATTN_REL_B,       {LLM_TENSOR_LAYER_REPEATING, GGML_OP_NONE}},
     {LLM_TENSOR_CONV1D,                     {LLM_TENSOR_LAYER_INPUT,     GGML_OP_IM2COL}},
     {LLM_TENSOR_POS_NET_NORM1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_POS_NET_NORM2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_POS_NET_CONV1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
+    {LLM_TENSOR_POS_NET_CONV2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -9445,6 +9457,15 @@ static bool llm_load_tensors(
 
                     model.posnet_0_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 0), {768}, 0);
                     model.posnet_0_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   0), {768}, 0);
+
+                    model.posnet_0_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 0), {3, 768, 768}, 0);
+                    model.posnet_0_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   0), {768}, 0);
+
+                    model.posnet_0_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 0), {768}, 0);
+                    model.posnet_0_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   0), {768}, 0);
+
+                    model.posnet_0_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 0), {3, 768, 768}, 0);
+                    model.posnet_0_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   0), {768}, 0);
 
                     // output
                     model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
@@ -17046,6 +17067,11 @@ struct llm_build_context {
                 ggml_reshape_2d(ctx0, model.posnet_0_norm1,   1, model.posnet_0_norm1->ne[0]),
                 ggml_reshape_2d(ctx0, model.posnet_0_norm1_b, 1, model.posnet_0_norm1_b->ne[0]),
                 LLM_NORM_GROUP, cb, 0);
+
+        cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+
+        cur = ggml_conv_1d_ph(ctx0, model.posnet_0_conv1, cur, 1, 1);
+        cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_0_conv1_b, 1, model.posnet_0_conv1_b->ne[0]));
 
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 
