@@ -237,7 +237,7 @@ void upscale_f32(const float  *x, float *dst, const int nb00, const int nb01,
     int i02 = i12 / sf2;
     int i03 = i13 / sf3;
 
-    dst[index] = *(float *)((const char *)x + i03 * nb03 + i02 * nb02 + i01 * nb01 + i00 * nb00);
+    dst[index] = *(const float *)((const char *)x + i03 * nb03 + i02 * nb02 + i01 * nb01 + i00 * nb00);
 }
 
 void pad_f32(const float  *x, float *dst, const int ne0, const int ne00, const int ne01, const int ne02,
@@ -251,8 +251,7 @@ void pad_f32(const float  *x, float *dst, const int ne0, const int ne00, const i
     // operation
     int offset_dst = nidx + item_ct1.get_group(1) * ne0 +
                      item_ct1.get_group(0) * ne0 * item_ct1.get_group_range(1);
-    if (nidx < ne00 && item_ct1.get_group(1) < ne01 &&
-        item_ct1.get_group(0) < ne02) {
+    if (nidx < ne00 && item_ct1.get_group(1) < (size_t) ne01 && item_ct1.get_group(0) < (size_t) ne02) {
         int offset_src = nidx + item_ct1.get_group(1) * ne00 +
                          item_ct1.get_group(0) * ne00 * ne01;
             dst[offset_dst] = x[offset_src];

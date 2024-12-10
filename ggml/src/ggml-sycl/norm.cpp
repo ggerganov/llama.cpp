@@ -32,7 +32,7 @@ static void norm_f32(const float* x, float* dst, const int ncols, const float ep
         item_ct1.barrier(sycl::access::fence_space::local_space);
         mean_var = 0.f;
         int nreduce = nwarps / WARP_SIZE;
-        for (size_t i = 0; i < nreduce; i += 1)
+        for (size_t i = 0; i < (size_t) nreduce; i += 1)
         {
             mean_var += s_sum[lane_id + i * WARP_SIZE];
         }
@@ -86,7 +86,7 @@ static void group_norm_f32(const float* x, float* dst, const int group_size, con
         */
         item_ct1.barrier();
         tmp = 0.f;
-        for (size_t i = 0; i < nreduce; i += 1)
+        for (size_t i = 0; i < (size_t) nreduce; i += 1)
         {
             tmp += s_sum[lane_id + i * WARP_SIZE];
         }
@@ -121,7 +121,7 @@ static void group_norm_f32(const float* x, float* dst, const int group_size, con
         */
         item_ct1.barrier();
         tmp = 0.f;
-        for (size_t i = 0; i < nreduce; i += 1)
+        for (size_t i = 0; i < (size_t) nreduce; i += 1)
         {
             tmp += s_sum[lane_id + i * WARP_SIZE];
         }

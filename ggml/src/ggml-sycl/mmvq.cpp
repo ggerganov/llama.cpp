@@ -1031,4 +1031,5 @@ void ggml_sycl_op_mul_mat_vec_q(
     (void) src1;
     (void) dst;
     (void) src1_ddf_i;
+    (void) ctx;
 }
