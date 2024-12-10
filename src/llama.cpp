@@ -3581,8 +3581,17 @@ static bool llama_kv_cache_init(
             return false;
         }
 
-        ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k_gqa*kv_size);
-        ggml_tensor * v = ggml_new_tensor_1d(ctx, type_v, n_embd_v_gqa*kv_size);
+        // If this is a hybrid model, there will be two caches, one for
+        // recurrent layers and one for attention layers. The tensors in the
+        // cache only need to be fully allocated for the correct layers.
+        const uint32_t tensor_dim = (
+            (cache.recurrent && hparams.recurrent_layer(i)) ||
+            (!cache.recurrent && !hparams.recurrent_layer(i))
+            ? kv_size : 0
+        );
+
+        ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k_gqa*tensor_dim);
+        ggml_tensor * v = ggml_new_tensor_1d(ctx, type_v, n_embd_v_gqa*tensor_dim);
         ggml_format_name(k, "cache_k_l%d", i);
         ggml_format_name(v, "cache_v_l%d", i);
         cache.k_l.push_back(k);
@@ -20451,7 +20460,7 @@ struct llama_context * llama_new_context_with_model(
             for (auto & v : ctx->kv_hybrid.v_l) {
                 memory_size_v += ggml_nbytes(v);
             }
-            LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
+            LLAMA_LOG_INFO("%s: KV hybrid size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
                       (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
                 ggml_type_name(type_k), (float)memory_size_k / (1024.0f * 1024.0f),
                 ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
