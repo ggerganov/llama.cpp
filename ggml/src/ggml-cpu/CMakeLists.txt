@@ -111,70 +111,35 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             endif ()
 
             set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_PREV})
-        elseif (APPLE)
-            if (GGML_NATIVE)
-                set(USER_PROVIDED_MARCH FALSE)
-                foreach(flag_var IN ITEMS CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_REQUIRED_FLAGS)
-                    if ("${${flag_var}}" MATCHES "-march=[a-zA-Z0-9+._-]+")
-                        set(USER_PROVIDED_MARCH TRUE)
-                        break()
-                    endif()
-                endforeach()
-
-                if (NOT USER_PROVIDED_MARCH)
-                    set(MARCH_FLAGS "-march=armv8.2a")
-
-                    check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_DOTPROD)
-                    if (GGML_COMPILER_SUPPORT_DOTPROD)
-                        set(MARCH_FLAGS "${MARCH_FLAGS}+dotprod")
-                        list(APPEND ARCH_DEFINITIONS __ARM_FEATURE_DOTPROD)
-
-                        message(STATUS "ARM feature DOTPROD enabled")
-                    endif ()
-
-                    set(TEST_I8MM_FLAGS "-march=armv8.2a+i8mm")
-
-                    set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
-                    set(CMAKE_REQUIRED_FLAGS     "${CMAKE_REQUIRED_FLAGS} ${TEST_I8MM_FLAGS}")
-
-                    check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmmlaq_s32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_MATMUL_INT8)
-                    if (GGML_COMPILER_SUPPORT_MATMUL_INT8)
-                        set(MARCH_FLAGS "${MARCH_FLAGS}+i8mm")
-                        list(APPEND ARCH_DEFINITIONS __ARM_FEATURE_MATMUL_INT8)
-
-                        message(STATUS "ARM feature MATMUL_INT8 enabled")
-                    endif ()
-
-                    set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
-
-                    list(APPEND ARCH_FLAGS "${MARCH_FLAGS}")
-                endif ()
-            endif ()
         else()
-            check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
-            if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
-                list(APPEND ARCH_FLAGS -mfp16-format=ieee)
-            endif()
-            if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv6")
-                # Raspberry Pi 1, Zero
-                list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access)
-            endif()
-            if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
-                if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
-                    # Android armeabi-v7a
-                    list(APPEND ARCH_FLAGS -mfpu=neon-vfpv4 -mno-unaligned-access -funsafe-math-optimizations)
-                else()
-                    # Raspberry Pi 2
-                    list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
+            if (GGML_NATIVE)
+                list(APPEND ARCH_FLAGS -mcpu=native)
+            else()
+                check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
+                if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
+                    list(APPEND ARCH_FLAGS -mfp16-format=ieee)
                 endif()
-            endif()
-            if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
-                # Android arm64-v8a
-                # Raspberry Pi 3, 4, Zero 2 (32-bit)
-                list(APPEND ARCH_FLAGS -mno-unaligned-access)
-            endif()
-            if (GGML_SVE)
-                list(APPEND ARCH_FLAGS -march=armv8.6-a+sve)
+                if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv6")
+                    # Raspberry Pi 1, Zero
+                    list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access)
+                endif()
+                if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
+                    if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
+                        # Android armeabi-v7a
+                        list(APPEND ARCH_FLAGS -mfpu=neon-vfpv4 -mno-unaligned-access -funsafe-math-optimizations)
+                    else()
+                        # Raspberry Pi 2
+                        list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
+                    endif()
+                endif()
+                if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
+                    # Android arm64-v8a
+                    # Raspberry Pi 3, 4, Zero 2 (32-bit)
+                    list(APPEND ARCH_FLAGS -mno-unaligned-access)
+                endif()
+                if (GGML_SVE)
+                    list(APPEND ARCH_FLAGS -march=armv8.6-a+sve)
+                endif()
             endif()
         endif()
     elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LWR MATCHES "^(x86_64|i686|amd64|x64|win32)$" OR
