@@ -2178,5 +2178,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_MODEL_DRAFT"));
 
+    add_opt(common_arg(
+        {"-mv", "--model-vocoder"}, "FNAME",
+        "vocoder model for audio generation (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.vocoder.model = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
+
     return ctx_arg;
 }

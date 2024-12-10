@@ -221,17 +221,17 @@ class Model:
             self.gguf_writer.add_context_length(n_ctx)
             logger.info(f"gguf: context length = {n_ctx}")
 
-        n_embd = self.find_hparam(["hidden_size", "n_embd"])
-        self.gguf_writer.add_embedding_length(n_embd)
-        logger.info(f"gguf: embedding length = {n_embd}")
+        if (n_embd := self.find_hparam(["hidden_size", "n_embd"], optional=True)) is not None:
+            self.gguf_writer.add_embedding_length(n_embd)
+            logger.info(f"gguf: embedding length = {n_embd}")
 
         if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
             logger.info(f"gguf: feed forward length = {n_ff}")
 
-        n_head = self.find_hparam(["num_attention_heads", "n_head"])
-        self.gguf_writer.add_head_count(n_head)
-        logger.info(f"gguf: head count = {n_head}")
+        if (n_head := self.find_hparam(["num_attention_heads", "n_head"], optional=True)) is not None:
+            self.gguf_writer.add_head_count(n_head)
+            logger.info(f"gguf: head count = {n_head}")
 
         if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
             self.gguf_writer.add_head_count_kv(n_head_kv)
@@ -2050,7 +2050,8 @@ class OuteTTSVocoderModel(Model):
         self._set_vocab_none()
 
     def set_gguf_parameters(self):
-        self.gguf_writer.add_block_count(self.block_count)
+        super().set_gguf_parameters()
+        self.gguf_writer.add_vocab_size(self.hparams["vocab_size"])
 
 
 @Model.register("Qwen2MoeForCausalLM")

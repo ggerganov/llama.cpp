@@ -197,6 +197,7 @@ enum llm_arch {
     LLM_ARCH_GRANITE,
     LLM_ARCH_GRANITE_MOE,
     LLM_ARCH_CHAMELEON,
+    LLM_ARCH_OUTETTS_VOC,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -253,6 +254,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_GRANITE,         "granite"      },
     { LLM_ARCH_GRANITE_MOE,     "granitemoe"   },
     { LLM_ARCH_CHAMELEON,       "chameleon"    },
+    { LLM_ARCH_OUTETTS_VOC,     "outetts-voc"  },
     { LLM_ARCH_UNKNOWN,         "(unknown)"    },
 };
 
@@ -503,6 +505,7 @@ struct LLM_KV {
 enum llm_tensor {
     LLM_TENSOR_TOKEN_EMBD,
     LLM_TENSOR_TOKEN_EMBD_NORM,
+    LLM_TENSOR_TOKEN_EMBD_SHIFT,
     LLM_TENSOR_TOKEN_TYPES,
     LLM_TENSOR_POS_EMBD,
     LLM_TENSOR_OUTPUT,
@@ -609,6 +612,24 @@ enum llm_tensor {
     LLM_TENSOR_ENC_OUTPUT_NORM,
     LLM_TENSOR_CLS,
     LLM_TENSOR_CLS_OUT,
+    LLM_TENSOR_CONV1D,
+    LLM_TENSOR_CONV_NEXT_DW,
+    LLM_TENSOR_CONV_NEXT_NORM,
+    LLM_TENSOR_CONV_NEXT_SHIFT,
+    LLM_TENSOR_CONV_NEXT_PW1,
+    LLM_TENSOR_CONV_NEXT_PW2,
+    LLM_TENSOR_CONV_NEXT_GAMMA,
+    LLM_TENSOR_POS_NET_CONV1,
+    LLM_TENSOR_POS_NET_CONV2,
+    LLM_TENSOR_POS_NET_NORM,
+    LLM_TENSOR_POS_NET_NORM1,
+    LLM_TENSOR_POS_NET_NORM2,
+    LLM_TENSOR_POS_NET_ATTN_NORM,
+    LLM_TENSOR_POS_NET_ATTN_Q,
+    LLM_TENSOR_POS_NET_ATTN_K,
+    LLM_TENSOR_POS_NET_ATTN_V,
+    LLM_TENSOR_POS_NET_ATTN_OUT,
+    LLM_TENSOR_HANN_WINDOW,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_NAMES = {
@@ -1594,6 +1615,34 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
         },
     },
     {
+        LLM_ARCH_OUTETTS_VOC,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,        "token_embd" },
+            { LLM_TENSOR_TOKEN_EMBD_NORM,   "token_embd_norm" },
+            { LLM_TENSOR_TOKEN_EMBD_SHIFT,  "token_embd_shift" },
+            { LLM_TENSOR_CONV1D,            "conv1d" },
+            { LLM_TENSOR_CONV_NEXT_DW,      "conv_next.dw" },
+            { LLM_TENSOR_CONV_NEXT_NORM,    "conv_next.norm" },
+            { LLM_TENSOR_CONV_NEXT_SHIFT,   "conv_next.shift" },
+            { LLM_TENSOR_CONV_NEXT_PW1,     "conv_next.pw1" },
+            { LLM_TENSOR_CONV_NEXT_PW2,     "conv_next.pw2" },
+            { LLM_TENSOR_CONV_NEXT_GAMMA,   "conv_next.gamma" },
+            { LLM_TENSOR_OUTPUT_NORM,       "output_norm" },
+            { LLM_TENSOR_OUTPUT,            "output" },
+            { LLM_TENSOR_POS_NET_CONV1,     "pos_net.conv1" },
+            { LLM_TENSOR_POS_NET_CONV2,     "pos_net.conv2" },
+            { LLM_TENSOR_POS_NET_NORM,      "pos_net.norm" },
+            { LLM_TENSOR_POS_NET_NORM1,     "pos_net.norm1" },
+            { LLM_TENSOR_POS_NET_NORM2,     "pos_net.norm2" },
+            { LLM_TENSOR_POS_NET_ATTN_NORM, "pos_net.attn_norm" },
+            { LLM_TENSOR_POS_NET_ATTN_Q,    "pos_net.attn_q" },
+            { LLM_TENSOR_POS_NET_ATTN_K,    "pos_net.attn_k" },
+            { LLM_TENSOR_POS_NET_ATTN_V,    "pos_net.attn_v" },
+            { LLM_TENSOR_POS_NET_ATTN_OUT,  "pos_net.attn_output" },
+            { LLM_TENSOR_HANN_WINDOW,       "hann_window" },
+        },
+    },
+    {
         LLM_ARCH_UNKNOWN,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
@@ -2489,7 +2538,7 @@ struct llama_hparams {
     bool use_par_res;
     bool swin_norm;
 
-    uint32_t n_vocab;
+    uint32_t n_vocab = 0;
     uint32_t n_ctx_train; // context size the model was trained on
     uint32_t n_embd;
     uint32_t n_layer;
@@ -3004,6 +3053,9 @@ struct llama_model {
     struct ggml_tensor * cls_b = nullptr;
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
+
+    // quantizer
+    struct ggml_tensor * qntz_cbook_embd = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -5519,7 +5571,7 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_GENERAL_NAME, model.name, false);
 
     // get hparams kv
-    ml.get_key(LLM_KV_VOCAB_SIZE, hparams.n_vocab, false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab);
+    ml.get_key(LLM_KV_VOCAB_SIZE, hparams.n_vocab, false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab, false);
 
     // everything past this point is not vocab-related
     if (hparams.vocab_only) {
@@ -5545,8 +5597,8 @@ static void llm_load_hparams(
     std::fill(hparams.n_head_kv_arr.begin(), hparams.n_head_kv_arr.end(), 0);
     std::fill(hparams.n_ff_arr.begin(),      hparams.n_ff_arr.end(),      0);
 
-    ml.get_key_or_arr(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff_arr,   hparams.n_layer);
-    ml.get_key_or_arr(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head_arr, hparams.n_layer);
+    ml.get_key_or_arr(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff_arr,   hparams.n_layer, false);
+    ml.get_key_or_arr(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head_arr, hparams.n_layer, false);
 
     // n_head_kv is optional, default to n_head
     hparams.n_head_kv_arr = hparams.n_head_arr;
@@ -6320,7 +6372,7 @@ static void llm_load_vocab(
         ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_model);
         ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
 
-        if (tokenizer_model == "no_vocab") {
+        if (tokenizer_model == "no_vocab" || tokenizer_model == "none") {
             vocab.type = LLAMA_VOCAB_TYPE_NONE;
 
             // default special tokens
@@ -9336,9 +9388,9 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_CHAMELEON:
                 {
-                 model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
+                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
 
-                 // output
+                    // output
                     model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd}, 0);
                     model.output      = create_tensor(tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
                     // if output is NULL, init from the input tok embed
@@ -9366,6 +9418,10 @@ static bool llm_load_tensors(
                         layer.ffn_down = create_tensor(tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, 0);
                         layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, 0);
                     }
+                } break;
+            case LLM_ARCH_OUTETTS_VOC:
+                {
+                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
                 } break;
             default:
                 throw std::runtime_error("unknown architecture");
@@ -20383,6 +20439,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_T5ENCODER:
         case LLM_ARCH_JAIS:
         case LLM_ARCH_RWKV6:
+        case LLM_ARCH_OUTETTS_VOC:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values

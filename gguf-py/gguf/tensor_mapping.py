@@ -28,7 +28,7 @@ class TensorNameMap:
             "transformer.token_embeddings",              # openelm
             "shared",                                    # t5
             "rwkv.embeddings",                           # rwkv
-            "backbone.embed",                            # outetts
+            "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed" # outetts
         ),
 
         # Token type embeddings
@@ -101,6 +101,10 @@ class TensorNameMap:
 
         MODEL_TENSOR.HANN_WINDOW: (
             "head.istft.window", # outetts
+        ),
+
+        MODEL_TENSOR.CONV1D: (
+            "backbone.embed", # roberta
         ),
     }
 
@@ -771,10 +775,6 @@ class TensorNameMap:
 
         MODEL_TENSOR.POS_NET_ATTN_OUT: (
             "backbone.pos_net.{bid}.proj_out", # outetts
-        ),
-
-        MODEL_TENSOR.QNTZ_CBOOK_EMBD: (
-            "feature_extractor.encodec.quantizer.vq.layers.{bid}._codebook.embed", # outetts
         ),
     }
 

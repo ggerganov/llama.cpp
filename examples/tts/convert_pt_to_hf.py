@@ -84,6 +84,10 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
             if match:
                new_key = f"backbone.pos_net.{match.group(1)}.norm.{match.group(2)}"
 
+        # "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed" -> "backbone.embedding.weight"
+        if new_key == "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed":
+            new_key = "backbone.embedding.weight"
+
         size_mb = value.element_size() * value.nelement() / (1024 * 1024)
         print(f"{size_mb:8.2f} MB - {new_key}: {value.shape}")
 
@@ -132,6 +136,9 @@ config = {
     "architectures": [
         "OuteTTSVocoder"
     ],
+    "hidden_size": 512,
+    "vocab_size": 4096,
+    "max_position_embeddings": 8192, # ?
     "num_hidden_layers": 12
 }
 
