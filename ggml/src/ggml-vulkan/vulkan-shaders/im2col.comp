@@ -1,6 +1,11 @@
 #version 450
 
 #extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_spirv_intrinsics: enable
+
+#if RTE16
+spirv_execution_mode(capabilities = [4467], 4462, 16); // RoundingModeRTE, 16 bits
+#endif
 
 layout (push_constant) uniform parameter
 {
