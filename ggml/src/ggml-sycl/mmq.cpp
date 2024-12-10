@@ -13,10 +13,7 @@
 #include "mmq.hpp"
 #include "vecdotq.hpp"
 
-// Just to make the compiler happy
-// TODO: Remove it when needed
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdivision-by-zero"
+
 
 typedef void (*allocate_tiles_sycl_t)(
     int** x_ql,
@@ -3034,4 +3031,3 @@ catch (sycl::exception const &exc) {
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
-#pragma clang diagnostic pop
