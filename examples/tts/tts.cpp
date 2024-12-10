@@ -88,6 +88,7 @@ int main(int argc, char ** argv) {
     ctx_ttc = llama_init_ttc.context;
 
     params.model = params.vocoder.model;
+    params.embedding = true;
 
     common_init_result llama_init_cts = common_init_from_params(params);
     model_cts = llama_init_cts.model;
@@ -146,6 +147,9 @@ int main(int argc, char ** argv) {
         LOG_INF("%s: prompt audio size: %d\n", __func__, (int) prompt_inp.size());
     }
 
+    for (auto & token : prompt_inp) {
+        token -= 151672;
+    }
 
     llama_batch batch = llama_batch_init(prompt_inp.size(), 0, 1);
 
@@ -155,22 +159,27 @@ int main(int argc, char ** argv) {
     }
     GGML_ASSERT(batch.n_tokens == (int) prompt_inp.size());
 
-    if (llama_decode(ctx_ttc, batch) != 0) {
+    if (llama_decode(ctx_cts, batch) != 0) {
         LOG_ERR("%s: llama_decode() failed\n", __func__);
         return 1;
     }
 
-    llama_synchronize(ctx_ttc);
+    llama_synchronize(ctx_cts);
 
     LOG_INF("%s: time for prompt: %.3f ms\n", __func__, (ggml_time_us() - t_main_start) / 1000.0f);
 
-    const float * embd = llama_get_embeddings(ctx_ttc);
+    const float * embd = llama_get_embeddings(ctx_cts);
 
     LOG("result:\n");
     for (int i = 0; i < 10; ++i) {
         LOG("%8.3f ", embd[i]);
     }
     LOG("\n");
+    double sum = 0.0;
+    for (int i = 0; i < 261*512; ++i) {
+        sum += embd[i];
+    }
+    LOG("sum: %f\n", sum);
 
     fprintf(stderr, "\n");
 

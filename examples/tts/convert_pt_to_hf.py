@@ -138,6 +138,7 @@ config = {
     ],
     "hidden_size": 512,
     "vocab_size": 4096,
+    "n_head": 1,
     "max_position_embeddings": 8192, # ?
     "num_hidden_layers": 12
 }
