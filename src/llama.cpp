@@ -3055,9 +3055,11 @@ struct llama_model {
     struct ggml_tensor * cls_out_b = nullptr;
 
     // outetts vocoder
+    // TODO: dedup
     struct ggml_tensor * conv_1d = nullptr;
     struct ggml_tensor * conv_1d_b = nullptr;
 
+    // resnet 0
     struct ggml_tensor * posnet_0_norm1 = nullptr;
     struct ggml_tensor * posnet_0_norm1_b = nullptr;
 
@@ -3070,6 +3072,7 @@ struct llama_model {
     struct ggml_tensor * posnet_0_conv2 = nullptr;
     struct ggml_tensor * posnet_0_conv2_b = nullptr;
 
+    // resnet 1
     struct ggml_tensor * posnet_1_norm1 = nullptr;
     struct ggml_tensor * posnet_1_norm1_b = nullptr;
 
@@ -3081,6 +3084,48 @@ struct llama_model {
 
     struct ggml_tensor * posnet_1_conv2 = nullptr;
     struct ggml_tensor * posnet_1_conv2_b = nullptr;
+
+    // attn 2
+    struct ggml_tensor * posnet_2_attn_norm = nullptr;
+    struct ggml_tensor * posnet_2_attn_norm_b = nullptr;
+
+    struct ggml_tensor * posnet_2_attn_q = nullptr;
+    struct ggml_tensor * posnet_2_attn_q_b = nullptr;
+
+    struct ggml_tensor * posnet_2_attn_k = nullptr;
+    struct ggml_tensor * posnet_2_attn_k_b = nullptr;
+
+    struct ggml_tensor * posnet_2_attn_v = nullptr;
+    struct ggml_tensor * posnet_2_attn_v_b = nullptr;
+
+    struct ggml_tensor * posnet_2_attn_o = nullptr;
+    struct ggml_tensor * posnet_2_attn_o_b = nullptr;
+
+    // resnet 3
+    struct ggml_tensor * posnet_3_norm1 = nullptr;
+    struct ggml_tensor * posnet_3_norm1_b = nullptr;
+
+    struct ggml_tensor * posnet_3_conv1 = nullptr;
+    struct ggml_tensor * posnet_3_conv1_b = nullptr;
+
+    struct ggml_tensor * posnet_3_norm2 = nullptr;
+    struct ggml_tensor * posnet_3_norm2_b = nullptr;
+
+    struct ggml_tensor * posnet_3_conv2 = nullptr;
+    struct ggml_tensor * posnet_3_conv2_b = nullptr;
+
+    // resnet 4
+    struct ggml_tensor * posnet_4_norm1 = nullptr;
+    struct ggml_tensor * posnet_4_norm1_b = nullptr;
+
+    struct ggml_tensor * posnet_4_conv1 = nullptr;
+    struct ggml_tensor * posnet_4_conv1_b = nullptr;
+
+    struct ggml_tensor * posnet_4_norm2 = nullptr;
+    struct ggml_tensor * posnet_4_norm2_b = nullptr;
+
+    struct ggml_tensor * posnet_4_conv2 = nullptr;
+    struct ggml_tensor * posnet_4_conv2_b = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -7386,6 +7431,11 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_POS_NET_NORM2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
     {LLM_TENSOR_POS_NET_CONV1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
     {LLM_TENSOR_POS_NET_CONV2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
+    {LLM_TENSOR_POS_NET_ATTN_NORM,          {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_POS_NET_ATTN_Q,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_POS_NET_ATTN_K,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_POS_NET_ATTN_V,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_POS_NET_ATTN_OUT,           {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -9490,6 +9540,45 @@ static bool llm_load_tensors(
 
                     model.posnet_1_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 1), {3, 768, 768}, 0);
                     model.posnet_1_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   1), {768}, 0);
+
+                    model.posnet_2_attn_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 2), {768}, 0);
+                    model.posnet_2_attn_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   2), {768}, 0);
+
+                    model.posnet_2_attn_q   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "weight", 2), {1, 768, 768}, 0);
+                    model.posnet_2_attn_q_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "bias",   2), {768}, 0);
+
+                    model.posnet_2_attn_k   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "weight", 2), {1, 768, 768}, 0);
+                    model.posnet_2_attn_k_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "bias",   2), {768}, 0);
+
+                    model.posnet_2_attn_v   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "weight", 2), {1, 768, 768}, 0);
+                    model.posnet_2_attn_v_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "bias",   2), {768}, 0);
+
+                    model.posnet_2_attn_o   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "weight", 2), {1, 768, 768}, 0);
+                    model.posnet_2_attn_o_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "bias",   2), {768}, 0);
+
+                    model.posnet_3_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 3), {768}, 0);
+                    model.posnet_3_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   3), {768}, 0);
+
+                    model.posnet_3_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 3), {3, 768, 768}, 0);
+                    model.posnet_3_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   3), {768}, 0);
+
+                    model.posnet_3_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 3), {768}, 0);
+                    model.posnet_3_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   3), {768}, 0);
+
+                    model.posnet_3_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 3), {3, 768, 768}, 0);
+                    model.posnet_3_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   3), {768}, 0);
+
+                    model.posnet_4_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 4), {768}, 0);
+                    model.posnet_4_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   4), {768}, 0);
+
+                    model.posnet_4_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 4), {3, 768, 768}, 0);
+                    model.posnet_4_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   4), {768}, 0);
+
+                    model.posnet_4_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 4), {768}, 0);
+                    model.posnet_4_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   4), {768}, 0);
+
+                    model.posnet_4_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 4), {3, 768, 768}, 0);
+                    model.posnet_4_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   4), {768}, 0);
 
                     // output
                     model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
@@ -17088,58 +17177,94 @@ struct llm_build_context {
         cur = ggml_conv_1d_ph(ctx0, model.conv_1d, cur, 1, 1);
         cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.conv_1d_b, 1, model.conv_1d_b->ne[0]));
 
+        inpL = cur;
+
         // resnet block 0
         {
-            struct ggml_tensor * cur_rnet = cur;
-
-            cur_rnet = llm_build_norm(ctx0, cur, hparams,
+            cur = llm_build_norm(ctx0, cur, hparams,
                     ggml_reshape_2d(ctx0, model.posnet_0_norm1,   1, model.posnet_0_norm1->ne[0]),
                     ggml_reshape_2d(ctx0, model.posnet_0_norm1_b, 1, model.posnet_0_norm1_b->ne[0]),
                     LLM_NORM_GROUP, cb, 0);
 
-            cur_rnet = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur_rnet), cur_rnet);
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
 
-            cur_rnet = ggml_conv_1d_ph(ctx0, model.posnet_0_conv1, cur_rnet, 1, 1);
-            cur_rnet = ggml_add(ctx0, cur_rnet, ggml_reshape_2d(ctx0, model.posnet_0_conv1_b, 1, model.posnet_0_conv1_b->ne[0]));
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_0_conv1, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_0_conv1_b, 1, model.posnet_0_conv1_b->ne[0]));
 
-            cur_rnet = llm_build_norm(ctx0, cur_rnet, hparams,
+            cur = llm_build_norm(ctx0, cur, hparams,
                     ggml_reshape_2d(ctx0, model.posnet_0_norm2,   1, model.posnet_0_norm2->ne[0]),
                     ggml_reshape_2d(ctx0, model.posnet_0_norm2_b, 1, model.posnet_0_norm2_b->ne[0]),
                     LLM_NORM_GROUP, cb, 0);
 
-            cur_rnet = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur_rnet), cur_rnet);
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
 
-            cur_rnet = ggml_conv_1d_ph(ctx0, model.posnet_0_conv2, cur_rnet, 1, 1);
-            cur_rnet = ggml_add(ctx0, cur_rnet, ggml_reshape_2d(ctx0, model.posnet_0_conv2_b, 1, model.posnet_0_conv2_b->ne[0]));
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_0_conv2, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_0_conv2_b, 1, model.posnet_0_conv2_b->ne[0]));
 
-            cur = ggml_add(ctx0, cur_rnet, cur);
+            cur = ggml_add(ctx0, cur, inpL);
         }
+
+        inpL = cur;
 
         // resnet block 1
         {
-            struct ggml_tensor * cur_rnet = cur;
-
-            cur_rnet = llm_build_norm(ctx0, cur, hparams,
+            cur = llm_build_norm(ctx0, cur, hparams,
                     ggml_reshape_2d(ctx0, model.posnet_1_norm1,   1, model.posnet_1_norm1->ne[0]),
                     ggml_reshape_2d(ctx0, model.posnet_1_norm1_b, 1, model.posnet_1_norm1_b->ne[0]),
                     LLM_NORM_GROUP, cb, 0);
 
-            cur_rnet = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur_rnet), cur_rnet);
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
 
-            cur_rnet = ggml_conv_1d_ph(ctx0, model.posnet_1_conv1, cur_rnet, 1, 1);
-            cur_rnet = ggml_add(ctx0, cur_rnet, ggml_reshape_2d(ctx0, model.posnet_1_conv1_b, 1, model.posnet_1_conv1_b->ne[0]));
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_1_conv1, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_1_conv1_b, 1, model.posnet_1_conv1_b->ne[0]));
 
-            cur_rnet = llm_build_norm(ctx0, cur_rnet, hparams,
+            cur = llm_build_norm(ctx0, cur, hparams,
                     ggml_reshape_2d(ctx0, model.posnet_1_norm2,   1, model.posnet_1_norm2->ne[0]),
                     ggml_reshape_2d(ctx0, model.posnet_1_norm2_b, 1, model.posnet_1_norm2_b->ne[0]),
                     LLM_NORM_GROUP, cb, 0);
 
-            cur_rnet = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur_rnet), cur_rnet);
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
 
-            cur_rnet = ggml_conv_1d_ph(ctx0, model.posnet_1_conv2, cur_rnet, 1, 1);
-            cur_rnet = ggml_add(ctx0, cur_rnet, ggml_reshape_2d(ctx0, model.posnet_1_conv2_b, 1, model.posnet_1_conv2_b->ne[0]));
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_1_conv2, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_1_conv2_b, 1, model.posnet_1_conv2_b->ne[0]));
 
-            cur = ggml_add(ctx0, cur_rnet, cur);
+            cur = ggml_add(ctx0, cur, inpL);
+        }
+
+        inpL = cur;
+
+        // attention block
+        {
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    ggml_reshape_2d(ctx0, model.posnet_2_attn_norm,   1, model.posnet_2_attn_norm->ne[0]),
+                    ggml_reshape_2d(ctx0, model.posnet_2_attn_norm_b, 1, model.posnet_2_attn_norm_b->ne[0]),
+                    LLM_NORM_GROUP, cb, 0);
+
+            struct ggml_tensor * q;
+            struct ggml_tensor * k;
+            struct ggml_tensor * v;
+
+            q = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_q, cur, 1, 1);
+            k = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_k, cur, 1, 1);
+            v = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_v, cur, 1, 1);
+
+            q = ggml_add(ctx0, q, ggml_reshape_2d(ctx0, model.posnet_2_attn_q_b, 1, model.posnet_2_attn_q_b->ne[0]));
+            k = ggml_add(ctx0, k, ggml_reshape_2d(ctx0, model.posnet_2_attn_k_b, 1, model.posnet_2_attn_k_b->ne[0]));
+            v = ggml_add(ctx0, v, ggml_reshape_2d(ctx0, model.posnet_2_attn_v_b, 1, model.posnet_2_attn_v_b->ne[0]));
+
+            q = ggml_cont(ctx0, ggml_transpose(ctx0, q));
+            k = ggml_cont(ctx0, ggml_transpose(ctx0, k));
+
+            struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
+
+            kq = ggml_soft_max_ext(ctx0, kq, nullptr, 1.0f/sqrtf(float(768)), 0.0f);
+
+            cur = ggml_mul_mat(ctx0, kq, v);
+
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_o, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_2_attn_o_b, 1, model.posnet_2_attn_o_b->ne[0]));
+
+            cur = ggml_add(ctx0, cur, inpL);
         }
 
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);

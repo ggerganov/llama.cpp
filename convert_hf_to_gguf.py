@@ -296,7 +296,9 @@ class Model:
                     break
 
             for new_name, data_torch in (self.modify_tensors(data_torch, name, bid)):
-                data = data_torch.squeeze().numpy()
+                # TODO: why do we squeeze here?
+                #data = data_torch.squeeze().numpy()
+                data = data_torch.numpy()
 
                 # if data ends up empty, it means data_torch was a scalar tensor -> restore
                 if len(data.shape) == 0:
@@ -2043,6 +2045,8 @@ class OuteTTSVocoderModel(Model):
                 name.endswith("codebook.inited"):
             logger.debug(f"Skipping {name!r}")
             return []
+
+        print(f"{self.map_tensor_name(name)} -> {data_torch.shape}")
 
         return [(self.map_tensor_name(name), data_torch)]
 
