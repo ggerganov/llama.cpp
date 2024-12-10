@@ -4,7 +4,7 @@ set -eu
 
 if [ $# -lt 1 ]
 then
-    pytest -v -x
+    pytest -v -x -m "not slow"
 else
     pytest "$@"
 fi

@@ -383,7 +383,11 @@ static nlohmann::ordered_json add_system(const nlohmann::ordered_json & messages
     json messages_with_system = messages;
 
     if (messages_with_system.size() > 0 && messages_with_system[0].at("role") == "system") {
-        messages_with_system.at(0).at("content") += ("\n" + system_prompt);
+        std::string existing_system = messages_with_system.at(0).at("content");
+        messages_with_system[0] = json {
+            {"role", "system"},
+            {"content", existing_system + "\n" + system_prompt},
+        };
     } else {
         messages_with_system.insert(messages_with_system.begin(), json {
             {"role", "system"},
