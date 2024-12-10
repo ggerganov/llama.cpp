@@ -815,7 +815,7 @@ load_tiles_q4_K(const void *__restrict__ vx, int *__restrict__ x_ql,
         x_ql[i * (WARP_SIZE + 1) + k] = get_int_from_uint8_aligned(bxi->qs, kqsx);
     }
 
-    const int blocks_per_tile_x_row = WARP_SIZE / QI4_K; // == 1 if QK_K == 256
+    constexpr int blocks_per_tile_x_row = QI4_K > WARP_SIZE ? 1 : WARP_SIZE / QI4_K; // == 1 if QK_K == 256
     const int kbxd = k % blocks_per_tile_x_row;          // == 0 if QK_K == 256
 
 #pragma unroll
@@ -963,7 +963,7 @@ load_tiles_q5_K(const void *__restrict__ vx, int *__restrict__ x_ql,
         x_ql[i * (2*WARP_SIZE + 1) + kq1] = ql1 | qh1;
     }
 
-    const int blocks_per_tile_x_row = WARP_SIZE / QI5_K; // == 1 if QK_K == 256
+    constexpr int blocks_per_tile_x_row = QI5_K > WARP_SIZE ? 1 : WARP_SIZE / QI5_K; // == 1 if QK_K == 256
     const int kbxd = k % blocks_per_tile_x_row;          // == 0 if QK_K == 256
 
 #pragma unroll
@@ -1111,7 +1111,7 @@ load_tiles_q6_K(const void *__restrict__ vx, int *__restrict__ x_ql,
                                                  dpct::sub_sat());
     }
 
-    const int blocks_per_tile_x_row = WARP_SIZE / QI6_K; // == 1 if QK_K == 256
+    constexpr int blocks_per_tile_x_row = QI6_K > WARP_SIZE ? 1 : WARP_SIZE / QI6_K; // == 1 if QK_K == 256
     const int kbxd = k % blocks_per_tile_x_row;          // == 0 if QK_K == 256
     float * x_dmf = (float *) x_dm;
 
