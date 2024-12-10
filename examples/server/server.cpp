@@ -3815,20 +3815,24 @@ int main(int argc, char ** argv) {
     // Router
     //
 
-    // register static assets routes
-    if (!params.public_path.empty()) {
-        // Set the base directory for serving static files
-        bool is_found = svr->set_mount_point("/", params.public_path);
-        if (!is_found) {
-            LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
-            return 1;
-        }
+    if (!params.webui) {
+        LOG_INF("Web UI is disabled\n");
     } else {
-        // using embedded static index.html
-        svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
-            res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
-            return false;
-        });
+        // register static assets routes
+        if (!params.public_path.empty()) {
+            // Set the base directory for serving static files
+            bool is_found = svr->set_mount_point("/", params.public_path);
+            if (!is_found) {
+                LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
+                return 1;
+            }
+        } else {
+            // using embedded static index.html
+            svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+                return false;
+            });
+        }
     }
 
     // register API routes
