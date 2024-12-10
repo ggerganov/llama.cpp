@@ -159,7 +159,7 @@
             id="msg-input"
             dir="auto"
           ></textarea>
-          <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage" :disabled="inputMsg.length === 0">Send</button>
+          <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage" :disabled="inputMsg.length === 0" id="msg-send">Send</button>
           <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">Stop</button>
         </div>
       </div>
