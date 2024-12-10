@@ -214,11 +214,14 @@ def start_benchmark(args):
     k6_args = [
         'run', args.scenario,
         '--no-color',
+        '--no-connection-reuse',
+        '--no-vu-connection-reuse',
     ]
     k6_args.extend(['--duration', args.duration])
     k6_args.extend(['--iterations', args.n_prompts])
     k6_args.extend(['--vus', args.parallel])
     k6_args.extend(['--summary-export', 'k6-results.json'])
+    k6_args.extend(['--out', 'csv=k6-results.csv'])
     args = f"SERVER_BENCH_N_PROMPTS={args.n_prompts} SERVER_BENCH_MAX_PROMPT_TOKENS={args.max_prompt_tokens} SERVER_BENCH_MAX_CONTEXT={args.max_tokens} "
     args = args + ' '.join([str(arg) for arg in [k6_path, *k6_args]])
     print(f"bench: starting k6 with: {args}")
