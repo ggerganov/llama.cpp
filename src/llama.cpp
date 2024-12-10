@@ -1631,7 +1631,7 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_OUTPUT,            "output" },
             { LLM_TENSOR_POS_NET_CONV1,     "pos_net.%d.conv1" },
             { LLM_TENSOR_POS_NET_CONV2,     "pos_net.%d.conv2" },
-            { LLM_TENSOR_POS_NET_NORM,      "pos_net.norm" },
+            { LLM_TENSOR_POS_NET_NORM,      "pos_net.%d.norm" },
             { LLM_TENSOR_POS_NET_NORM1,     "pos_net.%d.norm1" },
             { LLM_TENSOR_POS_NET_NORM2,     "pos_net.%d.norm2" },
             { LLM_TENSOR_POS_NET_ATTN_NORM, "pos_net.%d.attn_norm" },
@@ -3126,6 +3126,10 @@ struct llama_model {
 
     struct ggml_tensor * posnet_4_conv2 = nullptr;
     struct ggml_tensor * posnet_4_conv2_b = nullptr;
+
+    // resnet 5
+    struct ggml_tensor * posnet_5_norm = nullptr;
+    struct ggml_tensor * posnet_5_norm_b = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -7427,6 +7431,7 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     // this tensor is loaded for T5, but never used
     {LLM_TENSOR_DEC_CROSS_ATTN_REL_B,       {LLM_TENSOR_LAYER_REPEATING, GGML_OP_NONE}},
     {LLM_TENSOR_CONV1D,                     {LLM_TENSOR_LAYER_INPUT,     GGML_OP_IM2COL}},
+    {LLM_TENSOR_POS_NET_NORM,               {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
     {LLM_TENSOR_POS_NET_NORM1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
     {LLM_TENSOR_POS_NET_NORM2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
     {LLM_TENSOR_POS_NET_CONV1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
@@ -9579,6 +9584,9 @@ static bool llm_load_tensors(
 
                     model.posnet_4_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 4), {3, 768, 768}, 0);
                     model.posnet_4_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   4), {768}, 0);
+
+                    model.posnet_5_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 5), {768}, 0);
+                    model.posnet_5_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   5), {768}, 0);
 
                     // output
                     model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
@@ -17266,6 +17274,69 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, inpL);
         }
+
+        inpL = cur;
+
+        // resnet block 3
+        {
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    ggml_reshape_2d(ctx0, model.posnet_3_norm1,   1, model.posnet_3_norm1->ne[0]),
+                    ggml_reshape_2d(ctx0, model.posnet_3_norm1_b, 1, model.posnet_3_norm1_b->ne[0]),
+                    LLM_NORM_GROUP, cb, 0);
+
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_3_conv1, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_3_conv1_b, 1, model.posnet_3_conv1_b->ne[0]));
+
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    ggml_reshape_2d(ctx0, model.posnet_3_norm2,   1, model.posnet_3_norm2->ne[0]),
+                    ggml_reshape_2d(ctx0, model.posnet_3_norm2_b, 1, model.posnet_3_norm2_b->ne[0]),
+                    LLM_NORM_GROUP, cb, 0);
+
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_3_conv2, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_3_conv2_b, 1, model.posnet_3_conv2_b->ne[0]));
+
+            cur = ggml_add(ctx0, cur, inpL);
+        }
+
+        inpL = cur;
+
+        // resnet block 4
+        {
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    ggml_reshape_2d(ctx0, model.posnet_4_norm1,   1, model.posnet_4_norm1->ne[0]),
+                    ggml_reshape_2d(ctx0, model.posnet_4_norm1_b, 1, model.posnet_4_norm1_b->ne[0]),
+                    LLM_NORM_GROUP, cb, 0);
+
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_4_conv1, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_4_conv1_b, 1, model.posnet_4_conv1_b->ne[0]));
+
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    ggml_reshape_2d(ctx0, model.posnet_4_norm2,   1, model.posnet_4_norm2->ne[0]),
+                    ggml_reshape_2d(ctx0, model.posnet_4_norm2_b, 1, model.posnet_4_norm2_b->ne[0]),
+                    LLM_NORM_GROUP, cb, 0);
+
+            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+
+            cur = ggml_conv_1d_ph(ctx0, model.posnet_4_conv2, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.posnet_4_conv2_b, 1, model.posnet_4_conv2_b->ne[0]));
+
+            cur = ggml_add(ctx0, cur, inpL);
+        }
+
+        // normalize block 5
+        {
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    ggml_reshape_2d(ctx0, model.posnet_5_norm,   1, model.posnet_5_norm->ne[0]),
+                    ggml_reshape_2d(ctx0, model.posnet_5_norm_b, 1, model.posnet_5_norm_b->ne[0]),
+                    LLM_NORM_GROUP, cb, 0);
+        }
+
 
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 
