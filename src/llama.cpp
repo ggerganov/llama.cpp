@@ -505,7 +505,6 @@ struct LLM_KV {
 enum llm_tensor {
     LLM_TENSOR_TOKEN_EMBD,
     LLM_TENSOR_TOKEN_EMBD_NORM,
-    LLM_TENSOR_TOKEN_EMBD_SHIFT,
     LLM_TENSOR_TOKEN_TYPES,
     LLM_TENSOR_POS_EMBD,
     LLM_TENSOR_OUTPUT,
@@ -1619,7 +1618,6 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
         {
             { LLM_TENSOR_TOKEN_EMBD,        "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM,   "token_embd_norm" },
-            { LLM_TENSOR_TOKEN_EMBD_SHIFT,  "token_embd_shift" },
             { LLM_TENSOR_CONV1D,            "conv1d" },
             { LLM_TENSOR_CONV_NEXT_DW,      "conv_next.dw" },
             { LLM_TENSOR_CONV_NEXT_NORM,    "conv_next.norm" },
@@ -9519,6 +9517,9 @@ static bool llm_load_tensors(
                 {
                     model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
 
+                    model.tok_norm   = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {768}, 0);
+                    model.tok_norm_b = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {768}, 0);
+
                     model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, n_embd, 768}, 0);
                     model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {768}, 0);
 
@@ -17337,6 +17338,10 @@ struct llm_build_context {
                     LLM_NORM_GROUP, cb, 0);
         }
 
+        cur = llm_build_norm(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), hparams,
+                model.tok_norm,
+                model.tok_norm_b,
+                LLM_NORM, cb, -1);
 
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 

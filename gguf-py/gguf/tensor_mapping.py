@@ -43,11 +43,7 @@ class TensorNameMap:
             "emb_ln",                     # nomic-bert
             "transformer.norm",           # openelm
             "rwkv.blocks.0.pre_ln",       # rwkv
-            "backbone.norm.scale",        # outetts
-        ),
-
-        MODEL_TENSOR.TOKEN_EMBD_SHIFT: (
-            "backbone.norm.shift",        # outetts
+            "backbone.norm",              # outetts
         ),
 
         # Position embeddings

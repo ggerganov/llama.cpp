@@ -88,6 +88,16 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
         if new_key == "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed":
             new_key = "backbone.embedding.weight"
 
+        # these are the only rows used
+        # ref: https://github.com/edwko/OuteTTS/blob/a613e79c489d8256dd657ea9168d78de75895d82/outetts/wav_tokenizer/audio_codec.py#L100
+        if new_key == "backbone.norm.scale.weight":
+            new_key = "backbone.norm.weight"
+            value = value[0]
+
+        if new_key == "backbone.norm.shift.weight":
+            new_key = "backbone.norm.bias"
+            value = value[0]
+
         size_mb = value.element_size() * value.nelement() / (1024 * 1024)
         print(f"{size_mb:8.2f} MB - {new_key}: {value.shape}")
 

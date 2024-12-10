@@ -267,7 +267,6 @@ class MODEL_ARCH(IntEnum):
 class MODEL_TENSOR(IntEnum):
     TOKEN_EMBD           = auto()
     TOKEN_EMBD_NORM      = auto()
-    TOKEN_EMBD_SHIFT     = auto()
     TOKEN_TYPES          = auto()
     POS_EMBD             = auto()
     OUTPUT               = auto()
@@ -451,7 +450,6 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.TOKEN_EMBD:                "token_embd",
     MODEL_TENSOR.TOKEN_EMBD_NORM:           "token_embd_norm",
-    MODEL_TENSOR.TOKEN_EMBD_SHIFT:          "token_embd_shift",
     MODEL_TENSOR.TOKEN_TYPES:               "token_types",
     MODEL_TENSOR.POS_EMBD:                  "position_embd",
     MODEL_TENSOR.OUTPUT_NORM:               "output_norm",
@@ -1415,7 +1413,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.OUTETTS_VOC: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
-        MODEL_TENSOR.TOKEN_EMBD_SHIFT,
         MODEL_TENSOR.CONV1D,
         MODEL_TENSOR.CONV_NEXT_DW,
         MODEL_TENSOR.CONV_NEXT_NORM,

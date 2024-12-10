@@ -2046,7 +2046,7 @@ class OuteTTSVocoderModel(Model):
             logger.debug(f"Skipping {name!r}")
             return []
 
-        print(f"{self.map_tensor_name(name)} -> {data_torch.shape}")
+        logger.info(f"{self.map_tensor_name(name)} -> {data_torch.shape}")
 
         return [(self.map_tensor_name(name), data_torch)]
 
