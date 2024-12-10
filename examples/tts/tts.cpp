@@ -170,13 +170,19 @@ int main(int argc, char ** argv) {
 
     const float * embd = llama_get_embeddings(ctx_cts);
 
+    int n = 768*261;
+
     LOG("result:\n");
     for (int i = 0; i < 10; ++i) {
         LOG("%8.3f ", embd[i]);
     }
     LOG("\n");
+    for (int i = n - 10; i < n; ++i) {
+        LOG("%8.3f ", embd[i]);
+    }
+    LOG("\n");
     double sum = 0.0;
-    for (int i = 0; i < 261*512; ++i) {
+    for (int i = 0; i < n; ++i) {
         sum += embd[i];
     }
     LOG("sum: %f\n", sum);

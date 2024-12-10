@@ -3054,8 +3054,8 @@ struct llama_model {
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
-    // quantizer
-    struct ggml_tensor * qntz_cbook_embd = nullptr;
+    struct ggml_tensor * conv_1d = nullptr;
+    struct ggml_tensor * conv_1d_b = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -5036,7 +5036,7 @@ struct llama_model_loader {
 
     void done_getting_tensors() const {
         if (n_created != n_tensors) {
-            // TODO: TEMPORARY DISABLED
+            // TODO: TEMPORARY DISABLED [OUTETTS]
             //throw std::runtime_error(format("%s: wrong number of tensors; expected %d, got %d", __func__, n_tensors, n_created));
         }
     }
@@ -7356,6 +7356,7 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_FFN_UP_EXPS,                {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT_ID}},
     // this tensor is loaded for T5, but never used
     {LLM_TENSOR_DEC_CROSS_ATTN_REL_B,       {LLM_TENSOR_LAYER_REPEATING, GGML_OP_NONE}},
+    {LLM_TENSOR_CONV1D,                     {LLM_TENSOR_LAYER_INPUT,     GGML_OP_IM2COL}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -7459,6 +7460,12 @@ static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w
                 ggml_tensor  * td = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, 1, S, H, n_tokens);
                 ggml_tensor  * state = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, S, n_seqs, S, H);
                 op_tensor = ggml_rwkv_wkv6(ctx, k, v, r, tf, td, state);
+            } break;
+        case GGML_OP_IM2COL:
+            {
+                int n_embd = hparams.n_embd;
+                ggml_tensor * b = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_embd, w->ne[1], 1, 1);
+                op_tensor = ggml_im2col(ctx, w, b, 1, 0, 0, 0, 1, 0, false, GGML_TYPE_F16);
             } break;
         default:
             GGML_ABORT("%s: missing test for op %s for tensor %s", __func__, ggml_op_name(op), w->name);
@@ -9428,6 +9435,9 @@ static bool llm_load_tensors(
                 {
                     model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
 
+                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, n_embd, 768}, 0);
+                    model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {768}, 0);
+
                     // output
                     model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
                     model.output      = create_tensor(tn(LLM_TENSOR_OUTPUT,      "weight"), {768, 1282}, llama_model_loader::TENSOR_NOT_REQUIRED);
@@ -9671,7 +9681,7 @@ static struct ggml_tensor * llm_build_inp_embd(
 
         inpL = ggml_get_rows(ctx, tok_embd, lctx.inp_tokens);
     } else {
-       lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
+        lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
         inpL = lctx.inp_embd;
         ggml_set_input(lctx.inp_embd);
     }
@@ -17009,7 +17019,13 @@ struct llm_build_context {
 
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
-        cur = inpL;
+        cur = ggml_cont(ctx0, ggml_transpose(ctx0, inpL));
+
+        printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
+        printf("conv1d: %d %d %d\n", model.conv_1d->ne[0], model.conv_1d->ne[1], model.conv_1d->ne[2]);
+        cur = ggml_conv_1d_ph(ctx0, model.conv_1d, cur, 1, 1);
+        cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.conv_1d_b, 1, model.conv_1d_b->ne[0]));
+        printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 
         //cur = llm_build_norm(ctx0, cur, hparams,
         //        model.output_norm, NULL,
@@ -17309,7 +17325,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     // add on pooling layer
     if (lctx.cparams.embeddings) {
-        // TODO: TEMPORARY DISABLED
+        // TODO: TEMPORARY DISABLED [OUTETTS]
         //result = llm.append_pooling(result);
     }
 
@@ -17798,7 +17814,13 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
     }
 
     const size_t prev_size = lctx.buf_output ? ggml_backend_buffer_get_size(lctx.buf_output.get()) : 0;
+
+    // TODO: TEMPORARY !!! [OUTETTS]
+#if 0
     const size_t new_size  = (logits_size + embd_size) * sizeof(float);
+#else
+    const size_t new_size  = 1024*1024*32;
+#endif
 
     // alloc only when more than the current capacity is required
     // TODO: also consider shrinking the buffer
@@ -18075,7 +18097,7 @@ static int llama_decode_internal(
         struct ggml_tensor * res  = nullptr;
         struct ggml_tensor * embd = nullptr;
 
-// TODO: TEMPORARY DISABLED
+// TODO: TEMPORARY DISABLED [OUTETTS]
 if (model.arch != LLM_ARCH_OUTETTS_VOC) {
         // the output is always the last tensor in the graph
         res  = ggml_graph_node(gf, -1);
@@ -18170,7 +18192,9 @@ if (model.arch != LLM_ARCH_OUTETTS_VOC) {
                         if (n_outputs_new) {
                             GGML_ASSERT( n_outputs_prev + n_outputs_new <= n_outputs);
                             GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_embd <= (int64_t) lctx.embd_size);
-                            ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
+                            // TODO: TEMPORARY [OUTETTS]
+                            //ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
+                            ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_tokens*768*sizeof(float));
                         }
                     } break;
                 case LLAMA_POOLING_TYPE_MEAN:

@@ -3874,7 +3874,7 @@ struct ggml_tensor * ggml_im2col(
         int                   d1,
         bool                  is_2D,
         enum ggml_type        dst_type) {
-    if(is_2D) {
+    if (is_2D) {
         GGML_ASSERT(a->ne[2] == b->ne[2]);
     } else {
         GGML_ASSERT(a->ne[1] == b->ne[1]);
