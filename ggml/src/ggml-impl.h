@@ -551,6 +551,22 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
 #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
 #define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
 
+// expose GGUF internals for test code
+
+size_t gguf_type_size(enum gguf_type type);
+
+struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params);
+
+struct gguf_buf {
+    void * data;
+    size_t size;
+    size_t offset;
+};
+struct gguf_buf gguf_buf_init(size_t size);
+void gguf_buf_free(struct gguf_buf buf);
+
+void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf * buf, bool only_meta);
+
 #ifdef __cplusplus
 }
 #endif
