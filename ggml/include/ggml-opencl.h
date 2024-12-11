@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
-// SPDX-License-Identifier: MIT
-
 #ifndef GGML_OPENCL2_H
 #define GGML_OPENCL2_H
 

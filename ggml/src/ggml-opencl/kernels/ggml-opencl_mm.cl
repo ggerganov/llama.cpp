@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
-// SPDX-License-Identifier: MIT
-
 //------------------------------------------------------------------------------
 // This file is contains additional mulmat kernels
 // (and potentially other kernels).

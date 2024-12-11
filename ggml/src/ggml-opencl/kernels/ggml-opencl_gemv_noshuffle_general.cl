@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
-// SPDX-License-Identifier: MIT
-
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 #pragma OPENCL EXTENSION cl_khr_subgroups : enable
 #pragma OPENCL EXTENSION cl_qcom_subgroup_uniform_load: enable

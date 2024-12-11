@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
-// SPDX-License-Identifier: MIT
-
 //------------------------------------------------------------------------------
 // This file is contains additional kernels for data conversion.
 // These kernels are used when loading the model, so its performance is less

@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
-// SPDX-License-Identifier: MIT
-
 // 16-bit transpose, loading/storing an 8x8 tile of elements
 
 kernel void kernel_transpose_16(

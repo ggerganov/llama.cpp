@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) Qualcomm Innovation Center, Inc. All rights reserved
-// SPDX-License-Identifier: MIT
-
 #define CL_TARGET_OPENCL_VERSION 220
 
 // suppress warnings in CL headers for GCC and Clang
