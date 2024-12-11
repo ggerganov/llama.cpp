@@ -130,15 +130,16 @@
           </div>
 
           <!-- pending (ongoing) assistant message -->
-          <div id="pending-msg"></div>
-          <message-bubble
-            v-if="pendingMsg"
-            :config="config"
-            :msg="pendingMsg"
-            :key="pendingMsg.id"
-            :is-generating="isGenerating"
-            :edit-user-msg-and-regenerate="() => {}"
-            :regenerate-msg="() => {}"></message-bubble>
+          <div id="pending-msg" class="group">
+            <message-bubble
+              v-if="pendingMsg"
+              :config="config"
+              :msg="pendingMsg"
+              :key="pendingMsg.id"
+              :is-generating="isGenerating"
+              :edit-user-msg-and-regenerate="() => {}"
+              :regenerate-msg="() => {}"></message-bubble>
+          </div>
         </div>
 
         <!-- chat input -->
