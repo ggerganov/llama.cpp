@@ -442,7 +442,7 @@ These words will not be included in the completion, so make sure to add them to 
 
 `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["dry", "top_k", "typ_p", "top_p", "min_p", "xtc", "temperature"]` - these are all the available values.
 
-    `timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
+`timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
 
 **Response format**
 
