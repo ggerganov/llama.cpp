@@ -101,6 +101,9 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
         if new_key.endswith("gamma"):
             new_key = new_key.replace("gamma", "gamma.weight")
 
+        if new_key == "head.istft.window":
+            new_key = "head.istft.window.weight"
+
         size_mb = value.element_size() * value.nelement() / (1024 * 1024)
         print(f"{size_mb:8.2f} MB - {new_key}: {value.shape}")
 

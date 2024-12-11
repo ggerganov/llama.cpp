@@ -28,7 +28,6 @@ class TensorNameMap:
             "transformer.token_embeddings",              # openelm
             "shared",                                    # t5
             "rwkv.embeddings",                           # rwkv
-            "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed" # outetts
         ),
 
         # Token type embeddings

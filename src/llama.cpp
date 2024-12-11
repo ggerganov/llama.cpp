@@ -3070,6 +3070,8 @@ struct llama_model {
     struct ggml_tensor * conv_1d = nullptr;
     struct ggml_tensor * conv_1d_b = nullptr;
 
+    struct ggml_tensor * hann_window = nullptr;
+
     // resnet 0
     struct ggml_tensor * posnet_0_norm1 = nullptr;
     struct ggml_tensor * posnet_0_norm1_b = nullptr;
@@ -5121,8 +5123,7 @@ struct llama_model_loader {
 
     void done_getting_tensors() const {
         if (n_created != n_tensors) {
-            // TODO: TEMPORARY DISABLED [OUTETTS]
-            //throw std::runtime_error(format("%s: wrong number of tensors; expected %d, got %d", __func__, n_tensors, n_created));
+            throw std::runtime_error(format("%s: wrong number of tensors; expected %d, got %d", __func__, n_tensors, n_created));
         }
     }
 
@@ -7461,6 +7462,7 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_CONV_NEXT_PW1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_CONV_NEXT_PW2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_CONV_NEXT_GAMMA,            {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_HANN_WINDOW,                {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_MUL}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -9634,8 +9636,10 @@ static bool llm_load_tensors(
                     model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
                     model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {768}, 0);
 
-                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, 1282}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                    model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {1282}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, 1282}, 0);
+                    model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {1282}, 0);
+
+                    model.hann_window = create_tensor(tn(LLM_TENSOR_HANN_WINDOW, "weight"), {1280}, 0);
                 } break;
             default:
                 throw std::runtime_error("unknown architecture");
