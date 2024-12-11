@@ -2486,7 +2486,6 @@ inline void ggml_sycl_op_mul_mat_sycl(
     const int64_t ne00 = src0->ne[0];
     const int64_t ne10 = src1->ne[0];
 
-    
 
     const int64_t row_diff = row_high - row_low;
 
@@ -4220,7 +4219,7 @@ try
 {
     ggml_backend_sycl_context *sycl_ctx =
         (ggml_backend_sycl_context *)backend->context;
-        
+
     sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
 
     const queue_ptr &stream = sycl_ctx->stream(sycl_ctx->device, 0);
@@ -4645,7 +4644,7 @@ static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, cons
     // "ggml_backend_register_host_buffer"
     // "ggml_backend_unregister_host_buffer"
     // doing this to make the compiler happy
-    (void) name; 
+    (void) name;
     return nullptr;
 }
 
