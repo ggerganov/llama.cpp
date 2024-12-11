@@ -519,7 +519,7 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
 }
 
 void ggml_backend_load_all() {
-    ggml_backend_load_all_from_path(NULL);
+    ggml_backend_load_all_from_path(nullptr);
 }
 
 void ggml_backend_load_all_from_path(const char * dir_path) {
