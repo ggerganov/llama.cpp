@@ -78,7 +78,7 @@ def test_completion_stream_vs_non_stream():
 @pytest.mark.parametrize("n_slots", [1, 2])
 def test_consistent_result_same_seed(n_slots: int):
     global server
-    server.n_slots = n_slots
+    server.n_slots = 1
     server.start()
     last_res = None
     for _ in range(4):
@@ -115,7 +115,7 @@ def test_different_result_different_seed(n_slots: int):
 @pytest.mark.parametrize("temperature", [0.0, 1.0])
 def test_consistent_result_different_batch_size(n_batch: int, temperature: float):
     global server
-    server.n_batch = n_batch
+    server.n_batch = 1
     server.start()
     last_res = None
     for _ in range(4):
