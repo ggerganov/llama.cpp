@@ -297,7 +297,7 @@ class Model:
 
             for new_name, data_torch in (self.modify_tensors(data_torch, name, bid)):
                 # TODO: why do we squeeze here?
-                #data = data_torch.squeeze().numpy()
+                # data = data_torch.squeeze().numpy()
                 data = data_torch.numpy()
 
                 # if data ends up empty, it means data_torch was a scalar tensor -> restore

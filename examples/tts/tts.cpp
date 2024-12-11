@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -354,9 +355,9 @@ int main(int argc, char ** argv) {
 
         // TODO: not sure if this is correct
         {
+            std::string prompt_clean;
             std::string prompt_user = params.prompt;
-            std::string prompt_clean = "";
-            //string_replace_all(prompt_user, " ", "<|text_sep|>");
+
             for (auto & c : prompt_user) {
                 if (c == ' ') {
                     prompt_clean += "<|text_sep|>";
