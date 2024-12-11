@@ -454,7 +454,7 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
      // TODO: search system paths
     std::string file_prefix = backend_filename_prefix() + name + "-";
     std::vector<std::string> search_paths;
-    if (user_search_path == NULL) {
+    if (user_search_path == nullptr) {
         search_paths.push_back("./");
         search_paths.push_back(get_executable_path());
     } else {
