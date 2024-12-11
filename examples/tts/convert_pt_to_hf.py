@@ -70,7 +70,7 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
         # keep only what we need for inference
         if not key.startswith('state_dict.feature_extractor.encodec.quantizer.') and \
            not key.startswith('state_dict.backbone.') and \
-           not key.startswith('state_dict.head.'):
+           not key.startswith('state_dict.head.out'):
                print('Skipping key: ', key)
                continue
 
@@ -100,9 +100,6 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
 
         if new_key.endswith("gamma"):
             new_key = new_key.replace("gamma", "gamma.weight")
-
-        if new_key == "head.istft.window":
-            new_key = "head.istft.window.weight"
 
         size_mb = value.element_size() * value.nelement() / (1024 * 1024)
         print(f"{size_mb:8.2f} MB - {new_key}: {value.shape}")

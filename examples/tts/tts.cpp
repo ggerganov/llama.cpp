@@ -57,6 +57,16 @@ static void print_usage(int, char ** argv) {
     LOG("\n");
 }
 
+void fill_hann_window(int length, bool periodic, float * output) {
+    int offset = -1;
+    if (periodic) {
+        offset = 0;
+    }
+    for (int i = 0; i < length; i++) {
+        output[i] = 0.5 * (1.0 - cosf((2.0 * M_PI * i) / (length + offset)));
+    }
+}
+
 int main(int argc, char ** argv) {
     common_params params;
 
@@ -170,6 +180,11 @@ int main(int argc, char ** argv) {
 
     const int n_embd = llama_n_embd(model_cts);
     const float * embd = llama_get_embeddings(ctx_cts);
+
+    const int w = 1280;
+    std::vector<float> hann(w);
+    fill_hann_window(hann.size(), true, hann.data());
+
 
     int n = n_embd*261;
 

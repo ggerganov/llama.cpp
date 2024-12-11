@@ -94,10 +94,6 @@ class TensorNameMap:
         MODEL_TENSOR.ROPE_FACTORS_LONG: (),
         MODEL_TENSOR.ROPE_FACTORS_SHORT: (),
 
-        MODEL_TENSOR.HANN_WINDOW: (
-            "head.istft.window", # outetts
-        ),
-
         MODEL_TENSOR.CONV1D: (
             "backbone.embed", # roberta
         ),

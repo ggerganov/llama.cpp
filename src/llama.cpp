@@ -627,7 +627,6 @@ enum llm_tensor {
     LLM_TENSOR_POS_NET_ATTN_K,
     LLM_TENSOR_POS_NET_ATTN_V,
     LLM_TENSOR_POS_NET_ATTN_OUT,
-    LLM_TENSOR_HANN_WINDOW,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_NAMES = {
@@ -1635,7 +1634,6 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_POS_NET_ATTN_K,    "pos_net.%d.attn_k" },
             { LLM_TENSOR_POS_NET_ATTN_V,    "pos_net.%d.attn_v" },
             { LLM_TENSOR_POS_NET_ATTN_OUT,  "pos_net.%d.attn_output" },
-            { LLM_TENSOR_HANN_WINDOW,       "hann_window" },
         },
     },
     {
@@ -3646,6 +3644,17 @@ struct llama_lora_adapter {
 
 static int llama_get_device_count(const llama_model & model) {
     return (int) model.devices.size();
+}
+
+static struct ggml_tensor * llama_get_model_tensor(const struct llama_model * model, const char * name) {
+    auto it = std::find_if(model->tensors_by_name.begin(), model->tensors_by_name.end(),
+            [name](const std::pair<std::string, struct ggml_tensor *> & it) {
+                return it.first == name;
+            });
+    if (it == model->tensors_by_name.end()) {
+        return nullptr;
+    }
+    return it->second;
 }
 
 template<typename F>
@@ -7462,7 +7471,6 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_CONV_NEXT_PW1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_CONV_NEXT_PW2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_CONV_NEXT_GAMMA,            {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
-    {LLM_TENSOR_HANN_WINDOW,                {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_MUL}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -9638,8 +9646,6 @@ static bool llm_load_tensors(
 
                     model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, n_embd}, 0);
                     model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {n_embd}, 0);
-
-                    model.hann_window = create_tensor(tn(LLM_TENSOR_HANN_WINDOW, "weight"), {1280}, 0);
                 } break;
             default:
                 throw std::runtime_error("unknown architecture");
@@ -21019,17 +21025,6 @@ uint64_t llama_model_size(const struct llama_model * model) {
 
 uint64_t llama_model_n_params(const struct llama_model * model) {
     return model->n_elements;
-}
-
-struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name) {
-    auto it = std::find_if(model->tensors_by_name.begin(), model->tensors_by_name.end(),
-            [name](const std::pair<std::string, struct ggml_tensor *> & it) {
-                return it.first == name;
-            });
-    if (it == model->tensors_by_name.end()) {
-        return nullptr;
-    }
-    return it->second;
 }
 
 bool llama_model_has_encoder(const struct llama_model * model) {
