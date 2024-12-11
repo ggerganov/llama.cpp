@@ -260,9 +260,40 @@ def test_n_probs():
     assert "completion_probabilities" in res.body
     assert len(res.body["completion_probabilities"]) == 5
     for tok in res.body["completion_probabilities"]:
-        assert "probs" in tok
-        assert len(tok["probs"]) == 10
-        for prob in tok["probs"]:
-            assert "prob" in prob
-            assert "tok_str" in prob
-            assert 0.0 <= prob["prob"] <= 1.0
+        assert "id" in tok and tok["id"] > 0
+        assert "token" in tok and type(tok["token"]) == str
+        assert "logprob" in tok and 0.0 <= tok["logprob"] <= 1.0
+        assert "bytes" in tok and len(tok["bytes"]) > 0
+        assert len(tok["top_logprobs"]) == 10
+        for prob in tok["top_logprobs"]:
+            assert "id" in prob and prob["id"] > 0
+            assert "token" in prob and type(prob["token"]) == str
+            assert "logprob" in prob and 0.0 <= prob["logprob"] <= 1.0
+            assert "bytes" in prob and len(prob["bytes"]) > 0
+
+
+def test_n_probs_stream():
+    global server
+    server.start()
+    res = server.make_stream_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "n_probs": 10,
+        "temperature": 0.0,
+        "n_predict": 5,
+        "stream": True,
+    })
+    for data in res:
+        if data["stop"] == False:
+            assert "completion_probabilities" in data
+            assert len(data["completion_probabilities"]) == 1
+            for tok in data["completion_probabilities"]:
+                assert "id" in tok and tok["id"] > 0
+                assert "token" in tok and type(tok["token"]) == str
+                assert "logprob" in tok and 0.0 <= tok["logprob"] <= 1.0
+                assert "bytes" in tok and len(tok["bytes"]) > 0
+                assert len(tok["top_logprobs"]) == 10
+                for prob in tok["top_logprobs"]:
+                    assert "id" in prob and prob["id"] > 0
+                    assert "token" in prob and type(prob["token"]) == str
+                    assert "logprob" in prob and 0.0 <= prob["logprob"] <= 1.0
+                    assert "bytes" in prob and len(prob["bytes"]) > 0
