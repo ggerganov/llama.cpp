@@ -124,6 +124,8 @@ static __global__ void __launch_bounds__(CUDA_CONCAT_BLOCK_SIZE)
           uint64_t   nb1,
           uint64_t   nb2,
           uint64_t   nb3){
+    static_assert(dim >= 0 && dim <= 3);
+
     const int64_t i3 = blockIdx.z;
     const int64_t i2 = blockIdx.y;
     const int64_t i1 = blockIdx.x;
@@ -134,13 +136,13 @@ static __global__ void __launch_bounds__(CUDA_CONCAT_BLOCK_SIZE)
         if (i0 < ne00 && i1 < ne01 && i2 < ne02 && i3 < ne03) {
             x = (const float *)(src0 + (i3       )*nb03 + (i2       )*nb02 + (i1       )*nb01 + (i0       )*nb00);
         } else {
-            if /*constexpr*/ (dim == 0) {
+            if constexpr (dim == 0) {
                 x = (const float *) (src1 + i3 * nb13 + i2 * nb12 + i1 * nb11 + (i0 - ne00) * nb10);
-            } else if (dim == 1) {
+            } else if constexpr (dim == 1) {
                 x = (const float *) (src1 + i3 * nb13 + i2 * nb12 + (i1 - ne01) * nb11 + i0 * nb10);
-            } else if (dim == 2) {
+            } else if constexpr (dim == 2) {
                 x = (const float *) (src1 + i3 * nb13 + (i2 - ne02) * nb12 + i1 * nb11 + i0 * nb10);
-            } else if (dim == 3) {
+            } else if constexpr (dim == 3) {
                 x = (const float *) (src1 + (i3 - ne03) * nb13 + i2 * nb12 + i1 * nb11 + i0 * nb10);
             }
         }
