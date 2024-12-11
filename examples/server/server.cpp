@@ -1430,10 +1430,6 @@ struct server_context {
     // Necessary similarity of prompt for slot selection
     float slot_prompt_similarity = 0.0f;
 
-    server_context() {
-        queue_tasks.standby_timeout = params_base.standby_timeout;
-    }
-
     ~server_context() {
         if (ctx) {
             llama_free(ctx);
@@ -1484,6 +1480,8 @@ struct server_context {
         }
 
         n_ctx = llama_n_ctx(ctx);
+
+        queue_tasks.standby_timeout = params.standby_timeout;
 
         add_bos_token = llama_add_bos_token(model);
         has_eos_token = !llama_add_eos_token(model);
