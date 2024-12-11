@@ -17,7 +17,7 @@
 #
 #   python3 convert_hf_to_gguf_update.py <huggingface_token>
 #
-# - Copy-paste the generated get_vocab_base_pre() function into convert_hf_to_gguf.py
+# - The convert_hf_to_gguf.py script will have had its get_vocab_base_pre() function updated
 # - Update llama.cpp with the new pre-tokenizer if necessary
 #
 # TODO: generate tokenizer tests for llama.cpp
@@ -102,6 +102,8 @@ models = [
     {"name": "exaone",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct", },
     {"name": "phi-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/microsoft/phi-2", },
     {"name": "chameleon",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/facebook/chameleon-7b", },
+    {"name": "minerva-7b",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/sapienzanlp/Minerva-7B-base-v1.0", },
+    {"name": "roberta-bpe",    "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/sentence-transformers/stsb-roberta-base"},
 ]
 
 

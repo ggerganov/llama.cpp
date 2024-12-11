@@ -4,8 +4,11 @@
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #endif
 
+#include "amx.h"
 #include "mmq.h"
 #include "ggml-impl.h"
+#include "ggml-cpu-impl.h"
+#include "ggml-cpu-quants.h"
 #include "ggml-quants.h"
 #include <algorithm>
 #include <type_traits>
@@ -13,10 +16,6 @@
 #if defined(__gnu_linux__)
 #include <sys/syscall.h>
 #include <unistd.h>
-#endif
-
-#if defined(_OPENMP)
-#include <omp.h>
 #endif
 
 #if (defined(_WIN32) || defined(_WIN64))
@@ -33,7 +32,7 @@
 #define ALWAYS_INLINE inline
 #endif
 
-#if defined(__AMX_INT8__)
+#if defined(__AMX_INT8__) && defined(__AVX512VNNI__)
 
 namespace {
 
@@ -496,13 +495,12 @@ inline void from_float(const float * x, char * vy, int64_t k);
 
 template <>
 inline void from_float<block_q8_0>(const float * x, char * vy, int64_t k) {
-    // FIXME: using unoptimized reference impl until moved to CPU backend
-    quantize_row_q8_0_ref(x, (block_q8_0 *)vy, k);
+    quantize_row_q8_0(x, (block_q8_0 *)vy, k);
 }
 
 template <>
 inline void from_float<block_q8_1>(const float * x, char * vy, int64_t k) {
-    quantize_row_q8_1_ref(x, (block_q8_1 *)vy, k);
+    quantize_row_q8_1(x, (block_q8_1 *)vy, k);
 }
 
 template <>
@@ -950,7 +948,7 @@ template<typename TB, typename packed_B_t = packed_B_type<TB>>
 void unpack_B(packed_B_t * RESTRICT tile, const void * RESTRICT packed_B) {
     GGML_UNUSED(tile);
     GGML_UNUSED(packed_B);
-};
+}
 
 template <>
 void unpack_B<block_q4_0>(int8_t * RESTRICT tile, const void * RESTRICT packed_B) {
@@ -1338,21 +1336,19 @@ struct tinygemm_kernel_avx<float, ggml_fp16_t, float, BLOCK_M, BLOCK_N, BLOCK_K>
         __m512 vb[COLS];
         __m512 vc[ROWS * COLS];
 
-        auto loadc = [&](int idx) {
+        auto loadc = [&](auto idx) {
             vc[idx] = _mm512_setzero_ps();
         };
         Unroll<ROWS * COLS>{}(loadc);
 
-        auto compute = [&](int idx, int k) {
-            // TODO: use `constexpr` here to get rid of interger div
-            // when upgraded to C++17
-            const int row = idx / COLS;
-            const int col = idx % COLS;
+        auto compute = [&](auto idx, auto k) {
+            constexpr int row = idx / COLS;
+            constexpr int col = idx % COLS;
 
-            if (col == 0) {
+            if constexpr (col == 0) {
                 va = _mm512_loadu_ps(A + row * K + k);
             }
-            if (row == 0) {
+            if constexpr (row == 0) {
                 vb[col] =  _mm512_cvtph_ps(_mm256_loadu_si256((const __m256i *)(B + col * K + k)));
             }
             vc[idx] = _mm512_fmadd_ps(va, vb[col], vc[idx]);
@@ -1362,9 +1358,9 @@ struct tinygemm_kernel_avx<float, ggml_fp16_t, float, BLOCK_M, BLOCK_N, BLOCK_K>
             Unroll<ROWS * COLS>{}(compute, k);
         }
 
-        auto storec = [&](int idx) {
-            const int row = idx / COLS;
-            const int col = idx % COLS;
+        auto storec = [&](auto idx) {
+            constexpr int row = idx / COLS;
+            constexpr int col = idx % COLS;
             C[row * ldc + col] = _mm512_reduce_add_ps(vc[idx]);
         };
         Unroll<ROWS * COLS>{}(storec);
@@ -1382,13 +1378,13 @@ struct tinygemm_kernel_avx<float, ggml_fp16_t, float, BLOCK_M, BLOCK_N, BLOCK_K>
 #define PACKED_INDEX(n, k, KB, tile_size) (n * KB + k) * tile_size
 
 template<typename TB, int BLOCK_K>
-void convert_B_packed_format(void * RESTRICT packed_B, const TB * RESTRICT B, int N, int K, int n_threads) {
+void convert_B_packed_format(void * RESTRICT packed_B, const TB * RESTRICT B, int N, int K) {
     const int NB = N / TILE_N;
     const int KB = K / BLOCK_K;
     const int TILE_SIZE = get_tile_size<TB>();
 
     // parallel on NB should be enough
-    parallel_for(n_threads, NB, [&](int begin, int end) {
+    parallel_for(NB, [&](int begin, int end) {
         for (int n = begin; n < end; ++n) {
             for (int k = 0; k < KB; ++k) {
                 int n0 = n * TILE_N;
@@ -1427,14 +1423,14 @@ struct tinygemm_kernel_vnni<block_q8_0, block_q4_0, float, BLOCK_M, BLOCK_N, BLO
         const __m512i off = _mm512_set1_epi8(8);
         const __m512i lowMask = _mm512_set1_epi8(0xF);
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
 
-        auto compute = [&](int col, int i) {
+        auto compute = [&](auto col, auto i) {
             // load a and compute compensation
-            if (col == 0) {
+            if constexpr (col == 0) {
                 const int32_t * a_ptr = reinterpret_cast<const int32_t *>(A[0 * KB + i].qs);
                 vcomp = _mm512_setzero_si512();
                 for (int k = 0; k < 8; ++k) {
@@ -1466,7 +1462,7 @@ struct tinygemm_kernel_vnni<block_q8_0, block_q4_0, float, BLOCK_M, BLOCK_N, BLO
         }
 
         //store to C
-        auto storec = [&](int col) {
+        auto storec = [&](auto col) {
             _mm512_storeu_ps((__m512i*)(C + 0 * ldc + col * 16), vc[col]);
         };
         Unroll<COLS>{}(storec);
@@ -1490,14 +1486,14 @@ struct tinygemm_kernel_vnni<block_q8_1, block_q4_1, float, 1, BLOCK_N, BLOCK_K> 
 
         const __m512i lowMask = _mm512_set1_epi8(0xF);
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
 
-        auto compute = [&](int col, int i) {
+        auto compute = [&](auto col, auto i) {
             // load a
-            if (col == 0) {
+            if constexpr (col == 0) {
                 const int32_t * a_ptr = reinterpret_cast<const int32_t *>(A[0 * KB + i].qs);
                 for (int k = 0; k < 8; ++k) {
                     va[k] = _mm512_set1_epi32(a_ptr[k]);
@@ -1531,7 +1527,7 @@ struct tinygemm_kernel_vnni<block_q8_1, block_q4_1, float, 1, BLOCK_N, BLOCK_K> 
         }
 
         //store to C
-        auto storec = [&](int col) {
+        auto storec = [&](auto col) {
             _mm512_storeu_ps((__m512i*)(C + 0 * ldc + col * 16), vc[col]);
         };
         Unroll<COLS>{}(storec);
@@ -1562,14 +1558,14 @@ struct tinygemm_kernel_vnni<block_q8_0, block_q8_0, float, BLOCK_M, BLOCK_N, BLO
         //
         const __m512i off = _mm512_set1_epi8(static_cast<char>(0x80));
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
 
-        auto compute = [&](int col, int i) {
+        auto compute = [&](auto col, auto i) {
             // load a and add offset 128
-            if (col == 0) {
+            if constexpr (col == 0) {
                 const int32_t * a_ptr = reinterpret_cast<const int32_t *>(A[0 * KB + i].qs);
                 for (int k = 0; k < 8; ++k) {
                     va[k] = _mm512_set1_epi32(a_ptr[k]);
@@ -1602,7 +1598,7 @@ struct tinygemm_kernel_vnni<block_q8_0, block_q8_0, float, BLOCK_M, BLOCK_N, BLO
         }
 
         //store to C
-        auto storec = [&](int col) {
+        auto storec = [&](auto col) {
             _mm512_storeu_ps((__m512i*)(C + 0 * ldc + col * 16), vc[col]);
         };
         Unroll<COLS>{}(storec);
@@ -1634,7 +1630,7 @@ struct tinygemm_kernel_vnni<block_q8_K, block_q4_K, float, BLOCK_M, BLOCK_N, BLO
 
         const __m512i lowMask = _mm512_set1_epi8(0xF);
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
@@ -1648,9 +1644,9 @@ struct tinygemm_kernel_vnni<block_q8_K, block_q4_K, float, BLOCK_M, BLOCK_N, BLO
         //     int16 {k/2, n, 2}, viewed as 2d {k/2, 2n}, k = 8
         //     from {16,  8} to {4, 32}
         //
-        auto compute = [&](int col, int i) {
+        auto compute = [&](auto col, auto i) {
             // load a
-            if (col == 0) {
+            if constexpr (col == 0) {
                 for (int k_group = 0; k_group < QK_K / 32; ++k_group) {
                     va[k_group] = _mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(A[0 * KB + i].qs + k_group * 32)));
                 }
@@ -1702,7 +1698,7 @@ struct tinygemm_kernel_vnni<block_q8_K, block_q4_K, float, BLOCK_M, BLOCK_N, BLO
         }
 
         //store to C
-        auto storec = [&](int col) {
+        auto storec = [&](auto col) {
             _mm512_storeu_ps((__m512i*)(C + 0 * ldc + col * 16), vc[col]);
         };
         Unroll<COLS>{}(storec);
@@ -1735,15 +1731,15 @@ struct tinygemm_kernel_vnni<block_q8_K, block_q5_K, float, BLOCK_M, BLOCK_N, BLO
 
         const __m512i lowMask = _mm512_set1_epi8(0xF);
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
 
         // Q5_K and Q4_K shares the same vnni formats, refer to notes above.
-        auto compute = [&](int col, int i) {
+        auto compute = [&](auto col, auto i) {
             // load a
-            if (col == 0) {
+            if constexpr (col == 0) {
                 for (int k_group = 0; k_group < QK_K / 32; ++k_group) {
                     va[k_group] = _mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(A[0 * KB + i].qs + k_group * 32)));
                 }
@@ -1808,7 +1804,7 @@ struct tinygemm_kernel_vnni<block_q8_K, block_q5_K, float, BLOCK_M, BLOCK_N, BLO
         }
 
         //store to C
-        auto storec = [&](int col) {
+        auto storec = [&](auto col) {
             _mm512_storeu_ps((__m512i*)(C + 0 * ldc + col * 16), vc[col]);
         };
         Unroll<COLS>{}(storec);
@@ -1841,13 +1837,13 @@ struct tinygemm_kernel_vnni<block_q8_K, block_q6_K, float, BLOCK_M, BLOCK_N, BLO
         const __m512i m32s = _mm512_set1_epi32(32);
         const __m512i lowMask = _mm512_set1_epi8(0xF);
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
 
-        auto compute = [&](int col, int i) {
-            if (col == 0) {
+        auto compute = [&](auto col, auto i) {
+            if constexpr (col == 0) {
                 // load a
                 va[0] = _mm512_loadu_si512((const __m512i *)(A[0 * KB + i].qs +   0));
                 va[1] = _mm512_loadu_si512((const __m512i *)(A[0 * KB + i].qs +  64));
@@ -1959,13 +1955,13 @@ struct tinygemm_kernel_vnni<block_q8_K, block_iq4_xs, float, BLOCK_M, BLOCK_N, B
         const __m512i off = _mm512_set1_epi8(static_cast<char>(0x80));
         const __m512i values256 = _mm512_add_epi8(values128, off);
 
-        auto loadc = [&](int col) {
+        auto loadc = [&](auto col) {
             vc[col] = _mm512_setzero_ps();
         };
         Unroll<COLS>{}(loadc);
 
-        auto compute = [&](int col, int i) {
-            if (col == 0) {
+        auto compute = [&](auto col, auto i) {
+            if constexpr (col == 0) {
                 // load a
                 va[0] = _mm512_loadu_si512((const __m512i *)(A[0 * KB + i].qs +   0));
                 va[1] = _mm512_loadu_si512((const __m512i *)(A[0 * KB + i].qs +  64));
@@ -2015,7 +2011,7 @@ struct tinygemm_kernel_vnni<block_q8_K, block_iq4_xs, float, BLOCK_M, BLOCK_N, B
         }
 
         //store to C
-        auto storec = [&](int col) {
+        auto storec = [&](auto col) {
             _mm512_storeu_ps((__m512i*)(C + 0 * ldc + col * 16), vc[col]);
         };
         Unroll<COLS>{}(storec);
@@ -2327,25 +2323,39 @@ size_t ggml_backend_amx_get_alloc_size(const struct ggml_tensor * tensor) {
 
 // pack weight to vnni format
 void ggml_backend_amx_convert_weight(struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-
-    size_t alloc_size = ggml_backend_amx_get_alloc_size(tensor);
-    GGML_ASSERT(alloc_size == size);
+    GGML_ASSERT(offset == 0 && size == ggml_nbytes(tensor)); // only full tensor conversion is supported for now
 
     const enum ggml_type TYPE = tensor->type;
 
     const int K = tensor->ne[0]; // ne0: in_features
     const int N = tensor->ne[1]; // ne1: out_features
 
-#if defined(_OPENMP)
-    // the buffer ctx is not initialized when .set_tensor is called
-    int n_threads = omp_get_num_threads();
-#else
-    int n_threads = 1;
-#endif
+    GGML_DISPATCH_QTYPES(TYPE, [&] {
+        convert_B_packed_format<type, blck_size>((void *)((char *)tensor->data + offset), (const type *)data, N, K);
+    });
+}
+
+size_t ggml_backend_amx_desired_wsize(const struct ggml_tensor * dst) {
+    struct ggml_tensor * src0 = dst->src[0];
+
+    const enum ggml_type TYPE = src0->type;
+
+    const bool is_floating_type = TYPE == GGML_TYPE_F16;
+    if (is_floating_type) {
+        return 0;
+    }
+
+    const int M = dst->ne[1];
+    const int K = src0->ne[0];
+
+    size_t desired_wsize = 0;
 
     GGML_DISPATCH_QTYPES(TYPE, [&] {
-        convert_B_packed_format<type, blck_size>((void *)((char *)tensor->data + offset), (const type *)data, N, K, n_threads);
+        const size_t row_size_A = K / blck_size * sizeof(vec_dot_type);
+        desired_wsize = M * row_size_A;
     });
+
+    return desired_wsize;
 }
 
 // NB: mixed dtype gemm with Advanced Matrix Extensions (Intel AMX)
@@ -2356,13 +2366,11 @@ void ggml_backend_amx_convert_weight(struct ggml_tensor * tensor, const void * d
 //
 // the function performs: dst = src1 @ src0.T
 //
-void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor * dst) {
+void ggml_backend_amx_mul_mat(const ggml_compute_params * params, struct ggml_tensor * dst) {
     struct ggml_tensor * src0 = dst->src[0];
     struct ggml_tensor * src1 = dst->src[1];
 
     const enum ggml_type TYPE = src0->type;
-
-    const int n_threads = ctx->n_threads;
 
     // f16 only has avx512 kernels for now,
     // amx kernels will be added once 6th gen xeon is released.
@@ -2379,7 +2387,7 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
         const int MB = div_up(M, BLOCK_M);
         const int NB = div_up(N, BLOCK_N);
 
-        parallel_for(n_threads, MB * NB, [&](int begin, int end) {
+        parallel_for_ggml(params, MB * NB, [&](int begin, int end) {
             GGML_DISPATCH_FLOATING_TYPES(TYPE, [&] {
                 for (int i = begin; i < end; ++i) {
                     int mb = i / NB;
@@ -2412,27 +2420,29 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
     }
 
     // pointer to work space, used convert A from float to quantized type
-    void * wdata = nullptr;
+    void * wdata = params->wdata;
 
     //TODO: performance improvement: merge quant A
-    GGML_DISPATCH_QTYPES(TYPE, [&] {
-        const size_t row_size_A = K / blck_size * sizeof(vec_dot_type);
-        const size_t desired_wsize = M * row_size_A;
-        if (ctx->work_size < desired_wsize) {
-            ctx->work_data.reset(new char[desired_wsize]);
-            ctx->work_size = desired_wsize;
-        }
-        wdata = ctx->work_data.get();
+    if (params->ith == 0) {
+        GGML_DISPATCH_QTYPES(TYPE, [&] {
+            const size_t row_size_A = K / blck_size * sizeof(vec_dot_type);
+            const size_t desired_wsize = M * row_size_A;
+            if (params->wsize < desired_wsize) {
+                GGML_ABORT("insufficient work space size");
+            }
 
-        // Q4_0, Q4_1, Q8_0 handles 1 TILE_K per blck_size
-        // Q4_K, Q5_K, Q6_K, IQ4_XS handles 8 TILE_K per blck_size
-        GGML_ASSERT(TILE_K == blck_size || TILE_K * 8 == blck_size);
+            // Q4_0, Q4_1, Q8_0 handles 1 TILE_K per blck_size
+            // Q4_K, Q5_K, Q6_K, IQ4_XS handles 8 TILE_K per blck_size
+            GGML_ASSERT(TILE_K == blck_size || TILE_K * 8 == blck_size);
 
-        const float * A_data = static_cast<const float *>(src1->data);
-        for (int m = 0; m < M; ++m) {
-            from_float<vec_dot_type>(A_data + m * K, (char *)wdata + m * row_size_A, K);
-        }
-    });
+            const float * A_data = static_cast<const float *>(src1->data);
+            for (int m = 0; m < M; ++m) {
+                from_float<vec_dot_type>(A_data + m * K, (char *)wdata + m * row_size_A, K);
+            }
+        });
+    }
+
+    ggml_barrier(params->threadpool);
 
     if (M == 1) {
         // MB = 1 and handle 8 tiles in each block
@@ -2440,7 +2450,7 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
         constexpr int BLOCK_N = TILE_N * kTilesN;
         const int NB = div_up(N, BLOCK_N);
 
-        parallel_for(n_threads, NB, [&](int begin, int end) {
+        parallel_for_ggml(params, NB, [&](int begin, int end) {
             GGML_DISPATCH_QTYPES(TYPE, [&] {
                 const int KB = K / blck_size;
                 const int TILE_SIZE = get_tile_size<type>();
@@ -2470,7 +2480,7 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
     const int MB = div_up(M, BLOCK_M);
     const int NB = div_up(N, BLOCK_N);
 
-    parallel_for(n_threads, MB * NB, [&](int begin, int end) {
+    parallel_for_ggml(params, MB * NB, [&](int begin, int end) {
         // init tile config for each thread
         ggml_tile_config_init();
 
@@ -2498,13 +2508,4 @@ void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor
     });
 }
 
-#else // if defined(__AMX_INT8__)
-
-void ggml_backend_amx_mul_mat(ggml_backend_amx_context * ctx, struct ggml_tensor * dst) {
-    fprintf(stderr, "GGML is not compiled with AMX support!\n");
-
-    GGML_UNUSED(ctx);
-    GGML_UNUSED(dst);
-}
-
-#endif // if defined(__AMX_INT8__)
+#endif // if defined(__AMX_INT8__) && defined(__AVX512VNNI__)

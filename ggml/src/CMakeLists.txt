@@ -220,9 +220,7 @@ add_library(ggml-base
             ggml-threading.cpp
             ggml-threading.h
             ggml-quants.c
-            ggml-quants.h
-            ggml-aarch64.c
-            ggml-aarch64.h)
+            ggml-quants.h)
 
 target_include_directories(ggml-base PRIVATE .)
 
@@ -261,21 +259,50 @@ function(ggml_add_backend backend)
     if (${backend_id})
         string(TOLOWER "ggml-${backend}" backend_target)
         add_subdirectory(${backend_target})
-        # check again in case the backend disabled itself
-        # note that this should NOT be the normal behavior, in case of errors the backend should fail the build
-        # however, currently it is necessary for AMX, since it is enabled by default on llama.cpp
-        if (${backend_id})
-            message(STATUS "Including ${backend} backend")
-            if (NOT GGML_BACKEND_DL)
-                string(TOUPPER "GGML_USE_${backend}" backend_use)
-                target_compile_definitions(ggml PUBLIC ${backend_use})
-            endif()
+        message(STATUS "Including ${backend} backend")
+        if (NOT GGML_BACKEND_DL)
+            string(TOUPPER "GGML_USE_${backend}" backend_use)
+            target_compile_definitions(ggml PUBLIC ${backend_use})
         endif()
     endif()
 endfunction()
 
+function(ggml_add_cpu_backend_variant tag_name)
+    set(GGML_CPU_TAG_NAME ${tag_name})
+    # other: OPENMP LLAMAFILE CPU_HBM
+    foreach (feat NATIVE
+                  AVX AVX2 AVX_VNNI FMA F16C
+                  AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16
+                  AMX_TILE AMX_INT8 AMX_BF16)
+        set(GGML_${feat} OFF)
+    endforeach()
+
+    foreach (feat ${ARGN})
+        set(GGML_${feat} ON)
+    endforeach()
+
+    ggml_add_cpu_backend_variant_impl(${tag_name})
+endfunction()
+
 ggml_add_backend(CPU)
-ggml_add_backend(AMX)
+
+if (GGML_CPU_ALL_VARIANTS)
+    if (NOT GGML_BACKEND_DL)
+        message(FATAL_ERROR "GGML_CPU_ALL_VARIANTS requires GGML_BACKEND_DL")
+    endif()
+    ggml_add_cpu_backend_variant(sandybridge    AVX)
+    ggml_add_cpu_backend_variant(haswell        AVX F16C AVX2 FMA)
+    ggml_add_cpu_backend_variant(skylakex       AVX F16C AVX2 FMA AVX512)
+    ggml_add_cpu_backend_variant(icelake        AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI)
+    if (NOT MSVC)
+        # MSVC doesn't support AVX-VNNI or AMX
+        ggml_add_cpu_backend_variant(alderlake      AVX F16C AVX2 FMA AVX_VNNI)
+        ggml_add_cpu_backend_variant(sapphirerapids AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8)
+    endif()
+else ()
+    ggml_add_cpu_backend_variant_impl("")
+endif()
+
 ggml_add_backend(BLAS)
 ggml_add_backend(CANN)
 ggml_add_backend(CUDA)
@@ -289,7 +316,7 @@ ggml_add_backend(Vulkan)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
-    target_compile_features   (${target} PRIVATE c_std_11) # don't bump
+    target_compile_features   (${target} PRIVATE c_std_11 cxx_std_17) # don't bump
 endforeach()
 
 target_link_libraries(ggml-base PRIVATE Threads::Threads)

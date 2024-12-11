@@ -133,6 +133,7 @@ struct common_params_sampling {
     bool    penalize_nl        = false; // consider newlines as a repeatable token
     bool    ignore_eos         = false;
     bool    no_perf            = false; // disable performance metrics
+    bool    timing_per_token   = false;
 
     std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
 
@@ -214,7 +215,7 @@ struct common_params {
     struct common_params_speculative speculative;
 
     std::string model                = ""; // model path                                                    // NOLINT
-    std::string model_alias          = "unknown"; // model alias                                            // NOLINT
+    std::string model_alias          = ""; // model alias                                                   // NOLINT
     std::string model_url            = ""; // model url to download                                         // NOLINT
     std::string hf_token             = ""; // HF token                                                      // NOLINT
     std::string hf_repo              = ""; // HF repo                                                       // NOLINT

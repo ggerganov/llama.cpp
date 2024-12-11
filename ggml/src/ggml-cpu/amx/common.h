@@ -1,14 +1,13 @@
 #pragma once
 
 #include "ggml.h"
-// hack until AMX is moved into the CPU backend
-#include "../ggml-cpu/ggml-cpu-impl.h" // <immintrin.h>
+#include "ggml-cpu-impl.h"
 
 #include <algorithm>
 #include <memory>
 #include <type_traits>
 
-#if defined(_OPENMP)
+#if defined(GGML_USE_OPENMP)
 #include <omp.h>
 #endif
 
@@ -57,11 +56,11 @@ inline void balance211(T n, T nth, T ith, T& n_start, T& n_end) {
 }
 
 template <typename func_t>
-inline void parallel_for(int nth, int n, const func_t& f) {
-#if defined(_OPENMP)
-#pragma omp parallel num_threads(nth)
+inline void parallel_for(int n, const func_t& f) {
+#if defined(GGML_USE_OPENMP)
+#pragma omp parallel
 {
-    //int nth = omp_get_num_threads();
+    int nth = omp_get_num_threads();
     int ith = omp_get_thread_num();
     int tbegin, tend;
     balance211(n, nth, ith, tbegin, tend);
@@ -69,26 +68,24 @@ inline void parallel_for(int nth, int n, const func_t& f) {
 }
 #else
     f(0, n);
-
-    GGML_UNUSED(nth);
 #endif
+}
+
+template <typename func_t>
+inline void parallel_for_ggml(const ggml_compute_params * params, int n, const func_t & f) {
+    int tbegin, tend;
+    balance211(n, params->nth, params->ith, tbegin, tend);
+    f(tbegin, tend);
 }
 
 // quantized types that have AMX support
 inline bool qtype_has_amx_kernels(const enum ggml_type type) {
     // TODO: fix padding for vnni format
     return (type == GGML_TYPE_Q4_0) ||
-        (type == GGML_TYPE_Q4_1);
-        //(type == GGML_TYPE_Q8_0) ||
-        //(type == GGML_TYPE_Q4_K) ||
-        //(type == GGML_TYPE_Q5_K) ||
-        //(type == GGML_TYPE_Q6_K) ||
-        //(type == GGML_TYPE_IQ4_XS);
+        (type == GGML_TYPE_Q4_1) ||
+        (type == GGML_TYPE_Q8_0) ||
+        (type == GGML_TYPE_Q4_K) ||
+        (type == GGML_TYPE_Q5_K) ||
+        (type == GGML_TYPE_Q6_K) ||
+        (type == GGML_TYPE_IQ4_XS);
 }
-
-// ggml backend context
-struct ggml_backend_amx_context {
-    int n_threads = GGML_DEFAULT_N_THREADS;
-    std::unique_ptr<char[]> work_data;
-    size_t work_size = 0;
-};

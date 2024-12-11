@@ -46,6 +46,7 @@ class ServerProcess:
     model_alias: str | None = None
     model_url: str | None = None
     model_file: str | None = None
+    model_draft: str | None = None
     n_threads: int | None = None
     n_gpu_layer: int | None = None
     n_batch: int | None = None
@@ -63,11 +64,15 @@ class ServerProcess:
     server_embeddings: bool | None = False
     server_reranking: bool | None = False
     server_metrics: bool | None = False
+    server_slots: bool | None = False
     draft: int | None = None
     api_key: str | None = None
     response_format: str | None = None
     lora_files: List[str] | None = None
     disable_ctx_shift: int | None = False
+    draft_min: int | None = None
+    draft_max: int | None = None
+    no_webui: bool | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -88,7 +93,6 @@ class ServerProcess:
         else:
             server_path = "../../../build/bin/llama-server"
         server_args = [
-            "--slots",  # requires to get slot status via /slots endpoint
             "--host",
             self.server_host,
             "--port",
@@ -102,6 +106,8 @@ class ServerProcess:
             server_args.extend(["--model", self.model_file])
         if self.model_url:
             server_args.extend(["--model-url", self.model_url])
+        if self.model_draft:
+            server_args.extend(["--model-draft", self.model_draft])
         if self.model_hf_repo:
             server_args.extend(["--hf-repo", self.model_hf_repo])
         if self.model_hf_file:
@@ -124,6 +130,8 @@ class ServerProcess:
             server_args.append("--reranking")
         if self.server_metrics:
             server_args.append("--metrics")
+        if self.server_slots:
+            server_args.append("--slots")
         if self.model_alias:
             server_args.extend(["--alias", self.model_alias])
         if self.n_ctx:
@@ -147,6 +155,12 @@ class ServerProcess:
             server_args.extend(["--no-context-shift"])
         if self.api_key:
             server_args.extend(["--api-key", self.api_key])
+        if self.draft_max:
+            server_args.extend(["--draft-max", self.draft_max])
+        if self.draft_min:
+            server_args.extend(["--draft-min", self.draft_min])
+        if self.no_webui:
+            server_args.append("--no-webui")
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -172,7 +186,7 @@ class ServerProcess:
         start_time = time.time()
         while time.time() - start_time < timeout_seconds:
             try:
-                response = self.make_request("GET", "/slots", headers={
+                response = self.make_request("GET", "/health", headers={
                     "Authorization": f"Bearer {self.api_key}" if self.api_key else None
                 })
                 if response.status_code == 200:
@@ -185,7 +199,8 @@ class ServerProcess:
         raise TimeoutError(f"Server did not start within {timeout_seconds} seconds")
 
     def stop(self) -> None:
-        server_instances.remove(self)
+        if self in server_instances:
+            server_instances.remove(self)
         if self.process:
             print(f"Stopping server with pid={self.process.pid}")
             self.process.kill()
@@ -214,7 +229,7 @@ class ServerProcess:
         result.headers = dict(response.headers)
         result.status_code = response.status_code
         result.body = response.json() if parse_body else None
-        print("Response from server", result.body)
+        print("Response from server", json.dumps(result.body, indent=2))
         return result
 
     def make_stream_request(
@@ -235,7 +250,7 @@ class ServerProcess:
                 break
             elif line.startswith('data: '):
                 data = json.loads(line[6:])
-                print("Partial response from server", data)
+                print("Partial response from server", json.dumps(data, indent=2))
                 yield data
 
 
@@ -359,3 +374,6 @@ def match_regex(regex: str, text: str) -> bool:
         ).search(text)
         is not None
     )
+
+def is_slow_test_allowed():
+    return os.environ.get("SLOW_TESTS") == "1" or os.environ.get("SLOW_TESTS") == "ON"

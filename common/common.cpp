@@ -652,7 +652,17 @@ bool fs_validate_filename(const std::string & filename) {
 
     std::u32string filename_utf32;
     try {
+#if defined(__clang__)
+        // disable C++17 deprecation warning for std::codecvt_utf8
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
         std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+
+#if defined(__clang__)
+#    pragma clang diagnostic pop
+#endif
+
         filename_utf32 = converter.from_bytes(filename);
 
         // If the reverse conversion mismatches, it means overlong UTF-8 sequences were used,
