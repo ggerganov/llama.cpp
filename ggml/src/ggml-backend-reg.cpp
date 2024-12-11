@@ -449,11 +449,21 @@ static std::string backend_filename_suffix() {
 #endif
 }
 
-static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent) {
+static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent, const char * user_search_path) {
     // enumerate all the files that match [lib]ggml-name-*.[so|dll] in the search paths
      // TODO: search system paths
-    std::vector<std::string> search_paths = { "./", get_executable_path() };
     std::string file_prefix = backend_filename_prefix() + name + "-";
+    std::vector<std::string> search_paths;
+    if (user_search_path == nullptr) {
+        search_paths.push_back("./");
+        search_paths.push_back(get_executable_path());
+    } else {
+#if defined(_WIN32)
+        search_paths.push_back(std::string(user_search_path) + "\\");
+#else
+        search_paths.push_back(std::string(user_search_path) + "/");
+#endif
+    }
 
     int best_score = 0;
     std::string best_path;
@@ -509,21 +519,25 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent)
 }
 
 void ggml_backend_load_all() {
+    ggml_backend_load_all_from_path(nullptr);
+}
+
+void ggml_backend_load_all_from_path(const char * dir_path) {
 #ifdef NDEBUG
     bool silent = true;
 #else
     bool silent = false;
 #endif
 
-    ggml_backend_load_best("blas", silent);
-    ggml_backend_load_best("cann", silent);
-    ggml_backend_load_best("cuda", silent);
-    ggml_backend_load_best("hip", silent);
-    ggml_backend_load_best("kompute", silent);
-    ggml_backend_load_best("metal", silent);
-    ggml_backend_load_best("rpc", silent);
-    ggml_backend_load_best("sycl", silent);
-    ggml_backend_load_best("vulkan", silent);
-    ggml_backend_load_best("musa", silent);
-    ggml_backend_load_best("cpu", silent);
+    ggml_backend_load_best("blas", silent, dir_path);
+    ggml_backend_load_best("cann", silent, dir_path);
+    ggml_backend_load_best("cuda", silent, dir_path);
+    ggml_backend_load_best("hip", silent, dir_path);
+    ggml_backend_load_best("kompute", silent, dir_path);
+    ggml_backend_load_best("metal", silent, dir_path);
+    ggml_backend_load_best("rpc", silent, dir_path);
+    ggml_backend_load_best("sycl", silent, dir_path);
+    ggml_backend_load_best("vulkan", silent, dir_path);
+    ggml_backend_load_best("musa", silent, dir_path);
+    ggml_backend_load_best("cpu", silent, dir_path);
 }
