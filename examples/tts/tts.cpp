@@ -135,7 +135,7 @@ static void fold(const std::vector<double> & data, int64_t n_out, int64_t n_win,
         int64_t end   = start + kernel_w;
 
         for (int64_t w_im = start; w_im < end; ++w_im) {
-            if (w_im >= 0 && w_im < output_height) {
+            if (w_im >= 0 && w_im < output_height && col_idx < (int64_t) data.size()) {
                 output[w_im] += data[col_idx];
             }
             col_idx++;
@@ -291,7 +291,7 @@ int main(int argc, char ** argv) {
 
     params.prompt = "";
 
-    params.n_predict = 1024;
+    params.n_predict = 4096;
     params.n_batch   = 8192;
     params.n_ctx     = 8192;
 
@@ -364,7 +364,7 @@ int main(int argc, char ** argv) {
                 if (c == ' ') {
                     prompt_clean += "<|text_sep|>";
                 } else {
-                    if (isalpha(c)) {
+                    if (isalpha(c) || isdigit(c)) {
                         c = tolower(c);
                     } else {
                         continue;
