@@ -1237,7 +1237,7 @@ namespace dpct
 
             std::map<byte_t *, allocation>::iterator get_map_iterator(const void *ptr)
             {
-                auto it = m_map.upper_bound((byte_t *)ptr);
+                auto it = m_map.upper_bound(const_cast<byte_t *>(reinterpret_cast<const byte_t *>(ptr)));
                 if (it == m_map.end())
                 {
                     // Not a virtual pointer.

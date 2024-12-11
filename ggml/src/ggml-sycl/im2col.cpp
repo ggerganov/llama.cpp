@@ -122,4 +122,5 @@ void ggml_sycl_op_im2col(
 
     (void) src0;
     (void) src0_dd;
+    (void) ctx;
 }

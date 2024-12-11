@@ -626,6 +626,7 @@ struct bin_bcast_sycl {
                     });
             }
         }
+        (void) ctx;
     }
 };
 

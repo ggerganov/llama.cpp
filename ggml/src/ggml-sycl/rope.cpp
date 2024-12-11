@@ -272,4 +272,5 @@ void ggml_sycl_op_rope(
     (void) src1;
     (void) dst;
     (void) src1_dd;
+    (void) ctx;
 }
