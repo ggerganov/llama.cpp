@@ -303,23 +303,23 @@ mkdir llama-client
 cd llama-client
 ```
 
-Create a index.js file and put this inside:
+Create an index.js file and put this inside:
 
 ```javascript
-const prompt = `Building a website can be done in 10 simple steps:`;
+const prompt = "Building a website can be done in 10 simple steps:"
 
-async function Test() {
+async function test() {
     let response = await fetch("http://127.0.0.1:8080/completion", {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({
             prompt,
-            n_predict: 512,
+            n_predict: 64,
         })
     })
     console.log((await response.json()).content)
 }
 
-Test()
+test()
 ```
 
 And run it:
@@ -381,7 +381,7 @@ Multiple prompts are also supported. In this case, the completion result will be
 `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.
 By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
 
-`stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
+`stream`: Allows receiving each predicted token in real-time instead of waiting for the completion to finish (uses a different response format). To enable this, set to `true`.
 
 `stop`: Specify a JSON array of stopping strings.
 These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
@@ -446,7 +446,7 @@ These words will not be included in the completion, so make sure to add them to 
 
 **Response format**
 
-- Note: When using streaming mode (`stream`), only `content` and `stop` will be returned until end of completion.
+- Note: In streaming mode (`stream`), only `content` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
 
 - `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
 
