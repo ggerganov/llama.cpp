@@ -343,6 +343,10 @@ node index.js
 
 ### POST `/completion`: Given a `prompt`, it returns the predicted completion.
 
+> [!IMPORTANT]
+>
+> This endpoint is **not** OAI-compatible
+
 *Options:*
 
 `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
@@ -448,26 +452,47 @@ These words will not be included in the completion, so make sure to add them to 
 
 - Note: When using streaming mode (`stream`), only `content` and `stop` will be returned until end of completion.
 
-- `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
+- `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has a nested array `top_logprobs`. It contains at **maximum** `n_probs` elements:
 
 ```json
 {
-  "content": "<the token selected by the model>",
-  "probs": [
+  "content": "<the generated completion text>",
+  ...
+  "completion_probabilities": [
     {
+      "id": <token id>,
       "prob": float,
-      "tok_str": "<most likely token>"
+      "token": "<most likely token>",
+      "bytes": [int, int, ...],
+      "top_logprobs": [
+        {
+          "id": <token id>,
+          "prob": float,
+          "token": "<token text>",
+          "bytes": [int, int, ...],
+        },
+        {
+          "id": <token id>,
+          "prob": float,
+          "token": "<token text>",
+          "bytes": [int, int, ...],
+        },
+        ...
+      ]
     },
     {
+      "id": <token id>,
       "prob": float,
-      "tok_str": "<second most likely token>"
+      "token": "<most likely token>",
+      "bytes": [int, int, ...],
+      "top_logprobs": [
+        ...
+      ]
     },
     ...
   ]
 },
 ```
-
-Notice that each `probs` is an array of length `n_probs`.
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
