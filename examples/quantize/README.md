@@ -81,7 +81,7 @@ Several quantization methods are supported. They differ in the resulting model d
   - [#4930 - imatrix for all k-quants](https://github.com/ggerganov/llama.cpp/pull/4930)
   - [#4951 - imatrix on the GPU](https://github.com/ggerganov/llama.cpp/pull/4957)
   - [#4969 - imatrix for legacy quants](https://github.com/ggerganov/llama.cpp/pull/4969)
-  - [#4996 - k-qunats tuning](https://github.com/ggerganov/llama.cpp/pull/4996)
+  - [#4996 - k-quants tuning](https://github.com/ggerganov/llama.cpp/pull/4996)
   - [#5060 - Q3_K_XS](https://github.com/ggerganov/llama.cpp/pull/5060)
   - [#5196 - 3-bit i-quants](https://github.com/ggerganov/llama.cpp/pull/5196)
   - [quantization tuning](https://github.com/ggerganov/llama.cpp/pull/5320), [another one](https://github.com/ggerganov/llama.cpp/pull/5334), and [another one](https://github.com/ggerganov/llama.cpp/pull/5361)
