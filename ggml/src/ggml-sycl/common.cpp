@@ -64,20 +64,10 @@ void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
                                  const ggml_tensor *src1, ggml_tensor *dst,
                                  const ggml_sycl_op_flatten_t op) try {
 
-    // TODO: What's the use of these?
-    // const int64_t nrows0 = ggml_nrows(src0);
-    // const int64_t nrows1 = use_src1 ? ggml_nrows(src1) : 1;
-
     const bool use_src1 = src1 != nullptr;
 
     GGML_ASSERT(!use_src1 || src1->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
     GGML_ASSERT(              dst->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
-
-    // TODO: What are these uses of these?
-
-    // ggml_tensor_extra_gpu * src0_extra =            (ggml_tensor_extra_gpu *) src0->extra;
-    // ggml_tensor_extra_gpu * src1_extra = use_src1 ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
-    // ggml_tensor_extra_gpu * dst_extra  =            (ggml_tensor_extra_gpu *)  dst->extra;
 
     // dd = data device
     float * src0_ddf = (float *) src0->data;
