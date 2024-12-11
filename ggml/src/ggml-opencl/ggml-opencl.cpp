@@ -7,7 +7,7 @@
 #pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
 #pragma GCC diagnostic ignored "-Woverlength-strings"
 
-#include "ggml-opencl2.h"
+#include "ggml-opencl.h"
 #include "ggml-backend.h"
 #include "ggml-impl.h"
 #include "ggml-backend-impl.h"

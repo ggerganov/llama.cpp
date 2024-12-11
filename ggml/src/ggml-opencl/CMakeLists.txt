@@ -4,20 +4,13 @@ find_package(OpenCL)
 if (OpenCL_FOUND)
     find_package(Python3 REQUIRED)
 
-    set(TARGET_NAME ggml-opencl2)
+    set(TARGET_NAME ggml-opencl)
 
     ggml_add_backend_library(${TARGET_NAME}
-                ggml-opencl2.cpp
-                ../../include/ggml-opencl2.h)
+                ggml-opencl.cpp
+                ../../include/ggml-opencl.h)
     target_link_libraries(${TARGET_NAME} PRIVATE ggml-base ${OpenCL_LIBRARIES})
     target_include_directories(${TARGET_NAME} PRIVATE . .. ${OpenCL_INCLUDE_DIRS})
-
-    # TODO - this is kind of strange. We have been calling this backend OpenCL2,
-    # so everything (function names, folder name, etc) except macro switches
-    # has been OpenCL2. Now, the backend frameworke enforces the use of the folder
-    # name as the backend name and switch. So, GGML_USE_OPENCL2 is used in
-    # ggml-backend-reg.cpp, but the rest still uses GGML_USE_OPENCL.
-    add_compile_definitions(GGML_USE_OPENCL)
 
     if (GGML_OPENCL_PROFILING)
         message(STATUS "OpenCL profiling enabled (increases CPU overhead)")

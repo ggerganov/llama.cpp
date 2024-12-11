@@ -46,8 +46,8 @@
 #include "ggml-vulkan.h"
 #endif
 
-#ifdef GGML_USE_OPENCL2
-#include "ggml-opencl2.h"
+#ifdef GGML_USE_OPENCL
+#include "ggml-opencl.h"
 #endif
 
 #ifdef GGML_USE_BLAS
@@ -150,7 +150,7 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_VULKAN
         register_backend(ggml_backend_vk_reg());
 #endif
-#ifdef GGML_USE_OPENCL2
+#ifdef GGML_USE_OPENCL
         register_backend(ggml_backend_opencl2_reg());
 #endif
 #ifdef GGML_USE_CANN
@@ -546,6 +546,7 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
     ggml_backend_load_best("rpc", silent, dir_path);
     ggml_backend_load_best("sycl", silent, dir_path);
     ggml_backend_load_best("vulkan", silent, dir_path);
+    ggml_backend_load_best("opencl", silent, dir_path);
     ggml_backend_load_best("musa", silent, dir_path);
     ggml_backend_load_best("cpu", silent, dir_path);
 }
