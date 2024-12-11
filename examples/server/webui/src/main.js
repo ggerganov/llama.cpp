@@ -3,9 +3,12 @@ import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vu
 import MarkdownIt from 'markdown-it';
 import TextLineStream from 'textlinestream';
 
+const isDev = import.meta.env.MODE === 'development';
+
 // utility functions
 const isString = (x) => !!x.toLowerCase;
-const isNumeric = (n) => !isString(n) && !isNaN(n);
+const isBoolean = (x) => x === true || x === false;
+const isNumeric = (n) => !isString(n) && !isNaN(n) && !isBoolean(n);
 const escapeAttr = (str) => str.replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const copyStr = (str) => navigator.clipboard.writeText(str);
 
@@ -36,6 +39,7 @@ const CONFIG_DEFAULT = {
   dry_allowed_length: 2,
   dry_penalty_last_n: -1,
   max_tokens: -1,
+  show_tokens_per_second: false,
   custom: '', // custom json-stringified object
 };
 const CONFIG_INFO = {
@@ -98,6 +102,37 @@ const SettingsModalShortInput = defineComponent({
     configDefault: Object,
     configInfo: Object,
     modelValue: [Object, String, Number],
+  },
+});
+
+// message bubble component
+const MessageBubble = defineComponent({
+  components: {
+    VueMarkdown
+  },
+  template: document.getElementById('message-bubble').innerHTML,
+  props: {
+    msg: Object,
+    isGenerating: Boolean,
+    editUserMsgAndRegenerate: Function,
+    regenerateMsg: Function,
+  },
+  data() {
+    return {
+      editingContent: null,
+    };
+  },
+  methods: {
+    copyMsg() {
+      copyStr(this.msg.content);
+    },
+    editMsg() {
+      this.editUserMsgAndRegenerate({
+        ...this.msg,
+        content: this.editingContent,
+      });
+      this.editingContent = null;
+    },
   },
 });
 
@@ -199,6 +234,7 @@ async function* sendSSEPostRequest(url, fetchOptions) {
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new TextLineStream());
   for await (const line of lines) {
+    if (isDev) console.log({line});
     if (line.startsWith('data:') && !line.endsWith('[DONE]')) {
       const data = JSON.parse(line.slice(5));
       yield data;
@@ -213,6 +249,7 @@ const mainApp = createApp({
   components: {
     VueMarkdown,
     SettingsModalShortInput,
+    MessageBubble,
   },
   data() {
     return {
@@ -226,7 +263,6 @@ const mainApp = createApp({
       selectedTheme: StorageUtils.getTheme(),
       config: StorageUtils.getConfig(),
       showConfigDialog: false,
-      editingMsg: null,
       // const
       themes: THEMES,
       configDefault: {...CONFIG_DEFAULT},
@@ -243,6 +279,15 @@ const mainApp = createApp({
     });
     resizeObserver.observe(pendingMsgElem);
   },
+  watch: {
+    viewingConvId: function(val, oldVal) {
+      if (val != oldVal) {
+        this.fetchMessages();
+        chatScrollToBottom();
+        this.hideSidebar();
+      }
+    }
+  },
   methods: {
     hideSidebar() {
       document.getElementById('toggle-drawer').checked = false;
@@ -254,18 +299,10 @@ const mainApp = createApp({
     newConversation() {
       if (this.isGenerating) return;
       this.viewingConvId = StorageUtils.getNewConvId();
-      this.editingMsg = null;
-      this.fetchMessages();
-      chatScrollToBottom();
-      this.hideSidebar();
     },
     setViewingConv(convId) {
       if (this.isGenerating) return;
       this.viewingConvId = convId;
-      this.editingMsg = null;
-      this.fetchMessages();
-      chatScrollToBottom();
-      this.hideSidebar();
     },
     deleteConv(convId) {
       if (this.isGenerating) return;
@@ -273,7 +310,6 @@ const mainApp = createApp({
         StorageUtils.remove(convId);
         if (this.viewingConvId === convId) {
           this.viewingConvId = StorageUtils.getNewConvId();
-          this.editingMsg = null;
         }
         this.fetchConversation();
         this.fetchMessages();
@@ -308,7 +344,6 @@ const mainApp = createApp({
       this.fetchConversation();
       this.fetchMessages();
       this.inputMsg = '';
-      this.editingMsg = null;
       this.generateMessage(currConvId);
       chatScrollToBottom();
     },
@@ -316,7 +351,6 @@ const mainApp = createApp({
       if (this.isGenerating) return;
       this.pendingMsg = { id: Date.now()+1, role: 'assistant', content: null };
       this.isGenerating = true;
-      this.editingMsg = null;
 
       try {
         const abortController = new AbortController();
@@ -347,6 +381,7 @@ const mainApp = createApp({
           dry_allowed_length: this.config.dry_allowed_length,
           dry_penalty_last_n: this.config.dry_penalty_last_n,
           max_tokens: this.config.max_tokens,
+          timings_per_token: !!this.config.show_tokens_per_second,
           ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
         };
         const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
@@ -407,14 +442,10 @@ const mainApp = createApp({
       this.fetchMessages();
       this.generateMessage(currConvId);
     },
-    copyMsg(msg) {
-      copyStr(msg.content);
-    },
     editUserMsgAndRegenerate(msg) {
       if (this.isGenerating) return;
       const currConvId = this.viewingConvId;
       const newContent = msg.content;
-      this.editingMsg = null;
       StorageUtils.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
       StorageUtils.appendMsg(currConvId, {
         id: Date.now(),
