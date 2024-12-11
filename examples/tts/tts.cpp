@@ -295,7 +295,7 @@ int main(int argc, char ** argv) {
     params.n_batch   = 8192;
     params.n_ctx     = 8192;
 
-    params.sampling.top_k = 128;
+    params.sampling.top_k = 4;
     params.sampling.penalty_repeat = 1.1;
     params.sampling.penalty_last_n = 8;
     params.sampling.samplers = { COMMON_SAMPLER_TYPE_TEMPERATURE, COMMON_SAMPLER_TYPE_TOP_K, };
@@ -743,6 +743,11 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
     const std::string fname = "output.wav";
 
     const int n_sr = 24000; // sampling rate
+
+    // zero out first 0.25 seconds
+    for (int i = 0; i < 24000/4; ++i) {
+        audio[i] = 0.0f;
+    }
 
     LOG_INF("%s: time for spectral ops: %.3f ms\n", __func__, (ggml_time_us() - t_spec_start) / 1000.0f);
     LOG_INF("%s: total time:            %.3f ms\n", __func__, (ggml_time_us() - t_main_start) / 1000.0f);
