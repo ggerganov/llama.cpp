@@ -137,8 +137,6 @@ void ggml_backend_sycl_print_sycl_devices() {
 
     for (int id = 0; id < device_count; ++id) {
       sycl::device device = dpct::dev_mgr::instance().get_device(id);
-      // TODO: backend variable is unused here!
-      // sycl::backend backend = device.get_backend();
       std::string backend_type = get_device_backend_and_type(device);
       int type_id = DeviceNums[backend_type]++;
       std::stringstream device_type;
@@ -421,7 +419,6 @@ ggml_backend_sycl_buffer_cpy_tensor(ggml_backend_buffer_t buffer,
         return true;
     }
     return false;
-    // TODO: Buffer is unused
     (void) buffer;
 } catch (const sycl::exception & exc) {
     std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
