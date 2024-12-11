@@ -4648,7 +4648,6 @@ static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, cons
     // SYCL doesn't support registering host memory, left here for reference
     // "ggml_backend_register_host_buffer"
     // "ggml_backend_unregister_host_buffer"
-    // doing this to make the compiler happy
     (void) name;
     return nullptr;
 }

@@ -59,7 +59,6 @@ static void rwkv_wkv_f32_kernel(
         float y = 0;
 
         // Process in chunks of 4 for better vectorization
-        // TODO: What's the purpose of kv4?
         sycl::float4 k4, r4, tf4, td4, s4;
         #pragma unroll
         for (int j = 0; j < head_size; j += 4) {
