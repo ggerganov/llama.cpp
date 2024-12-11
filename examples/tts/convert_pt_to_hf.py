@@ -11,9 +11,6 @@ import re
 
 from safetensors.torch import save_file
 
-# change path to script dir
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
 # default
 model_path = './model.pt';
 
