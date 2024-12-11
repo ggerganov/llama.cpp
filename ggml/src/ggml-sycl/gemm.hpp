@@ -24,9 +24,6 @@
 #include "dnnl_sycl.hpp"
 
 
-// TODO: Remove this when needed
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wcast-qual"
 class DnnlGemmWrapper {
 public:
     using dt = dnnl::memory::data_type;
@@ -100,7 +97,6 @@ public:
     }
 };
 
-#    pragma clang diagnostic pop
 #endif
 
 #endif // GGML_SYCL_GEMM_HPP
