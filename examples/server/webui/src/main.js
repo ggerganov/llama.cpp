@@ -1,7 +1,7 @@
 import './styles.css';
 import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vue.esm-bundler.js';
-import { llama } from './completion.js';
 import MarkdownIt from 'markdown-it';
+import TextLineStream from 'textlinestream';
 
 // utility functions
 const isString = (x) => !!x.toLowerCase;
@@ -192,6 +192,23 @@ const chatScrollToBottom = (requiresNearBottom) => {
   }
 };
 
+// wrapper for SSE
+async function* sendSSEPostRequest(url, fetchOptions) {
+  const res = await fetch(url, fetchOptions);
+  const lines = res.body
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+  for await (const line of lines) {
+    if (line.startsWith('data:') && !line.endsWith('[DONE]')) {
+      const data = JSON.parse(line.slice(5));
+      yield data;
+    } else if (line.startsWith('error:')) {
+      const data = JSON.parse(line.slice(6));
+      throw new Error(data.message || 'Unknown error');
+    }
+  }
+};
+
 const mainApp = createApp({
   components: {
     VueMarkdown,
@@ -331,16 +348,19 @@ const mainApp = createApp({
           dry_penalty_last_n: this.config.dry_penalty_last_n,
           max_tokens: this.config.max_tokens,
           ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
-          ...(this.config.apiKey ? { api_key: this.config.apiKey } : {}),
         };
-        const config = {
-          controller: abortController,
-          api_url: BASE_URL,
-          endpoint: '/chat/completions',
-        };
-        for await (const chunk of llama(prompt, params, config)) {
-          const stop = chunk.data.stop;
-          const addedContent = chunk.data.choices[0].delta.content;
+        const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': this.config.apiKey ? `Bearer ${this.config.apiKey}` : undefined,
+          },
+          body: JSON.stringify(params),
+          signal: abortController.signal,
+        });
+        for await (const chunk of chunks) {
+          const stop = chunk.stop;
+          const addedContent = chunk.choices[0].delta.content;
           const lastContent = this.pendingMsg.content || '';
           if (addedContent) {
             this.pendingMsg = {
