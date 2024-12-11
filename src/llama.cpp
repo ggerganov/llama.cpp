@@ -17234,9 +17234,6 @@ struct llm_build_context {
 
         cur = ggml_cont(ctx0, ggml_transpose(ctx0, inpL));
 
-        printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
-        printf("conv1d: %d %d %d\n", model.conv_1d->ne[0], model.conv_1d->ne[1], model.conv_1d->ne[2]);
-
         cur = ggml_conv_1d_ph(ctx0, model.conv_1d, cur, 1, 1);
         cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.conv_1d_b, 1, model.conv_1d_b->ne[0]));
 
@@ -17444,8 +17441,6 @@ struct llm_build_context {
 
         cur = ggml_add(ctx0, cur, model.output_b);
         cb(cur, "result_embd", -1);
-
-        printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 
         ggml_build_forward_expand(gf, cur);
 

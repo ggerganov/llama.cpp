@@ -3846,10 +3846,6 @@ struct ggml_tensor * ggml_conv_1d(
         int                   d0) {
     struct ggml_tensor * im2col = ggml_im2col(ctx, a, b, s0, 0, p0, 0, d0, 0, false, GGML_TYPE_F16); // [N, OL, IC * K]
 
-    printf("a: %lld %lld %lld %lld\n", a->ne[0], a->ne[1], a->ne[2], a->ne[3]);
-    printf("b: %lld %lld %lld %lld\n", b->ne[0], b->ne[1], b->ne[2], b->ne[3]);
-    printf("im2col: %lld %lld %lld %lld\n", im2col->ne[0], im2col->ne[1], im2col->ne[2], im2col->ne[3]);
-
     struct ggml_tensor * result =
         ggml_mul_mat(ctx,
                 ggml_reshape_2d(ctx, im2col, im2col->ne[0], (im2col->ne[2] * im2col->ne[1])), // [N, OL, IC * K] => [N*OL, IC * K]
