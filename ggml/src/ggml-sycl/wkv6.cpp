@@ -136,7 +136,7 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, const ggml_tensor* s
                 );
             });
     });
-    // TODO: Why src0 and src1 are unused?
+
     (void) src0;
     (void) src1;
 }
