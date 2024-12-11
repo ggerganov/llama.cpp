@@ -1179,6 +1179,8 @@ struct server_queue {
     std::function<void(server_task)> callback_new_task;
     std::function<void(void)>        callback_update_slots;
 
+    int standby_timeout;
+
     // Add a new task to the end of the queue
     int post(server_task task, bool front = false) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
@@ -1260,7 +1262,7 @@ struct server_queue {
      * - Check if multitask is finished
      * - Update all slots
      */
-    void start_loop(int standby_timeout) {
+    void start_loop() {
         running = true;
 
         while (true) {
@@ -1427,6 +1429,10 @@ struct server_context {
 
     // Necessary similarity of prompt for slot selection
     float slot_prompt_similarity = 0.0f;
+
+    server_context() {
+        queue_tasks.standby_timeout = params_base.standby_timeout;
+    }
 
     ~server_context() {
         if (ctx) {
@@ -3952,7 +3958,7 @@ int main(int argc, char ** argv) {
 
     LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
 
-    ctx_server.queue_tasks.start_loop(params.standby_timeout);
+    ctx_server.queue_tasks.start_loop();
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct sigaction sigint_action;
