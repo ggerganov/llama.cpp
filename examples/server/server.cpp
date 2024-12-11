@@ -392,7 +392,7 @@ struct server_task_result {
         return false;
     }
     virtual bool is_stop() {
-        // only used by server_task_result_cmpl_partial
+        // only used by server_task_result_cmpl_*
         return false;
     }
     virtual int get_index() {
@@ -478,14 +478,20 @@ struct server_task_result_cmpl_final : server_task_result {
         return index;
     }
 
+    virtual bool is_stop() override {
+        return true; // in stream mode, final responses are considered stop
+    }
+
     virtual json to_json() override {
-        return oaicompat ? to_json_oaicompat_chat() : to_json_non_oaicompat();
+        return oaicompat
+            ? (stream ? to_json_oaicompat_chat_stream() : to_json_oaicompat_chat())
+            : to_json_non_oaicompat();
     }
 
     json to_json_non_oaicompat() {
         json res = json {
             {"index",               index},
-            {"content",             content},
+            {"content",             stream ? "" : content}, // in stream mode, content is already in last partial chunk
             {"id_slot",             id_slot},
             {"stop",                true},
             {"model",               oaicompat_model},
@@ -546,17 +552,45 @@ struct server_task_result_cmpl_final : server_task_result {
 
         return res;
     }
+
+    json to_json_oaicompat_chat_stream() {
+        std::time_t t = std::time(0);
+        std::string finish_reason = "length";
+        if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
+            finish_reason = "stop";
+        }
+
+        json choices = json::array({json{{"finish_reason", finish_reason},
+                                        {"index", 0},
+                                        {"delta", json::object()}}});
+
+        json ret = json {
+            {"choices", choices},
+            {"created", t},
+            {"id",      oaicompat_cmpl_id},
+            {"model",   oaicompat_model},
+            {"object",  "chat.completion.chunk"},
+            {"usage", json {
+                {"completion_tokens", n_decoded},
+                {"prompt_tokens",     n_prompt_tokens},
+                {"total_tokens",      n_decoded + n_prompt_tokens},
+            }},
+        };
+
+        if (timings.prompt_n >= 0) {
+            ret.push_back({"timings", timings.to_json()});
+        }
+
+        return ret;
+    }
 };
 
 struct server_task_result_cmpl_partial : server_task_result {
     int index = 0;
     std::string content;
 
-    bool truncated;
     int32_t n_decoded;
     int32_t n_prompt_tokens;
-
-    stop_type stop = STOP_TYPE_NONE;
 
     std::vector<completion_token_output> probs_output;
     result_timings timings;
@@ -573,20 +607,19 @@ struct server_task_result_cmpl_partial : server_task_result {
     }
 
     virtual bool is_stop() override {
-        return stop != STOP_TYPE_NONE;
+        return false; // in stream mode, partial responses are not considered stop
     }
 
     virtual json to_json() override {
-        if (oaicompat) {
-            return to_json_oaicompat();
-        }
-        bool is_stop = stop != STOP_TYPE_NONE;
+        return oaicompat ? to_json_oaicompat() : to_json_non_oaicompat();
+    }
+
+    json to_json_non_oaicompat() {
         // non-OAI-compat JSON
         json res = json {
             {"index",            index},
             {"content",          content},
-            {"stop_type",        stop_type_to_str(stop)},
-            {"stop",             is_stop},
+            {"stop",             false},
             {"id_slot",          id_slot},
             {"tokens_predicted", n_decoded},
             {"tokens_evaluated", n_prompt_tokens},
@@ -598,72 +631,54 @@ struct server_task_result_cmpl_partial : server_task_result {
         if (!probs_output.empty()) {
             res["completion_probabilities"] = completion_token_output::probs_vector_to_json(probs_output);
         }
-        if (is_stop) {
-            res.push_back({"truncated", truncated});
-        }
         return res;
     }
 
     json to_json_oaicompat() {
         bool first = n_decoded == 0;
-
-        std::string finish_reason;
-        if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
-            finish_reason = "stop";
-        } else if (stop == STOP_TYPE_LIMIT) {
-            finish_reason = "length";
-        }
-
         std::time_t t = std::time(0);
-
         json choices;
 
-        if (!finish_reason.empty()) {
-            choices = json::array({json{{"finish_reason", finish_reason},
-                                        {"index", 0},
-                                        {"delta", json::object()}}});
-        } else {
-            if (first) {
-                if (content.empty()) {
-                    choices = json::array({json{{"finish_reason", nullptr},
-                                                {"index", 0},
-                                                {"delta", json{{"role", "assistant"}}}}});
-                } else {
-                    // We have to send this as two updates to conform to openai behavior
-                    json initial_ret = json{{"choices", json::array({json{
-                                            {"finish_reason", nullptr},
+        if (first) {
+            if (content.empty()) {
+                choices = json::array({json{{"finish_reason", nullptr},
                                             {"index", 0},
-                                            {"delta", json{
-                                                {"role", "assistant"}
-                                            }}}})},
-                                {"created", t},
-                                {"id", oaicompat_cmpl_id},
-                                {"model", oaicompat_model},
-                                {"object", "chat.completion.chunk"}};
-
-                    json second_ret = json{
-                                {"choices", json::array({json{{"finish_reason", nullptr},
-                                                                {"index", 0},
-                                                                {"delta", json{
-                                                                {"content", content}}}
-                                                                }})},
-                                {"created", t},
-                                {"id", oaicompat_cmpl_id},
-                                {"model", oaicompat_model},
-                                {"object", "chat.completion.chunk"}};
-
-                    return std::vector<json>({initial_ret, second_ret});
-                }
+                                            {"delta", json{{"role", "assistant"}}}}});
             } else {
-                choices = json::array({json{
-                    {"finish_reason", nullptr},
-                    {"index", 0},
-                    {"delta",
-                    json{
-                        {"content", content},
-                    }},
-                }});
+                // We have to send this as two updates to conform to openai behavior
+                json initial_ret = json{{"choices", json::array({json{
+                                        {"finish_reason", nullptr},
+                                        {"index", 0},
+                                        {"delta", json{
+                                            {"role", "assistant"}
+                                        }}}})},
+                            {"created", t},
+                            {"id", oaicompat_cmpl_id},
+                            {"model", oaicompat_model},
+                            {"object", "chat.completion.chunk"}};
+
+                json second_ret = json{
+                            {"choices", json::array({json{{"finish_reason", nullptr},
+                                                            {"index", 0},
+                                                            {"delta", json{
+                                                            {"content", content}}}
+                                                            }})},
+                            {"created", t},
+                            {"id", oaicompat_cmpl_id},
+                            {"model", oaicompat_model},
+                            {"object", "chat.completion.chunk"}};
+
+                return std::vector<json>({initial_ret, second_ret});
             }
+        } else {
+            choices = json::array({json{
+                {"finish_reason", nullptr},
+                {"index", 0},
+                {"delta",
+                json{
+                    {"content", content},
+                }},
+            }});
         }
 
         json ret = json {
@@ -676,14 +691,6 @@ struct server_task_result_cmpl_partial : server_task_result {
 
         if (timings.prompt_n >= 0) {
             ret.push_back({"timings", timings.to_json()});
-        }
-
-        if (!finish_reason.empty()) {
-            ret.push_back({"usage", json {
-                {"completion_tokens", n_decoded},
-                {"prompt_tokens",     n_prompt_tokens},
-                {"total_tokens",      n_decoded + n_prompt_tokens},
-            }});
         }
 
         return std::vector<json>({ret});
@@ -1888,11 +1895,8 @@ struct server_context {
         res->index   = slot.index;
         res->content = tkn.text_to_send;
 
-        res->truncated       = slot.truncated;
         res->n_decoded       = slot.n_decoded;
         res->n_prompt_tokens = slot.n_prompt_tokens;
-
-        res->stop = slot.stop;
 
         res->verbose           = slot.params.verbose;
         res->oaicompat         = slot.params.oaicompat;
@@ -1924,12 +1928,6 @@ struct server_context {
     }
 
     void send_final_response(server_slot & slot) {
-        if (slot.params.stream) {
-            // if in stream mode, send the last partial response
-            send_partial_response(slot, {0, "", {}});
-            return;
-        }
-
         auto res = std::make_unique<server_task_result_cmpl_final>();
         res->id              = slot.id_task;
         res->id_slot         = slot.id;
@@ -1948,6 +1946,7 @@ struct server_context {
         res->stop            = slot.stop;
 
         res->verbose           = slot.params.verbose;
+        res->stream            = slot.params.stream;
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_chat    = slot.params.oaicompat_chat;
         res->oaicompat_model   = slot.params.oaicompat_model;
@@ -2100,7 +2099,10 @@ struct server_context {
                 return;
             }
 
-            GGML_ASSERT(dynamic_cast<server_task_result_cmpl_partial*>(result.get()) != nullptr);
+            GGML_ASSERT(
+                dynamic_cast<server_task_result_cmpl_partial*>(result.get()) != nullptr
+                || dynamic_cast<server_task_result_cmpl_final*>(result.get()) != nullptr
+            );
             if (!result_handler(result)) {
                 cancel_tasks(id_tasks);
                 break;
@@ -3482,6 +3484,11 @@ int main(int argc, char ** argv) {
         json data = json::parse(req.body);
 
         // validate input
+        if (data.contains("prompt") && !data.at("prompt").is_string()) {
+            // prompt is optional
+            res_error(res, format_error_response("\"prompt\" must be a string", ERROR_TYPE_INVALID_REQUEST));
+        }
+
         if (!data.contains("input_prefix")) {
             res_error(res, format_error_response("\"input_prefix\" is required", ERROR_TYPE_INVALID_REQUEST));
         }
@@ -3491,9 +3498,11 @@ int main(int argc, char ** argv) {
         }
 
         if (data.contains("input_extra") && !data.at("input_extra").is_array()) {
+            // input_extra is optional
             res_error(res, format_error_response("\"input_extra\" must be an array of {\"filename\": string, \"text\": string}", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
+
         json input_extra = json_value(data, "input_extra", json::array());
         for (const auto & chunk : input_extra) {
             // { "text": string, "filename": string }
@@ -3508,6 +3517,21 @@ int main(int argc, char ** argv) {
             }
         }
         data["input_extra"] = input_extra; // default to empty array if it's not exist
+
+        std::string prompt = json_value(data, "prompt", std::string());
+        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
+        SRV_DBG("creating infill tasks, n_prompts = %d\n", (int) tokenized_prompts.size());
+        data["prompt"] = format_infill(
+            ctx_server.ctx,
+            data.at("input_prefix"),
+            data.at("input_suffix"),
+            data.at("input_extra"),
+            ctx_server.params_base.n_batch,
+            ctx_server.params_base.n_predict,
+            ctx_server.slots[0].n_ctx, // TODO: there should be a better way
+            ctx_server.params_base.spm_infill,
+            tokenized_prompts[0]
+        );
 
         return handle_completions_generic(SERVER_TASK_TYPE_INFILL, data, res);
     };
@@ -3791,20 +3815,24 @@ int main(int argc, char ** argv) {
     // Router
     //
 
-    // register static assets routes
-    if (!params.public_path.empty()) {
-        // Set the base directory for serving static files
-        bool is_found = svr->set_mount_point("/", params.public_path);
-        if (!is_found) {
-            LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
-            return 1;
-        }
+    if (!params.webui) {
+        LOG_INF("Web UI is disabled\n");
     } else {
-        // using embedded static index.html
-        svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
-            res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
-            return false;
-        });
+        // register static assets routes
+        if (!params.public_path.empty()) {
+            // Set the base directory for serving static files
+            bool is_found = svr->set_mount_point("/", params.public_path);
+            if (!is_found) {
+                LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
+                return 1;
+            }
+        } else {
+            // using embedded static index.html
+            svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+                return false;
+            });
+        }
     }
 
     // register API routes

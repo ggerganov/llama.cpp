@@ -72,6 +72,7 @@ class ServerProcess:
     disable_ctx_shift: int | None = False
     draft_min: int | None = None
     draft_max: int | None = None
+    no_webui: bool | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -158,6 +159,8 @@ class ServerProcess:
             server_args.extend(["--draft-max", self.draft_max])
         if self.draft_min:
             server_args.extend(["--draft-min", self.draft_min])
+        if self.no_webui:
+            server_args.append("--no-webui")
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -371,3 +374,6 @@ def match_regex(regex: str, text: str) -> bool:
         ).search(text)
         is not None
     )
+
+def is_slow_test_allowed():
+    return os.environ.get("SLOW_TESTS") == "1" or os.environ.get("SLOW_TESTS") == "ON"
