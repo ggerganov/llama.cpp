@@ -416,7 +416,7 @@ const mainApp = createApp({
             };
           }
           const timings = chunk.timings;
-          if (timings) {
+          if (timings && this.config.showTokensPerSecond) {
             // only extract what's really needed, to save some space
             this.pendingMsg.timings = {
               prompt_n: timings.prompt_n,
