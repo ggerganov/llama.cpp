@@ -170,7 +170,7 @@ int main(int argc, char ** argv) {
 
     const float * embd = llama_get_embeddings(ctx_cts);
 
-    int n = 768*261;
+    int n = 1282*261;
 
     LOG("result:\n");
     for (int i = 0; i < 10; ++i) {

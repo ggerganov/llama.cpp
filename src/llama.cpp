@@ -9631,8 +9631,11 @@ static bool llm_load_tensors(
                     }
 
                     // output
-                    model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
-                    model.output      = create_tensor(tn(LLM_TENSOR_OUTPUT,      "weight"), {768, 1282}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
+                    model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {768}, 0);
+
+                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, 1282}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {1282}, llama_model_loader::TENSOR_NOT_REQUIRED);
                 } break;
             default:
                 throw std::runtime_error("unknown architecture");
@@ -17419,16 +17422,22 @@ struct llm_build_context {
 
         cur = inpL;
 
+        cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
+
+        cur = llm_build_norm(ctx0, cur, hparams,
+                model.output_norm,
+                model.output_norm_b,
+                LLM_NORM, cb, -1);
+        cb(cur, "result_norm", -1);
+
+        // lm_head
+        cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
+        cb(cur, "result_output_no_bias", -1);
+
+        cur = ggml_add(ctx0, cur, model.output_b);
+        cb(cur, "result_output", -1);
+
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
-
-        //cur = llm_build_norm(ctx0, cur, hparams,
-        //        model.output_norm, NULL,
-        //        LLM_NORM_RMS, cb, -1);
-        //cb(cur, "result_norm", -1);
-
-        //// lm_head
-        //cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
-        //cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
 
@@ -18588,7 +18597,7 @@ if (model.arch != LLM_ARCH_OUTETTS_VOC) {
                             GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_embd <= (int64_t) lctx.embd_size);
                             // TODO: TEMPORARY [OUTETTS]
                             //ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
-                            ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_tokens*768*sizeof(float));
+                            ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_tokens*1282*sizeof(float));
                         }
                     } break;
                 case LLAMA_POOLING_TYPE_MEAN:
