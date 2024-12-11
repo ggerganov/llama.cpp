@@ -614,7 +614,6 @@ enum llm_tensor {
     LLM_TENSOR_CONV1D,
     LLM_TENSOR_CONV_NEXT_DW,
     LLM_TENSOR_CONV_NEXT_NORM,
-    LLM_TENSOR_CONV_NEXT_SHIFT,
     LLM_TENSOR_CONV_NEXT_PW1,
     LLM_TENSOR_CONV_NEXT_PW2,
     LLM_TENSOR_CONV_NEXT_GAMMA,
@@ -1619,12 +1618,11 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_TOKEN_EMBD,        "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM,   "token_embd_norm" },
             { LLM_TENSOR_CONV1D,            "conv1d" },
-            { LLM_TENSOR_CONV_NEXT_DW,      "conv_next.dw" },
-            { LLM_TENSOR_CONV_NEXT_NORM,    "conv_next.norm" },
-            { LLM_TENSOR_CONV_NEXT_SHIFT,   "conv_next.shift" },
-            { LLM_TENSOR_CONV_NEXT_PW1,     "conv_next.pw1" },
-            { LLM_TENSOR_CONV_NEXT_PW2,     "conv_next.pw2" },
-            { LLM_TENSOR_CONV_NEXT_GAMMA,   "conv_next.gamma" },
+            { LLM_TENSOR_CONV_NEXT_DW,      "conv_next.%d.dw" },
+            { LLM_TENSOR_CONV_NEXT_NORM,    "conv_next.%d.norm" },
+            { LLM_TENSOR_CONV_NEXT_PW1,     "conv_next.%d.pw1" },
+            { LLM_TENSOR_CONV_NEXT_PW2,     "conv_next.%d.pw2" },
+            { LLM_TENSOR_CONV_NEXT_GAMMA,   "conv_next.%d.gamma" },
             { LLM_TENSOR_OUTPUT_NORM,       "output_norm" },
             { LLM_TENSOR_OUTPUT,            "output" },
             { LLM_TENSOR_POS_NET_CONV1,     "pos_net.%d.conv1" },
@@ -2922,6 +2920,21 @@ struct llama_layer {
     struct ggml_tensor * ffn_gate_scale;
     struct ggml_tensor * ffn_up_scale;
     struct ggml_tensor * ffn_down_scale;
+
+    // convnext
+    struct ggml_tensor * convnext_dw;
+    struct ggml_tensor * convnext_dw_b;
+
+    struct ggml_tensor * convnext_norm;
+    struct ggml_tensor * convnext_norm_b;
+
+    struct ggml_tensor * convnext_pw1;
+    struct ggml_tensor * convnext_pw1_b;
+
+    struct ggml_tensor * convnext_pw2;
+    struct ggml_tensor * convnext_pw2_b;
+
+    struct ggml_tensor * convnext_gamma;
 };
 
 // very similar to llama_batch,
@@ -6420,6 +6433,10 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                }
             } break;
+        case LLM_ARCH_OUTETTS_VOC:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
+            } break;
         default: (void)0;
     }
 
@@ -7439,6 +7456,11 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_POS_NET_ATTN_K,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_POS_NET_ATTN_V,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_POS_NET_ATTN_OUT,           {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_CONV_NEXT_DW,               {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
+    {LLM_TENSOR_CONV_NEXT_NORM,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_CONV_NEXT_PW1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_CONV_NEXT_PW2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_CONV_NEXT_GAMMA,            {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -9588,6 +9610,25 @@ static bool llm_load_tensors(
 
                     model.posnet_5_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 5), {768}, 0);
                     model.posnet_5_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   5), {768}, 0);
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        auto & layer = model.layers[i];
+
+                        layer.convnext_dw   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "weight", i), {7, 1, 768}, 0);
+                        layer.convnext_dw_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "bias",   i), {768}, 0);
+
+                        layer.convnext_norm   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "weight", i), {768}, 0);
+                        layer.convnext_norm_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "bias",   i), {768}, 0);
+
+                        // TODO: n_ff
+                        layer.convnext_pw1   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "weight", i), {768, 2304}, 0);
+                        layer.convnext_pw1_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "bias",   i), {2304}, 0);
+
+                        layer.convnext_pw2   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "weight", i), {2304, 768}, 0);
+                        layer.convnext_pw2_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "bias",   i), {768}, 0);
+
+                        layer.convnext_gamma = create_tensor(tn(LLM_TENSOR_CONV_NEXT_GAMMA, "weight", i), {768}, 0);
+                    }
 
                     // output
                     model.output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
@@ -17338,10 +17379,45 @@ struct llm_build_context {
                     LLM_NORM_GROUP, cb, 0);
         }
 
-        cur = llm_build_norm(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), hparams,
+        cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
+
+        cur = llm_build_norm(ctx0, cur, hparams,
                 model.tok_norm,
                 model.tok_norm_b,
                 LLM_NORM, cb, -1);
+
+        cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
+
+        inpL = cur;
+
+        for (int il = 0; il < n_layer; ++il) {
+            cur = inpL;
+
+            cur = ggml_conv_1d_dw_ph(ctx0, model.layers[il].convnext_dw, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, ggml_reshape_2d(ctx0, model.layers[il].convnext_dw_b, 1, model.layers[il].convnext_dw_b->ne[0]));
+
+            cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
+
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    model.layers[il].convnext_norm,
+                    model.layers[il].convnext_norm_b,
+                    LLM_NORM, cb, -1);
+
+            cur = llm_build_ffn(ctx0, lctx, cur,
+                    model.layers[il].convnext_pw1, model.layers[il].convnext_pw1_b, NULL,
+                    NULL,                          NULL,                            NULL,
+                    model.layers[il].convnext_pw2, model.layers[il].convnext_pw2_b, NULL,
+                    NULL,
+                    LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
+
+            cur = ggml_mul(ctx0, cur, model.layers[il].convnext_gamma);
+
+            cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
+
+            inpL = ggml_add(ctx0, cur, inpL);
+        }
+
+        cur = inpL;
 
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 

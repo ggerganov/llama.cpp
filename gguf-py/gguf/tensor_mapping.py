@@ -714,11 +714,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.CONV_NEXT_NORM: (
-            "backbone.convnext.{bid}.norm.scale", # outetts
-        ),
-
-        MODEL_TENSOR.CONV_NEXT_SHIFT: (
-            "backbone.convnext.{bid}.norm.shift", # outetts
+            "backbone.convnext.{bid}.norm", # outetts
         ),
 
         MODEL_TENSOR.CONV_NEXT_PW1: (

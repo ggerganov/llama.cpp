@@ -90,13 +90,16 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
 
         # these are the only rows used
         # ref: https://github.com/edwko/OuteTTS/blob/a613e79c489d8256dd657ea9168d78de75895d82/outetts/wav_tokenizer/audio_codec.py#L100
-        if new_key == "backbone.norm.scale.weight":
-            new_key = "backbone.norm.weight"
+        if new_key.endswith("norm.scale.weight"):
+            new_key = new_key.replace("norm.scale.weight", "norm.weight")
             value = value[0]
 
-        if new_key == "backbone.norm.shift.weight":
-            new_key = "backbone.norm.bias"
+        if new_key.endswith("norm.shift.weight"):
+            new_key = new_key.replace("norm.shift.weight", "norm.bias")
             value = value[0]
+
+        if new_key.endswith("gamma"):
+            new_key = new_key.replace("gamma", "gamma.weight")
 
         size_mb = value.element_size() * value.nelement() / (1024 * 1024)
         print(f"{size_mb:8.2f} MB - {new_key}: {value.shape}")
@@ -149,6 +152,7 @@ config = {
     "hidden_size": 512,
     "vocab_size": 4096,
     "n_head": 1,
+    "layer_norm_epsilon": 1e-6,
     "max_position_embeddings": 8192, # ?
     "num_hidden_layers": 12
 }

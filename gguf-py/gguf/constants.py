@@ -374,7 +374,6 @@ class MODEL_TENSOR(IntEnum):
     CONV1D               = auto()
     CONV_NEXT_DW         = auto()
     CONV_NEXT_NORM       = auto()
-    CONV_NEXT_SHIFT      = auto()
     CONV_NEXT_PW1        = auto()
     CONV_NEXT_PW2        = auto()
     CONV_NEXT_GAMMA      = auto()
@@ -557,7 +556,6 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.CONV1D:                    "conv1d",
     MODEL_TENSOR.CONV_NEXT_DW:              "conv_next.{bid}.dw",
     MODEL_TENSOR.CONV_NEXT_NORM:            "conv_next.{bid}.norm",
-    MODEL_TENSOR.CONV_NEXT_SHIFT:           "conv_next.{bid}.shift",
     MODEL_TENSOR.CONV_NEXT_PW1:             "conv_next.{bid}.pw1",
     MODEL_TENSOR.CONV_NEXT_PW2:             "conv_next.{bid}.pw2",
     MODEL_TENSOR.CONV_NEXT_GAMMA:           "conv_next.{bid}.gamma",
@@ -1416,7 +1414,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.CONV1D,
         MODEL_TENSOR.CONV_NEXT_DW,
         MODEL_TENSOR.CONV_NEXT_NORM,
-        MODEL_TENSOR.CONV_NEXT_SHIFT,
         MODEL_TENSOR.CONV_NEXT_PW1,
         MODEL_TENSOR.CONV_NEXT_PW2,
         MODEL_TENSOR.CONV_NEXT_GAMMA,
