@@ -9,9 +9,16 @@ llama_add_compile_flags()
 add_library(llama
             ../include/llama.h
             llama.cpp
-            llama-vocab.cpp
+            llama-arch.cpp
+            llama-batch.cpp
+            llama-context.cpp
+            llama-control-vector.cpp
             llama-grammar.cpp
+            llama-kv-cache.cpp
+            llama-mmap.cpp
+            llama-model.cpp
             llama-sampling.cpp
+            llama-vocab.cpp
             unicode.h
             unicode.cpp
             unicode-data.cpp
