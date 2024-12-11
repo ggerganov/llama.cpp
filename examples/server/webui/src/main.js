@@ -19,6 +19,7 @@ const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: '',
   systemMessage: 'You are a helpful assistant.',
+  showTokensPerSecond: false,
   // make sure these default values are in sync with `common.h`
   samplers: 'dkypmxt',
   temperature: 0.8,
@@ -39,7 +40,6 @@ const CONFIG_DEFAULT = {
   dry_allowed_length: 2,
   dry_penalty_last_n: -1,
   max_tokens: -1,
-  show_tokens_per_second: false,
   custom: '', // custom json-stringified object
 };
 const CONFIG_INFO = {
@@ -112,6 +112,7 @@ const MessageBubble = defineComponent({
   },
   template: document.getElementById('message-bubble').innerHTML,
   props: {
+    config: Object,
     msg: Object,
     isGenerating: Boolean,
     editUserMsgAndRegenerate: Function,
@@ -121,6 +122,16 @@ const MessageBubble = defineComponent({
     return {
       editingContent: null,
     };
+  },
+  computed: {
+    timings() {
+      if (!this.msg.timings) return null;
+      return {
+        ...this.msg.timings,
+        prompt_per_second: this.msg.timings.prompt_n / (this.msg.timings.prompt_ms / 1000),
+        predicted_per_second: this.msg.timings.predicted_n / (this.msg.timings.predicted_ms / 1000),
+      };
+    }
   },
   methods: {
     copyMsg() {
@@ -381,7 +392,7 @@ const mainApp = createApp({
           dry_allowed_length: this.config.dry_allowed_length,
           dry_penalty_last_n: this.config.dry_penalty_last_n,
           max_tokens: this.config.max_tokens,
-          timings_per_token: !!this.config.show_tokens_per_second,
+          timings_per_token: !!this.config.showTokensPerSecond,
           ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
         };
         const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
@@ -402,6 +413,16 @@ const mainApp = createApp({
               id: this.pendingMsg.id,
               role: 'assistant',
               content: lastContent + addedContent,
+            };
+          }
+          const timings = chunk.timings;
+          if (timings) {
+            // only extract what's really needed, to save some space
+            this.pendingMsg.timings = {
+              prompt_n: timings.prompt_n,
+              prompt_ms: timings.prompt_ms,
+              predicted_n: timings.predicted_n,
+              predicted_ms: timings.predicted_ms,
             };
           }
         }
