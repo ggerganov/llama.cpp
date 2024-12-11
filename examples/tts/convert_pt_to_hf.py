@@ -152,7 +152,7 @@ config = {
     "architectures": [
         "OuteTTSVocoder"
     ],
-    "hidden_size": 512,
+    "hidden_size": 1282,
     "vocab_size": 4096,
     "n_head": 1,
     "layer_norm_epsilon": 1e-6,

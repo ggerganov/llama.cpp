@@ -9539,12 +9539,12 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_OUTETTS_VOC:
                 {
-                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
+                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {512, n_vocab}, 0);
 
                     model.tok_norm   = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {768}, 0);
                     model.tok_norm_b = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {768}, 0);
 
-                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, n_embd, 768}, 0);
+                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, 512, 768}, 0);
                     model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {768}, 0);
 
                     model.posnet_0_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 0), {768}, 0);
@@ -9636,8 +9636,8 @@ static bool llm_load_tensors(
                     model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
                     model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {768}, 0);
 
-                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, 1282}, 0);
-                    model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {1282}, 0);
+                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, n_embd}, 0);
+                    model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {n_embd}, 0);
 
                     model.hann_window = create_tensor(tn(LLM_TENSOR_HANN_WINDOW, "weight"), {1280}, 0);
                 } break;
@@ -17432,14 +17432,12 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, cb, -1);
-        cb(cur, "result_norm", -1);
 
         // lm_head
         cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
-        cb(cur, "result_output_no_bias", -1);
 
         cur = ggml_add(ctx0, cur, model.output_b);
-        cb(cur, "result_output", -1);
+        cb(cur, "result_embd", -1);
 
         printf("cur: %d %d %d\n", cur->ne[0], cur->ne[1], cur->ne[2]);
 
@@ -17732,8 +17730,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     // add on pooling layer
     if (lctx.cparams.embeddings) {
-        // TODO: TEMPORARY DISABLED [OUTETTS]
-        //result = llm.append_pooling(result);
+        result = llm.append_pooling(result);
     }
 
     llm.free();
@@ -18221,13 +18218,7 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
     }
 
     const size_t prev_size = lctx.buf_output ? ggml_backend_buffer_get_size(lctx.buf_output.get()) : 0;
-
-    // TODO: TEMPORARY !!! [OUTETTS]
-#if 0
     const size_t new_size  = (logits_size + embd_size) * sizeof(float);
-#else
-    const size_t new_size  = 1024*1024*32;
-#endif
 
     // alloc only when more than the current capacity is required
     // TODO: also consider shrinking the buffer
@@ -18501,14 +18492,9 @@ static int llama_decode_internal(
 
         ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
 
-        struct ggml_tensor * res  = nullptr;
-        struct ggml_tensor * embd = nullptr;
-
-// TODO: TEMPORARY DISABLED [OUTETTS]
-if (model.arch != LLM_ARCH_OUTETTS_VOC) {
         // the output is always the last tensor in the graph
-        res  = ggml_graph_node(gf, -1);
-        embd = ggml_graph_node(gf, -2);
+        struct ggml_tensor * res  = ggml_graph_node(gf, -1);
+        struct ggml_tensor * embd = ggml_graph_node(gf, -2);
 
         if (lctx.n_outputs == 0) {
             // no output
@@ -18528,10 +18514,7 @@ if (model.arch != LLM_ARCH_OUTETTS_VOC) {
             embd = nullptr; // do not extract embeddings when not needed
             GGML_ASSERT(strcmp(res->name, "result_output") == 0 && "missing result_output tensor");
         }
-} else {
-        res  = nullptr;
-        embd = ggml_graph_node(gf, -1);
-}
+
         // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
         ggml_backend_sched_alloc_graph(lctx.sched.get(), gf);
@@ -18599,9 +18582,7 @@ if (model.arch != LLM_ARCH_OUTETTS_VOC) {
                         if (n_outputs_new) {
                             GGML_ASSERT( n_outputs_prev + n_outputs_new <= n_outputs);
                             GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_embd <= (int64_t) lctx.embd_size);
-                            // TODO: TEMPORARY [OUTETTS]
-                            //ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
-                            ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_tokens*1282*sizeof(float));
+                            ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
                         }
                     } break;
                 case LLAMA_POOLING_TYPE_MEAN:

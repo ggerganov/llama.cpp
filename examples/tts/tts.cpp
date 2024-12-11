@@ -168,9 +168,10 @@ int main(int argc, char ** argv) {
 
     LOG_INF("%s: time for prompt: %.3f ms\n", __func__, (ggml_time_us() - t_main_start) / 1000.0f);
 
+    const int n_embd = llama_n_embd(model_cts);
     const float * embd = llama_get_embeddings(ctx_cts);
 
-    int n = 1282*261;
+    int n = n_embd*261;
 
     LOG("result:\n");
     for (int i = 0; i < 10; ++i) {
