@@ -1164,16 +1164,6 @@ struct server_metrics {
     }
 };
 
-struct termination_signal {
-    int number;
-};
-
-struct standby_timeout {};
-
-using shutdown_reason = std::variant<termination_signal, standby_timeout>;
-
-std::function<void(shutdown_reason)> shutdown_handler;
-
 struct server_queue {
     int id = 0;
     bool running;
@@ -1308,9 +1298,8 @@ struct server_queue {
                     };
                     if (standby_timeout > 0) {
                         if (!condition_tasks.wait_for(lock, std::chrono::seconds(standby_timeout), pred)) {
-                            lock.release()->unlock(); // unlock the unique_lock, before calling the shutdown_handler, as it tries to lock it
                             QUE_INF("%s", "stand-by timeout reached\n");
-                            shutdown_handler(::standby_timeout{});
+                            running = false;
                             break;
                         }
                     } else {
@@ -2906,6 +2895,7 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
     LOG_DBG("response: %s\n", res.body.c_str());
 }
 
+std::function<void(int)> shutdown_handler;
 std::atomic_flag is_terminating = ATOMIC_FLAG_INIT;
 
 inline void signal_handler(int signal) {
@@ -2916,7 +2906,7 @@ inline void signal_handler(int signal) {
         exit(1);
     }
 
-    shutdown_handler(termination_signal{ signal });
+    shutdown_handler(signal);
 }
 
 int main(int argc, char ** argv) {
@@ -3956,7 +3946,7 @@ int main(int argc, char ** argv) {
     ctx_server.queue_tasks.on_update_slots(std::bind(
                 &server_context::update_slots, &ctx_server));
 
-    shutdown_handler = [&](shutdown_reason) {
+    shutdown_handler = [&](int) {
         ctx_server.queue_tasks.terminate();
     };
 
