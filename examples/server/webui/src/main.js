@@ -14,7 +14,7 @@ const copyStr = (str) => navigator.clipboard.writeText(str);
 
 // constants
 const BASE_URL = localStorage.getItem('base') // for debugging
-  || (new URL('.', document.baseURI).href).toString(); // for production
+  || (new URL('.', document.baseURI).href).toString().replace(/\/$/, ''); // for production
 const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: '',
