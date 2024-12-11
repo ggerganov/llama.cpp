@@ -4,6 +4,8 @@
 #include "log.h"
 #include "llama.h"
 
+#define _USE_MATH_DEFINES // For M_PI on MSVC
+
 #include <algorithm>
 #include <cstdio>
 #include <cmath>
