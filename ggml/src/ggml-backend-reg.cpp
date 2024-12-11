@@ -151,7 +151,7 @@ struct ggml_backend_registry {
         register_backend(ggml_backend_vk_reg());
 #endif
 #ifdef GGML_USE_OPENCL
-        register_backend(ggml_backend_opencl2_reg());
+        register_backend(ggml_backend_opencl_reg());
 #endif
 #ifdef GGML_USE_CANN
         register_backend(ggml_backend_cann_reg());
