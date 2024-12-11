@@ -539,10 +539,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
 
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string kernel_src {
-        #include "ggml-opencl2.cl.h"
+        #include "ggml-opencl.cl.h"
     };
 #else
-    const std::string kernel_src = read_file("ggml-opencl2.cl");
+    const std::string kernel_src = read_file("ggml-opencl.cl");
 #endif
 
     std::string compile_opts =
@@ -597,10 +597,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     // Load additional mulmat kernels.
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string kernel_src_1 {
-        #include "ggml-opencl2_mm.cl.h"
+        #include "ggml-opencl_mm.cl.h"
     };
 #else
-    const std::string kernel_src_1 = read_file("ggml-opencl2_mm.cl");
+    const std::string kernel_src_1 = read_file("ggml-opencl_mm.cl");
 #endif
     backend_ctx->program_1 = build_program_from_source(context, device, kernel_src_1.c_str(), compile_opts);
 
@@ -613,10 +613,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     // Load additional data conversion kernels.
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string kernel_src_2 {
-        #include "ggml-opencl2_cvt.cl.h"
+        #include "ggml-opencl_cvt.cl.h"
     };
 #else
-    const std::string kernel_src_2 = read_file("ggml-opencl2_cvt.cl");
+    const std::string kernel_src_2 = read_file("ggml-opencl_cvt.cl");
 #endif
     backend_ctx->program_2 = build_program_from_source(context, device, kernel_src_2.c_str(), compile_opts);
 
@@ -626,30 +626,30 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
 #ifdef GGML_OPENCL_USE_ADRENO_KERNELS
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string transpose_32_src {
-        #include "ggml-opencl2_transpose_32.cl.h"
+        #include "ggml-opencl_transpose_32.cl.h"
     };
 #else
-    const std::string transpose_32_src = read_file("ggml-opencl2_transpose_32.cl");
+    const std::string transpose_32_src = read_file("ggml-opencl_transpose_32.cl");
 #endif
     backend_ctx->program_transpose_32 = build_program_from_source(context, device, transpose_32_src.c_str(), compile_opts);
     CL_CHECK((backend_ctx->kernel_transpose_32 = clCreateKernel(backend_ctx->program_transpose_32, "kernel_transpose_32", &err), err));
 
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string transpose_32_16_src {
-        #include "ggml-opencl2_transpose_32_16.cl.h"
+        #include "ggml-opencl_transpose_32_16.cl.h"
     };
 #else
-    const std::string transpose_32_16_src = read_file("ggml-opencl2_transpose_32_16.cl");
+    const std::string transpose_32_16_src = read_file("ggml-opencl_transpose_32_16.cl");
 #endif
     backend_ctx->program_transpose_32_16 = build_program_from_source(context, device, transpose_32_16_src.c_str(), compile_opts);
     CL_CHECK((backend_ctx->kernel_transpose_32_16 = clCreateKernel(backend_ctx->program_transpose_32_16, "kernel_transpose_32_16", &err), err));
 
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string transpose_16_src {
-        #include "ggml-opencl2_transpose_16.cl.h"
+        #include "ggml-opencl_transpose_16.cl.h"
     };
 #else
-    const std::string transpose_16_src = read_file("ggml-opencl2_transpose_16.cl");
+    const std::string transpose_16_src = read_file("ggml-opencl_transpose_16.cl");
 #endif
     backend_ctx->program_transpose_16 = build_program_from_source(context, device, transpose_16_src.c_str(), compile_opts);
     CL_CHECK((backend_ctx->kernel_transpose_16 = clCreateKernel(backend_ctx->program_transpose_16, "kernel_transpose_16", &err), err));
@@ -664,10 +664,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     }
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string kernel_src_CL_gemv_general {
-        #include "ggml-opencl2_gemv_noshuffle_general.cl.h"
+        #include "ggml-opencl_gemv_noshuffle_general.cl.h"
     };
 #else
-    const std::string kernel_src_CL_gemv_general = read_file("ggml-opencl2_gemv_noshuffle_general.cl");
+    const std::string kernel_src_CL_gemv_general = read_file("ggml-opencl_gemv_noshuffle_general.cl");
 #endif
 
     backend_ctx->program_CL_gemv_general = build_program_from_source(
@@ -686,10 +686,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     }
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string kernel_src_CL_gemv {
-        #include "ggml-opencl2_gemv_noshuffle.cl.h"
+        #include "ggml-opencl_gemv_noshuffle.cl.h"
     };
 #else
-    const std::string kernel_src_CL_gemv = read_file("ggml-opencl2_gemv_noshuffle.cl");
+    const std::string kernel_src_CL_gemv = read_file("ggml-opencl_gemv_noshuffle.cl");
 #endif
 
     backend_ctx->program_CL_gemv_4096_1_4096 = build_program_from_source(
@@ -743,10 +743,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     // Gemm
 #ifdef GGML_OPENCL_EMBED_KERNELS
     const std::string kernel_src_CL_gemm {
-        #include "ggml-opencl2_mul_mat_Ab_Bi_8x4.cl.h"
+        #include "ggml-opencl_mul_mat_Ab_Bi_8x4.cl.h"
     };
 #else
-    const std::string kernel_src_CL_gemm = read_file("ggml-opencl2_mul_mat_Ab_Bi_8x4.cl");
+    const std::string kernel_src_CL_gemm = read_file("ggml-opencl_mul_mat_Ab_Bi_8x4.cl");
 #endif
     backend_ctx->program_CL_gemm = build_program_from_source(context, device, kernel_src_CL_gemm.c_str(), compile_opts);
     CL_CHECK((backend_ctx->CL_mul_mat_Ab_Bi_8x4 = clCreateKernel(backend_ctx->program_CL_gemm, "kernel_mul_mat_Ab_Bi_8x4", &err), err));
