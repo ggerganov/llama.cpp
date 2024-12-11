@@ -39,7 +39,7 @@
     do {                                                            \
         cl_int err_ = (err);                                        \
         if (err_ != CL_SUCCESS) {                                   \
-            fprintf(stderr, "ggml_opencl: %s error %d at %s:%d\n",  \
+            GGML_LOG_ERROR("ggml_opencl: %s error %d at %s:%d\n",  \
                 #err, err_, __FILE__, __LINE__);                    \
             GGML_ASSERT(0);                                         \
         }                                                           \
@@ -239,7 +239,7 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
 
     p = clCreateProgramWithSource(ctx, 1, (const char**)&program_buffer, &program_size, &err);
     if(err < 0) {
-        fprintf(stderr, "OpenCL error creating program");
+        GGML_LOG_ERROR("OpenCL error creating program");
         exit(1);
     }
 
@@ -249,7 +249,7 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
         program_log = (char*) malloc(log_size + 1);
         program_log[log_size] = '\0';
         clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, log_size + 1, program_log, NULL);
-        fprintf(stderr, "ggml_opencl: kernel compile error:\n\n%s\n", program_log);
+        GGML_LOG_ERROR("ggml_opencl: kernel compile error:\n\n%s\n", program_log);
         free(program_log);
         exit(1);
     }
@@ -277,7 +277,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     cl_int err;
 
 #ifdef GGML_PROFILE_OPENCL
-    fprintf(stderr, "ggml_opencl: OpenCL profiling enabled\n");
+    GGML_LOG_INFO("ggml_opencl: OpenCL profiling enabled\n");
 #endif
 
     struct cl_device;
@@ -346,7 +346,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     }
 
     if (n_devices == 0) {
-        fprintf(stderr, "ggml_opencl: could find any OpenCL devices.\n");
+        GGML_LOG_ERROR("ggml_opencl: could find any OpenCL devices.\n");
         exit(1);
     }
 
@@ -365,7 +365,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     if (user_platform_number != -1 && user_device_number != -1) {
         cl_platform* platform = &platforms[user_platform_number];
         if ((unsigned)user_device_number >= platform->n_devices) {
-            fprintf(stderr, "ggml_opencl: invalid device number %d\n", user_device_number);
+            GGML_LOG_ERROR("ggml_opencl: invalid device number %d\n", user_device_number);
             exit(1);
         }
         default_device = &platform->devices[user_device_number];
@@ -384,7 +384,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
                 }
             }
             if (user_platform_number == -1) {
-                fprintf(stderr, "ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
+                GGML_LOG_ERROR("ggml_opencl: no platform matching '%s' was found.\n", user_platform_string);
                 exit(1);
             }
         }
@@ -394,7 +394,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
             n_selected_devices = p->n_devices;
             default_device = p->default_device;
             if (n_selected_devices == 0) {
-                fprintf(stderr, "ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
+                GGML_LOG_ERROR("ggml_opencl: selected platform '%s' does not have any devices.\n", p->name);
                 exit(1);
             }
         }
@@ -408,7 +408,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
                 }
             }
             if (user_device_number == -1) {
-                fprintf(stderr, "ggml_opencl: no device matching '%s' was found.\n", user_device_string);
+                GGML_LOG_ERROR("ggml_opencl: no device matching '%s' was found.\n", user_device_string);
                 exit(1);
             }
         }
@@ -425,10 +425,10 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
         }
     }
 
-    fprintf(stderr, "ggml_opencl: selecting platform: '%s'\n", default_device->platform->name);
-    fprintf(stderr, "ggml_opencl: selecting device: '%s'\n", default_device->name);
+    GGML_LOG_INFO("ggml_opencl: selecting platform: '%s'\n", default_device->platform->name);
+    GGML_LOG_INFO("ggml_opencl: selecting device: '%s'\n", default_device->name);
     if (default_device->type != CL_DEVICE_TYPE_GPU) {
-        fprintf(stderr, "ggml_opencl: warning, not a GPU: '%s'.\n", default_device->name);
+        GGML_LOG_WARN("ggml_opencl: warning, not a GPU: '%s'.\n", default_device->name);
     }
 
     dev_ctx->platform = default_device->platform->id;
@@ -447,7 +447,7 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
             backend_ctx->adreno_wave_size = 128;
         } else {
             backend_ctx->adreno_wave_size = 128;
-            fprintf(stderr, "ggml_opencl: Unsupported Adreno GPU: %s, "
+            GGML_LOG_WARN("ggml_opencl: Unsupported Adreno GPU: %s, "
                 "using wave size %d, "
                 "may not work as expected\n",
                 backend_ctx->device_name.c_str(), backend_ctx->adreno_wave_size);
@@ -455,8 +455,8 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     } else if (strstr(default_device->name, "Intel")) {
         backend_ctx->gpu_family = GPU_FAMILY::INTEL;
     } else {
-        fprintf(stderr, "Unknown GPU: %s\n", default_device->name);
-        GGML_ASSERT(false && "Unknown GPU");
+        GGML_LOG_ERROR("Unknown GPU: %s\n", default_device->name);
+        exit(1);
     }
 
     // Populate backend device name
@@ -473,13 +473,13 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     char *driver_version = (char *)alloca(driver_version_str_size + 1);
     clGetDeviceInfo(device, CL_DRIVER_VERSION, driver_version_str_size, driver_version, NULL);
     driver_version[driver_version_str_size] = '\0';
-    fprintf(stderr, "ggml_opencl: OpenCL driver: %s\n", driver_version);
+    GGML_LOG_INFO("ggml_opencl: OpenCL driver: %s\n", driver_version);
     backend_ctx->driver_version = driver_version;
 
     int adreno_cl_compiler_version = get_adreno_cl_compiler_version(driver_version);
     bool has_vector_subgroup_broadcast =
         adreno_cl_compiler_version >= 47 || adreno_cl_compiler_version == 17;
-    fprintf(stderr, "ggml_opencl: vector subgroup broadcast support: %s\n",
+    GGML_LOG_INFO("ggml_opencl: vector subgroup broadcast support: %s\n",
         has_vector_subgroup_broadcast ? "true" : "false");
 
     size_t ext_str_size;
@@ -489,33 +489,33 @@ static ggml_backend_opencl2_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     ext_buffer[ext_str_size] = '\0'; // ensure it is null terminated
     // Check if ext_buffer contains cl_khr_fp16
     backend_ctx->fp16_support = strstr(ext_buffer, "cl_khr_fp16") != NULL;
-    fprintf(stderr, "ggml_opencl: device FP16 support: %s\n", backend_ctx->fp16_support ? "true" : "false");
+    GGML_LOG_INFO("ggml_opencl: device FP16 support: %s\n", backend_ctx->fp16_support ? "true" : "false");
 
     CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(cl_uint), &backend_ctx->alignment, NULL));
-    fprintf(stderr, "ggml_opencl: mem base addr align: %u\n", backend_ctx->alignment);
+    GGML_LOG_INFO("ggml_opencl: mem base addr align: %u\n", backend_ctx->alignment);
 
     clGetDeviceInfo(device, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(size_t), &backend_ctx->max_alloc_size, NULL);
-    fprintf(stderr, "ggml_opencl: max mem alloc size: %zu MB\n", backend_ctx->max_alloc_size/1024/1024);
+    GGML_LOG_INFO("ggml_opencl: max mem alloc size: %zu MB\n", backend_ctx->max_alloc_size/1024/1024);
 
     // Check SVM.
     cl_device_svm_capabilities svm_caps;
     CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_SVM_CAPABILITIES, sizeof(cl_device_svm_capabilities), &svm_caps, 0));
-    fprintf(stderr, "ggml_opencl: SVM coarse grain buffer support: %s\n",
+    GGML_LOG_INFO("ggml_opencl: SVM coarse grain buffer support: %s\n",
         svm_caps & CL_DEVICE_SVM_COARSE_GRAIN_BUFFER ? "true" : "false");
-    fprintf(stderr, "ggml_opencl: SVM fine grain buffer support: %s\n",
+    GGML_LOG_INFO("ggml_opencl: SVM fine grain buffer support: %s\n",
         svm_caps & CL_DEVICE_SVM_FINE_GRAIN_BUFFER ? "true" : "false");
-    fprintf(stderr, "ggml_opencl: SVM fine grain system support: %s\n",
+    GGML_LOG_INFO("ggml_opencl: SVM fine grain system support: %s\n",
         svm_caps & CL_DEVICE_SVM_FINE_GRAIN_SYSTEM ? "true" : "false");
-    fprintf(stderr, "ggml_opencl: SVM atomics support: %s\n",
+    GGML_LOG_INFO("ggml_opencl: SVM atomics support: %s\n",
         svm_caps & CL_DEVICE_SVM_ATOMICS ? "true" : "false");
 
     // Print out configurations
 #ifdef GGML_OPENCL_SOA_Q
-    fprintf(stderr, "ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)\n");
+    GGML_LOG_INFO("ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)\n");
 #endif // GGML_OPENCL_SOA_Q
 
 #ifdef GGML_OPENCL_USE_ADRENO_KERNELS
-    fprintf(stderr, "ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)\n");
+    GGML_LOG_INFO("ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)\n");
 #endif // GGML_OPENCL_USE_ADRENO_KERNELS
 
     cl_context_properties properties[] = {
@@ -768,7 +768,7 @@ static void ggml_cl2_free(void) {
 #ifdef GGML_OPENCL_PROFILING
     FILE * fperf = fopen("cl_profiling.csv", "w");
     if (!fperf) {
-        fprintf(stderr, "Failed to open cl_profiling.csv\n");
+        GGML_LOG_ERROR("Failed to open cl_profiling.csv\n");
         return;
     }
 
@@ -784,7 +784,7 @@ static void ggml_cl2_free(void) {
     }
     fclose(fperf);
 
-    fprintf(stderr, "ggml_opencl: total kernel time: %f\n", total_kernel_time);
+    GGML_LOG_INFO("ggml_opencl: total kernel time: %f\n", total_kernel_time);
 #endif
 }
 
@@ -911,7 +911,7 @@ static ggml_status ggml_backend_opencl2_graph_compute(ggml_backend_t backend, gg
 
         bool ok = ggml_cl_compute_forward(backend, node);
         if (!ok) {
-            fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
+            GGML_LOG_ERROR("%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
         }
         GGML_ASSERT(ok);
     }
@@ -1537,7 +1537,7 @@ static ggml_backend_buffer_t ggml_backend_opencl2_buffer_type_alloc_buffer(ggml_
     cl_int err;
     cl_mem mem = clCreateBuffer(backend_ctx->context, CL_MEM_READ_WRITE, size, NULL, &err);
     if (err != CL_SUCCESS) {
-        fprintf(stderr, "%s: failed to allocate %.2f MiB\n", __func__, size / 1024.0 / 1024.0);
+        GGML_LOG_INFO("%s: failed to allocate %.2f MiB\n", __func__, size / 1024.0 / 1024.0);
         return nullptr;
     }
 
