@@ -394,7 +394,7 @@ int main(int raw_argc, char ** raw_argv) {
     }
 
     if (show_token_count) {
-        printf("Total number of tokens: %ld\n", tokens.size());
+        printf("Total number of tokens: %zu\n", tokens.size());
     }
     // silence valgrind
     llama_free(ctx);
