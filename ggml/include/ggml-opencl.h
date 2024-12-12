@@ -1,5 +1,5 @@
-#ifndef GGML_OPENCL2_H
-#define GGML_OPENCL2_H
+#ifndef GGML_OPENCL_H
+#define GGML_OPENCL_H
 
 #include "ggml.h"
 #include "ggml-backend.h"
@@ -23,4 +23,4 @@ GGML_BACKEND_API ggml_backend_reg_t ggml_backend_opencl_reg(void);
 }
 #endif
 
-#endif // GGML_OPENCL2_H
+#endif // GGML_OPENCL_H
