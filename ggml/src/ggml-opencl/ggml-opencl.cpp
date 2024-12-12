@@ -1,8 +1,10 @@
 #define CL_TARGET_OPENCL_VERSION 220
 
 // suppress warnings in CL headers for GCC and Clang
-#pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
 #pragma GCC diagnostic ignored "-Woverlength-strings"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
+#endif
 
 #include "ggml-opencl.h"
 #include "ggml-backend.h"
@@ -1163,9 +1165,7 @@ static void * ggml_backend_opencl_buffer_get_base(ggml_backend_buffer_t buffer) 
 static void ggml_backend_opencl_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
     ggml_backend_opencl_buffer_context * ctx = (ggml_backend_opencl_buffer_context *) buffer->context;
 
-    ggml_backend_opencl_context * backend_ctx =
-        (ggml_backend_opencl_context *)ggml_cl2_init(buffer->buft->device);
-    cl_context context = backend_ctx->context;
+    ggml_cl2_init(buffer->buft->device);
 
     if (tensor->view_src != nullptr) {
         GGML_ASSERT(tensor->view_src->buffer->buft == buffer->buft);
@@ -3604,8 +3604,9 @@ static void ggml_cl_soft_max(ggml_backend_t backend, const ggml_tensor * src0, c
     const int  ne02 = src0 ? src0->ne[2] : 0;
     const int  ne03 = src0 ? src0->ne[3] : 0;
 
-    const float scale = ((float *) dst->op_params)[0];
-    const float max_bias = ((float *) dst->op_params)[1];
+    float scale, max_bias;
+    memcpy(&scale,    dst->op_params + 0, sizeof(float));
+    memcpy(&max_bias, dst->op_params + 1, sizeof(float));
 
     const int nrows_x = ggml_nrows(src0);
     const int nrows_y = src0->ne[1];
@@ -3845,10 +3846,6 @@ bool ggml_cl_compute_forward(ggml_backend_t backend, struct ggml_tensor * tensor
             func = ggml_cl_cpy;
             break;
         case GGML_OP_DUP:
-            if (!any_on_device) {
-                return false;
-            }
-            func = ggml_cl_dup;
         case GGML_OP_CONT:
             if (!any_on_device) {
                 return false;
