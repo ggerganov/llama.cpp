@@ -1174,7 +1174,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_NO_KV_OFFLOAD"));
     add_opt(common_arg(
         {"-ctk", "--cache-type-k"}, "TYPE",
-        string_format("KV cache data type for K (default: %s)", params.cache_type_k.c_str()),
+        string_format("KV cache data type for K : f16, f32, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1 (default: %s)", params.cache_type_k.c_str()),
         [](common_params & params, const std::string & value) {
             // TODO: get the type right here
             params.cache_type_k = value;
@@ -1182,7 +1182,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(common_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
-        string_format("KV cache data type for V (default: %s)", params.cache_type_v.c_str()),
+        string_format("KV cache data type for V : : f16, f32, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1 (default: %s)", params.cache_type_v.c_str()),
         [](common_params & params, const std::string & value) {
             // TODO: get the type right here
             params.cache_type_v = value;
