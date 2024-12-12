@@ -187,13 +187,15 @@ struct ggml_backend_opencl_context {
 #endif // GGML_OPENCL_USE_ADRENO_KERNELS
 };
 
-static ggml_backend_device                  g_ggml_backend_opencl_device;
+static ggml_backend_device                 g_ggml_backend_opencl_device;
 static ggml_backend_opencl_device_context  g_ggml_ctx_dev_main {
     /*.platform         =*/ nullptr,
     /*.platform_nane    =*/ "",
     /*.device           =*/ nullptr,
     /*.device_name      =*/ "",
 };
+
+static int ggml_backend_opencl_n_devices = 0;
 
 // Profiling
 #ifdef GGML_OPENCL_PROFILING
@@ -270,6 +272,7 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
 
     initialized = true;
     backend_ctx = new ggml_backend_opencl_context();
+    backend_ctx->gpu_family = GPU_FAMILY::UNKNOWN;
 
     cl_int err;
 
@@ -305,7 +308,10 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     struct cl_device * default_device = NULL;
 
     cl_platform_id platform_ids[NPLAT];
-    CL_CHECK(clGetPlatformIDs(NPLAT, platform_ids, &n_platforms));
+    if (clGetPlatformIDs(NPLAT, platform_ids, &n_platforms) != CL_SUCCESS) {
+        GGML_LOG_ERROR("ggml_opencl: plaform IDs not available.\n");
+        return backend_ctx;
+    }
 
     for (unsigned i = 0; i < n_platforms; i++) {
         struct cl_platform * p = &platforms[i];
@@ -344,7 +350,7 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
 
     if (n_devices == 0) {
         GGML_LOG_ERROR("ggml_opencl: could find any OpenCL devices.\n");
-        exit(1);
+        return backend_ctx;
     }
 
     char * user_platform_string = getenv("GGML_OPENCL_PLATFORM");
@@ -453,7 +459,8 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
         backend_ctx->gpu_family = GPU_FAMILY::INTEL;
     } else {
         GGML_LOG_ERROR("Unknown GPU: %s\n", default_device->name);
-        exit(1);
+        backend_ctx->gpu_family = GPU_FAMILY::UNKNOWN;
+        return backend_ctx;
     }
 
     // Populate backend device name
@@ -757,6 +764,9 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     CL_CHECK((backend_ctx->A_s_d_max = clCreateBuffer(context, 0, max_A_s_d_bytes, NULL, &err), err));
     CL_CHECK((backend_ctx->B_d_max   = clCreateBuffer(context, 0, max_B_d_bytes,   NULL, &err), err));
 #endif // GGML_OPENCL_USE_ADRENO_KERNELS
+
+    // For now we support a single devices
+    ggml_backend_opencl_n_devices = 1;
 
     return backend_ctx;
 }
@@ -1728,7 +1738,7 @@ static const char * ggml_backend_opencl_reg_get_name(ggml_backend_reg_t reg) {
 }
 
 static size_t ggml_backend_opencl_reg_device_count(ggml_backend_reg_t reg) {
-    return 1;
+    return ggml_backend_opencl_n_devices;
 
     GGML_UNUSED(reg);
 }
