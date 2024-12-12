@@ -164,17 +164,17 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
     if (params.mirostat == 0) {
         for (const auto & cnstr : params.samplers) {
             switch (cnstr) {
-                    case COMMON_SAMPLER_TYPE_DRY:
+                case COMMON_SAMPLER_TYPE_DRY:
                     {
-                        std::vector<const char*> c_breakers;
+                        std::vector<const char *> c_breakers;
                         c_breakers.reserve(params.dry_sequence_breakers.size());
-                        for (const auto& str : params.dry_sequence_breakers) {
+                        for (const auto & str : params.dry_sequence_breakers) {
                             c_breakers.push_back(str.c_str());
                         }
 
                         llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (model, params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
                     }
-                        break;
+                    break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
                     llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
                     break;
