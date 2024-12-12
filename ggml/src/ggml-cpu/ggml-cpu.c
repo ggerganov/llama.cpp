@@ -454,21 +454,21 @@ const struct ggml_type_traits_cpu * ggml_get_type_traits_cpu(enum ggml_type type
 #define GGML_F32x4_ADD          vaddq_f32
 #define GGML_F32x4_MUL          vmulq_f32
 #define GGML_F32x4_REDUCE_ONE(x) vaddvq_f32(x)
-#define GGML_F32x4_REDUCE(res, x)                  \
-{                                                  \
-    int offset = GGML_F32_ARR >> 1;                \
-    for (int i = 0; i < offset; ++i) {             \
-        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]); \
-    }                                              \
-    offset >>= 1;                                  \
-    for (int i = 0; i < offset; ++i) {             \
-        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]); \
-    }                                              \
-    offset >>= 1;                                  \
-    for (int i = 0; i < offset; ++i) {             \
-        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]); \
-    }                                              \
-    (res) = GGML_F32x4_REDUCE_ONE((x)[0]);         \
+#define GGML_F32x4_REDUCE(res, x)                       \
+{                                                       \
+    int offset = GGML_F32_ARR >> 1;                     \
+    for (int i = 0; i < offset; ++i) {                  \
+        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]);      \
+    }                                                   \
+    offset >>= 1;                                       \
+    for (int i = 0; i < offset; ++i) {                  \
+        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]);      \
+    }                                                   \
+    offset >>= 1;                                       \
+    for (int i = 0; i < offset; ++i) {                  \
+        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]);      \
+    }                                                   \
+    (res) = (ggml_float) GGML_F32x4_REDUCE_ONE((x)[0]); \
 }
 
 #define GGML_F32_VEC        GGML_F32x4
@@ -2395,7 +2395,7 @@ static void ggml_init_arm_arch_features(void) {
     uint32_t hwcap2 = getauxval(AT_HWCAP2);
 
     ggml_arm_arch_features.has_neon = !!(hwcap & HWCAP_ASIMD);
-    ggml_arm_arch_features.has_dotprod = !!(hwcap && HWCAP_ASIMDDP);
+    ggml_arm_arch_features.has_dotprod = !!(hwcap & HWCAP_ASIMDDP);
     ggml_arm_arch_features.has_i8mm = !!(hwcap2 & HWCAP2_I8MM);
     ggml_arm_arch_features.has_sve  = !!(hwcap & HWCAP_SVE);
 
