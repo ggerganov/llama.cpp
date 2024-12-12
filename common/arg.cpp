@@ -909,6 +909,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--repeat-last-n"}, "N",
         string_format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", params.sampling.penalty_last_n),
         [](common_params & params, int value) {
+            if (value < -1) {
+                throw std::runtime_error(string_format("error: invalid repeat-last-n = %d\n", value));
+            }
             params.sampling.penalty_last_n = value;
             params.sampling.n_prev = std::max(params.sampling.n_prev, params.sampling.penalty_last_n);
         }
@@ -963,6 +966,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--dry-penalty-last-n"}, "N",
         string_format("set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sampling.dry_penalty_last_n),
         [](common_params & params, int value) {
+            if (value < -1) {
+                throw std::runtime_error(string_format("error: invalid dry-penalty-last-n = %d\n", value));
+            }
             params.sampling.dry_penalty_last_n = value;
         }
     ).set_sparam());
