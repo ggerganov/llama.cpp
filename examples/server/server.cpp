@@ -1886,25 +1886,17 @@ struct server_context {
         return slot.has_next_token; // continue
     }
 
-    void populate_token_probs(const server_slot & slot, completion_token_output & result) {
-        const auto * cur_p = common_sampler_get_candidates(slot.smpl);
-        const size_t max_probs = cur_p->size;
+    void populate_token_probs(const server_slot & slot, completion_token_output & result, bool special, int idx) {
+        std::vector<llama_token_data> cur = get_token_probabilities(ctx, idx);
+        int n_vocab = llama_n_vocab(llama_get_model(ctx));
 
-        // set prob for the sampled token
-        for (size_t i = 0; i < max_probs; ++i) {
-            if (result.tok == cur_p->data[i].id) {
-                result.prob = cur_p->data[i].p;
-                break;
-            }
-        }
-
-        // set probs for the top n tokens
-        for (size_t i = 0; i < std::min(max_probs, (size_t) slot.params.sampling.n_probs); ++i) {
-            auto tok_id = cur_p->data[i].id;
+        // only take at most n_probs tokens
+        const int n_probs = slot.params.sampling.n_probs;
+        for (int i = 0; i < std::min(n_probs, n_vocab); i++) {
             result.probs.push_back({
-                tok_id,
-                tokens_to_output_formatted_string(ctx, tok_id),
-                cur_p->data[i].p,
+                cur[i].id,
+                common_detokenize(ctx, {cur[i].id}, special),
+                cur[i].p
             });
         }
     }
@@ -2758,7 +2750,9 @@ struct server_context {
                     continue; // continue loop of slots
                 }
 
-                llama_token id = common_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
+                const int tok_idx = slot.i_batch - i;
+
+                llama_token id = common_sampler_sample(slot.smpl, ctx, tok_idx);
 
                 slot.i_batch = -1;
 
@@ -2782,7 +2776,7 @@ struct server_context {
                 result.prob         = 1.0f; // set later
 
                 if (slot.params.sampling.n_probs > 0) {
-                    populate_token_probs(slot, result);
+                    populate_token_probs(slot, result, params_base.special, tok_idx);
                 }
 
                 if (!process_token(result, slot)) {
