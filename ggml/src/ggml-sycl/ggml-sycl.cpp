@@ -1797,7 +1797,7 @@ static  void pool2d_nchw_kernel(
             default:
                 res      = NAN;
                 op_valid = false;
-                fprintf(stdout, "An unsupported op is passed as argument.\n");
+                sycl::intel::experimental::printf("An unsupported op is passed as argument.\n");
                 break;
         }
 
@@ -1819,7 +1819,7 @@ static  void pool2d_nchw_kernel(
                     case GGML_OP_POOL_MAX: res = sycl::max(res, (To)cur); break;
                     default:
                         op_valid = false;
-                        fprintf(stdout, "An unsupported op is passed as argument.\n");
+                        sycl::intel::experimental::printf("An unsupported op is passed as argument.\n");
                         break;
                 }
             }
