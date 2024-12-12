@@ -286,8 +286,8 @@ struct common_params {
     bool warmup            = true;  // warmup run
     bool check_tensors     = false; // validate tensor data
 
-    std::string cache_type_k = "f16"; // KV cache data type for the K
-    std::string cache_type_v = "f16"; // KV cache data type for the V
+    ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
+    ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
 
     // multimodal models (see examples/llava)
     std::string mmproj = "";        // path to multimodal projector                                         // NOLINT
