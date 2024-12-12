@@ -1467,7 +1467,7 @@ struct server_context {
         n_ctx = llama_n_ctx(ctx);
 
         add_bos_token = llama_add_bos_token(model);
-        has_eos_token = !llama_add_eos_token(model);
+        has_eos_token = llama_token_eos(model) != LLAMA_TOKEN_NULL;
 
         if (!params_base.speculative.model.empty()) {
             SRV_INF("loading draft model '%s'\n", params_base.speculative.model.c_str());

@@ -940,6 +940,11 @@ struct common_init_result common_init_from_params(common_params & params) {
         params.sampling.ignore_eos = false;
     }
 
+    if (params.sampling.ignore_eos) {
+        LOG_INF("%s: added EOS logit bias = %f\n", __func__, -INFINITY);
+        params.sampling.logit_bias.push_back({llama_token_eos(model), -INFINITY});
+    }
+
     if (params.warmup) {
         LOG_WRN("%s: warming up the model with an empty run - please wait ... (--no-warmup to disable)\n", __func__);
 
