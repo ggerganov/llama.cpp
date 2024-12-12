@@ -30,8 +30,6 @@
 
 #define UNUSED(x) (void)(x)
 
-#define GGML_CL_MAX_NODES 16384
-
 #define CL_CHECK(err)                                               \
     do {                                                            \
         cl_int err_ = (err);                                        \
@@ -1066,41 +1064,32 @@ struct ggml_backend_opencl_buffer_context {
             CL_CHECK(clReleaseMemObject(im));
         }
 
-        delete[] temp_tensor_extras;
-        delete[] temp_tensor_extras_q4_0;
+        for (ggml_tensor_extra_cl * e : temp_tensor_extras) {
+            delete e;
+        }
+        for (ggml_tensor_extra_cl_q4_0 * e : temp_tensor_extras_q4_0) {
+            delete e;
+        }
     }
 
     ggml_tensor_extra_cl * ggml_opencl_alloc_temp_tensor_extra() {
-        if (temp_tensor_extras == nullptr) {
-            temp_tensor_extras = new ggml_tensor_extra_cl[GGML_CL_MAX_NODES];
-        }
-
-        size_t alloc_index = temp_tensor_extra_index;
-        temp_tensor_extra_index = (temp_tensor_extra_index + 1) % GGML_CL_MAX_NODES;
-        ggml_tensor_extra_cl * extra = &temp_tensor_extras[alloc_index];
+        ggml_tensor_extra_cl * extra = new ggml_tensor_extra_cl();
         extra->reset();
+        temp_tensor_extras.push_back(extra);
 
         return extra;
     }
 
     ggml_tensor_extra_cl_q4_0 * ggml_opencl_alloc_temp_tensor_extra_q4_0() {
-        if (temp_tensor_extras_q4_0 == nullptr) {
-            temp_tensor_extras_q4_0 = new ggml_tensor_extra_cl_q4_0[GGML_CL_MAX_NODES];
-        }
-
-        size_t alloc_index = temp_tensor_extra_index_q4_0;
-        temp_tensor_extra_index_q4_0 = (temp_tensor_extra_index_q4_0 + 1) % GGML_CL_MAX_NODES;
-        ggml_tensor_extra_cl_q4_0 * extra = &temp_tensor_extras_q4_0[alloc_index];
+        ggml_tensor_extra_cl_q4_0 * extra = new ggml_tensor_extra_cl_q4_0();
         extra->reset();
+        temp_tensor_extras_q4_0.push_back(extra);
 
         return extra;
     }
 
-    ggml_tensor_extra_cl * temp_tensor_extras = nullptr;
-    size_t temp_tensor_extra_index = 0;
-
-    ggml_tensor_extra_cl_q4_0 * temp_tensor_extras_q4_0 = nullptr;
-    size_t  temp_tensor_extra_index_q4_0 = 0;
+    std::vector<ggml_tensor_extra_cl *> temp_tensor_extras;
+    std::vector<ggml_tensor_extra_cl_q4_0 *> temp_tensor_extras_q4_0;
 
     // The buffer_context is initially created by ggml_backend_buft_alloc_buffer
     // before any tensor is initialized (at the beginning of alloc_tensor_range).
