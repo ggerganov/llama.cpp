@@ -2864,6 +2864,8 @@ struct server_context {
                     result.text_to_send = common_token_to_piece(ctx, result.tok, params_base.special);
                     result.prob         = 1.0f; // set later
 
+                    // TODO: set result.probs
+
                     if (!process_token(result, slot)) {
                         // release slot because of stop condition
                         slot.release();
