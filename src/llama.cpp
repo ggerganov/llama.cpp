@@ -1794,7 +1794,7 @@ private:
         DWORD bufLen = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                     NULL, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&lpMsgBuf, 0, NULL);
         if (!bufLen) {
-            ret = format("Win32 error code: %s", error_code);
+            ret = format("Win32 error code: %lx", error_code);
         } else {
             ret = lpMsgBuf;
             LocalFree(lpMsgBuf);
@@ -2132,7 +2132,7 @@ struct llama_mmap {
             HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
 
             // may fail on pre-Windows 8 systems
-            pPrefetchVirtualMemory = reinterpret_cast<decltype(pPrefetchVirtualMemory)> (GetProcAddress(hKernel32, "PrefetchVirtualMemory"));
+            pPrefetchVirtualMemory = (decltype(pPrefetchVirtualMemory))(void *) GetProcAddress(hKernel32, "PrefetchVirtualMemory");
 
             if (pPrefetchVirtualMemory) {
                 // advise the kernel to preload the mapped memory
@@ -21577,7 +21577,7 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
                 throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
             }
         } else if ((size_t) i >= ctx->output_ids.size()) {
-            throw std::runtime_error(format("out of range [0, %lu)", ctx->output_ids.size()));
+            throw std::runtime_error(format("out of range [0, %zu)", ctx->output_ids.size()));
         } else {
             j = ctx->output_ids[i];
         }
