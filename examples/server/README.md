@@ -104,7 +104,6 @@ The project is under active development, and we are [looking for feedback and co
 | `-s, --seed SEED` | RNG seed (default: -1, use random seed for -1) |
 | `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: dkypmxt) |
 | `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
-| `--penalize-nl` | penalize newline tokens (default: false) |
 | `--temp N` | temperature (default: 0.8) |
 | `--top-k N` | top-k sampling (default: 40, 0 = disabled) |
 | `--top-p N` | top-p sampling (default: 0.9, 1.0 = disabled) |
@@ -393,8 +392,6 @@ These words will not be included in the completion, so make sure to add them to 
 
 `repeat_last_n`: Last n tokens to consider for penalizing repetition. Default: `64`, where `0` is disabled and `-1` is ctx-size.
 
-`penalize_nl`: Penalize newline tokens when applying the repeat penalty. Default: `true`
-
 `presence_penalty`: Repeat alpha presence penalty. Default: `0.0`, which is disabled.
 
 `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
@@ -655,7 +652,6 @@ This endpoint is public (no API key check). By default, it is read-only. To make
       "mirostat": 0,
       "mirostat_tau": 5.0,
       "mirostat_eta": 0.10000000149011612,
-      "penalize_nl": false,
       "stop": [],
       "max_tokens": -1,
       "n_keep": 0,
@@ -845,7 +841,6 @@ Example:
       "mirostat": 0,
       "mirostat_tau": 5.0,
       "mirostat_eta": 0.10000000149011612,
-      "penalize_nl": false,
       "stop": [],
       "max_tokens": -1,
       "n_keep": 0,

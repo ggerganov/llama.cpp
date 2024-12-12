@@ -65,10 +65,17 @@ int main(int argc, char ** argv) {
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
     auto sparams = llama_sampler_chain_default_params();
+    sparams.no_perf = false;
 
     llama_sampler * smpl = llama_sampler_chain_init(sparams);
 
     llama_sampler_chain_add(smpl, llama_sampler_init_top_k(params.sampling.top_k));
+    llama_sampler_chain_add(smpl,
+            llama_sampler_init_penalties(
+                params.sampling.penalty_last_n,
+                params.sampling.penalty_repeat,
+                params.sampling.penalty_freq,
+                params.sampling.penalty_present));
     llama_sampler_chain_add(smpl, llama_sampler_init_top_p(params.sampling.top_p, params.sampling.min_keep));
     llama_sampler_chain_add(smpl, llama_sampler_init_temp (params.sampling.temp));
     llama_sampler_chain_add(smpl, llama_sampler_init_dist (params.sampling.seed));

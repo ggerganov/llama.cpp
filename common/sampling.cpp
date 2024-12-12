@@ -161,18 +161,6 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.logit_bias.size(),
                 params.logit_bias.data()));
 
-    llama_sampler_chain_add(result->chain,
-            llama_sampler_init_penalties(
-                llama_n_vocab  (model),
-                llama_token_eos(model),
-                llama_token_nl (model),
-                params.penalty_last_n,
-                params.penalty_repeat,
-                params.penalty_freq,
-                params.penalty_present,
-                params.penalize_nl,
-                params.ignore_eos));
-
     if (params.mirostat == 0) {
         for (const auto & cnstr : params.samplers) {
             switch (cnstr) {
@@ -207,6 +195,9 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     break;
                 case COMMON_SAMPLER_TYPE_INFILL:
                     llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                    break;
+                case COMMON_SAMPLER_TYPE_PENALTIES:
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_penalties(params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present));
                     break;
                 default:
                     GGML_ASSERT(false && "unknown sampler type");
@@ -415,6 +406,7 @@ char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_TEMPERATURE: return 't';
         case COMMON_SAMPLER_TYPE_XTC:         return 'x';
         case COMMON_SAMPLER_TYPE_INFILL:      return 'i';
+        case COMMON_SAMPLER_TYPE_PENALTIES:   return 'e';
         default : return '?';
     }
 }
@@ -429,6 +421,7 @@ std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_TEMPERATURE: return "temperature";
         case COMMON_SAMPLER_TYPE_XTC:         return "xtc";
         case COMMON_SAMPLER_TYPE_INFILL:      return "infill";
+        case COMMON_SAMPLER_TYPE_PENALTIES:   return "penalties";
         default : return "";
     }
 }
@@ -443,6 +436,7 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
         { "temperature", COMMON_SAMPLER_TYPE_TEMPERATURE },
         { "xtc",         COMMON_SAMPLER_TYPE_XTC },
         { "infill",      COMMON_SAMPLER_TYPE_INFILL },
+        { "penalties",   COMMON_SAMPLER_TYPE_PENALTIES },
     };
 
     // since samplers names are written multiple ways
@@ -489,6 +483,7 @@ std::vector<common_sampler_type> common_sampler_types_from_chars(const std::stri
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TEMPERATURE), COMMON_SAMPLER_TYPE_TEMPERATURE },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_XTC),         COMMON_SAMPLER_TYPE_XTC },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_INFILL),      COMMON_SAMPLER_TYPE_INFILL },
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_PENALTIES),   COMMON_SAMPLER_TYPE_PENALTIES },
     };
 
     std::vector<common_sampler_type> samplers;

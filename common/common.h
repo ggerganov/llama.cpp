@@ -95,6 +95,7 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_TEMPERATURE = 7,
     COMMON_SAMPLER_TYPE_XTC         = 8,
     COMMON_SAMPLER_TYPE_INFILL      = 9,
+    COMMON_SAMPLER_TYPE_PENALTIES   = 10,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -130,7 +131,6 @@ struct common_params_sampling {
     int32_t mirostat           = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   mirostat_tau       = 5.00f; // target entropy
     float   mirostat_eta       = 0.10f; // learning rate
-    bool    penalize_nl        = false; // consider newlines as a repeatable token
     bool    ignore_eos         = false;
     bool    no_perf            = false; // disable performance metrics
     bool    timing_per_token   = false;

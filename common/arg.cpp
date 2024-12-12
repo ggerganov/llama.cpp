@@ -856,13 +856,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"--penalize-nl"},
-        string_format("penalize newline tokens (default: %s)", params.sampling.penalize_nl ? "true" : "false"),
-        [](common_params & params) {
-            params.sampling.penalize_nl = true;
-        }
-    ).set_sparam());
-    add_opt(common_arg(
         {"--temp"}, "N",
         string_format("temperature (default: %.1f)", (double)params.sampling.temp),
         [](common_params & params, const std::string & value) {

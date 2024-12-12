@@ -1139,16 +1139,12 @@ extern "C" {
                           const char * grammar_str,
                           const char * grammar_root);
 
+    /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
-                             int32_t   n_vocab,         // llama_n_vocab()
-                         llama_token   special_eos_id,  // llama_token_eos()
-                         llama_token   linefeed_id,     // llama_token_nl()
-                             int32_t   penalty_last_n,  // last n tokens to penalize (0 = disable penalty, -1 = context size)
-                               float   penalty_repeat,  // 1.0 = disabled
-                               float   penalty_freq,    // 0.0 = disabled
-                               float   penalty_present, // 0.0 = disabled
-                                bool   penalize_nl,     // consider newlines as a repeatable token
-                                bool   ignore_eos);     // ignore the end-of-sequence token
+                             int32_t   penalty_last_n,   // last n tokens to penalize (0 = disable penalty, -1 = context size)
+                               float   penalty_repeat,   // 1.0 = disabled
+                               float   penalty_freq,     // 0.0 = disabled
+                               float   penalty_present); // 0.0 = disabled
 
     ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
     LLAMA_API struct llama_sampler *    llama_sampler_init_dry(
