@@ -941,8 +941,12 @@ struct common_init_result common_init_from_params(common_params & params) {
     }
 
     if (params.sampling.ignore_eos) {
-        LOG_INF("%s: added EOS logit bias = %f\n", __func__, -INFINITY);
-        params.sampling.logit_bias.push_back({llama_token_eos(model), -INFINITY});
+        for (llama_token i = 0; i < llama_n_vocab(model); i++) {
+            if (llama_token_is_eog(model, i)) {
+                LOG_INF("%s: added %s logit bias = %f\n", __func__, common_token_to_piece(lctx, i).c_str(), -INFINITY);
+                params.sampling.logit_bias.push_back({i, -INFINITY});
+            }
+        }
     }
 
     if (params.sampling.penalty_last_n == -1) {
