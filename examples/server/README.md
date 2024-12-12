@@ -62,8 +62,8 @@ The project is under active development, and we are [looking for feedback and co
 | `--yarn-beta-fast N` | YaRN: low correction dim or beta (default: 32.0)<br/>(env: LLAMA_ARG_YARN_BETA_FAST) |
 | `-dkvc, --dump-kv-cache` | verbose print of the KV cache |
 | `-nkvo, --no-kv-offload` | disable KV offload<br/>(env: LLAMA_ARG_NO_KV_OFFLOAD) |
-| `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_K) |
-| `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16)<br/>(env: LLAMA_ARG_CACHE_TYPE_V) |
+| `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16, f32, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1)<br/>(env: LLAMA_ARG_CACHE_TYPE_K) |
+| `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16, f32, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1)<br/>(env: LLAMA_ARG_CACHE_TYPE_V) |
 | `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: 0.1, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
 | `-np, --parallel N` | number of parallel sequences to decode (default: 1)<br/>(env: LLAMA_ARG_N_PARALLEL) |
 | `--mlock` | force system to keep model in RAM rather than swapping or compressing<br/>(env: LLAMA_ARG_MLOCK) |
