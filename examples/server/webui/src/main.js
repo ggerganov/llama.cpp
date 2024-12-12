@@ -3,6 +3,14 @@ import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vu
 import MarkdownIt from 'markdown-it';
 import TextLineStream from 'textlinestream';
 
+// code highlighting
+import hljs from 'highlight.js';
+import HighlightJS from 'markdown-it-highlightjs' // used integrate highlight.js into markdown-it
+import 'highlight.js/styles/github-dark.min.css';
+// math formula rendering
+import 'katex/dist/katex.min.css'
+import markdownItKatexGpt from 'markdown-it-katex-gpt'
+
 const isDev = import.meta.env.MODE === 'development';
 
 // utility functions
@@ -74,7 +82,9 @@ const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate',
 // markdown support
 const VueMarkdown = defineComponent(
   (props) => {
-    const md = shallowRef(new MarkdownIt({ breaks: true }));
+    const md = shallowRef(new MarkdownIt({ breaks: true}))
+    md.value.use(HighlightJS,{hljs})
+    md.value.use(markdownItKatexGpt)
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
       const content = tokens[idx].content;
