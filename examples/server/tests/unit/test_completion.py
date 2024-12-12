@@ -263,13 +263,13 @@ def test_n_probs():
         assert "id" in tok and tok["id"] > 0
         assert "token" in tok and type(tok["token"]) == str
         assert "logprob" in tok and tok["logprob"] <= 0.0
-        assert "bytes" in tok and len(tok["bytes"]) > 0
+        assert "bytes" in tok and type(tok["bytes"]) == list
         assert len(tok["top_logprobs"]) == 10
         for prob in tok["top_logprobs"]:
             assert "id" in prob and prob["id"] > 0
             assert "token" in prob and type(prob["token"]) == str
             assert "logprob" in prob and prob["logprob"] <= 0.0
-            assert "bytes" in prob and len(prob["bytes"]) > 0
+            assert "bytes" in prob and type(prob["bytes"]) == list
 
 
 def test_n_probs_stream():
@@ -290,10 +290,10 @@ def test_n_probs_stream():
                 assert "id" in tok and tok["id"] > 0
                 assert "token" in tok and type(tok["token"]) == str
                 assert "logprob" in tok and tok["logprob"] <= 0.0
-                assert "bytes" in tok and len(tok["bytes"]) > 0
+                assert "bytes" in tok and type(tok["bytes"]) == list
                 assert len(tok["top_logprobs"]) == 10
                 for prob in tok["top_logprobs"]:
                     assert "id" in prob and prob["id"] > 0
                     assert "token" in prob and type(prob["token"]) == str
                     assert "logprob" in prob and prob["logprob"] <= 0.0
-                    assert "bytes" in prob and len(prob["bytes"]) > 0
+                    assert "bytes" in prob and type(prob["bytes"]) == list

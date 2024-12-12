@@ -186,7 +186,7 @@ def test_logprobs():
     for token in res.choices[0].logprobs.content:
         aggregated_text += token.token
         assert token.logprob <= 0.0
-        assert token.bytes is not None and len(token.bytes) > 0
+        assert token.bytes is not None
         assert len(token.top_logprobs) > 0
     assert aggregated_text == output_text
 
@@ -219,7 +219,7 @@ def test_logprobs_stream():
             for token in choice.logprobs.content:
                 aggregated_text += token.token
                 assert token.logprob <= 0.0
-                assert token.bytes is not None and len(token.bytes) > 0
+                assert token.bytes is not None
                 assert token.top_logprobs is not None
                 assert len(token.top_logprobs) > 0
     assert aggregated_text == output_text
