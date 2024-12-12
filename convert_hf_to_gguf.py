@@ -3093,7 +3093,6 @@ class Mamba2Model(Model):
         return data_torch.squeeze()
 
 
-# TODO: Switch to BambaForCausalLM once ready in transformers
 @Model.register("BambaForCausalLM")
 class BambaModel(Mamba2Model):
     """Bamba is a hybrid SSM + Attention model that uses Mamba2 SSM layers"""
