@@ -81,7 +81,7 @@ if (Vulkan_FOUND)
             --target-cpp ${_ggml_vk_source}
             --no-clean
 
-        DEPENDS ${_ggml_vk_shader_deps}
+        DEPENDS ${_ggml_vk_shader_deps} ${_ggml_vk_genshaders_cmd}
         COMMENT "Generate vulkan shaders"
     )
 

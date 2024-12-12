@@ -146,6 +146,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--host HOST` | ip address to listen (default: 127.0.0.1)<br/>(env: LLAMA_ARG_HOST) |
 | `--port PORT` | port to listen (default: 8080)<br/>(env: LLAMA_ARG_PORT) |
 | `--path PATH` | path to serve static files from (default: )<br/>(env: LLAMA_ARG_STATIC_PATH) |
+| `--no-webui` | disable the Web UI<br/>(env: LLAMA_ARG_NO_WEBUI) |
 | `--embedding, --embeddings` | restrict to only support embedding use case; use only with dedicated embedding models (default: disabled)<br/>(env: LLAMA_ARG_EMBEDDINGS) |
 | `--reranking, --rerank` | enable reranking endpoint on server (default: disabled)<br/>(env: LLAMA_ARG_RERANKING) |
 | `--api-key KEY` | API key to use for authentication (default: none)<br/>(env: LLAMA_API_KEY) |
@@ -302,23 +303,23 @@ mkdir llama-client
 cd llama-client
 ```
 
-Create a index.js file and put this inside:
+Create an index.js file and put this inside:
 
 ```javascript
-const prompt = `Building a website can be done in 10 simple steps:`;
+const prompt = "Building a website can be done in 10 simple steps:"
 
-async function Test() {
+async function test() {
     let response = await fetch("http://127.0.0.1:8080/completion", {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({
             prompt,
-            n_predict: 512,
+            n_predict: 64,
         })
     })
     console.log((await response.json()).content)
 }
 
-Test()
+test()
 ```
 
 And run it:
@@ -380,7 +381,7 @@ Multiple prompts are also supported. In this case, the completion result will be
 `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.
 By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
 
-`stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
+`stream`: Allows receiving each predicted token in real-time instead of waiting for the completion to finish (uses a different response format). To enable this, set to `true`.
 
 `stop`: Specify a JSON array of stopping strings.
 These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
@@ -441,11 +442,11 @@ These words will not be included in the completion, so make sure to add them to 
 
 `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["dry", "top_k", "typ_p", "top_p", "min_p", "xtc", "temperature"]` - these are all the available values.
 
-    `timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
+`timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
 
 **Response format**
 
-- Note: When using streaming mode (`stream`), only `content` and `stop` will be returned until end of completion.
+- Note: In streaming mode (`stream`), only `content` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
 
 - `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
 

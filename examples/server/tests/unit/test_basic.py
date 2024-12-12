@@ -1,4 +1,5 @@
 import pytest
+import requests
 from utils import *
 
 server = ServerPreset.tinyllama2()
@@ -76,3 +77,20 @@ def test_load_split_model():
     })
     assert res.status_code == 200
     assert match_regex("(little|girl)+", res.body["content"])
+
+
+def test_no_webui():
+    global server
+    # default: webui enabled
+    server.start()
+    url = f"http://{server.server_host}:{server.server_port}"
+    res = requests.get(url)
+    assert res.status_code == 200
+    assert "<html>" in res.text
+    server.stop()
+
+    # with --no-webui
+    server.no_webui = True
+    server.start()
+    res = requests.get(url)
+    assert res.status_code == 404

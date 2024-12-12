@@ -1521,7 +1521,7 @@ int main(int argc, char ** argv) {
     for (const auto & inst : params_instances) {
         params_idx++;
         if (params.progress) {
-            fprintf(stderr, "llama-bench: benchmark %d/%ld: starting\n", params_idx, params_count);
+            fprintf(stderr, "llama-bench: benchmark %d/%zu: starting\n", params_idx, params_count);
         }
         // keep the same model between tests when possible
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
@@ -1573,14 +1573,14 @@ int main(int argc, char ** argv) {
         // warmup run
         if (t.n_prompt > 0) {
             if (params.progress) {
-                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup prompt run\n", params_idx, params_count);
+                fprintf(stderr, "llama-bench: benchmark %d/%zu: warmup prompt run\n", params_idx, params_count);
             }
             //test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
             test_prompt(ctx, t.n_prompt, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
             if (params.progress) {
-                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup generation run\n", params_idx, params_count);
+                fprintf(stderr, "llama-bench: benchmark %d/%zu: warmup generation run\n", params_idx, params_count);
             }
             test_gen(ctx, 1, t.n_threads);
         }
@@ -1592,14 +1592,14 @@ int main(int argc, char ** argv) {
 
             if (t.n_prompt > 0) {
                 if (params.progress) {
-                    fprintf(stderr, "llama-bench: benchmark %d/%ld: prompt run %d/%d\n", params_idx, params_count,
+                    fprintf(stderr, "llama-bench: benchmark %d/%zu: prompt run %d/%d\n", params_idx, params_count,
                             i + 1, params.reps);
                 }
                 test_prompt(ctx, t.n_prompt, t.n_batch, t.n_threads);
             }
             if (t.n_gen > 0) {
                 if (params.progress) {
-                    fprintf(stderr, "llama-bench: benchmark %d/%ld: generation run %d/%d\n", params_idx, params_count,
+                    fprintf(stderr, "llama-bench: benchmark %d/%zu: generation run %d/%d\n", params_idx, params_count,
                             i + 1, params.reps);
                 }
                 test_gen(ctx, t.n_gen, t.n_threads);
