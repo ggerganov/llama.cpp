@@ -754,8 +754,6 @@ static void mul_mat_vec_iq2_xs_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, QK_WARP_SIZE);
     {
         stream->submit([&](sycl::handler & cgh) {
-
-
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
                 [=](sycl::nd_item<3> item_ct1)
@@ -778,8 +776,6 @@ static void mul_mat_vec_iq2_s_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-
-
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
                 [=](sycl::nd_item<3> item_ct1)
@@ -802,8 +798,6 @@ static void mul_mat_vec_iq3_xxs_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-
-
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
                 [=](sycl::nd_item<3> item_ct1)
@@ -826,8 +820,6 @@ static void mul_mat_vec_iq3_s_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-
-
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
                 [=](sycl::nd_item<3> item_ct1)
@@ -850,8 +842,6 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
     {
 
         stream->submit([&](sycl::handler &cgh) {
-
-
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
                 [=](sycl::nd_item<3> item_ct1)
