@@ -83,7 +83,7 @@ const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate',
 const VueMarkdown = defineComponent(
   (props) => {
     const md = shallowRef(new MarkdownIt({ breaks: true }));
-    md.value.use(HighlightJS,{hljs})
+    md.value.use(HighlightJS, { hljs });
     md.value.use(markdownItKatexGpt)
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
