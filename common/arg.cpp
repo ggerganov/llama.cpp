@@ -145,7 +145,7 @@ static void common_params_handle_model_default(common_params & params) {
     }
 }
 
-const std::initializer_list<ggml_type> kv_cache_types = {
+const std::vector<ggml_type> kv_cache_types = {
     GGML_TYPE_F32,
     GGML_TYPE_F16,
     GGML_TYPE_BF16,
@@ -168,9 +168,8 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
 
 static std::string get_all_kv_cache_types() {
     std::ostringstream msg;
-    size_t size = kv_cache_types.size();
-    for (size_t i = 0; i < size; i++) {
-        msg << ggml_type_name(*(kv_cache_types.begin()+i)) << (i+1 == size ? "" : ", ");
+    for (const auto & type : kv_cache_types) {
+        msg << ggml_type_name(type) << (&type == &kv_cache_types.back() ? "" : ", ");
     }
     return msg.str();
 }
