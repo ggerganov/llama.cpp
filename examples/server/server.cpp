@@ -342,11 +342,6 @@ struct server_task {
             }
         }
 
-        if (params.sampling.n_probs > 0 && params.cache_prompt) {
-            SRV_WRN("cache_prompt is not compatible with n_probs > 0 (current value = %d), disabling cache_prompt.\n", params.sampling.n_probs);
-            params.cache_prompt = false;
-        }
-
         std::string model_name = params_base.model_alias.empty() ? DEFAULT_OAICOMPAT_MODEL : params_base.model_alias;
         params.oaicompat_model = json_value(data, "model", model_name);
 
@@ -439,7 +434,7 @@ struct completion_token_output {
                 {"id",      p.tok},
                 {"token",   tok_str},
                 {"bytes",   str_to_bytes(p.tok_str)},
-                {"logprob", p.prob},
+                {"logprob", logarithm(p.prob)},
             });
         }
         return probs_for_token;
@@ -453,12 +448,17 @@ struct completion_token_output {
             out.push_back(json {
                 {"id",           it.tok},
                 {"token",        tok_str},
-                {"logprob",      it.prob},
+                {"logprob",      logarithm(it.prob)},
                 {"bytes",        str_to_bytes(it.text_to_send)},
                 {"top_logprobs", it.to_json()},
             });
         }
         return out;
+    }
+
+    static float logarithm(float x) {
+        // nlohmann::json converts -inf to null, so we need to prevent that
+        return x == 0.0f ? std::numeric_limits<float>::lowest() : std::log(x);
     }
 
     static std::vector<unsigned char> str_to_bytes(const std::string & str) {

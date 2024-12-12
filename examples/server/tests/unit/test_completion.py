@@ -262,13 +262,13 @@ def test_n_probs():
     for tok in res.body["completion_probabilities"]:
         assert "id" in tok and tok["id"] > 0
         assert "token" in tok and type(tok["token"]) == str
-        assert "logprob" in tok and 0.0 <= tok["logprob"] <= 1.0
+        assert "logprob" in tok and tok["logprob"] <= 0.0
         assert "bytes" in tok and len(tok["bytes"]) > 0
         assert len(tok["top_logprobs"]) == 10
         for prob in tok["top_logprobs"]:
             assert "id" in prob and prob["id"] > 0
             assert "token" in prob and type(prob["token"]) == str
-            assert "logprob" in prob and 0.0 <= prob["logprob"] <= 1.0
+            assert "logprob" in prob and prob["logprob"] <= 0.0
             assert "bytes" in prob and len(prob["bytes"]) > 0
 
 
@@ -289,11 +289,11 @@ def test_n_probs_stream():
             for tok in data["completion_probabilities"]:
                 assert "id" in tok and tok["id"] > 0
                 assert "token" in tok and type(tok["token"]) == str
-                assert "logprob" in tok and 0.0 <= tok["logprob"] <= 1.0
+                assert "logprob" in tok and tok["logprob"] <= 0.0
                 assert "bytes" in tok and len(tok["bytes"]) > 0
                 assert len(tok["top_logprobs"]) == 10
                 for prob in tok["top_logprobs"]:
                     assert "id" in prob and prob["id"] > 0
                     assert "token" in prob and type(prob["token"]) == str
-                    assert "logprob" in prob and 0.0 <= prob["logprob"] <= 1.0
+                    assert "logprob" in prob and prob["logprob"] <= 0.0
                     assert "bytes" in prob and len(prob["bytes"]) > 0
