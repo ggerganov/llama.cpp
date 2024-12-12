@@ -1018,8 +1018,8 @@ void ggml_sycl_op_mul_mat_vec_q(
             break;
         }
     }
-    (void) src1;
-    (void) dst;
-    (void) src1_ddf_i;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_ddf_i);
+    GGML_UNUSED(ctx);
 }

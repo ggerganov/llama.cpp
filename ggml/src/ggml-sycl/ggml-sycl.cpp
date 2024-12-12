@@ -419,7 +419,7 @@ ggml_backend_sycl_buffer_cpy_tensor(ggml_backend_buffer_t buffer,
         return true;
     }
     return false;
-    (void) buffer;
+    GGML_UNUSED(buffer);
 } catch (const sycl::exception & exc) {
     std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
     std::exit(1);
@@ -1861,8 +1861,8 @@ static void get_rows_sycl(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
                                  s3, nb01, nb02, nb03, s10, s11, s12, item_ct1);
                          });
 
-    (void) dst;
-    (void) ctx;
+    GGML_UNUSED(dst);
+    GGML_UNUSED(ctx);
 }
 
 template <typename src0_t>
@@ -1900,8 +1900,8 @@ static void get_rows_sycl_float(ggml_backend_sycl_context & ctx, const ggml_tens
             });
     }
 
-    (void) dst;
-    (void) ctx;
+    GGML_UNUSED(dst);
+    GGML_UNUSED(ctx);
 }
 
 static void quantize_row_q8_1_sycl(const float *x, void *vy, const int kx,
@@ -2471,8 +2471,8 @@ static void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, const ggml_tens
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(ctx, dst, src0, dst, nullptr, src0_d, dst_d, main_stream);
 
-    (void) src1;
-    (void) src1_d;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(src1_d);
 }
 
 
@@ -2598,9 +2598,9 @@ inline void ggml_sycl_op_mul_mat_sycl(
             src0_ddf_i, DnnlGemmWrapper::to_dt<float>(), dst_dd_i, DnnlGemmWrapper::to_dt<float>());
 #endif
     }
-    (void) dst;
-    (void) src1_ddq_i;
-    (void) src1_padded_row_size;
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_ddq_i);
+    GGML_UNUSED(src1_padded_row_size);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -2646,9 +2646,9 @@ static void ggml_sycl_op_pool2d(ggml_backend_sycl_context & ctx, const ggml_tens
                                item_ct1);
         });
 
-    (void) src1;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2663,10 +2663,10 @@ inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor 
 
     sum_rows_f32_sycl(src0_dd, dst_dd, ne, 1, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2683,10 +2683,10 @@ inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, const ggml_te
 
     sum_rows_f32_sycl(src0_dd, dst_dd, ncols, nrows, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2705,10 +2705,10 @@ inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, const ggml_ten
 
     argsort_f32_i32_sycl(src0_dd, (int *)dst_dd, ncols, nrows, order, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2725,10 +2725,10 @@ inline void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, const ggml_tens
 
     argmax_f32_i32_sycl(src0_dd, (int *)dst_dd, ncols, nrows, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_diag_mask_inf(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2748,10 +2748,10 @@ inline void ggml_sycl_op_diag_mask_inf(ggml_backend_sycl_context & ctx, const gg
 
     diag_mask_inf_f32_sycl(src0_dd, dst_dd, ne00, nrows0, ne01, n_past, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -2772,10 +2772,10 @@ inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, const ggml_tenso
     */
     SYCL_CHECK(0);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -2798,10 +2798,10 @@ inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, const ggml_tenso
     */
     SYCL_CHECK(0);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
-    (void) ctx;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 static void ggml_sycl_set_peer_access(const int n_tokens, int main_device) {
@@ -3412,7 +3412,7 @@ catch (sycl::exception const &exc) {
 
 inline bool ggml_sycl_supports_mmq(enum ggml_type type) {
     // TODO: accuracy issues in MMQ
-    (void) type;
+    GGML_UNUSED(type);
     return false;
 }
 
@@ -3788,7 +3788,7 @@ static void ggml_sycl_cpy(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
         GGML_ABORT("fatal error");
     }
 
-    (void) dst;
+    GGML_UNUSED(dst);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -3799,7 +3799,7 @@ catch (sycl::exception const &exc) {
 static void ggml_sycl_dup(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     // TODO: why do we pass dst as src1 here?
     ggml_sycl_cpy(ctx, src0, dst, nullptr);
-    (void) src1;
+    GGML_UNUSED(src1);
 }
 
 static void ggml_sycl_diag_mask_inf(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -3845,10 +3845,10 @@ static void ggml_sycl_argmax(ggml_backend_sycl_context & ctx, const ggml_tensor 
 
 static void ggml_sycl_nop(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     // TODO: Why this function even exists?
-    (void) src0;
-    (void) src1;
-    (void) dst;
-    (void) ctx;
+    GGML_UNUSED(src0);
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(ctx);
 }
 
 void ggml_sycl_set_main_device(const int main_device) try {
@@ -4645,7 +4645,7 @@ static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, cons
     // SYCL doesn't support registering host memory, left here for reference
     // "ggml_backend_register_host_buffer"
     // "ggml_backend_unregister_host_buffer"
-    (void) name;
+    GGML_UNUSED(name);
     return nullptr;
 }
 

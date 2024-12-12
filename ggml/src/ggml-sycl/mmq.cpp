@@ -3020,9 +3020,9 @@ void ggml_sycl_op_mul_mat_q(
             break;
     }
 
-    (void) src1;
-    (void) dst;
-    (void) src1_ddf_i;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_ddf_i);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__

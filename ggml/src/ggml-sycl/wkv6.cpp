@@ -136,6 +136,6 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, const ggml_tensor* s
             });
     });
 
-    (void) src0;
-    (void) src1;
+    GGML_UNUSED(src0);
+    GGML_UNUSED(src1);
 }
