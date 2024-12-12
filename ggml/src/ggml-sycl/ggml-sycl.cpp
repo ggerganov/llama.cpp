@@ -3843,7 +3843,6 @@ static void ggml_sycl_argmax(ggml_backend_sycl_context & ctx, const ggml_tensor 
 }
 
 static void ggml_sycl_nop(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    // TODO: Why this function even exists?
     GGML_UNUSED(src0);
     GGML_UNUSED(src1);
     GGML_UNUSED(dst);
