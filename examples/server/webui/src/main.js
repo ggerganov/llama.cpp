@@ -5,11 +5,11 @@ import TextLineStream from 'textlinestream';
 
 // code highlighting
 import hljs from 'highlight.js';
-import HighlightJS from 'markdown-it-highlightjs' // used integrate highlight.js into markdown-it
+import HighlightJS from 'markdown-it-highlightjs'; // used integrate highlight.js into markdown-it
 import 'highlight.js/styles/github-dark.min.css';
 // math formula rendering
-import 'katex/dist/katex.min.css'
-import markdownItKatexGpt from 'markdown-it-katex-gpt'
+import 'katex/dist/katex.min.css';
+import markdownItKatexGpt from 'markdown-it-katex-gpt';
 
 const isDev = import.meta.env.MODE === 'development';
 
