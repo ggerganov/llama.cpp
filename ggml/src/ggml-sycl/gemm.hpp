@@ -23,7 +23,6 @@
 #include "dnnl.hpp"
 #include "dnnl_sycl.hpp"
 
-
 class DnnlGemmWrapper {
 public:
     using dt = dnnl::memory::data_type;
