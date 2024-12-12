@@ -1064,32 +1064,72 @@ struct ggml_backend_opencl_buffer_context {
             CL_CHECK(clReleaseMemObject(im));
         }
 
+        // Delete all extras to trigger their destructors
         for (ggml_tensor_extra_cl * e : temp_tensor_extras) {
+            delete e;
+        }
+        for (ggml_tensor_extra_cl * e : temp_tensor_extras_in_use) {
             delete e;
         }
         for (ggml_tensor_extra_cl_q4_0 * e : temp_tensor_extras_q4_0) {
             delete e;
         }
+        for (ggml_tensor_extra_cl_q4_0 * e : temp_tensor_extras_q4_0_in_use) {
+            delete e;
+        }
     }
 
     ggml_tensor_extra_cl * ggml_opencl_alloc_temp_tensor_extra() {
-        ggml_tensor_extra_cl * extra = new ggml_tensor_extra_cl();
-        extra->reset();
-        temp_tensor_extras.push_back(extra);
+        ggml_tensor_extra_cl * extra;
+        if (temp_tensor_extras.empty()) {
+            extra = new ggml_tensor_extra_cl();
+        } else {
+            extra = temp_tensor_extras.back();
+            temp_tensor_extras.pop_back();
+        }
 
+        temp_tensor_extras_in_use.push_back(extra);
+
+        extra->reset();
         return extra;
     }
 
     ggml_tensor_extra_cl_q4_0 * ggml_opencl_alloc_temp_tensor_extra_q4_0() {
-        ggml_tensor_extra_cl_q4_0 * extra = new ggml_tensor_extra_cl_q4_0();
-        extra->reset();
-        temp_tensor_extras_q4_0.push_back(extra);
+        ggml_tensor_extra_cl_q4_0 * extra;
+        if (temp_tensor_extras_q4_0.empty()) {
+            extra = new ggml_tensor_extra_cl_q4_0();
+        } else {
+            extra = temp_tensor_extras_q4_0.back();
+            temp_tensor_extras_q4_0.pop_back();
+        }
 
+        temp_tensor_extras_q4_0_in_use.push_back(extra);
+
+        extra->reset();
         return extra;
     }
 
+    void reset() {
+        for (ggml_tensor_extra_cl * e : temp_tensor_extras_in_use) {
+            temp_tensor_extras.push_back(e);
+        }
+        temp_tensor_extras_in_use.clear();
+
+        for (ggml_tensor_extra_cl_q4_0 * e : temp_tensor_extras_q4_0_in_use) {
+            temp_tensor_extras_q4_0.push_back(e);
+        }
+        temp_tensor_extras_q4_0_in_use.clear();
+    }
+
+    // Pools for extras. Available extras are in `temp_tensor_extras`. Extras
+    // being used are in `temp_tensor_extras_in_use`. At the first run, new
+    // extras get created and put in `in_use`. When the buffer is reset via
+    // the `reset` callback, all extras in `in_use` get moved to available extras
+    // for reuse.
     std::vector<ggml_tensor_extra_cl *> temp_tensor_extras;
+    std::vector<ggml_tensor_extra_cl *> temp_tensor_extras_in_use;
     std::vector<ggml_tensor_extra_cl_q4_0 *> temp_tensor_extras_q4_0;
+    std::vector<ggml_tensor_extra_cl_q4_0 *> temp_tensor_extras_q4_0_in_use;
 
     // The buffer_context is initially created by ggml_backend_buft_alloc_buffer
     // before any tensor is initialized (at the beginning of alloc_tensor_range).
@@ -1492,6 +1532,11 @@ static void ggml_backend_opencl_buffer_clear(ggml_backend_buffer_t buffer, uint8
     CL_CHECK(clFinish(queue));
 }
 
+static void ggml_backend_opencl_buffer_reset(ggml_backend_buffer_t buffer) {
+    ggml_backend_opencl_buffer_context * ctx = (ggml_backend_opencl_buffer_context *) buffer->context;
+    ctx->reset();
+}
+
 static ggml_backend_buffer_i ggml_backend_opencl_buffer_interface = {
     /* .free_buffer     = */ ggml_backend_opencl_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_opencl_buffer_get_base,
@@ -1501,7 +1546,7 @@ static ggml_backend_buffer_i ggml_backend_opencl_buffer_interface = {
     /* .get_tensor      = */ ggml_backend_opencl_buffer_get_tensor,
     /* .cpy_tensor      = */ NULL,
     /* .clear           = */ ggml_backend_opencl_buffer_clear,
-    /* .reset           = */ NULL,
+    /* .reset           = */ ggml_backend_opencl_buffer_reset,
 };
 
 //
