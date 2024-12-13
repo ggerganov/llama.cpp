@@ -2129,6 +2129,9 @@ class Phi3MiniModel(Model):
     model_arch = gguf.MODEL_ARCH.PHI3
 
     def set_vocab(self):
+        if self.metadata.name == "Phi 4":
+            return self._set_vocab_gpt2()
+
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -2245,7 +2248,8 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_rope_dimension_count(rope_dims)
         self.gguf_writer.add_rope_freq_base(self.find_hparam(["rope_theta"]))
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_sliding_window(self.find_hparam(["sliding_window"]))
+        if self.metadata.name != "Phi 4":
+            self.gguf_writer.add_sliding_window(self.find_hparam(["sliding_window"]))
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
