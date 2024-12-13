@@ -30,6 +30,15 @@ const BUILD_PLUGINS = [
         const content = GUIDE_FOR_FRONTEND + '\n' + fs.readFileSync(outputIndexHtml, 'utf-8');
         const compressed = zlib.gzipSync(Buffer.from(content, 'utf-8'), { level: 9 });
 
+        // because gzip header contains machine-specific info, we must remove these data from the header
+        // timestamp
+        compressed[0x4] = 0;
+        compressed[0x5] = 0;
+        compressed[0x6] = 0;
+        compressed[0x7] = 0;
+        // OS
+        compressed[0x9] = 0;
+
         if (compressed.byteLength > MAX_BUNDLE_SIZE) {
           throw new Error(
             `Bundle size is too large (${Math.ceil(compressed.byteLength / 1024)} KB).\n` +
