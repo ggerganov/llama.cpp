@@ -140,6 +140,7 @@ The project is under active development, and we are [looking for feedback and co
 | `-sp, --special` | special tokens output enabled (default: false) |
 | `--no-warmup` | skip warming up the model with an empty run |
 | `--spm-infill` | use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: disabled) |
+| `-mtp, --multi-token-probs` | allow getting probabilities for multiple tokens. note: this will slow down the generation speed (default: disabled)<br/>(env: LLAMA_ARG_MULTI_TOKEN_PROBS) |
 | `--pooling {none,mean,cls,last,rank}` | pooling type for embeddings, use model default if unspecified<br/>(env: LLAMA_ARG_POOLING) |
 | `-cb, --cont-batching` | enable continuous batching (a.k.a dynamic batching) (default: enabled)<br/>(env: LLAMA_ARG_CONT_BATCHING) |
 | `-nocb, --no-cont-batching` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
