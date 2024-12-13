@@ -3,13 +3,11 @@ import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vu
 import MarkdownIt from 'markdown-it';
 import TextLineStream from 'textlinestream';
 
-// math formula rendering
-import 'katex/dist/katex.min.css';
-import markdownItKatexGpt from 'markdown-it-katex-gpt';
-
 // code highlighting
 import hljs from './highlight-config';
 import daisyuiThemes from 'daisyui/src/theming/themes';
+
+// TODO: katex is too big, need to find a way to reduce bundle size so we can add it
 
 const isDev = import.meta.env.MODE === 'development';
 
@@ -97,7 +95,6 @@ const VueMarkdown = defineComponent(
         return '<pre><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
       }
     }));
-    md.value.use(markdownItKatexGpt);
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
       const content = tokens[idx].content;

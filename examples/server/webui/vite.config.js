@@ -12,24 +12,28 @@ const GUIDE_FOR_FRONTEND = `
 -->
 `.trim();
 
-export default {
-  plugins: process.env.ANALYZE ? [] : [,
-    (function llamaCppPlugin() {
-      let config;
-      return {
-        name: 'llamacpp:build',
-        apply: 'build',
-        async configResolved(_config) {
-          config = _config;
-        },
-        writeBundle() {
-          const outputIndexHtml = path.join(config.build.outDir, 'index.html');
-          const content = fs.readFileSync(outputIndexHtml, 'utf-8');
+const BUILD_PLUGINS = [
+  viteSingleFile(),
+  (function llamaCppPlugin() {
+    let config;
+    return {
+      name: 'llamacpp:build',
+      apply: 'build',
+      async configResolved(_config) {
+        config = _config;
+      },
+      writeBundle() {
+        const outputIndexHtml = path.join(config.build.outDir, 'index.html');
+        const content = fs.readFileSync(outputIndexHtml, 'utf-8');
 
-          const targetOutputFile = path.join(config.build.outDir, '../../public/index.html');
-          fs.writeFileSync(targetOutputFile, GUIDE_FOR_FRONTEND + '\n' + content);
-        }
+        const targetOutputFile = path.join(config.build.outDir, '../../public/index.html');
+        fs.writeFileSync(targetOutputFile, GUIDE_FOR_FRONTEND + '\n' + content);
       }
-    })(),
-  ],
+    }
+  })(),
+];
+
+/** @type {import('vite').UserConfig} */
+export default {
+  plugins: process.env.ANALYZE ? [] : BUILD_PLUGINS,
 };
