@@ -459,7 +459,7 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     } else if (strstr(default_device->name, "Intel")) {
         backend_ctx->gpu_family = GPU_FAMILY::INTEL;
     } else {
-        GGML_LOG_ERROR("Unknown GPU: %s\n", default_device->name);
+        GGML_LOG_ERROR("Unsupported GPU: %s\n", default_device->name);
         backend_ctx->gpu_family = GPU_FAMILY::UNKNOWN;
         return backend_ctx;
     }
