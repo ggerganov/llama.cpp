@@ -3528,7 +3528,7 @@ static struct ggml_tensor * ggml_rope_impl(
     memcpy(params +  8, &attn_factor,  sizeof(float));
     memcpy(params +  9, &beta_fast,    sizeof(float));
     memcpy(params + 10, &beta_slow,    sizeof(float));
-    memcpy(params + 11, &sections,     sizeof(int) * 4);
+    memcpy(params + 11, &sections,     sizeof(int)*4);
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op     = GGML_OP_ROPE;

@@ -50,7 +50,6 @@ def find_vision_tensors(qwen2vl, dtype) -> Dict[str, np.ndarray]:
             tensor_map[to_gguf_name(f"vision_model.{name}").replace("qkv", "q")] = wq
             tensor_map[to_gguf_name(f"vision_model.{name}").replace("qkv", "k")] = wk
             tensor_map[to_gguf_name(f"vision_model.{name}").replace("qkv", "v")] = wv
-            # breakpoint()
         elif 'merger' in name:
             if name.endswith("ln_q.weight"):
                 tensor_map['v.post_ln.weight'] = ten
@@ -97,7 +96,12 @@ def main(args):
     cfg: Qwen2VLConfig = qwen2vl.config  # type: ignore[reportAssignmentType]
     vcfg = cfg.vision_config
 
-    fname_out = "qwen2vl-vision.gguf"
+    if os.path.isdir(model_name):
+        if model_name.endswith(os.sep):
+            model_name = model_name[:-1]
+        model_name = os.path.basename(model_name)
+    fname_out = f"{model_name.replace('/', '-').lower()}-vision.gguf"
+
     fout = GGUFWriter(path=fname_out, arch="clip")
     fout.add_description("image encoder for Qwen2VL")
 
@@ -143,6 +147,7 @@ def main(args):
     fout.write_kv_data_to_file()
     fout.write_tensors_to_file()
     fout.close()
+    print("save model as: ", fname_out)
 
 
 if __name__ == "__main__":
