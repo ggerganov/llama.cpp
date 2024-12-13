@@ -5,7 +5,7 @@ import TextLineStream from 'textlinestream';
 
 // math formula rendering
 import 'katex/dist/katex.min.css';
-import markdownItKatexGpt from 'markdown-it-katex-gpt';
+import markdownItKatex from '@vscode/markdown-it-katex';
 
 // code highlighting
 import hljs from './highlight-config';
@@ -97,7 +97,14 @@ const VueMarkdown = defineComponent(
         return '<pre><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
       }
     }));
-    md.value.use(markdownItKatexGpt);
+    md.value.use(markdownItKatex, {
+      delimiters: [
+        { left: '\\[', right: '\\]', display: true },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '$$', right: '$$', display: false },
+      ],
+      throwOnError: false,
+    });
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
       const content = tokens[idx].content;

@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
 
-const MAX_BUNDLE_SIZE = 1024 * 1024; // only increase when absolutely necessary
+const MAX_BUNDLE_SIZE = 1.5 * 1024 * 1024; // only increase when absolutely necessary
 
 const GUIDE_FOR_FRONTEND = `
 <!--
@@ -32,7 +32,7 @@ const BUILD_PLUGINS = [
 
         if (compressed.byteLength > MAX_BUNDLE_SIZE) {
           throw new Error(
-            `Bundle size is too large (${Math.ceil(content.length / 1024)} KB).\n` +
+            `Bundle size is too large (${Math.ceil(compressed.byteLength / 1024)} KB).\n` +
             `Please reduce the size of the frontend or increase MAX_BUNDLE_SIZE in vite.config.js.\n`,
           );
         }
