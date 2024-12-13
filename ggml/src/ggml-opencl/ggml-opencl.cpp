@@ -1,4 +1,5 @@
 #define CL_TARGET_OPENCL_VERSION 220
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 
 // suppress warnings in CL headers for GCC and Clang
 #pragma GCC diagnostic ignored "-Woverlength-strings"
@@ -463,6 +464,14 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
         return backend_ctx;
     }
 
+#ifdef GGML_OPENCL_USE_ADRENO_KERNELS
+    if (backend_ctx->gpu_family != GPU_FAMILY::ADRENO) {
+        GGML_LOG_ERROR("ggml_opencl: Adreno-specific kernels should not be enabled for non-Adreno GPUs; "
+            "run on an Adreno GPU or recompile with CMake option `-DGGML_OPENCL_USE_ADRENO_KERNELS=OFF`\n");
+        return backend_ctx;
+    }
+#endif
+
     // Populate backend device name
     dev_ctx->platform_name = default_device->platform->name;
     dev_ctx->device_name = default_device->name;
@@ -470,6 +479,20 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
 
     // A local ref of cl_device_id for convenience
     cl_device_id device = backend_ctx->device;
+
+    // Check device OpenCL version, OpenCL 2.0 or above is required
+    size_t device_ver_str_size;
+    clGetDeviceInfo(device, CL_DEVICE_VERSION, 0, NULL, &device_ver_str_size);
+    char *device_ver_buffer = (char *)alloca(device_ver_str_size + 1);
+    clGetDeviceInfo(device, CL_DEVICE_VERSION, device_ver_str_size, device_ver_buffer, NULL);
+    device_ver_buffer[device_ver_str_size] = '\0';
+    GGML_LOG_INFO("ggml_opencl: device OpenCL version: %s\n", device_ver_buffer);
+
+    if (strstr(device_ver_buffer, "OpenCL 2") == NULL &&
+        strstr(device_ver_buffer, "OpenCL 3") == NULL) {
+        GGML_LOG_ERROR("ggml_opencl: OpenCL 2.0 or above is required\n");
+        return backend_ctx;
+    }
 
     // Check driver version
     size_t driver_version_str_size;
@@ -494,6 +517,22 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
     // Check if ext_buffer contains cl_khr_fp16
     backend_ctx->fp16_support = strstr(ext_buffer, "cl_khr_fp16") != NULL;
     GGML_LOG_INFO("ggml_opencl: device FP16 support: %s\n", backend_ctx->fp16_support ? "true" : "false");
+
+    // fp16 is required
+    if (!backend_ctx->fp16_support) {
+        GGML_LOG_ERROR("ggml_opencl: device does not support FP16\n");
+        return backend_ctx;
+    }
+
+    // If OpenCL 3.0 is supported, then check for cl_khr_subgroups, which becomes
+    // optional in OpenCL 3.0 (cl_khr_subgroup is mandatory in OpenCL 2.x)
+    if (strstr(device_ver_buffer, "OpenCL 3") &&
+        strstr(ext_buffer, "cl_khr_subgroups") == NULL &&
+        strstr(ext_buffer, "cl_intel_subgroups") == NULL) {
+        GGML_LOG_ERROR("ggml_opencl: device does not support subgroups (cl_khr_subgroups or cl_intel_subgroups) "
+            "(note that subgroups is an optional feature in OpenCL 3.0)\n");
+        return backend_ctx;
+    }
 
     CL_CHECK(clGetDeviceInfo(device, CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(cl_uint), &backend_ctx->alignment, NULL));
     GGML_LOG_INFO("ggml_opencl: mem base addr align: %u\n", backend_ctx->alignment);
