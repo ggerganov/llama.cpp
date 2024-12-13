@@ -139,6 +139,7 @@ struct common_params_sampling {
 
 
     std::vector<enum common_sampler_type> samplers = {
+        COMMON_SAMPLER_TYPE_PENALTIES,
         COMMON_SAMPLER_TYPE_DRY,
         COMMON_SAMPLER_TYPE_TOP_K,
         COMMON_SAMPLER_TYPE_TYPICAL_P,
@@ -146,7 +147,6 @@ struct common_params_sampling {
         COMMON_SAMPLER_TYPE_MIN_P,
         COMMON_SAMPLER_TYPE_XTC,
         COMMON_SAMPLER_TYPE_TEMPERATURE,
-        COMMON_SAMPLER_TYPE_PENALTIES,
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
