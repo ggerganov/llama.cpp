@@ -663,7 +663,11 @@ class Model:
             res = "minerva-7b"
         if chkhsh == "8b5a93ed704057481f240da0be7e7dca721d7f8f4755263b6807227a2cbeae65":
             # ref: https://huggingface.co/sentence-transformers/stsb-roberta-base
-            res = "roberta-bpe"
+            # NOTE: The Roberta tokenizer is the same as GPT-2, but it always
+            #   adds the cls/sep tokens as bos/eos. This is handled as a
+            #   post-processor in tokenizers, so the chkhsh is different, but
+            #   it still maps to gpt-2 internally.
+            res = "gpt-2"
 
         if res is None:
             logger.warning("\n")
@@ -2544,7 +2548,7 @@ class InternLM2Model(Model):
             return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("BertModel", "CamembertModel", "RobertaModel")
+@Model.register("BertModel", "CamembertModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -2615,6 +2619,27 @@ class BertModel(Model):
             return [] # we don't need these
 
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("RobertaModel")
+class RobertaModel(BertModel):
+    model_arch = gguf.MODEL_ARCH.BERT
+
+    def set_vocab(self):
+        """Support BPE tokenizers for roberta models"""
+        bpe_tok_path = self.dir_model / "tokenizer.json"
+        if bpe_tok_path.exists():
+            self._set_vocab_gpt2()
+            self.gguf_writer.add_add_bos_token(True)
+            self.gguf_writer.add_add_eos_token(True)
+
+            # we need this to validate the size of the token_type embeddings
+            # though currently we are passing all zeros to the token_type embeddings
+            # "Sequence A" or "Sequence B"
+            self.gguf_writer.add_token_type_count(self.hparams.get("type_vocab_size", 1))
+
+        else:
+            return super().set_vocab()
 
 
 @Model.register("NomicBertModel")
