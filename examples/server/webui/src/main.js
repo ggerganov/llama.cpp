@@ -1,21 +1,25 @@
 import './styles.css';
 import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vue.esm-bundler.js';
-import { llama } from './completion.js';
 import MarkdownIt from 'markdown-it';
+import TextLineStream from 'textlinestream';
+
+const isDev = import.meta.env.MODE === 'development';
 
 // utility functions
 const isString = (x) => !!x.toLowerCase;
-const isNumeric = (n) => !isString(n) && !isNaN(n);
+const isBoolean = (x) => x === true || x === false;
+const isNumeric = (n) => !isString(n) && !isNaN(n) && !isBoolean(n);
 const escapeAttr = (str) => str.replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const copyStr = (str) => navigator.clipboard.writeText(str);
 
 // constants
 const BASE_URL = localStorage.getItem('base') // for debugging
-  || (new URL('.', document.baseURI).href).toString(); // for production
+  || (new URL('.', document.baseURI).href).toString().replace(/\/$/, ''); // for production
 const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: '',
   systemMessage: 'You are a helpful assistant.',
+  showTokensPerSecond: false,
   // make sure these default values are in sync with `common.h`
   samplers: 'dkypmxt',
   temperature: 0.8,
@@ -98,6 +102,48 @@ const SettingsModalShortInput = defineComponent({
     configDefault: Object,
     configInfo: Object,
     modelValue: [Object, String, Number],
+  },
+});
+
+// message bubble component
+const MessageBubble = defineComponent({
+  components: {
+    VueMarkdown
+  },
+  template: document.getElementById('message-bubble').innerHTML,
+  props: {
+    config: Object,
+    msg: Object,
+    isGenerating: Boolean,
+    editUserMsgAndRegenerate: Function,
+    regenerateMsg: Function,
+  },
+  data() {
+    return {
+      editingContent: null,
+    };
+  },
+  computed: {
+    timings() {
+      if (!this.msg.timings) return null;
+      return {
+        ...this.msg.timings,
+        prompt_per_second: this.msg.timings.prompt_n / (this.msg.timings.prompt_ms / 1000),
+        predicted_per_second: this.msg.timings.predicted_n / (this.msg.timings.predicted_ms / 1000),
+      };
+    }
+  },
+  methods: {
+    copyMsg() {
+      copyStr(this.msg.content);
+    },
+    editMsg() {
+      this.editUserMsgAndRegenerate({
+        ...this.msg,
+        content: this.editingContent,
+      });
+      this.editingContent = null;
+    },
   },
 });
 
@@ -192,10 +238,29 @@ const chatScrollToBottom = (requiresNearBottom) => {
   }
 };
 
+// wrapper for SSE
+async function* sendSSEPostRequest(url, fetchOptions) {
+  const res = await fetch(url, fetchOptions);
+  const lines = res.body
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+  for await (const line of lines) {
+    if (isDev) console.log({line});
+    if (line.startsWith('data:') && !line.endsWith('[DONE]')) {
+      const data = JSON.parse(line.slice(5));
+      yield data;
+    } else if (line.startsWith('error:')) {
+      const data = JSON.parse(line.slice(6));
+      throw new Error(data.message || 'Unknown error');
+    }
+  }
+};
+
 const mainApp = createApp({
   components: {
     VueMarkdown,
     SettingsModalShortInput,
+    MessageBubble,
   },
   data() {
     return {
@@ -209,7 +274,6 @@ const mainApp = createApp({
       selectedTheme: StorageUtils.getTheme(),
       config: StorageUtils.getConfig(),
       showConfigDialog: false,
-      editingMsg: null,
       // const
       themes: THEMES,
       configDefault: {...CONFIG_DEFAULT},
@@ -226,6 +290,15 @@ const mainApp = createApp({
     });
     resizeObserver.observe(pendingMsgElem);
   },
+  watch: {
+    viewingConvId: function(val, oldVal) {
+      if (val != oldVal) {
+        this.fetchMessages();
+        chatScrollToBottom();
+        this.hideSidebar();
+      }
+    }
+  },
   methods: {
     hideSidebar() {
       document.getElementById('toggle-drawer').checked = false;
@@ -237,18 +310,10 @@ const mainApp = createApp({
     newConversation() {
       if (this.isGenerating) return;
       this.viewingConvId = StorageUtils.getNewConvId();
-      this.editingMsg = null;
-      this.fetchMessages();
-      chatScrollToBottom();
-      this.hideSidebar();
     },
     setViewingConv(convId) {
       if (this.isGenerating) return;
       this.viewingConvId = convId;
-      this.editingMsg = null;
-      this.fetchMessages();
-      chatScrollToBottom();
-      this.hideSidebar();
     },
     deleteConv(convId) {
       if (this.isGenerating) return;
@@ -256,7 +321,6 @@ const mainApp = createApp({
         StorageUtils.remove(convId);
         if (this.viewingConvId === convId) {
           this.viewingConvId = StorageUtils.getNewConvId();
-          this.editingMsg = null;
         }
         this.fetchConversation();
         this.fetchMessages();
@@ -291,7 +355,6 @@ const mainApp = createApp({
       this.fetchConversation();
       this.fetchMessages();
       this.inputMsg = '';
-      this.editingMsg = null;
       this.generateMessage(currConvId);
       chatScrollToBottom();
     },
@@ -299,7 +362,6 @@ const mainApp = createApp({
       if (this.isGenerating) return;
       this.pendingMsg = { id: Date.now()+1, role: 'assistant', content: null };
       this.isGenerating = true;
-      this.editingMsg = null;
 
       try {
         const abortController = new AbortController();
@@ -330,23 +392,37 @@ const mainApp = createApp({
           dry_allowed_length: this.config.dry_allowed_length,
           dry_penalty_last_n: this.config.dry_penalty_last_n,
           max_tokens: this.config.max_tokens,
+          timings_per_token: !!this.config.showTokensPerSecond,
           ...(this.config.custom.length ? JSON.parse(this.config.custom) : {}),
-          ...(this.config.apiKey ? { api_key: this.config.apiKey } : {}),
         };
-        const config = {
-          controller: abortController,
-          api_url: BASE_URL,
-          endpoint: '/chat/completions',
-        };
-        for await (const chunk of llama(prompt, params, config)) {
-          const stop = chunk.data.stop;
-          const addedContent = chunk.data.choices[0].delta.content;
+        const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': this.config.apiKey ? `Bearer ${this.config.apiKey}` : undefined,
+          },
+          body: JSON.stringify(params),
+          signal: abortController.signal,
+        });
+        for await (const chunk of chunks) {
+          const stop = chunk.stop;
+          const addedContent = chunk.choices[0].delta.content;
           const lastContent = this.pendingMsg.content || '';
           if (addedContent) {
             this.pendingMsg = {
               id: this.pendingMsg.id,
               role: 'assistant',
               content: lastContent + addedContent,
+            };
+          }
+          const timings = chunk.timings;
+          if (timings && this.config.showTokensPerSecond) {
+            // only extract what's really needed, to save some space
+            this.pendingMsg.timings = {
+              prompt_n: timings.prompt_n,
+              prompt_ms: timings.prompt_ms,
+              predicted_n: timings.predicted_n,
+              predicted_ms: timings.predicted_ms,
             };
           }
         }
@@ -387,14 +463,10 @@ const mainApp = createApp({
       this.fetchMessages();
       this.generateMessage(currConvId);
     },
-    copyMsg(msg) {
-      copyStr(msg.content);
-    },
     editUserMsgAndRegenerate(msg) {
       if (this.isGenerating) return;
       const currConvId = this.viewingConvId;
       const newContent = msg.content;
-      this.editingMsg = null;
       StorageUtils.filterAndKeepMsgs(currConvId, (m) => m.id < msg.id);
       StorageUtils.appendMsg(currConvId, {
         id: Date.now(),

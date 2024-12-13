@@ -59,7 +59,7 @@ static void rwkv_wkv_f32_kernel(
         float y = 0;
 
         // Process in chunks of 4 for better vectorization
-        sycl::float4 k4, r4, tf4, td4, s4, kv4;
+        sycl::float4 k4, r4, tf4, td4, s4;
         #pragma unroll
         for (int j = 0; j < head_size; j += 4) {
             // Load data in vec4 chunks
@@ -135,4 +135,7 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, const ggml_tensor* s
                 );
             });
     });
+
+    GGML_UNUSED(src0);
+    GGML_UNUSED(src1);
 }
