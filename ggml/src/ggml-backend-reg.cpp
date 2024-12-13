@@ -473,7 +473,8 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent,
         if (!fs::exists(search_path)) {
             continue;
         }
-        for (const auto & entry : fs::directory_iterator(search_path)) {
+        fs::directory_iterator dir_it(search_path, fs::directory_options::skip_permission_denied);
+        for (const auto & entry : dir_it) {
             if (entry.is_regular_file()) {
                 std::string filename = entry.path().filename().string();
                 std::string ext = entry.path().extension().string();
