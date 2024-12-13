@@ -2,7 +2,7 @@
 
 import sys
 import logging
-logger = logging.getLogger("opencl-embed-kernerl")
+logger = logging.getLogger("opencl-embed-kernel")
 
 
 def main():
@@ -15,9 +15,8 @@ def main():
     ifile = open(sys.argv[1], "r")
     ofile = open(sys.argv[2], "w")
 
-    ofile.write("R\"(\n\n")
-    ofile.write(ifile.read())
-    ofile.write("\n)\"")
+    for i in ifile:
+        ofile.write('R"({})"\n'.format(i))
 
     ifile.close()
     ofile.close()
