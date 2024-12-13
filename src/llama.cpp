@@ -2495,12 +2495,12 @@ struct llama_hparams {
     uint32_t time_decay_extra_dim = 0;
     uint32_t wkv_head_size = 0;
 
-    float                   rope_attn_factor = 1.0f;
-    float                   rope_freq_base_train;
-    float                   rope_freq_scale_train;
-    uint32_t                n_ctx_orig_yarn;
-    float                   rope_yarn_log_mul;
-    std::array<int, 4> rope_sections;
+    float     rope_attn_factor = 1.0f;
+    float     rope_freq_base_train;
+    float     rope_freq_scale_train;
+    uint32_t  n_ctx_orig_yarn;
+    float     rope_yarn_log_mul;
+    int       rope_sections[4];
 
     // for State Space Models
     uint32_t ssm_d_conv  = 0;
@@ -5779,8 +5779,9 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_QWEN2VL:
             {
-                std::fill(hparams.rope_sections.begin(), hparams.rope_sections.end(), 0);
-                ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS, hparams.rope_sections, 4, true);
+                std::array<int, 4> section_dims;
+                ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS, section_dims, 4, true);
+                std::copy(section_dims.begin(), section_dims.begin() + 4, std::begin(hparams.rope_sections));
             }
             // fall through
         case LLM_ARCH_QWEN2:
@@ -12614,7 +12615,7 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
         int sections[4];
-        std::copy(hparams.rope_sections.begin(), hparams.rope_sections.end(), sections);
+        std::copy(std::begin(hparams.rope_sections), std::begin(hparams.rope_sections) + 4, sections);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
