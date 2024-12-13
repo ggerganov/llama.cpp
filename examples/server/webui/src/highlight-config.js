@@ -20,6 +20,7 @@ import dart from 'highlight.js/lib/languages/dart';
 import elixir from 'highlight.js/lib/languages/elixir';
 import kotlin from 'highlight.js/lib/languages/kotlin';
 import lua from 'highlight.js/lib/languages/lua';
+import php from 'highlight.js/lib/languages/php';
 import hljs from 'highlight.js/lib/core';
 
 // only import commonly used languages to reduce bundle size
@@ -46,5 +47,6 @@ hljs.registerLanguage('dart', dart);
 hljs.registerLanguage('elixir', elixir);
 hljs.registerLanguage('kotlin', kotlin);
 hljs.registerLanguage('lua', lua);
+hljs.registerLanguage('php', php);
 
 export default hljs;
