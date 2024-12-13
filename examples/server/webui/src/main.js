@@ -1,15 +1,15 @@
-import './styles.css';
+import './styles.scss';
 import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vue.esm-bundler.js';
 import MarkdownIt from 'markdown-it';
 import TextLineStream from 'textlinestream';
 
-// code highlighting
-import hljs from 'highlight.js';
-import HighlightJS from 'markdown-it-highlightjs'; // used integrate highlight.js into markdown-it
-import 'highlight.js/styles/github-dark.min.css';
 // math formula rendering
 import 'katex/dist/katex.min.css';
 import markdownItKatexGpt from 'markdown-it-katex-gpt';
+
+// code highlighting
+import hljs from './highlight-config';
+import daisyuiThemes from 'daisyui/src/theming/themes';
 
 const isDev = import.meta.env.MODE === 'development';
 
@@ -77,13 +77,26 @@ const CONFIG_INFO = {
 // config keys having numeric value (i.e. temperature, top_k, top_p, etc)
 const CONFIG_NUMERIC_KEYS = Object.entries(CONFIG_DEFAULT).filter(e => isNumeric(e[1])).map(e => e[0]);
 // list of themes supported by daisyui
-const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'];
+const THEMES = ['light', 'dark']
+  // make sure light & dark are always at the beginning
+  .concat(Object.keys(daisyuiThemes).filter(t => t !== 'light' && t !== 'dark'));
 
 // markdown support
 const VueMarkdown = defineComponent(
   (props) => {
-    const md = shallowRef(new MarkdownIt({ breaks: true }));
-    md.value.use(HighlightJS, { hljs });
+    const md = shallowRef(new MarkdownIt({
+      breaks: true,
+      highlight: function (str, lang) { // Add highlight.js
+        if (lang && hljs.getLanguage(lang)) {
+          try {
+            return '<pre><code class="hljs">' +
+                   hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                   '</code></pre>';
+          } catch (__) {}
+        }
+        return '<pre><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
+      }
+    }));
     md.value.use(markdownItKatexGpt);
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
@@ -299,6 +312,7 @@ const mainApp = createApp({
       if (this.isGenerating) chatScrollToBottom(true);
     });
     resizeObserver.observe(pendingMsgElem);
+    this.setSelectedTheme(this.selectedTheme);
   },
   watch: {
     viewingConvId: function(val, oldVal) {
@@ -315,6 +329,8 @@ const mainApp = createApp({
     },
     setSelectedTheme(theme) {
       this.selectedTheme = theme;
+      document.body.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-color-scheme', daisyuiThemes[theme]?.['color-scheme'] ?? 'auto');
       StorageUtils.setTheme(theme);
     },
     newConversation() {

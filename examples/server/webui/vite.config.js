@@ -13,8 +13,7 @@ const GUIDE_FOR_FRONTEND = `
 `.trim();
 
 export default {
-  plugins: [
-    viteSingleFile(),
+  plugins: process.env.ANALYZE ? [] : [,
     (function llamaCppPlugin() {
       let config;
       return {
