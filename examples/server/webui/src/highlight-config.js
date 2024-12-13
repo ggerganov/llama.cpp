@@ -12,6 +12,14 @@ import go from 'highlight.js/lib/languages/go';
 import java from 'highlight.js/lib/languages/java';
 import rust from 'highlight.js/lib/languages/rust';
 import scala from 'highlight.js/lib/languages/scala';
+import c from 'highlight.js/lib/languages/c';
+import cpp from 'highlight.js/lib/languages/cpp';
+import csharp from 'highlight.js/lib/languages/csharp';
+import swift from 'highlight.js/lib/languages/swift';
+import dart from 'highlight.js/lib/languages/dart';
+import elixir from 'highlight.js/lib/languages/elixir';
+import kotlin from 'highlight.js/lib/languages/kotlin';
+import lua from 'highlight.js/lib/languages/lua';
 import hljs from 'highlight.js/lib/core';
 
 // only import commonly used languages to reduce bundle size
@@ -30,5 +38,13 @@ hljs.registerLanguage('go', go);
 hljs.registerLanguage('java', java);
 hljs.registerLanguage('rust', rust);
 hljs.registerLanguage('scala', scala);
+hljs.registerLanguage('c', c);
+hljs.registerLanguage('cpp', cpp);
+hljs.registerLanguage('csharp', csharp);
+hljs.registerLanguage('swift', swift);
+hljs.registerLanguage('dart', dart);
+hljs.registerLanguage('elixir', elixir);
+hljs.registerLanguage('kotlin', kotlin);
+hljs.registerLanguage('lua', lua);
 
 export default hljs;
