@@ -68,4 +68,5 @@ void ggml_sycl_op_timestep_embedding(ggml_backend_sycl_context & ctx, const ggml
     const int max_period = dst->op_params[1];
 
     timestep_embedding_f32_sycl(src0_d, dst_d, src0->ne[0], dst->nb[1], dim, max_period, stream);
+    GGML_UNUSED(src1);
 }

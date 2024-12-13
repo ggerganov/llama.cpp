@@ -1015,38 +1015,6 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     return mparams;
 }
 
-static ggml_type kv_cache_type_from_str(const std::string & s) {
-    if (s == "f32") {
-        return GGML_TYPE_F32;
-    }
-    if (s == "f16") {
-        return GGML_TYPE_F16;
-    }
-    if (s == "bf16") {
-        return GGML_TYPE_BF16;
-    }
-    if (s == "q8_0") {
-        return GGML_TYPE_Q8_0;
-    }
-    if (s == "q4_0") {
-        return GGML_TYPE_Q4_0;
-    }
-    if (s == "q4_1") {
-        return GGML_TYPE_Q4_1;
-    }
-    if (s == "iq4_nl") {
-        return GGML_TYPE_IQ4_NL;
-    }
-    if (s == "q5_0") {
-        return GGML_TYPE_Q5_0;
-    }
-    if (s == "q5_1") {
-        return GGML_TYPE_Q5_1;
-    }
-
-    throw std::runtime_error("Unsupported cache type: " + s);
-}
-
 struct llama_context_params common_context_params_to_llama(const common_params & params) {
     auto cparams = llama_context_default_params();
 
@@ -1081,8 +1049,8 @@ struct llama_context_params common_context_params_to_llama(const common_params &
         cparams.pooling_type  = LLAMA_POOLING_TYPE_RANK;
     }
 
-    cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
-    cparams.type_v = kv_cache_type_from_str(params.cache_type_v);
+    cparams.type_k = params.cache_type_k;
+    cparams.type_v = params.cache_type_v;
 
     return cparams;
 }
