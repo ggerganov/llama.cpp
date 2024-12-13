@@ -433,6 +433,20 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     </details>
 
+## [`llama-run`](examples/run)
+
+#### A comprehensive example for running `llama.cpp` models. Useful for inferencing. Used with RamaLama [^3].
+
+- <details>
+    <summary>Run a model with a specific prompt (by default it's pulled from Ollama registry)</summary>
+
+    ```bash
+    llama-run granite-code
+    ```
+
+    </details>
+
+[^3]: [https://github.com/containers/ramalama](RamaLama)
 
 ## [`llama-simple`](examples/simple)
 

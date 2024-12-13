@@ -1076,12 +1076,6 @@ struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_p
 #define CURL_MAX_RETRY 3
 #define CURL_RETRY_DELAY_SECONDS 2
 
-
-static bool starts_with(const std::string & str, const std::string & prefix) {
-    // While we wait for C++20's std::string::starts_with...
-    return str.rfind(prefix, 0) == 0;
-}
-
 static bool curl_perform_with_retry(const std::string& url, CURL* curl, int max_attempts, int retry_delay_seconds) {
     int remaining_attempts = max_attempts;
 
