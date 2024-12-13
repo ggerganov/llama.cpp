@@ -2555,9 +2555,9 @@ struct llama_hparams {
         if (this->n_ff_shexp         != other.n_ff_shexp)         return true;
         if (this->n_expert_shared    != other.n_expert_shared)    return true;
 
-        if (this->rope_finetuned  != other.rope_finetuned)          return true;
-        if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn)         return true;
-        if (this->rope_sections != other.rope_sections) return true;
+        if (this->rope_finetuned  != other.rope_finetuned)  return true;
+        if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn) return true;
+        if (this->rope_sections   != other.rope_sections)   return true;
 
         if (this->ssm_d_conv  != other.ssm_d_conv)  return true;
         if (this->ssm_d_inner != other.ssm_d_inner) return true;
