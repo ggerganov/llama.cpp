@@ -2,6 +2,7 @@
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 
 const MAX_BUNDLE_SIZE = 1024 * 1024; // only increase when absolutely necessary
 
@@ -26,17 +27,18 @@ const BUILD_PLUGINS = [
       },
       writeBundle() {
         const outputIndexHtml = path.join(config.build.outDir, 'index.html');
-        const content = fs.readFileSync(outputIndexHtml, 'utf-8');
+        const content = GUIDE_FOR_FRONTEND + '\n' + fs.readFileSync(outputIndexHtml, 'utf-8');
+        const compressed = zlib.gzipSync(Buffer.from(content, 'utf-8'), { level: 9 });
 
-        if (content.length > MAX_BUNDLE_SIZE) {
+        if (compressed.byteLength > MAX_BUNDLE_SIZE) {
           throw new Error(
             `Bundle size is too large (${Math.ceil(content.length / 1024)} KB).\n` +
             `Please reduce the size of the frontend or increase MAX_BUNDLE_SIZE in vite.config.js.\n`,
           );
         }
 
-        const targetOutputFile = path.join(config.build.outDir, '../../public/index.html');
-        fs.writeFileSync(targetOutputFile, GUIDE_FOR_FRONTEND + '\n' + content);
+        const targetOutputFile = path.join(config.build.outDir, '../../public/index.html.gz');
+        fs.writeFileSync(targetOutputFile, compressed);
       }
     }
   })(),

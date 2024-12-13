@@ -15,7 +15,7 @@
 #define MIMETYPE_JSON "application/json; charset=utf-8"
 
 // auto generated files (update with ./deps.sh)
-#include "index.html.hpp"
+#include "index.html.gz.hpp"
 #include "loading.html.hpp"
 
 #include <atomic>
@@ -3828,8 +3828,13 @@ int main(int argc, char ** argv) {
             }
         } else {
             // using embedded static index.html
-            svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
-                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+            svr->Get("/", [](const httplib::Request & req, httplib::Response & res) {
+                if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
+                    res.set_content("Error: gzip is not supported by this browser", "text/plain");
+                } else {
+                    res.set_header("Content-Encoding", "gzip");
+                    res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
+                }
                 return false;
             });
         }
