@@ -3026,7 +3026,9 @@ static void ggml_metal_encode_node(
             } break;
         case GGML_OP_ROPE:
             {
-                GGML_ASSERT(ne10 == ne02);
+                // make sure we have one or more position id(ne10) per token(ne02)
+                GGML_ASSERT(ne10 % ne02 == 0);
+                GGML_ASSERT(ne10 >= ne02);
 
                 const int nth = MIN(1024, ne00);
 
