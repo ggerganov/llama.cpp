@@ -3400,7 +3400,7 @@ struct llama_context {
 
     // whether we are computing encoder output or decoder output
     bool is_encoding = false;
-    
+
     // TODO: find a better way to accommodate mutli-dimension position encoding methods
     // number of position id each token get, 1 for each token in most cases.
     // when using m-rope, it will be 3 position ids per token to representing 3 dimension coordinate.
@@ -12592,7 +12592,7 @@ struct llm_build_context {
 
         return gf;
     }
-    
+
     struct ggml_cgraph * build_qwen2vl() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
         const int64_t n_embd_head = hparams.n_embd_head_v;
@@ -12644,7 +12644,7 @@ struct llm_build_context {
                 cb(Vcur, "Vcur", il);
 
                 Qcur = ggml_rope_multi(
-                    ctx0, 
+                    ctx0,
                     ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
                     n_rot, sections, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
@@ -20168,7 +20168,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_EXAONE:
         case LLM_ARCH_MINICPM3:
             return LLAMA_ROPE_TYPE_NEOX;
-        
+
         case LLM_ARCH_QWEN2VL:
             return LLAMA_ROPE_TYPE_MROPE;
 

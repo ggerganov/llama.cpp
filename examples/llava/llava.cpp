@@ -263,7 +263,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         std::vector<float *> image_embd_v;
         image_embd_v.resize(img_res_v.size);
         struct clip_image_size * load_image_size = clip_image_size_init();
-        
+
         for (size_t i = 0; i < img_res_v.size; i++) {
             const int64_t t_img_enc_step_start_us = ggml_time_us();
             image_embd_v[i] = (float *)malloc(clip_embd_nbytes_by_img(ctx_clip, img_res_v.data[i].nx, img_res_v.data[i].ny));
@@ -271,7 +271,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
             load_image_size->width = img_res_v.data[i].nx;
             load_image_size->height = img_res_v.data[i].ny;
             clip_add_load_image_size(ctx_clip, load_image_size);
-            
+
             bool encoded = false;
             if (clip_is_qwen2vl(ctx_clip)) {
                 encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
@@ -285,7 +285,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
                     encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
                 }
             }
-            
+
             if (!encoded) {
                 LOG_ERR("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int) i+1, (int) img_res_v.size);
                 return false;
@@ -299,8 +299,8 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         int n_img_pos_out = 0;
         for (size_t i = 0; i < image_embd_v.size(); i++) {
             std::memcpy(
-                image_embd + n_img_pos_out * clip_n_mmproj_embd(ctx_clip), 
-                image_embd_v[i], 
+                image_embd + n_img_pos_out * clip_n_mmproj_embd(ctx_clip),
+                image_embd_v[i],
                 clip_embd_nbytes_by_img(ctx_clip, img_res_v.data[i].nx, img_res_v.data[i].ny));
             n_img_pos_out += clip_n_patches_by_img(ctx_clip, &img_res_v.data[i]);
         }

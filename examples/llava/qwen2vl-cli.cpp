@@ -25,7 +25,7 @@
 #include <fstream>
 
 
-static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, 
+static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed,
                                      int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
     const int patch_size = 14 * 2;
@@ -35,7 +35,7 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     // llama_pos mrope_pos[img_tokens * 4];
     std::vector<llama_pos> mrope_pos;
     mrope_pos.resize(img_tokens * 4);
-    
+
     for (int y = 0; y < ph; y++)
     {
         for (int x = 0; x < pw; x++)
@@ -45,14 +45,14 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
             mrope_pos[i + img_tokens] = *st_pos_id + y;
             mrope_pos[i + img_tokens * 2] = *st_pos_id + x;
             mrope_pos[i + img_tokens * 3] = 0;
-        }   
+        }
     }
     *st_pos_id += std::max(pw, ph);
 
     int processed = 0;
     std::vector<llama_pos> batch_mrope_pos;
     batch_mrope_pos.resize(img_tokens * 4);
-    
+
     for (int i = 0; i < img_tokens; i += n_batch) {
         int n_eval = img_tokens - i;
         if (n_eval > n_batch) {
@@ -65,7 +65,7 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
         memcpy(&batch_mrope_pos[n_eval * 1], &mrope_pos[img_tokens * 1 + processed], n_eval * sizeof(llama_pos));
         memcpy(&batch_mrope_pos[n_eval * 2], &mrope_pos[img_tokens * 2 + processed], n_eval * sizeof(llama_pos));
         memcpy(&batch_mrope_pos[n_eval * 3], &mrope_pos[img_tokens * 3 + processed], n_eval * sizeof(llama_pos));
-        
+
         llama_batch batch = {
             int32_t(n_eval),                // n_tokens
             nullptr,                        // token
@@ -75,7 +75,7 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
             nullptr,  // seq_id
             nullptr,  // logits
         };
-        
+
         if (llama_decode(ctx_llama, batch)) {
             LOG_ERR("%s : failed to eval\n", __func__);
             return false;
@@ -103,7 +103,7 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
             pos[j] = *st_pos_id + (j % batch.n_tokens);
         }
         batch.pos = pos.data();
-        
+
         if (llama_decode(ctx_llama, batch)) {
             LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
@@ -413,7 +413,7 @@ static void debug_test_mrope_2d() {
         pos_id[i + 90] = i + 30;
     }
     int sections[4] = {32, 32, 0, 0};
-    
+
     // 4. Allocate a `ggml_backend_buffer` to store all tensors
     ggml_backend_buffer_t buffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
 
@@ -424,7 +424,7 @@ static void debug_test_mrope_2d() {
     // 6. Create a `ggml_cgraph` for mul_mat operation
     struct ggml_cgraph * gf = NULL;
     struct ggml_context * ctx_cgraph = NULL;
-    
+
     // create a temporally context to build the graph
     struct ggml_init_params params0 = {
         /*.mem_size   =*/ ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
@@ -441,7 +441,7 @@ static void debug_test_mrope_2d() {
 
     // Add "result" tensor and all of its dependencies to the cgraph
     ggml_build_forward_expand(gf, result0);
-    
+
     // 7. Create a `ggml_gallocr` for cgraph computation
     ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
     ggml_gallocr_alloc_graph(allocr, gf);
@@ -462,7 +462,7 @@ static void debug_test_mrope_2d() {
     ggml_backend_tensor_get(result, result_data, 0, ggml_nbytes(result));
     const std::string bin_file = "mrope_2d_" + backend_name +".bin";
     std::ofstream outFile(bin_file, std::ios::binary);
-    
+
     if (outFile.is_open()) {
         outFile.write(reinterpret_cast<const char*>(result_data), ggml_nbytes(result));
         outFile.close();
@@ -493,7 +493,7 @@ static void debug_dump_img_embed(struct llava_context * ctx_llava) {
         for (int c = 0; c < 3; c++)
             vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
     }
-    
+
     clip_encode_float_image(ctx_llava->ctx_clip, 16, vals, 56, 56, embd.data());
 
     std::ofstream outFile("img_embed.bin", std::ios::binary);
@@ -547,7 +547,7 @@ int main(int argc, char ** argv) {
 #ifndef NDEBUG
     } else if (params.image[0].empty()) {
         auto ctx_llava = llava_init_context(&params, model);
-        
+
         debug_test_mrope_2d();
         debug_dump_img_embed(ctx_llava);
 

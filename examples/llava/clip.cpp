@@ -659,19 +659,19 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     if (ctx->has_qwen2vl_merger) {
         GGML_ASSERT(image_size_width % (patch_size * 2) == 0);
         GGML_ASSERT(image_size_height % (patch_size * 2) == 0);
-        
+
         auto inp_1 = ggml_conv_2d(ctx0, model.patch_embeddings_1, inp_raw, patch_size, patch_size, 0, 0, 1, 1);
         inp = ggml_add(ctx0, inp, inp_1);
         inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 2, 0, 3));  // [w, h, c, b] -> [c, w, h, b]
         inp = ggml_reshape_4d(
-            ctx0, inp, 
+            ctx0, inp,
             hidden_size * 2, patches_w / 2, patches_h, batch_size);
         inp = ggml_reshape_4d(
-            ctx0, inp, 
+            ctx0, inp,
             hidden_size * 2, patches_w / 2, 2, batch_size * (patches_h / 2));
         inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 0, 2, 1, 3));
         inp = ggml_reshape_3d(
-            ctx0, inp, 
+            ctx0, inp,
             hidden_size, patches_w * patches_h, batch_size);
     }
     else {
@@ -756,7 +756,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_positions, batch_size);
             if (ctx->has_qwen2vl_merger) {
                 Q = ggml_rope_multi(
-                    ctx0, Q, positions, nullptr, 
+                    ctx0, Q, positions, nullptr,
                     d_head/2, mrope_sections, GGML_ROPE_TYPE_VISION, 32768, 10000, 1, 0, 1, 32, 1);
             }
             Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
@@ -769,7 +769,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             K = ggml_reshape_4d(ctx0, K, d_head, n_head, num_positions, batch_size);
             if (ctx->has_qwen2vl_merger) {
                 K = ggml_rope_multi(
-                    ctx0, K, positions, nullptr, 
+                    ctx0, K, positions, nullptr,
                     d_head/2, mrope_sections, GGML_ROPE_TYPE_VISION, 32768, 10000, 1, 0, 1, 32, 1);
             }
             K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3));
@@ -1286,7 +1286,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
         idx = get_key_idx(ctx, KEY_USE_GELU);
         new_clip->use_gelu = gguf_get_val_bool(ctx, idx);
-        
+
         try {
             idx = get_key_idx(ctx, KEY_USE_SILU);
             new_clip->use_silu = gguf_get_val_bool(ctx, idx);
@@ -2079,14 +2079,14 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
             }
         }
         return true;
-    } 
+    }
     else if (ctx->has_qwen2vl_merger) {
         clip_image_u8 * resized = clip_image_u8_init();
         auto patch_size = clip_patch_size(ctx) * 2;
         int nx = ceil((float)img->nx / patch_size) * patch_size;
         int ny = ceil((float)img->ny / patch_size) * patch_size;
         bicubic_resize(*img, *resized, nx, ny);
-        
+
         res_imgs->data = new clip_image_f32[1];
         // clip_image_f32 * res = clip_image_f32_init();
         normalize_image_u8_to_f32(resized, res_imgs->data, ctx->image_mean, ctx->image_std);
@@ -2573,7 +2573,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             const int pw = image_size_width / patch_size;
             const int ph = image_size_height / patch_size;
             int* positions_data = (int*)malloc(ggml_nbytes(positions));
-            
+
             int ptr = 0;
             for (int y = 0; y < ph; y+=2)
             {
@@ -2590,7 +2590,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
                     }
                 }
             }
-            
+
             ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
             free(positions_data);
         }

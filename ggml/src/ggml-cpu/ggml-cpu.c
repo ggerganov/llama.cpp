@@ -9146,10 +9146,10 @@ static void ggml_mrope_cache_init(
     int sec_w = sections[1] + sections[0];
     int sec_e = sections[2] + sec_w;
     GGML_ASSERT(sect_dims <= ne0);
-    
+
     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
         const float ff = freq_factors ? freq_factors[i0/2] : 1.0f;
-        
+
         int sector = (i0 / 2) % sect_dims;
         if (indep_sects) {
             // compute theta independently for each dim sections
@@ -9171,14 +9171,14 @@ static void ggml_mrope_cache_init(
         float theta = theta_t;
         if (sector >= sections[0] && sector < sec_w) {
             theta = theta_h;
-        } 
+        }
         else if (sector >= sec_w && sector < sec_w + sections[2]) {
             theta = theta_w;
         }
         else if (sector >= sec_w + sections[2]) {
             theta = theta_e;
         }
-        
+
         rope_yarn(
             theta/ff, freq_scale, corr_dims, i0, ext_factor, mscale, &cache[i0 + 0], &cache[i0 + 1]
         );

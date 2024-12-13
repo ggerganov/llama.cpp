@@ -2200,10 +2200,10 @@ struct test_rope : public test_case {
             ggml_set_param(ctx, a);
             ggml_set_name(a, "a");
         }
-        
+
         const bool is_mrope = mode & GGML_ROPE_TYPE_MROPE;
         const bool is_vision = mode == GGML_ROPE_TYPE_VISION;
-        
+
         ggml_tensor * pos;
         if (is_mrope || is_vision) {
             pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, ne_a[2] * 4);
@@ -3834,7 +3834,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
                                     test_cases.emplace_back(new test_rope(type, { 80,  32, 2, 1},  20, 2, 512, fs, ef, af, ff, v)); // neox (stablelm)
                                     test_cases.emplace_back(new test_rope(type, { 80,  32, 2, 1},  32, 2, 512, fs, ef, af, ff, v)); // neox (phi-2)
                                 }
-                                
+
                                 if (all) {
                                     test_cases.emplace_back(new test_rope(type, {128,  12, 2, 1}, 128, GGML_ROPE_TYPE_MROPE,  512, fs, ef, af, ff, v)); // rope_multi,m-rope (qwen2vl 2B)
                                     test_cases.emplace_back(new test_rope(type, {128,  28, 2, 1}, 128, GGML_ROPE_TYPE_MROPE,  512, fs, ef, af, ff, v)); // rope_multi,m-rope (qwen2vl 7B)

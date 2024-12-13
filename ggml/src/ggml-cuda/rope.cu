@@ -147,7 +147,7 @@ static __global__ void rope_multi(
     }
     else if (sector >= sections.v[0] && sector < sec_w) {
         theta_base = pos[i2 + ne2 * 1]*powf(theta_scale, i0/2.0f);
-    } 
+    }
     else if (sector >= sec_w && sector < sec_w + sections.v[2]) {
         theta_base = pos[i2 + ne2 * 2]*powf(theta_scale, i0/2.0f);
     }
@@ -196,7 +196,7 @@ static __global__ void rope_vision(
     else if (sector >= sections.v[0] && sector < sec_w) {
         const int p = sector - sections.v[0];
         theta_base = pos[i2 + ne2]*powf(theta_scale, p);
-    } 
+    }
 
     const float freq_factor = has_ff ? freq_factors[i0/2] : 1.0f;
 

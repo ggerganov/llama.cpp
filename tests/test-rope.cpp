@@ -178,7 +178,7 @@ int main(int /*argc*/, const char ** /*argv*/) {
             struct ggml_tensor * p0 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2] * 4);
             struct ggml_tensor * p1 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2] * 4);
             struct ggml_tensor * p2 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2] * 4);
-            
+
             int sections[4] = {16, 24, 24, 0};
             mode = (m == 3) ? GGML_ROPE_TYPE_MROPE : GGML_ROPE_TYPE_VISION;
 
@@ -189,7 +189,7 @@ int main(int /*argc*/, const char ** /*argv*/) {
                     ((int32_t *) p2->data)[i + ne[2] * j] = n_past_2 + i + j;
                 }
             }
-           
+
             // [[100, 101, 102, ..., 172],
             // [101, 102, 103, ..., 173],
             // [102, 103, 104, ..., 174]]
