@@ -461,19 +461,19 @@ These words will not be included in the completion, so make sure to add them to 
   "completion_probabilities": [
     {
       "id": <token id>,
-      "prob": float,
+      "logprob": float,
       "token": "<most likely token>",
       "bytes": [int, int, ...],
       "top_logprobs": [
         {
           "id": <token id>,
-          "prob": float,
+          "logprob": float,
           "token": "<token text>",
           "bytes": [int, int, ...],
         },
         {
           "id": <token id>,
-          "prob": float,
+          "logprob": float,
           "token": "<token text>",
           "bytes": [int, int, ...],
         },
@@ -482,7 +482,7 @@ These words will not be included in the completion, so make sure to add them to 
     },
     {
       "id": <token id>,
-      "prob": float,
+      "logprob": float,
       "token": "<most likely token>",
       "bytes": [int, int, ...],
       "top_logprobs": [
