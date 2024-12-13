@@ -239,6 +239,10 @@ struct server_task {
         params.speculative.n_min = std::max(params.speculative.n_min, 2);
         params.speculative.n_max = std::max(params.speculative.n_max, 0);
 
+        if (!params_base.sampling.multi_token_probs && params.n_predict > 1 && params.sampling.n_probs > 0) {
+            throw std::runtime_error("For performance reason, n_probs with n_predict > 1 is not allowed. To enable this, start the server with --multi-token-probs");
+        }
+
         if (params.sampling.dry_base < 1.0f) {
            params.sampling.dry_base = defaults.sampling.dry_base;
         }

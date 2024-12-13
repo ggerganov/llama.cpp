@@ -166,6 +166,7 @@ def test_chat_completion_with_timings_per_token():
 
 def test_logprobs():
     global server
+    server.multi_token_probs = True
     server.start()
     client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
     res = client.chat.completions.create(
@@ -193,6 +194,7 @@ def test_logprobs():
 
 def test_logprobs_stream():
     global server
+    server.multi_token_probs = True
     server.start()
     client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
     res = client.chat.completions.create(

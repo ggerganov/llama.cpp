@@ -134,6 +134,7 @@ struct common_params_sampling {
     bool    ignore_eos         = false;
     bool    no_perf            = false; // disable performance metrics
     bool    timing_per_token   = false;
+    bool    multi_token_probs  = false; // output probabilities for multiple tokens (when n_probs > 0)
 
     std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
 

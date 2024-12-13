@@ -249,6 +249,7 @@ def test_completion_parallel_slots(n_slots: int, n_requests: int):
 
 def test_n_probs():
     global server
+    server.multi_token_probs = True
     server.start()
     res = server.make_request("POST", "/completion", data={
         "prompt": "I believe the meaning of life is",
@@ -274,6 +275,7 @@ def test_n_probs():
 
 def test_n_probs_stream():
     global server
+    server.multi_token_probs = True
     server.start()
     res = server.make_stream_request("POST", "/completion", data={
         "prompt": "I believe the meaning of life is",
