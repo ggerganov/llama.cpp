@@ -1961,7 +1961,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
         "main",
         7,
         sizeof(vk_op_rwkv_wkv6_push_constants), 
-        {64, 1, 1},  // work group
+        {1, 1, 1},  // work group
         {device->subgroup_size}, 
         1
     );
@@ -8344,11 +8344,10 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
     } else if (tensor->op == GGML_OP_LEAKY_RELU) {
         const float * op_params = (const float *)tensor->op_params;
         tensor_clone = ggml_leaky_relu(ggml_ctx, src0_clone, op_params[0], false);
+    } else if (tensor->op == GGML_OP_RWKV_WKV6) { 
+        tensor_clone = ggml_rwkv_wkv6(ggml_ctx, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3],
+        tensor->src[4], tensor->src[5]);
     } 
-    // else if (tensor->op == GGML_OP_RWKV_WKV6) { 
-    //     tensor_clone = ggml_rwkv_wkv6(ggml_ctx, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3],
-    //     tensor->src[4], tensor->src[5]);
-    // } 
     else {
         std::cerr << "Missing vk_check_results OP: " << ggml_op_name(tensor->op) << std::endl;
         GGML_ABORT("fatal error");
