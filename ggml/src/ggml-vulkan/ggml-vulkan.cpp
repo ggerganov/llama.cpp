@@ -1848,7 +1848,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
 
     // AMD GCN graphics cards perform best when the number of rows per shader is doubled
     uint32_t rm = 1;
-    if ((device->subgroup_size_control) && (device->vendor_id == VK_VENDOR_ID_AMD) && (device->subgroup_min_size == 64) && (device->subgroup_max_size == 64))
+    if ((device->vendor_id == VK_VENDOR_ID_AMD) && (device->subgroup_min_size == 64) && (device->subgroup_max_size == 64))
         rm = 2;
 
     // computing additional rows per workgroup is a benefit for Q4_0 -> Q5_1, but not for Q8_0.
@@ -2249,13 +2249,16 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         device->pipeline_robustness = pl_robustness_features.pipelineRobustness;
 
+        if (device->subgroup_size_control) {
+            device->subgroup_min_size = subgroup_size_control_props.minSubgroupSize;
+            device->subgroup_max_size = subgroup_size_control_props.maxSubgroupSize;
+        }
+
         device->subgroup_size_control = device->subgroup_size_control &&
                 (subgroup_size_control_props.requiredSubgroupSizeStages & vk::ShaderStageFlagBits::eCompute) &&
                 subgroup_size_control_features.subgroupSizeControl;
 
         if (device->subgroup_size_control) {
-            device->subgroup_min_size = subgroup_size_control_props.minSubgroupSize;
-            device->subgroup_max_size = subgroup_size_control_props.maxSubgroupSize;
             device->subgroup_require_full_support = subgroup_size_control_features.computeFullSubgroups;
             device_extensions.push_back("VK_EXT_subgroup_size_control");
         }
