@@ -2557,7 +2557,6 @@ struct llama_hparams {
 
         if (this->rope_finetuned  != other.rope_finetuned)  return true;
         if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn) return true;
-        if (this->rope_sections   != other.rope_sections)   return true;
         if (std::equal(std::begin(this->rope_sections),
                        std::end(this->rope_sections),
                        std::begin(other.rope_sections)))    return true;
