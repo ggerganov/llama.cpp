@@ -3503,13 +3503,8 @@ class DeepseekModel(Model):
             rope_dim = hparams["head_dim"]
         else:
             rope_dim = hparams["hidden_size"] // hparams["num_attention_heads"]
+
         self.gguf_writer.add_rope_dimension_count(rope_dim)
-
-        # if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
-        #     if self.hparams["rope_scaling"].get("type") == "linear":
-        #         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
-        #         self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
-
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
         self.gguf_writer.add_leading_dense_block_count(hparams["first_k_dense_replace"])
         self.gguf_writer.add_vocab_size(hparams["vocab_size"])
