@@ -10,10 +10,14 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
     list (APPEND GGML_CPU_SOURCES
         ggml-cpu/ggml-cpu.c
         ggml-cpu/ggml-cpu.cpp
-        ggml-cpu/ggml-cpu-aarch64.c
+        ggml-cpu/ggml-cpu-aarch64.cpp
         ggml-cpu/ggml-cpu-aarch64.h
+        ggml-cpu/ggml-cpu-hbm.cpp
+        ggml-cpu/ggml-cpu-hbm.h
         ggml-cpu/ggml-cpu-quants.c
         ggml-cpu/ggml-cpu-quants.h
+        ggml-cpu/ggml-cpu-traits.cpp
+        ggml-cpu/ggml-cpu-traits.h
         ggml-cpu/amx/amx.cpp
         ggml-cpu/amx/amx.h
         ggml-cpu/amx/mmq.cpp
