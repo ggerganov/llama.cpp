@@ -22016,10 +22016,7 @@ static llm_chat_template llama_chat_detect_template(const std::string & tmpl) {
     auto tmpl_contains = [&tmpl](const char * haystack) -> bool {
         return tmpl.find(haystack) != std::string::npos;
     };
-    // gigachat
-    if (tmpl_contains("additional_special_tokens") && tmpl_contains("functions")) {
-        return LLM_CHAT_TEMPLATE_GIGACHAT;
-    } else if (tmpl_contains("<|im_start|>")) {
+    if (tmpl_contains("<|im_start|>")) {
         return LLM_CHAT_TEMPLATE_CHATML;
     } else if (tmpl.find("mistral") == 0 || tmpl_contains("[INST]")) {
         if (tmpl_contains("[SYSTEM_PROMPT]")) {
@@ -22102,6 +22099,9 @@ static llm_chat_template llama_chat_detect_template(const std::string & tmpl) {
         return LLM_CHAT_TEMPLATE_RWKV_WORLD;
     } else if (tmpl_contains("<|start_of_role|>")) {
         return LLM_CHAT_TEMPLATE_GRANITE;
+    } else if (tmpl_contains("message['role'] + additional_special_tokens[0] + message['content'] + additional_special_tokens[1]")) {
+        // gigachat
+        return LLM_CHAT_TEMPLATE_GIGACHAT;
     }
     return LLM_CHAT_TEMPLATE_UNKNOWN;
 }
