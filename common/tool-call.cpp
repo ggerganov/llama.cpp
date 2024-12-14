@@ -523,7 +523,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 builder.add_rule("root", "\"[TOOL_CALLS]\"? " + builder.add_schema("tool_calls", schema));
             });
             if (allow_content) {
-                handler.grammar_trigger_words.push_back("[TOOL_CALLS]");
+                handler.grammar_triggers.push_back("[TOOL_CALLS]");
             }
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
@@ -557,7 +557,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 builder.add_rule("root", "\" functools\"? " + builder.add_schema("tool_calls", schema));
             });
             if (allow_content) {
-                handler.grammar_trigger_words.push_back(" functools[");
+                handler.grammar_triggers.push_back(" functools[");
             }
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
@@ -595,7 +595,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     if (uses_python_tag && (name == "ipython" || builtin_tools.contains(name))) {
                         tool_rules.push_back(builder.add_rule("ipython-call", "\"<|python_tag|>\" .*"));
                         if (allow_content) {
-                            handler.grammar_trigger_words.push_back("<|python_tag|>");
+                            handler.grammar_triggers.push_back("<|python_tag|>");
                         }
                     } else {
                         //"<|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"" + name + "\", " +
@@ -606,28 +606,28 @@ llama_tool_call_handler llama_tool_call_handler_init(
                                     builder.add_schema(name + "-args", parameters) +
                                 " \"}\""));
                         if (allow_content && !eagerly_match_any_json) {
-                            handler.grammar_trigger_words.push_back("{\"name\": \"" + name + "\"");
+                            handler.grammar_triggers.push_back("{\"name\": \"" + name + "\"");
                             // Accommodate most common tool call variations from Llama-3.1-8B and Llama-3.2-3B.
                             // Note that c++11's regex doesn't support partial matches, otherwise it would make
                             // sense to add support for trigger regexes to the antiprompt mechanism.
-                            handler.grammar_trigger_words.push_back("{\n\t\"name\": \"" + name + "\"");
-                            handler.grammar_trigger_words.push_back("{\n  \"name\": \"" + name + "\"");
-                            handler.grammar_trigger_words.push_back("{\n    \"name\": \"" + name + "\"");
-                            handler.grammar_trigger_words.push_back("{\"type\": \"function\", \"name\": \"" + name + "\"");
+                            handler.grammar_triggers.push_back("{\n\t\"name\": \"" + name + "\"");
+                            handler.grammar_triggers.push_back("{\n  \"name\": \"" + name + "\"");
+                            handler.grammar_triggers.push_back("{\n    \"name\": \"" + name + "\"");
+                            handler.grammar_triggers.push_back("{\"type\": \"function\", \"name\": \"" + name + "\"");
                         }
                     }
                 }
 
                 if (allow_content && eagerly_match_any_json) {
-                    handler.grammar_trigger_words.push_back("{\"");
-                    handler.grammar_trigger_words.push_back("{\n\t\"");
-                    handler.grammar_trigger_words.push_back("{\n  \"");
-                    handler.grammar_trigger_words.push_back("{\n    \"");
+                    handler.grammar_triggers.push_back("{\"");
+                    handler.grammar_triggers.push_back("{\n\t\"");
+                    handler.grammar_triggers.push_back("{\n  \"");
+                    handler.grammar_triggers.push_back("{\n    \"");
                 }
 
                 builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
             });
-            handler.additional_stop_words.push_back("<|eom_id|>");
+            handler.additional_stops.push_back("<|eom_id|>");
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true, {
                 {"builtin_tools", builtin_tools},
             });
@@ -648,8 +648,8 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
                     subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\"\\n>>>" + name + "\\n\" " + args_rule));
                     if (allow_content) {
-                        handler.grammar_trigger_words.push_back(name + "\n");
-                        handler.grammar_trigger_words.push_back("\n>>>" + name + "\n");
+                        handler.grammar_triggers.push_back(name + "\n");
+                        handler.grammar_triggers.push_back("\n>>>" + name + "\n");
                     }
                 }
                 auto first_rule = builder.add_rule("first_tool_call", join(first_tool_rules.begin(), first_tool_rules.end(), " | ")) + " space";
@@ -678,7 +678,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     if (name == "python" || name == "ipython") {
                         tool_rules.push_back(builder.add_rule("python-call", "\"<|python_tag|>\" .*"));
                         if (allow_content) {
-                            handler.grammar_trigger_words.push_back("<|python_tag|>");
+                            handler.grammar_triggers.push_back("<|python_tag|>");
                         }
                     } else {
                         tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
@@ -687,7 +687,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
                 builder.add_rule("root", parallel ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
-                    handler.grammar_trigger_words.push_back("<function=");
+                    handler.grammar_triggers.push_back("<function=");
                 }
             });
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
@@ -718,7 +718,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 auto tool_call = "\"<tool_call>\" space " + builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " \"</tool_call>\" space";
                 builder.add_rule("root", parallel ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
-                    handler.grammar_trigger_words.push_back("<tool_call>");
+                    handler.grammar_triggers.push_back("<tool_call>");
                 }
             });
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);

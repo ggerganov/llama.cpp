@@ -35,8 +35,8 @@ struct llama_tool_calls {
 struct llama_tool_call_handler {
     std::string prompt;
     std::string grammar;
-    std::vector<std::string> grammar_trigger_words;
-    std::vector<std::string> additional_stop_words;
+    std::vector<std::string> grammar_triggers;
+    std::vector<std::string> additional_stops;
 };
 
 std::string llama_tool_call_style_name(llama_tool_call_style style);
