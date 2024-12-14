@@ -21,8 +21,11 @@ const escapeAttr = (str) => str.replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const copyStr = (str) => navigator.clipboard.writeText(str);
 
 // constants
-const BASE_URL = localStorage.getItem('base') // for debugging
-  || (new URL('.', document.baseURI).href).toString().replace(/\/$/, ''); // for production
+const BASE_URL = isDev
+  ? (localStorage.getItem('base') || 'https://localhost:8080') // for debugging
+  : (new URL('.', document.baseURI).href).toString().replace(/\/$/, ''); // for production
+console.log({ BASE_URL });
+
 const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: '',
@@ -308,6 +311,7 @@ const mainApp = createApp({
       themes: THEMES,
       configDefault: {...CONFIG_DEFAULT},
       configInfo: {...CONFIG_INFO},
+      isDev,
     }
   },
   computed: {},
@@ -546,6 +550,17 @@ const mainApp = createApp({
     fetchMessages() {
       this.messages = StorageUtils.getOneConversation(this.viewingConvId)?.messages ?? [];
     },
+
+    // debug functions
+    async debugImportDemoConv() {
+      const res = await fetch('/demo-conversation.json');
+      const demoConv = await res.json();
+      StorageUtils.remove(demoConv.id);
+      for (const msg of demoConv.messages) {
+        StorageUtils.appendMsg(demoConv.id, msg);
+      }
+      this.fetchConversation();
+    }
   },
 });
 mainApp.config.errorHandler = alert;
