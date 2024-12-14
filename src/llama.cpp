@@ -5807,7 +5807,7 @@ static void llm_load_hparams(
                     hparams.n_swa = 131072;
                 }
                 bool found_swa = ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
-                if (!found_swa && hparams.n_swa == 0 && model.name != "Phi 4") {
+                if (!found_swa && hparams.n_swa == 0) {
                     throw std::runtime_error("invalid value for sliding_window");
                 }
             } break;
@@ -12840,7 +12840,7 @@ struct llm_build_context {
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = nullptr;
-        if (model.name == "Phi 4") {
+        if (hparams.n_swa == 0) {
             // Phi-4 doesn't use sliding window attention
             KQ_mask = build_inp_KQ_mask();
         } else {
