@@ -110,6 +110,7 @@ const VueMarkdown = defineComponent(
         { left: '\\[', right: '\\]', display: true },
         { left: '\\(', right: '\\)', display: false },
         { left: '$$', right: '$$', display: false },
+        // do not add single dollar sign here, other wise it will confused with dollar used for money symbol
       ],
       throwOnError: false,
     });
