@@ -91,9 +91,6 @@ const VueMarkdown = defineComponent(
     const md = shallowRef(new MarkdownIt({
       breaks: true,
       highlight: function (str, lang) { // Add highlight.js
-        if (lang === 'latex') {
-          return renderLatexHTML(str, true);
-        }
         if (lang && hljs.getLanguage(lang)) {
           try {
             return '<pre><code class="hljs">' +

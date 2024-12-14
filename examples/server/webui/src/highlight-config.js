@@ -23,6 +23,7 @@ import elixir from 'highlight.js/lib/languages/elixir';
 import kotlin from 'highlight.js/lib/languages/kotlin';
 import lua from 'highlight.js/lib/languages/lua';
 import php from 'highlight.js/lib/languages/php';
+import latex from 'highlight.js/lib/languages/latex';
 
 hljs.registerLanguage('python', python);
 hljs.registerLanguage('javascript', javascript);
@@ -42,11 +43,13 @@ hljs.registerLanguage('elixir', elixir);
 hljs.registerLanguage('kotlin', kotlin);
 hljs.registerLanguage('lua', lua);
 hljs.registerLanguage('php', php);
+hljs.registerLanguage('latex', latex);
 
 // reuse some languages to further reduce bundle size
 
 hljs.registerLanguage('shell', bash);
 hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sh', bash);
 
 hljs.registerLanguage('css', scss);
 hljs.registerLanguage('scss', scss);
