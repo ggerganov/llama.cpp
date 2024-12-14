@@ -262,7 +262,7 @@ static FILE * get_handcrafted_file(const unsigned int seed, const enum handcraft
 
         size_t type_size = hft == HANDCRAFTED_KV_BAD_TYPE ? 1 : gguf_type_size(type);
         if (hft == HANDCRAFTED_KV_BAD_VALUE_SIZE) {
-            type_size += rng() % 3 - 1;
+            type_size += rng() % 3;
         }
         helper_write(data, type_size, file);
     }
