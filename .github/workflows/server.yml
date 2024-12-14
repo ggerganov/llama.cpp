@@ -79,7 +79,7 @@ jobs:
       # Setup nodejs (to be used for verifying bundled index.html)
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.11.0'
 
       - name: Verify bundled index.html
         id: verify_server_index_html
