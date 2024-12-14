@@ -25,6 +25,7 @@ def test_completion(prompt: str, n_predict: int, re_content: str, n_prompt: int,
     assert res.body["timings"]["prompt_n"] == n_prompt
     assert res.body["timings"]["predicted_n"] == n_predicted
     assert res.body["truncated"] == truncated
+    assert type(res.body["has_new_line"]) == bool
     assert match_regex(re_content, res.body["content"])
 
 
@@ -48,6 +49,7 @@ def test_completion_stream(prompt: str, n_predict: int, re_content: str, n_promp
             assert data["timings"]["predicted_n"] == n_predicted
             assert data["truncated"] == truncated
             assert data["stop_type"] == "limit"
+            assert type(data["has_new_line"]) == bool
             assert "generation_settings" in data
             assert server.n_predict is not None
             assert data["generation_settings"]["n_predict"] == min(n_predict, server.n_predict)
