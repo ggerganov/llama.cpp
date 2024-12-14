@@ -2000,7 +2000,7 @@ ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) 
     return ggml_backend_buffer_init(ggml_backend_cpu_buffer_from_ptr_type(), ggml_backend_cpu_buffer_from_ptr_i, ptr, size);
 }
 
-void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t sched, const struct ggml_cgraph * graph) {
+static void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t sched, const struct ggml_cgraph * graph) {
     std::set<void *> visited;
 
     for (int i = 0; i < sched->n_splits; i++) {
@@ -2014,7 +2014,7 @@ void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t sched, 
 
         for (int j = split->i_start; j < split->i_end; j++) {
             struct ggml_tensor *node = graph->nodes[j];
-            fprintf(fp, "    \"%p\";\n", node);
+            fprintf(fp, "    \"%p\";\n", (void *)node);
             for (int k = 0; k < GGML_MAX_SRC; k++) {
                 struct ggml_tensor *src = node->src[k];
                 if (   (nullptr == src)
@@ -2024,7 +2024,7 @@ void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t sched, 
                 }
 
                 visited.insert(src);
-                fprintf(fp, "    \"%p\";\n", src);
+                fprintf(fp, "    \"%p\";\n", (void *)src);
             }
         }
         fprintf(fp, "  }\n");
@@ -2123,7 +2123,7 @@ static void ggml_graph_dump_dot_real_node(ggml_backend_sched_t sched, FILE * fp,
     }
 
     fprintf(fp, "  \"%p\" [ style = filled; fillcolor = \"%s\"; shape = record; label=\"",
-            (void *) node, ggml_color_of_backend(sched, node));
+            (void *)node, ggml_color_of_backend(sched, node));
 
     if (strlen(node->name) > 0) {
         fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
