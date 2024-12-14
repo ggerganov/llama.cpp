@@ -239,7 +239,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_OPENELM,         "openelm"      },
     { LLM_ARCH_ARCTIC,          "arctic"       },
     { LLM_ARCH_DEEPSEEK2,       "deepseek2"    },
-    { LLM_ARCH_DEEPSEEK,       "deepseek"    },
+    { LLM_ARCH_DEEPSEEK,        "deepseek"     },
     { LLM_ARCH_CHATGLM,         "chatglm"      },
     { LLM_ARCH_BITNET,          "bitnet"       },
     { LLM_ARCH_T5,              "t5"           },
