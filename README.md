@@ -110,6 +110,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
 - [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 - [x] [Bunny](https://github.com/BAAI-DCAI/Bunny)
+- [x] [Qwen2-VL](https://huggingface.co/collections/Qwen/qwen2-vl-66cee7455501d7126940800d)
 
 </details>
 
@@ -433,6 +434,20 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     </details>
 
+## [`llama-run`](examples/run)
+
+#### A comprehensive example for running `llama.cpp` models. Useful for inferencing. Used with RamaLama [^3].
+
+- <details>
+    <summary>Run a model with a specific prompt (by default it's pulled from Ollama registry)</summary>
+
+    ```bash
+    llama-run granite-code
+    ```
+
+    </details>
+
+[^3]: [https://github.com/containers/ramalama](RamaLama)
 
 ## [`llama-simple`](examples/simple)
 

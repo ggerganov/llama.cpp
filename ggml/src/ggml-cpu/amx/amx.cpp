@@ -122,7 +122,7 @@ static const char * ggml_backend_amx_buffer_type_get_name(ggml_backend_buffer_ty
 }
 
 static ggml_backend_buffer_t ggml_backend_amx_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    void * data = aligned_alloc(TENSOR_ALIGNMENT, size);
+    void * data = ggml_aligned_malloc(size);
     if (data == NULL) {
         fprintf(stderr, "%s: failed to allocate buffer of size %zu\n", __func__, size);
         return NULL;

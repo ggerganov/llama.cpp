@@ -1145,9 +1145,9 @@ struct server_slot {
 
         SLT_INF(*this,
                 "\n"
-                "\rprompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
-                "\r       eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
-                "\r      total time = %10.2f ms / %5d tokens\n",
+                "prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
+                "       eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
+                "      total time = %10.2f ms / %5d tokens\n",
                 t_prompt_processing, n_prompt_tokens_processed, t_prompt, n_prompt_second,
                 t_token_generation, n_decoded, t_gen, n_gen_second,
                 t_prompt_processing + t_token_generation, n_prompt_tokens_processed + n_decoded);
@@ -4000,20 +4000,24 @@ int main(int argc, char ** argv) {
     // Router
     //
 
-    // register static assets routes
-    if (!params.public_path.empty()) {
-        // Set the base directory for serving static files
-        bool is_found = svr->set_mount_point("/", params.public_path);
-        if (!is_found) {
-            LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
-            return 1;
-        }
+    if (!params.webui) {
+        LOG_INF("Web UI is disabled\n");
     } else {
-        // using embedded static index.html
-        svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
-            res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
-            return false;
-        });
+        // register static assets routes
+        if (!params.public_path.empty()) {
+            // Set the base directory for serving static files
+            bool is_found = svr->set_mount_point("/", params.public_path);
+            if (!is_found) {
+                LOG_ERR("%s: static assets path not found: %s\n", __func__, params.public_path.c_str());
+                return 1;
+            }
+        } else {
+            // using embedded static index.html
+            svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+                return false;
+            });
+        }
     }
 
     // register API routes

@@ -3,9 +3,11 @@
 
 #include "mul_mat_vec_base.comp"
 
-layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-shared FLOAT_TYPE tmp[32];
+layout (constant_id = 0) const uint BLOCK_SIZE = 32;
+
+shared FLOAT_TYPE tmp[BLOCK_SIZE];
 
 void main() {
     const uint row = gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z;
@@ -20,22 +22,25 @@ void main() {
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
-    const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
-    const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+    // 16 threads are used to process each block
+    const uint it_size = gl_WorkGroupSize.x/16;
+    const uint tid = gl_LocalInvocationID.x;
+    const uint itid = tid%16;  // 0...16
+    const uint ix  = tid/16;
 
-    const uint step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
+    const uint step = 8;
 
-    const uint v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
-    const uint v_in = tid - step*v_im;                      // 0...15 or 0...7
+    const uint v_im = itid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const uint v_in = itid - step*v_im;                      // 0...15 or 0...7
 
-    const uint l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
+    const uint l0 = 2*v_in;                                  // 0...15
     const uint q_offset = 32*v_im + l0;
     const uint s_offset = 8*v_im;
     const uint y_offset = 128*v_im + l0;
 
     FLOAT_TYPE temp = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
-    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += it_size) {
         const uint y_idx = i * QUANT_K + y_offset;
 
         f16vec2 d = data_a[ib0 + i].d;
@@ -71,7 +76,7 @@ void main() {
 
         FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
         FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
-        [[unroll]] for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
+        [[unroll]] for (int l = 0; l < 2; ++l) {
             sum1 = fma(FLOAT_TYPE(b0[l]),   FLOAT_TYPE(s0_lo4[0]) * FLOAT_TYPE((qs0[l]  >> 0) & 3),
                    fma(FLOAT_TYPE(b16[l]),  FLOAT_TYPE(s0_lo4[1]) * FLOAT_TYPE((qs16[l] >> 0) & 3),
                    fma(FLOAT_TYPE(b32[l]),  FLOAT_TYPE(s0_lo4[2]) * FLOAT_TYPE((qs0[l]  >> 2) & 3),
@@ -96,7 +101,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (uint s = 16; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = gl_WorkGroupSize.x/2; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }

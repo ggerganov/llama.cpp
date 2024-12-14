@@ -108,9 +108,11 @@ extern "C" {
     };
 
     enum llama_rope_type {
-        LLAMA_ROPE_TYPE_NONE = -1,
-        LLAMA_ROPE_TYPE_NORM = 0,
-        LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
+        LLAMA_ROPE_TYPE_NONE   = -1,
+        LLAMA_ROPE_TYPE_NORM   = 0,
+        LLAMA_ROPE_TYPE_NEOX   = GGML_ROPE_TYPE_NEOX,
+        LLAMA_ROPE_TYPE_MROPE  = GGML_ROPE_TYPE_MROPE,
+        LLAMA_ROPE_TYPE_VISION = GGML_ROPE_TYPE_VISION,
     };
 
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
@@ -456,6 +458,7 @@ extern "C" {
     // Functions to access the model's GGUF metadata scalar values
     // - The functions return the length of the string on success, or -1 on failure
     // - The output string is always null-terminated and cleared on failure
+    // - When retrieving a string, an extra byte must be allocated to account for the null terminator
     // - GGUF array values are not supported by these functions
 
     // Get metadata value as a string by key name

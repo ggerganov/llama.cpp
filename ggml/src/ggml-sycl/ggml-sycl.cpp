@@ -47,7 +47,7 @@ static ggml_sycl_device_info ggml_sycl_init() {
 
     info.device_count = dpct::dev_mgr::instance().device_count();
     if (info.device_count == 0) {
-        GGML_LOG_ERROR("%s: failed to initialize " GGML_SYCL_NAME ": %s\n", __func__);
+        GGML_LOG_ERROR("%s: failed to initialize: %s\n", GGML_SYCL_NAME, __func__);
         return info;
     }
 
@@ -64,7 +64,7 @@ static ggml_sycl_device_info ggml_sycl_init() {
 #else
     GGML_LOG_INFO("%s: SYCL_USE_XMX: no\n", __func__);
 #endif
-    GGML_LOG_INFO("%s: found %d " GGML_SYCL_NAME " devices:\n", __func__, info.device_count);
+    GGML_LOG_INFO("%s: found %d %s devices:\n", __func__, info.device_count, GGML_SYCL_NAME);
 
     for (int i = 0; i < info.device_count; ++i) {
         info.devices[i].vmm = 0;
@@ -137,7 +137,6 @@ void ggml_backend_sycl_print_sycl_devices() {
 
     for (int id = 0; id < device_count; ++id) {
       sycl::device device = dpct::dev_mgr::instance().get_device(id);
-      sycl::backend backend = device.get_backend();
       std::string backend_type = get_device_backend_and_type(device);
       int type_id = DeviceNums[backend_type]++;
       std::stringstream device_type;
@@ -420,13 +419,11 @@ ggml_backend_sycl_buffer_cpy_tensor(ggml_backend_buffer_t buffer,
         return true;
     }
     return false;
+    GGML_UNUSED(buffer);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-
 
 static void ggml_backend_sycl_buffer_clear(ggml_backend_buffer_t buffer,
                                            uint8_t value) try {
@@ -1092,10 +1089,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
     ggml_sycl_buffer buffer_pool[MAX_SYCL_BUFFERS] = {};
     size_t pool_size = 0;
 
-    explicit ggml_sycl_pool_leg(queue_ptr qptr_, int device_) :
-        qptr(qptr_),
-        device(device_) {
-    }
+    explicit ggml_sycl_pool_leg(queue_ptr qptr_, int device_) : device(device_), qptr(qptr_) {}
 
     ~ggml_sycl_pool_leg() {
         for (int i = 0; i < MAX_SYCL_BUFFERS; ++i) {
@@ -1238,7 +1232,7 @@ static void quantize_q8_1(const float * __restrict__ x, void * __restrict__ vy, 
         zeros[i] = 0.f;
         qzeros[i] = 0;
     }
-    const TC xi = ix < kx ? *(TC *)&x[iy * kx + ix] : zeros;
+    const TC xi = ix < kx ? *(const TC *)&x[iy * kx + ix] : zeros;
     float sum = xi[0];
     float amax = sycl::fabs(xi[0]);
 #pragma unroll
@@ -1799,6 +1793,9 @@ static  void pool2d_nchw_kernel(
         switch (op) {
             case GGML_OP_POOL_AVG: res = 0; break;
             case GGML_OP_POOL_MAX: res = -FLT_MAX; break;
+            default:
+                res      = (To) sycl::nan(uint32_t(0));
+                break;
         }
 
         for (int i = bh; i < eh; i += 1) {
@@ -1817,6 +1814,9 @@ static  void pool2d_nchw_kernel(
                 switch (op) {
                     case GGML_OP_POOL_AVG: res += (cur / (kh * kw)); break;
                     case GGML_OP_POOL_MAX: res = sycl::max(res, (To)cur); break;
+                    default:
+                        res = (To) sycl::nan(uint32_t(0));
+                        break;
                 }
             }
         }
@@ -1855,7 +1855,8 @@ static void get_rows_sycl(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
                                  s3, nb01, nb02, nb03, s10, s11, s12, item_ct1);
                          });
 
-    (void) dst;
+    GGML_UNUSED(dst);
+    GGML_UNUSED(ctx);
 }
 
 template <typename src0_t>
@@ -1893,9 +1894,9 @@ static void get_rows_sycl_float(ggml_backend_sycl_context & ctx, const ggml_tens
             });
     }
 
-    (void) dst;
+    GGML_UNUSED(dst);
+    GGML_UNUSED(ctx);
 }
-
 
 static void quantize_row_q8_1_sycl(const float *x, void *vy, const int kx,
                                    const int ky, const int kx_padded,
@@ -2464,8 +2465,8 @@ static void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, const ggml_tens
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(ctx, dst, src0, dst, nullptr, src0_d, dst_d, main_stream);
 
-    (void) src1;
-    (void) src1_d;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(src1_d);
 }
 
 
@@ -2484,17 +2485,18 @@ inline void ggml_sycl_op_mul_mat_sycl(
     const int64_t ne00 = src0->ne[0];
     const int64_t ne10 = src1->ne[0];
 
-    const int64_t ne0 = dst->ne[0];
 
     const int64_t row_diff = row_high - row_low;
 
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-
+#if !GGML_SYCL_DNNL
+    const int64_t ne0 = dst->ne[0];
     // the main device has a larger memory buffer to hold the results from all GPUs
     // ldc == nrows of the matrix that cuBLAS writes into
     int ldc = id == ctx.device ? ne0 : row_diff;
+#endif
 
 #ifdef GGML_SYCL_F16
     bool use_fp16 = true;  // TODO(Yu) SYCL capability check
@@ -2531,9 +2533,9 @@ inline void ggml_sycl_op_mul_mat_sycl(
                                          : src1_as_f16.get();
         ggml_sycl_pool_alloc<sycl::half> dst_f16(ctx.pool(), row_diff * src1_ncols);
 
-        const sycl::half alpha_f16 = 1.0f;
-        const sycl::half beta_f16 = 0.0f;
 #if !GGML_SYCL_DNNL
+        const sycl::half alpha_f16 = 1.0f;
+        const sycl::half beta_f16  = 0.0f;
         SYCL_CHECK(CHECK_TRY_ERROR(dpct::gemm(
             *stream, oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
@@ -2570,9 +2572,9 @@ inline void ggml_sycl_op_mul_mat_sycl(
         const float * src0_ddf_i = src0->type == GGML_TYPE_F32 ? (const float *) src0_dd_i : src0_ddq_as_f32.get();
         const float * src1_ddf1_i = src1->type == GGML_TYPE_F32 ? (const float *) src1_ddf_i : src1_ddq_as_f32.get();
 
-        const float alpha = 1.0f;
-        const float beta = 0.0f;
 #if !GGML_SYCL_DNNL
+        const float alpha = 1.0f;
+        const float beta  = 0.0f;
 #    ifdef GGML_SYCL_NVIDIA
         SYCL_CHECK(CHECK_TRY_ERROR(oneapi::mkl::blas::column_major::gemm(
             oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ *stream }, oneapi::mkl::transpose::trans,
@@ -2590,9 +2592,9 @@ inline void ggml_sycl_op_mul_mat_sycl(
             src0_ddf_i, DnnlGemmWrapper::to_dt<float>(), dst_dd_i, DnnlGemmWrapper::to_dt<float>());
 #endif
     }
-    (void) dst;
-    (void) src1_ddq_i;
-    (void) src1_padded_row_size;
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_ddq_i);
+    GGML_UNUSED(src1_padded_row_size);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -2638,8 +2640,9 @@ static void ggml_sycl_op_pool2d(ggml_backend_sycl_context & ctx, const ggml_tens
                                item_ct1);
         });
 
-    (void) src1;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2654,9 +2657,10 @@ inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, const ggml_tensor 
 
     sum_rows_f32_sycl(src0_dd, dst_dd, ne, 1, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2673,9 +2677,10 @@ inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, const ggml_te
 
     sum_rows_f32_sycl(src0_dd, dst_dd, ncols, nrows, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2694,9 +2699,10 @@ inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, const ggml_ten
 
     argsort_f32_i32_sycl(src0_dd, (int *)dst_dd, ncols, nrows, order, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2713,9 +2719,10 @@ inline void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, const ggml_tens
 
     argmax_f32_i32_sycl(src0_dd, (int *)dst_dd, ncols, nrows, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_diag_mask_inf(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -2735,9 +2742,10 @@ inline void ggml_sycl_op_diag_mask_inf(ggml_backend_sycl_context & ctx, const gg
 
     diag_mask_inf_f32_sycl(src0_dd, dst_dd, ne00, nrows0, ne01, n_past, main_stream);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -2758,9 +2766,10 @@ inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, const ggml_tenso
     */
     SYCL_CHECK(0);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -2783,9 +2792,10 @@ inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, const ggml_tenso
     */
     SYCL_CHECK(0);
 
-    (void) src1;
-    (void) dst;
-    (void) src1_dd;
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(src1_dd);
+    GGML_UNUSED(ctx);
 }
 
 static void ggml_sycl_set_peer_access(const int n_tokens, int main_device) {
@@ -2862,7 +2872,6 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
     ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu *) src1->extra;
-    ggml_tensor_extra_gpu *  dst_extra = (ggml_tensor_extra_gpu *)  dst->extra;
 
     const bool src0_is_contiguous = ggml_is_contiguous(src0);
     const bool src1_is_contiguous = ggml_is_contiguous(src1);
@@ -3289,7 +3298,6 @@ static void ggml_sycl_mul_mat_batched_sycl(ggml_backend_sycl_context & ctx,
 
     GGML_TENSOR_BINARY_OP_LOCALS
 
-    const int64_t ne_dst = ggml_nelements(dst);
 
     SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     queue_ptr main_stream = ctx.stream();;
@@ -3397,6 +3405,7 @@ catch (sycl::exception const &exc) {
 
 inline bool ggml_sycl_supports_mmq(enum ggml_type type) {
     // TODO: accuracy issues in MMQ
+    GGML_UNUSED(type);
     return false;
 }
 
@@ -3772,7 +3781,7 @@ static void ggml_sycl_cpy(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
         GGML_ABORT("fatal error");
     }
 
-    (void) dst;
+    GGML_UNUSED(dst);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -3783,7 +3792,7 @@ catch (sycl::exception const &exc) {
 static void ggml_sycl_dup(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     // TODO: why do we pass dst as src1 here?
     ggml_sycl_cpy(ctx, src0, dst, nullptr);
-    (void) src1;
+    GGML_UNUSED(src1);
 }
 
 static void ggml_sycl_diag_mask_inf(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -3828,13 +3837,16 @@ static void ggml_sycl_argmax(ggml_backend_sycl_context & ctx, const ggml_tensor 
 }
 
 static void ggml_sycl_nop(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    (void) src0;
-    (void) src1;
-    (void) dst;
+    GGML_UNUSED(src0);
+    GGML_UNUSED(src1);
+    GGML_UNUSED(dst);
+    GGML_UNUSED(ctx);
 }
 
 void ggml_sycl_set_main_device(const int main_device) try {
-    if (dpct::get_current_device_id() == main_device) return;
+    if (dpct::get_current_device_id() == static_cast<unsigned int> (main_device)) {
+        return;
+    }
     check_allow_gpu_index(main_device);
     dpct::select_device(main_device);
 
@@ -4202,6 +4214,7 @@ try
 {
     ggml_backend_sycl_context *sycl_ctx =
         (ggml_backend_sycl_context *)backend->context;
+
     sycl::event *sycl_event = static_cast<sycl::event *>(event->context);
 
     const queue_ptr &stream = sycl_ctx->stream(sycl_ctx->device, 0);
@@ -4216,7 +4229,7 @@ catch (sycl::exception const &exc)
 }
 
 static void ggml_backend_sycl_event_wait(ggml_backend_t backend, ggml_backend_event_t event) try {
-    ggml_backend_sycl_context* sycl_ctx = static_cast<ggml_backend_sycl_context*>(backend->context);
+
     sycl::event* sycl_event = static_cast<sycl::event*>(event->context);
 
     if (ggml_backend_is_sycl(backend)) {
@@ -4475,7 +4488,16 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_SOFT_MAX:
             return true;
         case GGML_OP_ROPE:
-            return ggml_is_contiguous(op->src[0]);
+            {
+                const int mode = ((const int32_t *) op->op_params)[2];
+                if (mode & GGML_ROPE_TYPE_MROPE) {
+                    return false;
+                }
+                if (mode & GGML_ROPE_TYPE_VISION) {
+                    return false;
+                }
+                return ggml_is_contiguous(op->src[0]);
+            }
         case GGML_OP_IM2COL:
             // TODO: add support for the new F32 operations
             return op->src[0]->type == GGML_TYPE_F16;
@@ -4624,6 +4646,7 @@ static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, cons
     // SYCL doesn't support registering host memory, left here for reference
     // "ggml_backend_register_host_buffer"
     // "ggml_backend_unregister_host_buffer"
+    GGML_UNUSED(name);
     return nullptr;
 }
 
