@@ -5,7 +5,8 @@ import TextLineStream from 'textlinestream';
 
 // math formula rendering
 import 'katex/dist/katex.min.css';
-import markdownItKatex from '@vscode/markdown-it-katex';
+import markdownItKatexGpt, { renderLatexHTML } from './katex-gpt';
+import markdownItKatexNormal from '@vscode/markdown-it-katex';
 
 // code highlighting
 import hljs from './highlight-config';
@@ -90,6 +91,9 @@ const VueMarkdown = defineComponent(
     const md = shallowRef(new MarkdownIt({
       breaks: true,
       highlight: function (str, lang) { // Add highlight.js
+        if (lang === 'latex') {
+          return renderLatexHTML(str, true);
+        }
         if (lang && hljs.getLanguage(lang)) {
           try {
             return '<pre><code class="hljs">' +
@@ -100,7 +104,8 @@ const VueMarkdown = defineComponent(
         return '<pre><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
       }
     }));
-    md.value.use(markdownItKatex, {
+    // support latex with double dollar sign and square brackets
+    md.value.use(markdownItKatexGpt, {
       delimiters: [
         { left: '\\[', right: '\\]', display: true },
         { left: '\\(', right: '\\)', display: false },
@@ -108,6 +113,9 @@ const VueMarkdown = defineComponent(
       ],
       throwOnError: false,
     });
+    // support latex with single dollar sign
+    md.value.use(markdownItKatexNormal, { throwOnError: false });
+    // add copy button to code blocks
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
       const content = tokens[idx].content;
