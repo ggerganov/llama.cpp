@@ -89,6 +89,7 @@ def main(args):
         raise ValueError()
 
     local_model = False
+    model_path = ""
     model_name = args.model_name
     print("model_name: ", model_name)
     qwen2vl = Qwen2VLForConditionalGeneration.from_pretrained(
