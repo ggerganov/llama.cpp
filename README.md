@@ -98,6 +98,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [Jais](https://huggingface.co/inceptionai/jais-13b-chat)
 - [x] [Bielik-11B-v2.3](https://huggingface.co/collections/speakleash/bielik-11b-v23-66ee813238d9b526a072408a)
 - [x] [RWKV-6](https://github.com/BlinkDL/RWKV-LM)
+- [x] [GigaChat-20B-A3B](https://huggingface.co/ai-sage/GigaChat-20B-A3B-instruct)
 
 #### Multimodal
 
