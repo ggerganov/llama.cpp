@@ -194,11 +194,6 @@ endif()
 
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-
-    if (BUILD_SHARED_LIBS)
-        # TODO: should not use this
-        set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    endif()
 endif()
 
 # ggml
@@ -313,6 +308,7 @@ ggml_add_backend(MUSA)
 ggml_add_backend(RPC)
 ggml_add_backend(SYCL)
 ggml_add_backend(Vulkan)
+ggml_add_backend(OpenCL)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)

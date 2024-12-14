@@ -1,10 +1,3 @@
-# TODO: should not use this
-if (WIN32)
-    if (BUILD_SHARED_LIBS)
-        set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    endif()
-endif()
-
 llama_add_compile_flags()
 
 #
