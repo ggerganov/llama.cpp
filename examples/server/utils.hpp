@@ -22,7 +22,7 @@
 #include <vector>
 #include <memory>
 
-#define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
+#define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo"
 
 using json = nlohmann::ordered_json;
 
