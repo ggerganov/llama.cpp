@@ -120,8 +120,8 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
 //    return result;
 //}
 
-static std::vector<codepoint_flags> unicode_cpt_flags_array() {
-    std::vector<codepoint_flags> cpt_flags(MAX_CODEPOINTS, codepoint_flags::UNDEFINED);
+static std::vector<llama_codepoint_flags> unicode_cpt_flags_array() {
+    std::vector<llama_codepoint_flags> cpt_flags(MAX_CODEPOINTS, llama_codepoint_flags::LLAMA_UNDEFINED);
 
     assert (unicode_ranges_flags.begin()[0].first == 0);
     assert (unicode_ranges_flags.begin()[unicode_ranges_flags.size()-1].first == MAX_CODEPOINTS);
@@ -253,8 +253,8 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : OUT_OF_RANGE;
         };
 
-        auto _get_flags = [&] (const size_t pos) -> codepoint_flags {
-            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_flags(cpts[pos]) : codepoint_flags{};
+        auto _get_flags = [&](const size_t pos) -> llama_codepoint_flags {
+            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_flags(cpts[pos]) : llama_codepoint_flags{};
         };
 
         size_t _prev_end = offset_ini;
@@ -371,8 +371,8 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : OUT_OF_RANGE;
         };
 
-        auto _get_flags = [&] (const size_t pos) -> codepoint_flags {
-            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_flags(cpts[pos]) : codepoint_flags{};
+        auto _get_flags = [&](const size_t pos) -> llama_codepoint_flags {
+            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_flags(cpts[pos]) : llama_codepoint_flags{};
         };
 
         size_t _prev_end = offset_ini;
@@ -624,14 +624,14 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
     return result;
 }
 
-codepoint_flags unicode_cpt_flags(const uint32_t cp) {
-    static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+llama_codepoint_flags unicode_cpt_flags(const uint32_t cp) {
+    static const llama_codepoint_flags undef(llama_codepoint_flags::LLAMA_UNDEFINED);
     static const auto cpt_flags = unicode_cpt_flags_array();
     return cp < cpt_flags.size() ? cpt_flags[cp] : undef;
 }
 
-codepoint_flags unicode_cpt_flags(const std::string & utf8) {
-    static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+llama_codepoint_flags unicode_cpt_flags(const std::string & utf8) {
+    static const llama_codepoint_flags undef(llama_codepoint_flags::LLAMA_UNDEFINED);
     if (utf8.empty()) {
         return undef;  // undefined
     }
@@ -664,21 +664,22 @@ uint32_t unicode_tolower(uint32_t cp) {
 std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs) {
     // unicode categories
     static const std::map<std::string, int> k_ucat_enum = {
-        { "\\p{N}", codepoint_flags::NUMBER },
-        { "\\p{L}", codepoint_flags::LETTER },
-        { "\\p{P}", codepoint_flags::PUNCTUATION },
+        { "\\p{N}", llama_codepoint_flags::LLAMA_NUMBER },
+        { "\\p{L}", llama_codepoint_flags::LLAMA_LETTER },
+        { "\\p{P}", llama_codepoint_flags::LLAMA_PUNCTUATION },
     };
 
     static const std::map<int, int> k_ucat_cpt = {
-        { codepoint_flags::NUMBER,        0xD1 },
-        { codepoint_flags::LETTER,        0xD2 },
-        { codepoint_flags::PUNCTUATION,   0xD3 },
+        { llama_codepoint_flags::LLAMA_NUMBER, 0xD1 },
+        { llama_codepoint_flags::LLAMA_LETTER, 0xD2 },
+        { llama_codepoint_flags::LLAMA_PUNCTUATION, 0xD3 },
     };
 
     static const std::map<int, std::string> k_ucat_map = {
-        { codepoint_flags::NUMBER,        "\x30-\x39" }, // 0-9
-        { codepoint_flags::LETTER,        "\x41-\x5A\x61-\x7A" }, // A-Za-z
-        { codepoint_flags::PUNCTUATION,   "\x21-\x23\x25-\x2A\x2C-\x2F\x3A-\x3B\x3F-\x40\\\x5B-\\\x5D\x5F\\\x7B\\\x7D" }, // !-#%-*,-/:-;?-@\[-\]_\{\}
+        { llama_codepoint_flags::LLAMA_NUMBER, "\x30-\x39"                            }, // 0-9
+        { llama_codepoint_flags::LLAMA_LETTER, "\x41-\x5A\x61-\x7A"                   }, // A-Za-z
+        { llama_codepoint_flags::LLAMA_PUNCTUATION,
+         "\x21-\x23\x25-\x2A\x2C-\x2F\x3A-\x3B\x3F-\x40\\\x5B-\\\x5D\x5F\\\x7B\\\x7D" }, // !-#%-*,-/:-;?-@\[-\]_\{\}
     };
 
     // compute collapsed codepoints only if needed by at least one regex

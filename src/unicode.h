@@ -4,19 +4,17 @@
 #include <string>
 #include <vector>
 
-// TODO: prefix all symbols with "llama_"
-
-struct codepoint_flags {
+struct llama_codepoint_flags {
     enum {
-        UNDEFINED       = 0x0001,
-        NUMBER          = 0x0002,  // regex: \p{N}
-        LETTER          = 0x0004,  // regex: \p{L}
-        SEPARATOR       = 0x0008,  // regex: \p{Z}
-        ACCENT_MARK     = 0x0010,  // regex: \p{M}
-        PUNCTUATION     = 0x0020,  // regex: \p{P}
-        SYMBOL          = 0x0040,  // regex: \p{S}
-        CONTROL         = 0x0080,  // regex: \p{C}
-        MASK_CATEGORIES = 0x00FF,
+        LLAMA_UNDEFINED       = 0x0001,
+        LLAMA_NUMBER          = 0x0002,  // regex: \p{N}
+        LLAMA_LETTER          = 0x0004,  // regex: \p{L}
+        LLAMA_SEPARATOR       = 0x0008,  // regex: \p{Z}
+        LLAMA_ACCENT_MARK     = 0x0010,  // regex: \p{M}
+        LLAMA_PUNCTUATION     = 0x0020,  // regex: \p{P}
+        LLAMA_SYMBOL          = 0x0040,  // regex: \p{S}
+        LLAMA_CONTROL         = 0x0080,  // regex: \p{C}
+        LLAMA_MASK_CATEGORIES = 0x00FF,
     };
 
     // codepoint type
@@ -35,7 +33,7 @@ struct codepoint_flags {
     uint16_t is_nfd         : 1;
 
     // decode from uint16
-    inline codepoint_flags(const uint16_t flags=0) {
+    inline llama_codepoint_flags(const uint16_t flags = 0) {
         *reinterpret_cast<uint16_t*>(this) = flags;
     }
 
@@ -44,7 +42,7 @@ struct codepoint_flags {
     }
 
     inline uint16_t category_flag() const {
-        return this->as_uint() & MASK_CATEGORIES;
+        return this->as_uint() & LLAMA_MASK_CATEGORIES;
     }
 };
 
@@ -56,8 +54,8 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8);
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts);
 
-codepoint_flags unicode_cpt_flags(const uint32_t cp);
-codepoint_flags unicode_cpt_flags(const std::string & utf8);
+llama_codepoint_flags unicode_cpt_flags(const uint32_t cp);
+llama_codepoint_flags unicode_cpt_flags(const std::string & utf8);
 
 std::string unicode_byte_to_utf8(uint8_t byte);
 uint8_t unicode_utf8_to_byte(const std::string & utf8);
