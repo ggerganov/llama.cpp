@@ -33,7 +33,7 @@ struct llama_codepoint_flags {
     uint16_t is_nfd         : 1;
 
     // decode from uint16
-    inline llama_codepoint_flags(const uint16_t flags = 0) {
+    inline llama_codepoint_flags(const uint16_t flags=0) {
         *reinterpret_cast<uint16_t*>(this) = flags;
     }
 
