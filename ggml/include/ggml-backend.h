@@ -347,6 +347,9 @@ extern "C" {
     GGML_API ggml_backend_buffer_t      ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size);
     GGML_API ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void);
 
+    GGML_API void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t sched, const struct ggml_cgraph * graph);
+    GGML_API void ggml_backend_sched_dump_dot(ggml_backend_sched_t sched, const struct ggml_cgraph * graph, const char * filename);
+
 #ifdef  __cplusplus
 }
 #endif
