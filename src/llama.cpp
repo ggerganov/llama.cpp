@@ -22100,7 +22100,6 @@ static llm_chat_template llama_chat_detect_template(const std::string & tmpl) {
     } else if (tmpl_contains("<|start_of_role|>")) {
         return LLM_CHAT_TEMPLATE_GRANITE;
     } else if (tmpl_contains("message['role'] + additional_special_tokens[0] + message['content'] + additional_special_tokens[1]")) {
-        // gigachat
         return LLM_CHAT_TEMPLATE_GIGACHAT;
     }
     return LLM_CHAT_TEMPLATE_UNKNOWN;
