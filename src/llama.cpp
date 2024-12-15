@@ -22124,14 +22124,14 @@ static int32_t llama_chat_apply_template_internal(
     } else if (tmpl == LLM_CHAT_TEMPLATE_GIGACHAT) {
         // GigaChat template
         bool has_system = !chat.empty() && std::string(chat[0]->role) == "system";
-        
+
         // Handle system message if present
         if (has_system) {
             ss << "<s>" << chat[0]->content << "<|message_sep|>";
         } else {
             ss << "<s>";
         }
-        
+
         // Process remaining messages
         for (size_t i = has_system ? 1 : 0; i < chat.size(); i++) {
             std::string role(chat[i]->role);
@@ -22142,7 +22142,7 @@ static int32_t llama_chat_apply_template_internal(
                 ss << "assistant<|role_sep|>" << chat[i]->content << "<|message_sep|>";
             }
         }
-        
+
         // Add generation prompt if needed
         if (add_ass) {
             ss << "assistant<|role_sep|>";
