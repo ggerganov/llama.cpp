@@ -2352,16 +2352,27 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
         // GGML_SYCL_DEBUG("ggml_sycl_cpy_tensor_2d  GGML_BACKEND_TYPE_CPU src_ptr %p\n", src_ptr);
     } else if (ggml_backend_buffer_is_sycl(src->buffer) || ggml_backend_buffer_is_sycl_split(src->buffer)) {
         if (!ggml_backend_buffer_is_sycl_split(src->buffer)){
-            // Tensor is already on the device, what kind to choose here?
+            // If buffer is not a SYCL split buffer
+            /*
+            What memcpy_direction kind we need here?
+            Refer: dpct/helper.hpp:
+            enum memcpy_direction
+            {
+                host_to_host,
+                host_to_device,
+                device_to_host,
+                device_to_device,
+                automatic
+            };
+            */
             kind = dpct::device_to_device;
             src_ptr = (char *) src->data;
         }
         else {
             /*
-            This assertion seems to me that split buffers aren't supported in SYCL
-            Use ggml_abort()?
+            If buffer is a SYCL split buffer
             */
-        GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src->buffer) || (i1_low == 0 && i1_high == src->ne[1]));
+        GGML_ASSERT(i1_low == 0 && i1_high == src->ne[1]);
         kind = dpct::device_to_device;
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src->extra;
         int id;
