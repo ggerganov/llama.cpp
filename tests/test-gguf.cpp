@@ -689,6 +689,17 @@ static std::pair<int, int> test_handcrafted_file(const unsigned int seed) {
         }
         ntest++;
 
+        if (false && hft >= offset_has_data && !expect_context_not_null(hft)) { // FIXME
+            printf("%s:   - no_dangling_ggml_context_pointer: ", __func__);
+            if (ctx) {
+                printf("\033[1;31mFAIL\033[0m\n");
+            } else {
+                printf("\033[1;32mOK\033[0m\n");
+                npass++;
+            }
+            ntest++;
+        }
+
         if (false && expect_context_not_null(hft)) { // FIXME
             FILE * file_eb = get_handcrafted_file(seed, hft, /*extra_bytes =*/ 1);
             struct gguf_context * gguf_ctx_eb = gguf_init_from_file_impl(file_eb, gguf_params);
