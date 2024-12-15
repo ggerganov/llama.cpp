@@ -287,11 +287,9 @@ static void
 ggml_backend_sycl_buffer_init_tensor(ggml_backend_buffer_t buffer,
                                      ggml_tensor *tensor) try {
     ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *)buffer->context;
-
-    if (tensor->view_src != NULL && tensor->view_offs == 0) {
+    
+    if (tensor->view_src != NULL) {
         assert(tensor->view_src->buffer->buft == buffer->buft);
-        tensor->backend = tensor->view_src->backend;
-        tensor->extra = tensor->view_src->extra;
         return;
     }
 
@@ -746,7 +744,7 @@ ggml_backend_sycl_split_buffer_init_tensor(ggml_backend_buffer_t buffer,
             size += ggml_row_size(tensor->type, MATRIX_ROW_PADDING - ne0 % MATRIX_ROW_PADDING);
         }
 
-        // FIXME: do not crash if cudaMalloc fails
+        // FIXME: do not crash if SYCL Buffer alloc fails
         // currently, init_tensor cannot fail, it needs to be fixed in ggml-backend first
         ggml_sycl_set_device(i);
         const queue_ptr stream = ctx->streams[i];
@@ -788,7 +786,6 @@ ggml_backend_sycl_split_buffer_init_tensor(ggml_backend_buffer_t buffer,
                 CHECK_TRY_ERROR(extra->events[i][is] = new sycl::event()));
         }
     }
-    tensor->backend = GGML_BACKEND_TYPE_GPU_SPLIT;
     tensor->extra = extra;
 }
 catch (sycl::exception const &exc) {
@@ -928,7 +925,7 @@ static const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_bu
     GGML_UNUSED(buft);
 }
 
-static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
+bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
    return buffer->buft->iface.get_name == ggml_backend_sycl_split_buffer_type_get_name;
 }
 
@@ -2349,12 +2346,22 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
 
     dpct::memcpy_direction kind;
     char * src_ptr;
-    if (src->backend == GGML_BACKEND_TYPE_CPU) {
+    if (ggml_backend_buffer_is_host(src->buffer)) {
         kind = dpct::host_to_device;
         src_ptr = (char *) src->data;
         // GGML_SYCL_DEBUG("ggml_sycl_cpy_tensor_2d  GGML_BACKEND_TYPE_CPU src_ptr %p\n", src_ptr);
-    } else if (src->backend == GGML_BACKEND_TYPE_GPU || src->backend == GGML_BACKEND_TYPE_GPU_SPLIT) {
-        GGML_ASSERT(src->backend != GGML_BACKEND_TYPE_GPU_SPLIT || (i1_low == 0 && i1_high == src->ne[1]));
+    } else if (ggml_backend_buffer_is_sycl(src->buffer) || ggml_backend_buffer_is_sycl_split(src->buffer)) {
+        if (!ggml_backend_buffer_is_sycl_split(src->buffer)){
+            // Tensor is already on the device, what kind to choose here?
+            kind = dpct::device_to_device;
+            src_ptr = (char *) src->data;
+        }
+        else {
+            /*
+            This assertion seems to me that split buffers aren't supported in SYCL
+            Use ggml_abort()?
+            */
+        GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src->buffer) || (i1_low == 0 && i1_high == src->ne[1]));
         kind = dpct::device_to_device;
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src->extra;
         int id;
@@ -2362,6 +2369,7 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
             id = get_current_device_id()));
         // GGML_SYCL_DEBUG("current device index %d\n", id);
         src_ptr = (char *) extra->data_device[id];
+        }
     } else {
         // GGML_SYCL_DEBUG("GGML_ABORT("fatal error")\n");
         GGML_ABORT("fatal error");
@@ -2857,8 +2865,8 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
     const int nb2 = dst->nb[2];
     const int nb3 = dst->nb[3];
 
-    GGML_ASSERT(dst->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
-    GGML_ASSERT(src1->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src1->buffer));
     GGML_ASSERT(src1->type == GGML_TYPE_F32 || (src1->ne[2] == 1 && src1->ne[3] == 1));
 
     GGML_ASSERT(ne12 >= ne02 && ne12 % ne02 == 0);
@@ -2878,7 +2886,7 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
 
     int64_t src1_padded_col_size = GGML_PAD(ne10, MATRIX_ROW_PADDING);
 
-    const bool split = src0->backend == GGML_BACKEND_TYPE_GPU_SPLIT;
+    const bool split = ggml_backend_buffer_is_sycl_split(src0->buffer);
     GGML_ASSERT(!(split && ne02 > 1));
     GGML_ASSERT(!(split && ne03 > 1));
     GGML_ASSERT(!(split && ne02 < ne12));
@@ -3198,7 +3206,7 @@ static void ggml_sycl_mul_mat_vec_p021(ggml_backend_sycl_context & ctx, const gg
                                        const ggml_tensor *src1,
                                        ggml_tensor *dst) try {
     GGML_ASSERT(ggml_is_permuted(src0) && ggml_is_permuted(src1));
-    GGML_ASSERT(src0->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src0->buffer));
     GGML_ASSERT(src0->nb[0] <= src0->nb[1] && src0->nb[2] <= src0->nb[3]); // 0213 permutation
     GGML_ASSERT(src1->nb[0] <= src1->nb[1] && src1->nb[2] <= src1->nb[3]); // 0213 permutation
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
@@ -3231,7 +3239,7 @@ static void ggml_sycl_mul_mat_vec_nc(ggml_backend_sycl_context & ctx, const ggml
     GGML_ASSERT(!ggml_is_transposed(src0));
     GGML_ASSERT(!ggml_is_transposed(src1));
     GGML_ASSERT(!ggml_is_permuted(src0));
-    GGML_ASSERT(src0->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src0->buffer));
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
@@ -3293,7 +3301,7 @@ static void ggml_sycl_mul_mat_batched_sycl(ggml_backend_sycl_context & ctx,
                                              ggml_tensor *dst) try {
     GGML_ASSERT(!ggml_is_transposed(src0));
     GGML_ASSERT(!ggml_is_transposed(src1));
-    GGML_ASSERT(src0->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src0->buffer));
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
 
     GGML_TENSOR_BINARY_OP_LOCALS
