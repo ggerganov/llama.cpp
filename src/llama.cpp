@@ -1620,7 +1620,6 @@ enum llm_chat_template {
     LLM_CHAT_TEMPLATE_VICUNA,
     LLM_CHAT_TEMPLATE_VICUNA_ORCA,
     LLM_CHAT_TEMPLATE_DEEPSEEK,
-    LLM_CHAT_TEMPLATE_GIGACHAT,
     LLM_CHAT_TEMPLATE_DEEPSEEK_2,
     LLM_CHAT_TEMPLATE_COMMAND_R,
     LLM_CHAT_TEMPLATE_LLAMA_3,
@@ -1630,6 +1629,7 @@ enum llm_chat_template {
     LLM_CHAT_TEMPLATE_EXAONE_3,
     LLM_CHAT_TEMPLATE_RWKV_WORLD,
     LLM_CHAT_TEMPLATE_GRANITE,
+    LLM_CHAT_TEMPLATE_GIGACHAT,
     LLM_CHAT_TEMPLATE_UNKNOWN,
 };
 
@@ -1652,7 +1652,6 @@ static const std::map<std::string, llm_chat_template> LLM_CHAT_TEMPLATES = {
     { "vicuna",            LLM_CHAT_TEMPLATE_VICUNA            },
     { "vicuna-orca",       LLM_CHAT_TEMPLATE_VICUNA_ORCA       },
     { "deepseek",          LLM_CHAT_TEMPLATE_DEEPSEEK          },
-    { "gigachat",          LLM_CHAT_TEMPLATE_GIGACHAT          },
     { "deepseek2",         LLM_CHAT_TEMPLATE_DEEPSEEK_2        },
     { "command-r",         LLM_CHAT_TEMPLATE_COMMAND_R         },
     { "llama3",            LLM_CHAT_TEMPLATE_LLAMA_3           },
@@ -1662,6 +1661,7 @@ static const std::map<std::string, llm_chat_template> LLM_CHAT_TEMPLATES = {
     { "exaone3",           LLM_CHAT_TEMPLATE_EXAONE_3          },
     { "rwkv-world",        LLM_CHAT_TEMPLATE_RWKV_WORLD        },
     { "granite",           LLM_CHAT_TEMPLATE_GRANITE           },
+    { "gigachat",          LLM_CHAT_TEMPLATE_GIGACHAT          },
 };
 
 static llm_arch llm_arch_from_string(const std::string & name) {
