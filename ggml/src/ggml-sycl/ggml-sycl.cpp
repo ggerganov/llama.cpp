@@ -925,7 +925,7 @@ static const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_bu
     GGML_UNUSED(buft);
 }
 
-bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
+static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
    return buffer->buft->iface.get_name == ggml_backend_sycl_split_buffer_type_get_name;
 }
 
