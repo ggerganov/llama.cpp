@@ -145,7 +145,7 @@ def main(args):
 
     if local_model:
         processor: Qwen2VLProcessor = AutoProcessor.from_pretrained(model_path)
-    else: 
+    else:
         processor: Qwen2VLProcessor = AutoProcessor.from_pretrained(model_name)
     fout.add_array("clip.vision.image_mean", processor.image_processor.image_mean) # type: ignore[reportAttributeAccessIssue]
     fout.add_array("clip.vision.image_std", processor.image_processor.image_std) # type: ignore[reportAttributeAccessIssue]
