@@ -2031,7 +2031,7 @@ static void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t 
     }
 }
 
-static const char *ggml_color_of_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {
+static std::string ggml_color_of_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {
 #ifndef GGML_DOT_FULL_COLOR
     const int COLOR_NUM = 12;   // number of colors in `set312`
     const int DEF_COLOR = 0;
@@ -2041,7 +2041,7 @@ static const char *ggml_color_of_backend(ggml_backend_sched_t sched, struct ggml
 #endif
     const int SHUFFLE   = 2027; // a prime
 
-    static char color[32];
+    char color[32];
     uint32_t color1 = DEF_COLOR;
     uint32_t color2 = DEF_COLOR;
 
@@ -2078,7 +2078,7 @@ static void ggml_graph_dump_dot_leaf(ggml_backend_sched_t sched, FILE * fp, std:
     visited_nodes.insert(node);
 
     fprintf(fp, "  \"%p\" [ style = filled; fillcolor = \"%s\"; shape = record; label=\"<x>",
-            (void *)node, ggml_color_of_backend(sched, node));
+            (void *)node, ggml_color_of_backend(sched, node).c_str());
 
     if (strlen(node->name) > 0) {
         fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
@@ -2121,7 +2121,7 @@ static void ggml_graph_dump_dot_real_node(ggml_backend_sched_t sched, FILE * fp,
     }
 
     fprintf(fp, "  \"%p\" [ style = filled; fillcolor = \"%s\"; shape = record; label=\"",
-            (void *)node, ggml_color_of_backend(sched, node));
+            (void *)node, ggml_color_of_backend(sched, node).c_str());
 
     if (strlen(node->name) > 0) {
         fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
