@@ -238,8 +238,8 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_OLMOE,           "olmoe"        },
     { LLM_ARCH_OPENELM,         "openelm"      },
     { LLM_ARCH_ARCTIC,          "arctic"       },
-    { LLM_ARCH_DEEPSEEK2,       "deepseek2"    },
     { LLM_ARCH_DEEPSEEK,        "deepseek"     },
+    { LLM_ARCH_DEEPSEEK2,       "deepseek2"    },
     { LLM_ARCH_CHATGLM,         "chatglm"      },
     { LLM_ARCH_BITNET,          "bitnet"       },
     { LLM_ARCH_T5,              "t5"           },
@@ -1291,6 +1291,33 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
         },
     },
     {
+        LLM_ARCH_DEEPSEEK,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,         "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,        "output_norm" },
+            { LLM_TENSOR_OUTPUT,             "output" },
+            { LLM_TENSOR_ROPE_FREQS,         "rope_freqs" },
+            { LLM_TENSOR_ATTN_NORM,          "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_Q,             "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,             "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,             "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,           "blk.%d.attn_output" },
+            { LLM_TENSOR_ATTN_ROT_EMBD,      "blk.%d.attn_rot_embd" },
+            { LLM_TENSOR_FFN_GATE_INP,       "blk.%d.ffn_gate_inp" },
+            { LLM_TENSOR_FFN_NORM,           "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_GATE,           "blk.%d.ffn_gate" },
+            { LLM_TENSOR_FFN_DOWN,           "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,             "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_GATE_EXPS,      "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,      "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,        "blk.%d.ffn_up_exps" },
+            { LLM_TENSOR_FFN_GATE_INP_SHEXP, "blk.%d.ffn_gate_inp_shexp" },
+            { LLM_TENSOR_FFN_GATE_SHEXP,     "blk.%d.ffn_gate_shexp" },
+            { LLM_TENSOR_FFN_DOWN_SHEXP,     "blk.%d.ffn_down_shexp" },
+            { LLM_TENSOR_FFN_UP_SHEXP,       "blk.%d.ffn_up_shexp" },
+        },
+    },
+    {
         LLM_ARCH_DEEPSEEK2,
         {
             { LLM_TENSOR_TOKEN_EMBD,         "token_embd" },
@@ -1310,33 +1337,6 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_FFN_UP,             "blk.%d.ffn_up" },
             { LLM_TENSOR_FFN_DOWN,           "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_GATE_INP,       "blk.%d.ffn_gate_inp" },
-            { LLM_TENSOR_FFN_GATE_EXPS,      "blk.%d.ffn_gate_exps" },
-            { LLM_TENSOR_FFN_DOWN_EXPS,      "blk.%d.ffn_down_exps" },
-            { LLM_TENSOR_FFN_UP_EXPS,        "blk.%d.ffn_up_exps" },
-            { LLM_TENSOR_FFN_GATE_INP_SHEXP, "blk.%d.ffn_gate_inp_shexp" },
-            { LLM_TENSOR_FFN_GATE_SHEXP,     "blk.%d.ffn_gate_shexp" },
-            { LLM_TENSOR_FFN_DOWN_SHEXP,     "blk.%d.ffn_down_shexp" },
-            { LLM_TENSOR_FFN_UP_SHEXP,       "blk.%d.ffn_up_shexp" },
-        },
-    },
-    {
-        LLM_ARCH_DEEPSEEK,
-        {
-            { LLM_TENSOR_TOKEN_EMBD,         "token_embd" },
-            { LLM_TENSOR_OUTPUT_NORM,        "output_norm" },
-            { LLM_TENSOR_OUTPUT,             "output" },
-            { LLM_TENSOR_ROPE_FREQS,         "rope_freqs" },
-            { LLM_TENSOR_ATTN_NORM,          "blk.%d.attn_norm" },
-            { LLM_TENSOR_ATTN_Q,             "blk.%d.attn_q" },
-            { LLM_TENSOR_ATTN_K,             "blk.%d.attn_k" },
-            { LLM_TENSOR_ATTN_V,             "blk.%d.attn_v" },
-            { LLM_TENSOR_ATTN_OUT,           "blk.%d.attn_output" },
-            { LLM_TENSOR_ATTN_ROT_EMBD,      "blk.%d.attn_rot_embd" },
-            { LLM_TENSOR_FFN_GATE_INP,       "blk.%d.ffn_gate_inp" },
-            { LLM_TENSOR_FFN_NORM,           "blk.%d.ffn_norm" },
-            { LLM_TENSOR_FFN_GATE,           "blk.%d.ffn_gate" },
-            { LLM_TENSOR_FFN_DOWN,           "blk.%d.ffn_down" },
-            { LLM_TENSOR_FFN_UP,             "blk.%d.ffn_up" },
             { LLM_TENSOR_FFN_GATE_EXPS,      "blk.%d.ffn_gate_exps" },
             { LLM_TENSOR_FFN_DOWN_EXPS,      "blk.%d.ffn_down_exps" },
             { LLM_TENSOR_FFN_UP_EXPS,        "blk.%d.ffn_up_exps" },
@@ -6088,6 +6088,19 @@ static void llm_load_hparams(
                     model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_DEEPSEEK:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_layer_dense_lead);
+                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
+                ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
+                ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
+
+                switch (hparams.n_layer) {
+                    case 28: model.type = e_model::MODEL_20B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
         case LLM_ARCH_DEEPSEEK2:
             {
                 bool is_lite = (hparams.n_layer == 27);
@@ -6105,19 +6118,6 @@ static void llm_load_hparams(
                 switch (hparams.n_layer) {
                     case 27: model.type = e_model::MODEL_16B; break;
                     case 60: model.type = e_model::MODEL_236B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
-                }
-            } break;
-        case LLM_ARCH_DEEPSEEK:
-            {
-                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
-                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_layer_dense_lead);
-                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
-                ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
-                ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
-
-                switch (hparams.n_layer) {
-                    case 28: model.type = e_model::MODEL_20B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
@@ -7099,6 +7099,13 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
 
     LLAMA_LOG_INFO("%s: max token length = %d\n", __func__, vocab.max_token_len);
 
+    if (model.arch == LLM_ARCH_DEEPSEEK) {
+        LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
+        LLAMA_LOG_INFO("%s: n_ff_exp             = %d\n",     __func__, hparams.n_ff_exp);
+        LLAMA_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
+        LLAMA_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
+    }
+
     if (model.arch == LLM_ARCH_DEEPSEEK2) {
         LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
         LLAMA_LOG_INFO("%s: n_lora_q             = %d\n",     __func__, hparams.n_lora_q);
@@ -7107,13 +7114,6 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
         LLAMA_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
         LLAMA_LOG_INFO("%s: rope_yarn_log_mul    = %.4f\n",   __func__, hparams.rope_yarn_log_mul);
-    }
-
-    if (model.arch == LLM_ARCH_DEEPSEEK) {
-        LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
-        LLAMA_LOG_INFO("%s: n_ff_exp             = %d\n",     __func__, hparams.n_ff_exp);
-        LLAMA_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
-        LLAMA_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
     }
 
     if (model.arch == LLM_ARCH_QWEN2MOE) {
@@ -22121,32 +22121,6 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|im_start|>assistant\n";
         }
-    } else if (tmpl == LLM_CHAT_TEMPLATE_GIGACHAT) {
-        // GigaChat template
-        bool has_system = !chat.empty() && std::string(chat[0]->role) == "system";
-
-        // Handle system message if present
-        if (has_system) {
-            ss << "<s>" << chat[0]->content << "<|message_sep|>";
-        } else {
-            ss << "<s>";
-        }
-
-        // Process remaining messages
-        for (size_t i = has_system ? 1 : 0; i < chat.size(); i++) {
-            std::string role(chat[i]->role);
-            if (role == "user") {
-                ss << "user<|role_sep|>" << chat[i]->content << "<|message_sep|>"
-                << "available functions<|role_sep|>[]<|message_sep|>";
-            } else if (role == "assistant") {
-                ss << "assistant<|role_sep|>" << chat[i]->content << "<|message_sep|>";
-            }
-        }
-
-        // Add generation prompt if needed
-        if (add_ass) {
-            ss << "assistant<|role_sep|>";
-        }
     } else if (tmpl == LLM_CHAT_TEMPLATE_MISTRAL_V7) {
         // Official mistral 'v7' template
         // See: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411#basic-instruct-template-v7
@@ -22449,6 +22423,32 @@ static int32_t llama_chat_apply_template_internal(
         }
         if (add_ass) {
             ss << "<|start_of_role|>assistant<|end_of_role|>\n";
+        }
+    } else if (tmpl == LLM_CHAT_TEMPLATE_GIGACHAT) {
+        // GigaChat template
+        bool has_system = !chat.empty() && std::string(chat[0]->role) == "system";
+
+        // Handle system message if present
+        if (has_system) {
+            ss << "<s>" << chat[0]->content << "<|message_sep|>";
+        } else {
+            ss << "<s>";
+        }
+
+        // Process remaining messages
+        for (size_t i = has_system ? 1 : 0; i < chat.size(); i++) {
+            std::string role(chat[i]->role);
+            if (role == "user") {
+                ss << "user<|role_sep|>" << chat[i]->content << "<|message_sep|>"
+                << "available functions<|role_sep|>[]<|message_sep|>";
+            } else if (role == "assistant") {
+                ss << "assistant<|role_sep|>" << chat[i]->content << "<|message_sep|>";
+            }
+        }
+
+        // Add generation prompt if needed
+        if (add_ass) {
+            ss << "assistant<|role_sep|>";
         }
     } else {
         // template not supported
