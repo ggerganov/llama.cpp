@@ -646,7 +646,7 @@ class llama_antiprompts {
     };
 
     std::vector<std::string> stop_words;
-    std::vector<std::string> grammar_trigger_words;
+    std::vector<std::string> grammar_triggers;
 
 private:
     // The Aho–Corasick algorithm allows efficient string matching with multiple patterns.
@@ -740,25 +740,25 @@ private:
         stop_tokens.clear();
     }
 
-    void build(const llama_context * ctx, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_trigger_words) {
+    void build(const llama_context * ctx, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_triggers) {
         build(
             [&](const std::string & text) {
                 return common_tokenize(ctx, text, /* special= */ true);
             },
             stop_words,
-            grammar_trigger_words
+            grammar_triggers
         );
     }
 
-    void build(const std::function<std::vector<llama_token>(const std::string &)> & tokenizer, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_trigger_words) {
+    void build(const std::function<std::vector<llama_token>(const std::string &)> & tokenizer, const std::vector<std::string> & stop_words, const std::vector<std::string> & grammar_triggers) {
         clear();
         this->stop_words = stop_words;
-        this->grammar_trigger_words = grammar_trigger_words;
+        this->grammar_triggers = grammar_triggers;
 
         for (const std::string & stop_word : stop_words) {
             antiprompts.push_back({stop_word, /* is_grammar_trigger= */ false});
         }
-        for (const std::string & trigger : grammar_trigger_words) {
+        for (const std::string & trigger : grammar_triggers) {
             antiprompts.push_back({trigger, /* is_grammar_trigger= */ true});
         }
 

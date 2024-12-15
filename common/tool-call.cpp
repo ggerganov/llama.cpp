@@ -520,7 +520,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 if (!parallel) {
                     schema["maxItems"] = 1;
                 }
-                builder.add_rule("root", "\"[TOOL_CALLS]\"? " + builder.add_schema("tool_calls", schema));
+                builder.add_rule("root", "\"[TOOL_CALLS]\" " + builder.add_schema("tool_calls", schema));
             });
             if (allow_content) {
                 handler.grammar_triggers.push_back("[TOOL_CALLS]");

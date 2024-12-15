@@ -93,7 +93,6 @@ struct slot_params {
     json input_prefix;
     json input_suffix;
     std::vector<std::string> antiprompt;
-    std::vector<std::string> grammar_triggers;
     bool timings_per_token = false;
     bool ignore_eos = false;
 
@@ -318,47 +317,39 @@ struct server_task {
             }
         }
 
-        if (data.contains("grammar_triggers")) {
-            const auto & triggers = data.at("grammar_triggers");
-            if (triggers.is_array()) {
-                for (const auto & trigger : triggers) {
-                    if (trigger.is_string()) {
-                        params.grammar_triggers.push_back(trigger);
+        auto to_string_vec = [](const json & j) {
+            std::vector<std::string> out;
+            if (j.is_array()) {
+                for (const auto & e : j) {
+                    if (e.is_string()) {
+                        out.push_back(e);
                     }
                 }
+            }
+            return out;
+        };
+
+        {
+            const auto grammar_trigger_words = data.find("grammar_trigger_words");
+            if (grammar_trigger_words != data.end()) {
+                params.sampling.grammar_trigger_words = to_string_vec(*grammar_trigger_words);
             }
         }
 
         {
-            params.antiprompt.clear();
-
-            const auto & stop = data.find("stop");
-            if (stop != data.end() && stop->is_array()) {
-                for (const auto & word : *stop) {
-                    if (!word.empty()) {
-                        params.antiprompt.push_back(word);
-                    }
-                }
+            const auto stop = data.find("stop");
+            if (stop != data.end()) {
+                params.antiprompt = to_string_vec(*stop);
             }
         }
 
         {
-            const auto & samplers = data.find("samplers");
+            const auto samplers = data.find("samplers");
             if (samplers != data.end()) {
                 if (samplers->is_array()) {
-                    std::vector<std::string> sampler_names;
-                    for (const auto & name : *samplers) {
-                        if (name.is_string()) {
-                            sampler_names.emplace_back(name);
-                        }
-                    }
-                    params.sampling.samplers = common_sampler_types_from_names(sampler_names, false);
+                    params.sampling.samplers = common_sampler_types_from_names(to_string_vec(*samplers), false);
                 } else if (samplers->is_string()){
-                    std::string sampler_string;
-                    for (const auto & name : *samplers) {
-                        sampler_string += name;
-                    }
-                    params.sampling.samplers = common_sampler_types_from_chars(sampler_string);
+                    params.sampling.samplers = common_sampler_types_from_chars(samplers->get<std::string>());
                 }
             } else {
                 params.sampling.samplers = defaults.sampling.samplers;
@@ -546,7 +537,7 @@ struct server_task_result_cmpl_final : server_task_result {
         llama_tool_calls parsed_tool_calls;
         json tool_calls;
         json message_content;
-        if (!oaicompat_tools.is_null()) {
+        if (oaicompat_tool_call_style != llama_tool_call_style::None && !oaicompat_tools.is_null()) {
             parsed_tool_calls = parse_tool_calls(oaicompat_tool_call_style, oaicompat_tools, content);
             if (!parsed_tool_calls.tool_calls.empty()) {
                 finish_reason = "tool_calls";
@@ -1759,7 +1750,7 @@ struct server_context {
 
         {
             slot.antiprompts.clear();
-            slot.antiprompts.build(ctx, slot.params.antiprompt, slot.params.grammar_triggers);
+            slot.antiprompts.build(ctx, slot.params.antiprompt, slot.params.sampling.grammar_trigger_words);
         }
 
         {
@@ -1805,7 +1796,7 @@ struct server_context {
 
         if (match.pos != std::string::npos && !match.is_partial) {
             if (match.is_grammar_trigger) {
-                common_sampler_trigger_grammar(model, slot.smpl, common_token_to_piece(ctx, result.tok, params_base.special));
+                common_sampler_trigger_grammar(model, slot.smpl, token_str);
             } else {
                 // slot.stopped_word   = true;
                 slot.stopping_word  = match.pattern;
@@ -2014,7 +2005,7 @@ struct server_context {
             {"mirostat_eta",              slot.params.sampling.mirostat_eta},
             {"penalize_nl",               slot.params.sampling.penalize_nl},
             {"stop",                      slot.params.antiprompt},
-            {"grammar_trigger",           slot.params.grammar_triggers},
+            {"grammar_trigger_words",     slot.params.sampling.grammar_trigger_words},
             {"max_tokens",                slot.params.n_predict}, // User configured n_predict
             {"n_keep",                    slot.params.n_keep},
             {"n_discard",                 slot.params.n_discard},
@@ -3564,7 +3555,7 @@ int main(int argc, char ** argv) {
                 task.params.oaicompat           = oaicompat;
                 task.params.oaicompat_chat      = oaicompat_chat;
                 task.params.oaicompat_cmpl_id   = completion_id;
-                task.params.oaicompat_tools     = json_value(data, "tools", json::array());
+                task.params.oaicompat_tools     = json_value(data, "tools", json());
                 task.params.oaicompat_tool_call_style = tool_call_style;
 
                 // oaicompat_model is already populated by params_from_json_cmpl

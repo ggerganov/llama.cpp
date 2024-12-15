@@ -202,23 +202,24 @@ CODE_INTEPRETER_TOOL = {
 
 @pytest.mark.parametrize("template_name,n_predict,tool,expected_arguments", [
     ("meetkai-functionary-medium-v3.1",               32,  TEST_TOOL,   {}                                                       ),
-    ("meetkai-functionary-medium-v3.1",               32,  PYTHON_TOOL, {"code": ". She was so excited to go to the park and s"} ),
-    ("meetkai-functionary-medium-v3.2",               32,  TEST_TOOL,   {}                                                       ),
-    ("meetkai-functionary-medium-v3.2",               32,  PYTHON_TOOL, {"code": "Yes,"}                                         ),
+    ("meetkai-functionary-medium-v3.1",               32,  PYTHON_TOOL, {"code": " and played all day.\" exclasted her pare"}    ),
+    ("meetkai-functionary-medium-v3.2",               128, TEST_TOOL,   {}                                                       ),
+    ("meetkai-functionary-medium-v3.2",               128, PYTHON_TOOL, {"code": "Sure, I cannything,"}                          ),
     ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, TEST_TOOL,   {}                                                       ),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, PYTHON_TOOL, {"code": "Yes,"}                                         ),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, PYTHON_TOOL, {"code": " out the owl cried. Jack said "}                                         ),
     ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, TEST_TOOL,   {}                                                       ),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, PYTHON_TOOL, {"code": "Yes,"}                                         ),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, PYTHON_TOOL, {"code": " out the owl cried. Jack said "}                                         ),
     ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, TEST_TOOL,   {}                                                       ),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, PYTHON_TOOL, {"code": "It's a shark."}                                ),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, PYTHON_TOOL, {"code": "Let's feel out cooking fun together,"}                                ),
     ("meta-llama-Llama-3.2-3B-Instruct",              128, TEST_TOOL,   {}                                                       ),
-    ("meta-llama-Llama-3.2-3B-Instruct",              128, PYTHON_TOOL, {"code": "It's a shark."}                                ),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, PYTHON_TOOL, {"code": "Well you fight. Peopballs donto cheep and come again."}                                ),
     ("mistralai-Mistral-Nemo-Instruct-2407",          128, TEST_TOOL,   {}                                                       ),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          128, PYTHON_TOOL, {"code": "It's a small cost."}                           ),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          128, PYTHON_TOOL, {"code": "I can cannot count."}                           ),
 ])
 def test_completion_with_required_tool(template_name: str, n_predict: int, tool: dict, expected_arguments: dict):
     global server
     server.use_jinja = True
+    server.n_predict = n_predict
     server.chat_template_file = f'../../../tests/chat/templates/{template_name}.jinja'
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
@@ -227,13 +228,14 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
             {"role": "system", "content": "You are a coding assistant."},
             {"role": "user", "content": "Write an example"},
         ],
-        "tool_choice": tool["function"]["name"],
+        "tool_choice": "required",
         "tools": [tool], 
+        "parallel_tool_calls": False,
     })
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
-    assert tool_calls and len(tool_calls==1), f'Expected 1 tool call in {choice["message"]}'
+    assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
     assert tool["function"]["name"] == tool_call["function"]["name"]
     actual_arguments = json.loads(tool_call["function"]["arguments"])
@@ -254,6 +256,7 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
 def test_completion_without_tool_call(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
     global server
     server.use_jinja = True
+    server.n_predict = n_predict
     server.chat_template_file = f'../../../tests/chat/templates/{template_name}.jinja'
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
@@ -267,7 +270,7 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
     })
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
-    assert "tool_calls" not in choice["message"], f'Expected no tool call in {choice["message"]}'
+    assert choice["message"].get("tool_calls") is None, f'Expected no tool call in {choice["message"]}'
 
 
 @pytest.mark.slow
@@ -296,6 +299,7 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
 def test_hello_world_tool_call(tool: dict, expected_arguments: dict, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     global server
     server.use_jinja = True
+    server.n_predict = 128
     server.model_hf_repo = hf_repo
     server.model_hf_file = hf_file
     if template_override:
@@ -314,7 +318,7 @@ def test_hello_world_tool_call(tool: dict, expected_arguments: dict, hf_repo: st
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
-    assert tool_calls and len(tool_calls==1), f'Expected 1 tool call in {choice["message"]}'
+    assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
     assert tool["function"]["name"] == tool_call["function"]["name"]
     actual_arguments = json.loads(tool_call["function"]["arguments"])

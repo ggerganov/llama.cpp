@@ -494,7 +494,7 @@ static json oaicompat_completion_params_parse(
     auto tools = json_value(body, "tools", json());
     auto has_tools = tools.is_array() && !tools.empty();
 
-    auto stream = json_value(body, "stream", json());
+    auto stream = json_value(body, "stream", false);
     if (stream && has_tools) {
         throw std::runtime_error("Cannot use tools with stream");
     }
@@ -561,11 +561,12 @@ static json oaicompat_completion_params_parse(
                 llama_params["stop"].push_back(stop);
             }
             if (!handler.grammar_triggers.empty()) {
-                auto triggers = json::array();
+                auto trigger_words = json::array();
                 for (const auto & word : handler.grammar_triggers) {
-                    triggers.push_back(word);
+                    trigger_words.push_back(word);
+
                 }
-                llama_params["grammar_triggers"] = triggers;
+                llama_params["grammar_trigger_words"] = trigger_words;
             }
             if (!handler.grammar.empty()) {
                 if (llama_params.contains("grammar")) {
