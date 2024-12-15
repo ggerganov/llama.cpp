@@ -247,8 +247,8 @@ class MODEL_ARCH(IntEnum):
     OLMOE        = auto()
     OPENELM      = auto()
     ARCTIC       = auto()
-    DEEPSEEK2    = auto()
     DEEPSEEK     = auto()
+    DEEPSEEK2    = auto()
     CHATGLM      = auto()
     BITNET       = auto()
     T5           = auto()
@@ -410,8 +410,8 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.OLMOE:          "olmoe",
     MODEL_ARCH.OPENELM:        "openelm",
     MODEL_ARCH.ARCTIC:         "arctic",
-    MODEL_ARCH.DEEPSEEK2:      "deepseek2",
     MODEL_ARCH.DEEPSEEK:       "deepseek",
+    MODEL_ARCH.DEEPSEEK2:      "deepseek2",
     MODEL_ARCH.CHATGLM:        "chatglm",
     MODEL_ARCH.BITNET:         "bitnet",
     MODEL_ARCH.T5:             "t5",
