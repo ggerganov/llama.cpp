@@ -237,7 +237,9 @@
 #define GGML_EXIT_SUCCESS 0
 #define GGML_EXIT_ABORTED 1
 
-#define GGML_ROPE_TYPE_NEOX 2
+#define GGML_ROPE_TYPE_NEOX   2
+#define GGML_ROPE_TYPE_MROPE  8
+#define GGML_ROPE_TYPE_VISION 24
 
 #define GGUF_MAGIC "GGUF"
 
@@ -1434,6 +1436,22 @@ extern "C" {
             struct ggml_tensor  * b,
             struct ggml_tensor  * c,
             int                   n_dims,
+            int                   mode,
+            int                   n_ctx_orig,
+            float                 freq_base,
+            float                 freq_scale,
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            float                 beta_slow);
+
+    GGML_API struct ggml_tensor * ggml_rope_multi(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            struct ggml_tensor  * c,
+            int                   n_dims,
+            int                   sections[4],
             int                   mode,
             int                   n_ctx_orig,
             float                 freq_base,
