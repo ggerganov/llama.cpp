@@ -2031,21 +2031,15 @@ static void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t 
     }
 }
 
-static uint32_t simple_hash(const unsigned char *str)
-{
-    uint32_t hash = 5381;
-    while (unsigned char c = *str++) hash = hash * 33 + c;
-    return hash;
-}
-
 static const char *ggml_color_of_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {
 #ifndef GGML_DOT_FULL_COLOR
-    #define COLOR_NUM   12
-    #define DEF_COLOR   0
+    const int COLOR_NUM = 12;   // number of colors in `set312`
+    const int DEF_COLOR = 0;
 #else
-    #define COLOR_NUM   0x1000000
-    #define DEF_COLOR   0x0ffffff
+    const int COLOR_NUM = GGML_SCHED_MAX_BACKENDS;
+    const int DEF_COLOR = COLOR_NUM - 1;
 #endif
+    const int SHUFFLE   = 2027; // a prime
 
     static char color[32];
     uint32_t color1 = DEF_COLOR;
@@ -2053,21 +2047,25 @@ static const char *ggml_color_of_backend(ggml_backend_sched_t sched, struct ggml
 
     ggml_backend_t backend = ggml_backend_sched_get_tensor_backend(sched, node);
     if (backend) {
-        const char *name = ggml_backend_name(backend);
-        color1 = simple_hash((const unsigned char *)name) % COLOR_NUM;
+        color1 = (tensor_backend_id(node) * SHUFFLE) % COLOR_NUM;
         color2 = color1;
     }
     if (node->buffer) {
         ggml_backend_buffer_type_t buft = node->buffer->buft;
         if (backend && !ggml_backend_supports_buft(backend, buft)) {
-            color2 = simple_hash((const unsigned char *)ggml_backend_buft_name(buft)) % COLOR_NUM;
-            if (color2 == color1) color2 = (~color1) % COLOR_NUM;
+            for (int i = 0; i < sched->n_backends; i++) {
+                if (sched->bufts[i] == buft) {
+                    color2 = (i * SHUFFLE) % COLOR_NUM;
+                    break;
+                }
+            }
+            if (color2 == color1) color2 = (color2 + COLOR_NUM / 2) % COLOR_NUM;
         }
     }
 #ifndef GGML_DOT_FULL_COLOR
     snprintf(color, sizeof(color), "%d;0.5:%d", color1 + 1, color2 + 1);
 #else
-    snprintf(color, sizeof(color), "#%06x;0.5:#%06x", color1, color2);
+    snprintf(color, sizeof(color), "%.3f 0.4 1.0;0.5:%.3f 0.4 1.0", (float)color1 / COLOR_NUM / 2, (float)color2 / COLOR_NUM / 2);
 #endif
     return color;
 }
