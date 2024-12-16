@@ -704,6 +704,7 @@ struct server_task_result_cmpl_partial : server_task_result {
                 {"delta",
                 json {
                     {"content", content},
+                    {"tokens",  tokens}
                 }},
             }});
         }
@@ -1003,6 +1004,7 @@ struct server_slot {
         n_prompt_tokens    = 0;
         last_nl_pos        = 0;
         generated_text     = "";
+        generated_tokens   = {};
         has_new_line       = false;
         truncated          = false;
         stop               = STOP_TYPE_NONE;
