@@ -98,6 +98,13 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
         if new_key.endswith("gamma"):
             new_key = new_key.replace("gamma", "gamma.weight")
 
+        # convert from 1D [768] to 2D [768, 1] so that ggml_add can broadcast the bias
+        if (new_key.endswith("norm.weight") or new_key.endswith("norm1.weight") or new_key.endswith("norm2.weight") or new_key.endswith(".bias")) and (new_key.startswith("backbone.pos_net") or new_key.startswith("backbone.embed.bias")):
+            value = value.unsqueeze(1)
+
+        if new_key.endswith("dwconv.bias"):
+            value = value.unsqueeze(1)
+
         size_mb = value.element_size() * value.nelement() / (1024 * 1024)
         print(f"{size_mb:8.2f} MB - {new_key}: {value.shape}")
 
@@ -154,6 +161,8 @@ config = {
     "vocab_size": 4096,
     "n_head": 1,
     "layer_norm_epsilon": 1e-6,
+    "group_norm_epsilon": 1e-6,
+    "group_norm_groups": 32,
     "max_position_embeddings": 8192, # ?
     "num_hidden_layers": 12
 }

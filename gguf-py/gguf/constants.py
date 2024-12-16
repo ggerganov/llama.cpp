@@ -125,6 +125,8 @@ class Keys:
         VALUE_LENGTH      = "{arch}.attention.value_length"
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
+        GROUPNORM_EPS     = "{arch}.attention.group_norm_epsilon"
+        GROUPNORM_GROUPS  = "{arch}.attention.group_norm_groups"
         CAUSAL            = "{arch}.attention.causal"
         Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"

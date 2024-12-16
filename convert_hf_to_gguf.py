@@ -326,6 +326,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
+                            gguf.MODEL_TENSOR.POS_NET_NORM1,
+                            gguf.MODEL_TENSOR.POS_NET_NORM2,
                         )
                     )
                     or not new_name.endswith(".weight")
@@ -2060,6 +2062,8 @@ class WavTokenizerDecModel(Model):
         self.gguf_writer.add_posnet_length      (self.hparams["n_embd_posnet"])
         self.gguf_writer.add_convnext_length    (self.hparams["n_embd_convnext"])
         self.gguf_writer.add_feed_forward_length(self.hparams["n_ff"])
+        self.gguf_writer.add_group_norm_eps     (self.hparams["group_norm_epsilon"])
+        self.gguf_writer.add_group_norm_groups  (self.hparams["group_norm_groups"])
 
 
 @Model.register("Qwen2MoeForCausalLM")
