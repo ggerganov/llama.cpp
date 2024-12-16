@@ -5472,7 +5472,7 @@ static void ggml_vk_op_f32_rwkv6(ggml_backend_vk_context * ctx, vk_context& subc
     ggml_backend_vk_buffer_context * state_buf_ctx = (ggml_backend_vk_buffer_context *)state->buffer->context;
 
     ggml_vk_sync_buffers(subctx);
-    
+
     vk_buffer d_D, d_K, d_V, d_R, d_TF, d_TD, d_State;
     uint64_t k_offset, v_offset, r_offset, tf_offset, td_offset, state_offset, dst_offset;
     bool K_uma = false, V_uma = false, R_uma = false, TF_uma = false, TD_uma = false, STATE_uma = false, DST_uma = false;
@@ -5538,7 +5538,6 @@ static void ggml_vk_op_f32_rwkv6(ggml_backend_vk_context * ctx, vk_context& subc
         1
     };
 
-    
     ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, {
         vk_subbuffer{ d_K, k_offset, k_size },
         vk_subbuffer{ d_V, v_offset, v_size },
