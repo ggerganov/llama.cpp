@@ -82,8 +82,8 @@ void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
 
     ggml_sycl_set_device(ctx.device);
     queue_ptr main_stream = ctx.stream();
-    // GGML_SYCL_DEBUG("ctx.device=%d, main_stream=%p src0_on_device=%d, src1_on_device=%d, dst_on_device=%d\n",
-        // ctx.device, main_stream, src0_on_device, src1_on_device, dst_on_device);
+    // GGML_LOG_DEBUG("ctx.device=%d, main_stream=%p src0_on_device=%d, src1_on_device=%d, dst_on_device=%d\n",
+    //     ctx.device, main_stream, src0_on_device, src1_on_device, dst_on_device);
 
     // do the computation
     op(ctx, src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
