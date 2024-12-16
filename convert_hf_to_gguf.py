@@ -575,7 +575,7 @@ class Model:
             # ref: https://huggingface.co/tiiuae/falcon-7b
             res = "falcon"
         if chkhsh == "9d032fcbd5501f4a38150912590928bfb36091efb5df11b8e2124b0390e3fb1e":
-            # ref: https://huggingface.co/tiiuae/falcon3-7b
+            # ref: https://huggingface.co/tiiuae/Falcon3-7B-Base
             res = "falcon3"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
