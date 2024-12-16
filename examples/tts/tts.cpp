@@ -476,6 +476,10 @@ int main(int argc, char ** argv) {
         smpl[i] = common_sampler_init(model_ttc, params.sampling);
     }
 
+    LOG_INF("sampler seed: %u\n",     common_sampler_get_seed(smpl[0]));
+    LOG_INF("sampler params: \n%s\n", params.sampling.print().c_str());
+    LOG_INF("sampler chain: %s\n",    common_sampler_print(smpl[0]).c_str());
+
     LOG_INF("%s: loading done\n", __func__);
 
     const auto t_main_start = ggml_time_us();

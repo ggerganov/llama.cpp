@@ -91,8 +91,6 @@ class Keys:
         CONTEXT_LENGTH                    = "{arch}.context_length"
         EMBEDDING_LENGTH                  = "{arch}.embedding_length"
         FEATURES_LENGTH                   = "{arch}.features_length"
-        POSNET_LENGTH                     = "{arch}.posnet_length"
-        CONVNEXT_LENGTH                   = "{arch}.convnext_length"
         BLOCK_COUNT                       = "{arch}.block_count"
         LEADING_DENSE_BLOCK_COUNT         = "{arch}.leading_dense_block_count"
         FEED_FORWARD_LENGTH               = "{arch}.feed_forward_length"
@@ -159,6 +157,14 @@ class Keys:
 
     class WKV:
         HEAD_SIZE = "{arch}.wkv.head_size"
+
+    class PosNet:
+        EMBEDDING_LENGTH = "{arch}.posnet.embedding_length"
+        BLOCK_COUNT      = "{arch}.posnet.block_count"
+
+    class ConvNext:
+        EMBEDDING_LENGTH = "{arch}.convnext.embedding_length"
+        BLOCK_COUNT      = "{arch}.convnext.block_count"
 
     class Tokenizer:
         MODEL                = "tokenizer.ggml.model"
@@ -377,21 +383,21 @@ class MODEL_TENSOR(IntEnum):
     CLS                  = auto() # classifier
     CLS_OUT              = auto() # classifier output projection
     CONV1D               = auto()
-    CONV_NEXT_DW         = auto()
-    CONV_NEXT_NORM       = auto()
-    CONV_NEXT_PW1        = auto()
-    CONV_NEXT_PW2        = auto()
-    CONV_NEXT_GAMMA      = auto()
-    POS_NET_CONV1        = auto()
-    POS_NET_CONV2        = auto()
-    POS_NET_NORM         = auto()
-    POS_NET_NORM1        = auto()
-    POS_NET_NORM2        = auto()
-    POS_NET_ATTN_NORM    = auto()
-    POS_NET_ATTN_Q       = auto()
-    POS_NET_ATTN_K       = auto()
-    POS_NET_ATTN_V       = auto()
-    POS_NET_ATTN_OUT     = auto()
+    CONVNEXT_DW          = auto()
+    CONVNEXT_NORM        = auto()
+    CONVNEXT_PW1         = auto()
+    CONVNEXT_PW2         = auto()
+    CONVNEXT_GAMMA       = auto()
+    POSNET_CONV1         = auto()
+    POSNET_CONV2         = auto()
+    POSNET_NORM          = auto()
+    POSNET_NORM1         = auto()
+    POSNET_NORM2         = auto()
+    POSNET_ATTN_NORM     = auto()
+    POSNET_ATTN_Q        = auto()
+    POSNET_ATTN_K        = auto()
+    POSNET_ATTN_V        = auto()
+    POSNET_ATTN_OUT      = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -558,21 +564,21 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.CLS:                       "cls",
     MODEL_TENSOR.CLS_OUT:                   "cls.output",
     MODEL_TENSOR.CONV1D:                    "conv1d",
-    MODEL_TENSOR.CONV_NEXT_DW:              "conv_next.{bid}.dw",
-    MODEL_TENSOR.CONV_NEXT_NORM:            "conv_next.{bid}.norm",
-    MODEL_TENSOR.CONV_NEXT_PW1:             "conv_next.{bid}.pw1",
-    MODEL_TENSOR.CONV_NEXT_PW2:             "conv_next.{bid}.pw2",
-    MODEL_TENSOR.CONV_NEXT_GAMMA:           "conv_next.{bid}.gamma",
-    MODEL_TENSOR.POS_NET_CONV1:             "pos_net.{bid}.conv1",
-    MODEL_TENSOR.POS_NET_CONV2:             "pos_net.{bid}.conv2",
-    MODEL_TENSOR.POS_NET_NORM:              "pos_net.{bid}.norm",
-    MODEL_TENSOR.POS_NET_NORM1:             "pos_net.{bid}.norm1",
-    MODEL_TENSOR.POS_NET_NORM2:             "pos_net.{bid}.norm2",
-    MODEL_TENSOR.POS_NET_ATTN_NORM:         "pos_net.{bid}.attn_norm",
-    MODEL_TENSOR.POS_NET_ATTN_Q:            "pos_net.{bid}.attn_q",
-    MODEL_TENSOR.POS_NET_ATTN_K:            "pos_net.{bid}.attn_k",
-    MODEL_TENSOR.POS_NET_ATTN_V:            "pos_net.{bid}.attn_v",
-    MODEL_TENSOR.POS_NET_ATTN_OUT:          "pos_net.{bid}.attn_output",
+    MODEL_TENSOR.CONVNEXT_DW:               "convnext.{bid}.dw",
+    MODEL_TENSOR.CONVNEXT_NORM:             "convnext.{bid}.norm",
+    MODEL_TENSOR.CONVNEXT_PW1:              "convnext.{bid}.pw1",
+    MODEL_TENSOR.CONVNEXT_PW2:              "convnext.{bid}.pw2",
+    MODEL_TENSOR.CONVNEXT_GAMMA:            "convnext.{bid}.gamma",
+    MODEL_TENSOR.POSNET_CONV1:              "posnet.{bid}.conv1",
+    MODEL_TENSOR.POSNET_CONV2:              "posnet.{bid}.conv2",
+    MODEL_TENSOR.POSNET_NORM:               "posnet.{bid}.norm",
+    MODEL_TENSOR.POSNET_NORM1:              "posnet.{bid}.norm1",
+    MODEL_TENSOR.POSNET_NORM2:              "posnet.{bid}.norm2",
+    MODEL_TENSOR.POSNET_ATTN_NORM:          "posnet.{bid}.attn_norm",
+    MODEL_TENSOR.POSNET_ATTN_Q:             "posnet.{bid}.attn_q",
+    MODEL_TENSOR.POSNET_ATTN_K:             "posnet.{bid}.attn_k",
+    MODEL_TENSOR.POSNET_ATTN_V:             "posnet.{bid}.attn_v",
+    MODEL_TENSOR.POSNET_ATTN_OUT:           "posnet.{bid}.attn_output",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -1415,23 +1421,23 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.CONV1D,
-        MODEL_TENSOR.CONV_NEXT_DW,
-        MODEL_TENSOR.CONV_NEXT_NORM,
-        MODEL_TENSOR.CONV_NEXT_PW1,
-        MODEL_TENSOR.CONV_NEXT_PW2,
-        MODEL_TENSOR.CONV_NEXT_GAMMA,
+        MODEL_TENSOR.CONVNEXT_DW,
+        MODEL_TENSOR.CONVNEXT_NORM,
+        MODEL_TENSOR.CONVNEXT_PW1,
+        MODEL_TENSOR.CONVNEXT_PW2,
+        MODEL_TENSOR.CONVNEXT_GAMMA,
         MODEL_TENSOR.OUTPUT,
         MODEL_TENSOR.OUTPUT_NORM,
-        MODEL_TENSOR.POS_NET_CONV1,
-        MODEL_TENSOR.POS_NET_CONV2,
-        MODEL_TENSOR.POS_NET_NORM,
-        MODEL_TENSOR.POS_NET_NORM1,
-        MODEL_TENSOR.POS_NET_NORM2,
-        MODEL_TENSOR.POS_NET_ATTN_NORM,
-        MODEL_TENSOR.POS_NET_ATTN_Q,
-        MODEL_TENSOR.POS_NET_ATTN_K,
-        MODEL_TENSOR.POS_NET_ATTN_V,
-        MODEL_TENSOR.POS_NET_ATTN_OUT,
+        MODEL_TENSOR.POSNET_CONV1,
+        MODEL_TENSOR.POSNET_CONV2,
+        MODEL_TENSOR.POSNET_NORM,
+        MODEL_TENSOR.POSNET_NORM1,
+        MODEL_TENSOR.POSNET_NORM2,
+        MODEL_TENSOR.POSNET_ATTN_NORM,
+        MODEL_TENSOR.POSNET_ATTN_Q,
+        MODEL_TENSOR.POSNET_ATTN_K,
+        MODEL_TENSOR.POSNET_ATTN_V,
+        MODEL_TENSOR.POSNET_ATTN_OUT,
     ],
     # TODO
 }

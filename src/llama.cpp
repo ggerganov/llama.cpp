@@ -277,8 +277,6 @@ enum llm_kv {
     LLM_KV_CONTEXT_LENGTH,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_FEATURES_LENGTH,
-    LLM_KV_POSNET_LENGTH,
-    LLM_KV_CONVNEXT_LENGTH,
     LLM_KV_BLOCK_COUNT,
     LLM_KV_LEADING_DENSE_BLOCK_COUNT,
     LLM_KV_FEED_FORWARD_LENGTH,
@@ -375,6 +373,12 @@ enum llm_kv {
     LLM_KV_ADAPTER_TYPE,
     LLM_KV_ADAPTER_LORA_ALPHA,
 
+    LLM_KV_POSNET_EMBEDDING_LENGTH,
+    LLM_KV_POSNET_BLOCK_COUNT,
+
+    LLM_KV_CONVNEXT_EMBEDDING_LENGTH,
+    LLM_KV_CONVNEXT_BLOCK_COUNT,
+
     // deprecated:
     LLM_KV_TOKENIZER_PREFIX_ID,
     LLM_KV_TOKENIZER_SUFFIX_ID,
@@ -399,8 +403,6 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_CONTEXT_LENGTH,                    "%s.context_length"                    },
     { LLM_KV_EMBEDDING_LENGTH,                  "%s.embedding_length"                  },
     { LLM_KV_FEATURES_LENGTH,                   "%s.features_length"                   },
-    { LLM_KV_POSNET_LENGTH,                     "%s.posnet_length"                     },
-    { LLM_KV_CONVNEXT_LENGTH,                   "%s.convnext_length"                   },
     { LLM_KV_BLOCK_COUNT,                       "%s.block_count"                       },
     { LLM_KV_LEADING_DENSE_BLOCK_COUNT,         "%s.leading_dense_block_count"         },
     { LLM_KV_FEED_FORWARD_LENGTH,               "%s.feed_forward_length"               },
@@ -463,6 +465,12 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_DT_B_C_RMS,                   "%s.ssm.dt_b_c_rms"     },
 
     { LLM_KV_WKV_HEAD_SIZE,                    "%s.wkv.head_size" },
+
+    { LLM_KV_POSNET_EMBEDDING_LENGTH,          "%s.posnet.embedding_length" },
+    { LLM_KV_POSNET_BLOCK_COUNT,               "%s.posnet.block_count"      },
+
+    { LLM_KV_CONVNEXT_EMBEDDING_LENGTH,        "%s.convnext.embedding_length" },
+    { LLM_KV_CONVNEXT_BLOCK_COUNT,             "%s.convnext.block_count"      },
 
     { LLM_KV_TOKENIZER_MODEL,                  "tokenizer.ggml.model"                    },
     { LLM_KV_TOKENIZER_PRE,                    "tokenizer.ggml.pre"                      },
@@ -623,11 +631,11 @@ enum llm_tensor {
     LLM_TENSOR_CLS,
     LLM_TENSOR_CLS_OUT,
     LLM_TENSOR_CONV1D,
-    LLM_TENSOR_CONV_NEXT_DW,
-    LLM_TENSOR_CONV_NEXT_NORM,
-    LLM_TENSOR_CONV_NEXT_PW1,
-    LLM_TENSOR_CONV_NEXT_PW2,
-    LLM_TENSOR_CONV_NEXT_GAMMA,
+    LLM_TENSOR_CONVNEXT_DW,
+    LLM_TENSOR_CONVNEXT_NORM,
+    LLM_TENSOR_CONVNEXT_PW1,
+    LLM_TENSOR_CONVNEXT_PW2,
+    LLM_TENSOR_CONVNEXT_GAMMA,
     LLM_TENSOR_POS_NET_CONV1,
     LLM_TENSOR_POS_NET_CONV2,
     LLM_TENSOR_POS_NET_NORM,
@@ -1628,23 +1636,23 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_TOKEN_EMBD,        "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM,   "token_embd_norm" },
             { LLM_TENSOR_CONV1D,            "conv1d" },
-            { LLM_TENSOR_CONV_NEXT_DW,      "conv_next.%d.dw" },
-            { LLM_TENSOR_CONV_NEXT_NORM,    "conv_next.%d.norm" },
-            { LLM_TENSOR_CONV_NEXT_PW1,     "conv_next.%d.pw1" },
-            { LLM_TENSOR_CONV_NEXT_PW2,     "conv_next.%d.pw2" },
-            { LLM_TENSOR_CONV_NEXT_GAMMA,   "conv_next.%d.gamma" },
+            { LLM_TENSOR_CONVNEXT_DW,       "convnext.%d.dw" },
+            { LLM_TENSOR_CONVNEXT_NORM,     "convnext.%d.norm" },
+            { LLM_TENSOR_CONVNEXT_PW1,      "convnext.%d.pw1" },
+            { LLM_TENSOR_CONVNEXT_PW2,      "convnext.%d.pw2" },
+            { LLM_TENSOR_CONVNEXT_GAMMA,    "convnext.%d.gamma" },
             { LLM_TENSOR_OUTPUT_NORM,       "output_norm" },
             { LLM_TENSOR_OUTPUT,            "output" },
-            { LLM_TENSOR_POS_NET_CONV1,     "pos_net.%d.conv1" },
-            { LLM_TENSOR_POS_NET_CONV2,     "pos_net.%d.conv2" },
-            { LLM_TENSOR_POS_NET_NORM,      "pos_net.%d.norm" },
-            { LLM_TENSOR_POS_NET_NORM1,     "pos_net.%d.norm1" },
-            { LLM_TENSOR_POS_NET_NORM2,     "pos_net.%d.norm2" },
-            { LLM_TENSOR_POS_NET_ATTN_NORM, "pos_net.%d.attn_norm" },
-            { LLM_TENSOR_POS_NET_ATTN_Q,    "pos_net.%d.attn_q" },
-            { LLM_TENSOR_POS_NET_ATTN_K,    "pos_net.%d.attn_k" },
-            { LLM_TENSOR_POS_NET_ATTN_V,    "pos_net.%d.attn_v" },
-            { LLM_TENSOR_POS_NET_ATTN_OUT,  "pos_net.%d.attn_output" },
+            { LLM_TENSOR_POS_NET_CONV1,     "posnet.%d.conv1" },
+            { LLM_TENSOR_POS_NET_CONV2,     "posnet.%d.conv2" },
+            { LLM_TENSOR_POS_NET_NORM,      "posnet.%d.norm" },
+            { LLM_TENSOR_POS_NET_NORM1,     "posnet.%d.norm1" },
+            { LLM_TENSOR_POS_NET_NORM2,     "posnet.%d.norm2" },
+            { LLM_TENSOR_POS_NET_ATTN_NORM, "posnet.%d.attn_norm" },
+            { LLM_TENSOR_POS_NET_ATTN_Q,    "posnet.%d.attn_q" },
+            { LLM_TENSOR_POS_NET_ATTN_K,    "posnet.%d.attn_k" },
+            { LLM_TENSOR_POS_NET_ATTN_V,    "posnet.%d.attn_v" },
+            { LLM_TENSOR_POS_NET_ATTN_OUT,  "posnet.%d.attn_output" },
         },
     },
     {
@@ -2537,6 +2545,16 @@ static const size_t kiB = 1024;
 static const size_t MiB = 1024*kiB;
 static const size_t GiB = 1024*MiB;
 
+struct llama_hparams_posnet {
+    uint32_t n_embd;
+    uint32_t n_layer;
+};
+
+struct llama_hparams_convnext {
+    uint32_t n_embd;
+    uint32_t n_layer;
+};
+
 struct llama_hparams {
     bool vocab_only;
     bool rope_finetuned;
@@ -2546,6 +2564,7 @@ struct llama_hparams {
     uint32_t n_vocab = 0;
     uint32_t n_ctx_train; // context size the model was trained on
     uint32_t n_embd;
+    uint32_t n_embd_features = 0;
     uint32_t n_layer;
     uint32_t n_rot;
     uint32_t n_swa = 0; // sliding window attention (SWA)
@@ -2557,9 +2576,8 @@ struct llama_hparams {
     uint32_t n_rel_attn_bkts = 0;
 
     // for WavTokenizer
-    uint32_t n_embd_features = 0;
-    uint32_t n_embd_posnet = 0;
-    uint32_t n_embd_convnext = 0;
+    struct llama_hparams_posnet   posnet;
+    struct llama_hparams_convnext convnext;
 
     std::array<uint32_t, LLAMA_MAX_LAYERS> n_head_arr;
     std::array<uint32_t, LLAMA_MAX_LAYERS> n_head_kv_arr;
@@ -2623,66 +2641,6 @@ struct llama_hparams {
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
     enum llama_rope_scaling_type rope_scaling_type_train = LLAMA_ROPE_SCALING_TYPE_NONE;
 
-    bool operator!=(const llama_hparams & other) const {
-        if (this->vocab_only    != other.vocab_only)    return true;
-        if (this->n_vocab       != other.n_vocab)       return true;
-        if (this->n_ctx_train   != other.n_ctx_train)   return true;
-        if (this->n_embd        != other.n_embd)        return true;
-        if (this->n_layer       != other.n_layer)       return true;
-        if (this->n_rot         != other.n_rot)         return true;
-        if (this->n_swa         != other.n_swa)         return true;
-        if (this->n_embd_head_k != other.n_embd_head_k) return true;
-        if (this->n_embd_head_v != other.n_embd_head_v) return true;
-        if (this->n_expert      != other.n_expert)      return true;
-        if (this->n_expert_used != other.n_expert_used) return true;
-
-        if (this->n_head_arr    != other.n_head_arr)    return true;
-        if (this->n_head_kv_arr != other.n_head_kv_arr) return true;
-        if (this->n_ff_arr      != other.n_ff_arr)      return true;
-
-        if (this->n_rel_attn_bkts    != other.n_rel_attn_bkts)    return true;
-        if (this->n_layer_dense_lead != other.n_layer_dense_lead) return true;
-        if (this->n_lora_q           != other.n_lora_q)           return true;
-        if (this->n_lora_kv          != other.n_lora_kv)          return true;
-        if (this->n_ff_exp           != other.n_ff_exp)           return true;
-        if (this->n_ff_shexp         != other.n_ff_shexp)         return true;
-        if (this->n_expert_shared    != other.n_expert_shared)    return true;
-
-        if (this->rope_finetuned  != other.rope_finetuned)  return true;
-        if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn) return true;
-        if (std::equal(std::begin(this->rope_sections),
-                       std::end(this->rope_sections),
-                       std::begin(other.rope_sections)))    return true;
-
-        if (this->ssm_d_conv  != other.ssm_d_conv)  return true;
-        if (this->ssm_d_inner != other.ssm_d_inner) return true;
-        if (this->ssm_d_state != other.ssm_d_state) return true;
-        if (this->ssm_dt_rank != other.ssm_dt_rank) return true;
-        if (this->ssm_dt_b_c_rms != other.ssm_dt_b_c_rms) return true;
-
-        if (this->rescale_every_n_layers != other.rescale_every_n_layers) return true;
-        if (this->time_mix_extra_dim     != other.time_mix_extra_dim)     return true;
-        if (this->time_decay_extra_dim   != other.time_decay_extra_dim)   return true;
-        if (this->wkv_head_size          != other.wkv_head_size)          return true;
-
-        if (this->dec_start_token_id != other.dec_start_token_id) return true;
-
-        const float EPSILON = 1e-9f;
-
-        if (!is_float_close(this->f_norm_eps,            other.f_norm_eps,            EPSILON)) return true;
-        if (!is_float_close(this->f_norm_rms_eps,        other.f_norm_rms_eps,        EPSILON)) return true;
-        if (!is_float_close(this->rope_attn_factor,      other.rope_attn_factor,      EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_base_train,  other.rope_freq_base_train,  EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
-        if (!is_float_close(this->expert_weights_scale,  other.expert_weights_scale,  EPSILON)) return true;
-        if (!is_float_close(this->rope_yarn_log_mul,     other.rope_yarn_log_mul,     EPSILON)) return true;
-        if (!is_float_close(this->f_residual_scale,      other.f_residual_scale,      EPSILON)) return true;
-        if (!is_float_close(this->f_embedding_scale,     other.f_embedding_scale,     EPSILON)) return true;
-        if (!is_float_close(this->f_attention_scale,     other.f_attention_scale,     EPSILON)) return true;
-
-        return false;
-    }
-
     uint32_t n_head(uint32_t il = 0) const {
         if (il < n_layer) {
             return n_head_arr[il];
@@ -2735,21 +2693,21 @@ struct llama_hparams {
         if (wkv_head_size != 0) {
             // for RWKV models
             return 2 * n_embd;
-        } else {
-            // TODO: maybe support other convolution strides than 1
-            // NOTE: since the first column of the conv_state is shifted out each time, it's not actually needed
-            return (ssm_d_conv > 0 ? ssm_d_conv - 1 : 0) * ssm_d_inner;
         }
+
+        // TODO: maybe support other convolution strides than 1
+        // NOTE: since the first column of the conv_state is shifted out each time, it's not actually needed
+        return (ssm_d_conv > 0 ? ssm_d_conv - 1 : 0) * ssm_d_inner;
     }
 
     uint32_t n_embd_v_s() const { // dimension of the recurrent state embeddings
         if (wkv_head_size != 0) {
             // corresponds to RWKV's wkv_states size
             return n_embd * wkv_head_size;
-        } else {
-            // corresponds to Mamba's ssm_states size
-            return ssm_d_state * ssm_d_inner;
         }
+
+        // corresponds to Mamba's ssm_states size
+        return ssm_d_state * ssm_d_inner;
     }
 };
 
@@ -2785,6 +2743,57 @@ struct llama_cparams {
 
     ggml_backend_sched_eval_callback cb_eval;
     void * cb_eval_user_data;
+};
+
+struct llama_layer_posnet {
+    // resnet
+    struct ggml_tensor * norm1 = nullptr;
+    struct ggml_tensor * norm1_b = nullptr;
+
+    struct ggml_tensor * conv1 = nullptr;
+    struct ggml_tensor * conv1_b = nullptr;
+
+    struct ggml_tensor * norm2 = nullptr;
+    struct ggml_tensor * norm2_b = nullptr;
+
+    struct ggml_tensor * conv2 = nullptr;
+    struct ggml_tensor * conv2_b = nullptr;
+
+    // attention
+    struct ggml_tensor * attn_norm = nullptr;
+    struct ggml_tensor * attn_norm_b = nullptr;
+
+    struct ggml_tensor * attn_q = nullptr;
+    struct ggml_tensor * attn_q_b = nullptr;
+
+    struct ggml_tensor * attn_k = nullptr;
+    struct ggml_tensor * attn_k_b = nullptr;
+
+    struct ggml_tensor * attn_v = nullptr;
+    struct ggml_tensor * attn_v_b = nullptr;
+
+    struct ggml_tensor * attn_o = nullptr;
+    struct ggml_tensor * attn_o_b = nullptr;
+
+    // normalize
+    struct ggml_tensor * norm = nullptr;
+    struct ggml_tensor * norm_b = nullptr;
+};
+
+struct llama_layer_convnext {
+    struct ggml_tensor * dw;
+    struct ggml_tensor * dw_b;
+
+    struct ggml_tensor * norm;
+    struct ggml_tensor * norm_b;
+
+    struct ggml_tensor * pw1;
+    struct ggml_tensor * pw1_b;
+
+    struct ggml_tensor * pw2;
+    struct ggml_tensor * pw2_b;
+
+    struct ggml_tensor * gamma;
 };
 
 // TODO: separate into "llama_layer_enc" and "llama_layer_dec"
@@ -2938,20 +2947,9 @@ struct llama_layer {
     struct ggml_tensor * ffn_up_scale;
     struct ggml_tensor * ffn_down_scale;
 
-    // convnext
-    struct ggml_tensor * convnext_dw;
-    struct ggml_tensor * convnext_dw_b;
+    struct llama_layer_posnet posnet;
 
-    struct ggml_tensor * convnext_norm;
-    struct ggml_tensor * convnext_norm_b;
-
-    struct ggml_tensor * convnext_pw1;
-    struct ggml_tensor * convnext_pw1_b;
-
-    struct ggml_tensor * convnext_pw2;
-    struct ggml_tensor * convnext_pw2_b;
-
-    struct ggml_tensor * convnext_gamma;
+    struct llama_layer_convnext convnext;
 };
 
 // very similar to llama_batch,
@@ -3082,84 +3080,8 @@ struct llama_model {
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
-    // wavtokenizer decoder
-    // TODO: dedup
     struct ggml_tensor * conv_1d = nullptr;
     struct ggml_tensor * conv_1d_b = nullptr;
-
-    struct ggml_tensor * hann_window = nullptr;
-
-    // resnet 0
-    struct ggml_tensor * posnet_0_norm1 = nullptr;
-    struct ggml_tensor * posnet_0_norm1_b = nullptr;
-
-    struct ggml_tensor * posnet_0_conv1 = nullptr;
-    struct ggml_tensor * posnet_0_conv1_b = nullptr;
-
-    struct ggml_tensor * posnet_0_norm2 = nullptr;
-    struct ggml_tensor * posnet_0_norm2_b = nullptr;
-
-    struct ggml_tensor * posnet_0_conv2 = nullptr;
-    struct ggml_tensor * posnet_0_conv2_b = nullptr;
-
-    // resnet 1
-    struct ggml_tensor * posnet_1_norm1 = nullptr;
-    struct ggml_tensor * posnet_1_norm1_b = nullptr;
-
-    struct ggml_tensor * posnet_1_conv1 = nullptr;
-    struct ggml_tensor * posnet_1_conv1_b = nullptr;
-
-    struct ggml_tensor * posnet_1_norm2 = nullptr;
-    struct ggml_tensor * posnet_1_norm2_b = nullptr;
-
-    struct ggml_tensor * posnet_1_conv2 = nullptr;
-    struct ggml_tensor * posnet_1_conv2_b = nullptr;
-
-    // attn 2
-    struct ggml_tensor * posnet_2_attn_norm = nullptr;
-    struct ggml_tensor * posnet_2_attn_norm_b = nullptr;
-
-    struct ggml_tensor * posnet_2_attn_q = nullptr;
-    struct ggml_tensor * posnet_2_attn_q_b = nullptr;
-
-    struct ggml_tensor * posnet_2_attn_k = nullptr;
-    struct ggml_tensor * posnet_2_attn_k_b = nullptr;
-
-    struct ggml_tensor * posnet_2_attn_v = nullptr;
-    struct ggml_tensor * posnet_2_attn_v_b = nullptr;
-
-    struct ggml_tensor * posnet_2_attn_o = nullptr;
-    struct ggml_tensor * posnet_2_attn_o_b = nullptr;
-
-    // resnet 3
-    struct ggml_tensor * posnet_3_norm1 = nullptr;
-    struct ggml_tensor * posnet_3_norm1_b = nullptr;
-
-    struct ggml_tensor * posnet_3_conv1 = nullptr;
-    struct ggml_tensor * posnet_3_conv1_b = nullptr;
-
-    struct ggml_tensor * posnet_3_norm2 = nullptr;
-    struct ggml_tensor * posnet_3_norm2_b = nullptr;
-
-    struct ggml_tensor * posnet_3_conv2 = nullptr;
-    struct ggml_tensor * posnet_3_conv2_b = nullptr;
-
-    // resnet 4
-    struct ggml_tensor * posnet_4_norm1 = nullptr;
-    struct ggml_tensor * posnet_4_norm1_b = nullptr;
-
-    struct ggml_tensor * posnet_4_conv1 = nullptr;
-    struct ggml_tensor * posnet_4_conv1_b = nullptr;
-
-    struct ggml_tensor * posnet_4_norm2 = nullptr;
-    struct ggml_tensor * posnet_4_norm2_b = nullptr;
-
-    struct ggml_tensor * posnet_4_conv2 = nullptr;
-    struct ggml_tensor * posnet_4_conv2_b = nullptr;
-
-    // resnet 5
-    struct ggml_tensor * posnet_5_norm = nullptr;
-    struct ggml_tensor * posnet_5_norm_b = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -5705,8 +5627,12 @@ static void llm_load_hparams(
 
     if (model.arch == LLM_ARCH_WAVTOKENIZER_DEC) {
         ml.get_key(LLM_KV_FEATURES_LENGTH, hparams.n_embd_features);
-        ml.get_key(LLM_KV_POSNET_LENGTH,   hparams.n_embd_posnet);
-        ml.get_key(LLM_KV_CONVNEXT_LENGTH, hparams.n_embd_convnext);
+
+        ml.get_key(LLM_KV_POSNET_EMBEDDING_LENGTH, hparams.posnet.n_embd);
+        ml.get_key(LLM_KV_POSNET_BLOCK_COUNT,      hparams.posnet.n_layer);
+
+        ml.get_key(LLM_KV_CONVNEXT_EMBEDDING_LENGTH, hparams.convnext.n_embd);
+        ml.get_key(LLM_KV_CONVNEXT_BLOCK_COUNT,      hparams.convnext.n_layer);
     }
 
     GGML_ASSERT(hparams.n_expert <= LLAMA_MAX_EXPERTS);
@@ -7493,11 +7419,11 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_POS_NET_ATTN_K,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_POS_NET_ATTN_V,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
     {LLM_TENSOR_POS_NET_ATTN_OUT,           {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
-    {LLM_TENSOR_CONV_NEXT_DW,               {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
-    {LLM_TENSOR_CONV_NEXT_NORM,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
-    {LLM_TENSOR_CONV_NEXT_PW1,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
-    {LLM_TENSOR_CONV_NEXT_PW2,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
-    {LLM_TENSOR_CONV_NEXT_GAMMA,            {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_CONVNEXT_DW,                {LLM_TENSOR_LAYER_REPEATING, GGML_OP_IM2COL}},
+    {LLM_TENSOR_CONVNEXT_NORM,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
+    {LLM_TENSOR_CONVNEXT_PW1,               {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_CONVNEXT_PW2,               {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_CONVNEXT_GAMMA,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
 };
 
 // checks if the weight tensor can be used with the specified buffer type and device
@@ -7738,7 +7664,8 @@ static bool llm_load_tensors(
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
 
-    const int n_layer     = hparams.n_layer;
+    const int n_layer = hparams.n_layer;
+
     bool use_mmap_buffer = true;
 
     // build a list of buffer types for the CPU and GPU devices
@@ -9574,107 +9501,105 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_WAVTOKENIZER_DEC:
                 {
-                    const int64_t n_embd_features = hparams.n_embd_features;
-                    const int64_t n_embd_posnet   = hparams.n_embd_posnet;
-                    const int64_t n_embd_convnext = hparams.n_embd_convnext;
+                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {hparams.n_embd_features, n_vocab}, 0);
 
-                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd_features, n_vocab}, 0);
+                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, hparams.n_embd_features, hparams.posnet.n_embd}, 0);
+                    model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {1, hparams.posnet.n_embd}, 0);
 
-                    model.tok_norm   = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd_posnet}, 0);
-                    model.tok_norm_b = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd_posnet}, 0);
+                    // posnet
+                    {
+                        const int64_t n_embd = hparams.posnet.n_embd;
 
-                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, n_embd_features, n_embd_posnet}, 0);
-                    model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {1, n_embd_posnet}, 0);
+                        for (uint32_t i = 0; i < hparams.posnet.n_layer; ++i) {
+                            auto & layer = model.layers[i].posnet;
 
-                    model.posnet_0_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 0), {1, n_embd_posnet}, 0);
-                    model.posnet_0_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   0), {1, n_embd_posnet}, 0);
+                            // posnet:
+                            //
+                            //  - resnet
+                            //  - resnet
+                            //  - attn
+                            //  - resnet
+                            //  - resnet
+                            //  - norm
+                            //
+                            switch (i) {
+                                case 0:
+                                case 1:
+                                case 3:
+                                case 4:
+                                    {
+                                        layer.norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", i), {1, n_embd}, 0);
+                                        layer.norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_0_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 0), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_0_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   0), {1, n_embd_posnet}, 0);
+                                        layer.conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", i), {3, n_embd, n_embd}, 0);
+                                        layer.conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_0_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 0), {1, n_embd_posnet}, 0);
-                    model.posnet_0_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   0), {1, n_embd_posnet}, 0);
+                                        layer.norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", i), {1, n_embd}, 0);
+                                        layer.norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_0_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 0), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_0_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   0), {1, n_embd_posnet}, 0);
+                                        layer.conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", i), {3, n_embd, n_embd}, 0);
+                                        layer.conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   i), {1, n_embd}, 0);
+                                    } break;
+                                case 2:
+                                    {
+                                        layer.attn_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", i), {1, n_embd}, 0);
+                                        layer.attn_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_1_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 1), {1, n_embd_posnet}, 0);
-                    model.posnet_1_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   1), {1, n_embd_posnet}, 0);
+                                        layer.attn_q      = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q,    "weight", i), {1, n_embd, n_embd}, 0);
+                                        layer.attn_q_b    = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q,    "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_1_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 1), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_1_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   1), {1, n_embd_posnet}, 0);
+                                        layer.attn_k      = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K,    "weight", i), {1, n_embd, n_embd}, 0);
+                                        layer.attn_k_b    = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K,    "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_1_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 1), {1, n_embd_posnet}, 0);
-                    model.posnet_1_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   1), {1, n_embd_posnet}, 0);
+                                        layer.attn_v      = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V,    "weight", i), {1, n_embd, n_embd}, 0);
+                                        layer.attn_v_b    = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V,    "bias",   i), {1, n_embd}, 0);
 
-                    model.posnet_1_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 1), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_1_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   1), {1, n_embd_posnet}, 0);
-
-                    model.posnet_2_attn_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 2), {1, n_embd_posnet}, 0);
-                    model.posnet_2_attn_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   2), {1, n_embd_posnet}, 0);
-
-                    model.posnet_2_attn_q   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_2_attn_q_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "bias",   2), {1, n_embd_posnet}, 0);
-
-                    model.posnet_2_attn_k   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_2_attn_k_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "bias",   2), {1, n_embd_posnet}, 0);
-
-                    model.posnet_2_attn_v   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_2_attn_v_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "bias",   2), {1, n_embd_posnet}, 0);
-
-                    model.posnet_2_attn_o   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_2_attn_o_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "bias",   2), {1, n_embd_posnet}, 0);
-
-                    model.posnet_3_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 3), {1, n_embd_posnet}, 0);
-                    model.posnet_3_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   3), {1, n_embd_posnet}, 0);
-
-                    model.posnet_3_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 3), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_3_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   3), {1, n_embd_posnet}, 0);
-
-                    model.posnet_3_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 3), {1, n_embd_posnet}, 0);
-                    model.posnet_3_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   3), {1, n_embd_posnet}, 0);
-
-                    model.posnet_3_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 3), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_3_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   3), {1, n_embd_posnet}, 0);
-
-                    model.posnet_4_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 4), {1, n_embd_posnet}, 0);
-                    model.posnet_4_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   4), {1, n_embd_posnet}, 0);
-
-                    model.posnet_4_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 4), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_4_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   4), {1, n_embd_posnet}, 0);
-
-                    model.posnet_4_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 4), {1, n_embd_posnet}, 0);
-                    model.posnet_4_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   4), {1, n_embd_posnet}, 0);
-
-                    model.posnet_4_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 4), {3, n_embd_posnet, n_embd_posnet}, 0);
-                    model.posnet_4_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   4), {1, n_embd_posnet}, 0);
-
-                    model.posnet_5_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 5), {1, n_embd_posnet}, 0);
-                    model.posnet_5_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   5), {1, n_embd_posnet}, 0);
-
-                    for (int i = 0; i < n_layer; ++i) {
-                        auto & layer = model.layers[i];
-
-                        layer.convnext_dw   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "weight", i), {7, 1, n_embd_convnext}, 0);
-                        layer.convnext_dw_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "bias",   i), {1, n_embd_convnext}, 0);
-
-                        layer.convnext_norm   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "weight", i), {n_embd_convnext}, 0);
-                        layer.convnext_norm_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "bias",   i), {n_embd_convnext}, 0);
-
-                        layer.convnext_pw1   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "weight", i), {n_embd_convnext, n_ff}, 0);
-                        layer.convnext_pw1_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "bias",   i), {n_ff}, 0);
-
-                        layer.convnext_pw2   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "weight", i), {n_ff, n_embd_convnext}, 0);
-                        layer.convnext_pw2_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "bias",   i), {n_embd_convnext}, 0);
-
-                        layer.convnext_gamma = create_tensor(tn(LLM_TENSOR_CONV_NEXT_GAMMA, "weight", i), {n_embd_convnext}, 0);
+                                        layer.attn_o      = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT,  "weight", i), {1, n_embd, n_embd}, 0);
+                                        layer.attn_o_b    = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT,  "bias",   i), {1, n_embd}, 0);
+                                    } break;
+                                case 5:
+                                    {
+                                        layer.norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", i), {1, n_embd}, 0);
+                                        layer.norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   i), {1, n_embd}, 0);
+                                    } break;
+                                default: GGML_ABORT("unknown posnet layer");
+                            };
+                        }
                     }
 
-                    // output
-                    model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd_convnext}, 0);
-                    model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd_convnext}, 0);
+                    GGML_ASSERT(hparams.posnet.n_embd == hparams.convnext.n_embd);
 
-                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd_convnext, n_embd}, 0);
+                    model.tok_norm   = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {hparams.posnet.n_embd}, 0);
+                    model.tok_norm_b = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {hparams.posnet.n_embd}, 0);
+
+                    // convnext
+                    {
+                        const int64_t n_embd = hparams.convnext.n_embd;
+
+                        for (uint32_t i = 0; i < hparams.convnext.n_layer; ++i) {
+                            auto & layer = model.layers[i].convnext;
+
+                            layer.dw     = create_tensor(tn(LLM_TENSOR_CONVNEXT_DW,    "weight", i), {7, 1, n_embd}, 0);
+                            layer.dw_b   = create_tensor(tn(LLM_TENSOR_CONVNEXT_DW,    "bias",   i), {1, n_embd}, 0);
+
+                            layer.norm   = create_tensor(tn(LLM_TENSOR_CONVNEXT_NORM,  "weight", i), {n_embd}, 0);
+                            layer.norm_b = create_tensor(tn(LLM_TENSOR_CONVNEXT_NORM,  "bias",   i), {n_embd}, 0);
+
+                            layer.pw1    = create_tensor(tn(LLM_TENSOR_CONVNEXT_PW1,   "weight", i), {n_embd, n_ff}, 0);
+                            layer.pw1_b  = create_tensor(tn(LLM_TENSOR_CONVNEXT_PW1,   "bias",   i), {n_ff}, 0);
+
+                            layer.pw2    = create_tensor(tn(LLM_TENSOR_CONVNEXT_PW2,   "weight", i), {n_ff, n_embd}, 0);
+                            layer.pw2_b  = create_tensor(tn(LLM_TENSOR_CONVNEXT_PW2,   "bias",   i), {n_embd}, 0);
+
+                            layer.gamma  = create_tensor(tn(LLM_TENSOR_CONVNEXT_GAMMA, "weight", i), {n_embd}, 0);
+                        }
+
+                        // output
+                        model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd}, 0);
+                        model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd}, 0);
+                    }
+
+                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {hparams.convnext.n_embd, n_embd}, 0);
                     model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {n_embd}, 0);
                 } break;
             default:
@@ -17266,156 +17191,82 @@ struct llm_build_context {
         cur = ggml_conv_1d_ph(ctx0, model.conv_1d, cur, 1, 1);
         cur = ggml_add(ctx0, cur, model.conv_1d_b);
 
-        inpL = cur;
+        // posnet
+        for (uint32_t il = 0; il < hparams.posnet.n_layer; ++il) {
+            const auto & layer = model.layers[il].posnet;
 
-        // resnet block 0
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_0_norm1,
-                    model.posnet_0_norm1_b,
-                    LLM_NORM_GROUP, cb, 0);
+            inpL = cur;
 
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+            switch (il) {
+                case 0:
+                case 1:
+                case 3:
+                case 4:
+                    {
+                        cur = llm_build_norm(ctx0, cur, hparams,
+                                layer.norm1,
+                                layer.norm1_b,
+                                LLM_NORM_GROUP, cb, 0);
 
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_0_conv1, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_0_conv1_b);
+                        cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
 
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_0_norm2,
-                    model.posnet_0_norm2_b,
-                    LLM_NORM_GROUP, cb, 0);
+                        cur = ggml_conv_1d_ph(ctx0, layer.conv1, cur, 1, 1);
+                        cur = ggml_add(ctx0, cur, layer.conv1_b);
 
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+                        cur = llm_build_norm(ctx0, cur, hparams,
+                                layer.norm2,
+                                layer.norm2_b,
+                                LLM_NORM_GROUP, cb, 0);
 
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_0_conv2, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_0_conv2_b);
+                        cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
 
-            cur = ggml_add(ctx0, cur, inpL);
-        }
+                        cur = ggml_conv_1d_ph(ctx0, layer.conv2, cur, 1, 1);
+                        cur = ggml_add(ctx0, cur, layer.conv2_b);
 
-        inpL = cur;
+                        cur = ggml_add(ctx0, cur, inpL);
+                    } break;
+                case 2:
+                    {
+                        cur = llm_build_norm(ctx0, cur, hparams,
+                                layer.attn_norm,
+                                layer.attn_norm_b,
+                                LLM_NORM_GROUP, cb, 0);
 
-        // resnet block 1
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_1_norm1,
-                    model.posnet_1_norm1_b,
-                    LLM_NORM_GROUP, cb, 0);
+                        struct ggml_tensor * q;
+                        struct ggml_tensor * k;
+                        struct ggml_tensor * v;
 
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+                        q = ggml_conv_1d_ph(ctx0, layer.attn_q, cur, 1, 1);
+                        k = ggml_conv_1d_ph(ctx0, layer.attn_k, cur, 1, 1);
+                        v = ggml_conv_1d_ph(ctx0, layer.attn_v, cur, 1, 1);
 
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_1_conv1, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_1_conv1_b);
+                        q = ggml_add(ctx0, q, layer.attn_q_b);
+                        k = ggml_add(ctx0, k, layer.attn_k_b);
+                        v = ggml_add(ctx0, v, layer.attn_v_b);
 
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_1_norm2,
-                    model.posnet_1_norm2_b,
-                    LLM_NORM_GROUP, cb, 0);
+                        q = ggml_cont(ctx0, ggml_transpose(ctx0, q));
+                        k = ggml_cont(ctx0, ggml_transpose(ctx0, k));
 
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
+                        struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
 
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_1_conv2, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_1_conv2_b);
+                        kq = ggml_soft_max_ext(ctx0, kq, nullptr, 1.0f/sqrtf(float(hparams.posnet.n_embd)), 0.0f);
 
-            cur = ggml_add(ctx0, cur, inpL);
-        }
+                        cur = ggml_mul_mat(ctx0, kq, v);
 
-        inpL = cur;
+                        cur = ggml_conv_1d_ph(ctx0, layer.attn_o, cur, 1, 1);
+                        cur = ggml_add(ctx0, cur, layer.attn_o_b);
 
-        // attention block
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_2_attn_norm,
-                    model.posnet_2_attn_norm_b,
-                    LLM_NORM_GROUP, cb, 0);
-
-            struct ggml_tensor * q;
-            struct ggml_tensor * k;
-            struct ggml_tensor * v;
-
-            q = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_q, cur, 1, 1);
-            k = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_k, cur, 1, 1);
-            v = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_v, cur, 1, 1);
-
-            q = ggml_add(ctx0, q, model.posnet_2_attn_q_b);
-            k = ggml_add(ctx0, k, model.posnet_2_attn_k_b);
-            v = ggml_add(ctx0, v, model.posnet_2_attn_v_b);
-
-            q = ggml_cont(ctx0, ggml_transpose(ctx0, q));
-            k = ggml_cont(ctx0, ggml_transpose(ctx0, k));
-
-            struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
-
-            kq = ggml_soft_max_ext(ctx0, kq, nullptr, 1.0f/sqrtf(float(model.hparams.n_embd_posnet)), 0.0f);
-
-            cur = ggml_mul_mat(ctx0, kq, v);
-
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_2_attn_o, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_2_attn_o_b);
-
-            cur = ggml_add(ctx0, cur, inpL);
-        }
-
-        inpL = cur;
-
-        // resnet block 3
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_3_norm1,
-                    model.posnet_3_norm1_b,
-                    LLM_NORM_GROUP, cb, 0);
-
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
-
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_3_conv1, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_3_conv1_b);
-
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_3_norm2,
-                    model.posnet_3_norm2_b,
-                    LLM_NORM_GROUP, cb, 0);
-
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
-
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_3_conv2, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_3_conv2_b);
-
-            cur = ggml_add(ctx0, cur, inpL);
-        }
-
-        inpL = cur;
-
-        // resnet block 4
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_4_norm1,
-                    model.posnet_4_norm1_b,
-                    LLM_NORM_GROUP, cb, 0);
-
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
-
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_4_conv1, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_4_conv1_b);
-
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_4_norm2,
-                    model.posnet_4_norm2_b,
-                    LLM_NORM_GROUP, cb, 0);
-
-            cur = ggml_mul(ctx0, ggml_sigmoid(ctx0, cur), cur);
-
-            cur = ggml_conv_1d_ph(ctx0, model.posnet_4_conv2, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.posnet_4_conv2_b);
-
-            cur = ggml_add(ctx0, cur, inpL);
-        }
-
-        // normalize block 5
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.posnet_5_norm,
-                    model.posnet_5_norm_b,
-                    LLM_NORM_GROUP, cb, 0);
+                        cur = ggml_add(ctx0, cur, inpL);
+                    } break;
+                case 5:
+                    {
+                        cur = llm_build_norm(ctx0, cur, hparams,
+                                layer.norm,
+                                layer.norm_b,
+                                LLM_NORM_GROUP, cb, 0);
+                    } break;
+                default: GGML_ABORT("unknown posnet layer");
+            };
         }
 
         cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
@@ -17429,27 +17280,30 @@ struct llm_build_context {
 
         inpL = cur;
 
-        for (int il = 0; il < n_layer; ++il) {
+        // convnext
+        for (uint32_t il = 0; il < hparams.convnext.n_layer; ++il) {
+            const auto & layer = model.layers[il].convnext;
+
             cur = inpL;
 
-            cur = ggml_conv_1d_dw_ph(ctx0, model.layers[il].convnext_dw, cur, 1, 1);
-            cur = ggml_add(ctx0, cur, model.layers[il].convnext_dw_b);
+            cur = ggml_conv_1d_dw_ph(ctx0, layer.dw, cur, 1, 1);
+            cur = ggml_add(ctx0, cur, layer.dw_b);
 
             cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
 
             cur = llm_build_norm(ctx0, cur, hparams,
-                    model.layers[il].convnext_norm,
-                    model.layers[il].convnext_norm_b,
+                    layer.norm,
+                    layer.norm_b,
                     LLM_NORM, cb, -1);
 
             cur = llm_build_ffn(ctx0, lctx, cur,
-                    model.layers[il].convnext_pw1, model.layers[il].convnext_pw1_b, NULL,
-                    NULL,                          NULL,                            NULL,
-                    model.layers[il].convnext_pw2, model.layers[il].convnext_pw2_b, NULL,
+                    layer.pw1, layer.pw1_b, NULL,
+                    NULL,      NULL,        NULL,
+                    layer.pw2, layer.pw2_b, NULL,
                     NULL,
                     LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
 
-            cur = ggml_mul(ctx0, cur, model.layers[il].convnext_gamma);
+            cur = ggml_mul(ctx0, cur, layer.gamma);
 
             cur = ggml_cont(ctx0, ggml_transpose(ctx0, cur));
 

@@ -74,12 +74,13 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
         new_key = key
 
         new_key = new_key.replace('state_dict.', '')
+        new_key = new_key.replace('pos_net', 'posnet')
 
-        # check if matches "backbone.pos_net.%d.bias" or "backbone.pos_net.%d.weight"
-        if new_key.startswith("backbone.pos_net."):
-            match = re.match(r"backbone\.pos_net\.(\d+)\.(bias|weight)", new_key)
+        # check if matches "backbone.posnet.%d.bias" or "backbone.posnet.%d.weight"
+        if new_key.startswith("backbone.posnet."):
+            match = re.match(r"backbone\.posnet\.(\d+)\.(bias|weight)", new_key)
             if match:
-               new_key = f"backbone.pos_net.{match.group(1)}.norm.{match.group(2)}"
+               new_key = f"backbone.posnet.{match.group(1)}.norm.{match.group(2)}"
 
         # "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed" -> "backbone.embedding.weight"
         if new_key == "feature_extractor.encodec.quantizer.vq.layers.0._codebook.embed":
@@ -99,7 +100,7 @@ def flatten_state_dict(state_dict, parent_key='', sep='.'):
             new_key = new_key.replace("gamma", "gamma.weight")
 
         # convert from 1D [768] to 2D [768, 1] so that ggml_add can broadcast the bias
-        if (new_key.endswith("norm.weight") or new_key.endswith("norm1.weight") or new_key.endswith("norm2.weight") or new_key.endswith(".bias")) and (new_key.startswith("backbone.pos_net") or new_key.startswith("backbone.embed.bias")):
+        if (new_key.endswith("norm.weight") or new_key.endswith("norm1.weight") or new_key.endswith("norm2.weight") or new_key.endswith(".bias")) and (new_key.startswith("backbone.posnet") or new_key.startswith("backbone.embed.bias")):
             value = value.unsqueeze(1)
 
         if new_key.endswith("dwconv.bias"):
@@ -155,8 +156,6 @@ config = {
     ],
     "hidden_size": 1282,
     "n_embd_features": 512,
-    "n_embd_posnet": 768,
-    "n_embd_convnext": 768,
     "n_ff": 2304,
     "vocab_size": 4096,
     "n_head": 1,
@@ -164,7 +163,19 @@ config = {
     "group_norm_epsilon": 1e-6,
     "group_norm_groups": 32,
     "max_position_embeddings": 8192, # ?
-    "num_hidden_layers": 12
+    "n_layer": 12,
+    "posnet": {
+        "n_embd": 768,
+        "n_layer": 6
+    },
+    "convnext": {
+        "n_embd": 768,
+        "n_layer": 12
+    },
+    #"n_embd_posnet": 768,
+    #"n_embd_convnext": 768,
+    #"n_layer_posnet": 6,
+    #"n_layer_convnext": 12
 }
 
 with open(path_dst + '/config.json', 'w') as f:

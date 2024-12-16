@@ -842,7 +842,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"--sampling-seq"}, "SEQUENCE",
+        {"--sampling-seq", "--sampler-seq"}, "SEQUENCE",
         string_format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
         [](common_params & params, const std::string & value) {
             params.sampling.samplers = common_sampler_types_from_chars(value);

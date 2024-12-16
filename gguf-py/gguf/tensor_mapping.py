@@ -704,64 +704,64 @@ class TensorNameMap:
         ),
         #############################################################################
 
-        MODEL_TENSOR.CONV_NEXT_DW: (
+        MODEL_TENSOR.CONVNEXT_DW: (
             "backbone.convnext.{bid}.dwconv", # wavtokenizer
         ),
 
-        MODEL_TENSOR.CONV_NEXT_NORM: (
+        MODEL_TENSOR.CONVNEXT_NORM: (
             "backbone.convnext.{bid}.norm", # wavtokenizer
         ),
 
-        MODEL_TENSOR.CONV_NEXT_PW1: (
+        MODEL_TENSOR.CONVNEXT_PW1: (
             "backbone.convnext.{bid}.pwconv1", # wavtokenizer
         ),
 
-        MODEL_TENSOR.CONV_NEXT_PW2: (
+        MODEL_TENSOR.CONVNEXT_PW2: (
             "backbone.convnext.{bid}.pwconv2", # wavtokenizer
         ),
 
-        MODEL_TENSOR.CONV_NEXT_GAMMA: (
+        MODEL_TENSOR.CONVNEXT_GAMMA: (
             "backbone.convnext.{bid}.gamma", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_CONV1: (
-            "backbone.pos_net.{bid}.conv1", # wavtokenizer
+        MODEL_TENSOR.POSNET_CONV1: (
+            "backbone.posnet.{bid}.conv1", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_CONV2: (
-            "backbone.pos_net.{bid}.conv2", # wavtokenizer
+        MODEL_TENSOR.POSNET_CONV2: (
+            "backbone.posnet.{bid}.conv2", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_NORM: (
-            "backbone.pos_net.{bid}.norm", # wavtokenizer
+        MODEL_TENSOR.POSNET_NORM: (
+            "backbone.posnet.{bid}.norm", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_NORM1: (
-            "backbone.pos_net.{bid}.norm1", # wavtokenizer
+        MODEL_TENSOR.POSNET_NORM1: (
+            "backbone.posnet.{bid}.norm1", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_NORM2: (
-            "backbone.pos_net.{bid}.norm2", # wavtokenizer
+        MODEL_TENSOR.POSNET_NORM2: (
+            "backbone.posnet.{bid}.norm2", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_ATTN_NORM: (
-            "backbone.pos_net.{bid}.norm", # wavtokenizer
+        MODEL_TENSOR.POSNET_ATTN_NORM: (
+            "backbone.posnet.{bid}.norm", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_ATTN_Q: (
-            "backbone.pos_net.{bid}.q", # wavtokenizer
+        MODEL_TENSOR.POSNET_ATTN_Q: (
+            "backbone.posnet.{bid}.q", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_ATTN_K: (
-            "backbone.pos_net.{bid}.k", # wavtokenizer
+        MODEL_TENSOR.POSNET_ATTN_K: (
+            "backbone.posnet.{bid}.k", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_ATTN_V: (
-            "backbone.pos_net.{bid}.v", # wavtokenizer
+        MODEL_TENSOR.POSNET_ATTN_V: (
+            "backbone.posnet.{bid}.v", # wavtokenizer
         ),
 
-        MODEL_TENSOR.POS_NET_ATTN_OUT: (
-            "backbone.pos_net.{bid}.proj_out", # wavtokenizer
+        MODEL_TENSOR.POSNET_ATTN_OUT: (
+            "backbone.posnet.{bid}.proj_out", # wavtokenizer
         ),
     }
 

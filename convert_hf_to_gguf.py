@@ -326,8 +326,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
-                            gguf.MODEL_TENSOR.POS_NET_NORM1,
-                            gguf.MODEL_TENSOR.POS_NET_NORM2,
+                            gguf.MODEL_TENSOR.POSNET_NORM1,
+                            gguf.MODEL_TENSOR.POSNET_NORM2,
                         )
                     )
                     or not new_name.endswith(".weight")
@@ -2059,11 +2059,15 @@ class WavTokenizerDecModel(Model):
         super().set_gguf_parameters()
         self.gguf_writer.add_vocab_size         (self.hparams["vocab_size"])
         self.gguf_writer.add_features_length    (self.hparams["n_embd_features"])
-        self.gguf_writer.add_posnet_length      (self.hparams["n_embd_posnet"])
-        self.gguf_writer.add_convnext_length    (self.hparams["n_embd_convnext"])
         self.gguf_writer.add_feed_forward_length(self.hparams["n_ff"])
         self.gguf_writer.add_group_norm_eps     (self.hparams["group_norm_epsilon"])
         self.gguf_writer.add_group_norm_groups  (self.hparams["group_norm_groups"])
+
+        self.gguf_writer.add_posnet_embedding_length(self.hparams["posnet"]["n_embd"])
+        self.gguf_writer.add_posnet_block_count     (self.hparams["posnet"]["n_layer"])
+
+        self.gguf_writer.add_convnext_embedding_length(self.hparams["convnext"]["n_embd"])
+        self.gguf_writer.add_convnext_block_count     (self.hparams["convnext"]["n_layer"])
 
 
 @Model.register("Qwen2MoeForCausalLM")
