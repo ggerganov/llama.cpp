@@ -172,10 +172,6 @@ config = {
         "n_embd": 768,
         "n_layer": 12
     },
-    #"n_embd_posnet": 768,
-    #"n_embd_convnext": 768,
-    #"n_layer_posnet": 6,
-    #"n_layer_convnext": 12
 }
 
 with open(path_dst + '/config.json', 'w') as f:
