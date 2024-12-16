@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef GGML_USE_MUSA
+#undef __ARM_NEON
+#endif
+
 #include "ggml.h"
 #include "ggml-backend.h"
 
