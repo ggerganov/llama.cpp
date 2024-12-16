@@ -33,7 +33,7 @@ const CONFIG_DEFAULT = {
   systemMessage: 'You are a helpful assistant.',
   showTokensPerSecond: false,
   // make sure these default values are in sync with `common.h`
-  samplers: 'dkypmxt',
+  samplers: 'edkypmxt',
   temperature: 0.8,
   dynatemp_range: 0.0,
   dynatemp_exponent: 1.0,
