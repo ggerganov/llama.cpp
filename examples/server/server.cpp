@@ -719,14 +719,17 @@ struct server_task_result_embd : server_task_result {
     int index = 0;
     std::vector<float> embedding;
 
+    int32_t n_tokens;
+
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
         return json {
-            {"index",     index},
-            {"embedding", embedding},
+            {"index",            index},
+            {"embedding",        embedding},
+            {"tokens_evaluated", n_tokens},
         };
     }
 };
@@ -1995,6 +1998,7 @@ struct server_context {
         auto res = std::make_unique<server_task_result_embd>();
         res->id    = slot.id_task;
         res->index = slot.index;
+        res->n_tokens = slot.n_prompt_tokens;
 
         const int n_embd = llama_n_embd(model);
 

@@ -560,6 +560,7 @@ static json oaicompat_completion_params_parse(
 
 static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
     json data = json::array();
+    int32_t n_tokens = 0;
     int i = 0;
     for (const auto & elem : embeddings) {
         data.push_back(json{
@@ -567,14 +568,16 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
             {"index",     i++},
             {"object",    "embedding"}
         });
+
+        n_tokens += json_value(elem, "tokens_evaluated", 0);
     }
 
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
-        {"usage", json { // TODO: fill
-            {"prompt_tokens", 0},
-            {"total_tokens", 0}
+        {"usage", json {
+            {"prompt_tokens", n_tokens},
+            {"total_tokens", n_tokens}
         }},
         {"data", data}
     };
