@@ -296,9 +296,7 @@ int main(int argc, char ** argv) {
     params.n_ctx     = 8192;
 
     params.sampling.top_k = 4;
-    params.sampling.penalty_repeat = 1.1;
-    params.sampling.penalty_last_n = 8;
-    params.sampling.samplers = { COMMON_SAMPLER_TYPE_TEMPERATURE, COMMON_SAMPLER_TYPE_TOP_K, };
+    params.sampling.samplers = { COMMON_SAMPLER_TYPE_TOP_K, };
 
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_TTS, print_usage)) {
         return 1;
