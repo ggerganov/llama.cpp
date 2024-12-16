@@ -42,7 +42,7 @@ class TensorNameMap:
             "emb_ln",                     # nomic-bert
             "transformer.norm",           # openelm
             "rwkv.blocks.0.pre_ln",       # rwkv
-            "backbone.norm",              # outetts
+            "backbone.norm",              # wavtokenizer
         ),
 
         # Position embeddings
@@ -61,7 +61,7 @@ class TensorNameMap:
             "lm_head.linear",            # phi2
             "output_layer",              # chatglm
             "head",                      # rwkv
-            "head.out",                  # outetts
+            "head.out",                  # wavtokenizer
         ),
 
         # Output norm
@@ -82,7 +82,7 @@ class TensorNameMap:
             "transformer.norm",                        # openelm
             "model.norm",                              # nemotron
             "rwkv.ln_out",                             # rwkv
-            "backbone.final_layer_norm",               # outetts
+            "backbone.final_layer_norm",               # wavtokenizer
         ),
 
         # Rope frequencies
@@ -705,63 +705,63 @@ class TensorNameMap:
         #############################################################################
 
         MODEL_TENSOR.CONV_NEXT_DW: (
-            "backbone.convnext.{bid}.dwconv", # outetts
+            "backbone.convnext.{bid}.dwconv", # wavtokenizer
         ),
 
         MODEL_TENSOR.CONV_NEXT_NORM: (
-            "backbone.convnext.{bid}.norm", # outetts
+            "backbone.convnext.{bid}.norm", # wavtokenizer
         ),
 
         MODEL_TENSOR.CONV_NEXT_PW1: (
-            "backbone.convnext.{bid}.pwconv1", # outetts
+            "backbone.convnext.{bid}.pwconv1", # wavtokenizer
         ),
 
         MODEL_TENSOR.CONV_NEXT_PW2: (
-            "backbone.convnext.{bid}.pwconv2", # outetts
+            "backbone.convnext.{bid}.pwconv2", # wavtokenizer
         ),
 
         MODEL_TENSOR.CONV_NEXT_GAMMA: (
-            "backbone.convnext.{bid}.gamma", # outetts
+            "backbone.convnext.{bid}.gamma", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_CONV1: (
-            "backbone.pos_net.{bid}.conv1", # outetts
+            "backbone.pos_net.{bid}.conv1", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_CONV2: (
-            "backbone.pos_net.{bid}.conv2", # outetts
+            "backbone.pos_net.{bid}.conv2", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_NORM: (
-            "backbone.pos_net.{bid}.norm", # outetts
+            "backbone.pos_net.{bid}.norm", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_NORM1: (
-            "backbone.pos_net.{bid}.norm1", # outetts
+            "backbone.pos_net.{bid}.norm1", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_NORM2: (
-            "backbone.pos_net.{bid}.norm2", # outetts
+            "backbone.pos_net.{bid}.norm2", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_ATTN_NORM: (
-            "backbone.pos_net.{bid}.norm", # outetts
+            "backbone.pos_net.{bid}.norm", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_ATTN_Q: (
-            "backbone.pos_net.{bid}.q", # outetts
+            "backbone.pos_net.{bid}.q", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_ATTN_K: (
-            "backbone.pos_net.{bid}.k", # outetts
+            "backbone.pos_net.{bid}.k", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_ATTN_V: (
-            "backbone.pos_net.{bid}.v", # outetts
+            "backbone.pos_net.{bid}.v", # wavtokenizer
         ),
 
         MODEL_TENSOR.POS_NET_ATTN_OUT: (
-            "backbone.pos_net.{bid}.proj_out", # outetts
+            "backbone.pos_net.{bid}.proj_out", # wavtokenizer
         ),
     }
 

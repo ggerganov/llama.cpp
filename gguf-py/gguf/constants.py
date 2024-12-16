@@ -209,59 +209,59 @@ class GGUFType:
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA        = auto()
-    FALCON       = auto()
-    BAICHUAN     = auto()
-    GROK         = auto()
-    GPT2         = auto()
-    GPTJ         = auto()
-    GPTNEOX      = auto()
-    MPT          = auto()
-    STARCODER    = auto()
-    REFACT       = auto()
-    BERT         = auto()
-    NOMIC_BERT   = auto()
-    JINA_BERT_V2 = auto()
-    BLOOM        = auto()
-    STABLELM     = auto()
-    QWEN         = auto()
-    QWEN2        = auto()
-    QWEN2MOE     = auto()
-    QWEN2VL      = auto()
-    PHI2         = auto()
-    PHI3         = auto()
-    PLAMO        = auto()
-    CODESHELL    = auto()
-    ORION        = auto()
-    INTERNLM2    = auto()
-    MINICPM      = auto()
-    MINICPM3     = auto()
-    GEMMA        = auto()
-    GEMMA2       = auto()
-    STARCODER2   = auto()
-    RWKV6        = auto()
-    MAMBA        = auto()
-    XVERSE       = auto()
-    COMMAND_R    = auto()
-    DBRX         = auto()
-    OLMO         = auto()
-    OLMO2        = auto()
-    OLMOE        = auto()
-    OPENELM      = auto()
-    ARCTIC       = auto()
-    DEEPSEEK     = auto()
-    DEEPSEEK2    = auto()
-    CHATGLM      = auto()
-    BITNET       = auto()
-    T5           = auto()
-    T5ENCODER    = auto()
-    JAIS         = auto()
-    NEMOTRON     = auto()
-    EXAONE       = auto()
-    GRANITE      = auto()
-    GRANITE_MOE  = auto()
-    CHAMELEON    = auto()
-    OUTETTS_VOC  = auto()
+    LLAMA            = auto()
+    FALCON           = auto()
+    BAICHUAN         = auto()
+    GROK             = auto()
+    GPT2             = auto()
+    GPTJ             = auto()
+    GPTNEOX          = auto()
+    MPT              = auto()
+    STARCODER        = auto()
+    REFACT           = auto()
+    BERT             = auto()
+    NOMIC_BERT       = auto()
+    JINA_BERT_V2     = auto()
+    BLOOM            = auto()
+    STABLELM         = auto()
+    QWEN             = auto()
+    QWEN2            = auto()
+    QWEN2MOE         = auto()
+    QWEN2VL          = auto()
+    PHI2             = auto()
+    PHI3             = auto()
+    PLAMO            = auto()
+    CODESHELL        = auto()
+    ORION            = auto()
+    INTERNLM2        = auto()
+    MINICPM          = auto()
+    MINICPM3         = auto()
+    GEMMA            = auto()
+    GEMMA2           = auto()
+    STARCODER2       = auto()
+    RWKV6            = auto()
+    MAMBA            = auto()
+    XVERSE           = auto()
+    COMMAND_R        = auto()
+    DBRX             = auto()
+    OLMO             = auto()
+    OLMO2            = auto()
+    OLMOE            = auto()
+    OPENELM          = auto()
+    ARCTIC           = auto()
+    DEEPSEEK         = auto()
+    DEEPSEEK2        = auto()
+    CHATGLM          = auto()
+    BITNET           = auto()
+    T5               = auto()
+    T5ENCODER        = auto()
+    JAIS             = auto()
+    NEMOTRON         = auto()
+    EXAONE           = auto()
+    GRANITE          = auto()
+    GRANITE_MOE      = auto()
+    CHAMELEON        = auto()
+    WAVTOKENIZER_DEC = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -390,59 +390,59 @@ class MODEL_TENSOR(IntEnum):
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
-    MODEL_ARCH.LLAMA:          "llama",
-    MODEL_ARCH.FALCON:         "falcon",
-    MODEL_ARCH.BAICHUAN:       "baichuan",
-    MODEL_ARCH.GROK:           "grok",
-    MODEL_ARCH.GPT2:           "gpt2",
-    MODEL_ARCH.GPTJ:           "gptj",
-    MODEL_ARCH.GPTNEOX:        "gptneox",
-    MODEL_ARCH.MPT:            "mpt",
-    MODEL_ARCH.STARCODER:      "starcoder",
-    MODEL_ARCH.REFACT:         "refact",
-    MODEL_ARCH.BERT:           "bert",
-    MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
-    MODEL_ARCH.JINA_BERT_V2:   "jina-bert-v2",
-    MODEL_ARCH.BLOOM:          "bloom",
-    MODEL_ARCH.STABLELM:       "stablelm",
-    MODEL_ARCH.QWEN:           "qwen",
-    MODEL_ARCH.QWEN2:          "qwen2",
-    MODEL_ARCH.QWEN2MOE:       "qwen2moe",
-    MODEL_ARCH.QWEN2VL:        "qwen2vl",
-    MODEL_ARCH.PHI2:           "phi2",
-    MODEL_ARCH.PHI3:           "phi3",
-    MODEL_ARCH.PLAMO:          "plamo",
-    MODEL_ARCH.CODESHELL:      "codeshell",
-    MODEL_ARCH.ORION:          "orion",
-    MODEL_ARCH.INTERNLM2:      "internlm2",
-    MODEL_ARCH.MINICPM:        "minicpm",
-    MODEL_ARCH.MINICPM3:       "minicpm3",
-    MODEL_ARCH.GEMMA:          "gemma",
-    MODEL_ARCH.GEMMA2:         "gemma2",
-    MODEL_ARCH.STARCODER2:     "starcoder2",
-    MODEL_ARCH.RWKV6:          "rwkv6",
-    MODEL_ARCH.MAMBA:          "mamba",
-    MODEL_ARCH.XVERSE:         "xverse",
-    MODEL_ARCH.COMMAND_R:      "command-r",
-    MODEL_ARCH.DBRX:           "dbrx",
-    MODEL_ARCH.OLMO:           "olmo",
-    MODEL_ARCH.OLMO2:          "olmo2",
-    MODEL_ARCH.OLMOE:          "olmoe",
-    MODEL_ARCH.OPENELM:        "openelm",
-    MODEL_ARCH.ARCTIC:         "arctic",
-    MODEL_ARCH.DEEPSEEK:       "deepseek",
-    MODEL_ARCH.DEEPSEEK2:      "deepseek2",
-    MODEL_ARCH.CHATGLM:        "chatglm",
-    MODEL_ARCH.BITNET:         "bitnet",
-    MODEL_ARCH.T5:             "t5",
-    MODEL_ARCH.T5ENCODER:      "t5encoder",
-    MODEL_ARCH.JAIS:           "jais",
-    MODEL_ARCH.NEMOTRON:       "nemotron",
-    MODEL_ARCH.EXAONE:         "exaone",
-    MODEL_ARCH.GRANITE:        "granite",
-    MODEL_ARCH.GRANITE_MOE:    "granitemoe",
-    MODEL_ARCH.CHAMELEON:      "chameleon",
-    MODEL_ARCH.OUTETTS_VOC:    "outetts-voc",
+    MODEL_ARCH.LLAMA:            "llama",
+    MODEL_ARCH.FALCON:           "falcon",
+    MODEL_ARCH.BAICHUAN:         "baichuan",
+    MODEL_ARCH.GROK:             "grok",
+    MODEL_ARCH.GPT2:             "gpt2",
+    MODEL_ARCH.GPTJ:             "gptj",
+    MODEL_ARCH.GPTNEOX:          "gptneox",
+    MODEL_ARCH.MPT:              "mpt",
+    MODEL_ARCH.STARCODER:        "starcoder",
+    MODEL_ARCH.REFACT:           "refact",
+    MODEL_ARCH.BERT:             "bert",
+    MODEL_ARCH.NOMIC_BERT:       "nomic-bert",
+    MODEL_ARCH.JINA_BERT_V2:     "jina-bert-v2",
+    MODEL_ARCH.BLOOM:            "bloom",
+    MODEL_ARCH.STABLELM:         "stablelm",
+    MODEL_ARCH.QWEN:             "qwen",
+    MODEL_ARCH.QWEN2:            "qwen2",
+    MODEL_ARCH.QWEN2MOE:         "qwen2moe",
+    MODEL_ARCH.QWEN2VL:          "qwen2vl",
+    MODEL_ARCH.PHI2:             "phi2",
+    MODEL_ARCH.PHI3:             "phi3",
+    MODEL_ARCH.PLAMO:            "plamo",
+    MODEL_ARCH.CODESHELL:        "codeshell",
+    MODEL_ARCH.ORION:            "orion",
+    MODEL_ARCH.INTERNLM2:        "internlm2",
+    MODEL_ARCH.MINICPM:          "minicpm",
+    MODEL_ARCH.MINICPM3:         "minicpm3",
+    MODEL_ARCH.GEMMA:            "gemma",
+    MODEL_ARCH.GEMMA2:           "gemma2",
+    MODEL_ARCH.STARCODER2:       "starcoder2",
+    MODEL_ARCH.RWKV6:            "rwkv6",
+    MODEL_ARCH.MAMBA:            "mamba",
+    MODEL_ARCH.XVERSE:           "xverse",
+    MODEL_ARCH.COMMAND_R:        "command-r",
+    MODEL_ARCH.DBRX:             "dbrx",
+    MODEL_ARCH.OLMO:             "olmo",
+    MODEL_ARCH.OLMO2:            "olmo2",
+    MODEL_ARCH.OLMOE:            "olmoe",
+    MODEL_ARCH.OPENELM:          "openelm",
+    MODEL_ARCH.ARCTIC:           "arctic",
+    MODEL_ARCH.DEEPSEEK:         "deepseek",
+    MODEL_ARCH.DEEPSEEK2:        "deepseek2",
+    MODEL_ARCH.CHATGLM:          "chatglm",
+    MODEL_ARCH.BITNET:           "bitnet",
+    MODEL_ARCH.T5:               "t5",
+    MODEL_ARCH.T5ENCODER:        "t5encoder",
+    MODEL_ARCH.JAIS:             "jais",
+    MODEL_ARCH.NEMOTRON:         "nemotron",
+    MODEL_ARCH.EXAONE:           "exaone",
+    MODEL_ARCH.GRANITE:          "granite",
+    MODEL_ARCH.GRANITE_MOE:      "granitemoe",
+    MODEL_ARCH.CHAMELEON:        "chameleon",
+    MODEL_ARCH.WAVTOKENIZER_DEC: "wavtokenizer-dec",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -1406,7 +1406,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
-    MODEL_ARCH.OUTETTS_VOC: [
+    MODEL_ARCH.WAVTOKENIZER_DEC: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.CONV1D,

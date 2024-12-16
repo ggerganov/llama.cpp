@@ -2032,9 +2032,9 @@ class Qwen2VLModel(Model):
             yield name, data
 
 
-@Model.register("OuteTTSVocoder")
-class OuteTTSVocoderModel(Model):
-    model_arch = gguf.MODEL_ARCH.OUTETTS_VOC
+@Model.register("WavTokenizerDec")
+class WavTokenizerDecModel(Model):
+    model_arch = gguf.MODEL_ARCH.WAVTOKENIZER_DEC
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused

@@ -1,5 +1,5 @@
 # convert the https://huggingface.co/novateur/WavTokenizer-large-speech-75token to HF format
-# the goal is to be able to reuse the convert_hf_to_gguf.py after that to create a GGUF file with the OuteTTSS vocoder
+# the goal is to be able to reuse the convert_hf_to_gguf.py after that to create a GGUF file with the WavTokenizer decoder
 #
 # TODO: this script is LLM-generated and probably very inefficient and should be rewritten
 
@@ -144,7 +144,7 @@ print(f"Metadata has been saved to {index_path}")
 
 config = {
     "architectures": [
-        "OuteTTSVocoder"
+        "WavTokenizerDec"
     ],
     "hidden_size": 1282,
     "vocab_size": 4096,

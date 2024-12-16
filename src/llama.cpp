@@ -197,65 +197,65 @@ enum llm_arch {
     LLM_ARCH_GRANITE,
     LLM_ARCH_GRANITE_MOE,
     LLM_ARCH_CHAMELEON,
-    LLM_ARCH_OUTETTS_VOC,
+    LLM_ARCH_WAVTOKENIZER_DEC,
     LLM_ARCH_UNKNOWN,
 };
 
 static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
-    { LLM_ARCH_LLAMA,           "llama"        },
-    { LLM_ARCH_FALCON,          "falcon"       },
-    { LLM_ARCH_GROK,            "grok"         },
-    { LLM_ARCH_GPT2,            "gpt2"         },
-    { LLM_ARCH_GPTJ,            "gptj"         },
-    { LLM_ARCH_GPTNEOX,         "gptneox"      },
-    { LLM_ARCH_MPT,             "mpt"          },
-    { LLM_ARCH_BAICHUAN,        "baichuan"     },
-    { LLM_ARCH_STARCODER,       "starcoder"    },
-    { LLM_ARCH_REFACT,          "refact"       },
-    { LLM_ARCH_BERT,            "bert"         },
-    { LLM_ARCH_NOMIC_BERT,      "nomic-bert"   },
-    { LLM_ARCH_JINA_BERT_V2,    "jina-bert-v2" },
-    { LLM_ARCH_BLOOM,           "bloom"        },
-    { LLM_ARCH_STABLELM,        "stablelm"     },
-    { LLM_ARCH_QWEN,            "qwen"         },
-    { LLM_ARCH_QWEN2,           "qwen2"        },
-    { LLM_ARCH_QWEN2MOE,        "qwen2moe"     },
-    { LLM_ARCH_QWEN2VL,         "qwen2vl"      },
-    { LLM_ARCH_PHI2,            "phi2"         },
-    { LLM_ARCH_PHI3,            "phi3"         },
-    { LLM_ARCH_PLAMO,           "plamo"        },
-    { LLM_ARCH_CODESHELL,       "codeshell"    },
-    { LLM_ARCH_ORION,           "orion"        },
-    { LLM_ARCH_INTERNLM2,       "internlm2"    },
-    { LLM_ARCH_MINICPM,         "minicpm"      },
-    { LLM_ARCH_MINICPM3,        "minicpm3"     },
-    { LLM_ARCH_GEMMA,           "gemma"        },
-    { LLM_ARCH_GEMMA2,          "gemma2"       },
-    { LLM_ARCH_STARCODER2,      "starcoder2"   },
-    { LLM_ARCH_MAMBA,           "mamba"        },
-    { LLM_ARCH_XVERSE,          "xverse"       },
-    { LLM_ARCH_COMMAND_R,       "command-r"    },
-    { LLM_ARCH_DBRX,            "dbrx"         },
-    { LLM_ARCH_OLMO,            "olmo"         },
-    { LLM_ARCH_OLMO2,           "olmo2"        },
-    { LLM_ARCH_OLMOE,           "olmoe"        },
-    { LLM_ARCH_OPENELM,         "openelm"      },
-    { LLM_ARCH_ARCTIC,          "arctic"       },
-    { LLM_ARCH_DEEPSEEK,        "deepseek"     },
-    { LLM_ARCH_DEEPSEEK2,       "deepseek2"    },
-    { LLM_ARCH_CHATGLM,         "chatglm"      },
-    { LLM_ARCH_BITNET,          "bitnet"       },
-    { LLM_ARCH_T5,              "t5"           },
-    { LLM_ARCH_T5ENCODER,       "t5encoder"    },
-    { LLM_ARCH_JAIS,            "jais"         },
-    { LLM_ARCH_NEMOTRON,        "nemotron"     },
-    { LLM_ARCH_EXAONE,          "exaone"       },
-    { LLM_ARCH_RWKV6,           "rwkv6"        },
-    { LLM_ARCH_GRANITE,         "granite"      },
-    { LLM_ARCH_GRANITE_MOE,     "granitemoe"   },
-    { LLM_ARCH_CHAMELEON,       "chameleon"    },
-    { LLM_ARCH_OUTETTS_VOC,     "outetts-voc"  },
-    { LLM_ARCH_UNKNOWN,         "(unknown)"    },
+    { LLM_ARCH_LLAMA,            "llama"            },
+    { LLM_ARCH_FALCON,           "falcon"           },
+    { LLM_ARCH_GROK,             "grok"             },
+    { LLM_ARCH_GPT2,             "gpt2"             },
+    { LLM_ARCH_GPTJ,             "gptj"             },
+    { LLM_ARCH_GPTNEOX,          "gptneox"          },
+    { LLM_ARCH_MPT,              "mpt"              },
+    { LLM_ARCH_BAICHUAN,         "baichuan"         },
+    { LLM_ARCH_STARCODER,        "starcoder"        },
+    { LLM_ARCH_REFACT,           "refact"           },
+    { LLM_ARCH_BERT,             "bert"             },
+    { LLM_ARCH_NOMIC_BERT,       "nomic-bert"       },
+    { LLM_ARCH_JINA_BERT_V2,     "jina-bert-v2"     },
+    { LLM_ARCH_BLOOM,            "bloom"            },
+    { LLM_ARCH_STABLELM,         "stablelm"         },
+    { LLM_ARCH_QWEN,             "qwen"             },
+    { LLM_ARCH_QWEN2,            "qwen2"            },
+    { LLM_ARCH_QWEN2MOE,         "qwen2moe"         },
+    { LLM_ARCH_QWEN2VL,          "qwen2vl"          },
+    { LLM_ARCH_PHI2,             "phi2"             },
+    { LLM_ARCH_PHI3,             "phi3"             },
+    { LLM_ARCH_PLAMO,            "plamo"            },
+    { LLM_ARCH_CODESHELL,        "codeshell"        },
+    { LLM_ARCH_ORION,            "orion"            },
+    { LLM_ARCH_INTERNLM2,        "internlm2"        },
+    { LLM_ARCH_MINICPM,          "minicpm"          },
+    { LLM_ARCH_MINICPM3,         "minicpm3"         },
+    { LLM_ARCH_GEMMA,            "gemma"            },
+    { LLM_ARCH_GEMMA2,           "gemma2"           },
+    { LLM_ARCH_STARCODER2,       "starcoder2"       },
+    { LLM_ARCH_MAMBA,            "mamba"            },
+    { LLM_ARCH_XVERSE,           "xverse"           },
+    { LLM_ARCH_COMMAND_R,        "command-r"        },
+    { LLM_ARCH_DBRX,             "dbrx"             },
+    { LLM_ARCH_OLMO,             "olmo"             },
+    { LLM_ARCH_OLMO2,            "olmo2"            },
+    { LLM_ARCH_OLMOE,            "olmoe"            },
+    { LLM_ARCH_OPENELM,          "openelm"          },
+    { LLM_ARCH_ARCTIC,           "arctic"           },
+    { LLM_ARCH_DEEPSEEK,         "deepseek"         },
+    { LLM_ARCH_DEEPSEEK2,        "deepseek2"        },
+    { LLM_ARCH_CHATGLM,          "chatglm"          },
+    { LLM_ARCH_BITNET,           "bitnet"           },
+    { LLM_ARCH_T5,               "t5"               },
+    { LLM_ARCH_T5ENCODER,        "t5encoder"        },
+    { LLM_ARCH_JAIS,             "jais"             },
+    { LLM_ARCH_NEMOTRON,         "nemotron"         },
+    { LLM_ARCH_EXAONE,           "exaone"           },
+    { LLM_ARCH_RWKV6,            "rwkv6"            },
+    { LLM_ARCH_GRANITE,          "granite"          },
+    { LLM_ARCH_GRANITE_MOE,      "granitemoe"       },
+    { LLM_ARCH_CHAMELEON,        "chameleon"        },
+    { LLM_ARCH_WAVTOKENIZER_DEC, "wavtokenizer-dec" },
+    { LLM_ARCH_UNKNOWN,          "(unknown)"        },
 };
 
 enum llm_kv {
@@ -1612,7 +1612,7 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
         },
     },
     {
-        LLM_ARCH_OUTETTS_VOC,
+        LLM_ARCH_WAVTOKENIZER_DEC,
         {
             { LLM_TENSOR_TOKEN_EMBD,        "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM,   "token_embd_norm" },
@@ -3063,7 +3063,7 @@ struct llama_model {
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
-    // outetts vocoder
+    // wavtokenizer decoder
     // TODO: dedup
     struct ggml_tensor * conv_1d = nullptr;
     struct ggml_tensor * conv_1d_b = nullptr;
@@ -6443,7 +6443,7 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                }
             } break;
-        case LLM_ARCH_OUTETTS_VOC:
+        case LLM_ARCH_WAVTOKENIZER_DEC:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
             } break;
@@ -9545,7 +9545,7 @@ static bool llm_load_tensors(
                         layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, 0);
                     }
                 } break;
-            case LLM_ARCH_OUTETTS_VOC:
+            case LLM_ARCH_WAVTOKENIZER_DEC:
                 {
                     model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {512, n_vocab}, 0);
 
@@ -16142,7 +16142,7 @@ struct llm_build_context {
         return gf;
     }
 
-    struct ggml_cgraph * build_t5_encoder() {
+    struct ggml_cgraph * build_t5_enc() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
@@ -16274,7 +16274,7 @@ struct llm_build_context {
         return gf;
     }
 
-    struct ggml_cgraph * build_t5_decoder() {
+    struct ggml_cgraph * build_t5_dec() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
         // mutable variable, needed during the last layer of the computation to skip unused tokens
@@ -17224,7 +17224,7 @@ struct llm_build_context {
         return gf;
     }
 
-    struct ggml_cgraph * build_outetts_voc() {
+    struct ggml_cgraph * build_wavtokenizer_dec() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
         struct ggml_tensor * cur;
@@ -17692,14 +17692,14 @@ static struct ggml_cgraph * llama_build_graph(
         case LLM_ARCH_T5:
             {
                 if (lctx.is_encoding) {
-                    result = llm.build_t5_encoder();
+                    result = llm.build_t5_enc();
                 } else {
-                    result = llm.build_t5_decoder();
+                    result = llm.build_t5_dec();
                 }
             } break;
         case LLM_ARCH_T5ENCODER:
             {
-                result = llm.build_t5_encoder();
+                result = llm.build_t5_enc();
             } break;
         case LLM_ARCH_JAIS:
             {
@@ -17721,9 +17721,9 @@ static struct ggml_cgraph * llama_build_graph(
             {
                 result = llm.build_chameleon();
             } break;
-        case LLM_ARCH_OUTETTS_VOC:
+        case LLM_ARCH_WAVTOKENIZER_DEC:
             {
-                result = llm.build_outetts_voc();
+                result = llm.build_wavtokenizer_dec();
             } break;
         default:
             GGML_ABORT("fatal error");
@@ -20904,7 +20904,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_T5ENCODER:
         case LLM_ARCH_JAIS:
         case LLM_ARCH_RWKV6:
-        case LLM_ARCH_OUTETTS_VOC:
+        case LLM_ARCH_WAVTOKENIZER_DEC:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values
