@@ -631,6 +631,18 @@ class GGUFWriter:
     def add_embedding_length(self, length: int) -> None:
         self.add_uint32(Keys.LLM.EMBEDDING_LENGTH.format(arch=self.arch), length)
 
+    def add_embedding_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.EMBEDDING_LENGTH.format(arch=self.arch), length)
+
+    def add_features_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.FEATURES_LENGTH.format(arch=self.arch), length)
+
+    def add_posnet_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.POSNET_LENGTH.format(arch=self.arch), length)
+
+    def add_convnext_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.CONVNEXT_LENGTH.format(arch=self.arch), length)
+
     def add_block_count(self, length: int) -> None:
         self.add_uint32(Keys.LLM.BLOCK_COUNT.format(arch=self.arch), length)
 

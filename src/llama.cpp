@@ -77,6 +77,7 @@
 #endif
 
 // bump if necessary
+#define LLAMA_MAX_EMBD    8
 #define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
@@ -275,6 +276,9 @@ enum llm_kv {
     LLM_KV_VOCAB_SIZE,
     LLM_KV_CONTEXT_LENGTH,
     LLM_KV_EMBEDDING_LENGTH,
+    LLM_KV_FEATURES_LENGTH,
+    LLM_KV_POSNET_LENGTH,
+    LLM_KV_CONVNEXT_LENGTH,
     LLM_KV_BLOCK_COUNT,
     LLM_KV_LEADING_DENSE_BLOCK_COUNT,
     LLM_KV_FEED_FORWARD_LENGTH,
@@ -392,6 +396,9 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_VOCAB_SIZE,                        "%s.vocab_size"                        },
     { LLM_KV_CONTEXT_LENGTH,                    "%s.context_length"                    },
     { LLM_KV_EMBEDDING_LENGTH,                  "%s.embedding_length"                  },
+    { LLM_KV_FEATURES_LENGTH,                   "%s.features_length"                   },
+    { LLM_KV_POSNET_LENGTH,                     "%s.posnet_length"                     },
+    { LLM_KV_CONVNEXT_LENGTH,                   "%s.convnext_length"                   },
     { LLM_KV_BLOCK_COUNT,                       "%s.block_count"                       },
     { LLM_KV_LEADING_DENSE_BLOCK_COUNT,         "%s.leading_dense_block_count"         },
     { LLM_KV_FEED_FORWARD_LENGTH,               "%s.feed_forward_length"               },
@@ -2544,6 +2551,11 @@ struct llama_hparams {
     uint32_t n_expert_used = 0;
     uint32_t n_vocab_type = 0; // for BERT-style token types
     uint32_t n_rel_attn_bkts = 0;
+
+    // for WavTokenizer
+    uint32_t n_embd_features = 0;
+    uint32_t n_embd_posnet = 0;
+    uint32_t n_embd_convnext = 0;
 
     std::array<uint32_t, LLAMA_MAX_LAYERS> n_head_arr;
     std::array<uint32_t, LLAMA_MAX_LAYERS> n_head_kv_arr;
@@ -5684,6 +5696,12 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_EXPERT_COUNT,      hparams.n_expert,      false);
     ml.get_key(LLM_KV_EXPERT_USED_COUNT, hparams.n_expert_used, false);
 
+    if (model.arch == LLM_ARCH_WAVTOKENIZER_DEC) {
+        ml.get_key(LLM_KV_FEATURES_LENGTH, hparams.n_embd_features);
+        ml.get_key(LLM_KV_POSNET_LENGTH,   hparams.n_embd_posnet);
+        ml.get_key(LLM_KV_CONVNEXT_LENGTH, hparams.n_embd_convnext);
+    }
+
     GGML_ASSERT(hparams.n_expert <= LLAMA_MAX_EXPERTS);
     GGML_ASSERT(hparams.n_expert_used <= hparams.n_expert);
     if (hparams.n_expert > 0) {
@@ -5692,7 +5710,7 @@ static void llm_load_hparams(
         GGML_ASSERT(hparams.n_expert_used == 0);
     }
 
-    // zero-out the per-layer hparams
+    // zero-out the array hparams
     std::fill(hparams.n_head_arr.begin(),    hparams.n_head_arr.end(),    0);
     std::fill(hparams.n_head_kv_arr.begin(), hparams.n_head_kv_arr.end(), 0);
     std::fill(hparams.n_ff_arr.begin(),      hparams.n_ff_arr.end(),      0);
@@ -7577,7 +7595,7 @@ static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w
             } break;
         case GGML_OP_IM2COL:
             {
-                int n_embd = hparams.n_embd;
+                const int n_embd = hparams.n_embd;
                 ggml_tensor * b = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_embd, w->ne[1], 1, 1);
                 op_tensor = ggml_im2col(ctx, w, b, 1, 0, 0, 0, 1, 0, false, GGML_TYPE_F16);
             } break;
@@ -9547,104 +9565,107 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_WAVTOKENIZER_DEC:
                 {
-                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {512, n_vocab}, 0);
+                    const int64_t n_embd_features = hparams.n_embd_features;
+                    const int64_t n_embd_posnet   = hparams.n_embd_posnet;
+                    const int64_t n_embd_convnext = hparams.n_embd_convnext;
 
-                    model.tok_norm   = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {768}, 0);
-                    model.tok_norm_b = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {768}, 0);
+                    model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd_features, n_vocab}, 0);
 
-                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, 512, 768}, 0);
-                    model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {768}, 0);
+                    model.tok_norm   = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd_posnet}, 0);
+                    model.tok_norm_b = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd_posnet}, 0);
 
-                    model.posnet_0_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 0), {768}, 0);
-                    model.posnet_0_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   0), {768}, 0);
+                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, n_embd_features, n_embd_posnet}, 0);
+                    model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {n_embd_posnet}, 0);
 
-                    model.posnet_0_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 0), {3, 768, 768}, 0);
-                    model.posnet_0_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   0), {768}, 0);
+                    model.posnet_0_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 0), {n_embd_posnet}, 0);
+                    model.posnet_0_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   0), {n_embd_posnet}, 0);
 
-                    model.posnet_0_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 0), {768}, 0);
-                    model.posnet_0_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   0), {768}, 0);
+                    model.posnet_0_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 0), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_0_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   0), {n_embd_posnet}, 0);
 
-                    model.posnet_0_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 0), {3, 768, 768}, 0);
-                    model.posnet_0_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   0), {768}, 0);
+                    model.posnet_0_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 0), {n_embd_posnet}, 0);
+                    model.posnet_0_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   0), {n_embd_posnet}, 0);
 
-                    model.posnet_1_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 1), {768}, 0);
-                    model.posnet_1_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   1), {768}, 0);
+                    model.posnet_0_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 0), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_0_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   0), {n_embd_posnet}, 0);
 
-                    model.posnet_1_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 1), {3, 768, 768}, 0);
-                    model.posnet_1_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   1), {768}, 0);
+                    model.posnet_1_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 1), {n_embd_posnet}, 0);
+                    model.posnet_1_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   1), {n_embd_posnet}, 0);
 
-                    model.posnet_1_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 1), {768}, 0);
-                    model.posnet_1_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   1), {768}, 0);
+                    model.posnet_1_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 1), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_1_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   1), {n_embd_posnet}, 0);
 
-                    model.posnet_1_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 1), {3, 768, 768}, 0);
-                    model.posnet_1_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   1), {768}, 0);
+                    model.posnet_1_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 1), {n_embd_posnet}, 0);
+                    model.posnet_1_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   1), {n_embd_posnet}, 0);
 
-                    model.posnet_2_attn_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 2), {768}, 0);
-                    model.posnet_2_attn_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   2), {768}, 0);
+                    model.posnet_1_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 1), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_1_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   1), {n_embd_posnet}, 0);
 
-                    model.posnet_2_attn_q   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "weight", 2), {1, 768, 768}, 0);
-                    model.posnet_2_attn_q_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "bias",   2), {768}, 0);
+                    model.posnet_2_attn_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 2), {n_embd_posnet}, 0);
+                    model.posnet_2_attn_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   2), {n_embd_posnet}, 0);
 
-                    model.posnet_2_attn_k   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "weight", 2), {1, 768, 768}, 0);
-                    model.posnet_2_attn_k_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "bias",   2), {768}, 0);
+                    model.posnet_2_attn_q   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_2_attn_q_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_Q, "bias",   2), {n_embd_posnet}, 0);
 
-                    model.posnet_2_attn_v   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "weight", 2), {1, 768, 768}, 0);
-                    model.posnet_2_attn_v_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "bias",   2), {768}, 0);
+                    model.posnet_2_attn_k   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_2_attn_k_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_K, "bias",   2), {n_embd_posnet}, 0);
 
-                    model.posnet_2_attn_o   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "weight", 2), {1, 768, 768}, 0);
-                    model.posnet_2_attn_o_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "bias",   2), {768}, 0);
+                    model.posnet_2_attn_v   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_2_attn_v_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_V, "bias",   2), {n_embd_posnet}, 0);
 
-                    model.posnet_3_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 3), {768}, 0);
-                    model.posnet_3_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   3), {768}, 0);
+                    model.posnet_2_attn_o   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "weight", 2), {1, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_2_attn_o_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_OUT, "bias",   2), {n_embd_posnet}, 0);
 
-                    model.posnet_3_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 3), {3, 768, 768}, 0);
-                    model.posnet_3_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   3), {768}, 0);
+                    model.posnet_3_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 3), {n_embd_posnet}, 0);
+                    model.posnet_3_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   3), {n_embd_posnet}, 0);
 
-                    model.posnet_3_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 3), {768}, 0);
-                    model.posnet_3_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   3), {768}, 0);
+                    model.posnet_3_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 3), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_3_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   3), {n_embd_posnet}, 0);
 
-                    model.posnet_3_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 3), {3, 768, 768}, 0);
-                    model.posnet_3_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   3), {768}, 0);
+                    model.posnet_3_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 3), {n_embd_posnet}, 0);
+                    model.posnet_3_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   3), {n_embd_posnet}, 0);
 
-                    model.posnet_4_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 4), {768}, 0);
-                    model.posnet_4_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   4), {768}, 0);
+                    model.posnet_3_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 3), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_3_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   3), {n_embd_posnet}, 0);
 
-                    model.posnet_4_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 4), {3, 768, 768}, 0);
-                    model.posnet_4_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   4), {768}, 0);
+                    model.posnet_4_norm1   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "weight", 4), {n_embd_posnet}, 0);
+                    model.posnet_4_norm1_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM1, "bias",   4), {n_embd_posnet}, 0);
 
-                    model.posnet_4_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 4), {768}, 0);
-                    model.posnet_4_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   4), {768}, 0);
+                    model.posnet_4_conv1   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "weight", 4), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_4_conv1_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV1, "bias",   4), {n_embd_posnet}, 0);
 
-                    model.posnet_4_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 4), {3, 768, 768}, 0);
-                    model.posnet_4_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   4), {768}, 0);
+                    model.posnet_4_norm2   = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "weight", 4), {n_embd_posnet}, 0);
+                    model.posnet_4_norm2_b = create_tensor(tn(LLM_TENSOR_POS_NET_NORM2, "bias",   4), {n_embd_posnet}, 0);
 
-                    model.posnet_5_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 5), {768}, 0);
-                    model.posnet_5_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   5), {768}, 0);
+                    model.posnet_4_conv2   = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "weight", 4), {3, n_embd_posnet, n_embd_posnet}, 0);
+                    model.posnet_4_conv2_b = create_tensor(tn(LLM_TENSOR_POS_NET_CONV2, "bias",   4), {n_embd_posnet}, 0);
+
+                    model.posnet_5_norm   = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "weight", 5), {n_embd_posnet}, 0);
+                    model.posnet_5_norm_b = create_tensor(tn(LLM_TENSOR_POS_NET_ATTN_NORM, "bias",   5), {n_embd_posnet}, 0);
 
                     for (int i = 0; i < n_layer; ++i) {
                         auto & layer = model.layers[i];
 
-                        layer.convnext_dw   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "weight", i), {7, 1, 768}, 0);
-                        layer.convnext_dw_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "bias",   i), {768}, 0);
+                        layer.convnext_dw   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "weight", i), {7, 1, n_embd_convnext}, 0);
+                        layer.convnext_dw_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_DW, "bias",   i), {n_embd_convnext}, 0);
 
-                        layer.convnext_norm   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "weight", i), {768}, 0);
-                        layer.convnext_norm_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "bias",   i), {768}, 0);
+                        layer.convnext_norm   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "weight", i), {n_embd_convnext}, 0);
+                        layer.convnext_norm_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_NORM, "bias",   i), {n_embd_convnext}, 0);
 
-                        // TODO: n_ff
-                        layer.convnext_pw1   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "weight", i), {768, 2304}, 0);
-                        layer.convnext_pw1_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "bias",   i), {2304}, 0);
+                        layer.convnext_pw1   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "weight", i), {n_embd_convnext, n_ff}, 0);
+                        layer.convnext_pw1_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW1, "bias",   i), {n_ff}, 0);
 
-                        layer.convnext_pw2   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "weight", i), {2304, 768}, 0);
-                        layer.convnext_pw2_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "bias",   i), {768}, 0);
+                        layer.convnext_pw2   = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "weight", i), {n_ff, n_embd_convnext}, 0);
+                        layer.convnext_pw2_b = create_tensor(tn(LLM_TENSOR_CONV_NEXT_PW2, "bias",   i), {n_embd_convnext}, 0);
 
-                        layer.convnext_gamma = create_tensor(tn(LLM_TENSOR_CONV_NEXT_GAMMA, "weight", i), {768}, 0);
+                        layer.convnext_gamma = create_tensor(tn(LLM_TENSOR_CONV_NEXT_GAMMA, "weight", i), {n_embd_convnext}, 0);
                     }
 
                     // output
-                    model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {768}, 0);
-                    model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {768}, 0);
+                    model.output_norm   = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd_convnext}, 0);
+                    model.output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd_convnext}, 0);
 
-                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {768, n_embd}, 0);
+                    model.output   = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd_convnext, n_embd}, 0);
                     model.output_b = create_tensor(tn(LLM_TENSOR_OUTPUT, "bias"),   {n_embd}, 0);
                 } break;
             default:
@@ -17317,7 +17338,7 @@ struct llm_build_context {
 
             struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
 
-            kq = ggml_soft_max_ext(ctx0, kq, nullptr, 1.0f/sqrtf(float(768)), 0.0f);
+            kq = ggml_soft_max_ext(ctx0, kq, nullptr, 1.0f/sqrtf(float(model.hparams.n_embd_posnet)), 0.0f);
 
             cur = ggml_mul_mat(ctx0, kq, v);
 

@@ -147,6 +147,10 @@ config = {
         "WavTokenizerDec"
     ],
     "hidden_size": 1282,
+    "n_embd_features": 512,
+    "n_embd_posnet": 768,
+    "n_embd_convnext": 768,
+    "n_ff": 2304,
     "vocab_size": 4096,
     "n_head": 1,
     "layer_norm_epsilon": 1e-6,

@@ -2055,7 +2055,11 @@ class WavTokenizerDecModel(Model):
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        self.gguf_writer.add_vocab_size(self.hparams["vocab_size"])
+        self.gguf_writer.add_vocab_size         (self.hparams["vocab_size"])
+        self.gguf_writer.add_features_length    (self.hparams["n_embd_features"])
+        self.gguf_writer.add_posnet_length      (self.hparams["n_embd_posnet"])
+        self.gguf_writer.add_convnext_length    (self.hparams["n_embd_convnext"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_ff"])
 
 
 @Model.register("Qwen2MoeForCausalLM")
