@@ -1867,6 +1867,10 @@ int32_t llama_detokenize_impl(
                          int32_t   text_len_max,
                             bool   remove_special,
                             bool   unparse_special) {
+    if (vocab.type == LLAMA_VOCAB_TYPE_NONE) {
+        return 0;
+    }
+
     GGML_ASSERT(vocab.tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
 
     int32_t avail = text_len_max;
