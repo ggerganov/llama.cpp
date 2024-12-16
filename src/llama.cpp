@@ -77,7 +77,6 @@
 #endif
 
 // bump if necessary
-#define LLAMA_MAX_EMBD    8
 #define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
@@ -3074,8 +3073,8 @@ struct llama_model {
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
-    struct ggml_tensor * conv_1d = nullptr;
-    struct ggml_tensor * conv_1d_b = nullptr;
+    struct ggml_tensor * conv1d = nullptr;
+    struct ggml_tensor * conv1d_b = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -9498,8 +9497,8 @@ static bool llm_load_tensors(
                 {
                     model.tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {hparams.n_embd_features, n_vocab}, 0);
 
-                    model.conv_1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, hparams.n_embd_features, hparams.posnet.n_embd}, 0);
-                    model.conv_1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {1, hparams.posnet.n_embd}, 0);
+                    model.conv1d   = create_tensor(tn(LLM_TENSOR_CONV1D, "weight"), {7, hparams.n_embd_features, hparams.posnet.n_embd}, 0);
+                    model.conv1d_b = create_tensor(tn(LLM_TENSOR_CONV1D, "bias"),   {1, hparams.posnet.n_embd}, 0);
 
                     // posnet
                     {
@@ -17183,8 +17182,8 @@ struct llm_build_context {
 
         cur = ggml_cont(ctx0, ggml_transpose(ctx0, inpL));
 
-        cur = ggml_conv_1d_ph(ctx0, model.conv_1d, cur, 1, 1);
-        cur = ggml_add(ctx0, cur, model.conv_1d_b);
+        cur = ggml_conv_1d_ph(ctx0, model.conv1d, cur, 1, 1);
+        cur = ggml_add(ctx0, cur, model.conv1d_b);
 
         // posnet
         for (uint32_t il = 0; il < hparams.posnet.n_layer; ++il) {
