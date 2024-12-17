@@ -795,6 +795,8 @@ See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-r
   }'
   ```
 
+When `--pooling none` is used, the server will output an array of embeddings - one for each token in the input.
+
 ### GET `/slots`: Returns the current slots processing state
 
 > [!WARNING]
