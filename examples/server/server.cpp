@@ -3649,10 +3649,15 @@ int main(int argc, char ** argv) {
             oaicompat = true;
             prompt = body.at("input");
         } else if (body.count("content") != 0) {
-            // with "content", we only support single prompt
-            prompt = std::vector<std::string>{body.at("content")};
+            prompt = body.at("content");
         } else {
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+
+        // with "content", we only support single prompt
+        if (!oaicompat && prompt.type() != json::value_t::string) {
+            res_error(res, format_error_response("\"content\" must be a string", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
@@ -3663,6 +3668,11 @@ int main(int argc, char ** argv) {
             std::vector<server_task> tasks;
             std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, /* add_special */ false, true);
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
+                if (tokenized_prompts[i].size() == 0) {
+                    res_error(res, format_error_response("input cannot be an empty string", ERROR_TYPE_INVALID_REQUEST));
+                    return;
+                }
+
                 server_task task   = server_task(SERVER_TASK_TYPE_EMBEDDING);
                 task.id            = ctx_server.queue_tasks.get_new_id();
                 task.index         = i;

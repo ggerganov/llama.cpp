@@ -97,3 +97,39 @@ def test_same_prompt_give_same_result():
         vi = res.body['data'][i]['embedding']
         for x, y in zip(v0, vi):
             assert abs(x - y) < EPSILON
+
+
+@pytest.mark.parametrize("text", [
+    None,
+    True,
+    "",
+    42,
+    4.2,
+    {},
+    [],
+    [""],
+    ["This is a test", ""],
+])
+def test_embedding_bad_input(text):
+    global server
+    server.start()
+    res = server.make_request("POST", "/embeddings", data={"input": text})
+    assert res.status_code >= 400
+
+
+@pytest.mark.parametrize("text", [
+    None,
+    True,
+    "",
+    42,
+    4.2,
+    {},
+    [],
+    [""],
+    ["This is a test"],
+])
+def test_embedding_content_bad_input(text):
+    global server
+    server.start()
+    res = server.make_request("POST", "/embeddings", data={"content": text})
+    assert res.status_code >= 400
