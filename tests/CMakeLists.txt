@@ -129,6 +129,7 @@ llama_target_and_test(test-arg-parser.cpp)
 llama_target_and_test(test-chat-template.cpp)
 
 # llama_target_and_test(test-opt.cpp) # SLOW
+llama_target_and_test(test-gguf.cpp)
 llama_target_and_test(test-backend-ops.cpp)
 
 llama_target_and_test(test-model-load-cancel.cpp  LABEL "model")
