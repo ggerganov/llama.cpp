@@ -2968,12 +2968,8 @@ static void ggml_compute_forward_dup_f16(
                         id += ne00 * (ne01 - ir1);
                     }
                 }
-            } else if (ggml_get_type_traits_cpu(dst->type)->from_float || ggml_get_type_traits(dst->type)->from_float_ref) {
-                ggml_from_float_t quantize_row_q = ggml_get_type_traits_cpu(dst->type)->from_float;
-                if (!quantize_row_q) {
-                    quantize_row_q = ggml_get_type_traits(dst->type)->from_float_ref;
-                }
-
+            } else if (ggml_get_type_traits_cpu(dst->type)->from_float) {
+                ggml_from_float_t const quantize_row_q = ggml_get_type_traits_cpu(dst->type)->from_float;
                 float * src0_f32 = (float *) params->wdata + (ne00 + CACHE_LINE_SIZE_F32) * ith;
 
                 size_t id = 0;
@@ -3569,11 +3565,8 @@ static void ggml_compute_forward_dup_f32(
                         id += rs * (ne01 - ir1);
                     }
                 }
-            } else if (ggml_get_type_traits_cpu(dst->type)->from_float || ggml_get_type_traits(dst->type)->from_float_ref) {
-                ggml_from_float_t quantize_row_q = ggml_get_type_traits_cpu(dst->type)->from_float;
-                if (!quantize_row_q) {
-                    quantize_row_q = ggml_get_type_traits(dst->type)->from_float_ref;
-                }
+            } else if (ggml_get_type_traits_cpu(dst->type)->from_float) {
+                ggml_from_float_t const quantize_row_q = ggml_get_type_traits_cpu(dst->type)->from_float;
 
                 size_t id = 0;
                 size_t rs = nb0 * (ne00 / ggml_blck_size(dst->type));
