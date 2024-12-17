@@ -79,8 +79,9 @@ enum error_type {
 };
 
 struct slot_params {
-    bool stream       = true;
-    bool cache_prompt = true; // remember the prompt to avoid reprocessing all prompt
+    bool stream        = true;
+    bool cache_prompt  = true; // remember the prompt to avoid reprocessing all prompt
+    bool return_tokens = false;
 
     int32_t n_keep    =  0; // number of tokens to keep from initial prompt
     int32_t n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
@@ -199,6 +200,7 @@ struct server_task {
 
         params.stream           = json_value(data, "stream",             false);
         params.cache_prompt     = json_value(data, "cache_prompt",       true);
+        params.return_tokens    = json_value(data, "return_tokens",      false);
         params.n_predict        = json_value(data, "n_predict",          json_value(data, "max_tokens", defaults.n_predict));
         params.n_indent         = json_value(data, "n_indent",           defaults.n_indent);
         params.n_keep           = json_value(data, "n_keep",             defaults.n_keep);
@@ -543,7 +545,7 @@ struct server_task_result_cmpl_final : server_task_result {
         json choices = json::array({json{
             {"finish_reason", finish_reason},
             {"index", 0},
-            {"message", json{
+            {"message", json {
                 {"content", content},
                 {"tokens",  tokens},
                 {"role",    "assistant"}
@@ -998,7 +1000,6 @@ struct server_slot {
         n_prompt_tokens    = 0;
         last_nl_pos        = 0;
         generated_text     = "";
-        generated_tokens   = {};
         has_new_line       = false;
         truncated          = false;
         stop               = STOP_TYPE_NONE;
@@ -1008,6 +1009,7 @@ struct server_slot {
         n_sent_token_probs = 0;
         task_type          = SERVER_TASK_TYPE_COMPLETION;
 
+        generated_tokens.clear();
         generated_token_probs.clear();
     }
 
@@ -1748,9 +1750,10 @@ struct server_context {
         const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special);
         slot.sampled = result.tok;
 
-        // search stop word and delete it
         slot.generated_text += token_str;
-        slot.generated_tokens.push_back(result.tok);
+        if (slot.params.return_tokens) {
+            slot.generated_tokens.push_back(result.tok);
+        }
         slot.has_next_token = true;
 
         // check if there is incomplete UTF-8 character at the end
@@ -1775,6 +1778,7 @@ struct server_context {
             break;
         }
 
+        // search stop word and delete it
         if (!incomplete) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
