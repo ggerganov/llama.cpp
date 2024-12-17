@@ -22651,15 +22651,15 @@ int32_t llama_chat_apply_template(
     std::string curr_tmpl(tmpl == nullptr ? "" : tmpl);
     if (tmpl == nullptr) {
         GGML_ASSERT(model != nullptr);
-        // load template from model
-        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
-        std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        if (res < 0) {
+
+        // load template from model, if available
+        const auto & it = model->gguf_kv.find("tokenizer.chat_template");
+        if (it != model->gguf_kv.end() && it->second.size() > 0) {
+            curr_tmpl = it->second;
+        }
+        else {
             // worst case: there is no information about template, we will use chatml by default
-            curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
-        } else {
-            curr_tmpl = std::string(model_template.data(), model_template.size());
+            curr_tmpl = "chatml";  // see llama_chat_apply_template_internal
         }
     }
 
