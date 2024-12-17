@@ -16,7 +16,7 @@ def test_embedding_single():
     global server
     server.pooling = 'last'
     server.start()
-    res = server.make_request("POST", "/embeddings", data={
+    res = server.make_request("POST", "/v1/embeddings", data={
         "input": "I believe the meaning of life is",
     })
     assert res.status_code == 200
@@ -32,7 +32,7 @@ def test_embedding_multiple():
     global server
     server.pooling = 'last'
     server.start()
-    res = server.make_request("POST", "/embeddings", data={
+    res = server.make_request("POST", "/v1/embeddings", data={
         "input": [
             "I believe the meaning of life is",
             "Write a joke about AI from a very long prompt which will not be truncated",
@@ -84,16 +84,26 @@ def test_embedding_pooling_none():
         "input": "hello hello hello",
     })
     assert res.status_code == 200
-    assert len(res.body['data']) == 1
-    assert 'embedding' in res.body['data'][0]
-    assert len(res.body['data'][0]['embedding']) == 3
+    assert 'embedding' in res.body[0]
+    assert len(res.body[0]['embedding']) == 3
+
+
+def test_embedding_pooling_none_oai():
+    global server
+    server.pooling = 'none'
+    server.start()
+    res = server.make_request("POST", "/v1/embeddings", data={
+        "input": "hello hello hello",
+    })
+    # /v1/embeddings does not support pooling type 'none'
+    assert res.status_code == 400
 
 
 def test_embedding_openai_library_single():
     global server
     server.pooling = 'last'
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.embeddings.create(model="text-embedding-3-small", input="I believe the meaning of life is")
     assert len(res.data) == 1
     assert len(res.data[0].embedding) > 1
@@ -103,7 +113,7 @@ def test_embedding_openai_library_multiple():
     global server
     server.pooling = 'last'
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.embeddings.create(model="text-embedding-3-small", input=[
         "I believe the meaning of life is",
         "Write a joke about AI from a very long prompt which will not be truncated",
@@ -119,7 +129,7 @@ def test_embedding_error_prompt_too_long():
     global server
     server.pooling = 'last'
     server.start()
-    res = server.make_request("POST", "/embeddings", data={
+    res = server.make_request("POST", "/v1/embeddings", data={
         "input": "This is a test " * 512,
     })
     assert res.status_code != 200
@@ -129,7 +139,7 @@ def test_embedding_error_prompt_too_long():
 def test_same_prompt_give_same_result():
     server.pooling = 'last'
     server.start()
-    res = server.make_request("POST", "/embeddings", data={
+    res = server.make_request("POST", "/v1/embeddings", data={
         "input": [
             "I believe the meaning of life is",
             "I believe the meaning of life is",

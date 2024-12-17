@@ -731,23 +731,29 @@ struct server_task_result_embd : server_task_result {
 
     int32_t n_tokens;
 
+    // OAI-compat fields
+    bool oaicompat = false;
+
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
-        if (embedding.size() == 1) {
-            // to be OAI compatible
-            return json {
-                {"index",     index},
-                {"embedding", embedding[0]},
-            };
-        }
+        return oaicompat ? to_json_oaicompat() : to_json_non_oaicompat();
+    }
 
+    json to_json_non_oaicompat() {
         return json {
             {"index",            index},
             {"embedding",        embedding},
             {"tokens_evaluated", n_tokens},
+        };
+    }
+
+    json to_json_oaicompat() {
+        return json {
+            {"index",     index},
+            {"embedding", embedding[0]},
         };
     }
 };
@@ -2027,9 +2033,10 @@ struct server_context {
 
     void send_embedding(const server_slot & slot, const llama_batch & batch) {
         auto res = std::make_unique<server_task_result_embd>();
-        res->id    = slot.id_task;
-        res->index = slot.index;
-        res->n_tokens = slot.n_prompt_tokens;
+        res->id        = slot.id_task;
+        res->index     = slot.index;
+        res->n_tokens  = slot.n_prompt_tokens;
+        res->oaicompat = slot.params.oaicompat;
 
         const int n_embd = llama_n_embd(model);
 
@@ -3678,14 +3685,17 @@ int main(int argc, char ** argv) {
         res_ok(res, data);
     };
 
-    const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings_impl = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res, bool oaicompat) {
         const json body = json::parse(req.body);
-        bool oaicompat = false;
+
+        if (oaicompat && llama_pooling_type(ctx_server.ctx) == LLAMA_POOLING_TYPE_NONE) {
+            res_error(res, format_error_response("Pooling type 'none' is not OAI compatible. Please use a different pooling type", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
 
         // for the shape of input/content, see tokenize_input_prompts()
         json prompt;
-        if (body.contains("input")) {
-            oaicompat = true;
+        if (body.count("input") != 0) {
             prompt = body.at("input");
         } else if (body.contains("content")) {
             oaicompat = false;
@@ -3710,10 +3720,15 @@ int main(int argc, char ** argv) {
         {
             std::vector<server_task> tasks;
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
-                server_task task   = server_task(SERVER_TASK_TYPE_EMBEDDING);
+                server_task task = server_task(SERVER_TASK_TYPE_EMBEDDING);
+
                 task.id            = ctx_server.queue_tasks.get_new_id();
                 task.index         = i;
                 task.prompt_tokens = std::move(tokenized_prompts[i]);
+
+                // OAI-compat
+                task.params.oaicompat = oaicompat;;
+
                 tasks.push_back(task);
             }
 
@@ -3741,10 +3756,16 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = oaicompat
-            ? format_embeddings_response_oaicompat(body, responses)
-            : responses.size() == 1 ? responses[0] : json(responses);
+        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses) : json(responses);
         res_ok(res, root);
+    };
+
+    const auto handle_embeddings = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
+        handle_embeddings_impl(req, res, false);
+    };
+
+    const auto handle_embeddings_oai = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
+        handle_embeddings_impl(req, res, true);
     };
 
     const auto handle_rerank = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
@@ -3920,7 +3941,7 @@ int main(int argc, char ** argv) {
     svr->Post("/infill",              handle_infill);
     svr->Post("/embedding",           handle_embeddings); // legacy
     svr->Post("/embeddings",          handle_embeddings);
-    svr->Post("/v1/embeddings",       handle_embeddings);
+    svr->Post("/v1/embeddings",       handle_embeddings_oai);
     svr->Post("/rerank",              handle_rerank);
     svr->Post("/reranking",           handle_rerank);
     svr->Post("/v1/rerank",           handle_rerank);
