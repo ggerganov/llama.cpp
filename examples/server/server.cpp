@@ -3664,12 +3664,20 @@ int main(int argc, char ** argv) {
             return;
         }
 
+        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
+        for (const auto & tokens : tokenized_prompts) {
+            // this check is necessary for models that do not add BOS token to the input
+            if (tokens.empty()) {
+                res_error(res, format_error_response("Input content cannot be empty", ERROR_TYPE_INVALID_REQUEST));
+                return;
+            }
+        }
+
         // create and queue the task
         json responses = json::array();
         bool error = false;
         {
             std::vector<server_task> tasks;
-            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, /* add_special */ false, true);
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
                 server_task task   = server_task(SERVER_TASK_TYPE_EMBEDDING);
                 task.id            = ctx_server.queue_tasks.get_new_id();
