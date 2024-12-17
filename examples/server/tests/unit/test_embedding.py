@@ -87,6 +87,10 @@ def test_embedding_pooling_none():
     assert 'embedding' in res.body[0]
     assert len(res.body[0]['embedding']) == 3
 
+    # make sure embedding vector is not normalized
+    for x in res.body[0]['embedding']:
+        assert abs(sum([x ** 2 for x in x]) - 1) > EPSILON
+
 
 def test_embedding_pooling_none_oai():
     global server
@@ -95,6 +99,7 @@ def test_embedding_pooling_none_oai():
     res = server.make_request("POST", "/v1/embeddings", data={
         "input": "hello hello hello",
     })
+
     # /v1/embeddings does not support pooling type 'none'
     assert res.status_code == 400
 

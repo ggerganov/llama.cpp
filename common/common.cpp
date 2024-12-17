@@ -1780,7 +1780,9 @@ void common_embd_normalize(const float * inp, float * out, int n, int embd_norm)
             break;
         case 0: // max absolute
             for (int i = 0; i < n; i++) {
-                if (sum < std::abs(inp[i])) sum = std::abs(inp[i]);
+                if (sum < std::abs(inp[i])) {
+                    sum = std::abs(inp[i]);
+                }
             }
             sum /= 32760.0; // make an int16 range
             break;

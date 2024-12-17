@@ -2059,8 +2059,14 @@ struct server_context {
                 continue;
             }
 
-            common_embd_normalize(embd, embd_res.data(), n_embd);
-            res->embedding.push_back(embd_res);
+            // normalize only when there is pooling
+            // TODO: configurable
+            if (llama_pooling_type(slot.ctx) != LLAMA_POOLING_TYPE_NONE) {
+                common_embd_normalize(embd, embd_res.data(), n_embd, 2);
+                res->embedding.push_back(embd_res);
+            } else {
+                res->embedding.push_back({ embd, embd + n_embd });
+            }
         }
 
         SLT_DBG(slot, "%s", "sending embeddings\n");
