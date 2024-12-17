@@ -131,8 +131,8 @@ def test_same_prompt_give_same_result():
 @pytest.mark.parametrize(
     "content,n_tokens",
     [
-        ("I believe the meaning of life is", 7),
-        ("This is a test", 4),
+        ("I believe the meaning of life is", 9),
+        ("This is a test", 6),
     ]
 )
 def test_embedding_usage_single(content, n_tokens):
@@ -155,4 +155,4 @@ def test_embedding_usage_multiple():
     })
     assert res.status_code == 200
     assert res.body['usage']['prompt_tokens'] == res.body['usage']['total_tokens']
-    assert res.body['usage']['prompt_tokens'] == 2 * 7
+    assert res.body['usage']['prompt_tokens'] == 2 * 9
