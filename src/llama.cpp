@@ -22652,7 +22652,7 @@ int32_t llama_chat_apply_template(
     if (tmpl == nullptr) {
         GGML_ASSERT(model != nullptr);
         // load template from model
-        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
+        std::vector<char> model_template(16384, 0); // longest known template is about 12792 bytes
         std::string template_key = "tokenizer.chat_template";
         int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
         if (res < 0) {
