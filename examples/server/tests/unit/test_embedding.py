@@ -74,6 +74,18 @@ def test_embedding_mixed_input(content, is_multi_prompt: bool):
         assert len(res.body['embedding']) > 1
 
 
+def test_embedding_pooling_none():
+    server = ServerPreset.bert_bge_small(pooling = 'none')
+    server.start()
+    res = server.make_request("POST", "/embeddings", data={
+        "input": "hello hello hello",
+    })
+    assert res.status_code == 200
+    assert len(res.body['data']) == 1
+    assert 'embedding' in res.body['data'][0]
+    assert len(res.body['data'][0]['embedding']) == 3
+
+
 def test_embedding_openai_library_single():
     global server
     server.start()

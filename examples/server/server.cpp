@@ -727,7 +727,7 @@ struct server_task_result_cmpl_partial : server_task_result {
 
 struct server_task_result_embd : server_task_result {
     int index = 0;
-    std::vector<float> embedding;
+    std::vector<std::vector<float>> embedding;
 
     int32_t n_tokens;
 
@@ -736,6 +736,14 @@ struct server_task_result_embd : server_task_result {
     }
 
     virtual json to_json() override {
+        if (embedding.size() == 1){
+            // to be OAI compatible
+            return json {
+                {"index",     index},
+                {"embedding", embedding[0]},
+            };
+        }
+
         return json {
             {"index",            index},
             {"embedding",        embedding},
@@ -2040,12 +2048,12 @@ struct server_context {
             if (embd == NULL) {
                 SLT_ERR(slot, "failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
 
-                res->embedding = std::vector<float>(n_embd, 0.0f);
+                res->embedding.push_back(std::vector<float>(n_embd, 0.0f));
                 continue;
             }
 
             common_embd_normalize(embd, embd_res.data(), n_embd);
-            res->embedding = embd_res;
+            res->embedding.push_back(embd_res);
         }
 
         SLT_DBG(slot, "%s", "sending embeddings\n");
@@ -2659,7 +2667,10 @@ struct server_context {
 
                     // add prompt tokens for processing in the current batch
                     while (slot.n_past < slot.n_prompt_tokens && batch.n_tokens < n_batch) {
-                        common_batch_add(batch, prompt_tokens[slot.n_past], slot.n_past, { slot.id }, false);
+                        // without pooling, we want to output the embeddings for all the tokens in the batch
+                        const bool need_embd = slot.task_type == SERVER_TASK_TYPE_EMBEDDING && llama_pooling_type(slot.ctx) == LLAMA_POOLING_TYPE_NONE;
+
+                        common_batch_add(batch, prompt_tokens[slot.n_past], slot.n_past, { slot.id }, need_embd);
 
                         if (slot.params.cache_prompt) {
                             slot.cache_tokens.push_back(prompt_tokens[slot.n_past]);

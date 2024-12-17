@@ -65,6 +65,7 @@ class ServerProcess:
     server_reranking: bool | None = False
     server_metrics: bool | None = False
     server_slots: bool | None = False
+    pooling: str | None = None
     draft: int | None = None
     api_key: str | None = None
     response_format: str | None = None
@@ -132,6 +133,8 @@ class ServerProcess:
             server_args.append("--metrics")
         if self.server_slots:
             server_args.append("--slots")
+        if self.pooling:
+            server_args.extend(["--pooling", self.pooling])
         if self.model_alias:
             server_args.extend(["--alias", self.model_alias])
         if self.n_ctx:
@@ -272,7 +275,7 @@ class ServerPreset:
         return server
 
     @staticmethod
-    def bert_bge_small() -> ServerProcess:
+    def bert_bge_small(pooling = 'last') -> ServerProcess:
         server = ServerProcess()
         server.model_hf_repo = "ggml-org/models"
         server.model_hf_file = "bert-bge-small/ggml-model-f16.gguf"
@@ -283,6 +286,7 @@ class ServerPreset:
         server.n_slots = 2
         server.seed = 42
         server.server_embeddings = True
+        server.pooling = pooling
         return server
 
     @staticmethod
