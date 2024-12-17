@@ -525,9 +525,6 @@ class Model:
             else:
                 token: str = reverse_vocab[i]
                 if token in added_vocab:
-                    # We need to manually encode and decode the added tokens in case special characters
-                    # used for `\n` / `\t` have been manually added in the added tokens
-                    token = tokenizer.decode(tokenizer.encode(token))
                     if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
                         toktypes.append(gguf.TokenType.CONTROL)
                     else:
@@ -574,9 +571,6 @@ class Model:
         if chkhsh == "8aeee3860c56296a157a1fe2fad249ec40aa59b1bb5709f4ade11c4e6fe652ed":
             # ref: https://huggingface.co/tiiuae/falcon-7b
             res = "falcon"
-        if chkhsh == "9d032fcbd5501f4a38150912590928bfb36091efb5df11b8e2124b0390e3fb1e":
-            # ref: https://huggingface.co/tiiuae/Falcon3-7B-Base
-            res = "falcon3"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
             res = "bert-bge"
