@@ -414,7 +414,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 [^1]: [examples/perplexity/README.md](examples/perplexity/README.md)
 [^2]: [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity)
 
-## [`llama-bench`](example/bench)
+## [`llama-bench`](examples/llama-bench)
 
 #### Benchmark the performance of the inference for various parameters.
 
