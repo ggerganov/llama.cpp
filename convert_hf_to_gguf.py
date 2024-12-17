@@ -2069,6 +2069,8 @@ class WavTokenizerDecModel(Model):
         self.gguf_writer.add_convnext_embedding_length(self.hparams["convnext"]["n_embd"])
         self.gguf_writer.add_convnext_block_count     (self.hparams["convnext"]["n_layer"])
 
+        self.gguf_writer.add_causal_attention(False)
+
 
 @Model.register("Qwen2MoeForCausalLM")
 class Qwen2MoeModel(Model):
