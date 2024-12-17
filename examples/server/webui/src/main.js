@@ -5,12 +5,15 @@ import TextLineStream from 'textlinestream';
 
 // math formula rendering
 import 'katex/dist/katex.min.css';
-import markdownItKatexGpt, { renderLatexHTML } from './katex-gpt';
+import markdownItKatexGpt from './katex-gpt';
 import markdownItKatexNormal from '@vscode/markdown-it-katex';
 
 // code highlighting
 import hljs from './highlight-config';
 import daisyuiThemes from 'daisyui/src/theming/themes';
+
+// ponyfill for missing ReadableStream asyncIterator on Safari
+import { asyncIterator } from "@sec-ant/readable-stream/ponyfill/asyncIterator";
 
 const isDev = import.meta.env.MODE === 'development';
 
@@ -283,7 +286,7 @@ async function* sendSSEPostRequest(url, fetchOptions) {
   const lines = res.body
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new TextLineStream());
-  for await (const line of lines) {
+  for await (const line of asyncIterator(lines)) {
     if (isDev) console.log({line});
     if (line.startsWith('data:') && !line.endsWith('[DONE]')) {
       const data = JSON.parse(line.slice(5));
