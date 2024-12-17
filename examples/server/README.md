@@ -763,6 +763,8 @@ curl http://localhost:8080/v1/chat/completions \
 
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
+This endpoint requires that the model uses a pooling different than type `none`.
+
 *Options:*
 
 See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
@@ -795,7 +797,45 @@ See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-r
   }'
   ```
 
-When `--pooling none` is used, the server will output an array of embeddings - one for each token in the input.
+### POST `/embeddings`: non-OpenAI-compatible embeddings API
+
+This endpoint supports `--pooling none`. When used, the responses will contain the embeddings for all input tokens.
+Note that the response format is slightly different than `/v1/embeddings` - it does not have the `"data"` sub-tree and the
+embeddings are always returned as vector of vectors.
+
+*Options:*
+
+Same as the `/v1/embeddings` endpoint.
+
+*Examples:*
+
+Same as the `/v1/embeddings` endpoint.
+
+**Response format**
+
+```json
+[
+  {
+    "index": 0,
+    "embedding": [
+      [ ... embeddings for token 0   ... ],
+      [ ... embeddings for token 1   ... ],
+      [ ... ]
+      [ ... embeddings for token N-1 ... ],
+    ]
+  },
+  ...
+  {
+    "index": P,
+    "embedding": [
+      [ ... embeddings for token 0   ... ],
+      [ ... embeddings for token 1   ... ],
+      [ ... ]
+      [ ... embeddings for token N-1 ... ],
+    ]
+  }
+]
+```
 
 ### GET `/slots`: Returns the current slots processing state
 
