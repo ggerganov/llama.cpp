@@ -14,6 +14,7 @@ def create_server():
 
 def test_embedding_single():
     global server
+    server.pooling = 'last'
     server.start()
     res = server.make_request("POST", "/embeddings", data={
         "input": "I believe the meaning of life is",
@@ -29,6 +30,7 @@ def test_embedding_single():
 
 def test_embedding_multiple():
     global server
+    server.pooling = 'last'
     server.start()
     res = server.make_request("POST", "/embeddings", data={
         "input": [
@@ -75,7 +77,8 @@ def test_embedding_mixed_input(content, is_multi_prompt: bool):
 
 
 def test_embedding_pooling_none():
-    server = ServerPreset.bert_bge_small(pooling = 'none')
+    global server
+    server.pooling = 'none'
     server.start()
     res = server.make_request("POST", "/embeddings", data={
         "input": "hello hello hello",
@@ -88,6 +91,7 @@ def test_embedding_pooling_none():
 
 def test_embedding_openai_library_single():
     global server
+    server.pooling = 'last'
     server.start()
     client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
     res = client.embeddings.create(model="text-embedding-3-small", input="I believe the meaning of life is")
@@ -97,6 +101,7 @@ def test_embedding_openai_library_single():
 
 def test_embedding_openai_library_multiple():
     global server
+    server.pooling = 'last'
     server.start()
     client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
     res = client.embeddings.create(model="text-embedding-3-small", input=[
@@ -112,6 +117,7 @@ def test_embedding_openai_library_multiple():
 
 def test_embedding_error_prompt_too_long():
     global server
+    server.pooling = 'last'
     server.start()
     res = server.make_request("POST", "/embeddings", data={
         "input": "This is a test " * 512,
@@ -121,6 +127,7 @@ def test_embedding_error_prompt_too_long():
 
 
 def test_same_prompt_give_same_result():
+    server.pooling = 'last'
     server.start()
     res = server.make_request("POST", "/embeddings", data={
         "input": [
