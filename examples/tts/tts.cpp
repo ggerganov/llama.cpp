@@ -63,7 +63,47 @@ static void print_usage(int, char ** argv) {
     LOG("\n");
 }
 
-static void fill_hann_window(int length, bool periodic, double * output) {
+struct wav_header {
+    char riff[4] = {'R', 'I', 'F', 'F'};
+    uint32_t chunk_size;
+    char wave[4] = {'W', 'A', 'V', 'E'};
+    char fmt[4] = {'f', 'm', 't', ' '};
+    uint32_t fmt_chunk_size = 16;
+    uint16_t audio_format = 1; // PCM
+    uint16_t num_channels = 1; // Mono
+    uint32_t sample_rate;
+    uint32_t byte_rate;
+    uint16_t block_align;
+    uint16_t bits_per_sample = 16;
+    char data[4] = {'d', 'a', 't', 'a'};
+    uint32_t data_size;
+};
+
+static void save_wav16(const std::string & fname, const std::vector<float> & data, int sample_rate) {
+    std::ofstream file(fname, std::ios::binary);
+    if (!file) {
+        LOG_ERR("%s: Failed to open file '%s' for writing", __func__, fname.c_str());
+        return;
+    }
+
+    wav_header header;
+    header.sample_rate = sample_rate;
+    header.byte_rate = header.sample_rate * header.num_channels * (header.bits_per_sample / 8);
+    header.block_align = header.num_channels * (header.bits_per_sample / 8);
+    header.data_size = data.size() * (header.bits_per_sample / 8);
+    header.chunk_size = 36 + header.data_size;
+
+    file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+    for (const auto & sample : data) {
+        int16_t pcm_sample = static_cast<int16_t>(std::clamp(sample * 32767.0, -32768.0, 32767.0));
+        file.write(reinterpret_cast<const char*>(&pcm_sample), sizeof(pcm_sample));
+    }
+
+    file.close();
+}
+
+static void fill_hann_window(int length, bool periodic, float * output) {
     int offset = -1;
     if (periodic) {
         offset = 0;
@@ -74,31 +114,31 @@ static void fill_hann_window(int length, bool periodic, double * output) {
 }
 
 // very poor-man fft
-static void twiddle(double * real, double * imag, int k, int N) {
-    double angle = 2 * M_PI * k / N;
+static void twiddle(float * real, float * imag, int k, int N) {
+    float angle = 2 * M_PI * k / N;
     *real = cos(angle);
     *imag = sin(angle);
 }
 
-static void irfft(int n, const double * inp_cplx, double * out_real) {
+static void irfft(int n, const float * inp_cplx, float * out_real) {
     int N = n / 2 + 1;
 
-    std::vector<double> real_input(N);
-    std::vector<double> imag_input(N);
+    std::vector<float> real_input(N);
+    std::vector<float> imag_input(N);
     for (int i = 0; i < N; ++i) {
         real_input[i] = inp_cplx[2 * i];
         imag_input[i] = inp_cplx[2 * i + 1];
     }
 
-    std::vector<double> real_output(n);
-    std::vector<double> imag_output(n);
+    std::vector<float> real_output(n);
+    std::vector<float> imag_output(n);
 
     for (int k = 0; k < n; ++k) {
         real_output[k] = 0.0f;
         imag_output[k] = 0.0f;
         for (int m = 0; m < N; ++m) {
-            double twiddle_real;
-            double twiddle_imag;
+            float twiddle_real;
+            float twiddle_imag;
 
             twiddle(&twiddle_real, &twiddle_imag, k * m, n);
 
@@ -123,7 +163,7 @@ static void irfft(int n, const double * inp_cplx, double * out_real) {
 // hop_length =  320
 // pad =  480
 //
-static void fold(const std::vector<double> & data, int64_t n_out, int64_t n_win, int64_t n_hop, int64_t n_pad, std::vector<double> & output) {
+static void fold(const std::vector<float> & data, int64_t n_out, int64_t n_win, int64_t n_hop, int64_t n_pad, std::vector<float> & output) {
     int64_t output_height = n_out;
     int64_t kernel_w = n_win;
     int64_t stride_w = n_hop;
@@ -147,103 +187,63 @@ static void fold(const std::vector<double> & data, int64_t n_out, int64_t n_win,
     output.resize(n_out - 2 * n_pad);
 }
 
-struct wav_header {
-    char riff[4] = {'R', 'I', 'F', 'F'};
-    uint32_t chunk_size;
-    char wave[4] = {'W', 'A', 'V', 'E'};
-    char fmt[4] = {'f', 'm', 't', ' '};
-    uint32_t fmt_chunk_size = 16;
-    uint16_t audio_format = 1; // PCM
-    uint16_t num_channels = 1; // Mono
-    uint32_t sample_rate;
-    uint32_t byte_rate;
-    uint16_t block_align;
-    uint16_t bits_per_sample = 16;
-    char data[4] = {'d', 'a', 't', 'a'};
-    uint32_t data_size;
-};
-
-static void save_wav16(const std::string & fname, const std::vector<double> & data, int sample_rate) {
-    std::ofstream file(fname, std::ios::binary);
-    if (!file) {
-        LOG_ERR("%s: Failed to open file '%s' for writing", __func__, fname.c_str());
-        return;
-    }
-
-    wav_header header;
-    header.sample_rate = sample_rate;
-    header.byte_rate = header.sample_rate * header.num_channels * (header.bits_per_sample / 8);
-    header.block_align = header.num_channels * (header.bits_per_sample / 8);
-    header.data_size = data.size() * (header.bits_per_sample / 8);
-    header.chunk_size = 36 + header.data_size;
-
-    file.write(reinterpret_cast<const char*>(&header), sizeof(header));
-
-    for (const auto & sample : data) {
-        int16_t pcm_sample = static_cast<int16_t>(std::clamp(sample * 32767.0, -32768.0, 32767.0));
-        file.write(reinterpret_cast<const char*>(&pcm_sample), sizeof(pcm_sample));
-    }
-
-    file.close();
-}
-
-static std::vector<double> embd_to_audio(
+// TODO: not optimized at all
+static std::vector<float> embd_to_audio(
         const float * embd,
-        const std::vector<llama_token> & codes,
+        const int n_codes,
         const int n_embd,
         const int n_thread) {
-    const int n     = codes.size();
     const int n_fft = 1280;
     const int n_hop = 320;
     const int n_win = 1280;
     const int n_pad = (n_win - n_hop)/2;
-    const int n_out = (n - 1)*n_hop + n_win;
+    const int n_out = (n_codes - 1)*n_hop + n_win;
 
-    std::vector<double> hann(n_fft);
+    std::vector<float> hann(n_fft);
 
     fill_hann_window(hann.size(), true, hann.data());
 
-    int n_spec = n_embd*n;
+    int n_spec = n_embd*n_codes;
 
-    std::vector<double> E (n_spec);
-    std::vector<double> S (n_spec);
-    std::vector<double> ST(n_spec);
+    std::vector<float> E (n_spec);
+    std::vector<float> S (n_spec);
+    std::vector<float> ST(n_spec);
 
-    for (int l = 0; l < n; ++l) {
+    for (int l = 0; l < n_codes; ++l) {
         for (int k = 0; k < n_embd; ++k) {
-            E[k*n + l] = embd[l*n_embd + k];
+            E[k*n_codes + l] = embd[l*n_embd + k];
         }
     }
 
     for (int k = 0; k < n_embd/2; ++k) {
-        for (int l = 0; l < n; ++l) {
-            double mag = E[(k           )*n + l];
-            double phi = E[(k + n_embd/2)*n + l];
+        for (int l = 0; l < n_codes; ++l) {
+            float mag = E[(k           )*n_codes + l];
+            float phi = E[(k + n_embd/2)*n_codes + l];
 
             mag = exp(mag);
 
             if (mag > 1e2) {
                 mag = 1e2;
             }
-            S[2*(k*n + l) + 0] = mag*cosf(phi);
-            S[2*(k*n + l) + 1] = mag*sinf(phi);
+            S[2*(k*n_codes + l) + 0] = mag*cosf(phi);
+            S[2*(k*n_codes + l) + 1] = mag*sinf(phi);
         }
     }
 
-    for (int l = 0; l < n; ++l) {
+    for (int l = 0; l < n_codes; ++l) {
         for (int k = 0; k < n_embd/2; ++k) {
-            ST[l*n_embd + 2*k + 0] = S[2*(k*n + l) + 0];
-            ST[l*n_embd + 2*k + 1] = S[2*(k*n + l) + 1];
+            ST[l*n_embd + 2*k + 0] = S[2*(k*n_codes + l) + 0];
+            ST[l*n_embd + 2*k + 1] = S[2*(k*n_codes + l) + 1];
         }
     }
 
-    std::vector<double> res  (n*n_fft);
-    std::vector<double> hann2(n*n_fft);
+    std::vector<float> res  (n_codes*n_fft);
+    std::vector<float> hann2(n_codes*n_fft);
 
     std::vector<std::thread> workers(n_thread);
     for (int i = 0; i < n_thread; ++i) {
         workers[i] = std::thread([&, i]() {
-            for (int l = i; l < n; l += n_thread) {
+            for (int l = i; l < n_codes; l += n_thread) {
                 irfft(n_fft, ST.data() + l*n_embd, res.data() + l*n_fft);
                 for (int j = 0; j < n_fft; ++j) {
                     res  [l*n_fft + j] *= hann[j];
@@ -256,8 +256,8 @@ static std::vector<double> embd_to_audio(
         workers[i].join();
     }
 
-    std::vector<double> audio;
-    std::vector<double> env;
+    std::vector<float> audio;
+    std::vector<float> env;
 
     fold(res,   n_out, n_win, n_hop, n_pad, audio);
     fold(hann2, n_out, n_win, n_hop, n_pad, env); // TODO: can be done once
@@ -844,12 +844,14 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 
     const auto t_voc_start = ggml_time_us();
 
-    llama_batch batch = llama_batch_init(codes.size(), 0, 1);
+    const int n_codes = codes.size();
+
+    llama_batch batch = llama_batch_init(n_codes, 0, 1);
 
     for (size_t i = 0; i < codes.size(); ++i) {
         common_batch_add(batch, codes[i], i, { 0 }, true); // TODO: all logits?
     }
-    GGML_ASSERT(batch.n_tokens == (int) codes.size());
+    GGML_ASSERT(batch.n_tokens == n_codes);
 
     if (llama_decode(ctx_cts, batch) != 0) {
         LOG_ERR("%s: llama_decode() failed\n", __func__);
@@ -862,12 +864,40 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 
     const auto t_spec_start = ggml_time_us();
 
+#if 1
     // spectral operations
-    // TODO: not optimized at all
     const int n_embd = llama_n_embd(model_cts);
     const float * embd = llama_get_embeddings(ctx_cts);
 
-    auto audio = embd_to_audio(embd, codes, n_embd, params.cpuparams.n_threads);
+    auto audio = embd_to_audio(embd, n_codes, n_embd, params.cpuparams.n_threads);
+
+#else
+    // read the spectrogram from a file for debugging purposes
+    std::vector<float> audio;
+    {
+        std::ifstream fin("out.bin", std::ios::binary);
+        if (!fin) {
+            LOG_ERR("%s: failed to open file '%s'\n", __func__, "out.bin");
+            return 1;
+        }
+
+        std::vector<float> embd;
+
+        int n_codes;
+        int n_embd;
+
+        fin.read(reinterpret_cast<char *>(&n_codes), sizeof(int));
+        fin.read(reinterpret_cast<char *>(&n_embd), sizeof(int));
+
+        embd.resize(n_codes * n_embd);
+        fin.read(reinterpret_cast<char *>(embd.data()), n_codes * n_embd * sizeof(float));
+        fin.close();
+
+        LOG_INF("%s: n_codes: %d, n_embd: %d\n", __func__, n_codes, n_embd);
+
+        audio = embd_to_audio(embd.data(), n_codes, n_embd, params.cpuparams.n_threads);
+    }
+#endif
 
     const std::string fname = "output.wav";
 

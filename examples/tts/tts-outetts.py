@@ -143,7 +143,7 @@ response_json = response.json()
 #print(json.dumps(response_json, indent=4))
 #print(json.dumps(response_json["prompt"], indent=4).replace("\\n", "\n"))
 #print(json.dumps(response_json["timings"], indent=4))
-print(json.dumps(response_json["tokens"], indent=4))
+#print(json.dumps(response_json["tokens"], indent=4))
 
 codes = response_json["tokens"]
 
@@ -160,9 +160,15 @@ response_json = response.json()
 
 #print(json.dumps(response_json, indent=4))
 
+# spectrogram
 embd = response_json["data"][0]["embedding"]
 
-print(len(embd))
+n_codes = len(embd)
+n_embd = len(embd[0])
 
+print('spectrogram generated: n_codes: %d, n_embd: %d' % (n_codes, n_embd))
 
-
+# post-process the spectrogram to convert to audio
+# TODO: see the tts.cpp:embd_to_audio() and implement it in Python
+print('converting to audio ...')
+print('TODO: see the tts.cpp:embd_to_audio() and implement it in Python')
