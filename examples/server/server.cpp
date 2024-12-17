@@ -719,14 +719,17 @@ struct server_task_result_embd : server_task_result {
     int index = 0;
     std::vector<float> embedding;
 
+    int32_t n_tokens;
+
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
         return json {
-            {"index",     index},
-            {"embedding", embedding},
+            {"index",            index},
+            {"embedding",        embedding},
+            {"tokens_evaluated", n_tokens},
         };
     }
 };
@@ -735,14 +738,17 @@ struct server_task_result_rerank : server_task_result {
     int index = 0;
     float score = -1e6;
 
+    int32_t n_tokens;
+
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
         return json {
-            {"index", index},
-            {"score", score},
+            {"index",            index},
+            {"score",            score},
+            {"tokens_evaluated", n_tokens},
         };
     }
 };
@@ -1995,6 +2001,7 @@ struct server_context {
         auto res = std::make_unique<server_task_result_embd>();
         res->id    = slot.id_task;
         res->index = slot.index;
+        res->n_tokens = slot.n_prompt_tokens;
 
         const int n_embd = llama_n_embd(model);
 
@@ -2030,6 +2037,7 @@ struct server_context {
         auto res = std::make_unique<server_task_result_rerank>();
         res->id    = slot.id_task;
         res->index = slot.index;
+        res->n_tokens = slot.n_prompt_tokens;
 
         for (int i = 0; i < batch.n_tokens; ++i) {
             if (!batch.logits[i] || batch.seq_id[i][0] != slot.id) {
