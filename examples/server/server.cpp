@@ -736,7 +736,7 @@ struct server_task_result_embd : server_task_result {
     }
 
     virtual json to_json() override {
-        if (embedding.size() == 1){
+        if (embedding.size() == 1) {
             // to be OAI compatible
             return json {
                 {"index",     index},
