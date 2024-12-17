@@ -3651,14 +3651,14 @@ int main(int argc, char ** argv) {
         const json body = json::parse(req.body);
         bool oaicompat = false;
 
-        // an input prompt can be a string or a list of tokens (integer)
+        // for the shape of input/content, see tokenize_input_prompts()
         json prompt;
-        if (body.count("input") != 0) {
+        if (body.contains("input")) {
             oaicompat = true;
             prompt = body.at("input");
-        } else if (body.count("content") != 0) {
-            // with "content", we only support single prompt
-            prompt = std::vector<std::string>{body.at("content")};
+        } else if (body.contains("content")) {
+            oaicompat = false;
+            prompt = body.at("content");
         } else {
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;

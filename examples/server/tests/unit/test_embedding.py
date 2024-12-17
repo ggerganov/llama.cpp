@@ -45,6 +45,31 @@ def test_embedding_multiple():
         assert len(d['embedding']) > 1
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        # single prompt
+        "string",
+        [12, 34, 56],
+        [12, 34, "string", 56, 78],
+        # multiple prompts
+        ["string1", "string2"],
+        ["string1", [12, 34, 56]],
+        [[12, 34, 56], [12, 34, 56]],
+        [[12, 34, 56], [12, "string", 34, 56]],
+    ]
+)
+def test_embedding_mixed_input(content):
+    global server
+    server.start()
+    res = server.make_request("POST", "/embeddings", data={"content": content})
+    assert res.status_code == 200
+    assert len(res.body['data']) == len(content)
+    for d in res.body['data']:
+        assert 'embedding' in d
+        assert len(d['embedding']) > 1
+
+
 def test_embedding_openai_library_single():
     global server
     server.start()
