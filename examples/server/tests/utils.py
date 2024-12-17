@@ -275,7 +275,7 @@ class ServerPreset:
         return server
 
     @staticmethod
-    def bert_bge_small(pooling = 'last') -> ServerProcess:
+    def bert_bge_small() -> ServerProcess:
         server = ServerProcess()
         server.model_hf_repo = "ggml-org/models"
         server.model_hf_file = "bert-bge-small/ggml-model-f16.gguf"
@@ -286,7 +286,6 @@ class ServerPreset:
         server.n_slots = 2
         server.seed = 42
         server.server_embeddings = True
-        server.pooling = pooling
         return server
 
     @staticmethod
