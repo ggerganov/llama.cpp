@@ -114,6 +114,24 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         else()
             if (GGML_NATIVE)
                 list(APPEND ARCH_FLAGS -mcpu=native)
+
+                # Show enabled features
+                execute_process(
+                    COMMAND ${CMAKE_C_COMPILER} ${ARCH_FLAGS} -dM -E -
+                    INPUT_FILE "/dev/null"
+                    OUTPUT_VARIABLE ARM_FEATURE
+                    RESULT_VARIABLE ARM_FEATURE_RESULT
+                )
+                if (ARM_FEATURE_RESULT)
+                    message(WARNING "Failed to get ARM features")
+                else()
+                    foreach(feature DOTPROD SVE MATMUL_INT8 FMA FP16_VECTOR_ARITHMETIC)
+                        string(FIND "${ARM_FEATURE}" "__ARM_FEATURE_${feature} 1" feature_pos)
+                        if (NOT ${feature_pos} EQUAL -1)
+                            message(STATUS "ARM feature ${feature} enabled")
+                        endif()
+                    endforeach()
+                endif()
             else()
                 check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
                 if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
