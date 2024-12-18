@@ -527,7 +527,9 @@ class Model:
                 if token in added_vocab:
                     # We need to manually encode and decode the added tokens in case special characters
                     # used for `\n` / `\t` have been manually added in the added tokens
-                    token = tokenizer.decode(tokenizer.encode(token))
+                    if len(token) == 1:
+                        token = tokenizer.decode(tokenizer.encode(token, add_special_tokens=False))
+
                     if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
                         toktypes.append(gguf.TokenType.CONTROL)
                     else:
