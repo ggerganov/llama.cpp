@@ -744,16 +744,16 @@ struct server_task_result_embd : server_task_result {
 
     json to_json_non_oaicompat() {
         return json {
-            {"index",            index},
-            {"embedding",        embedding},
-            {"tokens_evaluated", n_tokens},
+            {"index",     index},
+            {"embedding", embedding},
         };
     }
 
     json to_json_oaicompat() {
         return json {
-            {"index",     index},
-            {"embedding", embedding[0]},
+            {"index",            index},
+            {"embedding",        embedding[0]},
+            {"tokens_evaluated", n_tokens},
         };
     }
 };
