@@ -445,7 +445,7 @@ const mainApp = createApp({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': this.config.apiKey ? `Bearer ${this.config.apiKey}` : undefined,
+            ...(this.config.apiKey ? {'Authorization': `Bearer ${this.config.apiKey}`} : {})
           },
           body: JSON.stringify(params),
           signal: abortController.signal,
