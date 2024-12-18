@@ -1018,7 +1018,6 @@ struct server_slot {
         n_prompt_tokens    = 0;
         last_nl_pos        = 0;
         generated_text     = "";
-        generated_tokens   = {};
         has_new_line       = false;
         truncated          = false;
         stop               = STOP_TYPE_NONE;
@@ -3733,7 +3732,7 @@ int main(int argc, char ** argv) {
                 task.prompt_tokens = std::move(tokenized_prompts[i]);
 
                 // OAI-compat
-                task.params.oaicompat = oaicompat;;
+                task.params.oaicompat = oaicompat;
 
                 tasks.push_back(task);
             }
