@@ -79,8 +79,9 @@ enum error_type {
 };
 
 struct slot_params {
-    bool stream       = true;
-    bool cache_prompt = true; // remember the prompt to avoid reprocessing all prompt
+    bool stream        = true;
+    bool cache_prompt  = true; // remember the prompt to avoid reprocessing all prompt
+    bool return_tokens = false;
 
     int32_t n_keep    =  0; // number of tokens to keep from initial prompt
     int32_t n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
@@ -199,6 +200,7 @@ struct server_task {
 
         params.stream           = json_value(data, "stream",             false);
         params.cache_prompt     = json_value(data, "cache_prompt",       true);
+        params.return_tokens    = json_value(data, "return_tokens",      false);
         params.n_predict        = json_value(data, "n_predict",          json_value(data, "max_tokens", defaults.n_predict));
         params.n_indent         = json_value(data, "n_indent",           defaults.n_indent);
         params.n_keep           = json_value(data, "n_keep",             defaults.n_keep);
@@ -468,7 +470,10 @@ struct completion_token_output {
 
 struct server_task_result_cmpl_final : server_task_result {
     int index = 0;
-    std::string content;
+
+    std::string  content;
+    llama_tokens tokens;
+
     bool stream;
     result_timings timings;
     std::string prompt;
@@ -510,6 +515,7 @@ struct server_task_result_cmpl_final : server_task_result {
         json res = json {
             {"index",               index},
             {"content",             stream ? "" : content}, // in stream mode, content is already in last partial chunk
+            {"tokens",              stream ? llama_tokens {} : tokens},
             {"id_slot",             id_slot},
             {"stop",                true},
             {"model",               oaicompat_model},
@@ -539,9 +545,9 @@ struct server_task_result_cmpl_final : server_task_result {
         json choices = json::array({json{
             {"finish_reason", finish_reason},
             {"index", 0},
-            {"message", json{
+            {"message", json {
                 {"content", content},
-                {"role", "assistant"}
+                {"role",    "assistant"}
             }
         }}});
 
@@ -605,7 +611,9 @@ struct server_task_result_cmpl_final : server_task_result {
 
 struct server_task_result_cmpl_partial : server_task_result {
     int index = 0;
-    std::string content;
+
+    std::string  content;
+    llama_tokens tokens;
 
     int32_t n_decoded;
     int32_t n_prompt_tokens;
@@ -637,6 +645,7 @@ struct server_task_result_cmpl_partial : server_task_result {
         json res = json {
             {"index",            index},
             {"content",          content},
+            {"tokens",           tokens},
             {"stop",             false},
             {"id_slot",          id_slot},
             {"tokens_predicted", n_decoded},
@@ -678,7 +687,7 @@ struct server_task_result_cmpl_partial : server_task_result {
                 json second_ret = json{
                             {"choices", json::array({json{{"finish_reason", nullptr},
                                                             {"index", 0},
-                                                            {"delta", json{
+                                                            {"delta", json {
                                                             {"content", content}}}
                                                             }})},
                             {"created", t},
@@ -693,7 +702,7 @@ struct server_task_result_cmpl_partial : server_task_result {
                 {"finish_reason", nullptr},
                 {"index", 0},
                 {"delta",
-                json{
+                json {
                     {"content", content},
                 }},
             }});
@@ -955,8 +964,11 @@ struct server_slot {
 
     size_t last_nl_pos = 0;
 
-    std::string generated_text;
+    std::string  generated_text;
+    llama_tokens generated_tokens;
+
     llama_tokens cache_tokens;
+
     std::vector<completion_token_output> generated_token_probs;
 
     bool has_next_token = true;
@@ -1000,6 +1012,7 @@ struct server_slot {
         n_sent_token_probs = 0;
         task_type          = SERVER_TASK_TYPE_COMPLETION;
 
+        generated_tokens.clear();
         generated_token_probs.clear();
     }
 
@@ -1740,8 +1753,10 @@ struct server_context {
         const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special);
         slot.sampled = result.tok;
 
-        // search stop word and delete it
         slot.generated_text += token_str;
+        if (slot.params.return_tokens) {
+            slot.generated_tokens.push_back(result.tok);
+        }
         slot.has_next_token = true;
 
         // check if there is incomplete UTF-8 character at the end
@@ -1766,6 +1781,7 @@ struct server_context {
             break;
         }
 
+        // search stop word and delete it
         if (!incomplete) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
@@ -1918,6 +1934,7 @@ struct server_context {
         res->id      = slot.id_task;
         res->index   = slot.index;
         res->content = tkn.text_to_send;
+        res->tokens  = { tkn.tok };
 
         res->n_decoded       = slot.n_decoded;
         res->n_prompt_tokens = slot.n_prompt_tokens;
@@ -1958,6 +1975,7 @@ struct server_context {
 
         res->index           = slot.index;
         res->content         = slot.generated_text;
+        res->tokens          = slot.generated_tokens;
         res->timings         = slot.get_timings();
         res->prompt          = common_detokenize(ctx, slot.prompt_tokens, true);
 
