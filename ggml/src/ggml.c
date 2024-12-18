@@ -3517,15 +3517,18 @@ static struct ggml_tensor * ggml_rope_impl(
         GGML_ASSERT(c->ne[0] >= n_dims / 2);
     }
 
+    int sections[4] = {0, 0, 0, 0};
+
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
-    int32_t params[11] = { /*n_past*/ 0, n_dims, mode, /*n_ctx*/ 0, n_ctx_orig };
+    int32_t params[15] = { /*n_past*/ 0, n_dims, mode, /*n_ctx*/ 0, n_ctx_orig };
     memcpy(params +  5, &freq_base,    sizeof(float));
     memcpy(params +  6, &freq_scale,   sizeof(float));
     memcpy(params +  7, &ext_factor,   sizeof(float));
     memcpy(params +  8, &attn_factor,  sizeof(float));
     memcpy(params +  9, &beta_fast,    sizeof(float));
     memcpy(params + 10, &beta_slow,    sizeof(float));
+    memcpy(params + 11, &sections,     sizeof(int)*4);
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op     = GGML_OP_ROPE;
@@ -3545,6 +3548,53 @@ struct ggml_tensor * ggml_rope(
     return ggml_rope_impl(
         ctx, a, b, NULL, n_dims, mode, 0, 10000.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, false
     );
+}
+
+struct ggml_tensor * ggml_rope_multi(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b,
+        struct ggml_tensor  * c,
+        int                   n_dims,
+        int                   sections[4],
+        int                   mode,
+        int                   n_ctx_orig,
+        float                 freq_base,
+        float                 freq_scale,
+        float                 ext_factor,
+        float                 attn_factor,
+        float                 beta_fast,
+        float                 beta_slow) {
+    // Multimodal Rotary Position Embedding
+    GGML_ASSERT((mode & 1) == 0 && "mode & 1 == 1 is no longer supported");
+
+    GGML_ASSERT(ggml_is_vector(b));
+    GGML_ASSERT(b->type == GGML_TYPE_I32);
+    GGML_ASSERT(a->ne[2] * 4 == b->ne[0]); // mrope expecting 4 position ids per token
+
+    if (c) {
+        GGML_ASSERT(c->type == GGML_TYPE_F32);
+        GGML_ASSERT(c->ne[0] >= n_dims / 2);
+    }
+
+    struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
+
+    int32_t params[11 + 4] = { /*n_past*/ 0, n_dims, mode, /*n_ctx*/ 0, n_ctx_orig };
+    memcpy(params +  5, &freq_base,    sizeof(float));
+    memcpy(params +  6, &freq_scale,   sizeof(float));
+    memcpy(params +  7, &ext_factor,   sizeof(float));
+    memcpy(params +  8, &attn_factor,  sizeof(float));
+    memcpy(params +  9, &beta_fast,    sizeof(float));
+    memcpy(params + 10, &beta_slow,    sizeof(float));
+    memcpy(&params[11], sections,      sizeof(int)*4);
+    ggml_set_op_params(result, params, sizeof(params));
+
+    result->op   = GGML_OP_ROPE;
+    result->src[0] = a;
+    result->src[1] = b;
+    result->src[2] = c;
+
+    return result;
 }
 
 struct ggml_tensor * ggml_rope_inplace(
@@ -5987,12 +6037,12 @@ struct ggml_tensor * ggml_graph_get_tensor(const struct ggml_cgraph * cgraph, co
 
 struct ggml_tensor * ggml_graph_get_grad(const struct ggml_cgraph * cgraph, const struct ggml_tensor * node) {
     const size_t igrad = ggml_hash_find(&cgraph->visited_hash_set, node);
-    return igrad != GGML_HASHSET_FULL && ggml_bitset_get(cgraph->visited_hash_set.used, igrad) ? cgraph->grads[igrad] : NULL;
+    return igrad != GGML_HASHSET_FULL && ggml_bitset_get(cgraph->visited_hash_set.used, igrad) && cgraph->grads ? cgraph->grads[igrad] : NULL;
 }
 
 struct ggml_tensor * ggml_graph_get_grad_acc(const struct ggml_cgraph * cgraph, const struct ggml_tensor * node) {
     const size_t igrad = ggml_hash_find(&cgraph->visited_hash_set, node);
-    return igrad != GGML_HASHSET_FULL && ggml_bitset_get(cgraph->visited_hash_set.used, igrad) ? cgraph->grad_accs[igrad] : NULL;
+    return igrad != GGML_HASHSET_FULL && ggml_bitset_get(cgraph->visited_hash_set.used, igrad) && cgraph->grad_accs ? cgraph->grad_accs[igrad] : NULL;
 }
 
 void ggml_graph_print(const struct ggml_cgraph * cgraph) {
@@ -6439,7 +6489,7 @@ struct gguf_context {
     void * data;
 };
 
-static size_t gguf_type_size(enum gguf_type type) {
+size_t gguf_type_size(enum gguf_type type) {
     GGML_ASSERT(0 <= type && type < GGUF_TYPE_COUNT);
     return GGUF_TYPE_SIZE[type];
 }
@@ -6567,13 +6617,7 @@ struct gguf_context * gguf_init_empty(void) {
     return ctx;
 }
 
-struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
-    FILE * file = ggml_fopen(fname, "rb");
-    if (!file) {
-        fprintf(stderr, "%s: failed to open '%s': '%s'\n", __func__, fname, strerror(errno));
-        return NULL;
-    }
-
+struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params) {
     // offset from start of file
     size_t offset = 0;
 
@@ -6586,7 +6630,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         for (uint32_t i = 0; i < sizeof(magic); i++) {
             if (magic[i] != GGUF_MAGIC[i]) {
                 fprintf(stderr, "%s: invalid magic characters '%c%c%c%c'\n", __func__, magic[0], magic[1], magic[2], magic[3]);
-                fclose(file);
                 return NULL;
             }
         }
@@ -6597,7 +6640,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     struct gguf_context * ctx = calloc(1, sizeof(struct gguf_context));
     if (!ctx) {
         fprintf(stderr, "%s: failed to allocate memory for context\n", __func__);
-        fclose(file);
         return NULL;
     }
 
@@ -6615,7 +6657,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (ctx->header.version == 1) {
             fprintf(stderr, "%s: GGUFv1 is no longer supported. please use a more up-to-date version\n", __func__);
-            fclose(file);
             gguf_free(ctx);
             return NULL;
         }
@@ -6628,7 +6669,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read header\n", __func__);
-            fclose(file);
             gguf_free(ctx);
             return NULL;
         }
@@ -6638,12 +6678,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     {
         const uint64_t n_kv = ctx->header.n_kv;
 
-        ctx->kv = calloc(n_kv, sizeof(struct gguf_kv));
-        if (!ctx->kv) {
-            fprintf(stderr, "%s: failed to allocate memory for kv pairs\n", __func__);
-            fclose(file);
-            gguf_free(ctx);
-            return NULL;
+        if (n_kv > 0) {
+            ctx->kv = calloc(n_kv, sizeof(struct gguf_kv));
+            if (!ctx->kv) {
+                fprintf(stderr, "%s: failed to allocate memory for kv pairs\n", __func__);
+                gguf_free(ctx);
+                return NULL;
+            }
         }
 
         for (uint64_t i = 0; i < n_kv; ++i) {
@@ -6690,7 +6731,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     // prevent from integer overflow in the malloc below
                                     if (kv->value.arr.n >= SIZE_MAX/gguf_type_size(kv->value.arr.type)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
-                                        fclose(file);
                                         gguf_free(ctx);
                                         return NULL;
                                     }
@@ -6698,7 +6738,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     kv->value.arr.data = calloc(kv->value.arr.n, gguf_type_size(kv->value.arr.type));
                                     if (!kv->value.arr.data) {
                                         fprintf(stderr, "%s: failed to allocate memory for array\n", __func__);
-                                        fclose(file);
                                         gguf_free(ctx);
                                         return NULL;
                                     }
@@ -6710,7 +6749,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     // prevent from integer overflow in the malloc below
                                     if (kv->value.arr.n >= SIZE_MAX/sizeof(struct gguf_str)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
-                                        fclose(file);
                                         gguf_free(ctx);
                                         return NULL;
                                     }
@@ -6718,7 +6756,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     kv->value.arr.data = calloc(kv->value.arr.n, sizeof(struct gguf_str));
                                     if (!kv->value.arr.data) {
                                         fprintf(stderr, "%s: failed to allocate memory for array\n", __func__);
-                                        fclose(file);
                                         gguf_free(ctx);
                                         return NULL;
                                     }
@@ -6749,7 +6786,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
-            fclose(file);
             gguf_free(ctx);
             return NULL;
         }
@@ -6760,7 +6796,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ctx->infos = calloc(ctx->header.n_tensors, sizeof(struct gguf_tensor_info));
         if (!ctx->infos) {
             fprintf(stderr, "%s: failed to allocate memory for tensor infos\n", __func__);
-            fclose(file);
             gguf_free(ctx);
             return NULL;
         }
@@ -6796,7 +6831,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor info\n", __func__);
-                fclose(file);
                 gguf_free(ctx);
                 return NULL;
             }
@@ -6839,7 +6873,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 // this tensor type support have been removed:
                 fprintf(stderr, "%s: tensor '%s' of type %d: %s\n",
                         __func__, info->name.data, (int) info->type, ggml_type_name(info->type));
-                fclose(file);
                 gguf_free(ctx);
                 return NULL;
             }
@@ -6847,7 +6880,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             if (ne % ggml_blck_size(info->type) != 0) {
                 fprintf(stderr, "%s: tensor '%s' of type %d (%s) number of elements (%" PRId64 ") is not a multiple of block size (%" PRId64 ")\n",
                         __func__, info->name.data, (int) info->type, ggml_type_name(info->type), ne, ggml_blck_size(info->type));
-                fclose(file);
                 gguf_free(ctx);
                 return NULL;
             }
@@ -6879,7 +6911,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         *params.ctx = ggml_init(pdata);
         if (*params.ctx == NULL) {
             fprintf(stderr, "%s: failed to initialize context\n", __func__);
-            fclose(file);
             gguf_free(ctx);
             return NULL;
         }
@@ -6898,7 +6929,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor data\n", __func__);
-                fclose(file);
                 ggml_free(ctx_data);
                 gguf_free(ctx);
                 return NULL;
@@ -6937,7 +6967,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read the tensor data\n", __func__);
-            fclose(file);
             ggml_free(ctx_data);
             gguf_free(ctx);
             return NULL;
@@ -6946,9 +6975,19 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ggml_set_no_alloc(ctx_data, params.no_alloc);
     }
 
-    fclose(file);
-
     return ctx;
+}
+
+struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
+    FILE * file = ggml_fopen(fname, "rb");
+    if (!file) {
+        fprintf(stderr, "%s: failed to open '%s': '%s'\n", __func__, fname, strerror(errno));
+        return NULL;
+    }
+
+    struct gguf_context * result = gguf_init_from_file_impl(file, params);
+    fclose(file);
+    return result;
 }
 
 void gguf_free(struct gguf_context * ctx) {
@@ -7410,13 +7449,7 @@ void gguf_set_tensor_data(struct gguf_context * ctx, const char * name, const vo
 //    fwrite(val, sizeof(char), size, file);
 //}
 
-struct gguf_buf {
-    void * data;
-    size_t size;
-    size_t offset;
-};
-
-static struct gguf_buf gguf_buf_init(size_t size) {
+struct gguf_buf gguf_buf_init(size_t size) {
     struct gguf_buf buf = {
         /*buf.data   =*/ size == 0 ? NULL : GGML_CALLOC(1, size),
         /*buf.size   =*/ size,
@@ -7426,7 +7459,7 @@ static struct gguf_buf gguf_buf_init(size_t size) {
     return buf;
 }
 
-static void gguf_buf_free(struct gguf_buf buf) {
+void gguf_buf_free(struct gguf_buf buf) {
     if (buf.data) {
         GGML_FREE(buf.data);
     }
@@ -7464,7 +7497,7 @@ static void gguf_bwrite_el(struct gguf_buf * buf, const void * val, size_t el_si
     buf->offset += el_size;
 }
 
-static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf * buf, bool only_meta) {
+void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf * buf, bool only_meta) {
     // write header
     gguf_bwrite_el(buf, &ctx->header.magic,     sizeof(ctx->header.magic));
     gguf_bwrite_el(buf, &ctx->header.version,   sizeof(ctx->header.version));
