@@ -529,6 +529,7 @@ class Model:
                     # used for `\n` / `\t` have been manually added in the added tokens
                     # To avoid unexpected issues - we make sure to encode single-char tokens
                     if len(token) == 1:
+                        logger.info("Ecode-Decode special characters using AutoTokenizer")
                         token = tokenizer.decode(tokenizer.encode(token, add_special_tokens=False))
 
                     if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
