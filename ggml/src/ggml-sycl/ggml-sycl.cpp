@@ -537,7 +537,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device) {
     auto dev_count = ggml_backend_sycl_get_device_count();
 
     if (device>=dev_count or device<0) {
-        printf("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
+        GGML_LOG_ERROR("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
             device, dev_count-1);
         GGML_ASSERT(device<dev_count);
     }
@@ -565,7 +565,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(ggml_backend_sycl_conte
 
     int device = ctx->device;
     if (device>=ggml_sycl_info().device_count or device<0) {
-        printf("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
+        GGML_LOG_ERROR("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
             device, ggml_sycl_info().device_count-1);
         GGML_ASSERT(device<ggml_sycl_info().device_count);
     }
@@ -2348,30 +2348,21 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
     char * src_ptr;
     if (ggml_backend_buffer_is_host(src->buffer)) {
         kind = dpct::host_to_device;
+        GGML_SYCL_DEBUG("%s: Host buffer type src tensor\n");
         src_ptr = (char *) src->data;
         // GGML_SYCL_DEBUG("ggml_sycl_cpy_tensor_2d  GGML_BACKEND_TYPE_CPU src_ptr %p\n", src_ptr);
     } else if (ggml_backend_buffer_is_sycl(src->buffer) || ggml_backend_buffer_is_sycl_split(src->buffer)) {
         if (!ggml_backend_buffer_is_sycl_split(src->buffer)){
-            // If buffer is not a SYCL split buffer
-            /*
-            What memcpy_direction kind we need here?
-            Refer: dpct/helper.hpp:
-            enum memcpy_direction
-            {
-                host_to_host,
-                host_to_device,
-                device_to_host,
-                device_to_device,
-                automatic
-            };
-            */
-            kind = dpct::device_to_device;
+            // If buffer is a SYCL buffer
+            GGML_SYCL_DEBUG("%s: SYCL buffer type src tensor\n", __func__);
+            kind    = dpct::device_to_device;
             src_ptr = (char *) src->data;
         }
         else {
             /*
             If buffer is a SYCL split buffer
             */
+           GGML_SYCL_DEBUG("%s: Split buffer type src tensor\n", __func__);
         GGML_ASSERT(i1_low == 0 && i1_high == src->ne[1]);
         kind = dpct::device_to_device;
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src->extra;
