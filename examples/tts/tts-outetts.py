@@ -1,6 +1,6 @@
 import sys
-import json
-import struct
+#import json
+#import struct
 import requests
 import re
 
@@ -162,7 +162,7 @@ response_json = response.json()
 #print(json.dumps(response_json, indent=4))
 
 # spectrogram
-embd = response_json["data"][0]["embedding"]
+embd = response_json[0]["embedding"]
 
 n_codes = len(embd)
 n_embd = len(embd[0])
