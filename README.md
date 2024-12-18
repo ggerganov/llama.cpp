@@ -221,7 +221,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 | [SYCL](docs/backend/SYCL.md) | Intel and Nvidia GPU |
 | [MUSA](docs/build.md#musa) | Moore Threads MTT GPU |
 | [CUDA](docs/build.md#cuda) | Nvidia GPU |
-| [hipBLAS](docs/build.md#hipblas) | AMD GPU |
+| [HIP](docs/build.md#hip) | AMD GPU |
 | [Vulkan](docs/build.md#vulkan) | GPU |
 | [CANN](docs/build.md#cann) | Ascend NPU |
 
