@@ -475,7 +475,10 @@ struct completion_token_output {
                 {"id",           it.tok},
                 {"token",        tok_str},
                 {"bytes",        str_to_bytes(it.text_to_send)},
-                {"top_logprobs", it.to_json(post_sampling_probs)},
+                {
+                    post_sampling_probs ? "top_probs" : "top_logprobs",
+                    it.to_json(post_sampling_probs)
+                },
                 {
                     post_sampling_probs ? "prob" : "logprob",
                     post_sampling_probs ? it.prob : logarithm(it.prob)

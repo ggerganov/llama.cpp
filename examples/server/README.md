@@ -497,7 +497,12 @@ These words will not be included in the completion, so make sure to add them to 
   ```
   Please note that if `post_sampling_probs` is set to `true`:
     - `logprob` will be replace with `prob`, with the value between 0.0 and 1.0
-    - Returned number of probabilities may be less than `n_probs`
+    - `top_logprobs` will be replace with `top_probs`. Each element inside contains:
+      - `id`: token ID
+      - `token`: token in string
+      - `bytes`: token in bytes
+      - `prob`: token probability, with the value between 0.0 and 1.0
+    - Number of elements in `top_probs` may be less than `n_probs`
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `tokens`: Same as `content` but represented as raw token ids. Only populated if `"return_tokens": true` or `"stream": true` in the request.

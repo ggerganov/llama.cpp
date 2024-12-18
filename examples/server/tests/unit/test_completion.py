@@ -327,8 +327,8 @@ def test_n_probs_post_sampling():
         assert "token" in tok and type(tok["token"]) == str
         assert "prob" in tok and 0.0 <= tok["prob"] <= 1.0
         assert "bytes" in tok and type(tok["bytes"]) == list
-        assert len(tok["top_logprobs"]) == 10
-        for prob in tok["top_logprobs"]:
+        assert len(tok["top_probs"]) == 10
+        for prob in tok["top_probs"]:
             assert "id" in prob and prob["id"] > 0
             assert "token" in prob and type(prob["token"]) == str
             assert "prob" in prob and 0.0 <= prob["prob"] <= 1.0
