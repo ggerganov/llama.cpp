@@ -564,21 +564,21 @@ static void ggml_gemv_q4_0_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, c
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
     if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
-        const block_q4_0x4 * b_ptr = (const block_q4_0x4 *)vx;
+        const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx;
 
         for (int c = 0; c < nc; c += ncols_interleaved) {
-            const block_q8_0 * a_ptr = (const block_q8_0 *)vy;
+            const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
             float32x4_t acc = vdupq_n_f32(0);
             for (int b = 0; b < nb; b++) {
-                int8x16_t b0 = vld1q_s8((const int8_t *)b_ptr->qs);
-                int8x16_t b1 = vld1q_s8((const int8_t *)b_ptr->qs + 16);
-                int8x16_t b2 = vld1q_s8((const int8_t *)b_ptr->qs + 32);
-                int8x16_t b3 = vld1q_s8((const int8_t *)b_ptr->qs + 48);
-                float16x4_t bd = vld1_f16((const __fp16 *)b_ptr->d);
+                int8x16_t b0 = vld1q_s8((const int8_t *) b_ptr->qs);
+                int8x16_t b1 = vld1q_s8((const int8_t *) b_ptr->qs + 16);
+                int8x16_t b2 = vld1q_s8((const int8_t *) b_ptr->qs + 32);
+                int8x16_t b3 = vld1q_s8((const int8_t *) b_ptr->qs + 48);
+                float16x4_t bd = vld1_f16((const __fp16 *) b_ptr->d);
 
                 int8x16_t a0 = vld1q_s8(a_ptr->qs);
                 int8x16_t a1 = vld1q_s8(a_ptr->qs + qk/2);
-                float16x4_t ad = vld1_dup_f16((const __fp16 *)&a_ptr->d);
+                float16x4_t ad = vld1_dup_f16((const __fp16 *) &a_ptr->d);
 
                 int32x4_t ret = vdupq_n_s32(0);
 
@@ -649,23 +649,23 @@ static void ggml_gemv_q4_0_4x8_q8_0(int n, float * GGML_RESTRICT s, size_t bs, c
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
     if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
-        const block_q4_0x4 * b_ptr = (const block_q4_0x4 *)vx;
+        const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx;
 
         for (int c = 0; c < nc; c += ncols_interleaved) {
-            const block_q8_0 * a_ptr = (const block_q8_0 *)vy;
+            const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
             float32x4_t acc = vdupq_n_f32(0);
             for (int b = 0; b < nb; b++) {
-                int8x16_t b0 = vld1q_s8((const int8_t *)b_ptr->qs);
-                int8x16_t b1 = vld1q_s8((const int8_t *)b_ptr->qs + 16);
-                int8x16_t b2 = vld1q_s8((const int8_t *)b_ptr->qs + 32);
-                int8x16_t b3 = vld1q_s8((const int8_t *)b_ptr->qs + 48);
-                float16x4_t bd = vld1_f16((const __fp16 *)b_ptr->d);
+                int8x16_t b0 = vld1q_s8((const int8_t *) b_ptr->qs);
+                int8x16_t b1 = vld1q_s8((const int8_t *) b_ptr->qs + 16);
+                int8x16_t b2 = vld1q_s8((const int8_t *) b_ptr->qs + 32);
+                int8x16_t b3 = vld1q_s8((const int8_t *) b_ptr->qs + 48);
+                float16x4_t bd = vld1_f16((const __fp16 *) b_ptr->d);
 
-                int8x16_t a0 = (int8x16_t)vld1q_dup_s64((const int64_t *)a_ptr->qs);
-                int8x16_t a1 = (int8x16_t)vld1q_dup_s64((const int64_t *)a_ptr->qs + 1);
-                int8x16_t a2 = (int8x16_t)vld1q_dup_s64((const int64_t *)a_ptr->qs + 2);
-                int8x16_t a3 = (int8x16_t)vld1q_dup_s64((const int64_t *)a_ptr->qs + 3);
-                float16x4_t ad = vld1_dup_f16((const __fp16 *)&a_ptr->d);
+                int8x16_t a0 = (int8x16_t) vld1q_dup_s64((const int64_t *) a_ptr->qs);
+                int8x16_t a1 = (int8x16_t) vld1q_dup_s64((const int64_t *) a_ptr->qs + 1);
+                int8x16_t a2 = (int8x16_t) vld1q_dup_s64((const int64_t *) a_ptr->qs + 2);
+                int8x16_t a3 = (int8x16_t) vld1q_dup_s64((const int64_t *) a_ptr->qs + 3);
+                float16x4_t ad = vld1_dup_f16((const __fp16 *) &a_ptr->d);
 
                 int32x4_t ret0 = vdupq_n_s32(0);
                 int32x4_t ret1 = vdupq_n_s32(0);
