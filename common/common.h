@@ -596,7 +596,8 @@ void common_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_si
 // Embedding utils
 //
 
-void common_embd_normalize(const float * inp, float * out, int n, int embd_norm = 2);
+// TODO: repace embd_norm with an enum
+void common_embd_normalize(const float * inp, float * out, int n, int embd_norm);
 
 float common_embd_similarity_cos(const float * embd1, const float * embd2, int n);
 

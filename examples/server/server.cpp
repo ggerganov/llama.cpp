@@ -726,18 +726,32 @@ struct server_task_result_cmpl_partial : server_task_result {
 
 struct server_task_result_embd : server_task_result {
     int index = 0;
-    std::vector<float> embedding;
+    std::vector<std::vector<float>> embedding;
 
     int32_t n_tokens;
+
+    // OAI-compat fields
+    bool oaicompat = false;
 
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
+        return oaicompat ? to_json_oaicompat() : to_json_non_oaicompat();
+    }
+
+    json to_json_non_oaicompat() {
+        return json {
+            {"index",     index},
+            {"embedding", embedding},
+        };
+    }
+
+    json to_json_oaicompat() {
         return json {
             {"index",            index},
-            {"embedding",        embedding},
+            {"embedding",        embedding[0]},
             {"tokens_evaluated", n_tokens},
         };
     }
@@ -2017,9 +2031,10 @@ struct server_context {
 
     void send_embedding(const server_slot & slot, const llama_batch & batch) {
         auto res = std::make_unique<server_task_result_embd>();
-        res->id    = slot.id_task;
-        res->index = slot.index;
-        res->n_tokens = slot.n_prompt_tokens;
+        res->id        = slot.id_task;
+        res->index     = slot.index;
+        res->n_tokens  = slot.n_prompt_tokens;
+        res->oaicompat = slot.params.oaicompat;
 
         const int n_embd = llama_n_embd(model);
 
@@ -2038,12 +2053,18 @@ struct server_context {
             if (embd == NULL) {
                 SLT_ERR(slot, "failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
 
-                res->embedding = std::vector<float>(n_embd, 0.0f);
+                res->embedding.push_back(std::vector<float>(n_embd, 0.0f));
                 continue;
             }
 
-            common_embd_normalize(embd, embd_res.data(), n_embd);
-            res->embedding = embd_res;
+            // normalize only when there is pooling
+            // TODO: configurable
+            if (llama_pooling_type(slot.ctx) != LLAMA_POOLING_TYPE_NONE) {
+                common_embd_normalize(embd, embd_res.data(), n_embd, 2);
+                res->embedding.push_back(embd_res);
+            } else {
+                res->embedding.push_back({ embd, embd + n_embd });
+            }
         }
 
         SLT_DBG(slot, "%s", "sending embeddings\n");
@@ -2657,7 +2678,10 @@ struct server_context {
 
                     // add prompt tokens for processing in the current batch
                     while (slot.n_past < slot.n_prompt_tokens && batch.n_tokens < n_batch) {
-                        common_batch_add(batch, prompt_tokens[slot.n_past], slot.n_past, { slot.id }, false);
+                        // without pooling, we want to output the embeddings for all the tokens in the batch
+                        const bool need_embd = slot.task_type == SERVER_TASK_TYPE_EMBEDDING && llama_pooling_type(slot.ctx) == LLAMA_POOLING_TYPE_NONE;
+
+                        common_batch_add(batch, prompt_tokens[slot.n_past], slot.n_past, { slot.id }, need_embd);
 
                         if (slot.params.cache_prompt) {
                             slot.cache_tokens.push_back(prompt_tokens[slot.n_past]);
@@ -3665,14 +3689,17 @@ int main(int argc, char ** argv) {
         res_ok(res, data);
     };
 
-    const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings_impl = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res, bool oaicompat) {
         const json body = json::parse(req.body);
-        bool oaicompat = false;
+
+        if (oaicompat && llama_pooling_type(ctx_server.ctx) == LLAMA_POOLING_TYPE_NONE) {
+            res_error(res, format_error_response("Pooling type 'none' is not OAI compatible. Please use a different pooling type", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
 
         // for the shape of input/content, see tokenize_input_prompts()
         json prompt;
-        if (body.contains("input")) {
-            oaicompat = true;
+        if (body.count("input") != 0) {
             prompt = body.at("input");
         } else if (body.contains("content")) {
             oaicompat = false;
@@ -3697,10 +3724,15 @@ int main(int argc, char ** argv) {
         {
             std::vector<server_task> tasks;
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
-                server_task task   = server_task(SERVER_TASK_TYPE_EMBEDDING);
+                server_task task = server_task(SERVER_TASK_TYPE_EMBEDDING);
+
                 task.id            = ctx_server.queue_tasks.get_new_id();
                 task.index         = i;
                 task.prompt_tokens = std::move(tokenized_prompts[i]);
+
+                // OAI-compat
+                task.params.oaicompat = oaicompat;
+
                 tasks.push_back(task);
             }
 
@@ -3728,10 +3760,16 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = oaicompat
-            ? format_embeddings_response_oaicompat(body, responses)
-            : responses.size() == 1 ? responses[0] : json(responses);
+        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses) : json(responses);
         res_ok(res, root);
+    };
+
+    const auto handle_embeddings = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
+        handle_embeddings_impl(req, res, false);
+    };
+
+    const auto handle_embeddings_oai = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
+        handle_embeddings_impl(req, res, true);
     };
 
     const auto handle_rerank = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
@@ -3907,7 +3945,7 @@ int main(int argc, char ** argv) {
     svr->Post("/infill",              handle_infill);
     svr->Post("/embedding",           handle_embeddings); // legacy
     svr->Post("/embeddings",          handle_embeddings);
-    svr->Post("/v1/embeddings",       handle_embeddings);
+    svr->Post("/v1/embeddings",       handle_embeddings_oai);
     svr->Post("/rerank",              handle_rerank);
     svr->Post("/reranking",           handle_rerank);
     svr->Post("/v1/rerank",           handle_rerank);
