@@ -704,7 +704,6 @@ struct server_task_result_cmpl_partial : server_task_result {
                 {"delta",
                 json {
                     {"content", content},
-                    {"tokens",  tokens}
                 }},
             }});
         }
