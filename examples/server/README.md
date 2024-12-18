@@ -763,7 +763,7 @@ curl http://localhost:8080/v1/chat/completions \
 
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
-This endpoint requires that the model uses a pooling different than type `none`.
+This endpoint requires that the model uses a pooling different than type `none`. The embeddings are normalized using the Eucledian norm.
 
 *Options:*
 
@@ -799,9 +799,9 @@ See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-r
 
 ### POST `/embeddings`: non-OpenAI-compatible embeddings API
 
-This endpoint supports `--pooling none`. When used, the responses will contain the embeddings for all input tokens.
-Note that the response format is slightly different than `/v1/embeddings` - it does not have the `"data"` sub-tree and the
-embeddings are always returned as vector of vectors.
+This endpoint supports all poolings, including `--pooling none`. When the pooling is `none`, the responses will contain the *unnormalized* embeddings for *all* input tokens. For all other pooling types, only the pooled embeddings are returned, normalized using Euclidian norm.
+
+Note that the response format of this endpoint is different from `/v1/embeddings`.
 
 *Options:*
 
