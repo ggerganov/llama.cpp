@@ -88,11 +88,11 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             endif()
 
             if (GGML_NATIVE)
-                list(APPEND ARCH_FLAGS -march=native)
+                list(APPEND ARCH_FLAGS -mcpu=native)
 
                 set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
 
-                # -march=native does not always enable all the features in some compilers,
+                # -mcpu=native does not always enable all the features in some compilers,
                 # so we check for them manually and enable them if available
 
                 include(CheckCXXSourceRuns)
@@ -103,7 +103,6 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
                     GGML_COMPILER_SUPPORT_DOTPROD)
                 if (GGML_COMPILER_SUPPORT_DOTPROD)
                     set(ARCH_FLAGS "${ARCH_FLAGS}+dotprod")
-                    list(APPEND ARCH_DEFINITIONS __ARM_FEATURE_DOTPROD)
                 endif()
 
                 set(CMAKE_REQUIRED_FLAGS "${ARCH_FLAGS}+i8mm")
@@ -112,7 +111,6 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
                     GGML_COMPILER_SUPPORT_I8MM)
                 if (GGML_COMPILER_SUPPORT_I8MM)
                     set(ARCH_FLAGS "${ARCH_FLAGS}+i8mm")
-                    list(APPEND ARCH_DEFINITIONS __ARM_FEATURE_MATMUL_INT8)
                 endif()
 
                 set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
