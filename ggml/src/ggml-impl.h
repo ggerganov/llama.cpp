@@ -555,6 +555,22 @@ struct ggml_tensor * ggml_graph_get_parent(const struct ggml_cgraph * cgraph, co
 void ggml_graph_dump_dot_leaf_edge(FILE * fp, struct ggml_tensor * node, struct ggml_tensor * parent, const char * label);
 void ggml_graph_dump_dot_node_edge(FILE * fp, const struct ggml_cgraph * gb, struct ggml_tensor * node, struct ggml_tensor * parent, const char * label);
 
+// expose GGUF internals for test code
+
+GGML_API size_t gguf_type_size(enum gguf_type type);
+
+GGML_API struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params);
+
+struct gguf_buf {
+    void * data;
+    size_t size;
+    size_t offset;
+};
+GGML_API struct gguf_buf gguf_buf_init(size_t size);
+GGML_API void gguf_buf_free(struct gguf_buf buf);
+
+GGML_API void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf * buf, bool only_meta);
+
 #ifdef __cplusplus
 }
 #endif

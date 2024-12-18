@@ -32,7 +32,7 @@ shared FLOAT_TYPE vals[BLOCK_SIZE];
 void soft_max(uint num_iters) {
     const uint tid = gl_LocalInvocationID.x;
     const uint rowx = gl_WorkGroupID.z * 262144 + gl_WorkGroupID.y * 512 + gl_WorkGroupID.x;
-    const uint rowy = rowx % p.KY;
+    const uint rowy = (p.KY > 0) ? (rowx % p.KY) : 0;
 
     if (rowx >= p.nrows_x) {
         return;
