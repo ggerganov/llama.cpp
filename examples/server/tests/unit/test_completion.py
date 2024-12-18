@@ -62,8 +62,8 @@ def test_completion_stream(prompt: str, n_predict: int, re_content: str, n_promp
             assert data["generation_settings"]["seed"] == server.seed
             assert match_regex(re_content, content)
         else:
-            assert len(res.body["tokens"]) > 0
-            assert all(type(tok) == int for tok in res.body["tokens"])
+            assert len(data["tokens"]) > 0
+            assert all(type(tok) == int for tok in data["tokens"])
             content += data["content"]
 
 

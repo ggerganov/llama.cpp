@@ -547,7 +547,6 @@ struct server_task_result_cmpl_final : server_task_result {
             {"index", 0},
             {"message", json {
                 {"content", content},
-                {"tokens",  tokens},
                 {"role",    "assistant"}
             }
         }}});
@@ -688,9 +687,8 @@ struct server_task_result_cmpl_partial : server_task_result {
                 json second_ret = json{
                             {"choices", json::array({json{{"finish_reason", nullptr},
                                                             {"index", 0},
-                                                            {"delta", json{
-                                                            {"content", content},
-                                                            {"tokens",  tokens}}}
+                                                            {"delta", json {
+                                                            {"content", content}}}
                                                             }})},
                             {"created", t},
                             {"id", oaicompat_cmpl_id},
@@ -704,9 +702,8 @@ struct server_task_result_cmpl_partial : server_task_result {
                 {"finish_reason", nullptr},
                 {"index", 0},
                 {"delta",
-                json{
+                json {
                     {"content", content},
-                    {"tokens",  tokens}
                 }},
             }});
         }
