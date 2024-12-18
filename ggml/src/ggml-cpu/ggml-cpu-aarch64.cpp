@@ -562,6 +562,68 @@ static void ggml_gemv_q4_0_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, c
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
+
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
+    if (ggml_cpu_has_neon()) {
+        const void * b_ptr = vx;
+        const void * a_ptr = vy;
+        float * res_ptr = s;
+
+        __asm__ __volatile__(
+            "movi v31.16b, #0x4\n"
+            "movi v30.16b, #0xf0\n"
+            "add %x[b_ptr], %x[b_ptr], #0x8\n"
+            "1:"  // Column loop
+            "add x22, %x[a_ptr], #0x2\n"
+            "movi v29.16b, #0x0\n"
+            "mov x21, %x[nb]\n"
+            "2:"  // Block loop
+            "ldr q28, [%x[b_ptr], #0x0]\n"
+            "ldr q27, [x22, #0x0]\n"
+            "movi v26.4s, #0x0\n"
+            "sub x20, x22, #0x2\n"
+            "ldr q25, [x22, #0x10]\n"
+            "ldr q24, [%x[b_ptr], #0x10]\n"
+            "sub x21, x21, #0x1\n"
+            "add x22, x22, #0x22\n"
+            "ldr q23, [%x[b_ptr], #0x20]\n"
+            "ldr q22, [%x[b_ptr], #0x30]\n"
+            "ld1r { v21.8h }, [x20]\n"
+            "ldr q20, [%x[b_ptr], #-0x8]\n"
+            "sshl v16.16b, v28.16b, v31.16b\n"
+            "and v28.16b, v28.16b, v30.16b\n"
+            "sshl v19.16b, v24.16b, v31.16b\n"
+            "and v24.16b, v24.16b, v30.16b\n"
+            "add %x[b_ptr], %x[b_ptr], #0x48\n"
+            "sshl v18.16b, v23.16b, v31.16b\n"
+            "and v23.16b, v23.16b, v30.16b\n"
+            ".inst 0x4f9be21a  // sdot v26.4s, v16.16b, v27.4b[0]\n"
+            "sshl v17.16b, v22.16b, v31.16b\n"
+            "and v22.16b, v22.16b, v30.16b\n"
+            "fcvtl v21.4s, v21.4h\n"
+            "fcvtl v16.4s, v20.4h\n"
+            ".inst 0x4f99e39a  // sdot v26.4s, v28.16b, v25.4b[0]\n"
+            "fmul v16.4s, v16.4s, v21.4s\n"
+            ".inst 0x4fbbe27a  // sdot v26.4s, v19.16b, v27.4b[1]\n"
+            ".inst 0x4fb9e31a  // sdot v26.4s, v24.16b, v25.4b[1]\n"
+            ".inst 0x4f9bea5a  // sdot v26.4s, v18.16b, v27.4b[2]\n"
+            ".inst 0x4f99eafa  // sdot v26.4s, v23.16b, v25.4b[2]\n"
+            ".inst 0x4fbbea3a  // sdot v26.4s, v17.16b, v27.4b[3]\n"
+            ".inst 0x4fb9eada  // sdot v26.4s, v22.16b, v25.4b[3]\n"
+            "scvtf v26.4s, v26.4s, #0x4\n"
+            "fmla v29.4s, v26.4s, v16.4s\n"
+            "cbnz x21, 2b\n"
+            "sub %x[nc], %x[nc], #0x4\n"
+            "str q29, [%x[res_ptr], #0x0]\n"
+            "add %x[res_ptr], %x[res_ptr], #0x10\n"
+            "cbnz %x[nc], 1b\n"
+            : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [nc] "+&r" (nc)
+            : [a_ptr] "r" (a_ptr), [nb] "r" (nb)
+            : "memory", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "x20", "x21", "x22"
+            );
+        return;
+    }
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
     if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
         const block_q4_0x4 * b_ptr = (const block_q4_0x4 *)vx;
@@ -1128,7 +1190,7 @@ static void ggml_gemm_q4_0_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, c
     UNUSED(blocklen);
 
 #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
-    if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
+    if (ggml_cpu_has_neon()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
@@ -4136,7 +4198,7 @@ static const ggml::cpu::tensor_traits * ggml_aarch64_get_optimal_repack_type(con
                 return &ggml::cpu::aarch64::q4_0_4x8_q8_0;
             }
         }
-        if (ggml_cpu_has_neon() && ggml_cpu_has_dotprod()) {
+        if (ggml_cpu_has_neon()) {
             if (cur->ne[1] % 4 == 0) {
                 return &ggml::cpu::aarch64::q4_0_4x4_q8_0;
             }
