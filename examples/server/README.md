@@ -449,52 +449,56 @@ These words will not be included in the completion, so make sure to add them to 
 
 `timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
 
+`post_sampling_probs`: Returns the probabilities of top `n_probs` tokens after applying sampling chain.
+
 **Response format**
 
 - Note: In streaming mode (`stream`), only `content`, `tokens` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
 
 - `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has a nested array `top_logprobs`. It contains at **maximum** `n_probs` elements:
-
-```json
-{
-  "content": "<the generated completion text>",
-  "tokens": [ generated token ids if requested ],
-  ...
-  "probs": [
-    {
-      "id": <token id>,
-      "logprob": float,
-      "token": "<most likely token>",
-      "bytes": [int, int, ...],
-      "top_logprobs": [
-        {
-          "id": <token id>,
-          "logprob": float,
-          "token": "<token text>",
-          "bytes": [int, int, ...],
-        },
-        {
-          "id": <token id>,
-          "logprob": float,
-          "token": "<token text>",
-          "bytes": [int, int, ...],
-        },
-        ...
-      ]
-    },
-    {
-      "id": <token id>,
-      "logprob": float,
-      "token": "<most likely token>",
-      "bytes": [int, int, ...],
-      "top_logprobs": [
-        ...
-      ]
-    },
+  ```json
+  {
+    "content": "<the generated completion text>",
+    "tokens": [ generated token ids if requested ],
     ...
-  ]
-},
-```
+    "probs": [
+      {
+        "id": <token id>,
+        "logprob": float,
+        "token": "<most likely token>",
+        "bytes": [int, int, ...],
+        "top_logprobs": [
+          {
+            "id": <token id>,
+            "logprob": float,
+            "token": "<token text>",
+            "bytes": [int, int, ...],
+          },
+          {
+            "id": <token id>,
+            "logprob": float,
+            "token": "<token text>",
+            "bytes": [int, int, ...],
+          },
+          ...
+        ]
+      },
+      {
+        "id": <token id>,
+        "logprob": float,
+        "token": "<most likely token>",
+        "bytes": [int, int, ...],
+        "top_logprobs": [
+          ...
+        ]
+      },
+      ...
+    ]
+  },
+  ```
+  Please note that if `post_sampling_probs` is set to `true`:
+    - `logprob` will be replace with `prob`, with the value between 0.0 and 1.0
+    - Returned number of probabilities may be less than `n_probs`
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `tokens`: Same as `content` but represented as raw token ids. Only populated if `"return_tokens": true` or `"stream": true` in the request.

@@ -309,3 +309,30 @@ def test_n_probs_stream():
                     assert "token" in prob and type(prob["token"]) == str
                     assert "logprob" in prob and prob["logprob"] <= 0.0
                     assert "bytes" in prob and type(prob["bytes"]) == list
+
+
+def test_n_probs_post_sampling():
+    global server
+    server.multi_token_probs = True
+    server.start()
+    res = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "n_probs": 10,
+        "temperature": 0.0,
+        "n_predict": 5,
+        "post_sampling_probs": True,
+    })
+    assert res.status_code == 200
+    assert "completion_probabilities" in res.body
+    assert len(res.body["completion_probabilities"]) == 5
+    for tok in res.body["completion_probabilities"]:
+        assert "id" in tok and tok["id"] > 0
+        assert "token" in tok and type(tok["token"]) == str
+        assert "prob" in tok and 0.0 <= tok["prob"] <= 1.0
+        assert "bytes" in tok and type(tok["bytes"]) == list
+        assert len(tok["top_logprobs"]) == 10
+        for prob in tok["top_logprobs"]:
+            assert "id" in prob and prob["id"] > 0
+            assert "token" in prob and type(prob["token"]) == str
+            assert "prob" in prob and 0.0 <= prob["prob"] <= 1.0
+            assert "bytes" in prob and type(prob["bytes"]) == list
