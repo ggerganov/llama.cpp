@@ -80,6 +80,7 @@ enum llama_example {
     LLAMA_EXAMPLE_LLAVA,
     LLAMA_EXAMPLE_LOOKUP,
     LLAMA_EXAMPLE_PARALLEL,
+    LLAMA_EXAMPLE_TTS,
 
     LLAMA_EXAMPLE_COUNT,
 };
@@ -159,6 +160,7 @@ struct common_params_sampling {
 
 struct common_params_speculative {
     std::vector<ggml_backend_dev_t> devices; // devices to use for offloading
+
     int32_t n_ctx        =     0; // draft context size
     int32_t n_max        =    16; // maximum number of tokens to draft during speculative decoding
     int32_t n_min        =     5; // minimum number of draft tokens to use for speculative decoding
@@ -170,6 +172,14 @@ struct common_params_speculative {
     struct cpu_params cpuparams_batch;
 
     std::string model = ""; // draft model for speculative decoding                          // NOLINT
+};
+
+struct common_params_vocoder {
+    std::string hf_repo = ""; // HF repo                                                     // NOLINT
+    std::string hf_file = ""; // HF file                                                     // NOLINT
+
+    std::string model     = ""; // model path                                                // NOLINT
+    std::string model_url = ""; // model url to download                                     // NOLINT
 };
 
 struct common_params {
@@ -214,8 +224,9 @@ struct common_params {
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
-    struct common_params_sampling sampling;
+    struct common_params_sampling    sampling;
     struct common_params_speculative speculative;
+    struct common_params_vocoder     vocoder;
 
     std::string model                = ""; // model path                                                    // NOLINT
     std::string model_alias          = ""; // model alias                                                   // NOLINT

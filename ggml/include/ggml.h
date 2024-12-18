@@ -1564,17 +1564,6 @@ extern "C" {
         int                   d1, // dilation dimension 1
         bool                  is_2D);
 
-    GGML_API struct ggml_tensor * ggml_conv_depthwise_2d(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a,  // convolution kernel
-            struct ggml_tensor  * b,  // data
-            int                  s0,  // stride dimension 0
-            int                  s1,  // stride dimension 1
-            int                  p0,  // padding dimension 0
-            int                  p1,  // padding dimension 1
-            int                  d0,  // dilation dimension 0
-            int                  d1); // dilation dimension 1
-
     GGML_API struct ggml_tensor * ggml_conv_1d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,   // convolution kernel
@@ -1591,6 +1580,23 @@ extern "C" {
             struct ggml_tensor  * b,  // data
             int                   s,  // stride
             int                   d); // dilation
+
+    // depthwise
+    // TODO: this is very likely wrong for some cases! - needs more testing
+    GGML_API struct ggml_tensor * ggml_conv_1d_dw(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,   // convolution kernel
+            struct ggml_tensor  * b,   // data
+            int                   s0,  // stride
+            int                   p0,  // padding
+            int                   d0); // dilation
+
+    GGML_API struct ggml_tensor * ggml_conv_1d_dw_ph(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,   // convolution kernel
+            struct ggml_tensor  * b,   // data
+            int                   s0,  // stride
+            int                   d0); // dilation
 
     GGML_API struct ggml_tensor * ggml_conv_transpose_1d(
             struct ggml_context * ctx,
@@ -1610,7 +1616,6 @@ extern "C" {
             int                   p1,  // padding dimension 1
             int                   d0,  // dilation dimension 0
             int                   d1); // dilation dimension 1
-
 
     // kernel size is a->ne[0] x a->ne[1]
     // stride is equal to kernel size
@@ -1637,6 +1642,18 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    // depthwise
+    GGML_API struct ggml_tensor * ggml_conv_2d_dw(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,  // convolution kernel
+            struct ggml_tensor  * b,  // data
+            int                  s0,  // stride dimension 0
+            int                  s1,  // stride dimension 1
+            int                  p0,  // padding dimension 0
+            int                  p1,  // padding dimension 1
+            int                  d0,  // dilation dimension 0
+            int                  d1); // dilation dimension 1
 
     GGML_API struct ggml_tensor * ggml_conv_transpose_2d_p0(
             struct ggml_context * ctx,

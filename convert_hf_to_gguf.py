@@ -221,17 +221,17 @@ class Model:
             self.gguf_writer.add_context_length(n_ctx)
             logger.info(f"gguf: context length = {n_ctx}")
 
-        n_embd = self.find_hparam(["hidden_size", "n_embd"])
-        self.gguf_writer.add_embedding_length(n_embd)
-        logger.info(f"gguf: embedding length = {n_embd}")
+        if (n_embd := self.find_hparam(["hidden_size", "n_embd"], optional=True)) is not None:
+            self.gguf_writer.add_embedding_length(n_embd)
+            logger.info(f"gguf: embedding length = {n_embd}")
 
         if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
             logger.info(f"gguf: feed forward length = {n_ff}")
 
-        n_head = self.find_hparam(["num_attention_heads", "n_head"])
-        self.gguf_writer.add_head_count(n_head)
-        logger.info(f"gguf: head count = {n_head}")
+        if (n_head := self.find_hparam(["num_attention_heads", "n_head"], optional=True)) is not None:
+            self.gguf_writer.add_head_count(n_head)
+            logger.info(f"gguf: head count = {n_head}")
 
         if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
             self.gguf_writer.add_head_count_kv(n_head_kv)
@@ -296,7 +296,9 @@ class Model:
                     break
 
             for new_name, data_torch in (self.modify_tensors(data_torch, name, bid)):
-                data = data_torch.squeeze().numpy()
+                # TODO: why do we squeeze here?
+                # data = data_torch.squeeze().numpy()
+                data = data_torch.numpy()
 
                 # if data ends up empty, it means data_torch was a scalar tensor -> restore
                 if len(data.shape) == 0:
@@ -324,6 +326,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
+                            gguf.MODEL_TENSOR.POSNET_NORM1,
+                            gguf.MODEL_TENSOR.POSNET_NORM2,
                         )
                     )
                     or not new_name.endswith(".weight")
@@ -688,6 +692,9 @@ class Model:
 
         return res
         # Marker: End get_vocab_base_pre
+
+    def _set_vocab_none(self) -> None:
+        self.gguf_writer.add_tokenizer_model("none")
 
     def _set_vocab_gpt2(self) -> None:
         tokens, toktypes, tokpre = self.get_vocab_base()
@@ -2025,6 +2032,44 @@ class Qwen2VLModel(Model):
             if name.startswith("visual."):
                 continue
             yield name, data
+
+
+@Model.register("WavTokenizerDec")
+class WavTokenizerDecModel(Model):
+    model_arch = gguf.MODEL_ARCH.WAVTOKENIZER_DEC
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        if \
+                name.endswith("codebook.cluster_size") or \
+                name.endswith("codebook.embed_avg") or \
+                name.endswith("codebook.inited"):
+            logger.debug(f"Skipping {name!r}")
+            return []
+
+        logger.info(f"{self.map_tensor_name(name)} -> {data_torch.shape}")
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def set_vocab(self):
+        self._set_vocab_none()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_vocab_size         (self.hparams["vocab_size"])
+        self.gguf_writer.add_features_length    (self.hparams["n_embd_features"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_ff"])
+        self.gguf_writer.add_group_norm_eps     (self.hparams["group_norm_epsilon"])
+        self.gguf_writer.add_group_norm_groups  (self.hparams["group_norm_groups"])
+
+        self.gguf_writer.add_posnet_embedding_length(self.hparams["posnet"]["n_embd"])
+        self.gguf_writer.add_posnet_block_count     (self.hparams["posnet"]["n_layer"])
+
+        self.gguf_writer.add_convnext_embedding_length(self.hparams["convnext"]["n_embd"])
+        self.gguf_writer.add_convnext_block_count     (self.hparams["convnext"]["n_layer"])
+
+        self.gguf_writer.add_causal_attention(False)
 
 
 @Model.register("Qwen2MoeForCausalLM")
