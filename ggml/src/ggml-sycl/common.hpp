@@ -31,10 +31,16 @@
 #pragma clang diagnostic ignored "-Wnested-anon-types"
 #include "ggml-common.h"
 #pragma clang diagnostic pop
-#include "ggml-impl.h"
 
 void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
+
+static int g_ggml_sycl_debug = 0;
+#define GGML_SYCL_DEBUG(...)        \
+  do {                              \
+    if (g_ggml_sycl_debug)          \
+      fprintf(stderr, __VA_ARGS__); \
+  } while (0)
 
 #define CHECK_TRY_ERROR(expr)                                            \
   [&]() {                                                                \
@@ -161,7 +167,8 @@ inline dpct::err0 ggml_sycl_set_device(const int device) try {
   int current_device_id;
   SYCL_CHECK(CHECK_TRY_ERROR(current_device_id = get_current_device_id()));
 
-  GGML_LOG_DEBUG("ggml_sycl_set_device device_id=%d,current_device_id=%d\n", device, current_device_id);
+  // GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d,
+  // current_device_id=%d\n", device, current_device);
   if (device == current_device_id) {
     return 0;
   }
