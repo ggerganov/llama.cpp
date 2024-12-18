@@ -132,6 +132,7 @@ response = requests.post(
         "prompt": [prefix + words, *suffix],
         "n_predict": 1024,
         "cache_prompt": True,
+        "return_tokens": True,
         "samplers": ["top_k"],
         "top_k": 16,
         "seed": 1003,
