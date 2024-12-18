@@ -175,7 +175,11 @@ struct common_params_speculative {
 };
 
 struct common_params_vocoder {
-    std::string model = ""; // vocoder model for producing audio                             // NOLINT
+    std::string hf_repo = ""; // HF repo                                                     // NOLINT
+    std::string hf_file = ""; // HF file                                                     // NOLINT
+
+    std::string model     = ""; // model path                                                // NOLINT
+    std::string model_url = ""; // model url to download                                     // NOLINT
 };
 
 struct common_params {

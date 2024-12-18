@@ -461,7 +461,12 @@ int main(int argc, char ** argv) {
     model_ttc = llama_init_ttc.model;
     ctx_ttc = llama_init_ttc.context;
 
-    params.model = params.vocoder.model;
+    // TODO: refactor in a common struct
+    params.model     = params.vocoder.model;
+    params.model_url = params.vocoder.model_url;
+    params.hf_repo   = params.vocoder.hf_repo;
+    params.hf_file   = params.vocoder.hf_file;
+
     params.embedding = true;
 
     common_init_result llama_init_cts = common_init_from_params(params);

@@ -119,29 +119,33 @@ std::string common_arg::to_string() {
 // utils
 //
 
-static void common_params_handle_model_default(common_params & params) {
-    if (!params.hf_repo.empty()) {
+static void common_params_handle_model_default(
+        std::string & model,
+        std::string & model_url,
+        std::string & hf_repo,
+        std::string & hf_file) {
+    if (!hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
-        if (params.hf_file.empty()) {
-            if (params.model.empty()) {
+        if (hf_file.empty()) {
+            if (model.empty()) {
                 throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
             }
-            params.hf_file = params.model;
-        } else if (params.model.empty()) {
+            hf_file = model;
+        } else if (model.empty()) {
             // this is to avoid different repo having same file name, or same file name in different subdirs
-            std::string filename = params.hf_repo + "_" + params.hf_file;
+            std::string filename = hf_repo + "_" + hf_file;
             // to make sure we don't have any slashes in the filename
             string_replace_all(filename, "/", "_");
-            params.model = fs_get_cache_file(filename);
+            model = fs_get_cache_file(filename);
         }
-    } else if (!params.model_url.empty()) {
-        if (params.model.empty()) {
-            auto f = string_split<std::string>(params.model_url, '#').front();
+    } else if (!model_url.empty()) {
+        if (model.empty()) {
+            auto f = string_split<std::string>(model_url, '#').front();
             f = string_split<std::string>(f, '?').front();
-            params.model = fs_get_cache_file(string_split<std::string>(f, '/').back());
+            model = fs_get_cache_file(string_split<std::string>(f, '/').back());
         }
-    } else if (params.model.empty()) {
-        params.model = DEFAULT_MODEL_PATH;
+    } else if (model.empty()) {
+        model = DEFAULT_MODEL_PATH;
     }
 }
 
@@ -276,7 +280,9 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
     }
 
-    common_params_handle_model_default(params);
+    // TODO: refactor model params in a common struct
+    common_params_handle_model_default(params.model,         params.model_url,         params.hf_repo,         params.hf_file);
+    common_params_handle_model_default(params.vocoder.model, params.vocoder.model_url, params.vocoder.hf_repo, params.vocoder.hf_file);
 
     if (params.escape) {
         string_process_escapes(params.prompt);
@@ -1581,6 +1587,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.hf_file = value;
         }
     ).set_env("LLAMA_ARG_HF_FILE"));
+    add_opt(common_arg(
+        {"-hfrv", "--hf-repo-v"}, "REPO",
+        "Hugging Face model repository for the vocoder model (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.vocoder.hf_repo = value;
+        }
+    ).set_env("LLAMA_ARG_HF_REPO_V"));
+    add_opt(common_arg(
+        {"-hffv", "--hf-file-v"}, "FILE",
+        "Hugging Face model file for the vocoder model (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.vocoder.hf_file = value;
+        }
+    ).set_env("LLAMA_ARG_HF_FILE_V"));
     add_opt(common_arg(
         {"-hft", "--hf-token"}, "TOKEN",
         "Hugging Face access token (default: value from HF_TOKEN environment variable)",
