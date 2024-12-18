@@ -1086,16 +1086,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"-mtp", "--multi-token-probs"},
-        string_format(
-            "allow getting probabilities for multiple tokens. note: this will slow down the generation speed (default: %s)",
-            params.sampling.multi_token_probs ? "enabled" : "disabled"
-        ),
-        [](common_params & params) {
-            params.sampling.multi_token_probs = true;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_MULTI_TOKEN_PROBS"));
-    add_opt(common_arg(
         {"--pooling"}, "{none,mean,cls,last,rank}",
         "pooling type for embeddings, use model default if unspecified",
         [](common_params & params, const std::string & value) {
