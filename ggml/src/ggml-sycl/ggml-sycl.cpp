@@ -4639,10 +4639,9 @@ static ggml_backend_dev_t ggml_backend_sycl_reg_get_device(ggml_backend_reg_t re
 static void *ggml_backend_sycl_reg_get_proc_address(ggml_backend_reg_t reg, const char *name) {
     GGML_UNUSED(reg);
 
-    // TODO: update to the current function signature
-    //if (strcmp(name, "ggml_backend_split_buffer_type") == 0) {
-    //    return (void *)ggml_backend_sycl_split_buffer_type;
-    //}
+    if (strcmp(name, "ggml_backend_split_buffer_type") == 0) {
+        return (void *)ggml_backend_sycl_split_buffer_type;
+    }
 
     // SYCL doesn't support registering host memory, left here for reference
     // "ggml_backend_register_host_buffer"
