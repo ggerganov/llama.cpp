@@ -504,8 +504,8 @@ These words will not be included in the completion, so make sure to add them to 
 - `tokens`: Same as `content` but represented as raw token ids. Only populated if `"return_tokens": true` or `"stream": true` in the request.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
 - `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`. These options may differ from the original ones in some way (e.g. bad values filtered out, strings converted to tokens, etc.).
-- `model`: The path to the model loaded with `-m`
-- `prompt`: The provided `prompt`
+- `model`: The model alias (for model path, please use `/props` endpoint)
+- `prompt`: The processed `prompt` (special tokens may be added)
 - `stop_type`: Indicating whether the completion has stopped. Possible values are:
   - `none`: Generating (not stopped)
   - `eos`: Stopped because it encountered the EOS token
