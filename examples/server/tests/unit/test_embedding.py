@@ -92,10 +92,6 @@ def test_embedding_pooling_none():
     for x in res.body[0]['embedding']:
         assert abs(sum([x ** 2 for x in x]) - 1) > EPSILON
 
-    # make sure embedding vector is not normalized
-    for x in res.body[0]['embedding']:
-        assert abs(sum([x ** 2 for x in x]) - 1) > EPSILON
-
 
 def test_embedding_pooling_none_oai():
     global server
