@@ -2691,6 +2691,7 @@ class BertModel(Model):
 @Model.register("RobertaModel")
 class RobertaModel(BertModel):
     model_arch = gguf.MODEL_ARCH.BERT
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
