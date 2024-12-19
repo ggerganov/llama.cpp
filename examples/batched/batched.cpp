@@ -65,6 +65,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
     auto sparams = llama_sampler_chain_default_params();
+    sparams.no_perf = false;
 
     llama_sampler * smpl = llama_sampler_chain_init(sparams);
 

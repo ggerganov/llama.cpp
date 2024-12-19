@@ -75,7 +75,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         }
 
         std::vector<float> emb_norm(emb_unorm.size());
-        common_embd_normalize(emb_unorm.data(), emb_norm.data(), n_embd);
+        common_embd_normalize(emb_unorm.data(), emb_norm.data(), n_embd, 2);
         result.push_back(emb_norm);
 
 #ifdef GRIT_DEBUG
