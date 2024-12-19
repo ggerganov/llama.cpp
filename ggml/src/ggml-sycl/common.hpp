@@ -26,7 +26,11 @@
 
 #define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
+/* suppress warning spam */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
 #include "ggml-common.h"
+#pragma clang diagnostic pop
 
 void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
