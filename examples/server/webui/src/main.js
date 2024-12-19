@@ -1,7 +1,19 @@
-import './styles.css';
+import './styles.scss';
 import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vue.esm-bundler.js';
 import MarkdownIt from 'markdown-it';
 import TextLineStream from 'textlinestream';
+
+// math formula rendering
+import 'katex/dist/katex.min.css';
+import markdownItKatexGpt from './katex-gpt';
+import markdownItKatexNormal from '@vscode/markdown-it-katex';
+
+// code highlighting
+import hljs from './highlight-config';
+import daisyuiThemes from 'daisyui/src/theming/themes';
+
+// ponyfill for missing ReadableStream asyncIterator on Safari
+import { asyncIterator } from "@sec-ant/readable-stream/ponyfill/asyncIterator";
 
 const isDev = import.meta.env.MODE === 'development';
 
@@ -13,15 +25,18 @@ const escapeAttr = (str) => str.replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const copyStr = (str) => navigator.clipboard.writeText(str);
 
 // constants
-const BASE_URL = localStorage.getItem('base') // for debugging
-  || (new URL('.', document.baseURI).href).toString().replace(/\/$/, ''); // for production
+const BASE_URL = isDev
+  ? (localStorage.getItem('base') || 'https://localhost:8080') // for debugging
+  : (new URL('.', document.baseURI).href).toString().replace(/\/$/, ''); // for production
+console.log({ BASE_URL });
+
 const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: '',
   systemMessage: 'You are a helpful assistant.',
   showTokensPerSecond: false,
   // make sure these default values are in sync with `common.h`
-  samplers: 'dkypmxt',
+  samplers: 'edkypmxt',
   temperature: 0.8,
   dynatemp_range: 0.0,
   dynatemp_exponent: 1.0,
@@ -69,12 +84,39 @@ const CONFIG_INFO = {
 // config keys having numeric value (i.e. temperature, top_k, top_p, etc)
 const CONFIG_NUMERIC_KEYS = Object.entries(CONFIG_DEFAULT).filter(e => isNumeric(e[1])).map(e => e[0]);
 // list of themes supported by daisyui
-const THEMES = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset'];
+const THEMES = ['light', 'dark']
+  // make sure light & dark are always at the beginning
+  .concat(Object.keys(daisyuiThemes).filter(t => t !== 'light' && t !== 'dark'));
 
 // markdown support
 const VueMarkdown = defineComponent(
   (props) => {
-    const md = shallowRef(new MarkdownIt({ breaks: true }));
+    const md = shallowRef(new MarkdownIt({
+      breaks: true,
+      highlight: function (str, lang) { // Add highlight.js
+        if (lang && hljs.getLanguage(lang)) {
+          try {
+            return '<pre><code class="hljs">' +
+                   hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                   '</code></pre>';
+          } catch (__) {}
+        }
+        return '<pre><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
+      }
+    }));
+    // support latex with double dollar sign and square brackets
+    md.value.use(markdownItKatexGpt, {
+      delimiters: [
+        { left: '\\[', right: '\\]', display: true },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '$$', right: '$$', display: false },
+        // do not add single dollar sign here, other wise it will confused with dollar used for money symbol
+      ],
+      throwOnError: false,
+    });
+    // support latex with single dollar sign
+    md.value.use(markdownItKatexNormal, { throwOnError: false });
+    // add copy button to code blocks
     const origFenchRenderer = md.value.renderer.rules.fence;
     md.value.renderer.rules.fence = (tokens, idx, ...args) => {
       const content = tokens[idx].content;
@@ -244,7 +286,7 @@ async function* sendSSEPostRequest(url, fetchOptions) {
   const lines = res.body
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new TextLineStream());
-  for await (const line of lines) {
+  for await (const line of asyncIterator(lines)) {
     if (isDev) console.log({line});
     if (line.startsWith('data:') && !line.endsWith('[DONE]')) {
       const data = JSON.parse(line.slice(5));
@@ -278,6 +320,7 @@ const mainApp = createApp({
       themes: THEMES,
       configDefault: {...CONFIG_DEFAULT},
       configInfo: {...CONFIG_INFO},
+      isDev,
     }
   },
   computed: {},
@@ -289,6 +332,7 @@ const mainApp = createApp({
       if (this.isGenerating) chatScrollToBottom(true);
     });
     resizeObserver.observe(pendingMsgElem);
+    this.setSelectedTheme(this.selectedTheme);
   },
   watch: {
     viewingConvId: function(val, oldVal) {
@@ -305,6 +349,8 @@ const mainApp = createApp({
     },
     setSelectedTheme(theme) {
       this.selectedTheme = theme;
+      document.body.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-color-scheme', daisyuiThemes[theme]?.['color-scheme'] ?? 'auto');
       StorageUtils.setTheme(theme);
     },
     newConversation() {
@@ -399,7 +445,7 @@ const mainApp = createApp({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': this.config.apiKey ? `Bearer ${this.config.apiKey}` : undefined,
+            ...(this.config.apiKey ? {'Authorization': `Bearer ${this.config.apiKey}`} : {})
           },
           body: JSON.stringify(params),
           signal: abortController.signal,
@@ -513,6 +559,17 @@ const mainApp = createApp({
     fetchMessages() {
       this.messages = StorageUtils.getOneConversation(this.viewingConvId)?.messages ?? [];
     },
+
+    // debug functions
+    async debugImportDemoConv() {
+      const res = await fetch('/demo-conversation.json');
+      const demoConv = await res.json();
+      StorageUtils.remove(demoConv.id);
+      for (const msg of demoConv.messages) {
+        StorageUtils.appendMsg(demoConv.id, msg);
+      }
+      this.fetchConversation();
+    }
   },
 });
 mainApp.config.errorHandler = alert;

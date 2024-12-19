@@ -221,17 +221,17 @@ class Model:
             self.gguf_writer.add_context_length(n_ctx)
             logger.info(f"gguf: context length = {n_ctx}")
 
-        n_embd = self.find_hparam(["hidden_size", "n_embd"])
-        self.gguf_writer.add_embedding_length(n_embd)
-        logger.info(f"gguf: embedding length = {n_embd}")
+        if (n_embd := self.find_hparam(["hidden_size", "n_embd"], optional=True)) is not None:
+            self.gguf_writer.add_embedding_length(n_embd)
+            logger.info(f"gguf: embedding length = {n_embd}")
 
         if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
             logger.info(f"gguf: feed forward length = {n_ff}")
 
-        n_head = self.find_hparam(["num_attention_heads", "n_head"])
-        self.gguf_writer.add_head_count(n_head)
-        logger.info(f"gguf: head count = {n_head}")
+        if (n_head := self.find_hparam(["num_attention_heads", "n_head"], optional=True)) is not None:
+            self.gguf_writer.add_head_count(n_head)
+            logger.info(f"gguf: head count = {n_head}")
 
         if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
             self.gguf_writer.add_head_count_kv(n_head_kv)
@@ -296,7 +296,9 @@ class Model:
                     break
 
             for new_name, data_torch in (self.modify_tensors(data_torch, name, bid)):
-                data = data_torch.squeeze().numpy()
+                # TODO: why do we squeeze here?
+                # data = data_torch.squeeze().numpy()
+                data = data_torch.numpy()
 
                 # if data ends up empty, it means data_torch was a scalar tensor -> restore
                 if len(data.shape) == 0:
@@ -324,6 +326,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
+                            gguf.MODEL_TENSOR.POSNET_NORM1,
+                            gguf.MODEL_TENSOR.POSNET_NORM2,
                         )
                     )
                     or not new_name.endswith(".weight")
@@ -664,6 +668,9 @@ class Model:
         if chkhsh == "8b5a93ed704057481f240da0be7e7dca721d7f8f4755263b6807227a2cbeae65":
             # ref: https://huggingface.co/sentence-transformers/stsb-roberta-base
             res = "roberta-bpe"
+        if chkhsh == "ad851be1dba641f2e3711822f816db2c265f788b37c63b4e1aeacb9ee92de8eb":
+            # ref: https://huggingface.co/ai-sage/GigaChat-20B-A3B-instruct
+            res = "gigachat"
 
         if res is None:
             logger.warning("\n")
@@ -685,6 +692,9 @@ class Model:
 
         return res
         # Marker: End get_vocab_base_pre
+
+    def _set_vocab_none(self) -> None:
+        self.gguf_writer.add_tokenizer_model("none")
 
     def _set_vocab_gpt2(self) -> None:
         tokens, toktypes, tokpre = self.get_vocab_base()
@@ -1999,6 +2009,67 @@ class Qwen2Model(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.YARN)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
                 self.gguf_writer.add_rope_scaling_orig_ctx_len(self.hparams["rope_scaling"]["original_max_position_embeddings"])
+
+
+@Model.register("Qwen2VLForConditionalGeneration")
+class Qwen2VLModel(Model):
+    model_arch = gguf.MODEL_ARCH.QWEN2VL
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        mrope_section = self.hparams["rope_scaling"]["mrope_section"]
+        mrope_section += [0] * max(0, 4 - len(mrope_section))
+        self.gguf_writer.add_rope_dimension_sections(mrope_section)
+
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_gpt2()
+
+    def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
+        for name, data in super().get_tensors():
+            if name.startswith("visual."):
+                continue
+            yield name, data
+
+
+@Model.register("WavTokenizerDec")
+class WavTokenizerDecModel(Model):
+    model_arch = gguf.MODEL_ARCH.WAVTOKENIZER_DEC
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        if \
+                name.endswith("codebook.cluster_size") or \
+                name.endswith("codebook.embed_avg") or \
+                name.endswith("codebook.inited"):
+            logger.debug(f"Skipping {name!r}")
+            return []
+
+        logger.info(f"{self.map_tensor_name(name)} -> {data_torch.shape}")
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def set_vocab(self):
+        self._set_vocab_none()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_vocab_size         (self.hparams["vocab_size"])
+        self.gguf_writer.add_features_length    (self.hparams["n_embd_features"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_ff"])
+        self.gguf_writer.add_group_norm_eps     (self.hparams["group_norm_epsilon"])
+        self.gguf_writer.add_group_norm_groups  (self.hparams["group_norm_groups"])
+
+        self.gguf_writer.add_posnet_embedding_length(self.hparams["posnet"]["n_embd"])
+        self.gguf_writer.add_posnet_block_count     (self.hparams["posnet"]["n_layer"])
+
+        self.gguf_writer.add_convnext_embedding_length(self.hparams["convnext"]["n_embd"])
+        self.gguf_writer.add_convnext_block_count     (self.hparams["convnext"]["n_layer"])
+
+        self.gguf_writer.add_causal_attention(False)
 
 
 @Model.register("Qwen2MoeForCausalLM")
@@ -3428,6 +3499,97 @@ class ArcticModel(Model):
                     data_torch = torch.stack(datas, dim=0)
 
                     merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
+
+                    new_name = self.map_tensor_name(merged_name)
+
+                    tensors.append((new_name, data_torch))
+                return tensors
+            else:
+                return []
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def prepare_tensors(self):
+        super().prepare_tensors()
+
+        if self._experts is not None:
+            # flatten `list[dict[str, Tensor]]` into `list[str]`
+            experts = [k for d in self._experts for k in d.keys()]
+            if len(experts) > 0:
+                raise ValueError(f"Unprocessed experts: {experts}")
+
+
+@Model.register("DeepseekForCausalLM")
+class DeepseekModel(Model):
+    model_arch = gguf.MODEL_ARCH.DEEPSEEK
+
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        hparams = self.hparams
+        if "head_dim" in hparams:
+            rope_dim = hparams["head_dim"]
+        else:
+            rope_dim = hparams["hidden_size"] // hparams["num_attention_heads"]
+
+        self.gguf_writer.add_rope_dimension_count(rope_dim)
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
+        self.gguf_writer.add_leading_dense_block_count(hparams["first_k_dense_replace"])
+        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+        self.gguf_writer.add_expert_feed_forward_length(hparams["moe_intermediate_size"])
+        self.gguf_writer.add_expert_weights_scale(1.0)
+        self.gguf_writer.add_expert_count(hparams["n_routed_experts"])
+        self.gguf_writer.add_expert_shared_count(hparams["n_shared_experts"])
+
+    _experts: list[dict[str, Tensor]] | None = None
+
+    @staticmethod
+    def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
+        if n_head_kv is not None and n_head != n_head_kv:
+            n_head = n_head_kv
+        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(weights.shape))
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        n_head = self.hparams["num_attention_heads"]
+        n_kv_head = self.hparams.get("num_key_value_heads")
+
+        if name.endswith(("q_proj.weight", "q_proj.bias")):
+            data_torch = DeepseekModel.permute(data_torch, n_head, n_head)
+        if name.endswith(("k_proj.weight", "k_proj.bias")):
+            data_torch = DeepseekModel.permute(data_torch, n_head, n_kv_head)
+
+        # process the experts separately
+        if name.find("mlp.experts") != -1:
+            n_experts = self.hparams["n_routed_experts"]
+            assert bid is not None
+
+            if self._experts is None:
+                self._experts = [{} for _ in range(self.block_count)]
+
+            self._experts[bid][name] = data_torch
+
+            if len(self._experts[bid]) >= n_experts * 3:
+                tensors: list[tuple[str, Tensor]] = []
+
+                # merge the experts into a single 3d tensor
+                for w_name in ["down_proj", "gate_proj", "up_proj"]:
+                    datas: list[Tensor] = []
+
+                    for xid in range(n_experts):
+                        ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
+                        datas.append(self._experts[bid][ename])
+                        del self._experts[bid][ename]
+
+                    data_torch = torch.stack(datas, dim=0)
+
+                    merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
 
                     new_name = self.map_tensor_name(merged_name)
 

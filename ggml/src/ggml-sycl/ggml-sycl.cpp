@@ -4488,7 +4488,16 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_SOFT_MAX:
             return true;
         case GGML_OP_ROPE:
-            return ggml_is_contiguous(op->src[0]);
+            {
+                const int mode = ((const int32_t *) op->op_params)[2];
+                if (mode & GGML_ROPE_TYPE_MROPE) {
+                    return false;
+                }
+                if (mode & GGML_ROPE_TYPE_VISION) {
+                    return false;
+                }
+                return ggml_is_contiguous(op->src[0]);
+            }
         case GGML_OP_IM2COL:
             // TODO: add support for the new F32 operations
             return op->src[0]->type == GGML_TYPE_F16;

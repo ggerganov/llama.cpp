@@ -15,7 +15,7 @@
 #define MIMETYPE_JSON "application/json; charset=utf-8"
 
 // auto generated files (update with ./deps.sh)
-#include "index.html.hpp"
+#include "index.html.gz.hpp"
 #include "loading.html.hpp"
 
 #include <atomic>
@@ -79,8 +79,9 @@ enum error_type {
 };
 
 struct slot_params {
-    bool stream       = true;
-    bool cache_prompt = true; // remember the prompt to avoid reprocessing all prompt
+    bool stream        = true;
+    bool cache_prompt  = true; // remember the prompt to avoid reprocessing all prompt
+    bool return_tokens = false;
 
     int32_t n_keep    =  0; // number of tokens to keep from initial prompt
     int32_t n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
@@ -135,7 +136,6 @@ struct slot_params {
             {"mirostat",                  sampling.mirostat},
             {"mirostat_tau",              sampling.mirostat_tau},
             {"mirostat_eta",              sampling.mirostat_eta},
-            {"penalize_nl",               sampling.penalize_nl},
             {"stop",                      antiprompt},
             {"max_tokens",                n_predict}, // User configured n_predict
             {"n_keep",                    n_keep},
@@ -184,6 +184,7 @@ struct server_task {
 
     static slot_params params_from_json_cmpl(
             const llama_model * model,
+            const llama_context * ctx,
             const common_params & params_base,
             const json & data) {
         slot_params params;
@@ -199,6 +200,7 @@ struct server_task {
 
         params.stream           = json_value(data, "stream",             false);
         params.cache_prompt     = json_value(data, "cache_prompt",       true);
+        params.return_tokens    = json_value(data, "return_tokens",      false);
         params.n_predict        = json_value(data, "n_predict",          json_value(data, "max_tokens", defaults.n_predict));
         params.n_indent         = json_value(data, "n_indent",           defaults.n_indent);
         params.n_keep           = json_value(data, "n_keep",             defaults.n_keep);
@@ -226,7 +228,6 @@ struct server_task {
         params.sampling.mirostat           = json_value(data, "mirostat",           defaults.sampling.mirostat);
         params.sampling.mirostat_tau       = json_value(data, "mirostat_tau",       defaults.sampling.mirostat_tau);
         params.sampling.mirostat_eta       = json_value(data, "mirostat_eta",       defaults.sampling.mirostat_eta);
-        params.sampling.penalize_nl        = json_value(data, "penalize_nl",        defaults.sampling.penalize_nl);
         params.sampling.seed               = json_value(data, "seed",               defaults.sampling.seed);
         params.sampling.n_probs            = json_value(data, "n_probs",            defaults.sampling.n_probs);
         params.sampling.min_keep           = json_value(data, "min_keep",           defaults.sampling.min_keep);
@@ -239,8 +240,27 @@ struct server_task {
         params.speculative.n_min = std::max(params.speculative.n_min, 2);
         params.speculative.n_max = std::max(params.speculative.n_max, 0);
 
+        // TODO: add more sanity checks for the input parameters
+
+        if (params.sampling.penalty_last_n < -1) {
+            throw std::runtime_error("Error: repeat_last_n must be >= -1");
+        }
+
+        if (params.sampling.dry_penalty_last_n < -1) {
+            throw std::runtime_error("Error: dry_penalty_last_n must be >= -1");
+        }
+
+        if (params.sampling.penalty_last_n == -1) {
+            // note: should be the slot's context and not the full context, but it's ok
+            params.sampling.penalty_last_n = llama_n_ctx(ctx);
+        }
+
+        if (params.sampling.dry_penalty_last_n == -1) {
+            params.sampling.dry_penalty_last_n = llama_n_ctx(ctx);
+        }
+
         if (params.sampling.dry_base < 1.0f) {
-           params.sampling.dry_base = defaults.sampling.dry_base;
+            params.sampling.dry_base = defaults.sampling.dry_base;
         }
 
         // sequence breakers for DRY
@@ -450,7 +470,10 @@ struct completion_token_output {
 
 struct server_task_result_cmpl_final : server_task_result {
     int index = 0;
-    std::string content;
+
+    std::string  content;
+    llama_tokens tokens;
+
     bool stream;
     result_timings timings;
     std::string prompt;
@@ -459,7 +482,7 @@ struct server_task_result_cmpl_final : server_task_result {
     int32_t n_decoded;
     int32_t n_prompt_tokens;
     int32_t n_tokens_cached;
-    int32_t has_new_line;
+    bool has_new_line;
     std::string stopping_word;
     stop_type stop = STOP_TYPE_NONE;
 
@@ -492,6 +515,7 @@ struct server_task_result_cmpl_final : server_task_result {
         json res = json {
             {"index",               index},
             {"content",             stream ? "" : content}, // in stream mode, content is already in last partial chunk
+            {"tokens",              stream ? llama_tokens {} : tokens},
             {"id_slot",             id_slot},
             {"stop",                true},
             {"model",               oaicompat_model},
@@ -521,9 +545,9 @@ struct server_task_result_cmpl_final : server_task_result {
         json choices = json::array({json{
             {"finish_reason", finish_reason},
             {"index", 0},
-            {"message", json{
+            {"message", json {
                 {"content", content},
-                {"role", "assistant"}
+                {"role",    "assistant"}
             }
         }}});
 
@@ -587,7 +611,9 @@ struct server_task_result_cmpl_final : server_task_result {
 
 struct server_task_result_cmpl_partial : server_task_result {
     int index = 0;
-    std::string content;
+
+    std::string  content;
+    llama_tokens tokens;
 
     int32_t n_decoded;
     int32_t n_prompt_tokens;
@@ -619,6 +645,7 @@ struct server_task_result_cmpl_partial : server_task_result {
         json res = json {
             {"index",            index},
             {"content",          content},
+            {"tokens",           tokens},
             {"stop",             false},
             {"id_slot",          id_slot},
             {"tokens_predicted", n_decoded},
@@ -660,7 +687,7 @@ struct server_task_result_cmpl_partial : server_task_result {
                 json second_ret = json{
                             {"choices", json::array({json{{"finish_reason", nullptr},
                                                             {"index", 0},
-                                                            {"delta", json{
+                                                            {"delta", json {
                                                             {"content", content}}}
                                                             }})},
                             {"created", t},
@@ -675,7 +702,7 @@ struct server_task_result_cmpl_partial : server_task_result {
                 {"finish_reason", nullptr},
                 {"index", 0},
                 {"delta",
-                json{
+                json {
                     {"content", content},
                 }},
             }});
@@ -699,16 +726,33 @@ struct server_task_result_cmpl_partial : server_task_result {
 
 struct server_task_result_embd : server_task_result {
     int index = 0;
-    std::vector<float> embedding;
+    std::vector<std::vector<float>> embedding;
+
+    int32_t n_tokens;
+
+    // OAI-compat fields
+    bool oaicompat = false;
 
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
+        return oaicompat ? to_json_oaicompat() : to_json_non_oaicompat();
+    }
+
+    json to_json_non_oaicompat() {
         return json {
             {"index",     index},
             {"embedding", embedding},
+        };
+    }
+
+    json to_json_oaicompat() {
+        return json {
+            {"index",            index},
+            {"embedding",        embedding[0]},
+            {"tokens_evaluated", n_tokens},
         };
     }
 };
@@ -717,14 +761,17 @@ struct server_task_result_rerank : server_task_result {
     int index = 0;
     float score = -1e6;
 
+    int32_t n_tokens;
+
     virtual int get_index() override {
         return index;
     }
 
     virtual json to_json() override {
         return json {
-            {"index", index},
-            {"score", score},
+            {"index",            index},
+            {"score",            score},
+            {"tokens_evaluated", n_tokens},
         };
     }
 };
@@ -931,8 +978,11 @@ struct server_slot {
 
     size_t last_nl_pos = 0;
 
-    std::string generated_text;
+    std::string  generated_text;
+    llama_tokens generated_tokens;
+
     llama_tokens cache_tokens;
+
     std::vector<completion_token_output> generated_token_probs;
 
     bool has_next_token = true;
@@ -976,6 +1026,7 @@ struct server_slot {
         n_sent_token_probs = 0;
         task_type          = SERVER_TASK_TYPE_COMPLETION;
 
+        generated_tokens.clear();
         generated_token_probs.clear();
     }
 
@@ -1079,9 +1130,9 @@ struct server_slot {
 
         SLT_INF(*this,
                 "\n"
-                "\rprompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
-                "\r       eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
-                "\r      total time = %10.2f ms / %5d tokens\n",
+                "prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
+                "       eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
+                "      total time = %10.2f ms / %5d tokens\n",
                 t_prompt_processing, n_prompt_tokens_processed, t_prompt, n_prompt_second,
                 t_token_generation, n_decoded, t_gen, n_gen_second,
                 t_prompt_processing + t_token_generation, n_prompt_tokens_processed + n_decoded);
@@ -1469,7 +1520,7 @@ struct server_context {
         n_ctx = llama_n_ctx(ctx);
 
         add_bos_token = llama_add_bos_token(model);
-        has_eos_token = !llama_add_eos_token(model);
+        has_eos_token = llama_token_eos(model) != LLAMA_TOKEN_NULL;
 
         if (!params_base.speculative.model.empty()) {
             SRV_INF("loading draft model '%s'\n", params_base.speculative.model.c_str());
@@ -1716,8 +1767,10 @@ struct server_context {
         const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special);
         slot.sampled = result.tok;
 
-        // search stop word and delete it
         slot.generated_text += token_str;
+        if (slot.params.return_tokens) {
+            slot.generated_tokens.push_back(result.tok);
+        }
         slot.has_next_token = true;
 
         // check if there is incomplete UTF-8 character at the end
@@ -1742,6 +1795,7 @@ struct server_context {
             break;
         }
 
+        // search stop word and delete it
         if (!incomplete) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
@@ -1894,6 +1948,7 @@ struct server_context {
         res->id      = slot.id_task;
         res->index   = slot.index;
         res->content = tkn.text_to_send;
+        res->tokens  = { tkn.tok };
 
         res->n_decoded       = slot.n_decoded;
         res->n_prompt_tokens = slot.n_prompt_tokens;
@@ -1934,6 +1989,7 @@ struct server_context {
 
         res->index           = slot.index;
         res->content         = slot.generated_text;
+        res->tokens          = slot.generated_tokens;
         res->timings         = slot.get_timings();
         res->prompt          = common_detokenize(ctx, slot.prompt_tokens, true);
 
@@ -1975,8 +2031,10 @@ struct server_context {
 
     void send_embedding(const server_slot & slot, const llama_batch & batch) {
         auto res = std::make_unique<server_task_result_embd>();
-        res->id    = slot.id_task;
-        res->index = slot.index;
+        res->id        = slot.id_task;
+        res->index     = slot.index;
+        res->n_tokens  = slot.n_prompt_tokens;
+        res->oaicompat = slot.params.oaicompat;
 
         const int n_embd = llama_n_embd(model);
 
@@ -1995,12 +2053,18 @@ struct server_context {
             if (embd == NULL) {
                 SLT_ERR(slot, "failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
 
-                res->embedding = std::vector<float>(n_embd, 0.0f);
+                res->embedding.push_back(std::vector<float>(n_embd, 0.0f));
                 continue;
             }
 
-            common_embd_normalize(embd, embd_res.data(), n_embd);
-            res->embedding = embd_res;
+            // normalize only when there is pooling
+            // TODO: configurable
+            if (llama_pooling_type(slot.ctx) != LLAMA_POOLING_TYPE_NONE) {
+                common_embd_normalize(embd, embd_res.data(), n_embd, 2);
+                res->embedding.push_back(embd_res);
+            } else {
+                res->embedding.push_back({ embd, embd + n_embd });
+            }
         }
 
         SLT_DBG(slot, "%s", "sending embeddings\n");
@@ -2012,6 +2076,7 @@ struct server_context {
         auto res = std::make_unique<server_task_result_rerank>();
         res->id    = slot.id_task;
         res->index = slot.index;
+        res->n_tokens = slot.n_prompt_tokens;
 
         for (int i = 0; i < batch.n_tokens; ++i) {
             if (!batch.logits[i] || batch.seq_id[i][0] != slot.id) {
@@ -2613,7 +2678,10 @@ struct server_context {
 
                     // add prompt tokens for processing in the current batch
                     while (slot.n_past < slot.n_prompt_tokens && batch.n_tokens < n_batch) {
-                        common_batch_add(batch, prompt_tokens[slot.n_past], slot.n_past, { slot.id }, false);
+                        // without pooling, we want to output the embeddings for all the tokens in the batch
+                        const bool need_embd = slot.task_type == SERVER_TASK_TYPE_EMBEDDING && llama_pooling_type(slot.ctx) == LLAMA_POOLING_TYPE_NONE;
+
+                        common_batch_add(batch, prompt_tokens[slot.n_past], slot.n_past, { slot.id }, need_embd);
 
                         if (slot.params.cache_prompt) {
                             slot.cache_tokens.push_back(prompt_tokens[slot.n_past]);
@@ -3381,7 +3449,7 @@ int main(int argc, char ** argv) {
                 task.index = i;
 
                 task.prompt_tokens    = std::move(tokenized_prompts[i]);
-                task.params           = server_task::params_from_json_cmpl(ctx_server.model, ctx_server.params_base, data);
+                task.params           = server_task::params_from_json_cmpl(ctx_server.model, ctx_server.ctx, ctx_server.params_base, data);
                 task.id_selected_slot = json_value(data, "id_slot", -1);
 
                 // OAI-compat
@@ -3621,21 +3689,33 @@ int main(int argc, char ** argv) {
         res_ok(res, data);
     };
 
-    const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings_impl = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res, bool oaicompat) {
         const json body = json::parse(req.body);
-        bool oaicompat = false;
 
-        // an input prompt can be a string or a list of tokens (integer)
+        if (oaicompat && llama_pooling_type(ctx_server.ctx) == LLAMA_POOLING_TYPE_NONE) {
+            res_error(res, format_error_response("Pooling type 'none' is not OAI compatible. Please use a different pooling type", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+
+        // for the shape of input/content, see tokenize_input_prompts()
         json prompt;
         if (body.count("input") != 0) {
-            oaicompat = true;
             prompt = body.at("input");
-        } else if (body.count("content") != 0) {
-            // with "content", we only support single prompt
-            prompt = std::vector<std::string>{body.at("content")};
+        } else if (body.contains("content")) {
+            oaicompat = false;
+            prompt = body.at("content");
         } else {
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;
+        }
+
+        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
+        for (const auto & tokens : tokenized_prompts) {
+            // this check is necessary for models that do not add BOS token to the input
+            if (tokens.empty()) {
+                res_error(res, format_error_response("Input content cannot be empty", ERROR_TYPE_INVALID_REQUEST));
+                return;
+            }
         }
 
         // create and queue the task
@@ -3643,12 +3723,16 @@ int main(int argc, char ** argv) {
         bool error = false;
         {
             std::vector<server_task> tasks;
-            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, /* add_special */ false, true);
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
-                server_task task   = server_task(SERVER_TASK_TYPE_EMBEDDING);
+                server_task task = server_task(SERVER_TASK_TYPE_EMBEDDING);
+
                 task.id            = ctx_server.queue_tasks.get_new_id();
                 task.index         = i;
                 task.prompt_tokens = std::move(tokenized_prompts[i]);
+
+                // OAI-compat
+                task.params.oaicompat = oaicompat;
+
                 tasks.push_back(task);
             }
 
@@ -3676,10 +3760,16 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = oaicompat
-            ? format_embeddings_response_oaicompat(body, responses)
-            : responses.size() == 1 ? responses[0] : json(responses);
+        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses) : json(responses);
         res_ok(res, root);
+    };
+
+    const auto handle_embeddings = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
+        handle_embeddings_impl(req, res, false);
+    };
+
+    const auto handle_embeddings_oai = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
+        handle_embeddings_impl(req, res, true);
     };
 
     const auto handle_rerank = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
@@ -3828,8 +3918,13 @@ int main(int argc, char ** argv) {
             }
         } else {
             // using embedded static index.html
-            svr->Get("/", [](const httplib::Request &, httplib::Response & res) {
-                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
+            svr->Get("/", [](const httplib::Request & req, httplib::Response & res) {
+                if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
+                    res.set_content("Error: gzip is not supported by this browser", "text/plain");
+                } else {
+                    res.set_header("Content-Encoding", "gzip");
+                    res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
+                }
                 return false;
             });
         }
@@ -3850,7 +3945,7 @@ int main(int argc, char ** argv) {
     svr->Post("/infill",              handle_infill);
     svr->Post("/embedding",           handle_embeddings); // legacy
     svr->Post("/embeddings",          handle_embeddings);
-    svr->Post("/v1/embeddings",       handle_embeddings);
+    svr->Post("/v1/embeddings",       handle_embeddings_oai);
     svr->Post("/rerank",              handle_rerank);
     svr->Post("/reranking",           handle_rerank);
     svr->Post("/v1/rerank",           handle_rerank);

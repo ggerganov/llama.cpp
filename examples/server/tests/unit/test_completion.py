@@ -10,22 +10,29 @@ def create_server():
     global server
     server = ServerPreset.tinyllama2()
 
-@pytest.mark.parametrize("prompt,n_predict,re_content,n_prompt,n_predicted,truncated", [
-    ("I believe the meaning of life is", 8, "(going|bed)+", 18, 8, False),
-    ("Write a joke about AI from a very long prompt which will not be truncated", 256, "(princesses|everyone|kids|Anna|forest)+", 46, 64, False),
+@pytest.mark.parametrize("prompt,n_predict,re_content,n_prompt,n_predicted,truncated,return_tokens", [
+    ("I believe the meaning of life is", 8, "(going|bed)+", 18, 8, False, False),
+    ("Write a joke about AI from a very long prompt which will not be truncated", 256, "(princesses|everyone|kids|Anna|forest)+", 46, 64, False, True),
 ])
-def test_completion(prompt: str, n_predict: int, re_content: str, n_prompt: int, n_predicted: int, truncated: bool):
+def test_completion(prompt: str, n_predict: int, re_content: str, n_prompt: int, n_predicted: int, truncated: bool, return_tokens: bool):
     global server
     server.start()
     res = server.make_request("POST", "/completion", data={
         "n_predict": n_predict,
         "prompt": prompt,
+        "return_tokens": return_tokens,
     })
     assert res.status_code == 200
     assert res.body["timings"]["prompt_n"] == n_prompt
     assert res.body["timings"]["predicted_n"] == n_predicted
     assert res.body["truncated"] == truncated
+    assert type(res.body["has_new_line"]) == bool
     assert match_regex(re_content, res.body["content"])
+    if return_tokens:
+        assert len(res.body["tokens"]) > 0
+        assert all(type(tok) == int for tok in res.body["tokens"])
+    else:
+        assert res.body["tokens"] == []
 
 
 @pytest.mark.parametrize("prompt,n_predict,re_content,n_prompt,n_predicted,truncated", [
@@ -48,12 +55,15 @@ def test_completion_stream(prompt: str, n_predict: int, re_content: str, n_promp
             assert data["timings"]["predicted_n"] == n_predicted
             assert data["truncated"] == truncated
             assert data["stop_type"] == "limit"
+            assert type(data["has_new_line"]) == bool
             assert "generation_settings" in data
             assert server.n_predict is not None
             assert data["generation_settings"]["n_predict"] == min(n_predict, server.n_predict)
             assert data["generation_settings"]["seed"] == server.seed
             assert match_regex(re_content, content)
         else:
+            assert len(data["tokens"]) > 0
+            assert all(type(tok) == int for tok in data["tokens"])
             content += data["content"]
 
 

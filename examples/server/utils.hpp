@@ -22,7 +22,7 @@
 #include <vector>
 #include <memory>
 
-#define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
+#define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo"
 
 using json = nlohmann::ordered_json;
 
@@ -138,6 +138,7 @@ static llama_tokens tokenize_mixed(const llama_context * ctx, const json & json_
  * and multiple prompts (multi-tasks):
  * - "prompt": ["string1", "string2"]
  * - "prompt": ["string1", [12, 34, 56]]
+ * - "prompt": [[12, 34, 56], [78, 90, 12]]
  * - "prompt": [[12, 34, "string", 56, 78], [12, 34, 56]]
  */
 static std::vector<llama_tokens> tokenize_input_prompts(llama_context * ctx, const json & json_prompt, bool add_special, bool parse_special) {
@@ -560,6 +561,7 @@ static json oaicompat_completion_params_parse(
 
 static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
     json data = json::array();
+    int32_t n_tokens = 0;
     int i = 0;
     for (const auto & elem : embeddings) {
         data.push_back(json{
@@ -567,14 +569,16 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
             {"index",     i++},
             {"object",    "embedding"}
         });
+
+        n_tokens += json_value(elem, "tokens_evaluated", 0);
     }
 
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
-        {"usage", json { // TODO: fill
-            {"prompt_tokens", 0},
-            {"total_tokens", 0}
+        {"usage", json {
+            {"prompt_tokens", n_tokens},
+            {"total_tokens", n_tokens}
         }},
         {"data", data}
     };
@@ -584,20 +588,23 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
 
 static json format_response_rerank(const json & request, const json & ranks) {
     json data = json::array();
+    int32_t n_tokens = 0;
     int i = 0;
     for (const auto & rank : ranks) {
         data.push_back(json{
             {"index",    i++},
             {"relevance_score", json_value(rank, "score", 0.0)},
         });
+
+        n_tokens += json_value(rank, "tokens_evaluated", 0);
     }
 
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
-        {"usage", json { // TODO: fill
-            {"prompt_tokens", 0},
-            {"total_tokens", 0}
+        {"usage", json {
+            {"prompt_tokens", n_tokens},
+            {"total_tokens", n_tokens}
         }},
         {"results", data}
     };

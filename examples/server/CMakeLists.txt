@@ -15,7 +15,7 @@ set(TARGET_SRCS
     httplib.h
 )
 set(PUBLIC_ASSETS
-    index.html
+    index.html.gz
     loading.html
 )
 
