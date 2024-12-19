@@ -50,6 +50,8 @@ def test_embedding_multiple():
 @pytest.mark.parametrize(
     "input,is_multi_prompt",
     [
+        # do not crash on empty input
+        ("", False),
         # single prompt
         ("string", False),
         ([12, 34, 56], False),
@@ -103,6 +105,7 @@ def test_embedding_pooling_none_oai():
 
     # /v1/embeddings does not support pooling type 'none'
     assert res.status_code == 400
+    assert "error" in res.body
 
 
 def test_embedding_openai_library_single():
