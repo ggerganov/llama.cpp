@@ -6,21 +6,15 @@
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
 layout (constant_id = 0) const uint BLOCK_SIZE = 32;
+layout (constant_id = 1) const uint NUM_ROWS = 1;
 
-shared FLOAT_TYPE tmp[BLOCK_SIZE];
+shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
 
-void main() {
-    const uint row = gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z;
-
-    if (row >= p.stride_d) {
-        return;
-    }
-
+void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
     get_offsets(a_offset, b_offset, d_offset);
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
-    const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
     // 16 threads are used to process each block
     const uint it_size = gl_WorkGroupSize.x/16;
@@ -38,14 +32,14 @@ void main() {
     const uint s_offset = 8*v_im;
     const uint y_offset = 128*v_im + l0;
 
-    FLOAT_TYPE temp = FLOAT_TYPE(0.0); // partial sum for thread in warp
+    FLOAT_TYPE temp[NUM_ROWS];
+
+    [[unroll]] for (uint i = 0; i < NUM_ROWS; ++i) {
+        temp[i] = FLOAT_TYPE(0);
+    }
 
     [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += it_size) {
         const uint y_idx = i * QUANT_K + y_offset;
-
-        f16vec2 d = data_a[ib0 + i].d;
-        const FLOAT_TYPE dall = d.x;
-        const FLOAT_TYPE dmin = d.y;
 
         B_TYPE_VEC2 b0 = data_b_v2[(b_offset + y_idx) / 2 + 0];
         B_TYPE_VEC2 b16 = data_b_v2[(b_offset + y_idx) / 2 + 8];
@@ -56,58 +50,84 @@ void main() {
         B_TYPE_VEC2 b96 = data_b_v2[(b_offset + y_idx) / 2 + 48];
         B_TYPE_VEC2 b112 = data_b_v2[(b_offset + y_idx) / 2 + 56];
 
-        uint32_t s0_u32 = data_a_packed32[ib0 + i].scales[s_offset / 4 + 0];
-        uint32_t s4_u32 = data_a_packed32[ib0 + i].scales[s_offset / 4 + 1];
+        [[unroll]] for (uint n = 0; n < num_rows; ++n) {
+            const uint ib0 = a_offset / QUANT_K + (first_row+n)*num_blocks_per_row;
+            f16vec2 d = data_a[ib0 + i].d;
+            const FLOAT_TYPE dall = d.x;
+            const FLOAT_TYPE dmin = d.y;
 
-        uint32_t s0_lo4_u32 = s0_u32 & 0x0F0F0F0F;
-        uint32_t s0_hi4_u32 = (s0_u32 >> 4) & 0x0F0F0F0F;
-        uint32_t s4_lo4_u32 = s4_u32 & 0x0F0F0F0F;
-        uint32_t s4_hi4_u32 = (s4_u32 >> 4) & 0x0F0F0F0F;
+            uint32_t s0_u32 = data_a_packed32[ib0 + i].scales[s_offset / 4 + 0];
+            uint32_t s4_u32 = data_a_packed32[ib0 + i].scales[s_offset / 4 + 1];
 
-        uvec4 s0_lo4 = uvec4(unpack8(s0_lo4_u32));
-        uvec4 s4_lo4 = uvec4(unpack8(s4_lo4_u32));
-        uvec4 s0_hi4 = uvec4(unpack8(s0_hi4_u32));
-        uvec4 s4_hi4 = uvec4(unpack8(s4_hi4_u32));
+            uint32_t s0_lo4_u32 = s0_u32 & 0x0F0F0F0F;
+            uint32_t s0_hi4_u32 = (s0_u32 >> 4) & 0x0F0F0F0F;
+            uint32_t s4_lo4_u32 = s4_u32 & 0x0F0F0F0F;
+            uint32_t s4_hi4_u32 = (s4_u32 >> 4) & 0x0F0F0F0F;
 
-        uint16_t qs0_u16 = data_a_packed16[ib0 + i].qs[q_offset / 2 + 0];
-        uint16_t qs16_u16 = data_a_packed16[ib0 + i].qs[q_offset / 2 + 8];
-        uvec2 qs0 =  uvec2(unpack8(qs0_u16));
-        uvec2 qs16 = uvec2(unpack8(qs16_u16));
+            uvec4 s0_lo4 = uvec4(unpack8(s0_lo4_u32));
+            uvec4 s4_lo4 = uvec4(unpack8(s4_lo4_u32));
+            uvec4 s0_hi4 = uvec4(unpack8(s0_hi4_u32));
+            uvec4 s4_hi4 = uvec4(unpack8(s4_hi4_u32));
 
-        FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
-        FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
-        [[unroll]] for (int l = 0; l < 2; ++l) {
-            sum1 = fma(FLOAT_TYPE(b0[l]),   FLOAT_TYPE(s0_lo4[0]) * FLOAT_TYPE((qs0[l]  >> 0) & 3),
-                   fma(FLOAT_TYPE(b16[l]),  FLOAT_TYPE(s0_lo4[1]) * FLOAT_TYPE((qs16[l] >> 0) & 3),
-                   fma(FLOAT_TYPE(b32[l]),  FLOAT_TYPE(s0_lo4[2]) * FLOAT_TYPE((qs0[l]  >> 2) & 3),
-                   fma(FLOAT_TYPE(b48[l]),  FLOAT_TYPE(s0_lo4[3]) * FLOAT_TYPE((qs16[l] >> 2) & 3),
-                   fma(FLOAT_TYPE(b64[l]),  FLOAT_TYPE(s4_lo4[0]) * FLOAT_TYPE((qs0[l]  >> 4) & 3),
-                   fma(FLOAT_TYPE(b80[l]),  FLOAT_TYPE(s4_lo4[1]) * FLOAT_TYPE((qs16[l] >> 4) & 3),
-                   fma(FLOAT_TYPE(b96[l]),  FLOAT_TYPE(s4_lo4[2]) * FLOAT_TYPE((qs0[l]  >> 6) & 3),
-                   fma(FLOAT_TYPE(b112[l]), FLOAT_TYPE(s4_lo4[3]) * FLOAT_TYPE((qs16[l] >> 6) & 3), sum1))))))));
-            sum2 = fma(FLOAT_TYPE(b0[l]),   FLOAT_TYPE(s0_hi4[0]),
-                   fma(FLOAT_TYPE(b16[l]),  FLOAT_TYPE(s0_hi4[1]),
-                   fma(FLOAT_TYPE(b32[l]),  FLOAT_TYPE(s0_hi4[2]),
-                   fma(FLOAT_TYPE(b48[l]),  FLOAT_TYPE(s0_hi4[3]),
-                   fma(FLOAT_TYPE(b64[l]),  FLOAT_TYPE(s4_hi4[0]),
-                   fma(FLOAT_TYPE(b80[l]),  FLOAT_TYPE(s4_hi4[1]),
-                   fma(FLOAT_TYPE(b96[l]),  FLOAT_TYPE(s4_hi4[2]),
-                   fma(FLOAT_TYPE(b112[l]), FLOAT_TYPE(s4_hi4[3]), sum2))))))));
+            uint16_t qs0_u16 = data_a_packed16[ib0 + i].qs[q_offset / 2 + 0];
+            uint16_t qs16_u16 = data_a_packed16[ib0 + i].qs[q_offset / 2 + 8];
+            uvec2 qs0 =  uvec2(unpack8(qs0_u16));
+            uvec2 qs16 = uvec2(unpack8(qs16_u16));
+
+            FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
+            FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
+            [[unroll]] for (int l = 0; l < 2; ++l) {
+                sum1 = fma(FLOAT_TYPE(b0[l]),   FLOAT_TYPE(s0_lo4[0]) * FLOAT_TYPE((qs0[l]  >> 0) & 3),
+                       fma(FLOAT_TYPE(b16[l]),  FLOAT_TYPE(s0_lo4[1]) * FLOAT_TYPE((qs16[l] >> 0) & 3),
+                       fma(FLOAT_TYPE(b32[l]),  FLOAT_TYPE(s0_lo4[2]) * FLOAT_TYPE((qs0[l]  >> 2) & 3),
+                       fma(FLOAT_TYPE(b48[l]),  FLOAT_TYPE(s0_lo4[3]) * FLOAT_TYPE((qs16[l] >> 2) & 3),
+                       fma(FLOAT_TYPE(b64[l]),  FLOAT_TYPE(s4_lo4[0]) * FLOAT_TYPE((qs0[l]  >> 4) & 3),
+                       fma(FLOAT_TYPE(b80[l]),  FLOAT_TYPE(s4_lo4[1]) * FLOAT_TYPE((qs16[l] >> 4) & 3),
+                       fma(FLOAT_TYPE(b96[l]),  FLOAT_TYPE(s4_lo4[2]) * FLOAT_TYPE((qs0[l]  >> 6) & 3),
+                       fma(FLOAT_TYPE(b112[l]), FLOAT_TYPE(s4_lo4[3]) * FLOAT_TYPE((qs16[l] >> 6) & 3), sum1))))))));
+                sum2 = fma(FLOAT_TYPE(b0[l]),   FLOAT_TYPE(s0_hi4[0]),
+                       fma(FLOAT_TYPE(b16[l]),  FLOAT_TYPE(s0_hi4[1]),
+                       fma(FLOAT_TYPE(b32[l]),  FLOAT_TYPE(s0_hi4[2]),
+                       fma(FLOAT_TYPE(b48[l]),  FLOAT_TYPE(s0_hi4[3]),
+                       fma(FLOAT_TYPE(b64[l]),  FLOAT_TYPE(s4_hi4[0]),
+                       fma(FLOAT_TYPE(b80[l]),  FLOAT_TYPE(s4_hi4[1]),
+                       fma(FLOAT_TYPE(b96[l]),  FLOAT_TYPE(s4_hi4[2]),
+                       fma(FLOAT_TYPE(b112[l]), FLOAT_TYPE(s4_hi4[3]), sum2))))))));
+            }
+            temp[n] = fma(dall, sum1, fma(-dmin, sum2, temp[n]));
         }
-        temp = fma(dall, sum1, fma(-dmin, sum2, temp));
     }
 
-    tmp[gl_LocalInvocationID.x] = temp;
-
     // sum up partial sums and write back result
+    [[unroll]] for (uint n = 0; n < num_rows; ++n) {
+        tmpsh[n][tid] = temp[n];
+    }
     barrier();
-    [[unroll]] for (uint s = gl_WorkGroupSize.x/2; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = BLOCK_SIZE/2; s > 0; s >>= 1) {
         if (tid < s) {
-            tmp[tid] += tmp[tid + s];
+            [[unroll]] for (uint n = 0; n < num_rows; ++n) {
+                tmpsh[n][tid] += tmpsh[n][tid + s];
+            }
         }
         barrier();
     }
     if (tid == 0) {
-        data_d[d_offset + row] = D_TYPE(tmp[0]);
+        [[unroll]] for (uint n = 0; n < num_rows; ++n) {
+            data_d[d_offset + first_row + n] = D_TYPE(tmpsh[n][0]);
+        }
+    }
+}
+
+void main() {
+    const uint first_row = NUM_ROWS * (gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z);
+
+    // do NUM_ROWS at a time, unless there aren't enough remaining rows
+    if (first_row + NUM_ROWS <= p.stride_d) {
+        compute_outputs(first_row, NUM_ROWS);
+    } else {
+        if (first_row >= p.stride_d) {
+            return;
+        }
+        compute_outputs(first_row, p.stride_d - first_row);
     }
 }
