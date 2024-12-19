@@ -663,11 +663,7 @@ class Model:
             res = "minerva-7b"
         if chkhsh == "8b5a93ed704057481f240da0be7e7dca721d7f8f4755263b6807227a2cbeae65":
             # ref: https://huggingface.co/sentence-transformers/stsb-roberta-base
-            # NOTE: The Roberta tokenizer is the same as GPT-2, but it always
-            #   adds the cls/sep tokens as bos/eos. This is handled as a
-            #   post-processor in tokenizers, so the chkhsh is different, but
-            #   it still maps to gpt-2 internally.
-            res = "gpt-2"
+            res = "roberta-bpe"
 
         if res is None:
             logger.warning("\n")
