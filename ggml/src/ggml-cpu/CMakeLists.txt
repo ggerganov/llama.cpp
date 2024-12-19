@@ -82,8 +82,8 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         if (MSVC AND NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
             message(FATAL_ERROR "MSVC is not supported for ARM, use clang")
         else()
-            check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
-            if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
+            check_cxx_compiler_flag(-mfp16-format=ieee GGML_COMPILER_SUPPORTS_FP16_FORMAT_I3E)
+            if (NOT "${GGML_COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
                 list(APPEND ARCH_FLAGS -mfp16-format=ieee)
             endif()
 
@@ -106,28 +106,28 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
                     message(STATUS "ARM -mcpu not found, -mcpu=native will be used")
                 endif()
 
-                set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
                 include(CheckCXXSourceRuns)
 
-                set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+dotprod")
-                check_cxx_source_runs(
-                    "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }"
-                    GGML_COMPILER_SUPPORT_DOTPROD)
-                if (GGML_COMPILER_SUPPORT_DOTPROD)
-                    set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+dotprod")
-                endif()
+                function(check_arm_feature tag code)
+                    set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
+                    set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+${tag}")
+                    check_cxx_source_runs(
+                        "${code}"
+                        GGML_MACHINE_SUPPORTS_${tag}
+                    )
+                    if (GGML_MACHINE_SUPPORTS_${tag})
+                        set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+${tag}" PARENT_SCOPE)
+                    else()
+                        set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+no${tag}" PARENT_SCOPE)
+                    endif()
+                    set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
+                endfunction()
 
-                set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+i8mm")
-                check_cxx_source_runs(
-                    "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmmlaq_s32(_s, _a, _b); return 0; }"
-                    GGML_COMPILER_SUPPORT_I8MM)
-                if (GGML_COMPILER_SUPPORT_I8MM)
-                    set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+i8mm")
-                endif()
+                check_arm_feature(dotprod "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; volatile int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }")
+                check_arm_feature(i8mm    "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; volatile int32x4_t _s = vmmlaq_s32(_s, _a, _b); return 0; }")
+                check_arm_feature(sve     "#include <arm_sve.h>\nint main()  { svfloat32_t _a, _b; volatile svfloat32_t _c = svadd_f32_z(svptrue_b8(), _a, _b); return 0; }")
 
-                set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
                 list(APPEND ARCH_FLAGS "${ARM_MCPU_FLAG}${ARM_MCPU_FLAG_FIX}")
-
             else()
                 if (GGML_CPU_ARM_ARCH)
                     list(APPEND ARCH_FLAGS -march=${GGML_CPU_ARM_ARCH})
