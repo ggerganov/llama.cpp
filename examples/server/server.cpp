@@ -441,12 +441,12 @@ struct completion_token_output {
     llama_token tok;
     float prob;
     std::string text_to_send;
-    struct token_prob {
+    struct prob_info {
         llama_token tok;
         std::string txt;
         float prob;
     };
-    std::vector<token_prob> probs;
+    std::vector<prob_info> probs;
 
     json to_json(bool post_sampling_probs) const {
         json probs_for_token = json::array();
