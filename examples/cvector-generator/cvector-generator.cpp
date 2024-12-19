@@ -2,8 +2,9 @@
 #include "common.h"
 #include "llama.h"
 #include "ggml.h"
-#include "pca.hpp"
+
 #include "mean.hpp"
+#include "pca.hpp"
 
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
