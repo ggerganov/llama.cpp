@@ -443,7 +443,7 @@ struct completion_token_output {
     std::string text_to_send;
     struct token_prob {
         llama_token tok;
-        std::string tok_str;
+        std::string txt;
         float prob;
     };
     std::vector<token_prob> probs;
@@ -451,12 +451,12 @@ struct completion_token_output {
     json to_json(bool post_sampling_probs) const {
         json probs_for_token = json::array();
         for (const auto & p : probs) {
-            std::string tok_str(p.tok_str);
-            tok_str.resize(validate_utf8(tok_str));
+            std::string txt(p.txt);
+            txt.resize(validate_utf8(txt));
             probs_for_token.push_back(json {
                 {"id",      p.tok},
-                {"token",   tok_str},
-                {"bytes",   str_to_bytes(p.tok_str)},
+                {"token",   txt},
+                {"bytes",   str_to_bytes(p.txt)},
                 {
                     post_sampling_probs ? "prob" : "logprob",
                     post_sampling_probs ? p.prob : logarithm(p.prob)
@@ -468,20 +468,20 @@ struct completion_token_output {
 
     static json probs_vector_to_json(const std::vector<completion_token_output> & probs, bool post_sampling_probs) {
         json out = json::array();
-        for (const auto & it : probs) {
-            std::string tok_str(it.text_to_send);
-            tok_str.resize(validate_utf8(tok_str));
+        for (const auto & p : probs) {
+            std::string txt(p.text_to_send);
+            txt.resize(validate_utf8(txt));
             out.push_back(json {
-                {"id",           it.tok},
-                {"token",        tok_str},
-                {"bytes",        str_to_bytes(it.text_to_send)},
+                {"id",           p.tok},
+                {"token",        txt},
+                {"bytes",        str_to_bytes(p.text_to_send)},
                 {
                     post_sampling_probs ? "top_probs" : "top_logprobs",
-                    it.to_json(post_sampling_probs)
+                    p.to_json(post_sampling_probs)
                 },
                 {
                     post_sampling_probs ? "prob" : "logprob",
-                    post_sampling_probs ? it.prob : logarithm(it.prob)
+                    post_sampling_probs ? p.prob : logarithm(p.prob)
                 },
             });
         }
@@ -1958,28 +1958,7 @@ struct server_context {
         size_t n_probs = slot.params.sampling.n_probs;
         int n_vocab = llama_n_vocab(llama_get_model(ctx));
         if (post_sampling) {
-            std::vector<llama_token_data> cur = get_token_probabilities(ctx, idx);
-
-            bool found_sampled_tok = false;
-            result.probs.reserve(n_probs);
-            for (int i = 0; i < n_vocab; i++) {
-                // set probability for sampled token
-                if (cur[i].id == result.tok) {
-                    found_sampled_tok = true;
-                    result.prob = cur[i].p;
-                }
-                // set probability for top n_probs tokens
-                result.probs.push_back({
-                    cur[i].id,
-                    common_detokenize(ctx, {cur[i].id}, special),
-                    cur[i].p
-                });
-                // break if we have all the necessary data
-                if (result.probs.size() == n_probs && found_sampled_tok) {
-                    break;
-                }
-            }
-        } else {
+            // TODO: optimize this with min-p optimization
             const auto * cur_p = common_sampler_get_candidates(slot.smpl);
             const size_t max_probs = cur_p->size;
 
@@ -1996,6 +1975,28 @@ struct server_context {
                     cur_p->data[i].id,
                     common_detokenize(ctx, {cur_p->data[i].id}, special),
                     cur_p->data[i].p
+                });
+                // break if we have all the necessary data
+                if (result.probs.size() == n_probs && found_sampled_tok) {
+                    break;
+                }
+            }
+        } else {
+            std::vector<llama_token_data> cur = get_token_probabilities(ctx, idx);
+
+            bool found_sampled_tok = false;
+            result.probs.reserve(n_probs);
+            for (int i = 0; i < n_vocab; i++) {
+                // set probability for sampled token
+                if (cur[i].id == result.tok) {
+                    found_sampled_tok = true;
+                    result.prob = cur[i].p;
+                }
+                // set probability for top n_probs tokens
+                result.probs.push_back({
+                    cur[i].id,
+                    common_detokenize(ctx, {cur[i].id}, special),
+                    cur[i].p
                 });
                 // break if we have all the necessary data
                 if (result.probs.size() == n_probs && found_sampled_tok) {

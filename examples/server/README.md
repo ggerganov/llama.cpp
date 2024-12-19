@@ -496,8 +496,8 @@ These words will not be included in the completion, so make sure to add them to 
   },
   ```
   Please note that if `post_sampling_probs` is set to `true`:
-    - `logprob` will be replace with `prob`, with the value between 0.0 and 1.0
-    - `top_logprobs` will be replace with `top_probs`. Each element inside contains:
+    - `logprob` will be replaced with `prob`, with the value between 0.0 and 1.0
+    - `top_logprobs` will be replaced with `top_probs`. Each element contains:
       - `id`: token ID
       - `token`: token in string
       - `bytes`: token in bytes
