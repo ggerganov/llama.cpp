@@ -88,32 +88,45 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             endif()
 
             if (GGML_NATIVE)
-                list(APPEND ARCH_FLAGS -mcpu=native)
-
-                set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
-
                 # -mcpu=native does not always enable all the features in some compilers,
                 # so we check for them manually and enable them if available
 
+                execute_process(
+                    COMMAND ${CMAKE_C_COMPILER} -mcpu=native -E -v -
+                    INPUT_FILE "/dev/null"
+                    OUTPUT_QUIET
+                    ERROR_VARIABLE ARM_MCPU
+                    RESULT_VARIABLE ARM_MCPU_RESULT
+                )
+                if (NOT ARM_MCPU_RESULT)
+                    string(REGEX MATCH "-mcpu=[^ ']+" ARM_MCPU_FLAG "${ARM_MCPU}")
+                endif()
+                if ("${ARM_MCPU_FLAG}" STREQUAL "")
+                    set(ARM_MCPU_FLAG -mcpu=native)
+                    message(STATUS "ARM -mcpu not found, -mcpu=native will be used")
+                endif()
+
+                set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
                 include(CheckCXXSourceRuns)
 
-                set(CMAKE_REQUIRED_FLAGS "${ARCH_FLAGS}+dotprod")
+                set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+dotprod")
                 check_cxx_source_runs(
                     "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }"
                     GGML_COMPILER_SUPPORT_DOTPROD)
                 if (GGML_COMPILER_SUPPORT_DOTPROD)
-                    set(ARCH_FLAGS "${ARCH_FLAGS}+dotprod")
+                    set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+dotprod")
                 endif()
 
-                set(CMAKE_REQUIRED_FLAGS "${ARCH_FLAGS}+i8mm")
+                set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+i8mm")
                 check_cxx_source_runs(
                     "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmmlaq_s32(_s, _a, _b); return 0; }"
                     GGML_COMPILER_SUPPORT_I8MM)
                 if (GGML_COMPILER_SUPPORT_I8MM)
-                    set(ARCH_FLAGS "${ARCH_FLAGS}+i8mm")
+                    set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+i8mm")
                 endif()
 
                 set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
+                list(APPEND ARCH_FLAGS "${ARM_MCPU_FLAG}${ARM_MCPU_FLAG_FIX}")
 
             else()
                 if (GGML_CPU_ARM_ARCH)
