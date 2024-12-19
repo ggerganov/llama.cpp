@@ -415,7 +415,6 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
     if (clip_is_glm(ctx_clip)) {
         num_max_patches = 1;
     }
-    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*num_max_patches); // TODO: base on gridsize/llava model
     float * image_embd;
     if (clip_is_qwen2vl(ctx_clip)) {
         // qwen2vl don't split image into chunks, so `num_max_patches` is not needed.

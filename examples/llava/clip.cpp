@@ -186,7 +186,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_LDP, "ldp" },
     { PROJECTOR_TYPE_LDPV2, "ldpv2"},
     { PROJECTOR_TYPE_RESAMPLER, "resampler"},
-    { PROJECTOR_TYPE_ADAPTER, "adapter"}
+    { PROJECTOR_TYPE_ADAPTER, "adapter"},
     { PROJECTOR_TYPE_MERGER, "qwen2vl_merger"},
 };
 
@@ -1130,7 +1130,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         }else{
             GGML_ABORT("fatel error");
         }
-    else if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
+    }else if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
         embeddings = ggml_reshape_3d(ctx0, embeddings, hidden_size * 4, num_positions / 4, batch_size);
 
         embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
@@ -1627,6 +1627,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_mlp_3_w =  get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPTER_D_4H_2_H,"weight"));
             vision_model.boi_w = get_tensor(new_clip->ctx_data, TN_GLM_BOI_W);
             vision_model.eoi_w = get_tensor(new_clip->ctx_data, TN_GLM_EOI_W);
+        }
         else if (new_clip->proj_type == PROJECTOR_TYPE_MERGER) {
             vision_model.mm_0_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
             vision_model.mm_0_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "bias"));
