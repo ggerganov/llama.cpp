@@ -14856,10 +14856,13 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask     = build_inp_KQ_mask();
         struct ggml_tensor * KQ_mask_swa = build_inp_KQ_mask_swa();
 
+        // sliding window switch pattern
+        const int32_t n_layer_switch = 4;
+
         for (int il = 0; il < n_layer; ++il) {
             // three layers sliding window attention (window size 4096) and ROPE
             // fourth layer uses global attention without positional embeddings
-            struct ggml_tensor * KQ_mask_l = (il % 4 != 3) ? KQ_mask_swa : KQ_mask;
+            struct ggml_tensor * KQ_mask_l = (il % n_layer_switch < (n_layer_switch - 1)) ? KQ_mask_swa : KQ_mask;
 
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams, model.layers[il].attn_norm, NULL, LLM_NORM, cb, il);
