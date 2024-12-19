@@ -107,7 +107,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         }
 
         float * out = output + batch.seq_id[i][0] * n_embd;
-        common_embd_normalize(embd, out, n_embd);
+        common_embd_normalize(embd, out, n_embd, 2);
     }
 }
 
@@ -143,7 +143,7 @@ int main(int argc, char ** argv) {
         std::vector<chunk> file_chunk = chunk_file(context_file, params.chunk_size, params.chunk_separator);
         chunks.insert(chunks.end(), file_chunk.begin(), file_chunk.end());
     }
-    LOG_INF("Number of chunks: %ld\n", chunks.size());
+    LOG_INF("Number of chunks: %zu\n", chunks.size());
 
     llama_backend_init();
     llama_numa_init(params.numa);

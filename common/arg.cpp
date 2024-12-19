@@ -119,30 +119,63 @@ std::string common_arg::to_string() {
 // utils
 //
 
-static void common_params_handle_model_default(common_params & params) {
-    if (!params.hf_repo.empty()) {
+static void common_params_handle_model_default(
+        std::string & model,
+        std::string & model_url,
+        std::string & hf_repo,
+        std::string & hf_file) {
+    if (!hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
-        if (params.hf_file.empty()) {
-            if (params.model.empty()) {
+        if (hf_file.empty()) {
+            if (model.empty()) {
                 throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
             }
-            params.hf_file = params.model;
-        } else if (params.model.empty()) {
+            hf_file = model;
+        } else if (model.empty()) {
             // this is to avoid different repo having same file name, or same file name in different subdirs
-            std::string filename = params.hf_repo + "_" + params.hf_file;
+            std::string filename = hf_repo + "_" + hf_file;
             // to make sure we don't have any slashes in the filename
             string_replace_all(filename, "/", "_");
-            params.model = fs_get_cache_file(filename);
+            model = fs_get_cache_file(filename);
         }
-    } else if (!params.model_url.empty()) {
-        if (params.model.empty()) {
-            auto f = string_split<std::string>(params.model_url, '#').front();
+    } else if (!model_url.empty()) {
+        if (model.empty()) {
+            auto f = string_split<std::string>(model_url, '#').front();
             f = string_split<std::string>(f, '?').front();
-            params.model = fs_get_cache_file(string_split<std::string>(f, '/').back());
+            model = fs_get_cache_file(string_split<std::string>(f, '/').back());
         }
-    } else if (params.model.empty()) {
-        params.model = DEFAULT_MODEL_PATH;
+    } else if (model.empty()) {
+        model = DEFAULT_MODEL_PATH;
     }
+}
+
+const std::vector<ggml_type> kv_cache_types = {
+    GGML_TYPE_F32,
+    GGML_TYPE_F16,
+    GGML_TYPE_BF16,
+    GGML_TYPE_Q8_0,
+    GGML_TYPE_Q4_0,
+    GGML_TYPE_Q4_1,
+    GGML_TYPE_IQ4_NL,
+    GGML_TYPE_Q5_0,
+    GGML_TYPE_Q5_1,
+};
+
+static ggml_type kv_cache_type_from_str(const std::string & s) {
+    for (const auto & type : kv_cache_types) {
+        if (ggml_type_name(type) == s) {
+            return type;
+        }
+    }
+    throw std::runtime_error("Unsupported cache type: " + s);
+}
+
+static std::string get_all_kv_cache_types() {
+    std::ostringstream msg;
+    for (const auto & type : kv_cache_types) {
+        msg << ggml_type_name(type) << (&type == &kv_cache_types.back() ? "" : ", ");
+    }
+    return msg.str();
 }
 
 //
@@ -247,7 +280,9 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
     }
 
-    common_params_handle_model_default(params);
+    // TODO: refactor model params in a common struct
+    common_params_handle_model_default(params.model,         params.model_url,         params.hf_repo,         params.hf_file);
+    common_params_handle_model_default(params.vocoder.model, params.vocoder.model_url, params.vocoder.hf_repo, params.vocoder.hf_file);
 
     if (params.escape) {
         string_process_escapes(params.prompt);
@@ -591,7 +626,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params) {
             params.ctx_shift = false;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_NO_CONTEXT_SHIFT"));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_IMATRIX}).set_env("LLAMA_ARG_NO_CONTEXT_SHIFT"));
     add_opt(common_arg(
         {"--chunks"}, "N",
         string_format("max number of chunks to process (default: %d, -1 = all)", params.n_chunks),
@@ -786,7 +821,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params) {
             params.warmup = false;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"--spm-infill"},
         string_format(
@@ -813,7 +848,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
-        {"--sampling-seq"}, "SEQUENCE",
+        {"--sampling-seq", "--sampler-seq"}, "SEQUENCE",
         string_format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
         [](common_params & params, const std::string & value) {
             params.sampling.samplers = common_sampler_types_from_chars(value);
@@ -824,13 +859,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)",
         [](common_params & params) {
             params.sampling.ignore_eos = true;
-        }
-    ).set_sparam());
-    add_opt(common_arg(
-        {"--penalize-nl"},
-        string_format("penalize newline tokens (default: %s)", params.sampling.penalize_nl ? "true" : "false"),
-        [](common_params & params) {
-            params.sampling.penalize_nl = true;
         }
     ).set_sparam());
     add_opt(common_arg(
@@ -887,6 +915,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--repeat-last-n"}, "N",
         string_format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", params.sampling.penalty_last_n),
         [](common_params & params, int value) {
+            if (value < -1) {
+                throw std::runtime_error(string_format("error: invalid repeat-last-n = %d\n", value));
+            }
             params.sampling.penalty_last_n = value;
             params.sampling.n_prev = std::max(params.sampling.n_prev, params.sampling.penalty_last_n);
         }
@@ -941,6 +972,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--dry-penalty-last-n"}, "N",
         string_format("set DRY penalty for the last n tokens (default: %d, 0 = disable, -1 = context size)", params.sampling.dry_penalty_last_n),
         [](common_params & params, int value) {
+            if (value < -1) {
+                throw std::runtime_error(string_format("error: invalid dry-penalty-last-n = %d\n", value));
+            }
             params.sampling.dry_penalty_last_n = value;
         }
     ).set_sparam());
@@ -1174,18 +1208,28 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_NO_KV_OFFLOAD"));
     add_opt(common_arg(
         {"-ctk", "--cache-type-k"}, "TYPE",
-        string_format("KV cache data type for K (default: %s)", params.cache_type_k.c_str()),
+        string_format(
+            "KV cache data type for K\n"
+            "allowed values: %s\n"
+            "(default: %s)",
+            get_all_kv_cache_types().c_str(),
+            ggml_type_name(params.cache_type_k)
+        ),
         [](common_params & params, const std::string & value) {
-            // TODO: get the type right here
-            params.cache_type_k = value;
+            params.cache_type_k = kv_cache_type_from_str(value);
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(common_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
-        string_format("KV cache data type for V (default: %s)", params.cache_type_v.c_str()),
+        string_format(
+            "KV cache data type for V\n"
+            "allowed values: %s\n"
+            "(default: %s)",
+            get_all_kv_cache_types().c_str(),
+            ggml_type_name(params.cache_type_v)
+        ),
         [](common_params & params, const std::string & value) {
-            // TODO: get the type right here
-            params.cache_type_v = value;
+            params.cache_type_v = kv_cache_type_from_str(value);
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(
@@ -1544,6 +1588,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_HF_FILE"));
     add_opt(common_arg(
+        {"-hfrv", "--hf-repo-v"}, "REPO",
+        "Hugging Face model repository for the vocoder model (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.vocoder.hf_repo = value;
+        }
+    ).set_env("LLAMA_ARG_HF_REPO_V"));
+    add_opt(common_arg(
+        {"-hffv", "--hf-file-v"}, "FILE",
+        "Hugging Face model file for the vocoder model (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.vocoder.hf_file = value;
+        }
+    ).set_env("LLAMA_ARG_HF_FILE_V"));
+    add_opt(common_arg(
         {"-hft", "--hf-token"}, "TOKEN",
         "Hugging Face access token (default: value from HF_TOKEN environment variable)",
         [](common_params & params, const std::string & value) {
@@ -1711,6 +1769,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.public_path = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_STATIC_PATH"));
+    add_opt(common_arg(
+        {"--no-webui"},
+        string_format("Disable the Web UI (default: %s)", params.webui ? "enabled" : "disabled"),
+        [](common_params & params) {
+            params.webui = false;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_NO_WEBUI"));
     add_opt(common_arg(
         {"--embedding", "--embeddings"},
         string_format("restrict to only support embedding use case; use only with dedicated embedding models (default: %s)", params.embedding ? "enabled" : "disabled"),
@@ -2076,35 +2141,35 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, int value) {
             params.speculative.n_max = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_DRAFT_MAX"));
     add_opt(common_arg(
         {"--draft-min", "--draft-n-min"}, "N",
         string_format("minimum number of draft tokens to use for speculative decoding (default: %d)", params.speculative.n_min),
         [](common_params & params, int value) {
             params.speculative.n_min = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_DRAFT_MIN"));
     add_opt(common_arg(
         {"--draft-p-split"}, "P",
         string_format("speculative decoding split probability (default: %.1f)", (double)params.speculative.p_split),
         [](common_params & params, const std::string & value) {
             params.speculative.p_split = std::stof(value);
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}).set_env("LLAMA_ARG_DRAFT_P_SPLIT"));
     add_opt(common_arg(
         {"--draft-p-min"}, "P",
         string_format("minimum speculative decoding probability (greedy) (default: %.1f)", (double)params.speculative.p_min),
         [](common_params & params, const std::string & value) {
             params.speculative.p_min = std::stof(value);
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_DRAFT_P_MIN"));
     add_opt(common_arg(
         {"-cd", "--ctx-size-draft"}, "N",
         string_format("size of the prompt context for the draft model (default: %d, 0 = loaded from model)", params.speculative.n_ctx),
         [](common_params & params, int value) {
             params.speculative.n_ctx = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CTX_SIZE_DRAFT"));
     add_opt(common_arg(
         {"-devd", "--device-draft"}, "<dev1,dev2,..>",
         "comma-separated list of devices to use for offloading the draft model (none = don't offload)\n"
@@ -2124,14 +2189,22 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                 fprintf(stderr, "warning: consult docs/build.md for compilation instructions\n");
             }
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_N_GPU_LAYERS_DRAFT"));
     add_opt(common_arg(
         {"-md", "--model-draft"}, "FNAME",
         "draft model for speculative decoding (default: unused)",
         [](common_params & params, const std::string & value) {
             params.speculative.model = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_MODEL_DRAFT"));
+
+    add_opt(common_arg(
+        {"-mv", "--model-vocoder"}, "FNAME",
+        "vocoder model for audio generation (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.vocoder.model = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
 
     return ctx_arg;
 }

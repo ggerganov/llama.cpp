@@ -418,6 +418,7 @@ struct llm_tokenizer_bpe : llm_tokenizer {
             case LLAMA_VOCAB_PRE_TYPE_SMOLLM:
             case LLAMA_VOCAB_PRE_TYPE_CODESHELL:
             case LLAMA_VOCAB_PRE_TYPE_EXAONE:
+            case LLAMA_VOCAB_PRE_TYPE_MINERVA:
                 regex_exprs = {
                     "\\p{N}",
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
@@ -737,7 +738,7 @@ struct llm_tokenizer_wpm_session {
         std::vector<std::string> words(1, "");
 
         for (const uint32_t cpt : cpts_nfd) {
-            const auto flags = unicode_cpt_flags(cpt);
+            const auto flags = unicode_cpt_flags_from_cpt(cpt);
 
             if (flags.is_whitespace) {
                 if (words.back().size()) {  // finish previous word if any
@@ -1866,6 +1867,10 @@ int32_t llama_detokenize_impl(
                          int32_t   text_len_max,
                             bool   remove_special,
                             bool   unparse_special) {
+    if (vocab.type == LLAMA_VOCAB_TYPE_NONE) {
+        return 0;
+    }
+
     GGML_ASSERT(vocab.tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
 
     int32_t avail = text_len_max;

@@ -57,7 +57,7 @@ static __global__ void mul_mat_vec(
     if (block_size > WARP_SIZE) {
         buf_iw[tid/WARP_SIZE] = sumf;
         __syncthreads();
-        if (tid > WARP_SIZE) {
+        if (tid >= WARP_SIZE) {
             return;
         }
         sumf = buf_iw[tid];

@@ -10,11 +10,16 @@ declare -a params=(
 
 MODELS_REPO=lora-tests
 MODELS_REPO_URL=https://huggingface.co/ggml-org/$MODELS_REPO
+COMMIT=c26d5fb85b4070a9e9c4e65d132c783b98086890
 
 # Clone the Hugging Face repository if the directory does not exist
 if [ ! -d "$MODELS_REPO" ]; then
     echo "Cloning the Hugging Face repository..."
     git clone $MODELS_REPO_URL --depth 1
+    cd $MODELS_REPO
+    git fetch --depth=1 origin $COMMIT
+    git reset --hard $COMMIT
+    cd -
 else
     echo "Repository already exists. Skipping clone."
 fi

@@ -15,7 +15,7 @@
       <!-- sidebar -->
       <div class="drawer-side h-screen lg:h-screen z-50 lg:max-w-64">
         <label for="toggle-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-        <div class="flex flex-col bg-base-200 min-h-full max-w-[calc(100vw-2em)] py-4 px-4">
+        <div class="flex flex-col bg-base-200 min-h-full max-w-64 py-4 px-4">
           <div class="flex flex-row items-center justify-between mb-4 mt-4">
             <h2 class="font-bold ml-4">Conversations</h2>
 
@@ -120,51 +120,25 @@
             {{ messages.length === 0 ? 'Send a message to start' : '' }}
           </div>
           <div v-for="msg in messages" class="group">
-            <div :class="{
-              'chat': true,
-              'chat-start': msg.role !== 'user',
-              'chat-end': msg.role === 'user',
-            }">
-              <div :class="{
-                'chat-bubble markdown': true,
-                'chat-bubble-base-300': msg.role !== 'user',
-              }">
-                <!-- textarea for editing message -->
-                <template v-if="editingMsg && editingMsg.id === msg.id">
-                  <textarea
-                    class="textarea textarea-bordered bg-base-100 text-base-content w-[calc(90vw-8em)] lg:w-96"
-                    v-model="msg.content"></textarea>
-                  <br/>
-                  <button class="btn btn-ghost mt-2 mr-2" @click="editingMsg = null">Cancel</button>
-                  <button class="btn mt-2" @click="editUserMsgAndRegenerate(msg)">Submit</button>
-                </template>
-                <!-- render message as markdown -->
-                <vue-markdown v-else :source="msg.content" />
-              </div>
-            </div>
-
-            <!-- actions for each message -->
-            <div :class="{'text-right': msg.role === 'user'}" class="mx-4 mt-2 mb-2">
-              <!-- user message -->
-              <button v-if="msg.role === 'user'" class="badge btn-mini show-on-hover" @click="editingMsg = msg" :disabled="isGenerating">
-                ✍️ Edit
-              </button>
-              <!-- assistant message -->
-              <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
-                🔄 Regenerate
-              </button>
-              <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="copyMsg(msg)" :disabled="isGenerating">
-                📋 Copy
-              </button>
-            </div>
+            <message-bubble
+              :config="config"
+              :msg="msg"
+              :key="msg.id"
+              :is-generating="isGenerating"
+              :edit-user-msg-and-regenerate="editUserMsgAndRegenerate"
+              :regenerate-msg="regenerateMsg"></message-bubble>
           </div>
 
           <!-- pending (ongoing) assistant message -->
-          <div id="pending-msg" class="chat chat-start">
-            <div v-if="pendingMsg" class="chat-bubble markdown chat-bubble-base-300">
-              <span v-if="!pendingMsg.content" class="loading loading-dots loading-md"></span>
-              <vue-markdown v-else :source="pendingMsg.content" />
-            </div>
+          <div id="pending-msg" class="group">
+            <message-bubble
+              v-if="pendingMsg"
+              :config="config"
+              :msg="pendingMsg"
+              :key="pendingMsg.id"
+              :is-generating="isGenerating"
+              :edit-user-msg-and-regenerate="() => {}"
+              :regenerate-msg="() => {}"></message-bubble>
           </div>
         </div>
 
@@ -227,6 +201,14 @@
           <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
             <summary class="collapse-title font-bold">Advanced config</summary>
             <div class="collapse-content">
+              <div class="flex flex-row items-center mb-2" v-if="isDev">
+                <!-- this button only shows in dev mode, used to import a demo conversation to test message rendering -->
+                <button class="btn" @click="debugImportDemoConv()">(debug) Import demo conversation</button>
+              </div>
+              <div class="flex flex-row items-center mb-2">
+                <input type="checkbox" class="checkbox" v-model="config.showTokensPerSecond" />
+                <span class="ml-4">Show tokens per second</span>
+              </div>
               <label class="form-control mb-2">
                 <!-- Custom parameters input -->
                 <div class="label inline">Custom JSON config (For more info, refer to <a class="underline" href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md" target="_blank" rel="noopener noreferrer">server documentation</a>)</div>
@@ -246,6 +228,66 @@
     </dialog>
 
   </div>
+
+
+  <!-- Template to be used as message bubble -->
+  <template id="message-bubble">
+    <div :class="{
+      'chat': true,
+      'chat-start': msg.role !== 'user',
+      'chat-end': msg.role === 'user',
+    }">
+      <div :class="{
+        'chat-bubble markdown': true,
+        'chat-bubble-base-300': msg.role !== 'user',
+      }">
+        <!-- textarea for editing message -->
+        <template v-if="editingContent !== null">
+          <textarea
+            class="textarea textarea-bordered bg-base-100 text-base-content w-[calc(90vw-8em)] lg:w-96"
+            v-model="editingContent"></textarea>
+          <br/>
+          <button class="btn btn-ghost mt-2 mr-2" @click="editingContent = null">Cancel</button>
+          <button class="btn mt-2" @click="editMsg()">Submit</button>
+        </template>
+        <template v-else>
+          <!-- show loading dots for pending message -->
+          <span v-if="msg.content === null" class="loading loading-dots loading-md"></span>
+          <!-- render message as markdown -->
+          <vue-markdown v-else :source="msg.content"></vue-markdown>
+          <!-- render timings if enabled -->
+          <div class="dropdown dropdown-hover dropdown-top mt-2" v-if="timings && config.showTokensPerSecond">
+            <div tabindex="0" role="button" class="cursor-pointer font-semibold text-sm opacity-60">Speed: {{ timings.predicted_per_second.toFixed(1) }} t/s</div>
+            <div class="dropdown-content bg-base-100 z-10 w-64 p-2 shadow mt-4">
+              <b>Prompt</b><br/>
+              - Tokens: {{ timings.prompt_n }}<br/>
+              - Time: {{ timings.prompt_ms }} ms<br/>
+              - Speed: {{ timings.prompt_per_second.toFixed(1) }} t/s<br/>
+              <b>Generation</b><br/>
+              - Tokens: {{ timings.predicted_n }}<br/>
+              - Time: {{ timings.predicted_ms }} ms<br/>
+              - Speed: {{ timings.predicted_per_second.toFixed(1) }} t/s<br/>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+    <!-- actions for each message -->
+    <div :class="{'text-right': msg.role === 'user', 'opacity-0': isGenerating}" class="mx-4 mt-2 mb-2">
+      <!-- user message -->
+      <button v-if="msg.role === 'user'" class="badge btn-mini show-on-hover" @click="editingContent = msg.content" :disabled="isGenerating">
+        ✍️ Edit
+      </button>
+      <!-- assistant message -->
+      <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="regenerateMsg(msg)" :disabled="isGenerating">
+        🔄 Regenerate
+      </button>
+      <button v-if="msg.role === 'assistant'" class="badge btn-mini show-on-hover mr-2" @click="copyMsg()" :disabled="isGenerating">
+        📋 Copy
+      </button>
+    </div>
+  </template>
+
 
   <!-- Template to be used by settings modal -->
   <template id="settings-modal-short-input">

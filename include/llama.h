@@ -104,12 +104,15 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH   = 24,
         LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
         LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
+        LLAMA_VOCAB_PRE_TYPE_MINERVA        = 27,
     };
 
     enum llama_rope_type {
-        LLAMA_ROPE_TYPE_NONE = -1,
-        LLAMA_ROPE_TYPE_NORM = 0,
-        LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
+        LLAMA_ROPE_TYPE_NONE   = -1,
+        LLAMA_ROPE_TYPE_NORM   = 0,
+        LLAMA_ROPE_TYPE_NEOX   = GGML_ROPE_TYPE_NEOX,
+        LLAMA_ROPE_TYPE_MROPE  = GGML_ROPE_TYPE_MROPE,
+        LLAMA_ROPE_TYPE_VISION = GGML_ROPE_TYPE_VISION,
     };
 
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
@@ -171,9 +174,9 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0_4_4      = 33, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0_4_8      = 34, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // except 1d tensors
+        //LLAMA_FTYPE_MOSTLY_Q4_0_4_4      = 33, // removed from gguf files, use Q4_0 and runtime repack
+        //LLAMA_FTYPE_MOSTLY_Q4_0_4_8      = 34, // removed from gguf files, use Q4_0 and runtime repack
+        //LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // removed from gguf files, use Q4_0 and runtime repack
         LLAMA_FTYPE_MOSTLY_TQ1_0         = 36, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_TQ2_0         = 37, // except 1d tensors
 
@@ -185,7 +188,8 @@ extern "C" {
         LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
         LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
         LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
-        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
+        LLAMA_ROPE_SCALING_TYPE_LONGROPE    = 3,
+        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_LONGROPE,
     };
 
     enum llama_pooling_type {
@@ -454,6 +458,7 @@ extern "C" {
     // Functions to access the model's GGUF metadata scalar values
     // - The functions return the length of the string on success, or -1 on failure
     // - The output string is always null-terminated and cleared on failure
+    // - When retrieving a string, an extra byte must be allocated to account for the null terminator
     // - GGUF array values are not supported by these functions
 
     // Get metadata value as a string by key name
@@ -476,9 +481,6 @@ extern "C" {
 
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
-
-    // Get a llama model tensor
-    LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
 
     // Returns true if the model contains an encoder that requires llama_encode() call
     LLAMA_API bool llama_model_has_encoder(const struct llama_model * model);
@@ -1134,16 +1136,12 @@ extern "C" {
                           const char * grammar_str,
                           const char * grammar_root);
 
+    /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
-                             int32_t   n_vocab,         // llama_n_vocab()
-                         llama_token   special_eos_id,  // llama_token_eos()
-                         llama_token   linefeed_id,     // llama_token_nl()
-                             int32_t   penalty_last_n,  // last n tokens to penalize (0 = disable penalty, -1 = context size)
-                               float   penalty_repeat,  // 1.0 = disabled
-                               float   penalty_freq,    // 0.0 = disabled
-                               float   penalty_present, // 0.0 = disabled
-                                bool   penalize_nl,     // consider newlines as a repeatable token
-                                bool   ignore_eos);     // ignore the end-of-sequence token
+                             int32_t   penalty_last_n,   // last n tokens to penalize (0 = disable penalty, -1 = context size)
+                               float   penalty_repeat,   // 1.0 = disabled
+                               float   penalty_freq,     // 0.0 = disabled
+                               float   penalty_present); // 0.0 = disabled
 
     ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
     LLAMA_API struct llama_sampler *    llama_sampler_init_dry(

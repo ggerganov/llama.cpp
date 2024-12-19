@@ -1,4 +1,3 @@
-#include "ggml-cpu.h"
 #include "ggml-backend-impl.h"
 
 #if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
@@ -13,6 +12,7 @@
 #include <array>
 #include <string>
 
+// ref: https://cdrdv2-public.intel.com/782156/325383-sdm-vol-2abcd.pdf
 struct cpuid_x86 {
     bool SSE3(void) { return f_1_ecx[0]; }
     bool PCLMULQDQ(void) { return f_1_ecx[1]; }
@@ -50,11 +50,15 @@ struct cpuid_x86 {
     bool INVPCID(void) { return f_7_ebx[10]; }
     bool RTM(void) { return is_intel && f_7_ebx[11]; }
     bool AVX512F(void) { return f_7_ebx[16]; }
+    bool AVX512DQ(void) { return f_7_ebx[17]; }
     bool RDSEED(void) { return f_7_ebx[18]; }
     bool ADX(void) { return f_7_ebx[19]; }
     bool AVX512PF(void) { return f_7_ebx[26]; }
     bool AVX512ER(void) { return f_7_ebx[27]; }
     bool AVX512CD(void) { return f_7_ebx[28]; }
+    bool AVX512BW(void) { return f_7_ebx[30]; }
+    bool AVX512VL(void) { return f_7_ebx[31]; }
+
     bool SHA(void) { return f_7_ebx[29]; }
 
     bool PREFETCHWT1(void) { return f_7_ecx[0]; }
@@ -259,36 +263,57 @@ void test_x86_is() {
 static int ggml_backend_cpu_x86_score() {
     // FIXME: this does not check for OS support
 
-    cpuid_x86 is;
-    // if the CPU backend was built with any features not supported by the current CPU, it cannot be used
-    if (ggml_cpu_has_fma() && !is.FMA()) { return 0; }
-    if (ggml_cpu_has_f16c() && !is.F16C()) { return 0; }
-    if (ggml_cpu_has_ssse3() && !is.SSSE3()) { return 0; }
-    if (ggml_cpu_has_sse3() && !is.SSE3()) { return 0; }
-    if (ggml_cpu_has_avx() && !is.AVX()) { return 0; }
-    if (ggml_cpu_has_avx_vnni() && !is.AVX_VNNI()) { return 0; }
-    if (ggml_cpu_has_avx2() && !is.AVX2()) { return 0; }
-    if (ggml_cpu_has_avx512() && !is.AVX512F()) { return 0; }
-    if (ggml_cpu_has_avx512_vbmi() && !is.AVX512_VBMI()) { return 0; }
-    if (ggml_cpu_has_avx512_bf16() && !is.AVX512_BF16()) { return 0; }
-    if (ggml_cpu_has_avx512_vnni() && !is.AVX512_VNNI()) { return 0; }
-    if (ggml_cpu_has_amx_int8() && !is.AMX_INT8()) { return 0; }
-
-    // calculate a backend score based on the supported features
-    // more important features have a higher weight
     int score = 0;
-    score +=  ggml_cpu_has_fma        () * 1;
-    score +=  ggml_cpu_has_f16c       () * 1<<1;
-    score +=  ggml_cpu_has_ssse3      () * 1<<2;
-    score +=  ggml_cpu_has_sse3       () * 1<<3;
-    score +=  ggml_cpu_has_avx_vnni   () * 1<<4;
-    score +=  ggml_cpu_has_avx        () * 1<<5;
-    score +=  ggml_cpu_has_avx2       () * 1<<6;
-    score +=  ggml_cpu_has_avx512     () * 1<<7;
-    // score +=  ggml_cpu_has_avx512_vbmi() * 1<<8; // not used
-    score +=  ggml_cpu_has_avx512_bf16() * 1<<9;
-    score +=  ggml_cpu_has_avx512_vnni() * 1<<10;
-    score +=  ggml_cpu_has_amx_int8   () * 1<<11;
+    cpuid_x86 is;
+
+#ifdef GGML_FMA
+    if (!is.FMA()) { return 0; }
+    score += 1;
+#endif
+#ifdef GGML_F16C
+    if (!is.F16C()) { return 0; }
+    score += 1<<1;
+#endif
+#ifdef GGML_SSE42
+    if (!is.SSE42()) { return 0; }
+    score += 1<<2;
+#endif
+#ifdef GGML_AVX
+    if (!is.AVX()) { return 0; }
+    score += 1<<4;
+#endif
+#ifdef GGML_AVX2
+    if (!is.AVX2()) { return 0; }
+    score += 1<<5;
+#endif
+#ifdef GGML_AVX_VNNI
+    if (!is.AVX_VNNI()) { return 0; }
+    score += 1<<6;
+#endif
+#ifdef GGML_AVX512
+    if (!is.AVX512F()) { return 0; }
+    if (!is.AVX512CD()) { return 0; }
+    if (!is.AVX512VL()) { return 0; }
+    if (!is.AVX512DQ()) { return 0; }
+    if (!is.AVX512BW()) { return 0; }
+    score += 1<<7;
+#endif
+#ifdef GGML_AVX512_VBMI
+    if (!is.AVX512_VBMI()) { return 0; }
+    score += 1<<8;
+#endif
+#ifdef GGML_AVX512_BF16
+    if (!is.AVX512_BF16()) { return 0; }
+    score += 1<<9;
+#endif
+#ifdef GGML_AVX512_VNNI
+    if (!is.AVX512_VNNI()) { return 0; }
+    score += 1<<10;
+#endif
+#ifdef GGML_AMX_INT8
+    if (!is.AMX_INT8()) { return 0; }
+    score += 1<<11;
+#endif
 
     return score;
 }
