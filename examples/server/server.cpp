@@ -1958,7 +1958,6 @@ struct server_context {
         size_t n_probs = slot.params.sampling.n_probs;
         int n_vocab = llama_n_vocab(llama_get_model(ctx));
         if (post_sampling) {
-            // TODO: optimize this with min-p optimization
             const auto * cur_p = common_sampler_get_candidates(slot.smpl);
             const size_t max_probs = cur_p->size;
 
@@ -1982,6 +1981,7 @@ struct server_context {
                 }
             }
         } else {
+            // TODO: optimize this with min-p optimization
             std::vector<llama_token_data> cur = get_token_probabilities(ctx, idx);
 
             bool found_sampled_tok = false;
