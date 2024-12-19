@@ -55,6 +55,17 @@ static int printe(const char * fmt, ...) {
 class Opt {
   public:
     int init(int argc, const char ** argv) {
+        context_size_default = llama_context_default_params().n_batch;
+        ngl_default          = llama_model_default_params().n_gpu_layers;
+        common_params_sampling sampling;
+        temperature_default = sampling.temp;
+
+        if (argc < 2) {
+            printe("Error: No arguments provided.\n");
+            help();
+            return 1;
+        }
+
         // Parse arguments
         if (parse(argc, argv)) {
             printe("Error: Failed to parse arguments.\n");
@@ -73,7 +84,10 @@ class Opt {
 
     std::string model_;
     std::string user_;
-    int         context_size_ = -1, ngl_ = -1;
+    int                          context_size_default = -1, ngl_default = -1;
+    float                        temperature_default = -1;
+    int                          context_size_ = -1, ngl_ = -1;
+    float                        temperature_        = -1;
     bool        verbose_ = false;
 
   private:
@@ -89,6 +103,17 @@ class Opt {
         }
 
         option_value = std::atoi(argv[++i]);
+
+        return 0;
+    }
+
+    int handle_option_with_value(int argc, const char ** argv, int & i, float & option_value) {
+        if (i + 1 >= argc) {
+            return 1;
+        }
+
+        option_value = std::atof(argv[++i]);
+
         return 0;
     }
 
@@ -101,6 +126,10 @@ class Opt {
                 }
             } else if (options_parsing && (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--ngl") == 0)) {
                 if (handle_option_with_value(argc, argv, i, ngl_) == 1) {
+                    return 1;
+                }
+            } else if (options_parsing && strcmp(argv[i], "--temperature") == 0) {
+                if (handle_option_with_value(argc, argv, i, temperature_) == 1) {
                     return 1;
                 }
             } else if (options_parsing &&
@@ -142,6 +171,8 @@ class Opt {
             "      Context size (default: %d)\n"
             "  -n, --ngl <value>\n"
             "      Number of GPU layers (default: %d)\n"
+            "  --temp <value>\n"
+            "      Temperature (default: %.1f)\n"
             "  -v, --verbose, --log-verbose\n"
             "      Set verbosity level to infinity (i.e. log all messages, useful for debugging)\n"
             "  -h, --help\n"
@@ -170,7 +201,7 @@ class Opt {
             "  llama-run file://some-file3.gguf\n"
             "  llama-run --ngl 999 some-file4.gguf\n"
             "  llama-run --ngl 999 some-file5.gguf Hello World\n",
-            llama_context_default_params().n_batch, llama_model_default_params().n_gpu_layers);
+            context_size_default, ngl_default, temperature_default);
     }
 };
 
@@ -495,12 +526,12 @@ class LlamaData {
             return 1;
         }
 
-        context = initialize_context(model, opt.context_size_);
+        context = initialize_context(model, opt);
         if (!context) {
             return 1;
         }
 
-        sampler = initialize_sampler();
+        sampler = initialize_sampler(opt);
         return 0;
     }
 
@@ -620,7 +651,7 @@ class LlamaData {
     llama_model_ptr initialize_model(Opt & opt) {
         ggml_backend_load_all();
         llama_model_params model_params = llama_model_default_params();
-        model_params.n_gpu_layers       = opt.ngl_ >= 0 ? opt.ngl_ : model_params.n_gpu_layers;
+        model_params.n_gpu_layers       = opt.ngl_ >= 0 ? opt.ngl_ : opt.ngl_default;
         resolve_model(opt.model_);
         printe(
             "\r%*s"
@@ -636,9 +667,9 @@ class LlamaData {
     }
 
     // Initializes the context with the specified parameters
-    llama_context_ptr initialize_context(const llama_model_ptr & model, const int n_ctx) {
+    llama_context_ptr initialize_context(const llama_model_ptr & model, const Opt & opt) {
         llama_context_params ctx_params = llama_context_default_params();
-        ctx_params.n_ctx = ctx_params.n_batch = n_ctx >= 0 ? n_ctx : ctx_params.n_batch;
+        ctx_params.n_ctx = ctx_params.n_batch = opt.context_size_ >= 0 ? opt.context_size_ : opt.context_size_default;
         llama_context_ptr context(llama_new_context_with_model(model.get(), ctx_params));
         if (!context) {
             printe("%s: error: failed to create the llama_context\n", __func__);
@@ -648,10 +679,11 @@ class LlamaData {
     }
 
     // Initializes and configures the sampler
-    llama_sampler_ptr initialize_sampler() {
+    llama_sampler_ptr initialize_sampler(const Opt & opt) {
         llama_sampler_ptr sampler(llama_sampler_chain_init(llama_sampler_chain_default_params()));
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_min_p(0.05f, 1));
-        llama_sampler_chain_add(sampler.get(), llama_sampler_init_temp(0.8f));
+        llama_sampler_chain_add(
+            sampler.get(), llama_sampler_init_temp(opt.temperature_ >= 0 ? opt.temperature_ : opt.temperature_default));
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
         return sampler;
