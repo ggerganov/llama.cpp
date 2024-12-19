@@ -8,25 +8,25 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef GGML_USE_CUDA
-#include "ggml-cuda.h"
-#endif
-
-#ifdef GGML_USE_SYCL
-#include "ggml-sycl.h"
-#endif
-
-#ifdef GGML_USE_METAL
-#include "ggml-metal.h"
-#endif
-
-#ifdef GGML_USE_CANN
-#include "ggml-cann.h"
-#endif
-
-#ifdef GGML_USE_VULKAN
-#include "ggml-vulkan.h"
-#endif
+//#ifdef GGML_USE_CUDA
+//#include "ggml-cuda.h"
+//#endif
+//
+//#ifdef GGML_USE_SYCL
+//#include "ggml-sycl.h"
+//#endif
+//
+//#ifdef GGML_USE_METAL
+//#include "ggml-metal.h"
+//#endif
+//
+//#ifdef GGML_USE_CANN
+//#include "ggml-cann.h"
+//#endif
+//
+//#ifdef GGML_USE_VULKAN
+//#include "ggml-vulkan.h"
+//#endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -1222,30 +1222,30 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
     }
 
-#ifdef GGML_USE_CUDA
-    new_clip->backend = ggml_backend_cuda_init(0);
-    LOG_INF("%s: CLIP using CUDA backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_METAL
-    new_clip->backend = ggml_backend_metal_init();
-    LOG_INF("%s: CLIP using Metal backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_CANN
-    new_clip->backend = ggml_backend_cann_init(0);
-    LOG_INF("%s: CLIP using CANN backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_VULKAN
-    new_clip->backend = ggml_backend_vk_init(0);
-    LOG_INF("%s: CLIP using Vulkan backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_SYCL
-    new_clip->backend = ggml_backend_sycl_init(0);
-    LOG_INF("%s: CLIP using SYCL backend\n", __func__);
-#endif
+//#ifdef GGML_USE_CUDA
+//    new_clip->backend = ggml_backend_cuda_init(0);
+//    LOG_INF("%s: CLIP using CUDA backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_METAL
+//    new_clip->backend = ggml_backend_metal_init();
+//    LOG_INF("%s: CLIP using Metal backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_CANN
+//    new_clip->backend = ggml_backend_cann_init(0);
+//    LOG_INF("%s: CLIP using CANN backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_VULKAN
+//    new_clip->backend = ggml_backend_vk_init(0);
+//    LOG_INF("%s: CLIP using Vulkan backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_SYCL
+//    new_clip->backend = ggml_backend_sycl_init(0);
+//    LOG_INF("%s: CLIP using SYCL backend\n", __func__);
+//#endif
 
     if (!new_clip->backend) {
         new_clip->backend = ggml_backend_cpu_init();
