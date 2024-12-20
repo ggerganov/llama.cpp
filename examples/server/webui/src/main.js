@@ -13,7 +13,7 @@ import hljs from './highlight-config';
 import daisyuiThemes from 'daisyui/src/theming/themes';
 
 // ponyfill for missing ReadableStream asyncIterator on Safari
-import { asyncIterator } from "@sec-ant/readable-stream/ponyfill/asyncIterator";
+import { asyncIterator } from '@sec-ant/readable-stream/ponyfill/asyncIterator';
 
 const isDev = import.meta.env.MODE === 'development';
 
@@ -22,7 +22,22 @@ const isString = (x) => !!x.toLowerCase;
 const isBoolean = (x) => x === true || x === false;
 const isNumeric = (n) => !isString(n) && !isNaN(n) && !isBoolean(n);
 const escapeAttr = (str) => str.replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const copyStr = (str) => navigator.clipboard.writeText(str);
+const copyStr = (textToCopy) => {
+  // Navigator clipboard api needs a secure context (https)
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(textToCopy);
+  } else {
+    // Use the 'out of viewport hidden text area' trick
+    const textArea = document.createElement('textarea');
+    textArea.value = textToCopy;
+    // Move textarea out of the viewport so it's not visible
+    textArea.style.position = 'absolute';
+    textArea.style.left = '-999999px';
+    document.body.prepend(textArea);
+    textArea.select();
+    document.execCommand('copy');
+  }
+};
 
 // constants
 const BASE_URL = isDev
@@ -130,9 +145,9 @@ const VueMarkdown = defineComponent(
     };
     window.copyStr = copyStr;
     const content = computed(() => md.value.render(props.source));
-    return () => h("div", { innerHTML: content.value });
+    return () => h('div', { innerHTML: content.value });
   },
-  { props: ["source"] }
+  { props: ['source'] }
 );
 
 // input field to be used by settings modal
