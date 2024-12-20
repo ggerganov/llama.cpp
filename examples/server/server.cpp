@@ -595,10 +595,11 @@ struct server_task_result_cmpl_final : server_task_result {
         std::time_t t = std::time(0);
 
         json res = json {
-            {"choices", json::array({choice})},
-            {"created", t},
-            {"model", oaicompat_model},
-            {"object", "chat.completion"},
+            {"choices",            json::array({choice})},
+            {"created",            t},
+            {"model",              oaicompat_model},
+            {"system_fingerprint", build_info},
+            {"object",             "chat.completion"},
             {"usage", json {
                 {"completion_tokens", n_decoded},
                 {"prompt_tokens",     n_prompt_tokens},
@@ -632,11 +633,12 @@ struct server_task_result_cmpl_final : server_task_result {
         };
 
         json ret = json {
-            {"choices", json::array({choice})},
-            {"created", t},
-            {"id",      oaicompat_cmpl_id},
-            {"model",   oaicompat_model},
-            {"object",  "chat.completion.chunk"},
+            {"choices",            json::array({choice})},
+            {"created",            t},
+            {"id",                 oaicompat_cmpl_id},
+            {"model",              oaicompat_model},
+            {"system_fingerprint", build_info},
+            {"object",             "chat.completion.chunk"},
             {"usage", json {
                 {"completion_tokens", n_decoded},
                 {"prompt_tokens",     n_prompt_tokens},
@@ -761,11 +763,12 @@ struct server_task_result_cmpl_partial : server_task_result {
         }
 
         json ret = json {
-            {"choices", choices},
-            {"created", t},
-            {"id",      oaicompat_cmpl_id},
-            {"model",   oaicompat_model},
-            {"object",  "chat.completion.chunk"}
+            {"choices",            choices},
+            {"created",            t},
+            {"id",                 oaicompat_cmpl_id},
+            {"model",              oaicompat_model},
+            {"system_fingerprint", build_info},
+            {"object",             "chat.completion.chunk"}
         };
 
         if (timings.prompt_n >= 0) {
@@ -3476,6 +3479,7 @@ int main(int argc, char ** argv) {
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
             { "chat_template",               llama_get_chat_template(ctx_server.model) },
+            { "build_info",                  build_info },
         };
 
         res_ok(res, data);
