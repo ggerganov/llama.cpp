@@ -2628,7 +2628,7 @@ class InternLM2Model(Model):
             return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("BertModel", "CamembertModel")
+@Model.register("BertModel", "BertForMaskedLM", "CamembertModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -2694,9 +2694,24 @@ class BertModel(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
+        if name.startswith("bert."):
+            name = name[5:]
+
+        if name.endswith(".gamma"):
+            name = name[:-6] + ".weight"
+
+        if name.endswith(".beta"):
+            name = name[:-5] + ".bias"
+
         # we are only using BERT for embeddings so we don't need the pooling layer
         if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
             return [] # we don't need these
+
+        if name.startswith("cls.predictions"):
+            return []
+
+        if name.startswith("cls.seq_relationship"):
+            return []
 
         return [(self.map_tensor_name(name), data_torch)]
 
