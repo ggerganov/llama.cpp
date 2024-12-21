@@ -724,7 +724,8 @@ This endpoint is public (no API key check). By default, it is read-only. To make
   },
   "total_slots": 1,
   "model_path": "../models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-  "chat_template": "..."
+  "chat_template": "...",
+  "build_info": "b(build number)-(build commit hash)"
 }
 ```
 
