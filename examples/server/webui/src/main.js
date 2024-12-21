@@ -55,7 +55,7 @@ const CONFIG_DEFAULT = {
   temperature: 0.8,
   dynatemp_range: 0.0,
   dynatemp_exponent: 1.0,
-  top_k: 40,
+  top_k: 1,
   top_p: 0.95,
   min_p: 0.05,
   xtc_probability: 0.0,
