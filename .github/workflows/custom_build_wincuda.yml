@@ -1,4 +1,4 @@
-name: build_win_cuda_full
+name: custom_build_wincuda
 
 on:
   workflow_dispatch: # allows manual triggering
