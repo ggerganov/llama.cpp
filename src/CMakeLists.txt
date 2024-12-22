@@ -12,7 +12,7 @@ add_library(llama
             llama-arch.cpp
             llama-batch.cpp
             llama-context.cpp
-            llama-control-vector.cpp
+            llama-adapter.cpp
             llama-grammar.cpp
             llama-kv-cache.cpp
             llama-mmap.cpp

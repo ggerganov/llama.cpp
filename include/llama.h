@@ -385,6 +385,7 @@ extern "C" {
     } llama_chat_message;
 
     // lora adapter
+    // TODO: rename to llama_adapter_lora
     struct llama_lora_adapter;
 
     // Helpers for getting default parameters
@@ -501,14 +502,20 @@ extern "C" {
             const char * fname_out,
             const llama_model_quantize_params * params);
 
+    //
+    // Adapters
+    //
+
     // Load a LoRA adapter from file
     // The loaded adapter will be associated to the given model, and will be free when the model is deleted
+    // TODO: rename to llama_adapter_lora_init
     LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
             struct llama_model * model,
             const char * path_lora);
 
     // Add a loaded LoRA adapter to given context
     // This will not modify model's weight
+    // TODO: rename to llama_set_adapter_lora
     LLAMA_API int32_t llama_lora_adapter_set(
             struct llama_context * ctx,
             struct llama_lora_adapter * adapter,
@@ -516,16 +523,19 @@ extern "C" {
 
     // Remove a specific LoRA adapter from given context
     // Return -1 if the adapter is not present in the context
+    // TODO: rename to llama_rm_adapter_lora
     LLAMA_API int32_t llama_lora_adapter_remove(
             struct llama_context * ctx,
             struct llama_lora_adapter * adapter);
 
     // Remove all LoRA adapters from given context
+    // TODO: rename to llama_clear_adapter_lora
     LLAMA_API void llama_lora_adapter_clear(
             struct llama_context * ctx);
 
     // Manually free a LoRA adapter
     // Note: loaded adapters will be free when the associated model is deleted
+    // TODO: rename to llama_adapter_lora_free
     LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
 
     // Apply a loaded control vector to a llama_context, or if data is NULL, clear
@@ -534,6 +544,7 @@ extern "C" {
     // to an n_embd x n_layers buffer starting from layer 1.
     // il_start and il_end are the layer range the vector should apply to (both inclusive)
     // See llama_control_vector_load in common to load a control vector.
+    // TODO: rename to llama_adapter_vec_apply
     LLAMA_API int32_t llama_control_vector_apply(
             struct llama_context * lctx,
                      const float * data,
