@@ -2,6 +2,7 @@
 
 #include "llama-impl.h"
 
+#include <algorithm>
 #include <cassert>
 
 const char * llm_type_name(llm_type type) {
@@ -171,4 +172,16 @@ ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, in
                 ggml_tensor * layer_dir = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);
                 return ggml_add(ctx, cur, layer_dir);
             });
+}
+
+struct ggml_tensor * llama_model_get_tensor(const struct llama_model & model, const char * name) {
+    auto it = std::find_if(model.tensors_by_name.begin(), model.tensors_by_name.end(),
+            [name](const std::pair<std::string, struct ggml_tensor *> & it) {
+                return it.first == name;
+            });
+    if (it == model.tensors_by_name.end()) {
+        return nullptr;
+    }
+
+    return it->second;
 }

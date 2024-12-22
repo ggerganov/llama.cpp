@@ -15670,6 +15670,21 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
+struct llama_lora_adapter * llama_lora_adapter_init(struct llama_model * model, const char * path_lora) {
+    struct llama_lora_adapter * adapter = new llama_lora_adapter();
+
+    try {
+        llama_lora_adapter_init_impl(*model, path_lora, *adapter);
+        return adapter;
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
+
+        delete adapter;
+    }
+
+    return nullptr;
+}
+
 int32_t llama_lora_adapter_set(
             struct llama_context * ctx,
             struct llama_lora_adapter * adapter,
@@ -15678,7 +15693,9 @@ int32_t llama_lora_adapter_set(
         LLAMA_LOG_ERROR("%s: flash_attn is not compatible with LoRA\n", __func__);
         return -1;
     }
+
     ctx->lora_adapters[adapter] = scale;
+
     return 0;
 }
 
@@ -15690,6 +15707,7 @@ int32_t llama_lora_adapter_remove(
         ctx->lora_adapters.erase(pos);
         return 0;
     }
+
     return -1;
 }
 
@@ -16557,17 +16575,6 @@ uint32_t llama_model_quantize(
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: failed to quantize: %s\n", __func__, err.what());
         return 1;
-    }
-}
-
-struct llama_lora_adapter * llama_lora_adapter_init(struct llama_model * model, const char * path_lora) {
-    try {
-        struct llama_lora_adapter * adapter = new llama_lora_adapter(model);
-        llama_lora_adapter_init_internal(model, path_lora, *adapter);
-        return adapter;
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
-        return nullptr;
     }
 }
 
