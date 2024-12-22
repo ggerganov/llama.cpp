@@ -1404,10 +1404,10 @@ static void ggml_vk_load_shaders(vk_device& device) {
         // spec constants and tile sizes for non-quant matmul/matmul_id
         l_warptile = { 256, 128, 256, 64 };
         m_warptile = { 256, 128, 128, 64 };
-        s_warptile = { 128,  32,  16, 64 };
+        s_warptile = { 128,  64,  64, 64 };
         l_wg_denoms = {128, 256, 1 };
         m_wg_denoms = {128, 128, 1 };
-        s_wg_denoms = { 32,  16, 1 };
+        s_wg_denoms = { 64,  64, 1 };
 
         // spec constants and tile sizes for quant matmul (non-Qi_K)
         l_warptile_mmq = { 256, 128, 256, 64 };
