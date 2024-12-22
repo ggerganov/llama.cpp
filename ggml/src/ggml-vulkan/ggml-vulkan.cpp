@@ -1857,17 +1857,14 @@ static void ggml_vk_load_shaders(vk_device& device) {
 
     // the number of rows computed per shader depends on GPU model and quant
     uint32_t rm_stdq = 1;
-    uint32_t rm_kq = 1;
+    uint32_t rm_kq = 2;
     if (device->vendor_id == VK_VENDOR_ID_AMD) {
         if (device->subgroup_min_size == 64 && device->subgroup_max_size == 64) { // GCN
             rm_stdq = 2;
             rm_kq = 4;
-        } else // RDNA
-            rm_kq = 2;
-    } else if (device->vendor_id == VK_VENDOR_ID_INTEL) {
+        }
+    } else if (device->vendor_id == VK_VENDOR_ID_INTEL)
         rm_stdq = 2;
-        rm_kq = 2;
-    }
 
     ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[GGML_TYPE_F32 ], "mul_mat_vec_f32_f32_f32",  mul_mat_vec_f32_f32_f32_len,  mul_mat_vec_f32_f32_f32_data,  "main", 3, sizeof(vk_mat_vec_push_constants), {2, 1, 1}, {device->subgroup_size, 2}, 1);
     ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[GGML_TYPE_F16 ], "mul_mat_vec_f16_f32_f32",  mul_mat_vec_f16_f32_f32_len,  mul_mat_vec_f16_f32_f32_data,  "main", 3, sizeof(vk_mat_vec_push_constants), {2, 1, 1}, {device->subgroup_size, 2}, 1);
