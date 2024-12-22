@@ -283,13 +283,13 @@ def test_completion_requested_fields(
     assert res.status_code == 200
     assert "content" in res.body
     assert len(res.body["content"])
-    if len(requested_fields) > 0:
+    if len(requested_fields):
         assert res.body["generation_settings/n_predict"] == n_predict
         assert res.body["prompt"] == "<s> " + prompt
         assert isinstance(res.body["content"], str)
         assert len(res.body) == len(requested_fields)
     else:
-        assert len(res.body) > 0
+        assert len(res.body)
         assert "generation_settings" in res.body
 
 

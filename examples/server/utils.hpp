@@ -94,7 +94,7 @@ static json json_get_nested_values(const std::vector<std::string> & paths, const
 
     for (const std::string & path : paths) {
         json current = js;
-        const auto keys = string_split<std::string>(path, /*delim*/ '/');
+        const auto keys = string_split<std::string>(path, /*separator*/ '/');
         bool valid_path = true;
         for (const std::string & k : keys) {
             if (valid_path && current.is_object() && current.contains(k)) {
