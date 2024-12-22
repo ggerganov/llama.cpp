@@ -363,15 +363,6 @@ struct llama_model {
 
     // total size of all the tensors in the model in bytes
     size_t  n_bytes     = 0;
-
-    // keep track of loaded lora adapters
-    std::set<struct llama_lora_adapter *> lora_adapters;
-
-    ~llama_model() {
-       while (!lora_adapters.empty()) {
-            llama_lora_adapter_free(*lora_adapters.begin());
-        }
-    }
 };
 
 const char * llm_type_name(llm_type type);
@@ -380,5 +371,9 @@ std::string llama_model_arch_name (const llama_model & model);
 std::string llama_model_type_name (const llama_model & model);
 std::string llama_model_ftype_name(const llama_model & model);
 
-// TODO: this probably belongs to llama-adapter
+// used by llama_adapter_vec
 ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il);
+
+// used by llama_adapter_lora
+struct ggml_tensor * llama_model_get_tensor(const struct llama_model & model, const char * name);
+

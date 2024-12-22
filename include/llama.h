@@ -417,6 +417,7 @@ extern "C" {
                              const char * path_model,
               struct llama_model_params   params);
 
+    // TODO: rename to llama_model_free
     LLAMA_API void llama_free_model(struct llama_model * model);
 
     // TODO: rename to llama_init_from_model
@@ -507,7 +508,6 @@ extern "C" {
     //
 
     // Load a LoRA adapter from file
-    // The loaded adapter will be associated to the given model, and will be free when the model is deleted
     // TODO: rename to llama_adapter_lora_init
     LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
             struct llama_model * model,
@@ -530,8 +530,7 @@ extern "C" {
 
     // Remove all LoRA adapters from given context
     // TODO: rename to llama_clear_adapter_lora
-    LLAMA_API void llama_lora_adapter_clear(
-            struct llama_context * ctx);
+    LLAMA_API void llama_lora_adapter_clear(struct llama_context * ctx);
 
     // Manually free a LoRA adapter
     // Note: loaded adapters will be free when the associated model is deleted
