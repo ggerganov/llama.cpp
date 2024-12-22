@@ -8,6 +8,7 @@
 
 #include <set>
 #include <vector>
+#include <limits>
 
 struct llama_kv_cell {
     llama_pos pos   = -1;

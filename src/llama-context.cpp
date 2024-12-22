@@ -799,7 +799,7 @@ static bool llama_state_load_file_internal(struct llama_context * ctx, const cha
 
     // restore the context state
     {
-        const size_t n_state_size_cur = file.size - file.tell();
+        const size_t n_state_size_cur = file.size() - file.tell();
 
         llama_data_read_file data_ctx(&file);
         const size_t n_read = llama_state_set_data_internal(ctx, data_ctx);
@@ -936,7 +936,7 @@ static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, con
 
     // restore the context state
     {
-        const size_t state_size = file.size - file.tell();
+        const size_t state_size = file.size() - file.tell();
         llama_data_read_file data_ctx(&file);
         const size_t nread = llama_state_seq_set_data_internal(ctx, data_ctx, dest_seq_id);
         if (!nread) {

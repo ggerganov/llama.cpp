@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <string>
 
 //
 // gguf constants (sync with gguf.py)

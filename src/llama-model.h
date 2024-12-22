@@ -5,6 +5,8 @@
 #include "llama-vocab.h"
 #include "llama-mmap.h"
 
+#include "llama-impl.h"
+
 #include "ggml-cpp.h"
 
 #include <array>
