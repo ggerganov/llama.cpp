@@ -434,12 +434,12 @@ static void print_matrix(struct ggml_tensor * probs) {
     }
 }
 
-struct llama_file {
+struct my_llama_file {
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
 
-    llama_file(const char * fname, const char * mode) {
+    my_llama_file(const char * fname, const char * mode) {
         fp = std::fopen(fname, mode);
         if (fp == NULL) {
             size = 0;
@@ -500,7 +500,7 @@ struct llama_file {
         return std::string(chars.data(), len);
     }
 
-    ~llama_file() {
+    ~my_llama_file() {
         if (fp) {
             std::fclose(fp);
         }
@@ -508,7 +508,7 @@ struct llama_file {
 };
 
 static bool is_ggml_file(const char * filename) {
-    llama_file file(filename, "rb");
+    my_llama_file file(filename, "rb");
     if (file.size < 4) {
         return false;
     }
@@ -576,7 +576,7 @@ static void load_vocab(const char * filename, const Config * config, struct my_l
     } else {
         // assume llama2.c vocabulary
         LOG_INF("%s: Assuming llama2.c vocabulary since %s is not a gguf file\n", __func__, filename);
-        llama_file file(filename, "rb");
+        my_llama_file file(filename, "rb");
         if (!file.fp) {
             die_fmt("%s: %s", strerror(errno), filename);
         }

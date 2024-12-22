@@ -193,20 +193,6 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
 // llama helpers
 //
 
-#if defined(_WIN32)
-static std::string llama_format_win_err(DWORD err) {
-    LPSTR buf;
-    size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                 NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);
-    if (!size) {
-        return "FormatMessageA failed";
-    }
-    std::string ret(buf, size);
-    LocalFree(buf);
-    return ret;
-}
-#endif
-
 template <typename T>
 struct no_init {
     T value;
@@ -490,7 +476,7 @@ struct llama_model_loader {
             }
 
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
-            if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {
+            if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size()) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", ggml_get_name(tensor)));
             }
         }
@@ -572,8 +558,8 @@ struct llama_model_loader {
                 throw std::runtime_error(format("illegal split file: %d, model must be loaded with the first split", idx));
             }
 
-            char split_prefix[PATH_MAX] = {0};
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
+            std::vector<char> split_prefix(llama_path_max(), 0);
+            if (!llama_split_prefix(split_prefix.data(), split_prefix.size(), fname.c_str(), idx, n_split)) {
                 throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
             }
 
@@ -581,20 +567,20 @@ struct llama_model_loader {
                 LLAMA_LOG_INFO("%s: loading additional %d GGUFs\n", __func__, n_split);
             }
 
-            char split_path[PATH_MAX] = {0};
+            std::vector<char> split_path(llama_path_max(), 0);
             for (idx = 1; idx < n_split; idx++) {
-                llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
+                llama_split_path(split_path.data(), split_path.size(), split_prefix.data(), idx, n_split);
 
                 struct gguf_init_params split_params = {
                     /*.no_alloc = */ true,
                     /*.ctx      = */ &ctx,
                 };
-                gguf_context_ptr ctx_gguf { gguf_init_from_file(split_path, split_params) };
+                gguf_context_ptr ctx_gguf { gguf_init_from_file(split_path.data(), split_params) };
                 if (!ctx_gguf) {
-                    throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, split_path));
+                    throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, split_path.data()));
                 }
 
-                files.emplace_back(new llama_file(split_path, "rb"));
+                files.emplace_back(new llama_file(split_path.data(), "rb"));
                 contexts.emplace_back(ctx);
 
                 // Save tensors data offset info of the shard.
@@ -1036,10 +1022,10 @@ struct llama_model_loader {
                 auto * reg = ggml_backend_dev_backend_reg(ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU));
                 auto * is_numa_fn = (decltype(ggml_is_numa) *) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cpu_is_numa");
                 std::unique_ptr<llama_mmap> mapping(new llama_mmap(file.get(), prefetch ? -1 : 0, is_numa_fn()));
-                mmaps_used.emplace_back(mapping->size, 0);
+                mmaps_used.emplace_back(mapping->size(), 0);
                 if (mlock_mmaps) {
                     std::unique_ptr<llama_mlock> mlock_mmap(new llama_mlock());
-                    mlock_mmap->init(mapping->addr);
+                    mlock_mmap->init(mapping->addr());
                     mlock_mmaps->emplace_back(std::move(mlock_mmap));
                 }
                 mappings.emplace_back(std::move(mapping));
@@ -1056,9 +1042,9 @@ struct llama_model_loader {
         GGML_ASSERT(!mappings.empty());
         const auto & mapping = mappings.at(idx);
 
-        *first = mapping->size;
+        *first = mapping->size();
         *last  = 0;
-        *addr = mapping->addr;
+        *addr = mapping->addr();
         for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
             const auto * weight = get_weight(ggml_get_name(tensor));
             if (!weight || weight->idx != idx) {
@@ -1076,9 +1062,9 @@ struct llama_model_loader {
         if (use_mmap) {
             const auto & mapping = mappings.at(w.idx);
             if (cur->data == nullptr) {
-                cur->data = (uint8_t *)mapping->addr + w.offs;
+                cur->data = (uint8_t *)mapping->addr() + w.offs;
             } else {
-                memcpy(cur->data, (uint8_t *)mapping->addr + w.offs, ggml_nbytes(cur));
+                memcpy(cur->data, (uint8_t *)mapping->addr() + w.offs, ggml_nbytes(cur));
             }
         } else {
             GGML_ASSERT(cur->data != nullptr);
@@ -1219,7 +1205,7 @@ struct llama_model_loader {
                 if (bufs.count(weight->idx)) {
                     buf_mmap = bufs.at(weight->idx);
                 }
-                uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
+                uint8_t * data = (uint8_t *) mapping->addr() + weight->offs;
 
                 if (check_tensors) {
                     validation_result.emplace_back(std::async(std::launch::async, [cur, data, n_size] {
@@ -1317,7 +1303,7 @@ struct llama_model_loader {
                     auto & mapping = mappings.at(idx);
                     mapping->unmap_fragment(0, mmap_used.first);
                     if (mmap_used.second != 0) {
-                        mapping->unmap_fragment(mmap_used.second, mapping->size);
+                        mapping->unmap_fragment(mmap_used.second, mapping->size());
                     }
                 }
             }
@@ -15650,9 +15636,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         GGML_ASSERT(ctx_outs[cur_split] && "Find uninitialized gguf_context");
         std::string fname = fname_out;
         if (params->keep_split) {
-            char split_path[PATH_MAX] = {0};
-            llama_split_path(split_path, sizeof(split_path), fname_out.c_str(), cur_split, n_split);
-            fname = std::string(split_path);
+            std::vector<char> split_path(llama_path_max(), 0);
+            llama_split_path(split_path.data(), split_path.size(), fname_out.c_str(), cur_split, n_split);
+            fname = std::string(split_path.data());
         }
 
         fout = std::ofstream(fname, std::ios::binary);

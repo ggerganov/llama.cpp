@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <map>
+#include <algorithm>
 
 //
 // llama_adapter_vec

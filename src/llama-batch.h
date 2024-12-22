@@ -3,6 +3,8 @@
 #include "llama.h"
 
 #include <vector>
+#include <cstring>
+#include <algorithm>
 
 // very similar to llama_batch,
 // but has more metadata about sequences
