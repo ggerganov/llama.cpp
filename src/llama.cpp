@@ -1494,6 +1494,8 @@ static void llm_load_hparams(
         hparams.n_embd_head_v = 0;
     }
 
+    using e_model = llm_type; // TMP
+
     // arch-specific KVs
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
@@ -2999,8 +3001,8 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: ssm_dt_b_c_rms   = %d\n",     __func__, hparams.ssm_dt_b_c_rms);
     }
 
-    LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, llama_model_type_name(model.type));
-    LLAMA_LOG_INFO("%s: model ftype      = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
+    LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, llama_model_type_name(model).c_str());
+    LLAMA_LOG_INFO("%s: model ftype      = %s\n",     __func__, llama_model_ftype_name(model).c_str());
     if (ml.n_elements >= 1e12) {
         LLAMA_LOG_INFO("%s: model params     = %.2f T\n", __func__, ml.n_elements*1e-12);
     } else if (ml.n_elements >= 1e9) {
@@ -10252,9 +10254,9 @@ struct llm_build_context {
 
                 // ref: https://github.com/google/gemma_pytorch/commit/03e657582d17cb5a8617ebf333c1c16f3694670e
                 switch (model.type) {
-                    case e_model::MODEL_2B:
-                    case e_model::MODEL_9B:  Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd_head_k)));   break;
-                    case e_model::MODEL_27B: Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd / n_head))); break;
+                    case llm_type::MODEL_2B:
+                    case llm_type::MODEL_9B:  Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd_head_k)));   break;
+                    case llm_type::MODEL_27B: Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd / n_head))); break;
                     default: GGML_ABORT("fatal error");
                 };
                 cb(Qcur, "Qcur_scaled", il);
@@ -16505,9 +16507,9 @@ int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int3
 
 int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
-            llm_arch_name(model->arch),                     // TODO: llama_model_arch_name(model)
-            llama_model_type_name(model->type),             // TODO: llama_model_type_name(model)
-            llama_model_ftype_name(model->ftype).c_str());  // TODO: llama_model_ftype_name(model)
+            llama_model_arch_name (*model).c_str(),
+            llama_model_type_name (*model).c_str(),
+            llama_model_ftype_name(*model).c_str());
 }
 
 uint64_t llama_model_size(const struct llama_model * model) {

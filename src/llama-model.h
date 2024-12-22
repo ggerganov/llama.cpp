@@ -15,8 +15,9 @@
 #define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
-// available llama models
-enum e_model {
+// available models
+// TODO: this enum does not follow the enum naming convention
+enum llm_type {
     MODEL_UNKNOWN,
     MODEL_14M,
     MODEL_17M,
@@ -81,73 +82,6 @@ enum e_model {
     MODEL_27B,
 };
 
-static const char * llama_model_type_name(e_model type) {
-    switch (type) {
-        case MODEL_14M:           return "14M";
-        case MODEL_17M:           return "17M";
-        case MODEL_22M:           return "22M";
-        case MODEL_33M:           return "33M";
-        case MODEL_60M:           return "60M";
-        case MODEL_70M:           return "70M";
-        case MODEL_80M:           return "80M";
-        case MODEL_109M:          return "109M";
-        case MODEL_137M:          return "137M";
-        case MODEL_160M:          return "160M";
-        case MODEL_220M:          return "220M";
-        case MODEL_250M:          return "250M";
-        case MODEL_270M:          return "270M";
-        case MODEL_335M:          return "335M";
-        case MODEL_410M:          return "410M";
-        case MODEL_450M:          return "450M";
-        case MODEL_770M:          return "770M";
-        case MODEL_780M:          return "780M";
-        case MODEL_0_5B:          return "0.5B";
-        case MODEL_1B:            return "1B";
-        case MODEL_1_3B:          return "1.3B";
-        case MODEL_1_4B:          return "1.4B";
-        case MODEL_1_5B:          return "1.5B";
-        case MODEL_1_6B:          return "1.6B";
-        case MODEL_2B:            return "2B";
-        case MODEL_2_8B:          return "2.8B";
-        case MODEL_3B:            return "3B";
-        case MODEL_4B:            return "4B";
-        case MODEL_6B:            return "6B";
-        case MODEL_6_9B:          return "6.9B";
-        case MODEL_7B:            return "7B";
-        case MODEL_8B:            return "8B";
-        case MODEL_9B:            return "9B";
-        case MODEL_11B:           return "11B";
-        case MODEL_12B:           return "12B";
-        case MODEL_13B:           return "13B";
-        case MODEL_14B:           return "14B";
-        case MODEL_15B:           return "15B";
-        case MODEL_16B:           return "16B";
-        case MODEL_20B:           return "20B";
-        case MODEL_30B:           return "30B";
-        case MODEL_32B:           return "32B";
-        case MODEL_34B:           return "34B";
-        case MODEL_35B:           return "35B";
-        case MODEL_40B:           return "40B";
-        case MODEL_65B:           return "65B";
-        case MODEL_70B:           return "70B";
-        case MODEL_236B:          return "236B";
-        case MODEL_314B:          return "314B";
-        case MODEL_SMALL:         return "0.1B";
-        case MODEL_MEDIUM:        return "0.4B";
-        case MODEL_LARGE:         return "0.8B";
-        case MODEL_XL:            return "1.5B";
-        case MODEL_A1_7B:         return "A1.7B";
-        case MODEL_A2_7B:         return "A2.7B";
-        case MODEL_8x7B:          return "8x7B";
-        case MODEL_8x22B:         return "8x22B";
-        case MODEL_16x12B:        return "16x12B";
-        case MODEL_10B_128x3_66B: return "10B+128x3.66B";
-        case MODEL_57B_A14B:      return "57B.A14B";
-        case MODEL_27B:           return "27B";
-        default:                  return "?B";
-    }
-}
-
 struct llama_hparams_posnet {
     uint32_t n_embd;
     uint32_t n_layer;
@@ -187,27 +121,27 @@ struct llama_hparams {
     std::array<uint32_t, LLAMA_MAX_LAYERS> n_ff_arr;
 
     uint32_t n_layer_dense_lead = 0;
-    uint32_t n_lora_q = 0;
-    uint32_t n_lora_kv = 0;
-    uint32_t n_ff_exp = 0;
-    uint32_t n_ff_shexp = 0;
-    uint32_t n_expert_shared = 0;
-    float    expert_weights_scale = 0.0;
+    uint32_t n_lora_q           = 0;
+    uint32_t n_lora_kv          = 0;
+    uint32_t n_ff_exp           = 0;
+    uint32_t n_ff_shexp         = 0;
+    uint32_t n_expert_shared    = 0;
+    uint32_t n_norm_groups      = 0;
+
+    float expert_weights_scale = 0.0;
 
     float f_norm_eps;
     float f_norm_rms_eps;
     float f_norm_group_eps;
 
-    uint32_t n_norm_groups;
-
-    float f_attn_logit_softcapping = 50.0f;
+    float f_attn_logit_softcapping  = 50.0f;
     float f_final_logit_softcapping = 30.0f;
 
     // for RWKV
     uint32_t rescale_every_n_layers = 0;
-    uint32_t time_mix_extra_dim = 0;
-    uint32_t time_decay_extra_dim = 0;
-    uint32_t wkv_head_size = 0;
+    uint32_t time_mix_extra_dim     = 0;
+    uint32_t time_decay_extra_dim   = 0;
+    uint32_t wkv_head_size          = 0;
 
     float     rope_attn_factor = 1.0f;
     float     rope_freq_base_train;
@@ -221,6 +155,7 @@ struct llama_hparams {
     uint32_t ssm_d_inner = 0;
     uint32_t ssm_d_state = 0;
     uint32_t ssm_dt_rank = 0;
+
     bool ssm_dt_b_c_rms = false;
 
     float f_clamp_kqv      = 0.0f;
@@ -518,8 +453,9 @@ struct llama_layer {
 };
 
 struct llama_model {
-    e_model     type  = MODEL_UNKNOWN;
-    llm_arch    arch  = LLM_ARCH_UNKNOWN;
+    llm_type type = MODEL_UNKNOWN;
+    llm_arch arch = LLM_ARCH_UNKNOWN;
+
     llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
 
     std::string name = "n/a";
@@ -527,25 +463,25 @@ struct llama_model {
     llama_hparams hparams = {};
     llama_vocab   vocab;
 
-    struct ggml_tensor * tok_embd = nullptr;
-    struct ggml_tensor * type_embd = nullptr;
-    struct ggml_tensor * pos_embd = nullptr;
-    struct ggml_tensor * tok_norm = nullptr;
+    struct ggml_tensor * tok_embd   = nullptr;
+    struct ggml_tensor * type_embd  = nullptr;
+    struct ggml_tensor * pos_embd   = nullptr;
+    struct ggml_tensor * tok_norm   = nullptr;
     struct ggml_tensor * tok_norm_b = nullptr;
 
-    struct ggml_tensor * output_norm = nullptr;
-    struct ggml_tensor * output_norm_b = nullptr;
-    struct ggml_tensor * output = nullptr;
-    struct ggml_tensor * output_b = nullptr;
+    struct ggml_tensor * output_norm     = nullptr;
+    struct ggml_tensor * output_norm_b   = nullptr;
+    struct ggml_tensor * output          = nullptr;
+    struct ggml_tensor * output_b        = nullptr;
     struct ggml_tensor * output_norm_enc = nullptr;
 
     // classifier
-    struct ggml_tensor * cls = nullptr;
-    struct ggml_tensor * cls_b = nullptr;
+    struct ggml_tensor * cls       = nullptr;
+    struct ggml_tensor * cls_b     = nullptr;
     struct ggml_tensor * cls_out   = nullptr;
     struct ggml_tensor * cls_out_b = nullptr;
 
-    struct ggml_tensor * conv1d = nullptr;
+    struct ggml_tensor * conv1d   = nullptr;
     struct ggml_tensor * conv1d_b = nullptr;
 
     std::vector<llama_layer> layers;
@@ -611,6 +547,11 @@ struct llama_model {
     }
 };
 
-ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il);
+const char * llm_type_name(llm_type type);
 
-std::string llama_model_ftype_name(llama_ftype ftype);
+std::string llama_model_arch_name (const llama_model & model);
+std::string llama_model_type_name (const llama_model & model);
+std::string llama_model_ftype_name(const llama_model & model);
+
+// TODO: this probably belongs to llama-adapter
+ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il);
