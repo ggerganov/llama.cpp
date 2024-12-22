@@ -89,19 +89,14 @@ static bool json_is_array_of_mixed_numbers_strings(const json & data) {
 }
 
 // get value by path(key1 / key2)
-static json json_get_nested_values(const std::vector<std::string>& paths, const json& js) {
+static json json_get_nested_values(const std::vector<std::string> & paths, const json & js) {
     json result = json::object();
-    
-    for (const std::string& path : paths) {
+
+    for (const std::string & path : paths) {
         json current = js;
-        std::istringstream stream(path);
-        std::string key;
-        std::vector<std::string> keys;
-        while (std::getline(stream, key, '/')) {
-            keys.push_back(key);
-        }
+        const auto keys = string_split<std::string>(path, /*delim*/ '/');
         bool valid_path = true;
-        for (const std::string& k : keys) {
+        for (const std::string & k : keys) {
             if (valid_path && current.is_object() && current.contains(k)) {
                 current = current[k];
             } else {

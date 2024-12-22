@@ -442,6 +442,8 @@ These words will not be included in the completion, so make sure to add them to 
 
 `timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
 
+`requested_fields`: A list of required response fields, for example : `"requested_fields": ["content", "generation_settings/n_predict"]`  If there is no field, return an empty json for that field.
+
 **Response format**
 
 - Note: In streaming mode (`stream`), only `content` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
