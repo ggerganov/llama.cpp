@@ -19,7 +19,7 @@ import { asyncIterator } from '@sec-ant/readable-stream/ponyfill/asyncIterator';
 import pako from "pako";
 
 const isDev = import.meta.env.MODE === "development";
-const useCompression = true; // set to true if you want to use gzip compression for local storage
+const useCompression = false; // set to true if you want to use gzip compression for local storage
 
 // utility functions
 const isString = (x) => !!x.toLowerCase;
