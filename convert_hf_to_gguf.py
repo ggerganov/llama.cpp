@@ -525,10 +525,9 @@ class Model:
             else:
                 token: str = reverse_vocab[i]
                 if token in added_vocab:
-                    # We need to manually encode and decode the added tokens in case special characters
-                    # used for `\n` / `\t` have been manually added in the added tokens
-                    # To avoid unexpected issues - we make sure to encode single-char tokens
-                    if len(token) == 1:
+                    # The tokenizer in llama.cpp assumes the CONTROL and USER_DEFINED tokens are pre-normalized.
+                    # To avoid unexpected issues - we make sure to normalize non-normalized tokens
+                    if not tokenizer.added_tokens_decoder[i].normalized:
                         previous_token = token
                         token = tokenizer.decode(tokenizer.encode(token, add_special_tokens=False))
                         if previous_token != token:
@@ -537,6 +536,8 @@ class Model:
                     if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
                         toktypes.append(gguf.TokenType.CONTROL)
                     else:
+                        # NOTE: this was added for Gemma.
+                        # Encoding and decoding the tokens above isn't sufficient for this case.
                         token = token.replace(b"\xe2\x96\x81".decode("utf-8"), " ")  # pre-normalize user-defined spaces
                         toktypes.append(gguf.TokenType.USER_DEFINED)
                 else:
