@@ -59,6 +59,21 @@
 // helpers
 //
 
+std::string format(const char * fmt, ...) {
+    va_list ap;
+    va_list ap2;
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
+    int size = vsnprintf(NULL, 0, fmt, ap);
+    GGML_ASSERT(size >= 0 && size < INT_MAX); // NOLINT
+    std::vector<char> buf(size + 1);
+    int size2 = vsnprintf(buf.data(), size + 1, fmt, ap2);
+    GGML_ASSERT(size2 == size);
+    va_end(ap2);
+    va_end(ap);
+    return std::string(buf.data(), size);
+}
+
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
     size_t start = 0;
@@ -16673,9 +16688,9 @@ int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int3
 
 int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
-            llama_model_arch_name(model->arch),
-            llama_model_type_name(model->type),
-            llama_model_ftype_name(model->ftype).c_str());
+            llm_arch_name(model->arch),                     // TODO: llama_model_arch_name(model)
+            llama_model_type_name(model->type),             // TODO: llama_model_type_name(model)
+            llama_model_ftype_name(model->ftype).c_str());  // TODO: llama_model_ftype_name(model)
 }
 
 uint64_t llama_model_size(const struct llama_model * model) {

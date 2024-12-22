@@ -1,6 +1,6 @@
 #pragma once
 
-#include "llama-impl.h"
+#include "llama.h"
 
 #include <string>
 #include <vector>
