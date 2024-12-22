@@ -529,9 +529,19 @@ class Model:
             else:
                 token: str = reverse_vocab[i]
                 if token in added_vocab:
+                    # The tokenizer in llama.cpp assumes the CONTROL and USER_DEFINED tokens are pre-normalized.
+                    # To avoid unexpected issues - we make sure to normalize non-normalized tokens
+                    if not tokenizer.added_tokens_decoder[i].normalized:
+                        previous_token = token
+                        token = tokenizer.decode(tokenizer.encode(token, add_special_tokens=False))
+                        if previous_token != token:
+                            logger.info(f"{repr(previous_token)} is encoded and decoded back to {repr(token)} using AutoTokenizer")
+
                     if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
                         toktypes.append(gguf.TokenType.CONTROL)
                     else:
+                        # NOTE: this was added for Gemma.
+                        # Encoding and decoding the tokens above isn't sufficient for this case.
                         token = token.replace(b"\xe2\x96\x81".decode("utf-8"), " ")  # pre-normalize user-defined spaces
                         toktypes.append(gguf.TokenType.USER_DEFINED)
                 else:
@@ -575,6 +585,9 @@ class Model:
         if chkhsh == "8aeee3860c56296a157a1fe2fad249ec40aa59b1bb5709f4ade11c4e6fe652ed":
             # ref: https://huggingface.co/tiiuae/falcon-7b
             res = "falcon"
+        if chkhsh == "9d032fcbd5501f4a38150912590928bfb36091efb5df11b8e2124b0390e3fb1e":
+            # ref: https://huggingface.co/tiiuae/Falcon3-7B-Base
+            res = "falcon3"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
             res = "bert-bge"
