@@ -4,7 +4,7 @@ The purpose of this example is to demonstrate a minimal usage of llama.cpp for r
 
 ```bash
 llama-run granite-code
-...
+```
 
 ```bash
 llama-run -h
@@ -19,6 +19,8 @@ Options:
       Context size (default: 2048)
   -n, --ngl <value>
       Number of GPU layers (default: 0)
+  -v, --verbose, --log-verbose
+      Set verbosity level to infinity (i.e. log all messages, useful for debugging)
   -h, --help
       Show help message
 
@@ -42,6 +44,6 @@ Examples:
   llama-run https://example.com/some-file1.gguf
   llama-run some-file2.gguf
   llama-run file://some-file3.gguf
-  llama-run --ngl 99 some-file4.gguf
-  llama-run --ngl 99 some-file5.gguf Hello World
-...
+  llama-run --ngl 999 some-file4.gguf
+  llama-run --ngl 999 some-file5.gguf Hello World
+```

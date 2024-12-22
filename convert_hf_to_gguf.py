@@ -221,17 +221,17 @@ class Model:
             self.gguf_writer.add_context_length(n_ctx)
             logger.info(f"gguf: context length = {n_ctx}")
 
-        n_embd = self.find_hparam(["hidden_size", "n_embd"])
-        self.gguf_writer.add_embedding_length(n_embd)
-        logger.info(f"gguf: embedding length = {n_embd}")
+        if (n_embd := self.find_hparam(["hidden_size", "n_embd"], optional=True)) is not None:
+            self.gguf_writer.add_embedding_length(n_embd)
+            logger.info(f"gguf: embedding length = {n_embd}")
 
         if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
             logger.info(f"gguf: feed forward length = {n_ff}")
 
-        n_head = self.find_hparam(["num_attention_heads", "n_head"])
-        self.gguf_writer.add_head_count(n_head)
-        logger.info(f"gguf: head count = {n_head}")
+        if (n_head := self.find_hparam(["num_attention_heads", "n_head"], optional=True)) is not None:
+            self.gguf_writer.add_head_count(n_head)
+            logger.info(f"gguf: head count = {n_head}")
 
         if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
             self.gguf_writer.add_head_count_kv(n_head_kv)
@@ -296,7 +296,9 @@ class Model:
                     break
 
             for new_name, data_torch in (self.modify_tensors(data_torch, name, bid)):
-                data = data_torch.squeeze().numpy()
+                # TODO: why do we squeeze here?
+                # data = data_torch.squeeze().numpy()
+                data = data_torch.numpy()
 
                 # if data ends up empty, it means data_torch was a scalar tensor -> restore
                 if len(data.shape) == 0:
@@ -324,6 +326,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
+                            gguf.MODEL_TENSOR.POSNET_NORM1,
+                            gguf.MODEL_TENSOR.POSNET_NORM2,
                         )
                     )
                     or not new_name.endswith(".weight")
@@ -525,9 +529,6 @@ class Model:
             else:
                 token: str = reverse_vocab[i]
                 if token in added_vocab:
-                    # We need to manually encode and decode the added tokens in case special characters
-                    # used for `\n` / `\t` have been manually added in the added tokens
-                    token = tokenizer.decode(tokenizer.encode(token))
                     if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
                         toktypes.append(gguf.TokenType.CONTROL)
                     else:
@@ -574,9 +575,6 @@ class Model:
         if chkhsh == "8aeee3860c56296a157a1fe2fad249ec40aa59b1bb5709f4ade11c4e6fe652ed":
             # ref: https://huggingface.co/tiiuae/falcon-7b
             res = "falcon"
-        if chkhsh == "9d032fcbd5501f4a38150912590928bfb36091efb5df11b8e2124b0390e3fb1e":
-            # ref: https://huggingface.co/tiiuae/Falcon3-7B-Base
-            res = "falcon3"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
             res = "bert-bge"
@@ -694,6 +692,9 @@ class Model:
 
         return res
         # Marker: End get_vocab_base_pre
+
+    def _set_vocab_none(self) -> None:
+        self.gguf_writer.add_tokenizer_model("none")
 
     def _set_vocab_gpt2(self) -> None:
         tokens, toktypes, tokpre = self.get_vocab_base()
@@ -2033,6 +2034,44 @@ class Qwen2VLModel(Model):
             yield name, data
 
 
+@Model.register("WavTokenizerDec")
+class WavTokenizerDecModel(Model):
+    model_arch = gguf.MODEL_ARCH.WAVTOKENIZER_DEC
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        if \
+                name.endswith("codebook.cluster_size") or \
+                name.endswith("codebook.embed_avg") or \
+                name.endswith("codebook.inited"):
+            logger.debug(f"Skipping {name!r}")
+            return []
+
+        logger.info(f"{self.map_tensor_name(name)} -> {data_torch.shape}")
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def set_vocab(self):
+        self._set_vocab_none()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_vocab_size         (self.hparams["vocab_size"])
+        self.gguf_writer.add_features_length    (self.hparams["n_embd_features"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_ff"])
+        self.gguf_writer.add_group_norm_eps     (self.hparams["group_norm_epsilon"])
+        self.gguf_writer.add_group_norm_groups  (self.hparams["group_norm_groups"])
+
+        self.gguf_writer.add_posnet_embedding_length(self.hparams["posnet"]["n_embd"])
+        self.gguf_writer.add_posnet_block_count     (self.hparams["posnet"]["n_layer"])
+
+        self.gguf_writer.add_convnext_embedding_length(self.hparams["convnext"]["n_embd"])
+        self.gguf_writer.add_convnext_block_count     (self.hparams["convnext"]["n_layer"])
+
+        self.gguf_writer.add_causal_attention(False)
+
+
 @Model.register("Qwen2MoeForCausalLM")
 class Qwen2MoeModel(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2MOE
@@ -2161,6 +2200,15 @@ class Phi3MiniModel(Model):
     model_arch = gguf.MODEL_ARCH.PHI3
 
     def set_vocab(self):
+        # Phi-4 model uses GPT2Tokenizer
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+                tokenizer_class = tokenizer_config_json['tokenizer_class']
+                if tokenizer_class == 'GPT2Tokenizer':
+                    return self._set_vocab_gpt2()
+
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -2277,7 +2325,11 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_rope_dimension_count(rope_dims)
         self.gguf_writer.add_rope_freq_base(self.find_hparam(["rope_theta"]))
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_sliding_window(self.find_hparam(["sliding_window"]))
+        sliding_window = self.hparams.get("sliding_window")
+        # use zero value of sliding_window to distinguish Phi-4 from other PHI3 models
+        if sliding_window is None:
+            sliding_window = 0
+        self.gguf_writer.add_sliding_window(sliding_window)
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
@@ -2576,7 +2628,7 @@ class InternLM2Model(Model):
             return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("BertModel", "CamembertModel", "RobertaModel")
+@Model.register("BertModel", "BertForMaskedLM", "CamembertModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -2642,11 +2694,71 @@ class BertModel(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
+        if name.startswith("bert."):
+            name = name[5:]
+
+        if name.endswith(".gamma"):
+            name = name[:-6] + ".weight"
+
+        if name.endswith(".beta"):
+            name = name[:-5] + ".bias"
+
         # we are only using BERT for embeddings so we don't need the pooling layer
         if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
             return [] # we don't need these
 
+        if name.startswith("cls.predictions"):
+            return []
+
+        if name.startswith("cls.seq_relationship"):
+            return []
+
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("RobertaModel")
+class RobertaModel(BertModel):
+    model_arch = gguf.MODEL_ARCH.BERT
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # we need the pad_token_id to know how to chop down position_embd matrix
+        if (pad_token_id := self.hparams.get("pad_token_id")) is not None:
+            self._position_offset = 1 + pad_token_id
+            if "max_position_embeddings" in self.hparams:
+                self.hparams["max_position_embeddings"] -= self._position_offset
+        else:
+            self._position_offset = None
+
+    def set_vocab(self):
+        """Support BPE tokenizers for roberta models"""
+        bpe_tok_path = self.dir_model / "tokenizer.json"
+        if bpe_tok_path.exists():
+            self._set_vocab_gpt2()
+            self.gguf_writer.add_add_bos_token(True)
+            self.gguf_writer.add_add_eos_token(True)
+
+            # we need this to validate the size of the token_type embeddings
+            # though currently we are passing all zeros to the token_type embeddings
+            # "Sequence A" or "Sequence B"
+            self.gguf_writer.add_token_type_count(self.hparams.get("type_vocab_size", 1))
+
+        else:
+            return super().set_vocab()
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # if name starts with "roberta.", remove the prefix
+        # e.g. https://huggingface.co/BAAI/bge-reranker-v2-m3/tree/main
+        if name.startswith("roberta."):
+            name = name[8:]
+
+        # position embeddings start at pad_token_id + 1, so just chop down the weight tensor
+        if name == "embeddings.position_embeddings.weight":
+            if self._position_offset is not None:
+                data_torch = data_torch[self._position_offset:,:]
+
+        return super().modify_tensors(data_torch, name, bid)
 
 
 @Model.register("NomicBertModel")
@@ -2967,6 +3079,9 @@ class Rwkv6Model(Model):
 
         if new_name.endswith("time_mix_w2.weight"):
             data_torch = data_torch.permute(0, 2, 1)
+
+        if new_name.endswith("time_mix_decay.weight") or "lerp" in new_name:
+            data_torch = data_torch.squeeze()
 
         rescale_every_n_layers = self.hparams["rescale_every"]
         if rescale_every_n_layers > 0:

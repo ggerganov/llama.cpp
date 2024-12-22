@@ -343,6 +343,10 @@ node index.js
 
 ### POST `/completion`: Given a `prompt`, it returns the predicted completion.
 
+> [!IMPORTANT]
+>
+> This endpoint is **not** OAI-compatible
+
 *Options:*
 
 `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
@@ -438,42 +442,76 @@ These words will not be included in the completion, so make sure to add them to 
 
 `cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `true`
 
+`return_tokens`: Return the raw generated token ids in the `tokens` field. Otherwise `tokens` remains empty. Default: `false`
+
 `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["dry", "top_k", "typ_p", "top_p", "min_p", "xtc", "temperature"]` - these are all the available values.
 
 `timings_per_token`: Include prompt processing and text generation speed information in each response.  Default: `false`
+
+`post_sampling_probs`: Returns the probabilities of top `n_probs` tokens after applying sampling chain.
 
 `requested_fields`: A list of required response fields, for example : `"requested_fields": ["content", "generation_settings/n_predict"]`  If there is no field, return an empty json for that field.
 
 **Response format**
 
-- Note: In streaming mode (`stream`), only `content` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
+- Note: In streaming mode (`stream`), only `content`, `tokens` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
 
-- `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
-
-```json
-{
-  "content": "<the token selected by the model>",
-  "probs": [
-    {
-      "prob": float,
-      "tok_str": "<most likely token>"
-    },
-    {
-      "prob": float,
-      "tok_str": "<second most likely token>"
-    },
+- `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has a nested array `top_logprobs`. It contains at **maximum** `n_probs` elements:
+  ```json
+  {
+    "content": "<the generated completion text>",
+    "tokens": [ generated token ids if requested ],
     ...
-  ]
-},
-```
-
-Notice that each `probs` is an array of length `n_probs`.
+    "probs": [
+      {
+        "id": <token id>,
+        "logprob": float,
+        "token": "<most likely token>",
+        "bytes": [int, int, ...],
+        "top_logprobs": [
+          {
+            "id": <token id>,
+            "logprob": float,
+            "token": "<token text>",
+            "bytes": [int, int, ...],
+          },
+          {
+            "id": <token id>,
+            "logprob": float,
+            "token": "<token text>",
+            "bytes": [int, int, ...],
+          },
+          ...
+        ]
+      },
+      {
+        "id": <token id>,
+        "logprob": float,
+        "token": "<most likely token>",
+        "bytes": [int, int, ...],
+        "top_logprobs": [
+          ...
+        ]
+      },
+      ...
+    ]
+  },
+  ```
+  Please note that if `post_sampling_probs` is set to `true`:
+    - `logprob` will be replaced with `prob`, with the value between 0.0 and 1.0
+    - `top_logprobs` will be replaced with `top_probs`. Each element contains:
+      - `id`: token ID
+      - `token`: token in string
+      - `bytes`: token in bytes
+      - `prob`: token probability, with the value between 0.0 and 1.0
+    - Number of elements in `top_probs` may be less than `n_probs`
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
+- `tokens`: Same as `content` but represented as raw token ids. Only populated if `"return_tokens": true` or `"stream": true` in the request.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
 - `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`. These options may differ from the original ones in some way (e.g. bad values filtered out, strings converted to tokens, etc.).
-- `model`: The path to the model loaded with `-m`
-- `prompt`: The provided `prompt`
+- `model`: The model alias (for model path, please use `/props` endpoint)
+- `prompt`: The processed `prompt` (special tokens may be added)
 - `stop_type`: Indicating whether the completion has stopped. Possible values are:
   - `none`: Generating (not stopped)
   - `eos`: Stopped because it encountered the EOS token
@@ -761,6 +799,8 @@ curl http://localhost:8080/v1/chat/completions \
 
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
+This endpoint requires that the model uses a pooling different than type `none`. The embeddings are normalized using the Eucledian norm.
+
 *Options:*
 
 See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
@@ -792,6 +832,46 @@ See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-r
           "encoding_format": "float"
   }'
   ```
+
+### POST `/embeddings`: non-OpenAI-compatible embeddings API
+
+This endpoint supports all poolings, including `--pooling none`. When the pooling is `none`, the responses will contain the *unnormalized* embeddings for *all* input tokens. For all other pooling types, only the pooled embeddings are returned, normalized using Euclidian norm.
+
+Note that the response format of this endpoint is different from `/v1/embeddings`.
+
+*Options:*
+
+Same as the `/v1/embeddings` endpoint.
+
+*Examples:*
+
+Same as the `/v1/embeddings` endpoint.
+
+**Response format**
+
+```json
+[
+  {
+    "index": 0,
+    "embedding": [
+      [ ... embeddings for token 0   ... ],
+      [ ... embeddings for token 1   ... ],
+      [ ... ]
+      [ ... embeddings for token N-1 ... ],
+    ]
+  },
+  ...
+  {
+    "index": P,
+    "embedding": [
+      [ ... embeddings for token 0   ... ],
+      [ ... embeddings for token 1   ... ],
+      [ ... ]
+      [ ... embeddings for token N-1 ... ],
+    ]
+  }
+]
+```
 
 ### GET `/slots`: Returns the current slots processing state
 

@@ -1095,7 +1095,7 @@ struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_p
 #define CURL_MAX_RETRY 3
 #define CURL_RETRY_DELAY_SECONDS 2
 
-static bool curl_perform_with_retry(const std::string& url, CURL* curl, int max_attempts, int retry_delay_seconds) {
+static bool curl_perform_with_retry(const std::string & url, CURL * curl, int max_attempts, int retry_delay_seconds) {
     int remaining_attempts = max_attempts;
 
     while (remaining_attempts > 0) {
@@ -1119,7 +1119,6 @@ static bool curl_perform_with_retry(const std::string& url, CURL* curl, int max_
 }
 
 static bool common_download_file(const std::string & url, const std::string & path, const std::string & hf_token) {
-
     // Initialize libcurl
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
     if (!curl) {
@@ -1192,11 +1191,13 @@ static bool common_download_file(const std::string & url, const std::string & pa
         std::string etag;
         std::string last_modified;
     };
+
     common_load_model_from_url_headers headers;
+
     {
         typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
-            common_load_model_from_url_headers *headers = (common_load_model_from_url_headers *) userdata;
+            common_load_model_from_url_headers * headers = (common_load_model_from_url_headers *) userdata;
 
             static std::regex header_regex("([^:]+): (.*)\r\n");
             static std::regex etag_regex("ETag", std::regex_constants::icase);
@@ -1780,7 +1781,9 @@ void common_embd_normalize(const float * inp, float * out, int n, int embd_norm)
             break;
         case 0: // max absolute
             for (int i = 0; i < n; i++) {
-                if (sum < std::abs(inp[i])) sum = std::abs(inp[i]);
+                if (sum < std::abs(inp[i])) {
+                    sum = std::abs(inp[i]);
+                }
             }
             sum /= 32760.0; // make an int16 range
             break;
