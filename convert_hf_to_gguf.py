@@ -2378,6 +2378,15 @@ class Phi3MiniModel(Model):
     model_arch = gguf.MODEL_ARCH.PHI3
 
     def set_vocab(self):
+        # Phi-4 model uses GPT2Tokenizer
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+                tokenizer_class = tokenizer_config_json['tokenizer_class']
+                if tokenizer_class == 'GPT2Tokenizer':
+                    return self._set_vocab_gpt2()
+
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -2494,7 +2503,11 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_rope_dimension_count(rope_dims)
         self.gguf_writer.add_rope_freq_base(self.find_hparam(["rope_theta"]))
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_sliding_window(self.find_hparam(["sliding_window"]))
+        sliding_window = self.hparams.get("sliding_window")
+        # use zero value of sliding_window to distinguish Phi-4 from other PHI3 models
+        if sliding_window is None:
+            sliding_window = 0
+        self.gguf_writer.add_sliding_window(sliding_window)
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
@@ -2793,7 +2806,7 @@ class InternLM2Model(Model):
             return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("BertModel", "CamembertModel", "RobertaModel")
+@Model.register("BertModel", "BertForMaskedLM", "CamembertModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -2859,11 +2872,71 @@ class BertModel(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
+        if name.startswith("bert."):
+            name = name[5:]
+
+        if name.endswith(".gamma"):
+            name = name[:-6] + ".weight"
+
+        if name.endswith(".beta"):
+            name = name[:-5] + ".bias"
+
         # we are only using BERT for embeddings so we don't need the pooling layer
         if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
             return [] # we don't need these
 
+        if name.startswith("cls.predictions"):
+            return []
+
+        if name.startswith("cls.seq_relationship"):
+            return []
+
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("RobertaModel")
+class RobertaModel(BertModel):
+    model_arch = gguf.MODEL_ARCH.BERT
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # we need the pad_token_id to know how to chop down position_embd matrix
+        if (pad_token_id := self.hparams.get("pad_token_id")) is not None:
+            self._position_offset = 1 + pad_token_id
+            if "max_position_embeddings" in self.hparams:
+                self.hparams["max_position_embeddings"] -= self._position_offset
+        else:
+            self._position_offset = None
+
+    def set_vocab(self):
+        """Support BPE tokenizers for roberta models"""
+        bpe_tok_path = self.dir_model / "tokenizer.json"
+        if bpe_tok_path.exists():
+            self._set_vocab_gpt2()
+            self.gguf_writer.add_add_bos_token(True)
+            self.gguf_writer.add_add_eos_token(True)
+
+            # we need this to validate the size of the token_type embeddings
+            # though currently we are passing all zeros to the token_type embeddings
+            # "Sequence A" or "Sequence B"
+            self.gguf_writer.add_token_type_count(self.hparams.get("type_vocab_size", 1))
+
+        else:
+            return super().set_vocab()
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # if name starts with "roberta.", remove the prefix
+        # e.g. https://huggingface.co/BAAI/bge-reranker-v2-m3/tree/main
+        if name.startswith("roberta."):
+            name = name[8:]
+
+        # position embeddings start at pad_token_id + 1, so just chop down the weight tensor
+        if name == "embeddings.position_embeddings.weight":
+            if self._position_offset is not None:
+                data_torch = data_torch[self._position_offset:,:]
+
+        return super().modify_tensors(data_torch, name, bid)
 
 
 @Model.register("NomicBertModel")
@@ -3184,6 +3257,9 @@ class Rwkv6Model(Model):
 
         if new_name.endswith("time_mix_w2.weight"):
             data_torch = data_torch.permute(0, 2, 1)
+
+        if new_name.endswith("time_mix_decay.weight") or "lerp" in new_name:
+            data_torch = data_torch.squeeze()
 
         rescale_every_n_layers = self.hparams["rescale_every"]
         if rescale_every_n_layers > 0:

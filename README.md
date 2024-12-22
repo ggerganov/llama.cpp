@@ -448,7 +448,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     </details>
 
-[^3]: [https://github.com/containers/ramalama](RamaLama)
+[^3]: [RamaLama](https://github.com/containers/ramalama)
 
 ## [`llama-simple`](examples/simple)
 

@@ -626,7 +626,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params) {
             params.ctx_shift = false;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_IMATRIX}).set_env("LLAMA_ARG_NO_CONTEXT_SHIFT"));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_IMATRIX, LLAMA_EXAMPLE_PERPLEXITY}).set_env("LLAMA_ARG_NO_CONTEXT_SHIFT"));
     add_opt(common_arg(
         {"--chunks"}, "N",
         string_format("max number of chunks to process (default: %d, -1 = all)", params.n_chunks),
@@ -2205,6 +2205,18 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.vocoder.model = value;
         }
     ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
+
+    // model-specific
+    add_opt(common_arg(
+        {"--tts-oute-default"},
+        string_format("use default OuteTTS models (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "OuteAI/OuteTTS-0.2-500M-GGUF";
+            params.hf_file = "OuteTTS-0.2-500M-Q8_0.gguf";
+            params.vocoder.hf_repo = "ggml-org/WavTokenizer";
+            params.vocoder.hf_file = "WavTokenizer-Large-75-F16.gguf";
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTS}));
 
     return ctx_arg;
 }
