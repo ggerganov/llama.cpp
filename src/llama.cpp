@@ -11431,7 +11431,8 @@ struct llm_build_context {
             const int64_t n_head_kv = hparams.n_head_kv(il);
             const int64_t n_head    = hparams.n_head(il);
 
-            if (n_head == 0) { // attention-free layer of Llama-3_1-Nemotron-51B
+            if (n_head == 0) {
+                // attention-free layer of Llama-3_1-Nemotron-51B
                 cur = inpL;
             } else {
                 // norm
@@ -11441,11 +11442,12 @@ struct llm_build_context {
                 cb(cur, "attn_norm", il);
             }
 
-            if (n_head > 0 && n_head_kv == 0) { // "linear attention" of Llama-3_1-Nemotron-51B
+            if (n_head > 0 && n_head_kv == 0) {
+                // "linear attention" of Llama-3_1-Nemotron-51B
                 cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wo, cur);
                 cb(cur, "wo", il);
             } else if (n_head > 0) {
-            // self-attention
+                // self-attention
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
                 struct ggml_tensor * rope_factors = build_rope_factors(il);
 
