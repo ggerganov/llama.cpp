@@ -9,11 +9,12 @@ llama_add_compile_flags()
 add_library(llama
             ../include/llama.h
             llama.cpp
+            llama-adapter.cpp
             llama-arch.cpp
             llama-batch.cpp
             llama-chat.cpp
             llama-context.cpp
-            llama-adapter.cpp
+            llama-hparams.cpp
             llama-grammar.cpp
             llama-kv-cache.cpp
             llama-mmap.cpp

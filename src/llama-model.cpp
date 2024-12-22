@@ -2,6 +2,8 @@
 
 #include "llama-impl.h"
 
+#include <cassert>
+
 const char * llm_type_name(llm_type type) {
     switch (type) {
         case MODEL_14M:           return "14M";
