@@ -4,8 +4,6 @@
 
 #include "ggml.h"
 
-#include <cstdio>
-
 #ifdef __has_include
     #if __has_include(<unistd.h>)
         #include <unistd.h>

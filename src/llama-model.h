@@ -648,3 +648,5 @@ static ggml_backend_buffer_type_t select_buft(const llama_model::buft_list_t & b
     throw std::runtime_error(format("no suitable buffer type found"));
 }
 
+
+std::string llama_model_ftype_name(llama_ftype ftype);
