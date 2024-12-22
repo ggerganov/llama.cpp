@@ -1627,11 +1627,16 @@ struct server_response {
 struct server_context {
     common_params params_base;
 
+    common_init_result llama_init;
+    common_init_result llama_init_dft;
+
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
+
     std::vector<common_lora_adapter_container> lora;
 
     llama_model * model_dft = nullptr;
+
     llama_context_params cparams_dft;
 
     llama_batch batch = {};
@@ -1655,21 +1660,6 @@ struct server_context {
     float slot_prompt_similarity = 0.0f;
 
     ~server_context() {
-        if (ctx) {
-            llama_free(ctx);
-            ctx = nullptr;
-        }
-
-        if (model) {
-            llama_free_model(model);
-            model = nullptr;
-        }
-
-        if (model_dft) {
-            llama_free_model(model_dft);
-            model_dft = nullptr;
-        }
-
         // Clear any sampling context
         for (server_slot & slot : slots) {
             common_sampler_free(slot.smpl);
@@ -1692,11 +1682,12 @@ struct server_context {
 
         params_base = params;
 
-        common_init_result llama_init = common_init_from_params(params_base);
+        llama_init = common_init_from_params(params_base);
 
-        model = llama_init.model;
-        ctx   = llama_init.context;
-        lora  = llama_init.lora_adapters;
+        model = llama_init.model.get();
+        ctx   = llama_init.context.get();
+
+        lora = std::move(llama_init.lora_adapters);
 
         if (model == nullptr) {
             SRV_ERR("failed to load model, '%s'\n", params_base.model.c_str());
@@ -1719,25 +1710,22 @@ struct server_context {
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
             params_dft.n_parallel   = 1;
 
-            common_init_result llama_init_dft = common_init_from_params(params_dft);
+            llama_init_dft = common_init_from_params(params_dft);
 
-            model_dft = llama_init_dft.model;
+            model_dft = llama_init_dft.model.get();
 
             if (model_dft == nullptr) {
                 SRV_ERR("failed to load draft model, '%s'\n", params_base.speculative.model.c_str());
                 return false;
             }
 
-            if (!common_speculative_are_compatible(ctx, llama_init_dft.context)) {
+            if (!common_speculative_are_compatible(ctx, llama_init_dft.context.get())) {
                 SRV_ERR("the draft model '%s' is not compatible with the target model '%s'\n", params_base.speculative.model.c_str(), params_base.model.c_str());
-
-                llama_free      (llama_init_dft.context);
-                llama_free_model(llama_init_dft.model);
 
                 return false;
             }
 
-            const int n_ctx_dft = llama_n_ctx(llama_init_dft.context);
+            const int n_ctx_dft = llama_n_ctx(llama_init_dft.context.get());
 
             cparams_dft = common_context_params_to_llama(params_dft);
             cparams_dft.n_batch = n_ctx_dft;
@@ -1745,9 +1733,6 @@ struct server_context {
             // force F16 KV cache for the draft model for extra performance
             cparams_dft.type_k = GGML_TYPE_F16;
             cparams_dft.type_v = GGML_TYPE_F16;
-
-            // the context is not needed - we will create one for each slot
-            llama_free(llama_init_dft.context);
         }
 
         return true;

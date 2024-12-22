@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "llama.h"
+#include "llama-cpp.h"
 
 #include <string>
 #include <vector>
@@ -30,7 +30,7 @@ struct common_lora_adapter_info {
 };
 
 struct common_lora_adapter_container : common_lora_adapter_info {
-    struct llama_lora_adapter * adapter;
+    llama_lora_adapter_ptr adapter;
 };
 
 using llama_tokens = std::vector<llama_token>;
@@ -479,19 +479,10 @@ std::string fs_get_cache_file(const std::string & filename);
 //
 
 struct common_init_result {
-    struct llama_model   * model   = nullptr;
-    struct llama_context * context = nullptr;
+    llama_model_ptr   model;
+    llama_context_ptr context;
 
     std::vector<common_lora_adapter_container> lora_adapters;
-
-    ~common_init_result() {
-        llama_free(context);
-        llama_free_model(model);
-
-        for (auto & lora_adapter : lora_adapters) {
-            llama_lora_adapter_free(lora_adapter.adapter);
-        }
-    }
 };
 
 struct common_init_result     common_init_from_params(common_params & params);

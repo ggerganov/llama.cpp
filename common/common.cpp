@@ -925,14 +925,14 @@ struct common_init_result common_init_from_params(common_params & params) {
         common_lora_adapter_container loaded_la;
         loaded_la.path = la.path;
         loaded_la.scale = la.scale;
-        loaded_la.adapter = llama_lora_adapter_init(model, la.path.c_str());
+        loaded_la.adapter.reset(llama_lora_adapter_init(model, la.path.c_str()));
         if (loaded_la.adapter == nullptr) {
             LOG_ERR("%s: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
             llama_free(lctx);
             llama_free_model(model);
             return iparams;
         }
-        iparams.lora_adapters.push_back(loaded_la); // copy to list of loaded adapters
+        iparams.lora_adapters.emplace_back(std::move(loaded_la)); // copy to list of loaded adapters
     }
     if (!params.lora_init_without_apply) {
         common_lora_adapters_apply(lctx, iparams.lora_adapters);
@@ -996,8 +996,8 @@ struct common_init_result common_init_from_params(common_params & params) {
         llama_perf_context_reset(lctx);
     }
 
-    iparams.model   = model;
-    iparams.context = lctx;
+    iparams.model.reset(model);
+    iparams.context.reset(lctx);
 
     return iparams;
 }
@@ -1006,7 +1006,7 @@ void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_l
     llama_lora_adapter_clear(ctx);
     for (auto & la : lora_adapters) {
         if (la.scale != 0.0f) {
-            llama_lora_adapter_set(ctx, la.adapter, la.scale);
+            llama_lora_adapter_set(ctx, la.adapter.get(), la.scale);
         }
     }
 }
