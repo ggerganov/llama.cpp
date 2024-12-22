@@ -261,9 +261,7 @@ def test_completion_parallel_slots(n_slots: int, n_requests: int):
     "prompt,n_predict,requested_fields",
     [
         ("I believe the meaning of life is", 8, []),
-        (
-            "I believe the meaning of life is", 32, ["content", "generation_settings/n_predict", "prompt"],
-        ),
+        ("I believe the meaning of life is", 32, ["content", "generation_settings/n_predict", "prompt"]),
     ],
 )
 def test_completion_requested_fields(
