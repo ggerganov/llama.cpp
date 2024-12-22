@@ -15,7 +15,11 @@ import daisyuiThemes from 'daisyui/src/theming/themes';
 // ponyfill for missing ReadableStream asyncIterator on Safari
 import { asyncIterator } from '@sec-ant/readable-stream/ponyfill/asyncIterator';
 
-const isDev = import.meta.env.MODE === 'development';
+// compression library
+import pako from "pako";
+
+const isDev = import.meta.env.MODE === "development";
+const useCompression = true; // set to true if you want to use gzip compression for local storage
 
 // utility functions
 const isString = (x) => !!x.toLowerCase;
@@ -38,6 +42,45 @@ const copyStr = (textToCopy) => {
     document.execCommand('copy');
   }
 };
+const compressedStorage = {
+  getItem(key) {
+    const compressed = window.localStorage.getItem(key);
+    try {
+      const bytes = Uint8Array.from(atob(compressed), (c) => c.charCodeAt(0));
+      return new TextDecoder().decode(this.decompress(bytes));
+    } catch (error) {
+      return compressed;
+    }
+  },
+  setItem(key, value) {
+    const compressed = this.compress(new TextEncoder().encode(value));
+    const compressedHex = btoa(this.uintToString(compressed));
+    window.localStorage.setItem(key, compressedHex);
+  },
+  removeItem: (key) => window.localStorage.removeItem(key),
+  clear: () => window.localStorage.clear(),
+  key: (index) => window.localStorage.key(index),
+  length: window.localStorage.length,
+  [Symbol.iterator]: function* () {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      yield window.localStorage.key(i);
+    }
+  },
+  uintToString(bytes) {
+    const chunkSize = 0x8000;
+    let result = "";
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      result += String.fromCharCode.apply(
+        null,
+        bytes.subarray(i, i + chunkSize)
+      );
+    }
+    return result;
+  },
+  compress: (encoded) => pako.gzip(encoded, { level: 9 }),
+  decompress: (bytes) => pako.ungzip(bytes),
+};
+const localStorage = useCompression ? compressedStorage : window.localStorage;
 
 // constants
 const BASE_URL = isDev
@@ -211,7 +254,8 @@ const StorageUtils = {
   // manage conversations
   getAllConversations() {
     const res = [];
-    for (const key in localStorage) {
+    const storage = useCompression ? localStorage : Object.keys(localStorage);
+    for (const key of storage) {
       if (key.startsWith('conv-')) {
         res.push(JSON.parse(localStorage.getItem(key)));
       }
