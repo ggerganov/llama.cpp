@@ -3205,8 +3205,8 @@ static void ggml_vk_buffer_write_nc_async(ggml_backend_vk_context * ctx, vk_cont
         GGML_ABORT("fatal error");
     }
     // Check if src is pinned memory
-    vk_buffer buf;
-    size_t buf_offset;
+    vk_buffer buf = nullptr;
+    size_t buf_offset = 0;
     ggml_vk_host_get(ctx->device, tensor->data, buf, buf_offset);
 
     const uint64_t ne0 = tensor->ne[0];
@@ -3269,7 +3269,7 @@ static void ggml_vk_buffer_write_nc_async(ggml_backend_vk_context * ctx, vk_cont
     VkBufferCopy buf_copy{ 0, offset, copy_size };
 
     ggml_vk_sync_buffers(subctx);
-    vkCmdCopyBuffer(subctx->s->buffer, staging->buffer, dst->buffer, 1, &buf_copy);
+    vkCmdCopyBuffer(subctx->s->buffer, (VkBuffer)staging->buffer, (VkBuffer)dst->buffer, 1, &buf_copy);
 
     for (uint64_t i3 = 0; i3 < ne3; i3++) {
         for (uint64_t i2 = 0; i2 < ne2; i2++) {
@@ -3302,7 +3302,7 @@ static void ggml_vk_buffer_write_2d_async(vk_context subctx, vk_buffer& dst, siz
     }
     // Check if src is pinned memory
     vk_buffer buf = nullptr;
-    size_t buf_offset;
+    size_t buf_offset = 0;
     ggml_vk_host_get(dst->device, src, buf, buf_offset);
 
     if (buf != nullptr) {
@@ -3344,7 +3344,7 @@ static void ggml_vk_buffer_write_2d_async(vk_context subctx, vk_buffer& dst, siz
         copy_size};
 
     ggml_vk_sync_buffers(subctx);
-    vkCmdCopyBuffer(subctx->s->buffer, staging_buffer->buffer, dst->buffer, 1, &buf_copy);
+    vkCmdCopyBuffer(subctx->s->buffer, (VkBuffer)staging_buffer->buffer, (VkBuffer)dst->buffer, 1, &buf_copy);
 
     if (width == spitch) {
         deferred_memcpy((uint8_t *)staging_buffer->ptr, src, width * height, &subctx->in_memcpys);
@@ -3400,7 +3400,7 @@ static void ggml_vk_buffer_read_2d_async(vk_context subctx, vk_buffer& src, size
 
     // Check if dst is pinned memory
     vk_buffer buf = nullptr;
-    size_t buf_offset;
+    size_t buf_offset = 0;
     ggml_vk_host_get(src->device, dst, buf, buf_offset);
 
     std::vector<vk::BufferCopy> slices(1);
@@ -3480,7 +3480,7 @@ static void ggml_vk_buffer_copy_async(vk_context& ctx, vk_buffer& dst, size_t ds
 
     VkBufferCopy bc{ src_offset, dst_offset, size };
 
-    vkCmdCopyBuffer(ctx->s->buffer, src->buffer, dst->buffer, 1, &bc);
+    vkCmdCopyBuffer(ctx->s->buffer, (VkBuffer)src->buffer, (VkBuffer)dst->buffer, 1, &bc);
 }
 
 static void ggml_vk_buffer_copy(vk_buffer& dst, size_t dst_offset, vk_buffer& src, size_t src_offset, size_t size) {
@@ -3732,9 +3732,9 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
     ggml_backend_vk_buffer_context * src0_buf_ctx = (ggml_backend_vk_buffer_context *)src0->buffer->context;
     ggml_backend_vk_buffer_context * src1_buf_ctx = (ggml_backend_vk_buffer_context *)src1->buffer->context;
 
-    vk_buffer d_Qx;
+    vk_buffer d_Qx = nullptr;
     size_t qx_buf_offset = 0;
-    vk_buffer d_Qy;
+    vk_buffer d_Qy = nullptr;
     size_t qy_buf_offset = 0;
 
     bool src0_uma = false;
@@ -3934,9 +3934,9 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context&
     ggml_backend_vk_buffer_context * src0_buf_ctx = (ggml_backend_vk_buffer_context *)src0->buffer->context;
     ggml_backend_vk_buffer_context * src1_buf_ctx = (ggml_backend_vk_buffer_context *)src1->buffer->context;
 
-    vk_buffer d_Qx;
+    vk_buffer d_Qx = nullptr;
     size_t qx_buf_offset = 0;
-    vk_buffer d_Qy;
+    vk_buffer d_Qy = nullptr;
     size_t qy_buf_offset = 0;
 
     bool src0_uma = false;
@@ -4112,7 +4112,7 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(ggml_backend_vk_context * ctx, vk_c
     ggml_backend_vk_buffer_context * src0_buf_ctx = (ggml_backend_vk_buffer_context *)src0->buffer->context;
     ggml_backend_vk_buffer_context * src1_buf_ctx = (ggml_backend_vk_buffer_context *)src1->buffer->context;
 
-    vk_buffer d_Qy;
+    vk_buffer d_Qy = nullptr;
     size_t qy_buf_offset = 0;
 
     bool src1_uma = false;
@@ -4300,11 +4300,11 @@ static void ggml_vk_mul_mat_id_q_f16(ggml_backend_vk_context * ctx, vk_context& 
     ggml_backend_vk_buffer_context * src1_buf_ctx = (ggml_backend_vk_buffer_context *)src1->buffer->context;
     ggml_backend_vk_buffer_context * ids_buf_ctx = (ggml_backend_vk_buffer_context *)ids->buffer->context;
 
-    vk_buffer d_Qx;
+    vk_buffer d_Qx = nullptr;
     size_t qx_buf_offset = 0;
-    vk_buffer d_Qy;
+    vk_buffer d_Qy = nullptr;
     size_t qy_buf_offset = 0;
-    vk_buffer d_ids;
+    vk_buffer d_ids = nullptr;
     size_t ids_buf_offset = 0;
 
     bool src0_uma = false;
@@ -4505,11 +4505,11 @@ static void ggml_vk_mul_mat_vec_id_q_f16(ggml_backend_vk_context * ctx, vk_conte
     ggml_backend_vk_buffer_context * src1_buf_ctx = (ggml_backend_vk_buffer_context *)src1->buffer->context;
     ggml_backend_vk_buffer_context * ids_buf_ctx = (ggml_backend_vk_buffer_context *)ids->buffer->context;
 
-    vk_buffer d_Qx;
+    vk_buffer d_Qx = nullptr;
     size_t qx_buf_offset = 0;
-    vk_buffer d_Qy;
+    vk_buffer d_Qy = nullptr;
     size_t qy_buf_offset = 0;
-    vk_buffer d_ids;
+    vk_buffer d_ids = nullptr;
     size_t ids_buf_offset = 0;
 
     bool src0_uma = false;
@@ -4768,8 +4768,8 @@ static void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx
 
     ggml_vk_sync_buffers(subctx);
 
-    vk_buffer d_Q, d_K, d_V, d_D, d_M;
-    uint64_t q_buf_offset, k_buf_offset, v_buf_offset, d_buf_offset, m_buf_offset;
+    vk_buffer d_Q = nullptr, d_K = nullptr, d_V = nullptr, d_D = nullptr, d_M = nullptr;
+    size_t q_buf_offset = 0, k_buf_offset = 0, v_buf_offset = 0, d_buf_offset = 0, m_buf_offset = 0;
 
     bool Q_uma = false, K_uma = false, V_uma = false, D_uma = false, M_uma = false;
 
@@ -5474,8 +5474,8 @@ static void ggml_vk_op_f32_rwkv6(ggml_backend_vk_context * ctx, vk_context& subc
 
     ggml_vk_sync_buffers(subctx);
 
-    vk_buffer d_D, d_K, d_V, d_R, d_TF, d_TD, d_State;
-    uint64_t k_offset, v_offset, r_offset, tf_offset, td_offset, state_offset, dst_offset;
+    vk_buffer d_D = nullptr, d_K = nullptr, d_V = nullptr, d_R = nullptr, d_TF = nullptr, d_TD = nullptr, d_State = nullptr;
+    size_t k_offset = 0, v_offset = 0, r_offset = 0, tf_offset = 0, td_offset = 0, state_offset = 0, dst_offset = 0;
     bool K_uma = false, V_uma = false, R_uma = false, TF_uma = false, TD_uma = false, STATE_uma = false, DST_uma = false;
 
     if (ctx->device->uma) {
