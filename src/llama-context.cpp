@@ -40,7 +40,7 @@ struct llama_data_write {
     }
 
     void write_model_info(const struct llama_context * ctx) {
-        std::string arch_str = LLM_ARCH_NAMES.at(ctx->model.arch);
+        const std::string arch_str = llm_arch_name(ctx->model.arch);
         write_string(arch_str);
         // TODO: add more model-specific info which should prevent loading the session file if not identical
     }
@@ -263,7 +263,8 @@ struct llama_data_read {
 
     // validate model information
     void read_model_info(const struct llama_context * ctx) {
-        std::string cur_arch_str = LLM_ARCH_NAMES.at(ctx->model.arch);
+        const std::string cur_arch_str = llm_arch_name(ctx->model.arch);
+
         std::string arch_str;
         read_string(arch_str);
         if (cur_arch_str != arch_str) {

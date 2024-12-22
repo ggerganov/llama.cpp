@@ -5,8 +5,6 @@
 #include "llama-vocab.h"
 #include "llama-mmap.h"
 
-#include "llama-impl.h"
-
 #include "ggml-cpp.h"
 
 #include <array>
@@ -613,42 +611,6 @@ struct llama_model {
     }
 };
 
-template<typename F>
-static bool buft_supported(ggml_backend_buffer_type_t buft, ggml_backend_dev_t dev, F & fn) {
-    ggml_init_params params = {
-        /*.mem_size   =*/ ggml_tensor_overhead()*8,
-        /*.mem_buffer =*/ NULL,
-        /*.no_alloc   =*/ true,
-    };
-    ggml_context_ptr ctx { ggml_init(params) };
-    if (!ctx) {
-        throw std::runtime_error(format("failed to create ggml context"));
-    }
-
-    ggml_backend_buffer_ptr buf { ggml_backend_buft_alloc_buffer(buft, 0) };
-    ggml_tensor * op_tensor = fn(ctx.get());
-    for (int i = 0; i < GGML_MAX_SRC; i++) {
-        if (op_tensor->src[i] != nullptr) {
-            assert(op_tensor->src[i]->buffer == nullptr);
-            op_tensor->src[i]->buffer = buf.get();
-        }
-    }
-    bool op_supported = ggml_backend_dev_supports_op(dev, op_tensor);
-
-    return op_supported;
-}
-
-template<typename F>
-static ggml_backend_buffer_type_t select_buft(const llama_model::buft_list_t & buft_list, const F & fn) {
-    for (const auto & cur : buft_list) {
-        ggml_backend_dev_t cur_dev = cur.first;
-        ggml_backend_buffer_type_t cur_buft = cur.second;
-        if (buft_supported(cur_buft, cur_dev, fn)) {
-            return cur_buft;
-        }
-    }
-    throw std::runtime_error(format("no suitable buffer type found"));
-}
-
+ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il);
 
 std::string llama_model_ftype_name(llama_ftype ftype);

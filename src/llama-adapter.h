@@ -68,12 +68,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
     cvec.tensors.reserve(model.hparams.n_layer);
     cvec.tensors.push_back(nullptr); // there's never a tensor for layer 0
     for (size_t il = 1; il < model.hparams.n_layer; il++) {
-        ggml_backend_buffer_type_t buft = select_buft(*model.dev_layer.at(il).buft_list,
-            [&](ggml_context * ctx) {
-                ggml_tensor * cur = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);
-                ggml_tensor * layer_dir = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);
-                return ggml_add(ctx, cur, layer_dir);
-            });
+        ggml_backend_buffer_type_t buft = llama_model_select_buft(model, il);
         ggml_context * ctx = ctx_for_buft(buft);
         if (!ctx) {
             LLAMA_LOG_ERROR("%s: failed to allocate context for control vector\n", __func__);
