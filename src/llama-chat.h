@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 
 enum llm_chat_template {
     LLM_CHAT_TEMPLATE_CHATML,

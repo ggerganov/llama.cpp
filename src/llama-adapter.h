@@ -5,9 +5,10 @@
 
 #include "llama-model.h" // TODO: need only hparams
 
-#include <vector>
-#include <map>
 #include <algorithm>
+#include <cassert>
+#include <map>
+#include <vector>
 
 //
 // llama_adapter_vec
