@@ -407,11 +407,11 @@ static std::string get_executable_path() {
     std::vector<char> path(1024);
     while (true) {
         // get executable path
-#  if defined(__linux__)
+#    if defined(__linux__)
         ssize_t len = readlink("/proc/self/exe", path.data(), path.size());
-#  elif defined(__FreeBSD__)
+#    elif defined(__FreeBSD__)
         ssize_t len = readlink("/proc/curproc/file", path.data(), path.size());
-#  endif
+#    endif
         if (len == -1) {
             break;
         }
