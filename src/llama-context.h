@@ -4,7 +4,7 @@
 #include "llama-batch.h"
 #include "llama-model.h"
 #include "llama-kv-cache.h"
-#include "llama-control-vector.h"
+#include "llama-adapter.h"
 
 #include "ggml-cpp.h"
 
@@ -54,7 +54,7 @@ struct llama_context {
     const struct llama_model & model;
 
     struct llama_cparams        cparams;
-    struct llama_sbatch         sbatch;
+    struct llama_sbatch         sbatch;  // TODO: revisit if needed
     struct llama_kv_cache       kv_self;
     struct llama_control_vector cvec;
 
