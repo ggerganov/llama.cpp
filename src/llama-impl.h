@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ggml.h"
+#include "ggml.h" // for ggml_log_level
 
 #include <string>
 
@@ -21,10 +21,6 @@
 LLAMA_ATTRIBUTE_FORMAT(2, 3)
 void llama_log_internal        (ggml_log_level level, const char * format, ...);
 void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
-
-// TODO: rename to llama_format ?
-LLAMA_ATTRIBUTE_FORMAT(1, 2)
-std::string format(const char * fmt, ...);
 
 #define LLAMA_LOG(...)       llama_log_internal(GGML_LOG_LEVEL_NONE , __VA_ARGS__)
 #define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
@@ -47,3 +43,7 @@ struct time_meas {
 };
 
 void replace_all(std::string & s, const std::string & search, const std::string & replace);
+
+// TODO: rename to llama_format ?
+LLAMA_ATTRIBUTE_FORMAT(1, 2)
+std::string format(const char * fmt, ...);

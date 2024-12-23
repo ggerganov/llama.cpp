@@ -86,4 +86,3 @@ struct llama_batch_allocr {
     // optionally fulfill the batch returned by llama_batch_get_one
     llama_batch_allocr(struct llama_batch in_batch, llama_pos p0);
 };
-

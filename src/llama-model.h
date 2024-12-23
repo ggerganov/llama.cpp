@@ -377,3 +377,4 @@ ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, in
 // used by llama_adapter_lora
 struct ggml_tensor * llama_model_get_tensor(const struct llama_model & model, const char * name);
 
+size_t llama_model_max_nodes(const llama_model & model);
