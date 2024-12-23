@@ -986,7 +986,7 @@ inline static void __wasm_f16x4_store(ggml_fp16_t * p, v128_t x) {
 #define GGML_F16_STEP 32
 #define GGML_F16_EPR  4
 
-static inline __m128 __sse_f16x4_load(ggml_fp16_t *x) {
+static inline __m128 __sse_f16x4_load(const ggml_fp16_t * x) {
     float tmp[4];
 
     tmp[0] = GGML_FP16_TO_FP32(x[0]);
@@ -997,7 +997,7 @@ static inline __m128 __sse_f16x4_load(ggml_fp16_t *x) {
     return _mm_loadu_ps(tmp);
 }
 
-static inline void __sse_f16x4_store(ggml_fp16_t *x, __m128 y) {
+static inline void __sse_f16x4_store(ggml_fp16_t * x, __m128 y) {
     float arr[4];
 
     _mm_storeu_ps(arr, y);
