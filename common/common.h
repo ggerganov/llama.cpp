@@ -641,6 +641,10 @@ common_control_vector_data common_control_vector_load(const std::vector<common_c
 // Split utils
 //
 
-static const char * const LLM_KV_SPLIT_NO            = "split.no";
-static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
-static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
+namespace {
+
+const char * const LLM_KV_SPLIT_NO            = "split.no";
+const char * const LLM_KV_SPLIT_COUNT         = "split.count";
+const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
+
+}

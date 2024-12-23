@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <stdexcept>
 
 const char * llm_type_name(llm_type type) {
     switch (type) {

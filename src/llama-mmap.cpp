@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <climits>
+#include <stdexcept>
 
 #ifdef __has_include
     #if __has_include(<unistd.h>)

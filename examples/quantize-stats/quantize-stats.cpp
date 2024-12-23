@@ -1,7 +1,7 @@
-#include "common.h"
 #include "ggml.h"
 #include "llama.h"
-#include "llama-impl.h"
+#include "llama-context.h"
+#include "common.h"
 
 #include <algorithm>
 #include <cassert>
@@ -9,11 +9,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <map>
 #include <numeric>
 #include <regex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -330,13 +328,13 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const auto &tensors = llama_internal_get_tensor_map(ctx);
+    const auto & tensors = llama_internal_get_tensor_map(ctx);
 
     // check layer tensors
     int included_layers = 0;
     int64_t max_nelements = 0;
     bool is_f16 = false;
-    for (const auto& kv_tensor : tensors) {
+    for (const auto & kv_tensor : tensors) {
         if (!layer_included(params, kv_tensor.first)) {
             continue;
         }
@@ -371,8 +369,8 @@ int main(int argc, char ** argv) {
         if (!params.include_types.empty() && std::find(params.include_types.begin(), params.include_types.end(), i) == params.include_types.end()) {
             continue;
         }
-        const auto *  qfns     = ggml_get_type_traits(type);
-        const auto *  qfns_cpu = ggml_get_type_traits_cpu(type);
+        const auto * qfns     = ggml_get_type_traits(type);
+        const auto * qfns_cpu = ggml_get_type_traits_cpu(type);
         if (qfns_cpu->from_float && qfns->to_float) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));
@@ -382,7 +380,7 @@ int main(int argc, char ** argv) {
 
             error_stats global_stats {};
 
-            for (const auto& kv_tensor : tensors) {
+            for (const auto & kv_tensor : tensors) {
                 if (!layer_included(params, kv_tensor.first)) {
                     continue;
                 }
