@@ -3701,7 +3701,7 @@ int main(int argc, char ** argv) {
             {"object", "list"},
             {"data", {
                 {
-                    {"id",       params.model_alias},
+                    {"id",       params.model_alias.empty() ? params.model : params.model_alias},
                     {"object",   "model"},
                     {"created",  std::time(0)},
                     {"owned_by", "llamacpp"},
