@@ -13406,30 +13406,6 @@ static struct ggml_cgraph * llama_build_graph(
     return result;
 }
 
-static void llama_set_k_shift(llama_context & lctx) {
-    const int64_t kv_size = lctx.kv_self.size;
-
-    assert(ggml_backend_buffer_is_host(lctx.inp_K_shift->buffer));
-
-    int32_t * data = (int32_t *) lctx.inp_K_shift->data;
-
-    for (int i = 0; i < kv_size; ++i) {
-        data[i] = lctx.kv_self.cells[i].delta;
-    }
-}
-
-static void llama_set_s_copy(llama_context & lctx) {
-    const int64_t kv_size = lctx.kv_self.size;
-
-    assert(ggml_backend_buffer_is_host(lctx.inp_s_copy->buffer));
-
-    int32_t * data = (int32_t *) lctx.inp_s_copy->data;
-
-    for (int i = 0; i < kv_size; ++i) {
-        data[i] = lctx.kv_self.cells[i].src;
-    }
-}
-
 static int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t n_buckets, bool bidirectional) {
     // TODO move to hparams if a T5 variant appears that uses a different value
     const int64_t max_distance = 128;
@@ -15735,19 +15711,6 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
     }
 }
 
-void llama_attach_threadpool(
-             struct llama_context * ctx,
-        ggml_threadpool_t   threadpool,
-        ggml_threadpool_t   threadpool_batch) {
-    ctx->threadpool       = threadpool;
-    ctx->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
-}
-
-void llama_detach_threadpool(struct llama_context * ctx) {
-    ctx->threadpool       = nullptr;
-    ctx->threadpool_batch = nullptr;
-}
-
 void llama_backend_free(void) {
     ggml_quantize_free();
 }
@@ -16227,34 +16190,6 @@ struct llama_context * llama_new_context_with_model(
     return ctx;
 }
 
-void llama_free(struct llama_context * ctx) {
-    delete ctx;
-}
-
-uint32_t llama_n_ctx(const struct llama_context * ctx) {
-    return ctx->cparams.n_ctx;
-}
-
-uint32_t llama_n_batch(const struct llama_context * ctx) {
-    return ctx->cparams.n_batch;
-}
-
-uint32_t llama_n_ubatch(const struct llama_context * ctx) {
-    return ctx->cparams.n_ubatch;
-}
-
-uint32_t llama_n_seq_max(const struct llama_context * ctx) {
-    return ctx->kv_self.size;
-}
-
-const struct llama_model * llama_get_model(const struct llama_context * ctx) {
-    return &ctx->model;
-}
-
-enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
-    return ctx->cparams.pooling_type;
-}
-
 uint32_t llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
@@ -16343,40 +16278,6 @@ bool llama_kv_cache_can_shift(struct llama_context * ctx) {
 
 ///
 
-void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t n_threads_batch) {
-    ctx->cparams.n_threads       = n_threads;
-    ctx->cparams.n_threads_batch = n_threads_batch;
-}
-
-int32_t llama_n_threads(struct llama_context * ctx) {
-    return ctx->cparams.n_threads;
-}
-
-int32_t llama_n_threads_batch(struct llama_context * ctx) {
-    return ctx->cparams.n_threads_batch;
-}
-
-void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
-    ctx->abort_callback      = abort_callback;
-    ctx->abort_callback_data = abort_callback_data;
-
-    for (auto & backend : ctx->backends) {
-        auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend.get()));
-        auto * set_abort_callback_fn = (ggml_backend_set_abort_callback_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_abort_callback");
-        if (set_abort_callback_fn) {
-            set_abort_callback_fn(backend.get(), ctx->abort_callback, ctx->abort_callback_data);
-        }
-    }
-}
-
-void llama_set_embeddings(struct llama_context * ctx, bool embeddings) {
-    ctx->cparams.embeddings = embeddings;
-}
-
-void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
-    ctx->cparams.causal_attn = causal_attn;
-}
-
 int32_t llama_encode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
@@ -16397,146 +16298,6 @@ int32_t llama_decode(
     }
 
     return ret;
-}
-
-void llama_synchronize(struct llama_context * ctx) {
-    ggml_backend_sched_synchronize(ctx->sched.get());
-
-    // FIXME: if multiple single tokens are evaluated without a synchronization,
-    // the stats will be added to the prompt evaluation stats
-    // this should only happen when using batch size 1 to evaluate a batch
-
-    // add the evaluation to the stats
-    if (ctx->n_queued_tokens == 1) {
-        if (!ctx->cparams.no_perf) {
-            ctx->t_eval_us += ggml_time_us() - ctx->t_compute_start_us;
-        }
-        ctx->n_eval++;
-    } else if (ctx->n_queued_tokens > 1) {
-        if (!ctx->cparams.no_perf) {
-            ctx->t_p_eval_us += ggml_time_us() - ctx->t_compute_start_us;
-        }
-        ctx->n_p_eval += ctx->n_queued_tokens;
-    }
-
-    // get a more accurate load time, upon first eval
-    if (ctx->n_queued_tokens > 0 && !ctx->has_evaluated_once) {
-        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
-        ctx->has_evaluated_once = true;
-    }
-
-    ctx->n_queued_tokens = 0;
-    ctx->t_compute_start_us = 0;
-}
-
-float * llama_get_logits(struct llama_context * ctx) {
-    llama_synchronize(ctx);
-
-    // reorder logits for backward compatibility
-    // TODO: maybe deprecate this
-    llama_output_reorder(ctx);
-
-    return ctx->logits;
-}
-
-float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
-    int32_t j = -1;
-    llama_synchronize(ctx);
-
-    try {
-        if (ctx->logits == nullptr) {
-            throw std::runtime_error("no logits");
-        }
-
-        if (i < 0) {
-            j = ctx->n_outputs + i;
-            if (j < 0) {
-                throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
-            }
-        } else if ((size_t) i >= ctx->output_ids.size()) {
-            throw std::runtime_error(format("out of range [0, %zu)", ctx->output_ids.size()));
-        } else {
-            j = ctx->output_ids[i];
-        }
-
-        if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
-        }
-        if (j >= ctx->n_outputs) {
-            // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
-        }
-
-        return ctx->logits + j*ctx->model.hparams.n_vocab;
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
-#ifndef NDEBUG
-        GGML_ABORT("fatal error");
-#else
-        return nullptr;
-#endif
-    }
-}
-
-float * llama_get_embeddings(struct llama_context * ctx) {
-    llama_synchronize(ctx);
-
-    // reorder embeddings for backward compatibility
-    // TODO: maybe deprecate this
-    llama_output_reorder(ctx);
-
-    return ctx->embd;
-}
-
-float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
-    int32_t j = -1;
-
-    llama_synchronize(ctx);
-
-    try {
-        if (ctx->embd == nullptr) {
-            throw std::runtime_error("no embeddings");
-        }
-
-        if (i < 0) {
-            j = ctx->n_outputs + i;
-            if (j < 0) {
-                throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
-            }
-        } else if ((size_t) i >= ctx->output_ids.size()) {
-            throw std::runtime_error(format("out of range [0, %zu)", ctx->output_ids.size()));
-        } else {
-            j = ctx->output_ids[i];
-        }
-
-        if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
-        }
-        if (j >= ctx->n_outputs) {
-            // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
-        }
-
-        return ctx->embd + j*ctx->model.hparams.n_embd;
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
-#ifndef NDEBUG
-        GGML_ABORT("fatal error");
-#else
-        return nullptr;
-#endif
-    }
-}
-
-float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_synchronize(ctx);
-
-    auto it = ctx->embd_seq.find(seq_id);
-    if (it == ctx->embd_seq.end()) {
-        return nullptr;
-    }
-
-    return it->second.data();
 }
 
 //
@@ -16788,6 +16549,10 @@ const char * llama_print_system_info(void) {
 
     return s.c_str();
 }
+
+//
+// perf
+//
 
 struct llama_perf_context_data llama_perf_context(const struct llama_context * ctx) {
     struct llama_perf_context_data data = {};

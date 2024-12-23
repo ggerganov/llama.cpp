@@ -1,7 +1,366 @@
 #include "llama-context.h"
 
+#include <cassert>
 #include <cstring>
 #include <stdexcept>
+
+void llama_set_k_shift(struct llama_context & lctx) {
+    const int64_t kv_size = lctx.kv_self.size;
+
+    assert(ggml_backend_buffer_is_host(lctx.inp_K_shift->buffer));
+
+    int32_t * data = (int32_t *) lctx.inp_K_shift->data;
+
+    for (int i = 0; i < kv_size; ++i) {
+        data[i] = lctx.kv_self.cells[i].delta;
+    }
+}
+
+void llama_set_s_copy(struct llama_context & lctx) {
+    const int64_t kv_size = lctx.kv_self.size;
+
+    assert(ggml_backend_buffer_is_host(lctx.inp_s_copy->buffer));
+
+    int32_t * data = (int32_t *) lctx.inp_s_copy->data;
+
+    for (int i = 0; i < kv_size; ++i) {
+        data[i] = lctx.kv_self.cells[i].src;
+    }
+}
+
+// llama output
+
+size_t llama_output_reserve(struct llama_context & lctx, size_t n_outputs) {
+    const auto & cparams = lctx.cparams;
+    const auto & hparams = lctx.model.hparams;
+
+    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
+
+    const auto n_batch = cparams.n_batch;
+    const auto n_vocab = hparams.n_vocab;
+    const auto n_embd  = hparams.n_embd;
+
+    // TODO: use a per-batch flag for logits presence instead
+    const bool has_logits = !cparams.embeddings;
+    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
+
+    const size_t logits_size = has_logits ? n_vocab*n_outputs_max : 0;
+    const size_t embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
+
+    if (lctx.output_ids.empty()) {
+        // init, never resized afterwards
+        lctx.output_ids.resize(n_batch);
+    }
+
+    const size_t prev_size = lctx.buf_output ? ggml_backend_buffer_get_size(lctx.buf_output.get()) : 0;
+    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
+
+    // alloc only when more than the current capacity is required
+    // TODO: also consider shrinking the buffer
+    if (!lctx.buf_output || prev_size < new_size) {
+        if (lctx.buf_output) {
+#ifndef NDEBUG
+            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
+            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
+#endif
+            lctx.buf_output = nullptr;
+            lctx.logits = nullptr;
+            lctx.embd = nullptr;
+        }
+
+        auto * buft = ggml_backend_cpu_buffer_type();
+        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
+        auto * output_dev = lctx.model.dev_output.dev;
+        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
+        if (output_dev_host_buft) {
+            buft = output_dev_host_buft;
+        }
+        lctx.buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
+        if (lctx.buf_output == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
+            return 0;
+        }
+    }
+
+    float * output_base = (float *) ggml_backend_buffer_get_base(lctx.buf_output.get());
+
+    lctx.logits = has_logits ? output_base               : nullptr;
+    lctx.embd   = has_embd   ? output_base + logits_size : nullptr;
+
+    lctx.output_size = n_outputs_max;
+    lctx.logits_size = logits_size;
+    lctx.embd_size   = embd_size;
+
+    // set all ids as invalid (negative)
+    std::fill(lctx.output_ids.begin(), lctx.output_ids.end(), -1);
+
+    ggml_backend_buffer_clear(lctx.buf_output.get(), 0);
+
+    lctx.n_outputs = 0;
+
+    return n_outputs_max;
+}
+
+void llama_output_reorder(struct llama_context & ctx) {
+    std::vector<size_t> & out_ids = ctx.sbatch.out_ids;
+    if (!out_ids.empty()) {
+        const uint32_t n_vocab = ctx.model.hparams.n_vocab;
+        const uint32_t n_embd  = ctx.model.hparams.n_embd;
+
+        const int32_t n_outputs = ctx.n_outputs;
+        GGML_ASSERT((size_t) n_outputs == out_ids.size());
+
+        // TODO: is there something more efficient which also minimizes swaps?
+        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
+        for (int32_t i = 0; i < n_outputs - 1; ++i) {
+            int32_t j_min = i;
+            for (int32_t j = i + 1; j < n_outputs; ++j) {
+                if (out_ids[j] < out_ids[j_min]) {
+                    j_min = j;
+                }
+            }
+            if (j_min == i) { continue; }
+            std::swap(out_ids[i], out_ids[j_min]);
+            if (ctx.logits_size > 0) {
+                for (uint32_t k = 0; k < n_vocab; k++) {
+                    std::swap(ctx.logits[i*n_vocab + k], ctx.logits[j_min*n_vocab + k]);
+                }
+            }
+            if (ctx.embd_size > 0) {
+                for (uint32_t k = 0; k < n_embd; k++) {
+                    std::swap(ctx.embd[i*n_embd + k], ctx.embd[j_min*n_embd + k]);
+                }
+            }
+        }
+        std::fill(ctx.output_ids.begin(), ctx.output_ids.end(), -1);
+        for (int32_t i = 0; i < n_outputs; ++i) {
+            ctx.output_ids[out_ids[i]] = i;
+        }
+        out_ids.clear();
+    }
+}
+
+//
+// interface implementation
+//
+
+void llama_free(struct llama_context * ctx) {
+    delete ctx;
+}
+
+uint32_t llama_n_ctx(const struct llama_context * ctx) {
+    return ctx->cparams.n_ctx;
+}
+
+uint32_t llama_n_batch(const struct llama_context * ctx) {
+    return ctx->cparams.n_batch;
+}
+
+uint32_t llama_n_ubatch(const struct llama_context * ctx) {
+    return ctx->cparams.n_ubatch;
+}
+
+uint32_t llama_n_seq_max(const struct llama_context * ctx) {
+    return ctx->kv_self.size;
+}
+
+const struct llama_model * llama_get_model(const struct llama_context * ctx) {
+    return &ctx->model;
+}
+
+enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
+    return ctx->cparams.pooling_type;
+}
+
+void llama_attach_threadpool(
+             struct llama_context * ctx,
+        ggml_threadpool_t   threadpool,
+        ggml_threadpool_t   threadpool_batch) {
+    ctx->threadpool       = threadpool;
+    ctx->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
+}
+
+void llama_detach_threadpool(struct llama_context * ctx) {
+    ctx->threadpool       = nullptr;
+    ctx->threadpool_batch = nullptr;
+}
+
+void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t n_threads_batch) {
+    ctx->cparams.n_threads       = n_threads;
+    ctx->cparams.n_threads_batch = n_threads_batch;
+}
+
+int32_t llama_n_threads(struct llama_context * ctx) {
+    return ctx->cparams.n_threads;
+}
+
+int32_t llama_n_threads_batch(struct llama_context * ctx) {
+    return ctx->cparams.n_threads_batch;
+}
+
+void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
+    ctx->abort_callback      = abort_callback;
+    ctx->abort_callback_data = abort_callback_data;
+
+    for (auto & backend : ctx->backends) {
+        auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend.get()));
+        auto * set_abort_callback_fn = (ggml_backend_set_abort_callback_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_abort_callback");
+        if (set_abort_callback_fn) {
+            set_abort_callback_fn(backend.get(), ctx->abort_callback, ctx->abort_callback_data);
+        }
+    }
+}
+
+void llama_set_embeddings(struct llama_context * ctx, bool embeddings) {
+    ctx->cparams.embeddings = embeddings;
+}
+
+void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
+    ctx->cparams.causal_attn = causal_attn;
+}
+
+void llama_synchronize(struct llama_context * ctx) {
+    ggml_backend_sched_synchronize(ctx->sched.get());
+
+    // FIXME: if multiple single tokens are evaluated without a synchronization,
+    // the stats will be added to the prompt evaluation stats
+    // this should only happen when using batch size 1 to evaluate a batch
+
+    // add the evaluation to the stats
+    if (ctx->n_queued_tokens == 1) {
+        if (!ctx->cparams.no_perf) {
+            ctx->t_eval_us += ggml_time_us() - ctx->t_compute_start_us;
+        }
+        ctx->n_eval++;
+    } else if (ctx->n_queued_tokens > 1) {
+        if (!ctx->cparams.no_perf) {
+            ctx->t_p_eval_us += ggml_time_us() - ctx->t_compute_start_us;
+        }
+        ctx->n_p_eval += ctx->n_queued_tokens;
+    }
+
+    // get a more accurate load time, upon first eval
+    if (ctx->n_queued_tokens > 0 && !ctx->has_evaluated_once) {
+        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
+        ctx->has_evaluated_once = true;
+    }
+
+    ctx->n_queued_tokens = 0;
+    ctx->t_compute_start_us = 0;
+}
+
+float * llama_get_logits(struct llama_context * ctx) {
+    llama_synchronize(ctx);
+
+    // reorder logits for backward compatibility
+    // TODO: maybe deprecate this
+    llama_output_reorder(*ctx);
+
+    return ctx->logits;
+}
+
+float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
+    int32_t j = -1;
+
+    llama_synchronize(ctx);
+
+    try {
+        if (ctx->logits == nullptr) {
+            throw std::runtime_error("no logits");
+        }
+
+        if (i < 0) {
+            j = ctx->n_outputs + i;
+            if (j < 0) {
+                throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
+            }
+        } else if ((size_t) i >= ctx->output_ids.size()) {
+            throw std::runtime_error(format("out of range [0, %zu)", ctx->output_ids.size()));
+        } else {
+            j = ctx->output_ids[i];
+        }
+
+        if (j < 0) {
+            throw std::runtime_error(format("batch.logits[%d] != true", i));
+        }
+        if (j >= ctx->n_outputs) {
+            // This should not happen
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
+        }
+
+        return ctx->logits + j*ctx->model.hparams.n_vocab;
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
+#ifndef NDEBUG
+        GGML_ABORT("fatal error");
+#else
+        return nullptr;
+#endif
+    }
+}
+
+float * llama_get_embeddings(struct llama_context * ctx) {
+    llama_synchronize(ctx);
+
+    // reorder embeddings for backward compatibility
+    // TODO: maybe deprecate this
+    llama_output_reorder(*ctx);
+
+    return ctx->embd;
+}
+
+float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
+    int32_t j = -1;
+
+    llama_synchronize(ctx);
+
+    try {
+        if (ctx->embd == nullptr) {
+            throw std::runtime_error("no embeddings");
+        }
+
+        if (i < 0) {
+            j = ctx->n_outputs + i;
+            if (j < 0) {
+                throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
+            }
+        } else if ((size_t) i >= ctx->output_ids.size()) {
+            throw std::runtime_error(format("out of range [0, %zu)", ctx->output_ids.size()));
+        } else {
+            j = ctx->output_ids[i];
+        }
+
+        if (j < 0) {
+            throw std::runtime_error(format("batch.logits[%d] != true", i));
+        }
+        if (j >= ctx->n_outputs) {
+            // This should not happen
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
+        }
+
+        return ctx->embd + j*ctx->model.hparams.n_embd;
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
+#ifndef NDEBUG
+        GGML_ABORT("fatal error");
+#else
+        return nullptr;
+#endif
+    }
+}
+
+float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id) {
+    llama_synchronize(ctx);
+
+    auto it = ctx->embd_seq.find(seq_id);
+    if (it == ctx->embd_seq.end()) {
+        return nullptr;
+    }
+
+    return it->second.data();
+}
+
+// llama state API
 
 // deprecated
 size_t llama_get_state_size(struct llama_context * ctx) {
@@ -58,7 +417,7 @@ struct llama_data_write {
     //}
 
     void write_output_ids(struct llama_context * ctx) {
-        llama_output_reorder(ctx);
+        llama_output_reorder(*ctx);
 
         const uint32_t n_outputs = ctx->n_outputs;
 
