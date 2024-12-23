@@ -402,12 +402,16 @@ static std::string get_executable_path() {
         base_path = base_path.substr(0, last_slash);
     }
     return base_path + "/";
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__FreeBSD__)
     std::string base_path = ".";
     std::vector<char> path(1024);
     while (true) {
         // get executable path
+#    if defined(__linux__)
         ssize_t len = readlink("/proc/self/exe", path.data(), path.size());
+#    elif defined(__FreeBSD__)
+        ssize_t len = readlink("/proc/curproc/file", path.data(), path.size());
+#    endif
         if (len == -1) {
             break;
         }
