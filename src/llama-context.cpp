@@ -1,5 +1,6 @@
 #include "llama-context.h"
 
+#include <cstring>
 #include <stdexcept>
 
 // deprecated

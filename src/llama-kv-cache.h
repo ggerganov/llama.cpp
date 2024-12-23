@@ -57,12 +57,23 @@ struct llama_kv_cache {
     std::vector<ggml_context_ptr> ctxs;
     std::vector<ggml_backend_buffer_ptr> bufs;
 
-    size_t total_size() {
+    size_t total_size() const {
         size_t size = 0;
-        for (auto & buf : bufs) {
+        for (const auto & buf : bufs) {
             size += ggml_backend_buffer_get_size(buf.get());
         }
+
         return size;
+    }
+
+    // TODO: better data structures to reduce the cost of this operation
+    llama_pos max_pos() const {
+        llama_pos max_pos = -1;
+        for (const auto & cell : cells) {
+            max_pos = std::max(max_pos, cell.pos);
+        }
+
+        return max_pos;
     }
 };
 
