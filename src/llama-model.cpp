@@ -134,6 +134,7 @@ static bool buft_supported(ggml_backend_buffer_type_t buft, ggml_backend_dev_t d
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ true,
     };
+
     ggml_context_ptr ctx { ggml_init(params) };
     if (!ctx) {
         throw std::runtime_error(format("failed to create ggml context"));
@@ -147,6 +148,7 @@ static bool buft_supported(ggml_backend_buffer_type_t buft, ggml_backend_dev_t d
             op_tensor->src[i]->buffer = buf.get();
         }
     }
+
     bool op_supported = ggml_backend_dev_supports_op(dev, op_tensor);
 
     return op_supported;
@@ -161,6 +163,7 @@ static ggml_backend_buffer_type_t select_buft(const llama_model::buft_list_t & b
             return cur_buft;
         }
     }
+
     throw std::runtime_error(format("no suitable buffer type found"));
 }
 

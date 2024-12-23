@@ -334,6 +334,7 @@ struct llama_model {
         ggml_backend_dev_t dev;
         buft_list_t * buft_list;
     };
+
     layer_dev dev_input = {};
     layer_dev dev_output = {};
     std::vector<layer_dev> dev_layer;
@@ -348,7 +349,6 @@ struct llama_model {
     llama_mmaps mappings;
 
     // objects representing data potentially being locked in memory
-    // TODO: should these be part of llama_context instead?
     llama_mlocks mlock_bufs;
     llama_mlocks mlock_mmaps;
 
@@ -371,7 +371,7 @@ std::string llama_model_arch_name (const llama_model & model);
 std::string llama_model_type_name (const llama_model & model);
 std::string llama_model_ftype_name(const llama_model & model);
 
-// used by llama_adapter_vec
+// used by llama_adapter_cvec
 ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il);
 
 // used by llama_adapter_lora

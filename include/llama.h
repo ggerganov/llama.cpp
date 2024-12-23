@@ -543,7 +543,7 @@ extern "C" {
     // to an n_embd x n_layers buffer starting from layer 1.
     // il_start and il_end are the layer range the vector should apply to (both inclusive)
     // See llama_control_vector_load in common to load a control vector.
-    // TODO: rename to llama_adapter_vec_apply
+    // TODO: rename to llama_adapter_cvec_apply
     LLAMA_API int32_t llama_control_vector_apply(
             struct llama_context * lctx,
                      const float * data,
