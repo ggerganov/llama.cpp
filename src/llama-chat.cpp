@@ -35,6 +35,7 @@ static const std::map<std::string, llm_chat_template> LLM_CHAT_TEMPLATES = {
     { "mistral-v3-tekken", LLM_CHAT_TEMPLATE_MISTRAL_V3_TEKKEN },
     { "mistral-v7",        LLM_CHAT_TEMPLATE_MISTRAL_V7        },
     { "phi3",              LLM_CHAT_TEMPLATE_PHI_3             },
+    { "falcon3",           LLM_CHAT_TEMPLATE_FALCON_3          },
     { "zephyr",            LLM_CHAT_TEMPLATE_ZEPHYR            },
     { "monarch",           LLM_CHAT_TEMPLATE_MONARCH           },
     { "gemma",             LLM_CHAT_TEMPLATE_GEMMA             },
@@ -53,6 +54,7 @@ static const std::map<std::string, llm_chat_template> LLM_CHAT_TEMPLATES = {
     { "rwkv-world",        LLM_CHAT_TEMPLATE_RWKV_WORLD        },
     { "granite",           LLM_CHAT_TEMPLATE_GRANITE           },
     { "gigachat",          LLM_CHAT_TEMPLATE_GIGACHAT          },
+    { "megrez",            LLM_CHAT_TEMPLATE_MEGREZ            },
 };
 
 llm_chat_template llm_chat_template_from_str(const std::string & name) {
@@ -108,6 +110,8 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
         }
     } else if (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>")) {
         return LLM_CHAT_TEMPLATE_PHI_3;
+    } else if (tmpl_contains("<|assistant|>") && tmpl_contains("<|user|>")) {
+        return LLM_CHAT_TEMPLATE_FALCON_3;
     } else if (tmpl_contains("<|user|>") && tmpl_contains("<|endoftext|>")) {
         return LLM_CHAT_TEMPLATE_ZEPHYR;
     } else if (tmpl_contains("bos_token + message['role']")) {
@@ -154,6 +158,8 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
         return LLM_CHAT_TEMPLATE_GRANITE;
     } else if (tmpl_contains("message['role'] + additional_special_tokens[0] + message['content'] + additional_special_tokens[1]")) {
         return LLM_CHAT_TEMPLATE_GIGACHAT;
+    } else if (tmpl_contains("<|role_start|>")) {
+        return LLM_CHAT_TEMPLATE_MEGREZ;
     }
     return LLM_CHAT_TEMPLATE_UNKNOWN;
 }
@@ -256,6 +262,15 @@ int32_t llm_chat_apply_template(
         for (auto message : chat) {
             std::string role(message->role);
             ss << "<|" << role << "|>\n" << message->content << "<|end|>\n";
+        }
+        if (add_ass) {
+            ss << "<|assistant|>\n";
+        }
+    } else if (tmpl == LLM_CHAT_TEMPLATE_FALCON_3) {
+        // Falcon 3
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|" << role << "|>\n" << message->content << "\n";
         }
         if (add_ass) {
             ss << "<|assistant|>\n";
@@ -502,6 +517,16 @@ int32_t llm_chat_apply_template(
         // Add generation prompt if needed
         if (add_ass) {
             ss << "assistant<|role_sep|>";
+        }
+    }  else if (tmpl == LLM_CHAT_TEMPLATE_MEGREZ) {
+        // Megrez template
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|role_start|>" << role << "<|role_end|>" << message->content << "<|turn_end|>";
+        }
+
+        if (add_ass) {
+            ss << "<|role_start|>assistant<|role_end|>";
         }
     } else {
         // template not supported
