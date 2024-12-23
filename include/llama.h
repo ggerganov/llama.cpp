@@ -556,6 +556,8 @@ extern "C" {
     // KV cache
     //
 
+    // TODO: remove llama_kv_cache_view_* API
+
     // Information associated with an individual cell in the KV cache view.
     struct llama_kv_cache_view_cell {
         // The position for this cell. Takes KV cache shifts into account.
@@ -602,7 +604,10 @@ extern "C" {
     LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
 
     // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
+    // TODO: change signature to llama_kv_cache_view_update(struct llama_kv_cache_view * view, const struct llama_context * ctx)
     LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
+
+    ///
 
     // Returns the number of tokens in the KV cache (slow, use only for debug)
     // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
@@ -672,6 +677,9 @@ extern "C" {
     LLAMA_API llama_pos llama_kv_cache_seq_pos_max(
             struct llama_context * ctx,
                     llama_seq_id   seq_id);
+
+    // TODO: the llama_kv_cache_defrag and llama_kv_cache_update API tightly couples llama_context with llama_kv_cache
+    //       how to avoid this?
 
     // Defragment the KV cache
     // This will be applied:
