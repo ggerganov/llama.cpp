@@ -198,6 +198,7 @@ class TensorNameMap:
             "transformer.h.{bid}.self_attention.dense",                     # falcon
             "h.{bid}.self_attention.dense",                                 # bloom
             "model.layers.{bid}.self_attn.o_proj",                          # llama-hf nemotron olmoe olmo2
+            "model.layers.{bid}.self_attn.linear_attn",                     # deci
             "layers.{bid}.attention.wo",                                    # llama-pth
             "encoder.layer.{bid}.attention.output.dense",                   # bert
             "transformer.h.{bid}.attn.out_proj",                            # gpt-j
