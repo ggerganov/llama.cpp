@@ -3693,11 +3693,14 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_models = [&params, &ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
+        std::string model_name = ctx_server.params_base.model_alias.empty()
+            ? ctx_server.params_base.model
+            : ctx_server.params_base.model_alias;
         json models = {
             {"object", "list"},
             {"data", {
                 {
-                    {"id",       params.model_alias},
+                    {"id",       model_name},
                     {"object",   "model"},
                     {"created",  std::time(0)},
                     {"owned_by", "llamacpp"},
