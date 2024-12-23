@@ -106,7 +106,6 @@ struct llama_data_write {
     }
 
     void write_kv_cache_meta(const llama_kv_cache & kv_self, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, llama_seq_id seq_id = -1) {
-
         for (const auto & range : cell_ranges) {
             for (uint32_t i = range.first; i < range.second; ++i) {
                 const auto & cell = kv_self.cells[i];
