@@ -202,13 +202,6 @@ static std::string llama_token_to_piece(const struct llama_model * model, llama_
 // globals
 //
 
-struct llama_logger_state {
-    ggml_log_callback log_callback = llama_log_callback_default;
-    void * log_callback_user_data = nullptr;
-};
-
-static llama_logger_state g_logger_state;
-
 static const size_t kiB = 1024;
 static const size_t MiB = 1024*kiB;
 static const size_t GiB = 1024*MiB;
@@ -17188,46 +17181,3 @@ void llama_perf_context_reset(struct llama_context * ctx) {
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
 }
 
-// For internal test use
-const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
-    struct llama_context * ctx
-) {
-    return ctx->model.tensors_by_name;
-}
-
-void llama_log_set(ggml_log_callback log_callback, void * user_data) {
-    ggml_log_set(log_callback, user_data);
-    g_logger_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
-    g_logger_state.log_callback_user_data = user_data;
-}
-
-static void llama_log_internal_v(ggml_log_level level, const char * format, va_list args) {
-    va_list args_copy;
-    va_copy(args_copy, args);
-    char buffer[128];
-    int len = vsnprintf(buffer, 128, format, args);
-    if (len < 128) {
-        g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
-    } else {
-        char * buffer2 = new char[len + 1];
-        vsnprintf(buffer2, len + 1, format, args_copy);
-        buffer2[len] = 0;
-        g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
-        delete[] buffer2;
-    }
-    va_end(args_copy);
-}
-
-void llama_log_internal(ggml_log_level level, const char * format, ...) {
-    va_list args;
-    va_start(args, format);
-    llama_log_internal_v(level, format, args);
-    va_end(args);
-}
-
-void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
-    (void) level;
-    (void) user_data;
-    fputs(text, stderr);
-    fflush(stderr);
-}

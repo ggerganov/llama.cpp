@@ -1,5 +1,7 @@
 #include "llama-context.h"
 
+#include <stdexcept>
+
 // deprecated
 size_t llama_get_state_size(struct llama_context * ctx) {
     return llama_state_get_size(ctx);
@@ -968,3 +970,8 @@ size_t llama_state_seq_load_file(struct llama_context * ctx, const char * filepa
     }
 }
 
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+) {
+    return ctx->model.tensors_by_name;
+}

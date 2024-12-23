@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <map>
 #include <cassert>
+#include <stdexcept>
 
 // vec
 

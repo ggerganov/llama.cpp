@@ -26,7 +26,9 @@ struct llama_ubatch {
 
 struct llama_sbatch_seq {
     int32_t n_seq_id;
+
     llama_seq_id * seq_id;
+
     size_t offset;
     size_t length;
 };
@@ -112,8 +114,8 @@ struct llama_sbatch {
             if (ubatch.equal_seqs) {
                 for (size_t i = 0; i < length; ++i) {
                     memcpy(
-                        ubatch.embd + n_embd * (ubatch.n_tokens + i),
-                        batch->embd + n_embd * ids[seq.offset + i],
+                        ubatch.embd + (n_embd * (ubatch.n_tokens + i)),
+                        batch->embd + (n_embd * ids[seq.offset + i]),
                         n_embd * sizeof(float)
                     );
                 }
