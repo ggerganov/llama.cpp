@@ -9,10 +9,10 @@
 #include <vector>
 
 //
-// llama_adapter_vec
+// llama_adapter_cvec
 //
 
-// TODO: rename to llama_adapter_vec
+// TODO: rename to llama_adapter_cvec
 struct llama_control_vector {
     std::vector<ggml_context_ptr> ctxs;
     std::vector<ggml_backend_buffer_ptr> bufs;
