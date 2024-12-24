@@ -202,7 +202,7 @@ def test_embedding_openai_library_base64():
     server.start()
     test_input = "Test base64 embedding output"
 
-    res = server.make_request("POST", "/embeddings", data={
+    res = server.make_request("POST", "/v1/embeddings", data={
         "input": test_input,
         "encoding_format": "base64"
     })

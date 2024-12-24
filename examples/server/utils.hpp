@@ -3,6 +3,7 @@
 #include "common.h"
 #include "log.h"
 #include "llama.h"
+#include "common/base64.hpp"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -596,6 +597,8 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
     int32_t n_tokens = 0;
     int i = 0;
     for (const auto & elem : embeddings) {
+        json embedding_obj;
+
         if (use_base64) {
             const auto& vec = json_value(elem, "embedding", json::array()).get<std::vector<float>>();
             const char* data_ptr = reinterpret_cast<const char*>(vec.data());
