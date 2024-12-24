@@ -92,6 +92,7 @@ struct slot_params {
     int64_t t_max_predict_ms = -1; // if positive, limit the generation phase to this time limit
 
     std::vector<std::string> antiprompt;
+    std::vector<std::string> response_fields;
     bool timings_per_token = false;
     bool post_sampling_probs = false;
     bool ignore_eos = false;
@@ -209,6 +210,7 @@ struct server_task {
         params.n_discard        = json_value(data, "n_discard",          defaults.n_discard);
       //params.t_max_prompt_ms  = json_value(data, "t_max_prompt_ms",    defaults.t_max_prompt_ms); // TODO: implement
         params.t_max_predict_ms = json_value(data, "t_max_predict_ms",   defaults.t_max_predict_ms);
+        params.response_fields  = json_value(data, "response_fields",   std::vector<std::string>());
 
         params.sampling.top_k              = json_value(data, "top_k",              defaults.sampling.top_k);
         params.sampling.top_p              = json_value(data, "top_p",              defaults.sampling.top_p);
@@ -522,6 +524,7 @@ struct server_task_result_cmpl_final : server_task_result {
 
     bool post_sampling_probs;
     std::vector<completion_token_output> probs_output;
+    std::vector<std::string>  response_fields;
 
     slot_params generation_params;
 
@@ -568,7 +571,7 @@ struct server_task_result_cmpl_final : server_task_result {
         if (!stream && !probs_output.empty()) {
             res["completion_probabilities"] = completion_token_output::probs_vector_to_json(probs_output, post_sampling_probs);
         }
-        return res;
+        return response_fields.empty() ? res : json_get_nested_values(response_fields, res);
     }
 
     json to_json_oaicompat_chat() {
@@ -2066,6 +2069,7 @@ struct server_context {
         res->tokens          = slot.generated_tokens;
         res->timings         = slot.get_timings();
         res->prompt          = common_detokenize(ctx, slot.prompt_tokens, true);
+        res->response_fields = slot.params.response_fields;
 
         res->truncated           = slot.truncated;
         res->n_decoded           = slot.n_decoded;
