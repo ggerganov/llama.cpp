@@ -1819,11 +1819,8 @@ float common_embd_similarity_cos(const float * embd1, const float * embd2, int n
         sum2 += embd2[i] * embd2[i];
     }
 
-    // Handle the case where one or both vectors are zero vectors
+    // Both vectors are required to be non-zero.
     if (sum1 == 0.0 || sum2 == 0.0) {
-        if (sum1 == 0.0 && sum2 == 0.0) {
-            return 1.0f; // two zero vectors are similar
-        }
         return 0.0f;
     }
 
