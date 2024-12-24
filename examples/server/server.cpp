@@ -3790,6 +3790,17 @@ int main(int argc, char ** argv) {
             return;
         }
 
+        bool use_base64 = false;
+        if (body.count("encoding_format") != 0) {
+            const std::string& format = body.at("encoding_format");
+            if (format == "base64") {
+                use_base64 = true;
+            } else if (format != "float") {
+                res_error(res, format_error_response("The format to return the embeddings in. Can be either float or base64", ERROR_TYPE_INVALID_REQUEST));
+                return;
+            }
+        }
+
         std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
         for (const auto & tokens : tokenized_prompts) {
             // this check is necessary for models that do not add BOS token to the input
@@ -3841,7 +3852,7 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses) : json(responses);
+        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses, use_base64) : json(responses);
         res_ok(res, root);
     };
 

@@ -3,6 +3,7 @@
 #include "common.h"
 #include "log.h"
 #include "llama.h"
+#include "common/base64.hpp"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -613,16 +614,31 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
+static json format_embeddings_response_oaicompat(const json & request, const json & embeddings, bool use_base64 = false) {
     json data = json::array();
     int32_t n_tokens = 0;
     int i = 0;
     for (const auto & elem : embeddings) {
-        data.push_back(json{
-            {"embedding", json_value(elem, "embedding", json::array())},
-            {"index",     i++},
-            {"object",    "embedding"}
-        });
+        json embedding_obj;
+
+        if (use_base64) {
+            const auto& vec = json_value(elem, "embedding", json::array()).get<std::vector<float>>();
+            const char* data_ptr = reinterpret_cast<const char*>(vec.data());
+            size_t data_size = vec.size() * sizeof(float);
+            embedding_obj = {
+                {"embedding", base64::encode(data_ptr, data_size)},
+                {"index", i++},
+                {"object", "embedding"},
+                {"encoding_format", "base64"}
+            };
+        } else {
+            embedding_obj = {
+                {"embedding", json_value(elem, "embedding", json::array())},
+                {"index", i++},
+                {"object", "embedding"}
+            };
+        }
+        data.push_back(embedding_obj);
 
         n_tokens += json_value(elem, "tokens_evaluated", 0);
     }
