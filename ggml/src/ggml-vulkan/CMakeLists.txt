@@ -17,7 +17,7 @@ function(detect_host_compiler)
         else()
             message(WARNING "Neither MSVC nor clang found")
         endif()
-    elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    else()
         find_program(CLANG_C_COMPILER clang)
         find_program(CLANG_CXX_COMPILER clang++)
         find_program(GNU_C_COMPILER gcc)
@@ -31,8 +31,6 @@ function(detect_host_compiler)
         else()
             message(WARNING "Neither clang nor gcc found")
         endif()
-    else()
-        message(WARNING "Unsupported host system: ${CMAKE_HOST_SYSTEM_NAME}")
     endif()
 endfunction()
 
@@ -121,16 +119,7 @@ if (Vulkan_FOUND)
             else()
                 message(STATUS "Host compiler: ${HOST_C_COMPILER} ${HOST_CXX_COMPILER}")
             endif()
-            file(WRITE ${CMAKE_BINARY_DIR}/host_toolchain.cmake
-                "set(CMAKE_BUILD_TYPE Release)\n"
-                "set(CMAKE_C_FLAGS -O2)\n"
-                "set(CMAKE_CXX_FLAGS -O2)\n"
-                "set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)\n"
-                "set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)\n"
-                "set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)\n"
-                "set(CMAKE_C_COMPILER ${HOST_C_COMPILER})\n"
-                "set(CMAKE_CXX_COMPILER ${HOST_CXX_COMPILER})\n"
-            )
+            configure_file(${CMAKE_CURRENT_SOURCE_DIR}/host_toolchain.cmake.in ${CMAKE_BINARY_DIR}/host_toolchain.cmake @ONLY)
             set(HOST_CMAKE_TOOLCHAIN_FILE ${CMAKE_BINARY_DIR}/host_toolchain.cmake)
         endif()
         message(STATUS "vulkan-shaders-gen toolchain file: ${HOST_CMAKE_TOOLCHAIN_FILE}")
