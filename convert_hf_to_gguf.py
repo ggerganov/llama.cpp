@@ -3279,6 +3279,64 @@ class Rwkv6Model(Model):
         yield (new_name, data_torch)
 
 
+@Model.register("RWKV6Qwen2ForCausalLM")
+class RWKV6Qwen2Model(Model):
+    model_arch = gguf.MODEL_ARCH.RWKV6QWEN2
+
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        num_attention_heads = self.hparams["num_attention_heads"]
+        num_key_value_heads = self.hparams["num_key_value_heads"]
+        hidden_size = self.hparams["hidden_size"]
+        head_size = hidden_size // num_attention_heads
+        rms_norm_eps = self.hparams["rms_norm_eps"]
+        intermediate_size = self.hparams["intermediate_size"]
+        time_mix_extra_dim = 64 if hidden_size >= 4096 else 32
+        time_decay_extra_dim = 128 if hidden_size >= 4096 else 64
+
+        # RWKV isn't context limited
+        self.gguf_writer.add_context_length(1048576)
+        self.gguf_writer.add_embedding_length(hidden_size)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_wkv_head_size(head_size)
+        self.gguf_writer.add_time_mix_extra_dim(time_mix_extra_dim)
+        self.gguf_writer.add_time_decay_extra_dim(time_decay_extra_dim)
+        self.gguf_writer.add_feed_forward_length(intermediate_size)
+        self.gguf_writer.add_file_type(self.ftype)
+
+        # special parameters for time_mixing in RWKV6QWEN2
+        self.gguf_writer.add_layer_norm_rms_eps(rms_norm_eps)
+        self.gguf_writer.add_token_shift_count(1)
+        # RWKV6QWEN2 use grouped key/value like GQA
+        self.gguf_writer.add_head_count_kv(num_key_value_heads)
+
+        # required by llama.cpp, unused
+        self.gguf_writer.add_head_count(0)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        new_name = self.map_tensor_name(name)
+
+        if not (new_name.endswith(".weight") or new_name.endswith(".bias")):
+            new_name += ".weight"
+
+        if new_name.endswith("time_mix_w1.weight") or new_name.endswith("time_mix_decay_w1.weight") or new_name.endswith("time_mix_decay_w2.weight"):
+            data_torch = data_torch.transpose(0, 1)
+
+        if new_name.endswith("time_mix_w2.weight"):
+            data_torch = data_torch.permute(0, 2, 1)
+
+        if new_name.endswith("time_mix_decay.weight") or "lerp" in new_name:
+            data_torch = data_torch.squeeze()
+
+        yield (new_name, data_torch)
+
+
 @Model.register("MambaForCausalLM", "MambaLMHeadModel", "FalconMambaForCausalLM")
 class MambaModel(Model):
     model_arch = gguf.MODEL_ARCH.MAMBA
