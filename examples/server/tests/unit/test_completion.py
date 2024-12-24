@@ -258,14 +258,14 @@ def test_completion_parallel_slots(n_slots: int, n_requests: int):
 
 
 @pytest.mark.parametrize(
-    "prompt,n_predict,requested_fields",
+    "prompt,n_predict,response_fields",
     [
         ("I believe the meaning of life is", 8, []),
         ("I believe the meaning of life is", 32, ["content", "generation_settings/n_predict", "prompt"]),
     ],
 )
-def test_completion_requested_fields(
-    prompt: str, n_predict: int, requested_fields: list[str]
+def test_completion_response_fields(
+    prompt: str, n_predict: int, response_fields: list[str]
 ):
     global server
     server.start()
@@ -275,17 +275,17 @@ def test_completion_requested_fields(
         data={
             "n_predict": n_predict,
             "prompt": prompt,
-            "requested_fields": requested_fields,
+            "response_fields": response_fields,
         },
     )
     assert res.status_code == 200
     assert "content" in res.body
     assert len(res.body["content"])
-    if len(requested_fields):
+    if len(response_fields):
         assert res.body["generation_settings/n_predict"] == n_predict
         assert res.body["prompt"] == "<s> " + prompt
         assert isinstance(res.body["content"], str)
-        assert len(res.body) == len(requested_fields)
+        assert len(res.body) == len(response_fields)
     else:
         assert len(res.body)
         assert "generation_settings" in res.body
