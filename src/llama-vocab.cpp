@@ -1657,7 +1657,7 @@ bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token t
 }
 
 llama_token llama_token_bos_impl(const struct llama_vocab & vocab) {
-    return vocab.special_bos_id;
+    return vocab.type != LLAMA_VOCAB_TYPE_WPM ? vocab.special_bos_id : vocab.special_cls_id;
 }
 
 llama_token llama_token_eos_impl(const struct llama_vocab & vocab) {
