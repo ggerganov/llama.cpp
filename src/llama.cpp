@@ -1531,9 +1531,11 @@ static void llm_load_hparams(
                         switch (hparams.n_embd) {
                             case 384: model.type = e_model::MODEL_33M; break; // MiniLM-L12, bge-small
                             case 768: model.type = e_model::MODEL_109M; break; // bge-base
+                            default: model.type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 24:
                         model.type = e_model::MODEL_335M; break; // bge-large
+                    default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_JINA_BERT_V2:
@@ -1547,6 +1549,7 @@ static void llm_load_hparams(
                 switch (hparams.n_layer) {
                     case 4:  model.type = e_model::MODEL_33M;  break; // jina-embeddings-small
                     case 12: model.type = e_model::MODEL_137M; break; // jina-embeddings-base
+                    default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_NOMIC_BERT:
@@ -1570,7 +1573,9 @@ static void llm_load_hparams(
                         switch (hparams.n_embd) {
                             case 2560: model.type = e_model::MODEL_3B; break;
                             case 4096: model.type = e_model::MODEL_7B; break;
+                            default: model.type = e_model::MODEL_UNKNOWN;
                         } break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
                 }
 
                 // TODO: become GGUF KV parameter
@@ -2099,7 +2104,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_GROUPNORM_GROUPS, hparams.n_norm_groups);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
             } break;
-        default: (void)0;
+        default: throw std::runtime_error("unsupported model architecture");
     }
 
     model.ftype = ml.ftype;
