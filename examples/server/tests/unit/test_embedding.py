@@ -1,3 +1,5 @@
+import base64
+import struct
 import pytest
 from openai import OpenAI
 from utils import *
@@ -194,3 +196,32 @@ def test_embedding_usage_multiple():
     assert res.status_code == 200
     assert res.body['usage']['prompt_tokens'] == res.body['usage']['total_tokens']
     assert res.body['usage']['prompt_tokens'] == 2 * 9
+
+
+def test_embedding_openai_library_base64():
+    server.start()
+    test_input = "Test base64 embedding output"
+
+    res = server.make_request("POST", "/embeddings", data={
+        "input": test_input,
+        "encoding_format": "base64"
+    })
+
+    assert res.status_code == 200
+    assert "data" in res.body
+    assert len(res.body["data"]) == 1
+
+    embedding_data = res.body["data"][0]
+    assert "embedding" in embedding_data
+    assert isinstance(embedding_data["embedding"], str)
+
+    # Verify embedding is valid base64
+    try:
+        decoded = base64.b64decode(embedding_data["embedding"])
+        # Verify decoded data can be converted back to float array
+        float_count = len(decoded) // 4  # 4 bytes per float
+        floats = struct.unpack(f'{float_count}f', decoded)
+        assert len(floats) > 0
+        assert all(isinstance(x, float) for x in floats)
+    except Exception as e:
+        pytest.fail(f"Invalid base64 format: {str(e)}")
