@@ -450,7 +450,7 @@ These words will not be included in the completion, so make sure to add them to 
 
 `post_sampling_probs`: Returns the probabilities of top `n_probs` tokens after applying sampling chain.
 
-`requested_fields`: A list of required response fields, for example : `"requested_fields": ["content", "generation_settings/n_predict"]`  If there is no field, return an empty json for that field.
+`requested_fields`: A list of response fields, for example: `"requested_fields": ["content", "generation_settings/n_predict"]`. If the specified field is missing, it will simply be omitted from the response without triggering an error.
 
 **Response format**
 
