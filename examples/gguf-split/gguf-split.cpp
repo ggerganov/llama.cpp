@@ -2,15 +2,14 @@
 #include "common.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <string>
 #include <vector>
-
-#include <stdio.h>
-#include <string.h>
 #include <climits>
+
+#include <cstdio>
+#include <cstring>
 #include <stdexcept>
 
 #if defined(_WIN32)
