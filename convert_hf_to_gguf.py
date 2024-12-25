@@ -333,8 +333,119 @@ class Model:
                         data_torch = data_torch.to(torch.float16)
 
                 return [(self.map_tensor_name(name), data_torch)]
+        elif quantization_config["quant_method"] == "bitdistiller":
+            new_name = self.map_tensor_name(name, try_suffixes=(".weight", ".bias"))
+            extra_f32 = any(self.match_model_tensor_name(new_name, key, bid) for key in (
+                gguf.MODEL_TENSOR.FFN_GATE_INP,
+                gguf.MODEL_TENSOR.POS_EMBD,
+                gguf.MODEL_TENSOR.TOKEN_TYPES,
+            ))
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            data = data_torch.numpy()
+            n_dims = len(data.shape)
+            extra_f16 = any(cond for cond in (
+                (name.endswith(".weight") and n_dims >= 2),
+            ))
+
+            to_dtype = gguf.GGMLQuantizationType.F32
+
+            if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
+                if self.ftype == gguf.LlamaFileType.MOSTLY_INT_N and any(self.match_model_tensor_name(new_name, key, bid) for key in [
+                    gguf.MODEL_TENSOR.ATTN_Q,
+                    gguf.MODEL_TENSOR.ATTN_K,
+                    gguf.MODEL_TENSOR.ATTN_V,
+                    gguf.MODEL_TENSOR.ATTN_QKV,
+                    gguf.MODEL_TENSOR.ATTN_OUT,
+                    gguf.MODEL_TENSOR.FFN_UP,
+                    gguf.MODEL_TENSOR.FFN_DOWN,
+                    gguf.MODEL_TENSOR.FFN_GATE,
+                ]):
+                    to_dtype = gguf.GGMLQuantizationType.I2
+                else:
+                    to_dtype = gguf.GGMLQuantizationType.F16
+
+            if to_dtype == gguf.GGMLQuantizationType.I2:
+                bits = 2
+                group_size = quantization_config["group_size"]
+                w, scales, zeros = self._t_mac_quantize_tensor_bitdistiller(
+                    LazyTorchTensor.to_eager(data_torch),
+                    n_bit=bits,
+                    zero_point=True,
+                    q_group_size=group_size,
+                )
+
+                self._t_mac_bits = quantization_config["bits"]
+                self._t_mac_raw_shape = w.shape
+
+                # For permutation in, e.g., LlamaModel
+                w = self.modify_tensors(torch.from_numpy(w), name, bid)[0][1].numpy()
+                scales = self.modify_tensors(torch.from_numpy(scales), name, bid)[0][1].numpy()
+                zeros = self.modify_tensors(torch.from_numpy(zeros), name, bid)[0][1].numpy()
+
+                if self.ftype == gguf.LlamaFileType.MOSTLY_INT_N:
+                    if quantization_config["sym"]:
+                        if not np.allclose(zeros, np.zeros_like(zeros)):
+                            logger.warning("Although the quantized model claimed to be symmetric, the weights are asymmetric")
+                        else:
+                            zeros = None
+                    data_torch = torch.from_numpy(preprocess_for_t_mac(self.kcfg_file, w, scales, zeros, bits=bits))
+                else:
+                    old_shape = w.shape
+                    w = w.astype("float32").reshape(-1, group_size)
+                    scales = scales.astype("float32").reshape(-1, 1)
+                    zeros = zeros.astype("float32").reshape(-1, 1)
+                    data = (w - (zeros / scales + (2 ** (bits - 1)))) * scales
+                    data_torch = torch.from_numpy(data.reshape(old_shape))
+                    if self.ftype == gguf.LlamaFileType.MOSTLY_F16:
+                        data_torch = data_torch.to(torch.float16)
+
+                return [(self.map_tensor_name(name), data_torch)]
 
         return self.modify_tensors(data_torch, name, bid)
+
+    # Modified version of BitDistiller pseudo_quantize_tensor
+    # core quantization method (simulated quantization)
+    def _t_mac_quantize_tensor_bitdistiller(self, w, n_bit=8, zero_point=True, q_group_size=-1):
+        org_w_shape = w.shape
+        if q_group_size > 0:
+            assert org_w_shape[-1] % q_group_size == 0
+            w = w.reshape(-1, q_group_size)
+        elif q_group_size == -1:
+            w = w.reshape(-1, w.shape[-1])
+        assert w.dim() == 2
+        if zero_point:
+            max_val = w.amax(dim=1, keepdim=True)
+            min_val = w.amin(dim=1, keepdim=True)
+            max_int = 2 ** n_bit - 1
+            min_int = 0
+            scales = (max_val - min_val).clamp(min=1e-5) / max_int
+            zeros = (-torch.round(min_val / scales)).clamp_(min_int, max_int)
+        else:  # we actually never used this
+            max_val = w.abs().amax(dim=1, keepdim=True)
+            max_val = max_val.clamp(min=1e-5)
+            max_int = 2 ** (n_bit - 1) - 1
+            min_int = - 2 ** (n_bit - 1)
+            scales = max_val / max_int
+            zeros = 0
+
+        assert torch.isnan(scales).sum() == 0
+        assert torch.isnan(w).sum() == 0
+
+        w = torch.clamp(torch.round(w / scales) + zeros, min_int, max_int)
+
+        w = w.reshape(org_w_shape).numpy()
+        scales = scales.numpy().reshape(w.shape[0], -1)
+        zeros = zeros.numpy().reshape(w.shape[0], -1) if zero_point else None
+
+        if zero_point:
+            w = w.astype(np.uint8)
+            zeros = (zeros - (2 ** (n_bit - 1))) * scales
+            return w, scales, zeros
+        else:
+            w = (w - min_int).astype(np.uint8)
+            return w, scales, zeros
+    
 
     def tensor_force_quant(self, name: str, new_name: str, bid: int | None, n_dims: int) -> gguf.GGMLQuantizationType | bool:
         del name, new_name, bid, n_dims  # unused
@@ -4529,7 +4640,6 @@ def main() -> None:
         except NotImplementedError:
             logger.error(f"Model {model_architecture} is not supported")
             sys.exit(1)
-
         model_instance = model_class(dir_model=dir_model, ftype=output_type, fname_out=fname_out,
                                      is_big_endian=args.bigendian, use_temp_file=args.use_temp_file,
                                      eager=args.no_lazy,
