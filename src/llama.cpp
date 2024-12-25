@@ -142,11 +142,11 @@ static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w
                 const int64_t H = 123;
                 const int64_t n_tokens = 123;
                 const int64_t n_seqs = 123;
-                ggml_tensor  * k = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, S, 1, H, n_tokens);
-                ggml_tensor  * v = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, 1, S, H, n_tokens);
-                ggml_tensor  * r = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, 1, S, H, n_tokens);
+                ggml_tensor  * k = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, S, H, n_tokens);
+                ggml_tensor  * v = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, S, H, n_tokens);
+                ggml_tensor  * r = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, S, H, n_tokens);
                 ggml_tensor  * tf = w;
-                ggml_tensor  * td = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, 1, S, H, n_tokens);
+                ggml_tensor  * td = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, S, H, n_tokens);
                 ggml_tensor  * state = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, S, n_seqs, S, H);
                 op_tensor = ggml_rwkv_wkv6(ctx, k, v, r, tf, td, state);
             } break;
@@ -3296,9 +3296,7 @@ static struct ggml_tensor * llm_build_rwkv6_time_mix(
         struct ggml_tensor * cur,
         struct ggml_tensor * x_prev,
         struct ggml_tensor ** wkv_state,
-        size_t head_count_kv,
-        bool key_decay,
-        bool skip_groupnorm) {
+        size_t head_count_kv) {
     size_t n_embd       = cur->ne[0];
     size_t n_seq_tokens = cur->ne[1];
     size_t n_seqs       = cur->ne[2];
@@ -3429,19 +3427,14 @@ static struct ggml_tensor * llm_build_rwkv6_time_mix(
         )
     );
 
-    w = ggml_add(ctx, w, ggml_reshape_1d(ctx, layer->time_mix_decay, n_embd));
+    w = ggml_add(ctx, w, layer->time_mix_decay);
     w = ggml_exp(ctx, ggml_neg(ctx, ggml_exp(ctx, w)));
-    w = ggml_reshape_4d(ctx, w, 1, head_size, head_count, n_tokens);
-
-    r = ggml_reshape_4d(ctx, r, 1, head_size, head_count, n_tokens);
-    k = ggml_reshape_4d(ctx, k, 1, head_size, head_count, n_tokens);
-    v = ggml_reshape_4d(ctx, v, 1, head_size, head_count, n_tokens);
+    w = ggml_reshape_3d(ctx, w, head_size, head_count, n_tokens);
 
     if (is_qrwkv) {
         // k = k * (1 - w)
         k = ggml_sub(ctx, k, ggml_mul(ctx, k, w));
     }
-    k = ggml_transpose(ctx, k);
 
     struct ggml_tensor * wkv_output;
     if (!layer->time_mix_first) {
@@ -3452,7 +3445,7 @@ static struct ggml_tensor * llm_build_rwkv6_time_mix(
     cur = ggml_view_1d(ctx, wkv_output, n_embd * n_tokens, 0);
     *wkv_state = ggml_view_1d(ctx, wkv_output, n_embd * head_size * n_seqs, n_embd * n_tokens * sizeof(float));
 
-    if (!skip_groupnorm) {
+    if (!is_qrwkv) {
         // group norm with head_count groups
         cur = ggml_reshape_3d(ctx, cur, n_embd / head_count, head_count, n_tokens);
         cur = ggml_norm(ctx, cur, 64e-5f);
@@ -9880,7 +9873,7 @@ struct llm_build_context {
                 1
             );
 
-            cur = ggml_add(ctx0, cur, llm_build_rwkv6_time_mix(lctx, ctx0, layer, x_norm_att, x_prev, &wkv_states, layer->time_mix_first->ne[1], false, false));
+            cur = ggml_add(ctx0, cur, llm_build_rwkv6_time_mix(lctx, ctx0, layer, x_norm_att, x_prev, &wkv_states, layer->time_mix_first->ne[1]));
             ggml_build_forward_expand(gf, cur);
             ggml_build_forward_expand(
                 gf,
@@ -10003,7 +9996,7 @@ struct llm_build_context {
                 )
             );
 
-            struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, llm_build_rwkv6_time_mix(lctx, ctx0, layer, x_norm_att, x_prev, &wkv_states, hparams.n_head_kv(), true, hparams.wkv_skip_groupnorm));
+            struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, llm_build_rwkv6_time_mix(lctx, ctx0, layer, x_norm_att, x_prev, &wkv_states, hparams.n_head_kv()));
             cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
