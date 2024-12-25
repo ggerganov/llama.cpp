@@ -1,4 +1,38 @@
+cmake_minimum_required(VERSION 3.19)
+cmake_policy(SET CMP0114 NEW)
+
 find_package(Vulkan COMPONENTS glslc REQUIRED)
+
+function(detect_host_compiler)
+    if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+        find_program(MSVC_COMPILER cl)
+        find_program(GNU_C_COMPILER gcc)
+        find_program(GNU_CXX_COMPILER g++)
+        if (MSVC_COMPILER)
+            set(HOST_C_COMPILER "${MSVC_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${MSVC_COMPILER}" PARENT_SCOPE)
+        elseif (CLANG_C_COMPILER AND CLANG_CXX_COMPILER)
+            set(HOST_C_COMPILER "${CLANG_C_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${CLANG_CXX_COMPILER}" PARENT_SCOPE)
+        else()
+            message(WARNING "Neither MSVC nor clang found")
+        endif()
+    else()
+        find_program(CLANG_C_COMPILER clang)
+        find_program(CLANG_CXX_COMPILER clang++)
+        find_program(GNU_C_COMPILER gcc)
+        find_program(GNU_CXX_COMPILER g++)
+        if (GNU_C_COMPILER AND GNU_CXX_COMPILER)
+            set(HOST_C_COMPILER "${GNU_C_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${GNU_CXX_COMPILER}" PARENT_SCOPE)
+        elseif (CLANG_C_COMPILER AND CLANG_CXX_COMPILER)
+            set(HOST_C_COMPILER "${CLANG_C_COMPILER}" PARENT_SCOPE)
+            set(HOST_CXX_COMPILER "${CLANG_CXX_COMPILER}" PARENT_SCOPE)
+        else()
+            message(WARNING "Neither clang nor gcc found")
+        endif()
+    endif()
+endfunction()
 
 if (Vulkan_FOUND)
     message(STATUS "Vulkan found")
@@ -59,15 +93,47 @@ if (Vulkan_FOUND)
         add_compile_definitions(GGML_VULKAN_RUN_TESTS)
     endif()
 
-    add_subdirectory(vulkan-shaders)
+    if (NOT CMAKE_CROSSCOMPILING)
+        add_subdirectory(vulkan-shaders)
+    else()
+        if (GGML_SHADERS_GEN_TOOLCHAIN)
+            set(HOST_CMAKE_TOOLCHAIN_FILE ${GGML_SHADERS_GEN_TOOLCHAIN})
+        else()
+            detect_host_compiler()
+            if (NOT HOST_C_COMPILER OR NOT HOST_CXX_COMPILER)
+                message(FATAL_ERROR "Host compiler not found")
+            else()
+                message(STATUS "Host compiler: ${HOST_C_COMPILER} ${HOST_CXX_COMPILER}")
+            endif()
+            configure_file(${CMAKE_CURRENT_SOURCE_DIR}/host_toolchain.cmake.in ${CMAKE_BINARY_DIR}/host_toolchain.cmake @ONLY)
+            set(HOST_CMAKE_TOOLCHAIN_FILE ${CMAKE_BINARY_DIR}/host_toolchain.cmake)
+        endif()
+        message(STATUS "vulkan-shaders-gen toolchain file: ${HOST_CMAKE_TOOLCHAIN_FILE}")
 
-    set (_ggml_vk_genshaders_cmd vulkan-shaders-gen)
+        include(ExternalProject)
+        # Native build through ExternalProject_Add
+        ExternalProject_Add(
+            vulkan-shaders-gen
+            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders
+            CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=${HOST_CMAKE_TOOLCHAIN_FILE}
+                    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
+            BUILD_COMMAND ${CMAKE_COMMAND} --build .
+            INSTALL_COMMAND ${CMAKE_COMMAND} --install .
+            INSTALL_DIR ${CMAKE_BINARY_DIR}
+        )
+        ExternalProject_Add_StepTargets(vulkan-shaders-gen build install)
+    endif()
+    set (_ggml_vk_genshaders_cmd ${CMAKE_BINARY_DIR}/bin/vulkan-shaders-gen)
     set (_ggml_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
     set (_ggml_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
     set (_ggml_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
     set (_ggml_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
 
     file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
+
+    if (CMAKE_CROSSCOMPILING)
+        set(_ggml_vk_shader_deps ${_ggml_vk_shader_deps} vulkan-shaders-gen-build vulkan-shaders-gen-install)
+    endif()
 
     add_custom_command(
         OUTPUT ${_ggml_vk_header}
