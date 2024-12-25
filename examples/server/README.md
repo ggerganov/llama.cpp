@@ -345,7 +345,7 @@ node index.js
 
 > [!IMPORTANT]
 >
-> This endpoint is **not** OAI-compatible
+> This endpoint is **not** OAI-compatible. For OAI-compatible client, use `/v1/completions` instead.
 
 *Options:*
 
@@ -522,6 +522,37 @@ These words will not be included in the completion, so make sure to add them to 
 - `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
 - `tokens_evaluated`: Number of tokens evaluated in total from the prompt
 - `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
+
+### POST `/v1/completions`: OpenAI-compatible Completions API
+
+Given an input `prompt`, it returns the predicted completion. Streaming mode is also supported. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps.
+
+*Options:*
+
+See [OpenAI Completions API documentation](https://platform.openai.com/docs/api-reference/completions).
+
+llama.cpp `/completion`-specific features such as `mirostat` are supported.
+
+*Examples:*
+
+Example usage with `openai` python library:
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
+    api_key = "sk-no-key-required"
+)
+
+completion = client.completions.create(
+  model="davinci-002",
+  prompt="I believe the meaning of life is",
+  max_tokens=8
+)
+
+print(completion.choices[0].text)
+```
 
 ### POST `/tokenize`: Tokenize a given text
 
@@ -767,11 +798,11 @@ client = openai.OpenAI(
 )
 
 completion = client.chat.completions.create(
-model="gpt-3.5-turbo",
-messages=[
+  model="gpt-3.5-turbo",
+  messages=[
     {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
     {"role": "user", "content": "Write a limerick about python exceptions"}
-]
+  ]
 )
 
 print(completion.choices[0].message)
