@@ -78,7 +78,8 @@ void execute_command(const std::string& command, std::string& stdout_str, std::s
     }
 
     PROCESS_INFORMATION pi;
-    STARTUPINFOA si = { sizeof(STARTUPINFOA) };
+    STARTUPINFOA si = {};
+    si.cb = sizeof(STARTUPINFOA);
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdOutput = stdout_write;
     si.hStdError = stderr_write;
