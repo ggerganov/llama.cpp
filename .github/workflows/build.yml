@@ -317,7 +317,7 @@ jobs:
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
           sudo apt-get update -y
-          sudo apt-get install -y build-essential vulkan-sdk
+          sudo apt-get install -y build-essential mesa-vulkan-drivers vulkan-sdk
 
       - name: Build
         id: cmake_build
@@ -326,6 +326,12 @@ jobs:
           cd build
           cmake -DGGML_VULKAN=ON ..
           cmake --build . --config Release -j $(nproc)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest -L main --verbose --timeout 900
 
   ubuntu-22-cmake-hip:
     runs-on: ubuntu-22.04

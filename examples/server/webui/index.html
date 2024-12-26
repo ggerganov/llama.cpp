@@ -201,6 +201,10 @@
           <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
             <summary class="collapse-title font-bold">Advanced config</summary>
             <div class="collapse-content">
+              <div class="flex flex-row items-center mb-2" v-if="isDev">
+                <!-- this button only shows in dev mode, used to import a demo conversation to test message rendering -->
+                <button class="btn" @click="debugImportDemoConv()">(debug) Import demo conversation</button>
+              </div>
               <div class="flex flex-row items-center mb-2">
                 <input type="checkbox" class="checkbox" v-model="config.showTokensPerSecond" />
                 <span class="ml-4">Show tokens per second</span>

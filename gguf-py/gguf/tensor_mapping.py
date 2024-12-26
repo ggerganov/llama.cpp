@@ -42,6 +42,7 @@ class TensorNameMap:
             "emb_ln",                     # nomic-bert
             "transformer.norm",           # openelm
             "rwkv.blocks.0.pre_ln",       # rwkv
+            "backbone.norm",              # wavtokenizer
         ),
 
         # Position embeddings
@@ -60,6 +61,7 @@ class TensorNameMap:
             "lm_head.linear",            # phi2
             "output_layer",              # chatglm
             "head",                      # rwkv
+            "head.out",                  # wavtokenizer
         ),
 
         # Output norm
@@ -80,6 +82,7 @@ class TensorNameMap:
             "transformer.norm",                        # openelm
             "model.norm",                              # nemotron
             "rwkv.ln_out",                             # rwkv
+            "backbone.final_layer_norm",               # wavtokenizer
         ),
 
         # Rope frequencies
@@ -90,6 +93,10 @@ class TensorNameMap:
 
         MODEL_TENSOR.ROPE_FACTORS_LONG: (),
         MODEL_TENSOR.ROPE_FACTORS_SHORT: (),
+
+        MODEL_TENSOR.CONV1D: (
+            "backbone.embed", # roberta
+        ),
     }
 
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
@@ -191,6 +198,7 @@ class TensorNameMap:
             "transformer.h.{bid}.self_attention.dense",                     # falcon
             "h.{bid}.self_attention.dense",                                 # bloom
             "model.layers.{bid}.self_attn.o_proj",                          # llama-hf nemotron olmoe olmo2
+            "model.layers.{bid}.self_attn.linear_attn",                     # deci
             "layers.{bid}.attention.wo",                                    # llama-pth
             "encoder.layer.{bid}.attention.output.dense",                   # bert
             "transformer.h.{bid}.attn.out_proj",                            # gpt-j
@@ -306,7 +314,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_UP_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.up_proj",  # qwen2moe
-            "model.layers.{bid}.mlp.shared_experts.up_proj", # deepseek2
+            "model.layers.{bid}.mlp.shared_experts.up_proj", # deepseek deepseek2
         ),
 
         # AWQ-activation gate
@@ -338,7 +346,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_GATE_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.gate_proj",  # qwen2moe
-            "model.layers.{bid}.mlp.shared_experts.gate_proj", # deepseek2
+            "model.layers.{bid}.mlp.shared_experts.gate_proj", # deepseek deepseek2
         ),
 
         # Feed-forward down
@@ -379,7 +387,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_DOWN_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.down_proj",  # qwen2moe
-            "model.layers.{bid}.mlp.shared_experts.down_proj", # deepseek2
+            "model.layers.{bid}.mlp.shared_experts.down_proj", # deepseek deepseek2
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
@@ -681,6 +689,8 @@ class TensorNameMap:
             "encoder.block.{bid}.layer.1.DenseReluDense.wo", # t5
         ),
 
+        ############################################################################
+        # TODO: these do not belong to block_mappings_cfg - move them to mappings_cfg
         MODEL_TENSOR.ENC_OUTPUT_NORM: (
             "encoder.final_layer_norm", # t5
         ),
@@ -692,6 +702,67 @@ class TensorNameMap:
 
         MODEL_TENSOR.CLS_OUT: (
             "classifier.out_proj", # roberta
+        ),
+        #############################################################################
+
+        MODEL_TENSOR.CONVNEXT_DW: (
+            "backbone.convnext.{bid}.dwconv", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.CONVNEXT_NORM: (
+            "backbone.convnext.{bid}.norm", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.CONVNEXT_PW1: (
+            "backbone.convnext.{bid}.pwconv1", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.CONVNEXT_PW2: (
+            "backbone.convnext.{bid}.pwconv2", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.CONVNEXT_GAMMA: (
+            "backbone.convnext.{bid}.gamma", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_CONV1: (
+            "backbone.posnet.{bid}.conv1", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_CONV2: (
+            "backbone.posnet.{bid}.conv2", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_NORM: (
+            "backbone.posnet.{bid}.norm", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_NORM1: (
+            "backbone.posnet.{bid}.norm1", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_NORM2: (
+            "backbone.posnet.{bid}.norm2", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_ATTN_NORM: (
+            "backbone.posnet.{bid}.norm", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_ATTN_Q: (
+            "backbone.posnet.{bid}.q", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_ATTN_K: (
+            "backbone.posnet.{bid}.k", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_ATTN_V: (
+            "backbone.posnet.{bid}.v", # wavtokenizer
+        ),
+
+        MODEL_TENSOR.POSNET_ATTN_OUT: (
+            "backbone.posnet.{bid}.proj_out", # wavtokenizer
         ),
     }
 

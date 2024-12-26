@@ -74,10 +74,10 @@ if (NOT GGML_CUDA_GRAPHS_DEFAULT)
 endif()
 
 # general
-option(GGML_STATIC "ggml: static link libraries"         OFF)
-option(GGML_NATIVE "ggml: enable -march=native flag"     ${GGML_NATIVE_DEFAULT})
-option(GGML_LTO    "ggml: enable link time optimization" OFF)
-option(GGML_CCACHE "ggml: use ccache if available"       ON)
+option(GGML_STATIC "ggml: static link libraries"                     OFF)
+option(GGML_NATIVE "ggml: optimize the build for the current system" ${GGML_NATIVE_DEFAULT})
+option(GGML_LTO    "ggml: enable link time optimization"             OFF)
+option(GGML_CCACHE "ggml: use ccache if available"                   ON)
 
 # debug
 option(GGML_ALL_WARNINGS           "ggml: enable all compiler warnings"                   ON)
@@ -120,8 +120,9 @@ endif()
 option(GGML_LASX             "ggml: enable lasx"             ON)
 option(GGML_LSX              "ggml: enable lsx"              ON)
 option(GGML_RVV              "ggml: enable rvv"              ON)
-option(GGML_SVE              "ggml: enable SVE"              OFF)
+
 option(GGML_CPU_ALL_VARIANTS "ggml: build all variants of the CPU backend (requires GGML_BACKEND_DL)" OFF)
+set(GGML_CPU_ARM_ARCH "" CACHE STRING "ggml: CPU architecture for ARM")
 
 
 if (WIN32)
