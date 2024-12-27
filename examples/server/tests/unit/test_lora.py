@@ -66,6 +66,7 @@ def test_lora_per_request():
             "lora": lora,
             "seed": 42,
             "temperature": 0.0,
+            "cache_prompt": False, # TODO: remove this once test_cache_vs_nocache_prompt is fixed
         })
     ) for lora, re_test in lora_config]
     results = parallel_function_calls(tasks)
