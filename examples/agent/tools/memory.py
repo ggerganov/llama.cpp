@@ -2,33 +2,33 @@
     Memory tools that use sqlite-vec as a vector database (combined w/ sqlite-lembed or sqlite-rembed for embeddings).
 
     Note: it's best to run this in a silo w/:
-        
+
         ./examples/agent/serve_tools_inside_docker.sh
 
     # Run w/o other tools:
-    
+
     ## Prerequisites:
-    
+
     pip install aiosqlite "fastapi[standard]" sqlite-lembed sqlite-rembed sqlite-vec uvicorn
-    
+
     ## Usage w/ sqlite-rembed:
-    
+
     ./llama-server --port 8081 -fa -c 0 --embeddings --rope-freq-scale 0.75 \
         -hfr nomic-ai/nomic-embed-text-v1.5-GGUF -hff nomic-embed-text-v1.5.Q4_K_M.gguf
     MEMORY_SQLITE_DB=memory_rembed.db \
         EMBEDDINGS_DIMS=768 \
         EMBEDDINGS_ENDPOINT=http://localhost:8081/v1/embeddings \
         python examples/agent/tools/memory.py
-        
+
     ## Usage w/ sqlite-lembed:
-    
+
     MEMORY_SQLITE_DB=memory_lembed.db \
         EMBEDDINGS_DIMS=768 \
         EMBEDDINGS_MODEL_FILE=~/Library/Caches/llama.cpp/nomic-embed-text-v1.5.Q4_K_M.gguf \
         python examples/agent/tools/memory.py
 
     ## Test:
-    
+
     curl -X POST "http://localhost:8000/memorize" -H "Content-Type: application/json" -d '["User is Olivier Chafik", "User is a Software Engineer"]'
     curl -X POST "http://localhost:8000/search_memory?text=What%20do%20we%20do%3F"
 '''
@@ -65,7 +65,7 @@ else:
 
 
 async def setup_db(db: aiosqlite.Connection):
-    
+
     await db.enable_load_extension(True)
     await db.load_extension(sqlite_vec.loadable_path())
     if local:
@@ -75,7 +75,7 @@ async def setup_db(db: aiosqlite.Connection):
     await db.enable_load_extension(False)
 
     client_name = 'default'
-    
+
     if local:
         await db.execute(f'''
             INSERT INTO lembed_models(name, model) VALUES (
@@ -88,7 +88,7 @@ async def setup_db(db: aiosqlite.Connection):
                 '{client_name}', rembed_client_options('format', 'llamafile', 'url', ?, 'key', ?)
             );
         ''', (embeddings_endpoint, embeddings_api_key))
-        
+
     async def create_vector_index(table_name, text_column, embedding_column):
         '''
             Create an sqlite-vec virtual table w/ an embedding column
@@ -145,7 +145,7 @@ async def setup_db(db: aiosqlite.Connection):
                     JOIN {table_name} USING (rowid)
                 ''',
                 (text, top_n)
-            ) 
+            )
         return search
 
     await db.execute('''
@@ -155,9 +155,9 @@ async def setup_db(db: aiosqlite.Connection):
         )
     ''')
     facts_search = await create_vector_index('facts', 'content', 'embedding')
-    
+
     await db.commit()
-    
+
     return dict(
         facts_search=facts_search,
     )
@@ -185,7 +185,7 @@ async def search_memory(text: str, top_n: int = 10):
             results = await cursor.fetchall()
             cols = [c[0] for c in cursor.description]
             return [dict(zip(cols, row)) for row in results]
-   
+
 
 # This main entry point is just here for easy debugging
 if __name__ == '__main__':

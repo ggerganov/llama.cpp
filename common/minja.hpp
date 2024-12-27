@@ -1009,7 +1009,7 @@ public:
             throw std::runtime_error("Filter must be a callable: " + filter_value.dump());
         }
         std::string rendered_body = body->render(context);
-        
+
         ArgumentsValue filter_args = {{Value(rendered_body)}, {}};
         auto result = filter_value.call(context, filter_args);
         out << result.to_str();
@@ -1181,7 +1181,7 @@ public:
             case Op::Expansion:
             case Op::ExpansionDict:
                 throw std::runtime_error("Expansion operator is only supported in function calls and collections");
-                
+
         }
         throw std::runtime_error("Unknown unary operator");
     }

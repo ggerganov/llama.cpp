@@ -80,7 +80,7 @@ async def main(
         api_key = os.environ.get(provider_info['api_key_env'])
 
     tool_map, tools = await discover_tools(tool_endpoints or [], verbose)
-    
+
     if think:
         tools.append({
             'type': 'function',

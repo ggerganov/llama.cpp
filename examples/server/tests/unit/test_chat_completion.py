@@ -231,7 +231,7 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
             {"role": "user", "content": "Write an example"},
         ],
         "tool_choice": "required",
-        "tools": [tool], 
+        "tools": [tool],
         "parallel_tool_calls": False,
     })
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
