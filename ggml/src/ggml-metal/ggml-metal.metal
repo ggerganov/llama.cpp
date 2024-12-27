@@ -1366,6 +1366,92 @@ kernel void kernel_ssm_scan_f32(
     }
 }
 
+kernel void kernel_rwkv_wkv6_f32(
+    device const float * k,
+    device const float * v,
+    device const float * r,
+    device const float * tf,
+    device const float * td,
+    device const float * state_in,
+    device       float * dst,
+    constant    uint & B,
+    constant    uint & T,
+    constant    uint & C,
+    constant    uint & H,
+    uint3 tgpig[[threadgroup_position_in_grid]],
+    uint3 tpitg[[thread_position_in_threadgroup]],
+    uint3   ntg[[threads_per_threadgroup]])  {
+        
+    const uint head_size = 64; // rwkv6
+    const uint batch_id = tgpig.x / H;
+    const uint head_id = tgpig.x % H;
+    const uint tid = tpitg.x;
+
+    if (batch_id >= B || head_id >= H) {
+        return;
+    }
+
+    const uint state_size = C * head_size;
+    const uint n_seq_tokens = T / B;
+
+    threadgroup float _k[head_size];
+    threadgroup float _r[head_size];
+    threadgroup float _tf[head_size];
+    threadgroup float _td[head_size];
+
+    float state[head_size];
+    #pragma unroll(64)
+    for (uint i = 0; i < head_size; i++) {
+        state[i] = state_in[batch_id * state_size + head_id * head_size * head_size
+                          + i * head_size + tid];
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    _tf[tid] = tf[head_id * head_size + tid];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    const uint start_t = batch_id * n_seq_tokens * C + head_id * head_size + tid;
+    const uint end_t = (batch_id + 1) * n_seq_tokens * C + head_id * head_size + tid;
+
+    for (uint t = start_t; t < end_t; t += C) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        _k[tid] = k[t];
+        _r[tid] = r[t];
+        _td[tid] = td[t];
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        const float v_val = v[t];
+        float y = 0.0;
+        
+        #pragma unroll(64)
+        for (uint j = 0; j < head_size; j += 4) {
+            float4 k_vec = float4(_k[j], _k[j+1], _k[j+2], _k[j+3]);
+            float4 r_vec = float4(_r[j], _r[j+1], _r[j+2], _r[j+3]);
+            float4 tf_vec = float4(_tf[j], _tf[j+1], _tf[j+2], _tf[j+3]);
+            float4 td_vec = float4(_td[j], _td[j+1], _td[j+2], _td[j+3]);
+            float4 s_vec = float4(state[j], state[j+1], state[j+2], state[j+3]);
+
+            float4 kv = k_vec * v_val;
+
+            float4 temp = tf_vec * kv + s_vec;
+            y += dot(r_vec, temp);
+
+            s_vec = s_vec * td_vec + kv;
+            state[j] = s_vec.x;
+            state[j+1] = s_vec.y;
+            state[j+2] = s_vec.z;
+            state[j+3] = s_vec.w;
+        }
+
+        dst[t] = y;
+    }
+    #pragma unroll(64)
+    for (uint i = 0; i < head_size; i++) {
+        dst[T * C + batch_id * state_size + head_id * head_size * head_size
+            + i * head_size + tid] = state[i];
+    }
+}
+
 kernel void kernel_argmax(
         device   const void * x,
         device      int32_t * dst,
