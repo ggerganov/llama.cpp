@@ -448,7 +448,10 @@ llama_tool_call_handler llama_tool_call_handler_init(
                         {"properties", {
                             {"tool_calls", {
                                 {"type", "array"},
-                                {"items", json {{"anyOf", tool_call_schemas}}}
+                                {"items", tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {
+                                    {"anyOf", tool_call_schemas},
+                                }},
+                                {"minItems", 1},
                             }},
                         }},
                         {"required", json::array({"tool_calls"})},
@@ -456,7 +459,9 @@ llama_tool_call_handler llama_tool_call_handler_init(
                     : json {
                         {"type", "object"},
                         {"properties", {
-                            {"tool_call", json {{"anyOf", tool_call_schemas}}},
+                            {"tool_call", tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {
+                                {"anyOf", tool_call_schemas},
+                            }},
                         }},
                         {"required", json::array({"tool_call"})},
                     };
@@ -473,6 +478,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                                         : json_schema
                                     },
                                 }},
+                                {"required", json::array({"response"})},
                             },
                         })}
                     }
@@ -514,7 +520,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 }
                 auto schema = json {
                     {"type", "array"},
-                    {"items", json {{"anyOf", schemas}}},
+                    {"items", schemas.size() == 1 ? schemas[0] : json {{"anyOf", schemas}}},
                     {"minItems", 1},
                 };
                 if (!parallel) {
@@ -548,7 +554,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
                 }
                 auto schema = json {
                     {"type", "array"},
-                    {"items", json {{"anyOf", schemas}}},
+                    {"items", schemas.size() == 1 ? schemas[0] : json {{"anyOf", schemas}}},
                     {"minItems", 1},
                 };
                 if (!parallel) {
