@@ -10,7 +10,8 @@ layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 layout (constant_id = 1) const uint NUM_ROWS = 1;
 
 shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
-shared block_q6_K_packed16 blkcache[BLOCK_SIZE/16];
+shared block_q6_K_packed16_flat blkcache[BLOCK_SIZE/16];
+shared FLOAT_TYPE scales[NUM_ROWS/4][16];
 
 void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
@@ -18,7 +19,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
 
-    // 16 threads are used to process each block
+    // 16 thread groups are used to process each block
     const uint it_size = gl_WorkGroupSize.x/16;
     const uint tid = gl_LocalInvocationID.x;
     const uint itid = tid%16;  // 0...15
@@ -34,6 +35,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     const uint qh_offset = 32*v_im + l0;
     const uint s_offset  =  8*v_im + is;
     const uint y_offset = 128*v_im + l0;
+    const uint shift = (itid%2 == 1) ? 8 : 0;
 
     FLOAT_TYPE temp[NUM_ROWS];
 
@@ -41,7 +43,8 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
         temp[i] = FLOAT_TYPE(0);
     }
 
-    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += it_size) {
+    [[unroll]] for (uint i0 = 0; i0 < num_blocks_per_row; i0 += it_size) {
+        uint i = i0 + ix; // 16 thread group specific counter
         const uint y_idx = i * QUANT_K + y_offset;
 
         B_TYPE_VEC4 by0  = data_b_v4[(b_offset + y_idx) / 4];
@@ -55,24 +58,29 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             ibi += num_blocks_per_row;
 
             // cache full superblock into shared memory with coalesced reads
-            [[unroll]] for (int l = 0; l < 4; ++l)
-                blkcache[ix].ql[itid + 16*l] = data_a_packed16[ib0 + i].ql[itid + 16*l];
-            [[unroll]] for (int l = 0; l < 2; ++l)
-                blkcache[ix].qh[itid + 16*l] = data_a_packed16[ib0 + i].qh[itid + 16*l];
-            blkcache[ix].scales[itid] = data_a_packed16[ib0 + i].scales[itid];
+            // we assume 64 threads here!
+            [[unroll]] for (int l = 0; (l < 4) && (i0 + l < num_blocks_per_row); ++l) {
+                blkcache[l].blkd[tid] = data_a_packed16_flat[ib0 + i0 + l].blkd[tid];
+                // we read beyond the struct size but it looks like vulkan doesn't care? o_O
+                // it's faster than using a branch to reduce the number of threads though
+                blkcache[l].blkd[64 + tid] = data_a_packed16_flat[ib0 + i0 + l].blkd[64 + tid];
+            }
+            scales[ix][itid] = FLOAT_TYPE(int8_t((blkcache[ix].blkd[96 + itid/2] >> shift) & 0xFF));
             barrier();
+            if (i >= num_blocks_per_row)
+                continue;
 
-            const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
+            const FLOAT_TYPE d = FLOAT_TYPE(blkcache[ix][ib0 + i][104]);
 
-            uint32_t ql0_u32 =  uint32_t(blkcache[ix].ql[ql_offset / 2]) | (uint32_t(blkcache[ix].ql[ql_offset / 2 + 1]) << 16);
-            uint32_t ql32_u32 = uint32_t(blkcache[ix].ql[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].ql[ql_offset / 2 + 17]) << 16);
+            uint32_t ql0_u32 =  uint32_t(blkcache[ix].blkd[ql_offset / 2]) | (uint32_t(blkcache[ix].blkd[ql_offset / 2 + 1]) << 16);
+            uint32_t ql32_u32 = uint32_t(blkcache[ix].blkd[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blkd[ql_offset / 2 + 17]) << 16);
 
             uint32_t ql0_u32_lo4 = ql0_u32 & 0x0F0F0F0F;
             uint32_t ql0_u32_hi4 = (ql0_u32 >> 4) & 0x0F0F0F0F;
             uint32_t ql32_u32_lo4 = ql32_u32 & 0x0F0F0F0F;
             uint32_t ql32_u32_hi4 = (ql32_u32 >> 4) & 0x0F0F0F0F;
 
-            uint32_t qh_u32 = uint32_t(blkcache[ix].qh[qh_offset / 2]) | (uint32_t(blkcache[ix].qh[qh_offset / 2 + 1]) << 16);
+            uint32_t qh_u32 = uint32_t(blkcache[ix].blkd[64 + qh_offset / 2]) | (uint32_t(blkcache[ix].blkd[64 + qh_offset / 2 + 1]) << 16);
             uint32_t qh0_u32 = (qh_u32 & 0x03030303) << 4;
             uint32_t qh2_u32 = (qh_u32 & 0x0C0C0C0C) << 2;
             uint32_t qh4_u32 = (qh_u32 & 0x30303030);
@@ -97,7 +105,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             }
 
             [[unroll]] for (int l = 0; l < 4; ++l)
-                sum[l] *= FLOAT_TYPE(blkcache[ix].scales[s_offset + l*2]);
+                sum[l] *= scales[ix][s_offset + l*2];
             temp[n] += (sum[0] + sum[1] + sum[2] + sum[3]) * d;
         }
     }

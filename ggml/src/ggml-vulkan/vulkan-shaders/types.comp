@@ -273,10 +273,16 @@ struct block_q6_K_packed16
     float16_t d;
 };
 
+struct block_q6_K_packed16_flat
+{
+    uint16_t blkd[105];
+};
+
 #if defined(DATA_A_Q6_K)
 #define QUANT_K QUANT_K_Q6_K
 #define A_TYPE block_q6_K
 #define A_TYPE_PACKED16 block_q6_K_packed16
+#define A_TYPE_PACKED16_FLAT block_q6_K_packed16_flat
 #endif
 
 // IQuants
