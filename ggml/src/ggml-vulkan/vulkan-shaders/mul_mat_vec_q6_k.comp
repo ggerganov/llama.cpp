@@ -10,7 +10,7 @@ layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 layout (constant_id = 1) const uint NUM_ROWS = 1;
 
 shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
-shared block_q6_K_packed16_flat blkcache[BLOCK_SIZE/16];
+shared block_q6_K_packed16 blkcache[BLOCK_SIZE/16];
 
 void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
@@ -22,7 +22,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     const uint it_size = gl_WorkGroupSize.x/16;
     const uint tid = gl_LocalInvocationID.x;
     const uint itid = tid%16;  // 0...15
-    const uint ix  = tid/16;
+    const uint ix = tid/16;
 
     const uint v_im = itid/8;                               // 0 or 1. 0 computes 0..., 1 computes 128...
     const uint v_in = itid - 8*v_im;                        // 0...15 or 0...7
@@ -58,24 +58,24 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             // cache full superblock into shared memory with coalesced reads
             // we assume 64 threads here!
             [[unroll]] for (int l = 0; (l < 4) && (i0 + l < num_blocks_per_row); ++l) {
-                blkcache[l].blkd[tid] = data_a_packed16_flat[ib0 + i0 + l].blkd[tid];
-                // we read beyond the struct size but it looks like vulkan doesn't care? o_O
+                blkcache[l].ql[tid] = data_a_packed16[ib0 + i0 + l].ql[tid];
+                // hacky method of reading beyond ql and the block struct size but it looks like vulkan doesn't care? o_O
                 // this assumes that the struct is packed in continous 16 bit blocks to work
-                blkcache[l].blkd[64 + tid] = data_a_packed16_flat[ib0 + i0 + l].blkd[64 + tid];
+                blkcache[l].ql[64 + tid] = data_a_packed16[ib0 + i0 + l].ql[64 + tid];
             }
             barrier();
             if (i >= num_blocks_per_row)
                 continue;
 
-            uint32_t ql0_u32 =  uint32_t(blkcache[ix].blkd[ql_offset / 2]) | (uint32_t(blkcache[ix].blkd[ql_offset / 2 + 1]) << 16);
-            uint32_t ql32_u32 = uint32_t(blkcache[ix].blkd[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blkd[ql_offset / 2 + 17]) << 16);
+            uint32_t ql0_u32 =  uint32_t(blkcache[ix].ql[ql_offset / 2]) | (uint32_t(blkcache[ix].ql[ql_offset / 2 + 1]) << 16);
+            uint32_t ql32_u32 = uint32_t(blkcache[ix].ql[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].ql[ql_offset / 2 + 17]) << 16);
 
             uint32_t ql0_u32_lo4 = ql0_u32 & 0x0F0F0F0F;
             uint32_t ql0_u32_hi4 = (ql0_u32 >> 4) & 0x0F0F0F0F;
             uint32_t ql32_u32_lo4 = ql32_u32 & 0x0F0F0F0F;
             uint32_t ql32_u32_hi4 = (ql32_u32 >> 4) & 0x0F0F0F0F;
 
-            uint32_t qh_u32 = uint32_t(blkcache[ix].blkd[64 + qh_offset / 2]) | (uint32_t(blkcache[ix].blkd[64 + qh_offset / 2 + 1]) << 16);
+            uint32_t qh_u32 = uint32_t(blkcache[ix].qh[qh_offset / 2]) | (uint32_t(blkcache[ix].qh[qh_offset / 2 + 1]) << 16);
             uint32_t qh0_u32 = (qh_u32 & 0x03030303) << 4;
             uint32_t qh2_u32 = (qh_u32 & 0x0C0C0C0C) << 2;
             uint32_t qh4_u32 = (qh_u32 & 0x30303030);

@@ -7,9 +7,6 @@
 #if defined(A_TYPE_PACKED16)
 layout (binding = 0) readonly buffer A_PACKED16 {A_TYPE_PACKED16 data_a_packed16[];};
 #endif
-#if defined(A_TYPE_PACKED16_FLAT)
-layout (binding = 0) readonly buffer A_PACKED16_FLAT {A_TYPE_PACKED16_FLAT data_a_packed16_flat[];};
-#endif
 #if defined(A_TYPE_PACKED32)
 layout (binding = 0) readonly buffer A_PACKED32 {A_TYPE_PACKED32 data_a_packed32[];};
 #endif
