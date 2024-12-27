@@ -275,7 +275,9 @@ struct block_q6_K_packed16
 
 struct block_q6_K_packed16_flat
 {
-    uint16_t blkd[105];
+    uint16_t blkd[96];
+    int8_t scales[16];
+    float16_t d;
 };
 
 #if defined(DATA_A_Q6_K)

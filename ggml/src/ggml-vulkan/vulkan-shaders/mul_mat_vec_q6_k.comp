@@ -11,7 +11,6 @@ layout (constant_id = 1) const uint NUM_ROWS = 1;
 
 shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
 shared block_q6_K_packed16_flat blkcache[BLOCK_SIZE/16];
-shared FLOAT_TYPE scales[NUM_ROWS/4][16];
 
 void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
@@ -35,7 +34,6 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     const uint qh_offset = 32*v_im + l0;
     const uint s_offset  =  8*v_im + is;
     const uint y_offset = 128*v_im + l0;
-    const uint shift = (itid%2 == 1) ? 8 : 0;
 
     FLOAT_TYPE temp[NUM_ROWS];
 
@@ -62,15 +60,12 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             [[unroll]] for (int l = 0; (l < 4) && (i0 + l < num_blocks_per_row); ++l) {
                 blkcache[l].blkd[tid] = data_a_packed16_flat[ib0 + i0 + l].blkd[tid];
                 // we read beyond the struct size but it looks like vulkan doesn't care? o_O
-                // it's faster than using a branch to reduce the number of threads though
+                // this assumes that the struct is packed in continous 16 bit blocks to work
                 blkcache[l].blkd[64 + tid] = data_a_packed16_flat[ib0 + i0 + l].blkd[64 + tid];
             }
-            scales[ix][itid] = FLOAT_TYPE(int8_t((blkcache[ix].blkd[96 + itid/2] >> shift) & 0xFF));
             barrier();
             if (i >= num_blocks_per_row)
                 continue;
-
-            const FLOAT_TYPE d = FLOAT_TYPE(blkcache[ix][ib0 + i][104]);
 
             uint32_t ql0_u32 =  uint32_t(blkcache[ix].blkd[ql_offset / 2]) | (uint32_t(blkcache[ix].blkd[ql_offset / 2 + 1]) << 16);
             uint32_t ql32_u32 = uint32_t(blkcache[ix].blkd[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blkd[ql_offset / 2 + 17]) << 16);
@@ -105,8 +100,8 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             }
 
             [[unroll]] for (int l = 0; l < 4; ++l)
-                sum[l] *= scales[ix][s_offset + l*2];
-            temp[n] += (sum[0] + sum[1] + sum[2] + sum[3]) * d;
+                sum[l] *= FLOAT_TYPE(blkcache[ix].scales[s_offset + l*2]);
+            temp[n] += (sum[0] + sum[1] + sum[2] + sum[3]) * FLOAT_TYPE(blkcache[ix].d);
         }
     }
 
