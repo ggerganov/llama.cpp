@@ -2588,6 +2588,13 @@ struct server_context {
         // next, batch any pending prompts without exceeding n_batch
         if (params_base.cont_batching || batch.n_tokens == 0) {
             for (auto & slot : slots) {
+                // check if we can batch this slot with the previous one
+                if (!slot_batched) {
+                    slot_batched = &slot;
+                } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
+                    continue;
+                }
+
                 // this slot still has a prompt to be processed
                 if (slot.state == SLOT_STATE_PROCESSING_PROMPT || slot.state == SLOT_STATE_STARTED) {
                     auto & prompt_tokens = slot.prompt_tokens;
@@ -2746,13 +2753,6 @@ struct server_context {
                         if (batch.n_tokens + slot.n_prompt_tokens > n_batch) {
                             continue;
                         }
-                    }
-
-                    // check if we can batch this slot with the previous one
-                    if (!slot_batched) {
-                        slot_batched = &slot;
-                    } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
-                        continue;
                     }
 
                     // keep only the common part

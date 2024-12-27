@@ -68,10 +68,9 @@ def test_lora_per_request():
             "temperature": 0.0,
             "cache_prompt": False, # TODO: remove this once test_cache_vs_nocache_prompt is fixed
         })
-    ) for lora, re_test in lora_config]
+    ) for lora, _ in lora_config]
     results = parallel_function_calls(tasks)
 
-    print(results)
     assert all([res.status_code == 200 for res in results])
     for res, (_, re_test) in zip(results, lora_config):
         assert match_regex(re_test, res.body["content"])
