@@ -17,7 +17,6 @@ import os
 from typing import Generator
 from pydantic import BaseModel
 import subprocess
-import sys
 
 
 class HuggingFaceModel(BaseModel):
@@ -41,7 +40,7 @@ def collect_hf_model_test_parameters(test_file) -> Generator[HuggingFaceModel, N
             for dec in node.decorator_list:
                 if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.func.attr == 'parametrize':
                     param_names = ast.literal_eval(dec.args[0]).split(",")
-                    if not "hf_repo" in param_names or not "hf_file" in param_names:
+                    if "hf_repo" not in param_names or "hf_file" not in param_names:
                         continue
 
                     raw_param_values = dec.args[1]
@@ -78,8 +77,7 @@ if __name__ == '__main__':
         'LLAMA_SERVER_BIN_PATH',
         os.path.join(
             os.path.dirname(__file__),
-            '../build/bin/Release/llama-cli.exe' if os.name == 'nt' \
-                else '../build/bin/llama-cli'))
+            '../build/bin/Release/llama-cli.exe' if os.name == 'nt' else '../build/bin/llama-cli'))
 
     for m in models:
         if '<' in m.hf_repo or '<' in m.hf_file:

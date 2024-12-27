@@ -1900,8 +1900,8 @@ struct server_context {
         auto match = slot.antiprompts.findSingleTokenMatch(result.tok);
 
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = result.text_to_send;
-        // const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special || (match.pos != std::string::npos && match.is_grammar_trigger));
+        // const std::string token_str = result.text_to_send;
+        const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special || (match.pos != std::string::npos && match.is_grammar_trigger));
         slot.sampled = result.tok;
 
         if (match.pos != std::string::npos && !match.is_partial) {

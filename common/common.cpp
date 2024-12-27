@@ -1778,11 +1778,9 @@ minja::chat_template llama_chat_template_from_model(
     if (chat_template.empty()) {
         if (prefer_tool_use) {
             chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template.tool_use");
-            fprintf(stderr, "# tokenizer.chat_template.tool_use: %s\n", chat_template.c_str());
         }
         if (chat_template.empty()) {
             chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template");
-            fprintf(stderr, "# tokenizer.chat_template: %s\n", chat_template.c_str());
         }
     }
     auto bos_token = _common_token_to_piece(model, llama_token_bos(model), true);
