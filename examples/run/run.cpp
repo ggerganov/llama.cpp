@@ -1,5 +1,6 @@
 #if defined(_WIN32)
 #    include <windows.h>
+#    include <io.h>
 #else
 #    include <sys/file.h>
 #    include <sys/ioctl.h>
@@ -253,7 +254,7 @@ class File {
                 return 1;
             }
 
-            OVERLAPPED overlapped = { 0 };
+            OVERLAPPED overlapped = {};
             if (!LockFileEx(hFile, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD,
                             &overlapped)) {
                 fd = -1;
@@ -277,7 +278,7 @@ class File {
         if (fd >= 0) {
 #    ifdef _WIN32
             if (hFile != INVALID_HANDLE_VALUE) {
-                OVERLAPPED overlapped = { 0 };
+                OVERLAPPED overlapped = {};
                 UnlockFileEx(hFile, 0, MAXDWORD, MAXDWORD, &overlapped);
             }
 #    else
@@ -293,7 +294,7 @@ class File {
   private:
     int fd = -1;
 #    ifdef _WIN32
-    HANDLE hFile;
+    HANDLE hFile = nullptr;
 #    endif
 };
 
@@ -464,7 +465,7 @@ class HttpClient {
         return (now_downloaded_plus_file_size * 100) / total_to_download;
     }
 
-    static std::string generate_progress_prefix(curl_off_t percentage) { return fmt("%3ld%% |", percentage); }
+    static std::string generate_progress_prefix(curl_off_t percentage) { return fmt("%3ld%% |", static_cast<long int>(percentage)); }
 
     static double calculate_speed(curl_off_t now_downloaded, const std::chrono::steady_clock::time_point & start_time) {
         const auto                          now             = std::chrono::steady_clock::now();
