@@ -73,7 +73,8 @@ void ggml_cuda_op_gated_linear_attn(ggml_backend_cuda_context & ctx, ggml_tensor
     const int64_t C = dst->ne[0];
     const int64_t H = dst->src[0]->ne[1];
 
-    const float scale = ((const float*)(dst->op_params))[0];
+    float scale;
+    memcpy(&scale, (float*)dst->op_params, sizeof(float));
 
     float * dst_d = (float *)dst->data;
 
