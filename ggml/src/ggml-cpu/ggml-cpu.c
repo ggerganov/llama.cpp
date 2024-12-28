@@ -12066,7 +12066,7 @@ static void ggml_compute_forward_gla_f32(
         #define GGML_F32X_STORE GGML_F32x4_STORE
         #define GGML_F32X_MUL GGML_F32x4_MUL
         #define GGML_F32X_FMA GGML_F32x4_FMA
-        #define WKV_VECTOR_SIZE 4
+        #define GLA_VECTOR_SIZE 4
     #endif
 
     #ifdef GLA_VECTOR_SIZE
@@ -12121,7 +12121,7 @@ static void ggml_compute_forward_gla_f32(
                     }
 
                     // Handle remaining elements, this will not be used.
-                    for (int64_t j = vec_count * WKV_VECTOR_SIZE; j < head_size; j++) {
+                    for (int64_t j = vec_count * GLA_VECTOR_SIZE; j < head_size; j++) {
                         size_t t_h_j_offset = t_h_offset + j;
                         size_t h_2d_i_j_offset = h_2d_i_offset + j;
                         float v_val = v[t_h_j_offset];
