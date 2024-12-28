@@ -96,7 +96,7 @@ NOTE: The dimensions in `ggml` are typically in the reverse order of the `pytorc
 
 This is the funniest part, you have to provide the inference graph implementation of the new model architecture in `llama_build_graph`.
 
-Have a look at existing implementation like `build_llama`, `build_dbrx` or `build_bert`.
+Have a look at existing implementations like `build_llama`, `build_dbrx` or `build_bert`.
 
 Some `ggml` backends do not support all operations. Backend implementations can be added in a separate PR.
 
