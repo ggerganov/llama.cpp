@@ -3258,6 +3258,7 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_head_count(0)
 
     lerp_weights: dict[int, dict[str, Tensor]] = {}
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)
 
@@ -3283,7 +3284,7 @@ class Rwkv6Model(Model):
 
         # concat time_mix_lerp weights to reduce some cpu overhead
         # also reduces the number of tensors in the model
-        if bid is not None and "time_mix_lerp" in new_name and not "time_mix_lerp_x" in new_name:
+        if bid is not None and "time_mix_lerp" in new_name and "time_mix_lerp_x" not in new_name:
             try:
                 self.lerp_weights[bid][new_name] = data_torch
             except KeyError:
