@@ -52,12 +52,11 @@ def test_lora_per_request():
     lora_config = [
         ( [{"id": 0, "scale": 0.0}], "(bright|day|many|happy)+" ),
         ( [{"id": 0, "scale": 0.0}], "(bright|day|many|happy)+" ),
-        ( [{"id": 0, "scale": 0.0}], "(bright|day|many|happy)+" ),
-        ( [{"id": 0, "scale": 1.0}], "(eye|love|glass|sun)+" ),
+        ( [{"id": 0, "scale": 0.3}], "(special|thing|gifted)+" ),
+        ( [{"id": 0, "scale": 0.7}], "(far|from|home|away)+" ),
         ( [{"id": 0, "scale": 1.0}], "(eye|love|glass|sun)+" ),
         ( [{"id": 0, "scale": 1.0}], "(eye|love|glass|sun)+" ),
     ]
-    # FIXME: tesing with scale between 0.0 and 1.0 (i.e. 0.2, 0.5, 0.7) produces unreliable results
 
     tasks = [(
         server.make_request,

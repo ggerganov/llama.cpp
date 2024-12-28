@@ -2558,9 +2558,19 @@ struct server_context {
         // start populating the batch for this iteration
         common_batch_clear(batch);
 
+        // track if given slot can be batched with slots already in the batch
+        server_slot * slot_batched = nullptr;
+
         // frist, add sampled tokens from any ongoing sequences
         for (auto & slot : slots) {
             if (slot.state != SLOT_STATE_GENERATING) {
+                continue;
+            }
+
+            // check if we can batch this slot with the previous one
+            if (!slot_batched) {
+                slot_batched = &slot;
+            } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
                 continue;
             }
 
@@ -2582,17 +2592,16 @@ struct server_context {
         int32_t n_batch  = llama_n_batch(ctx);
         int32_t n_ubatch = llama_n_ubatch(ctx);
 
-        // track if given slot can be batched with slots already in the batch
-        server_slot * slot_batched = nullptr;
-
         // next, batch any pending prompts without exceeding n_batch
         if (params_base.cont_batching || batch.n_tokens == 0) {
             for (auto & slot : slots) {
                 // check if we can batch this slot with the previous one
-                if (!slot_batched) {
-                    slot_batched = &slot;
-                } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
-                    continue;
+                if (slot.is_processing()) {
+                    if (!slot_batched) {
+                        slot_batched = &slot;
+                    } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
+                        continue;
+                    }
                 }
 
                 // this slot still has a prompt to be processed
