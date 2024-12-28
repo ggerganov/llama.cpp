@@ -73,6 +73,7 @@ enum llm_type {
     MODEL_8x7B,
     MODEL_8x22B,
     MODEL_16x12B,
+    MODEL_16x3_8B,
     MODEL_10B_128x3_66B,
     MODEL_57B_A14B,
     MODEL_27B,
