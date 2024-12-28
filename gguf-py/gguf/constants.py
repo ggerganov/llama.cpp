@@ -331,6 +331,7 @@ class MODEL_TENSOR(IntEnum):
     TIME_MIX_LERP_V      = auto()
     TIME_MIX_LERP_R      = auto()
     TIME_MIX_LERP_G      = auto()
+    TIME_MIX_LERP_FUSED  = auto()
     TIME_MIX_LERP_W      = auto()
     TIME_MIX_FIRST       = auto()
     TIME_MIX_DECAY       = auto()
@@ -514,6 +515,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.TIME_MIX_LERP_V:           "blk.{bid}.time_mix_lerp_v",
     MODEL_TENSOR.TIME_MIX_LERP_R:           "blk.{bid}.time_mix_lerp_r",
     MODEL_TENSOR.TIME_MIX_LERP_G:           "blk.{bid}.time_mix_lerp_g",
+    MODEL_TENSOR.TIME_MIX_LERP_FUSED:       "blk.{bid}.time_mix_lerp_fused",
     MODEL_TENSOR.TIME_MIX_LERP_W:           "blk.{bid}.time_mix_lerp_w",
     MODEL_TENSOR.TIME_MIX_FIRST:            "blk.{bid}.time_mix_first",
     MODEL_TENSOR.TIME_MIX_DECAY:            "blk.{bid}.time_mix_decay",
@@ -1080,6 +1082,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.TIME_MIX_LERP_R,
         MODEL_TENSOR.TIME_MIX_LERP_G,
         MODEL_TENSOR.TIME_MIX_LERP_W,
+        MODEL_TENSOR.TIME_MIX_LERP_FUSED,
         MODEL_TENSOR.TIME_MIX_FIRST,
         MODEL_TENSOR.TIME_MIX_DECAY,
         MODEL_TENSOR.TIME_MIX_DECAY_W1,
@@ -1109,6 +1112,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.TIME_MIX_LERP_R,
         MODEL_TENSOR.TIME_MIX_LERP_G,
         MODEL_TENSOR.TIME_MIX_LERP_W,
+        MODEL_TENSOR.TIME_MIX_LERP_FUSED,
         MODEL_TENSOR.TIME_MIX_FIRST,
         MODEL_TENSOR.TIME_MIX_DECAY,
         MODEL_TENSOR.TIME_MIX_DECAY_W1,

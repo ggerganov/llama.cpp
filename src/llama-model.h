@@ -238,6 +238,7 @@ struct llama_layer {
     struct ggml_tensor * time_mix_lerp_v     = nullptr;
     struct ggml_tensor * time_mix_lerp_r     = nullptr;
     struct ggml_tensor * time_mix_lerp_g     = nullptr;
+    struct ggml_tensor * time_mix_lerp_fused = nullptr;
 
     struct ggml_tensor * time_mix_first        = nullptr;
     struct ggml_tensor * time_mix_decay        = nullptr;

@@ -2164,6 +2164,7 @@ bool llama_model_is_recurrent(const struct llama_model * model) {
     switch (model->arch) {
         case LLM_ARCH_MAMBA:  return true;
         case LLM_ARCH_RWKV6:  return true;
+        case LLM_ARCH_RWKV6QWEN2: return true;
         default:              return false;
     }
 }
