@@ -1720,6 +1720,7 @@ enum llm_chat_template {
     LLM_CHAT_TEMPLATE_RWKV_WORLD,
     LLM_CHAT_TEMPLATE_GRANITE,
     LLM_CHAT_TEMPLATE_GIGACHAT,
+    LLM_CHAT_TEMPLATE_MEGREZ,
     LLM_CHAT_TEMPLATE_UNKNOWN,
 };
 
@@ -1753,6 +1754,7 @@ static const std::map<std::string, llm_chat_template> LLM_CHAT_TEMPLATES = {
     { "rwkv-world",        LLM_CHAT_TEMPLATE_RWKV_WORLD        },
     { "granite",           LLM_CHAT_TEMPLATE_GRANITE           },
     { "gigachat",          LLM_CHAT_TEMPLATE_GIGACHAT          },
+    { "megrez",            LLM_CHAT_TEMPLATE_MEGREZ            },
 };
 
 static llm_arch llm_arch_from_string(const std::string & name) {
@@ -6703,6 +6705,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "minerva-7b") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MINERVA;
+            } else if (
+                tokenizer_pre == "megrez") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_QWEN2;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -22931,6 +22936,8 @@ static llm_chat_template llama_chat_detect_template(const std::string & tmpl) {
         return LLM_CHAT_TEMPLATE_GRANITE;
     } else if (tmpl_contains("message['role'] + additional_special_tokens[0] + message['content'] + additional_special_tokens[1]")) {
         return LLM_CHAT_TEMPLATE_GIGACHAT;
+    } else if (tmpl_contains("<|role_start|>")) {
+        return LLM_CHAT_TEMPLATE_MEGREZ;
     }
     return LLM_CHAT_TEMPLATE_UNKNOWN;
 }
@@ -23288,6 +23295,16 @@ static int32_t llama_chat_apply_template_internal(
         // Add generation prompt if needed
         if (add_ass) {
             ss << "assistant<|role_sep|>";
+        }
+    }  else if (tmpl == LLM_CHAT_TEMPLATE_MEGREZ) {
+        // Megrez template
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|role_start|>" << role << "<|role_end|>" << message->content << "<|turn_end|>";
+        }
+
+        if (add_ass) {
+            ss << "<|role_start|>assistant<|role_end|>";
         }
     } else {
         // template not supported

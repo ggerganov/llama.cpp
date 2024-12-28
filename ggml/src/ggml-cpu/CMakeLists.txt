@@ -135,14 +135,20 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             endif()
 
             # show enabled features
+            if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+                set(FEAT_INPUT_FILE "NUL")
+            else()
+                set(FEAT_INPUT_FILE "/dev/null")
+            endif()
+
             execute_process(
                 COMMAND ${CMAKE_C_COMPILER} ${ARCH_FLAGS} -dM -E -
-                INPUT_FILE "/dev/null"
+                INPUT_FILE ${FEAT_INPUT_FILE}
                 OUTPUT_VARIABLE ARM_FEATURE
                 RESULT_VARIABLE ARM_FEATURE_RESULT
             )
             if (ARM_FEATURE_RESULT)
-                message(FATAL_ERROR "Failed to get ARM features")
+                message(WARNING "Failed to get ARM features")
             else()
                 foreach(feature DOTPROD SVE MATMUL_INT8 FMA FP16_VECTOR_ARITHMETIC)
                     string(FIND "${ARM_FEATURE}" "__ARM_FEATURE_${feature} 1" feature_pos)
@@ -317,6 +323,11 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
     target_compile_definitions(${GGML_CPU_NAME} PRIVATE ${ARCH_DEFINITIONS})
 
     if (GGML_BACKEND_DL)
+        if (GGML_NATIVE)
+            # the feature check relies on ARCH_DEFINITIONS, but it is not set with GGML_NATIVE
+            message(FATAL_ERROR "GGML_NATIVE is not compatible with GGML_BACKEND_DL, consider using GGML_CPU_ALL_VARIANTS")
+        endif()
+
         # The feature detection code is compiled as a separate target so that
         # it can be built without the architecture flags
         # Since multiple variants of the CPU backend may be included in the same

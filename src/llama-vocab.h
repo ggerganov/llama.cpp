@@ -45,7 +45,7 @@ struct llama_vocab {
     id special_unk_id  = 0;
     id special_sep_id  = LLAMA_TOKEN_NULL;
     id special_pad_id  = LLAMA_TOKEN_NULL;
-    id special_cls_id  = LLAMA_TOKEN_NULL;
+    id special_cls_id  = LLAMA_TOKEN_NULL; // TODO: revisit if this is really needed https://github.com/ggerganov/llama.cpp/pull/10930
     id special_mask_id = LLAMA_TOKEN_NULL;
 
     id linefeed_id = 13;
