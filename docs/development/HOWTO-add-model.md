@@ -98,7 +98,7 @@ This is the funniest part, you have to provide the inference graph implementatio
 
 Have a look at existing implementation like `build_llama`, `build_dbrx` or `build_bert`.
 
-Some `ggml` backends do not support all operations, backend implementation can be added in a separate PR.
+Some `ggml` backends do not support all operations. Backend implementations can be added in a separate PR.
 
 Note: to debug the inference graph: you can use [llama-eval-callback](/examples/eval-callback/).
 
