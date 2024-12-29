@@ -77,7 +77,7 @@
 #endif
 
 // bump if necessary
-#define LLAMA_MAX_LAYERS  512
+#define LLAMA_MAX_LAYERS  1024
 #define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
 //
