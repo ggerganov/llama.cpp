@@ -1856,6 +1856,8 @@ struct server_context {
                 result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
                 slot.n_sent_text += result.text_to_send.size();
                 // add the token to slot queue and cache
+            } else {
+                result.text_to_send = "";
             }
 
             slot.add_token(result);
