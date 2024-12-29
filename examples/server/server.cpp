@@ -92,6 +92,7 @@ struct slot_params {
     int64_t t_max_predict_ms = -1; // if positive, limit the generation phase to this time limit
 
     std::vector<std::string> antiprompt;
+    std::vector<std::string> response_fields;
     bool timings_per_token = false;
     bool post_sampling_probs = false;
     bool ignore_eos = false;
@@ -209,6 +210,7 @@ struct server_task {
         params.n_discard        = json_value(data, "n_discard",          defaults.n_discard);
       //params.t_max_prompt_ms  = json_value(data, "t_max_prompt_ms",    defaults.t_max_prompt_ms); // TODO: implement
         params.t_max_predict_ms = json_value(data, "t_max_predict_ms",   defaults.t_max_predict_ms);
+        params.response_fields  = json_value(data, "response_fields",   std::vector<std::string>());
 
         params.sampling.top_k              = json_value(data, "top_k",              defaults.sampling.top_k);
         params.sampling.top_p              = json_value(data, "top_p",              defaults.sampling.top_p);
@@ -522,6 +524,7 @@ struct server_task_result_cmpl_final : server_task_result {
 
     bool post_sampling_probs;
     std::vector<completion_token_output> probs_output;
+    std::vector<std::string>  response_fields;
 
     slot_params generation_params;
 
@@ -568,7 +571,7 @@ struct server_task_result_cmpl_final : server_task_result {
         if (!stream && !probs_output.empty()) {
             res["completion_probabilities"] = completion_token_output::probs_vector_to_json(probs_output, post_sampling_probs);
         }
-        return res;
+        return response_fields.empty() ? res : json_get_nested_values(response_fields, res);
     }
 
     json to_json_oaicompat_chat() {
@@ -595,10 +598,11 @@ struct server_task_result_cmpl_final : server_task_result {
         std::time_t t = std::time(0);
 
         json res = json {
-            {"choices", json::array({choice})},
-            {"created", t},
-            {"model", oaicompat_model},
-            {"object", "chat.completion"},
+            {"choices",            json::array({choice})},
+            {"created",            t},
+            {"model",              oaicompat_model},
+            {"system_fingerprint", build_info},
+            {"object",             "chat.completion"},
             {"usage", json {
                 {"completion_tokens", n_decoded},
                 {"prompt_tokens",     n_prompt_tokens},
@@ -632,11 +636,12 @@ struct server_task_result_cmpl_final : server_task_result {
         };
 
         json ret = json {
-            {"choices", json::array({choice})},
-            {"created", t},
-            {"id",      oaicompat_cmpl_id},
-            {"model",   oaicompat_model},
-            {"object",  "chat.completion.chunk"},
+            {"choices",            json::array({choice})},
+            {"created",            t},
+            {"id",                 oaicompat_cmpl_id},
+            {"model",              oaicompat_model},
+            {"system_fingerprint", build_info},
+            {"object",             "chat.completion.chunk"},
             {"usage", json {
                 {"completion_tokens", n_decoded},
                 {"prompt_tokens",     n_prompt_tokens},
@@ -761,11 +766,12 @@ struct server_task_result_cmpl_partial : server_task_result {
         }
 
         json ret = json {
-            {"choices", choices},
-            {"created", t},
-            {"id",      oaicompat_cmpl_id},
-            {"model",   oaicompat_model},
-            {"object",  "chat.completion.chunk"}
+            {"choices",            choices},
+            {"created",            t},
+            {"id",                 oaicompat_cmpl_id},
+            {"model",              oaicompat_model},
+            {"system_fingerprint", build_info},
+            {"object",             "chat.completion.chunk"}
         };
 
         if (timings.prompt_n >= 0) {
@@ -1850,6 +1856,8 @@ struct server_context {
                 result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
                 slot.n_sent_text += result.text_to_send.size();
                 // add the token to slot queue and cache
+            } else {
+                result.text_to_send = "";
             }
 
             slot.add_token(result);
@@ -2063,6 +2071,7 @@ struct server_context {
         res->tokens          = slot.generated_tokens;
         res->timings         = slot.get_timings();
         res->prompt          = common_detokenize(ctx, slot.prompt_tokens, true);
+        res->response_fields = slot.params.response_fields;
 
         res->truncated           = slot.truncated;
         res->n_decoded           = slot.n_decoded;
@@ -3476,6 +3485,7 @@ int main(int argc, char ** argv) {
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
             { "chat_template",               llama_get_chat_template(ctx_server.model) },
+            { "build_info",                  build_info },
         };
 
         res_ok(res, data);
@@ -3697,7 +3707,7 @@ int main(int argc, char ** argv) {
             {"object", "list"},
             {"data", {
                 {
-                    {"id",       params.model_alias},
+                    {"id",       params.model_alias.empty() ? params.model : params.model_alias},
                     {"object",   "model"},
                     {"created",  std::time(0)},
                     {"owned_by", "llamacpp"},
@@ -3782,6 +3792,17 @@ int main(int argc, char ** argv) {
             return;
         }
 
+        bool use_base64 = false;
+        if (body.count("encoding_format") != 0) {
+            const std::string& format = body.at("encoding_format");
+            if (format == "base64") {
+                use_base64 = true;
+            } else if (format != "float") {
+                res_error(res, format_error_response("The format to return the embeddings in. Can be either float or base64", ERROR_TYPE_INVALID_REQUEST));
+                return;
+            }
+        }
+
         std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
         for (const auto & tokens : tokenized_prompts) {
             // this check is necessary for models that do not add BOS token to the input
@@ -3833,7 +3854,7 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses) : json(responses);
+        json root = oaicompat ? format_embeddings_response_oaicompat(body, responses, use_base64) : json(responses);
         res_ok(res, root);
     };
 

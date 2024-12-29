@@ -450,6 +450,8 @@ These words will not be included in the completion, so make sure to add them to 
 
 `post_sampling_probs`: Returns the probabilities of top `n_probs` tokens after applying sampling chain.
 
+`response_fields`: A list of response fields, for example: `"response_fields": ["content", "generation_settings/n_predict"]`. If the specified field is missing, it will simply be omitted from the response without triggering an error. Note that fields with a slash will be unnested; for example, `generation_settings/n_predict` will move the field `n_predict` from the `generation_settings` object to the root of the response and give it a new name.
+
 **Response format**
 
 - Note: In streaming mode (`stream`), only `content`, `tokens` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
@@ -724,7 +726,8 @@ This endpoint is public (no API key check). By default, it is read-only. To make
   },
   "total_slots": 1,
   "model_path": "../models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-  "chat_template": "..."
+  "chat_template": "...",
+  "build_info": "b(build number)-(build commit hash)"
 }
 ```
 

@@ -3,6 +3,7 @@
 #include "common.h"
 #include "log.h"
 #include "llama.h"
+#include "common/base64.hpp"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -56,6 +57,8 @@ static T json_value(const json & body, const std::string & key, const T & defaul
     }
 }
 
+const static std::string build_info("b" + std::to_string(LLAMA_BUILD_NUMBER) + "-" + LLAMA_COMMIT);
+
 //
 // tokenizer and input processing utils
 //
@@ -86,6 +89,28 @@ static bool json_is_array_of_mixed_numbers_strings(const json & data) {
         }
     }
     return false;
+}
+
+// get value by path(key1 / key2)
+static json json_get_nested_values(const std::vector<std::string> & paths, const json & js) {
+    json result = json::object();
+
+    for (const std::string & path : paths) {
+        json current = js;
+        const auto keys = string_split<std::string>(path, /*separator*/ '/');
+        bool valid_path = true;
+        for (const std::string & k : keys) {
+            if (valid_path && current.is_object() && current.contains(k)) {
+                current = current[k];
+            } else {
+                valid_path = false;
+            }
+        }
+        if (valid_path) {
+            result[path] = current;
+        }
+    }
+    return result;
 }
 
 /**
@@ -589,16 +614,31 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
+static json format_embeddings_response_oaicompat(const json & request, const json & embeddings, bool use_base64 = false) {
     json data = json::array();
     int32_t n_tokens = 0;
     int i = 0;
     for (const auto & elem : embeddings) {
-        data.push_back(json{
-            {"embedding", json_value(elem, "embedding", json::array())},
-            {"index",     i++},
-            {"object",    "embedding"}
-        });
+        json embedding_obj;
+
+        if (use_base64) {
+            const auto& vec = json_value(elem, "embedding", json::array()).get<std::vector<float>>();
+            const char* data_ptr = reinterpret_cast<const char*>(vec.data());
+            size_t data_size = vec.size() * sizeof(float);
+            embedding_obj = {
+                {"embedding", base64::encode(data_ptr, data_size)},
+                {"index", i++},
+                {"object", "embedding"},
+                {"encoding_format", "base64"}
+            };
+        } else {
+            embedding_obj = {
+                {"embedding", json_value(elem, "embedding", json::array())},
+                {"index", i++},
+                {"object", "embedding"}
+            };
+        }
+        data.push_back(embedding_obj);
 
         n_tokens += json_value(elem, "tokens_evaluated", 0);
     }
