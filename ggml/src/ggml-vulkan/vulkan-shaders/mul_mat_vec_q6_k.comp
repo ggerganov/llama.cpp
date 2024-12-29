@@ -11,7 +11,7 @@ layout (constant_id = 1) const uint NUM_ROWS = 1;
 
 shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
 shared FLOAT_TYPE sccache[BLOCK_SIZE/16][16];
-shared block_q6_K_packed16 blkcache[BLOCK_SIZE/16 + 1];
+shared block_q6_K_packed16 blkcache[BLOCK_SIZE/16];
 
 void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
@@ -33,8 +33,9 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     const uint ql_offset = 64*v_im + l0;
     const uint qh_offset = 32*v_im + l0;
-    const uint s_offset  =  8*v_im + is;
+    const uint s_offset = 8*v_im + is;
     const uint y_offset = 128*v_im + l0;
+    const uint bcs_offset = (itid%2 == 1) ? 8 : 0;
 
     FLOAT_TYPE temp[NUM_ROWS];
 
@@ -58,26 +59,39 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
             // cache full superblock into shared memory with coalesced reads
             // we assume 64 threads here!
-            //
-            // hacky method of reading beyond ql and the block struct size but it looks like vulkan doesn't care? o_O
-            // this assumes that the struct is packed in continous 16 bit blocks to work
-            [[unroll]] for (int l = 0; l < 7; ++l) {
-                blkcache[0].ql[tid + 64*l] = data_a_packed16[ib0 + i0].ql[tid + 64*l];
+            const int blim = min(int(num_blocks_per_row) - int(i0), 4);
+            // this is required as this loop is super sensitive to unrolling with hardcoded 4
+            if (blim == 4) {
+                if (tid < 52) {
+                    [[unroll]] for (int l = 0; l < 4; ++l) {
+                        blkcache[l].blk[tid] = data_a_packed16[ib0 + i0 + l].blk[tid];
+                        blkcache[l].blk[tid + 52] = data_a_packed16[ib0 + i0 + l].blk[tid + 52];
+                    }
+                }
+            } else {
+                if (tid < 52) {
+                    [[unroll]] for (int l = 0; l < blim; ++l) {
+                        blkcache[l].blk[tid] = data_a_packed16[ib0 + i0 + l].blk[tid];
+                        blkcache[l].blk[tid + 52] = data_a_packed16[ib0 + i0 + l].blk[tid + 52];
+                    }
+                }
             }
-            sccache[ix][itid] = FLOAT_TYPE(blkcache[ix].scales[itid]);
+            sccache[ix][itid] = FLOAT_TYPE(int8_t(bitfieldExtract(blkcache[ix].blk[96 + itid/2], int(bcs_offset), 8)));
             barrier();
             if (i >= num_blocks_per_row)
                 continue;
 
-            uint32_t ql0_u32 =  uint32_t(blkcache[ix].ql[ql_offset / 2]) | (uint32_t(blkcache[ix].ql[ql_offset / 2 + 1]) << 16);
-            uint32_t ql32_u32 = uint32_t(blkcache[ix].ql[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].ql[ql_offset / 2 + 17]) << 16);
+            const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
+
+            uint32_t ql0_u32 =  uint32_t(blkcache[ix].blk[ql_offset / 2]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 1]) << 16);
+            uint32_t ql32_u32 = uint32_t(blkcache[ix].blk[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 17]) << 16);
 
             uint32_t ql0_u32_lo4 = ql0_u32 & 0x0F0F0F0F;
             uint32_t ql0_u32_hi4 = (ql0_u32 >> 4) & 0x0F0F0F0F;
             uint32_t ql32_u32_lo4 = ql32_u32 & 0x0F0F0F0F;
             uint32_t ql32_u32_hi4 = (ql32_u32 >> 4) & 0x0F0F0F0F;
 
-            uint32_t qh_u32 = uint32_t(blkcache[ix].qh[qh_offset / 2]) | (uint32_t(blkcache[ix].qh[qh_offset / 2 + 1]) << 16);
+            uint32_t qh_u32 = uint32_t(blkcache[ix].blk[64 + qh_offset / 2]) | (uint32_t(blkcache[ix].blk[64 + qh_offset / 2 + 1]) << 16);
             uint32_t qh0_u32 = (qh_u32 & 0x03030303) << 4;
             uint32_t qh2_u32 = (qh_u32 & 0x0C0C0C0C) << 2;
             uint32_t qh4_u32 = (qh_u32 & 0x30303030);
@@ -94,16 +108,16 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             uvec4 q3 = uvec4(unpack8(q3_u32));
 
             FLOAT_TYPE sum[4] = {0, 0, 0, 0};
-            [[unroll]] for (int l = 0; l < 4; ++l) {
+            [[unroll]] for (uint l = 0; l < 4; ++l) {
                 sum[0] = fma(FLOAT_TYPE(by0[l]), FLOAT_TYPE(int8_t(q0[l]) - 32), sum[0]);
                 sum[1] = fma(FLOAT_TYPE(by32[l]), FLOAT_TYPE(int8_t(q1[l]) - 32), sum[1]);
                 sum[2] = fma(FLOAT_TYPE(by64[l]), FLOAT_TYPE(int8_t(q2[l]) - 32), sum[2]);
                 sum[3] = fma(FLOAT_TYPE(by96[l]), FLOAT_TYPE(int8_t(q3[l]) - 32), sum[3]);
             }
 
-            [[unroll]] for (int l = 0; l < 4; ++l)
+            [[unroll]] for (uint l = 0; l < 4; ++l)
                 sum[l] *= sccache[ix][s_offset + l*2];
-            temp[n] += (sum[0] + sum[1] + sum[2] + sum[3]) * FLOAT_TYPE(blkcache[ix].d);
+            temp[n] += (sum[0] + sum[1] + sum[2] + sum[3]) * d;
         }
     }
 
