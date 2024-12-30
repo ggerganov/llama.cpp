@@ -23,7 +23,6 @@
 #include <mutex>
 #include <future>
 #include <thread>
-#include <atomic>
 
 #include "ggml-impl.h"
 #include "ggml-backend-impl.h"
@@ -61,8 +60,9 @@
 #define VK_LOG_DEBUG(msg) ((void) 0)
 #endif // GGML_VULKAN_DEBUG
 
-static std::atomic_uint64_t vk_instance_contexts = 0;
-static std::atomic_uint64_t vk_instance_buffers = 0;
+static std::mutex vk_instance_counter_mutex;
+static uint64_t vk_instance_contexts = 0;
+static uint64_t vk_instance_buffers = 0;
 
 struct ggml_backend_vk_context;
 
@@ -7358,6 +7358,7 @@ static void ggml_backend_vk_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_vk_destroy_buffer(ctx->dev_buffer);
     delete ctx;
 
+    std::lock_guard guard(vk_instance_counter_mutex);
     vk_instance_buffers--;
 
     if (vk_instance_contexts == 0 && vk_instance_buffers == 0) {
@@ -7450,7 +7451,10 @@ static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(ggml_backe
         return nullptr;
     }
 
-    vk_instance_buffers++;
+    {
+        std::lock_guard guard(vk_instance_counter_mutex);
+        vk_instance_buffers++;
+    }
 
     ggml_backend_vk_buffer_context * bufctx = new ggml_backend_vk_buffer_context(device, std::move(dev_buffer), ctx->name);
 
@@ -7572,6 +7576,7 @@ static void ggml_backend_vk_free(ggml_backend_t backend) {
     delete ctx;
     delete backend;
 
+    std::lock_guard guard(vk_instance_counter_mutex);
     vk_instance_contexts--;
 
     if (vk_instance_contexts == 0 && vk_instance_buffers == 0) {
@@ -7804,6 +7809,7 @@ ggml_backend_t ggml_backend_vk_init(size_t dev_num) {
         /* .context   = */ ctx,
     };
 
+    std::lock_guard guard(vk_instance_counter_mutex);
     vk_instance_contexts++;
 
     return vk_backend;
