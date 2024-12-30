@@ -5,6 +5,7 @@
 #include "llama.h"
 #include "chat-template.hpp"
 
+#include <optional>
 #include <string>
 #include <vector>
 #include <sstream>
