@@ -1623,15 +1623,35 @@ struct server_context {
         return true;
     }
 
-    bool validate_model_chat_template() const {
-        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
-        std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        if (res >= 0) {
-            llama_chat_message chat[] = {{"user", "test"}};
-            std::string tmpl = std::string(model_template.data(), model_template.size());
-            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
-            return chat_res > 0;
+    bool validate_model_chat_template(bool use_jinja) const {
+        llama_chat_message chat[] = {{"user", "test"}};
+
+        if (use_jinja) {
+            auto templates = llama_chat_templates_from_model(model, "");
+            try {
+                templates.default_template.apply({{
+                    {"role", "user"},
+                    {"content", "test"},
+                }}, json(), true);
+                if (templates.tool_use_template) {
+                    templates.tool_use_template->apply({{
+                        {"role", "user"},
+                        {"content", "test"},
+                    }}, json(), true);
+                }
+                return true;
+            } catch (const std::exception & e) {
+                SRV_ERR("failed to apply template: %s\n", e.what());
+            }
+        } else {
+            std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
+            std::string template_key = "tokenizer.chat_template";
+            int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+            if (res >= 0) {
+                std::string tmpl = std::string(model_template.data(), model_template.size());
+                int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
+                return chat_res > 0;
+            }
         }
         return false;
     }
@@ -3476,15 +3496,30 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
+    std::mutex chat_templates_mutex;
+    std::optional<llama_chat_templates> chat_templates;
+
+    auto get_chat_templates = [&ctx_server, &chat_templates_mutex, &chat_templates]() -> const llama_chat_templates & {
+        std::lock_guard<std::mutex> lock(chat_templates_mutex);
+        if (!chat_templates) {
+            chat_templates = llama_chat_templates_from_model(ctx_server.model, ctx_server.params_base.chat_template);
+        }
+        return *chat_templates;
+    };
+
+    const auto handle_props = [&ctx_server, &res_ok, &get_chat_templates](const httplib::Request &, httplib::Response & res) {
         // this endpoint is publicly available, please only return what is safe to be exposed
+        const auto & templates = get_chat_templates();
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            { "chat_template",               llama_get_chat_template(ctx_server.model) },
+            { "chat_template",               templates.default_template.source() },
             { "build_info",                  build_info },
         };
+        if (ctx_server.params_base.use_jinja && templates.tool_use_template) {
+            data["chat_template_tool_use"] = templates.tool_use_template->source();
+        }
 
         res_ok(res, data);
     };
@@ -3685,13 +3720,17 @@ int main(int argc, char ** argv) {
         return handle_completions_generic(SERVER_TASK_TYPE_INFILL, data, res);
     };
 
-    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_generic](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_generic, &get_chat_templates](const httplib::Request & req, httplib::Response & res) {
         if (ctx_server.params_base.embedding) {
             res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
-        json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
+        auto body = json::parse(req.body);
+        const auto & templates = get_chat_templates();
+        const auto & chat_template = body.contains("tools") && templates.tool_use_template ? *templates.tool_use_template : templates.default_template;
+        json data = oaicompat_completion_params_parse(ctx_server.model, body, chat_template, params.use_jinja);
+
         return handle_completions_generic(
             SERVER_TASK_TYPE_COMPLETION,
             data,
@@ -4111,7 +4150,7 @@ int main(int argc, char ** argv) {
 
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
-        if (!ctx_server.validate_model_chat_template()) {
+        if (!ctx_server.validate_model_chat_template(params.use_jinja)) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             params.chat_template = "chatml";
         }

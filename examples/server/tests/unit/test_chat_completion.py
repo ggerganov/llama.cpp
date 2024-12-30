@@ -4,22 +4,24 @@ from utils import *
 
 server = ServerPreset.tinyllama2()
 
-
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(autouse=True)
 def create_server():
     global server
     server = ServerPreset.tinyllama2()
 
 
 @pytest.mark.parametrize(
-    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason",
+    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason,jinja",
     [
-        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length"),
-        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length"),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", False),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", True),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", False),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", True),
     ]
 )
-def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason):
+def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason, jinja):
     global server
+    server.jinja = jinja
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
         "model": model,
@@ -102,6 +104,7 @@ def test_chat_completion_with_openai_library():
 
 @pytest.mark.parametrize("response_format,n_predicted,re_content", [
     ({"type": "json_object", "schema": {"const": "42"}}, 6, "\"42\""),
+    ({"type": "json_schema", "json_schema": {"const": "42"}}, 6, "\"42\""),
     ({"type": "json_object", "schema": {"items": [{"type": "integer"}]}}, 10, "[ -3000 ]"),
     ({"type": "json_object"}, 10, "(\\{|John)+"),
     ({"type": "sound"}, 0, None),

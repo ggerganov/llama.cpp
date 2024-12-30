@@ -3,6 +3,7 @@
 #pragma once
 
 #include "llama.h"
+#include "chat-template.hpp"
 
 #include <string>
 #include <vector>
@@ -324,6 +325,7 @@ struct common_params {
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT
     std::string chat_template = "";                                                                         // NOLINT
+    bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
@@ -571,8 +573,8 @@ struct common_chat_msg {
     std::string content;
 };
 
-// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-bool common_chat_verify_template(const std::string & tmpl);
+// Check if the template is supported or not. Returns true if it's valid
+bool common_chat_verify_template(const std::string & tmpl, bool use_jinja);
 
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
@@ -592,6 +594,14 @@ std::string common_chat_format_single(const struct llama_model * model,
 // Returns an example of formatted chat
 std::string common_chat_format_example(const struct llama_model * model,
         const std::string & tmpl);
+
+
+struct llama_chat_templates {
+    minja::chat_template default_template;
+    std::optional<minja::chat_template> tool_use_template;
+};
+
+llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 
 //
 // KV cache utils

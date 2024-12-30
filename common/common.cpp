@@ -1576,13 +1576,13 @@ std::vector<llama_token> common_tokenize(
     return result;
 }
 
-std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+static std::string _common_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+    const int n_chars = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+        int check = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -1590,6 +1590,10 @@ std::string common_token_to_piece(const struct llama_context * ctx, llama_token 
     }
 
     return piece;
+}
+
+std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+    return _common_token_to_piece(llama_get_model(ctx), token, special);
 }
 
 std::string common_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
@@ -1612,7 +1616,21 @@ std::string common_detokenize(llama_context * ctx, const std::vector<llama_token
 // Chat template utils
 //
 
-bool common_chat_verify_template(const std::string & tmpl) {
+bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
+    if (use_jinja) {
+        try {
+            auto chat_template = minja::chat_template(tmpl, "<s>", "</s>");
+            chat_template.apply({{
+                {"role", "user"},
+                {"content", "test"},
+            }}, json(), true);
+            return true;
+        } catch (const std::exception & e) {
+            LOG_ERR("%s: failed to apply template: %s\n", __func__, e.what());
+            return false;
+        }
+    }
+
     llama_chat_message chat[] = {{"user", "test"}};
     int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
@@ -1691,6 +1709,48 @@ std::string common_chat_format_example(const struct llama_model * model,
         {"user",      "How are you?"},
     };
     return common_chat_apply_template(model, tmpl, msgs, true);
+}
+
+static std::string _llama_model_meta_val_str(const struct llama_model * model, const char * key) {
+    int32_t tlen = llama_model_meta_val_str(model, key, nullptr, 0);
+    if (tlen > 0) {
+        std::vector<char> curr_tmpl_buf(tlen + 1, 0);
+        if (llama_model_meta_val_str(model, key, curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
+            return std::string(curr_tmpl_buf.data(), tlen);
+        }
+    }
+    return "";
+}
+
+llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
+{
+    auto bos_token = _common_token_to_piece(model, llama_token_bos(model), true);
+    auto eos_token = _common_token_to_piece(model, llama_token_eos(model), true);
+    std::string default_template_src = chat_template_override;
+    std::string tool_use_template_src = chat_template_override;
+    if (chat_template_override.empty()) {
+        default_template_src = _llama_model_meta_val_str(model, "tokenizer.chat_template");
+        tool_use_template_src = _llama_model_meta_val_str(model, "tokenizer.chat_template.tool_use");
+    }
+    if (default_template_src.empty() || default_template_src == "chatml") {
+        if (!tool_use_template_src.empty()) {
+            default_template_src = tool_use_template_src;
+        } else {
+            default_template_src = R"(
+                {%- for message in messages -%}
+                    {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
+                {%- endfor -%}
+                {%- if add_generation_prompt -%}
+                    {{- "<|im_start|>assistant\n" -}}
+                {%- endif -%}
+            )";
+        }
+    }
+    return {
+        .default_template = { default_template_src, bos_token, eos_token },
+        .tool_use_template = tool_use_template_src.empty() ? std::nullopt
+            : std::optional<minja::chat_template>({ tool_use_template_src, bos_token, eos_token }),
+    };
 }
 
 //
