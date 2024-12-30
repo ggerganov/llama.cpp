@@ -56,7 +56,7 @@ def get_hf_chat_template(model_id, variant=None):
             if 'default' not in variants:
                 raise Exception(f'Please specify a chat template variant (one of {format_variants()})')
             variant = 'default'
-            print(f'Note: picked "default" chat template variant (out of {format_variants()})', file=sys.stderr)
+            sys.stderr.write(f'Note: picked "default" chat template variant (out of {format_variants()})\n')
         elif variant not in variants:
             raise Exception(f"Variant {variant} not found in chat template (found {format_variants()})")
 
@@ -70,7 +70,7 @@ def main(args):
     variant = None if len(args) < 2 else args[1]
 
     template = get_hf_chat_template(model_id, variant)
-    print(template, end=None)
+    sys.stdout.write(template)
 
 
 if __name__ == '__main__':
