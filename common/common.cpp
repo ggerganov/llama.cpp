@@ -1747,8 +1747,8 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
         }
     }
     return {
-        .default_template = { default_template_src, bos_token, eos_token },
-        .tool_use_template = tool_use_template_src.empty() ? std::nullopt
+        /* .default_template = */  { default_template_src, bos_token, eos_token },
+        /* .tool_use_template = */ tool_use_template_src.empty() ? std::nullopt
             : std::optional<minja::chat_template>({ tool_use_template_src, bos_token, eos_token }),
     };
 }
