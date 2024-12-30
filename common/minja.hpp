@@ -2541,7 +2541,7 @@ inline std::shared_ptr<Context> Context::builtins() {
   }));
   globals.set("namespace", Value::callable([=](const std::shared_ptr<Context> &, ArgumentsValue & args) {
     auto ns = Value::object();
-    args.expectArgs("namespace", {0, 0}, {0, std::numeric_limits<size_t>::max()});
+    args.expectArgs("namespace", {0, 0}, {0, (std::numeric_limits<size_t>::max)()});
     for (auto & [name, value] : args.kwargs) {
       ns.set(name, value);
     }
@@ -2596,7 +2596,7 @@ inline std::shared_ptr<Context> Context::builtins() {
   };
   // https://jinja.palletsprojects.com/en/3.0.x/templates/#jinja-filters.reject
   globals.set("reject", Value::callable([=](const std::shared_ptr<Context> & context, ArgumentsValue & args) {
-    args.expectArgs("reject", {2, std::numeric_limits<size_t>::max()}, {0, 0});
+    args.expectArgs("reject", {2, (std::numeric_limits<size_t>::max)()}, {0, 0});
     auto & items = args.args[0];
     auto filter_fn = context->get(args.args[1]);
     if (filter_fn.is_null()) throw std::runtime_error("Undefined filter: " + args.args[1].dump());
@@ -2667,7 +2667,7 @@ inline std::shared_ptr<Context> Context::builtins() {
     return out;
   }));
   globals.set("selectattr", Value::callable([=](const std::shared_ptr<Context> & context, ArgumentsValue & args) {
-    args.expectArgs("selectattr", {2, std::numeric_limits<size_t>::max()}, {0, 0});
+    args.expectArgs("selectattr", {2, (std::numeric_limits<size_t>::max)()}, {0, 0});
     auto & items = args.args[0];
     if (items.is_null())
       return Value::array();
