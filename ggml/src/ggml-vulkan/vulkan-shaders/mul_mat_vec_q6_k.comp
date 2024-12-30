@@ -86,41 +86,14 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
             const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
-            uint32_t ql0_u32 =  uint32_t(blkcache[ix].blk[ql_offset / 2]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 1]) << 16);
-            uint32_t ql32_u32 = uint32_t(blkcache[ix].blk[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 17]) << 16);
+			FLOAT_TYPE dq[16];
+			FLOAT_TYPE sum = 0;
+            [[unroll]] for (uint l = 0; l < 16; ++l) {
+				dq[l] = bitfieldExtract(blkcache[ix].blk[l/2], 1, 4) | (bitfieldExtract(blkcache[ix].blk[64 + l], 2, 2) << 4);
+				sum = fma(FLOAT_TYPE(bycache[ix][16*itid + l]), dq[l], sum);
+			}
 
-            uint32_t ql0_u32_lo4 = ql0_u32 & 0x0F0F0F0F;
-            uint32_t ql0_u32_hi4 = (ql0_u32 >> 4) & 0x0F0F0F0F;
-            uint32_t ql32_u32_lo4 = ql32_u32 & 0x0F0F0F0F;
-            uint32_t ql32_u32_hi4 = (ql32_u32 >> 4) & 0x0F0F0F0F;
-
-            uint32_t qh_u32 = uint32_t(blkcache[ix].blk[64 + qh_offset / 2]) | (uint32_t(blkcache[ix].blk[64 + qh_offset / 2 + 1]) << 16);
-            uint32_t qh0_u32 = (qh_u32 & 0x03030303) << 4;
-            uint32_t qh2_u32 = (qh_u32 & 0x0C0C0C0C) << 2;
-            uint32_t qh4_u32 = (qh_u32 & 0x30303030);
-            uint32_t qh6_u32 = (qh_u32 & 0xC0C0C0C0) >> 2;
-
-            uint32_t q0_u32 = ql0_u32_lo4  | qh0_u32;
-            uint32_t q1_u32 = ql32_u32_lo4 | qh2_u32;
-            uint32_t q2_u32 = ql0_u32_hi4  | qh4_u32;
-            uint32_t q3_u32 = ql32_u32_hi4 | qh6_u32;
-
-            uvec4 q0 = uvec4(unpack8(q0_u32));
-            uvec4 q1 = uvec4(unpack8(q1_u32));
-            uvec4 q2 = uvec4(unpack8(q2_u32));
-            uvec4 q3 = uvec4(unpack8(q3_u32));
-
-            FLOAT_TYPE sum[4] = {0, 0, 0, 0};
-            [[unroll]] for (uint l = 0; l < 4; ++l) {
-                sum[0] = fma(FLOAT_TYPE(bycache[ix][128*v_im + l0 + l]), FLOAT_TYPE(int8_t(q0[l]) - 32), sum[0]);
-                sum[1] = fma(FLOAT_TYPE(bycache[ix][128*v_im + l0 + 32 + l]), FLOAT_TYPE(int8_t(q1[l]) - 32), sum[1]);
-                sum[2] = fma(FLOAT_TYPE(bycache[ix][128*v_im + l0 + 64 + l]), FLOAT_TYPE(int8_t(q2[l]) - 32), sum[2]);
-                sum[3] = fma(FLOAT_TYPE(bycache[ix][128*v_im + l0 + 96 + l]), FLOAT_TYPE(int8_t(q3[l]) - 32), sum[3]);
-            }
-
-            [[unroll]] for (uint l = 0; l < 4; ++l)
-                sum[l] *= sccache[ix][s_offset + l*2];
-            temp[n] += (sum[0] + sum[1] + sum[2] + sum[3]) * d;
+            temp[n] += sum * sccache[ix][itid] * d;
         }
     }
 
