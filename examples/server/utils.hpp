@@ -16,6 +16,8 @@
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
+#include "minja.hpp"
+#include "chat-template.hpp"
 
 #include <random>
 #include <sstream>
@@ -382,19 +384,6 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     return formatted_chat;
 }
 
-static std::string llama_get_chat_template(const struct llama_model * model) {
-    std::string template_key = "tokenizer.chat_template";
-    // call with NULL buffer to get the total size of the string
-    int32_t res = llama_model_meta_val_str(model, template_key.c_str(), NULL, 0);
-    if (res < 2) {
-        return "";
-    } else {
-        std::vector<char> model_template(res + 1, 0);
-        llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        return std::string(model_template.data(), model_template.size() - 1);
-    }
-}
-
 //
 // base64 utils (TODO: move to common in the future)
 //
@@ -552,11 +541,21 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json & body, /* openai api json semantics */
-    const std::string & chat_template) {
+    const minja::chat_template & tmpl,
+    bool use_jinja)
+{
     json llama_params;
 
-    // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    auto tools = json_value(body, "tools", json());
+    auto has_tools = tools.is_array() && !tools.empty();
+
+    if (has_tools) {
+        if (use_jinja) {
+            LOG_WRN("tools param is not fully supported yet\n");
+        } else {
+            throw std::runtime_error("tools param requires --jinja flag");
+        }
+    }
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
@@ -579,6 +578,13 @@ static json oaicompat_completion_params_parse(
         }
     }
 
+    // Apply chat template to the list of messages
+    if (use_jinja) {
+        llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
+    } else {
+        llama_params["prompt"] = format_chat(model, tmpl.source(), body.at("messages"));
+    }
+
     // Handle "n" field
     int n_choices = json_value(body, "n", 1);
     if (n_choices != 1) {
@@ -594,7 +600,7 @@ static json oaicompat_completion_params_parse(
     }
 
     // Params supported by OAI but unsupported by llama.cpp
-    static const std::vector<std::string> unsupported_params { "tools", "tool_choice" };
+    static const std::vector<std::string> unsupported_params { "tool_choice" };
     for (const auto & param : unsupported_params) {
         if (body.contains(param)) {
             throw std::runtime_error("Unsupported param: " + param);
