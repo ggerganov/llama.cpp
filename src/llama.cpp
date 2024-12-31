@@ -22948,6 +22948,7 @@ static int32_t llama_chat_apply_template_internal(
     const llm_chat_template tmpl,
     const std::vector<const llama_chat_message *> & chat,
     std::string & dest, bool add_ass) {
+
     // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
     std::stringstream ss;
     if (tmpl == LLM_CHAT_TEMPLATE_CHATML) {
@@ -23375,6 +23376,10 @@ int32_t llama_chat_builtin_templates(const char ** output, size_t len) {
 // TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
+}
+
+bool llama_sampler_is_grammar_empty(struct llama_sampler * gsmpl) {
+    return llama_sampler_is_grammar_empty_impl(gsmpl);
 }
 
 struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
