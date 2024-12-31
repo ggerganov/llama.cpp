@@ -1000,8 +1000,10 @@ class tinyBLAS_Q0_AVX {
 
     inline __m256 updot(__m256i u, __m256i s) {
         __m256i res;
-#if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
+#if defined(__AVX512VNNI__) && defined(__AVX512VL__)
         res = _mm256_dpbusd_epi32(_mm256_setzero_si256(), u, s);
+#elif defined(__AVXVNNI__)
+        res = _mm256_dpbusd_avx_epi32(_mm256_setzero_si256(), u, s);
 #else
         res = _mm256_madd_epi16(_mm256_set1_epi16(1), _mm256_maddubs_epi16(u, s));
 #endif
