@@ -82,39 +82,52 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         if (MSVC AND NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
             message(FATAL_ERROR "MSVC is not supported for ARM, use clang")
         else()
-            check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
-            if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
+            check_cxx_compiler_flag(-mfp16-format=ieee GGML_COMPILER_SUPPORTS_FP16_FORMAT_I3E)
+            if (NOT "${GGML_COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
                 list(APPEND ARCH_FLAGS -mfp16-format=ieee)
             endif()
 
             if (GGML_NATIVE)
-                list(APPEND ARCH_FLAGS -mcpu=native)
-
-                set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
-
                 # -mcpu=native does not always enable all the features in some compilers,
                 # so we check for them manually and enable them if available
 
+                execute_process(
+                    COMMAND ${CMAKE_C_COMPILER} -mcpu=native -E -v -
+                    INPUT_FILE "/dev/null"
+                    OUTPUT_QUIET
+                    ERROR_VARIABLE ARM_MCPU
+                    RESULT_VARIABLE ARM_MCPU_RESULT
+                )
+                if (NOT ARM_MCPU_RESULT)
+                    string(REGEX MATCH "-mcpu=[^ ']+" ARM_MCPU_FLAG "${ARM_MCPU}")
+                endif()
+                if ("${ARM_MCPU_FLAG}" STREQUAL "")
+                    set(ARM_MCPU_FLAG -mcpu=native)
+                    message(STATUS "ARM -mcpu not found, -mcpu=native will be used")
+                endif()
+
                 include(CheckCXXSourceRuns)
 
-                set(CMAKE_REQUIRED_FLAGS "${ARCH_FLAGS}+dotprod")
-                check_cxx_source_runs(
-                    "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }"
-                    GGML_COMPILER_SUPPORT_DOTPROD)
-                if (GGML_COMPILER_SUPPORT_DOTPROD)
-                    set(ARCH_FLAGS "${ARCH_FLAGS}+dotprod")
-                endif()
+                function(check_arm_feature tag code)
+                    set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
+                    set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+${tag}")
+                    check_cxx_source_runs(
+                        "${code}"
+                        GGML_MACHINE_SUPPORTS_${tag}
+                    )
+                    if (GGML_MACHINE_SUPPORTS_${tag})
+                        set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+${tag}" PARENT_SCOPE)
+                    else()
+                        set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+no${tag}" PARENT_SCOPE)
+                    endif()
+                    set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
+                endfunction()
 
-                set(CMAKE_REQUIRED_FLAGS "${ARCH_FLAGS}+i8mm")
-                check_cxx_source_runs(
-                    "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmmlaq_s32(_s, _a, _b); return 0; }"
-                    GGML_COMPILER_SUPPORT_I8MM)
-                if (GGML_COMPILER_SUPPORT_I8MM)
-                    set(ARCH_FLAGS "${ARCH_FLAGS}+i8mm")
-                endif()
+                check_arm_feature(dotprod "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; volatile int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }")
+                check_arm_feature(i8mm    "#include <arm_neon.h>\nint main() { int8x16_t _a, _b; volatile int32x4_t _s = vmmlaq_s32(_s, _a, _b); return 0; }")
+                check_arm_feature(sve     "#include <arm_sve.h>\nint main()  { svfloat32_t _a, _b; volatile svfloat32_t _c = svadd_f32_z(svptrue_b8(), _a, _b); return 0; }")
 
-                set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
-
+                list(APPEND ARCH_FLAGS "${ARM_MCPU_FLAG}${ARM_MCPU_FLAG_FIX}")
             else()
                 if (GGML_CPU_ARM_ARCH)
                     list(APPEND ARCH_FLAGS -march=${GGML_CPU_ARM_ARCH})
@@ -122,14 +135,20 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             endif()
 
             # show enabled features
+            if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+                set(FEAT_INPUT_FILE "NUL")
+            else()
+                set(FEAT_INPUT_FILE "/dev/null")
+            endif()
+
             execute_process(
                 COMMAND ${CMAKE_C_COMPILER} ${ARCH_FLAGS} -dM -E -
-                INPUT_FILE "/dev/null"
+                INPUT_FILE ${FEAT_INPUT_FILE}
                 OUTPUT_VARIABLE ARM_FEATURE
                 RESULT_VARIABLE ARM_FEATURE_RESULT
             )
             if (ARM_FEATURE_RESULT)
-                message(FATAL_ERROR "Failed to get ARM features")
+                message(WARNING "Failed to get ARM features")
             else()
                 foreach(feature DOTPROD SVE MATMUL_INT8 FMA FP16_VECTOR_ARITHMETIC)
                     string(FIND "${ARM_FEATURE}" "__ARM_FEATURE_${feature} 1" feature_pos)
@@ -304,6 +323,11 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
     target_compile_definitions(${GGML_CPU_NAME} PRIVATE ${ARCH_DEFINITIONS})
 
     if (GGML_BACKEND_DL)
+        if (GGML_NATIVE)
+            # the feature check relies on ARCH_DEFINITIONS, but it is not set with GGML_NATIVE
+            message(FATAL_ERROR "GGML_NATIVE is not compatible with GGML_BACKEND_DL, consider using GGML_CPU_ALL_VARIANTS")
+        endif()
+
         # The feature detection code is compiled as a separate target so that
         # it can be built without the architecture flags
         # Since multiple variants of the CPU backend may be included in the same
