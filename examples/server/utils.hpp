@@ -549,10 +549,49 @@ static bool server_sent_event(httplib::DataSink & sink, const char * event, cons
 // OAI utils
 //
 
-static json oaicompat_completion_params_parse(
-    const struct llama_model * model,
-    const json & body, /* openai api json semantics */
-    const std::string & chat_template) {
+static json oaicompat_completion_params_parse(const json & body) {
+    json llama_params;
+
+    if (!body.contains("prompt")) {
+        throw std::runtime_error("\"prompt\" is required");
+    }
+
+    // Handle "stop" field
+    if (body.contains("stop") && body.at("stop").is_string()) {
+        llama_params["stop"] = json::array({body.at("stop").get<std::string>()});
+    } else {
+        llama_params["stop"] = json_value(body, "stop", json::array());
+    }
+
+    // Handle "n" field
+    int n_choices = json_value(body, "n", 1);
+    if (n_choices != 1) {
+        throw std::runtime_error("Only one completion choice is allowed");
+    }
+
+    // Params supported by OAI but unsupported by llama.cpp
+    static const std::vector<std::string> unsupported_params { "best_of", "echo", "suffix" };
+    for (const auto & param : unsupported_params) {
+        if (body.contains(param)) {
+            throw std::runtime_error("Unsupported param: " + param);
+        }
+    }
+
+    // Copy remaining properties to llama_params
+    for (const auto & item : body.items()) {
+        // Exception: if "n_predict" is present, we overwrite the value specified earlier by "max_tokens"
+        if (!llama_params.contains(item.key()) || item.key() == "n_predict") {
+            llama_params[item.key()] = item.value();
+        }
+    }
+
+    return llama_params;
+}
+
+static json oaicompat_chat_completion_params_parse(
+        const struct llama_model * model,
+        const json & body, /* openai api json semantics */
+        const std::string & chat_template) {
     json llama_params;
 
     // Apply chat template to the list of messages

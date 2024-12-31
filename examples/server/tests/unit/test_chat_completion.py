@@ -83,7 +83,7 @@ def test_chat_completion_stream(system_prompt, user_prompt, max_tokens, re_conte
 def test_chat_completion_with_openai_library():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         messages=[
@@ -170,7 +170,7 @@ def test_chat_completion_with_timings_per_token():
 def test_logprobs():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         temperature=0.0,
@@ -197,7 +197,7 @@ def test_logprobs():
 def test_logprobs_stream():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         temperature=0.0,
