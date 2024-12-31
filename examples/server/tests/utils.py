@@ -74,6 +74,7 @@ class ServerProcess:
     draft_min: int | None = None
     draft_max: int | None = None
     no_webui: bool | None = None
+    chat_template: str | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -164,6 +165,8 @@ class ServerProcess:
             server_args.extend(["--draft-min", self.draft_min])
         if self.no_webui:
             server_args.append("--no-webui")
+        if self.chat_template:
+            server_args.extend(["--chat-template", self.chat_template])
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")

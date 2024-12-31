@@ -1724,17 +1724,10 @@ struct server_context {
         return true;
     }
 
-    bool validate_model_chat_template() const {
-        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
-        std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
-        if (res >= 0) {
-            llama_chat_message chat[] = {{"user", "test"}};
-            std::string tmpl = std::string(model_template.data(), model_template.size());
-            int32_t chat_res = llama_chat_apply_template(model, tmpl.c_str(), chat, 1, true, nullptr, 0);
-            return chat_res > 0;
-        }
-        return false;
+    bool validate_builtin_chat_template() const {
+        llama_chat_message chat[] = {{"user", "test"}};
+        int32_t chat_res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        return chat_res > 0;
     }
 
     void init() {
@@ -3583,7 +3576,7 @@ int main(int argc, char ** argv) {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            { "chat_template",               llama_get_chat_template(ctx_server.model) },
+            { "chat_template",               common_get_builtin_chat_template(ctx_server.model) },
             { "build_info",                  build_info },
         };
 
@@ -4223,14 +4216,16 @@ int main(int argc, char ** argv) {
 
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
-        if (!ctx_server.validate_model_chat_template()) {
+        if (!ctx_server.validate_builtin_chat_template()) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             params.chat_template = "chatml";
         }
     }
 
     // print sample chat example to make it clear which template is used
-    LOG_INF("%s: chat template, built_in: %d, chat_example: '%s'\n", __func__, params.chat_template.empty(), common_chat_format_example(ctx_server.model, params.chat_template).c_str());
+    LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
+        params.chat_template.empty() ? "(built-in)" : params.chat_template.c_str(),
+        common_chat_format_example(ctx_server.model, params.chat_template).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));
