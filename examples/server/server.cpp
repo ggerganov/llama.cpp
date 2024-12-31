@@ -4113,8 +4113,8 @@ int main(int argc, char ** argv) {
     }
 
     // print sample chat example to make it clear which template is used
-    LOG_INF("%s: chat template, chat_template: %d, example_format: '%s'\n", __func__,
-        params.chat_template.empty() ? "(built-in)" : params.chat_template,
+    LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
+        params.chat_template.empty() ? "(built-in)" : params.chat_template.c_str(),
         common_chat_format_example(ctx_server.model, params.chat_template).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
