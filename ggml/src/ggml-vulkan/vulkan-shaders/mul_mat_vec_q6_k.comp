@@ -1,6 +1,9 @@
 #version 450
 
 #extension GL_EXT_shader_explicit_arithmetic_types : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_EXT_shader_subgroup_extended_types_int16 : require
 
 #include "mul_mat_vec_base.comp"
 
@@ -9,16 +12,11 @@ layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 layout (constant_id = 1) const uint NUM_ROWS = 1;
 
-// a 32 bit cache potentially might write faster due to banking
-struct block_q6_K_32stor
-{
-    uint32_t blk[104];
-    float16_t d;
-};
+uint16_t blk[BLOCK_SIZE/16][8];
 
-shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
-shared FLOAT_TYPE sccache[BLOCK_SIZE/16][16];
-shared block_q6_K_32stor blkcache[BLOCK_SIZE/16];
+uint16_t get_blk_shuffle(uint fbi, uint ix, uint ofst) {
+    return subgroupShuffle(blk[ix][ofst/(104/fbi)], ofst%(104/fbi));
+}
 
 uint fill_blkcache_its(uint wg_size) {
     // subgroup sizes are always a power of 2
@@ -38,7 +36,7 @@ void fill_blkcache(const int num_blocks, const uint ib0, const uint i0, const ui
         [[unroll]] for (int l = 0; l < num_blocks; ++l) {
             [[unroll]] for (int m = 0; m < fbi; ++m)
                 // cache full superblock into shared memory with coalesced reads
-                blkcache[l].blk[tid + m*bc_t] = uint32_t(data_a_packed16[ib0 + i0 + l].blk[tid + m*bc_t]);
+                blk[l][m] = data_a_packed16[ib0 + i0 + l].blk[tid + m*bc_t];
         }
     }
 }
@@ -64,7 +62,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     const uint ql_offset = 64*v_im + l0;
     const uint qh_offset = 32*v_im + l0;
-    const uint s_offset = 8*v_im + is;
+    const uint s_offset = 16*ix + 8*v_im + is;
     const uint y_offset = 128*v_im + l0;
     const uint bcs_offset = (itid%2 == 1) ? 8 : 0;
 
@@ -93,7 +91,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
                 fill_blkcache(blim, ib0, i0, tid, fbi);
             }
 
-            sccache[ix][itid] = FLOAT_TYPE(int8_t(bitfieldExtract(blkcache[ix].blk[96 + itid/2], int(bcs_offset), 8)));
+            FLOAT_TYPE sccache = FLOAT_TYPE(int8_t(bitfieldExtract(get_blk_shuffle(fbi, ix, 96 + itid/2), int(bcs_offset), 8)));
             barrier();
 
             ibi += num_blocks_per_row;
@@ -102,15 +100,15 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
             const FLOAT_TYPE d = FLOAT_TYPE(data_a_packed16[ib0 + i].d);
 
-            uint32_t ql0_u32 =  uint32_t(blkcache[ix].blk[ql_offset / 2]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 1]) << 16);
-            uint32_t ql32_u32 = uint32_t(blkcache[ix].blk[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 17]) << 16);
+            uint32_t ql0_u32 =  uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2)) | (uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2 + 1)) << 16);
+            uint32_t ql32_u32 = uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2 + 16)) | (uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2 + 17)) << 16);
 
             uint32_t ql0_u32_lo4 = ql0_u32 & 0x0F0F0F0F;
             uint32_t ql0_u32_hi4 = (ql0_u32 >> 4) & 0x0F0F0F0F;
             uint32_t ql32_u32_lo4 = ql32_u32 & 0x0F0F0F0F;
             uint32_t ql32_u32_hi4 = (ql32_u32 >> 4) & 0x0F0F0F0F;
 
-            uint32_t qh_u32 = uint32_t(blkcache[ix].blk[64 + qh_offset / 2]) | (uint32_t(blkcache[ix].blk[64 + qh_offset / 2 + 1]) << 16);
+            uint32_t qh_u32 = uint32_t(get_blk_shuffle(fbi, ix, 64 + qh_offset / 2)) | (uint32_t(get_blk_shuffle(fbi, ix, 64 + qh_offset / 2 + 1)) << 16);
             uint32_t qh0_u32 = (qh_u32 & 0x03030303) << 4;
             uint32_t qh2_u32 = (qh_u32 & 0x0C0C0C0C) << 2;
             uint32_t qh4_u32 = (qh_u32 & 0x30303030);
@@ -134,28 +132,15 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
                 sum[3] = fma(FLOAT_TYPE(by96[l]), FLOAT_TYPE(int8_t(q3[l]) - 32), sum[3]);
             }
 
-            temp[n] = fma(fma(sum[0], sccache[ix][s_offset], fma(sum[1], sccache[ix][s_offset + 2], fma(sum[2], sccache[ix][s_offset + 4], sum[3] * sccache[ix][s_offset + 6]))), d, temp[n]);
+            temp[n] = fma(fma(sum[0], subgroupShuffle(sccache, s_offset), fma(sum[1], subgroupShuffle(sccache, s_offset + 2), fma(sum[2], subgroupShuffle(sccache, s_offset + 4), sum[3] * subgroupShuffle(sccache, s_offset + 6)))), d, temp[n]);
         }
     }
 
     // sum up partial sums and write back result
-    [[unroll]] for (uint n = 0; n < num_rows; ++n) {
-        tmpsh[n][tid] = temp[n];
-    }
-    barrier();
-    [[unroll]] for (uint s = BLOCK_SIZE/2; s > 0; s >>= 1) {
-        if (tid < s) {
-            [[unroll]] for (uint n = 0; n < num_rows; ++n) {
-                tmpsh[n][tid] += tmpsh[n][tid + s];
-            }
-        }
-        barrier();
-    }
-    if (tid == 0) {
-        [[unroll]] for (uint n = 0; n < num_rows; ++n) {
-            data_d[d_offset + first_row + n] = D_TYPE(tmpsh[n][0]);
-        }
-    }
+    [[unroll]] for (uint n = 0; n < num_rows; ++n)
+        temp[n] = subgroupAdd(temp[n]);
+    if (tid < num_rows)
+        data_d[d_offset + first_row + tid] = D_TYPE(temp[tid]);
 }
 
 void main() {
