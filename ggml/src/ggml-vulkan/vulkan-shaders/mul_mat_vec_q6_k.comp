@@ -9,16 +9,9 @@ layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 layout (constant_id = 1) const uint NUM_ROWS = 1;
 
-// a 32 bit cache potentially might write faster due to banking
-struct block_q6_K_32stor
-{
-    uint32_t blk[104];
-    float16_t d;
-};
-
 shared FLOAT_TYPE tmpsh[NUM_ROWS][BLOCK_SIZE];
 shared FLOAT_TYPE sccache[BLOCK_SIZE/16][16];
-shared block_q6_K_32stor blkcache[BLOCK_SIZE/16];
+shared block_q6_K_packed16 blkcache[BLOCK_SIZE/16];
 
 uint fill_blkcache_its(uint wg_size) {
     // subgroup sizes are always a power of 2
@@ -38,7 +31,7 @@ void fill_blkcache(const int num_blocks, const uint ib0, const uint i0, const ui
         [[unroll]] for (int l = 0; l < num_blocks; ++l) {
             [[unroll]] for (int m = 0; m < fbi; ++m)
                 // cache full superblock into shared memory with coalesced reads
-                blkcache[l].blk[tid + m*bc_t] = uint32_t(data_a_packed16[ib0 + i0 + l].blk[tid + m*bc_t]);
+                blkcache[l].blk[tid + m*bc_t] = data_a_packed16[ib0 + i0 + l].blk[tid + m*bc_t];
         }
     }
 }
