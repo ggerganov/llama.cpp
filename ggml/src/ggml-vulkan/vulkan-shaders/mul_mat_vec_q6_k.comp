@@ -1,9 +1,8 @@
 #version 450
 
 #extension GL_EXT_shader_explicit_arithmetic_types : require
-#extension GL_KHR_shader_subgroup_arithmetic : require
-#extension GL_KHR_shader_subgroup_shuffle : require
-#extension GL_EXT_shader_subgroup_extended_types_int16 : require
+#extension GL_KHR_shader_subgroup_arithmetic: require
+#extension GL_KHR_shader_subgroup_shuffle: require
 
 #include "mul_mat_vec_base.comp"
 
@@ -12,11 +11,7 @@ layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 layout (constant_id = 1) const uint NUM_ROWS = 1;
 
-uint16_t blk[BLOCK_SIZE/16][8];
-
-uint16_t get_blk_shuffle(uint fbi, uint ix, uint ofst) {
-    return subgroupShuffle(blk[ix][ofst/(104/fbi)], ofst%(104/fbi));
-}
+shared block_q6_K_packed16 blkcache[BLOCK_SIZE/16];
 
 uint fill_blkcache_its(uint wg_size) {
     // subgroup sizes are always a power of 2
@@ -36,7 +31,7 @@ void fill_blkcache(const int num_blocks, const uint ib0, const uint i0, const ui
         [[unroll]] for (int l = 0; l < num_blocks; ++l) {
             [[unroll]] for (int m = 0; m < fbi; ++m)
                 // cache full superblock into shared memory with coalesced reads
-                blk[l][m] = data_a_packed16[ib0 + i0 + l].blk[tid + m*bc_t];
+                blkcache[l].blk[tid + m*bc_t] = data_a_packed16[ib0 + i0 + l].blk[tid + m*bc_t];
         }
     }
 }
@@ -91,7 +86,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
                 fill_blkcache(blim, ib0, i0, tid, fbi);
             }
 
-            FLOAT_TYPE sccache = FLOAT_TYPE(int8_t(bitfieldExtract(get_blk_shuffle(fbi, ix, 96 + itid/2), int(bcs_offset), 8)));
+            FLOAT_TYPE sccache = FLOAT_TYPE(int8_t(bitfieldExtract(blkcache[ix].blk[96 + itid/2], int(bcs_offset), 8)));
             barrier();
 
             ibi += num_blocks_per_row;
@@ -100,15 +95,15 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
             const FLOAT_TYPE d = FLOAT_TYPE(data_a_packed16[ib0 + i].d);
 
-            uint32_t ql0_u32 =  uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2)) | (uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2 + 1)) << 16);
-            uint32_t ql32_u32 = uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2 + 16)) | (uint32_t(get_blk_shuffle(fbi, ix, ql_offset / 2 + 17)) << 16);
+            uint32_t ql0_u32 =  uint32_t(blkcache[ix].blk[ql_offset / 2]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 1]) << 16);
+            uint32_t ql32_u32 = uint32_t(blkcache[ix].blk[ql_offset / 2 + 16]) | (uint32_t(blkcache[ix].blk[ql_offset / 2 + 17]) << 16);
 
             uint32_t ql0_u32_lo4 = ql0_u32 & 0x0F0F0F0F;
             uint32_t ql0_u32_hi4 = (ql0_u32 >> 4) & 0x0F0F0F0F;
             uint32_t ql32_u32_lo4 = ql32_u32 & 0x0F0F0F0F;
             uint32_t ql32_u32_hi4 = (ql32_u32 >> 4) & 0x0F0F0F0F;
 
-            uint32_t qh_u32 = uint32_t(get_blk_shuffle(fbi, ix, 64 + qh_offset / 2)) | (uint32_t(get_blk_shuffle(fbi, ix, 64 + qh_offset / 2 + 1)) << 16);
+            uint32_t qh_u32 = uint32_t(blkcache[ix].blk[64 + qh_offset / 2]) | (uint32_t(blkcache[ix].blk[64 + qh_offset / 2 + 1]) << 16);
             uint32_t qh0_u32 = (qh_u32 & 0x03030303) << 4;
             uint32_t qh2_u32 = (qh_u32 & 0x0C0C0C0C) << 2;
             uint32_t qh4_u32 = (qh_u32 & 0x30303030);
