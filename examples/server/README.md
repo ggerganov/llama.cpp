@@ -947,6 +947,8 @@ This endpoint returns the loaded LoRA adapters. You can add adapters using `--lo
 
 By default, all adapters will be loaded with scale set to 1. To initialize all adapters scale to 0, add `--lora-init-without-apply`
 
+Please note that this value will be overwritten by the `lora` field for each request.
+
 If an adapter is disabled, the scale will be set to 0.
 
 **Response format**
@@ -967,6 +969,8 @@ If an adapter is disabled, the scale will be set to 0.
 ```
 
 ### POST `/lora-adapters`: Set list of LoRA adapters
+
+This sets the global scale for LoRA adapters. Please note that this value will be overwritten by the `lora` field for each request.
 
 To disable an adapter, either remove it from the list below, or set scale to 0.
 

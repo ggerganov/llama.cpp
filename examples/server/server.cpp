@@ -64,6 +64,7 @@ enum server_task_type {
     SERVER_TASK_TYPE_SLOT_SAVE,
     SERVER_TASK_TYPE_SLOT_RESTORE,
     SERVER_TASK_TYPE_SLOT_ERASE,
+    SERVER_TASK_TYPE_SET_LORA,
 };
 
 enum oaicompat_type {
@@ -195,6 +196,9 @@ struct server_task {
 
     // used by SERVER_TASK_TYPE_METRICS
     bool metrics_reset_bucket = false;
+
+    // used by SERVER_TASK_TYPE_SET_LORA
+    std::vector<common_lora_adapter_container> set_lora;
 
     server_task(server_task_type type) : type(type) {}
 
@@ -1105,6 +1109,12 @@ struct server_task_result_slot_erase : server_task_result {
             { "id_slot",  id_slot },
             { "n_erased", n_erased },
         };
+    }
+};
+
+struct server_task_result_apply_lora : server_task_result {
+    virtual json to_json() override {
+        return json {{ "success", true }};
     }
 };
 
@@ -2578,6 +2588,13 @@ struct server_context {
                     res->id       = task.id;
                     res->id_slot  = id_slot;
                     res->n_erased = n_erased;
+                    queue_results.send(std::move(res));
+                } break;
+            case SERVER_TASK_TYPE_SET_LORA:
+                {
+                    lora = std::move(task.set_lora);
+                    auto res = std::make_unique<server_task_result_apply_lora>();
+                    res->id = task.id;
                     queue_results.send(std::move(res));
                 } break;
         }
@@ -4099,8 +4116,22 @@ int main(int argc, char ** argv) {
             res_error(res, format_error_response("Request body must be an array", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
-        ctx_server.lora = parse_lora_request(ctx_server.lora, body);
-        res_ok(res, json{{"success", true}});
+        server_task task(SERVER_TASK_TYPE_SET_LORA);
+        task.id = ctx_server.queue_tasks.get_new_id();
+        task.set_lora = parse_lora_request(ctx_server.lora, body);
+        ctx_server.queue_results.add_waiting_task_id(task.id);
+        ctx_server.queue_tasks.post(task);
+
+        server_task_result_ptr result = ctx_server.queue_results.recv(task.id);
+        ctx_server.queue_results.remove_waiting_task_id(task.id);
+
+        if (result->is_error()) {
+            res_error(res, result->to_json());
+            return;
+        }
+
+        GGML_ASSERT(dynamic_cast<server_task_result_apply_lora*>(result.get()) != nullptr);
+        res_ok(res, result->to_json());
     };
 
     //
