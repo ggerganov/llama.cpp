@@ -2,6 +2,8 @@
 
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_EXT_shader_subgroup_extended_types_float16 : require
 
 #ifdef FLOAT16
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
@@ -448,7 +450,7 @@ void main() {
 
             const float d = float(data_a[ib].d);
             const uint vui = uint(data_a[ib].qs[iqs]);
-            const vec2 v = vec2(kvalues_iq4nl[vui & 0xF], kvalues_iq4nl[vui >> 4]) * d;
+            const vec2 v = vec2(subgroupShuffle(kvalues_iq4nl, vui & 0xF), subgroupShuffle(kvalues_iq4nl, vui >> 4)) * d;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
             buf_a[buf_idx + 16] = FLOAT_TYPE(v.y);

@@ -3,6 +3,7 @@
 #define GGML_TYPES_COMP
 
 #extension GL_EXT_shader_explicit_arithmetic_types : require
+#extension GL_KHR_shader_subgroup_basic : require
 
 #if defined(DATA_A_F32)
 #define QUANT_K 1
@@ -305,13 +306,13 @@ const int8_t kvalues_iq4nl_const[16] = {
     int8_t(1), int8_t(13), int8_t(25), int8_t(38), int8_t(53), int8_t(69), int8_t(89), int8_t(113)
 };
 
-shared FLOAT_TYPE kvalues_iq4nl[16];
+FLOAT_TYPE kvalues_iq4nl = FLOAT_TYPE(0);
 
 void init_iq4nl_shmem()
 {
     // copy the table into shared memory and sync
-    if (gl_LocalInvocationIndex.x < 16) {
-        kvalues_iq4nl[gl_LocalInvocationIndex.x] = FLOAT_TYPE(kvalues_iq4nl_const[gl_LocalInvocationIndex.x]);
+    if (gl_SubgroupInvocationID < 16) {
+        kvalues_iq4nl = FLOAT_TYPE(kvalues_iq4nl_const[gl_SubgroupInvocationID]);
     }
     barrier();
 }
