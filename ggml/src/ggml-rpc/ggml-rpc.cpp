@@ -94,7 +94,16 @@ enum rpc_cmd {
     RPC_CMD_GRAPH_COMPUTE,
     RPC_CMD_GET_DEVICE_MEMORY,
     RPC_CMD_INIT_TENSOR,
+    RPC_CMD_GET_ALLOC_SIZE,
     RPC_CMD_COUNT,
+};
+
+struct rpc_msg_get_alloc_size_req {
+    rpc_tensor tensor;
+};
+
+struct rpc_msg_get_alloc_size_rsp {
+    uint64_t alloc_size;
 };
 
 struct rpc_msg_init_tensor_req {
@@ -473,7 +482,7 @@ static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t buffer, gg
     //UNUSED(buffer);
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
 
-    if (ggml_is_quantized(tensor->type)) {
+    if (ggml_is_quantized(tensor->type) && (tensor->ne[0] % 512 != 0)) {
         // TODO: this check is due to MATRIX_ROW_PADDING in CUDA and should be generalized
         //GGML_ASSERT(tensor->ne[0] % 512 == 0 && "unsupported quantized tensor");
         rpc_msg_init_tensor_req request;
@@ -594,8 +603,21 @@ static size_t ggml_backend_rpc_get_max_size(ggml_backend_buffer_type_t buft) {
 }
 
 static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
-    UNUSED(buft);
-    return ggml_nbytes(tensor);
+    if (ggml_is_quantized(tensor->type) && (tensor->ne[0] % 512 != 0)) {
+        ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
+        auto sock = get_socket(buft_ctx->endpoint);
+
+        rpc_msg_get_alloc_size_req request;
+        request.tensor = serialize_tensor(tensor);
+
+        rpc_msg_get_alloc_size_rsp response;
+        bool status = send_rpc_cmd(sock, RPC_CMD_GET_ALLOC_SIZE, &request, sizeof(request), &response, sizeof(response));
+        GGML_ASSERT(status);
+
+        return response.alloc_size;
+    } else {
+        return ggml_nbytes(tensor);
+    }
 }
 
 static ggml_backend_buffer_type_i ggml_backend_rpc_buffer_type_interface = {
@@ -775,6 +797,7 @@ public:
     bool copy_tensor(const rpc_msg_copy_tensor_req & request, rpc_msg_copy_tensor_rsp & response);
     bool graph_compute(const std::vector<uint8_t> & input, rpc_msg_graph_compute_rsp & response);
     bool init_tensor(const rpc_msg_init_tensor_req & request);
+    bool get_alloc_size(const rpc_msg_get_alloc_size_req & request, rpc_msg_get_alloc_size_rsp & response);
 
 private:
     ggml_tensor * deserialize_tensor(struct ggml_context * ctx, const rpc_tensor * tensor);
@@ -787,6 +810,47 @@ private:
     ggml_backend_t backend;
     std::unordered_set<ggml_backend_buffer_t> buffers;
 };
+
+bool rpc_server::get_alloc_size(const rpc_msg_get_alloc_size_req & request, rpc_msg_get_alloc_size_rsp & response) {
+    ggml_backend_buffer_type_t buft = ggml_backend_get_default_buffer_type(backend);
+    struct ggml_init_params params {
+        /*.mem_size   =*/ ggml_tensor_overhead(),
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ true,
+    };
+    struct ggml_context * ctx = ggml_init(params);
+    ggml_tensor * tensor = deserialize_tensor(ctx, &request.tensor);
+    if (tensor == nullptr) {
+        printf("Got nullptr\n");
+        ggml_free(ctx);
+        return false;
+    }
+
+    printf("Getting buft\n");
+
+    //ggml_backend_buffer_get_alloc_size(tensor->buffer,tensor)
+
+    //if (tensor->buffer == nullptr) {
+    //    printf("Got null buffer\n");
+    //    response.alloc_size = 0;
+    //    ggml_free(ctx);
+    //    return true;
+    //}
+
+    response.alloc_size = ggml_backend_buft_get_alloc_size(buft,tensor);
+    // Call the backend's buffer_type_get_alloc_size function
+    //ggml_backend_buffer_type_t buft = tensor->buffer->buft;
+    //if (buft && buft->iface.get_alloc_size) {
+    //    printf("Called buffer type get alloc size\n");
+    //    response.alloc_size = buft->iface.get_alloc_size(buft, tensor);
+    //} else {
+    //    printf("Called ggml_nbytes");
+    //    response.alloc_size = ggml_nbytes(tensor);
+    //}
+
+    ggml_free(ctx);
+    return true;
+}
 
 void rpc_server::alloc_buffer(const rpc_msg_alloc_buffer_req & request, rpc_msg_alloc_buffer_rsp & response) {
     ggml_backend_buffer_type_t buft = ggml_backend_get_default_buffer_type(backend);
@@ -1100,6 +1164,18 @@ static void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t fre
                 }
                 rpc_msg_alloc_buffer_rsp response;
                 server.alloc_buffer(request, response);
+                if (!send_msg(sockfd, &response, sizeof(response))) {
+                    return;
+                }
+                break;
+            }
+            case RPC_CMD_GET_ALLOC_SIZE: {
+                rpc_msg_get_alloc_size_req request;
+                if (!recv_msg(sockfd, &request, sizeof(request))) {
+                    return;
+                }
+                rpc_msg_get_alloc_size_rsp response;
+                server.get_alloc_size(request, response);
                 if (!send_msg(sockfd, &response, sizeof(response))) {
                     return;
                 }
