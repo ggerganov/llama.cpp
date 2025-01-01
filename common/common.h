@@ -571,6 +571,9 @@ struct common_chat_msg {
     std::string content;
 };
 
+// Get the built-in chat template for the model. Return empty string if not present.
+std::string common_get_builtin_chat_template(const struct llama_model * model);
+
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool common_chat_verify_template(const std::string & tmpl);
 

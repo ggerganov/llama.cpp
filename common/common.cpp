@@ -18,6 +18,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -62,7 +63,9 @@
 #ifdef __linux__
 #include <linux/limits.h>
 #elif defined(_WIN32)
-#define PATH_MAX MAX_PATH
+#   if !defined(PATH_MAX)
+#   define PATH_MAX MAX_PATH
+#   endif
 #else
 #include <sys/syslimits.h>
 #endif
@@ -1148,8 +1151,7 @@ static bool common_download_file(const std::string & url, const std::string & pa
 #endif
 
     // Check if the file already exists locally
-    struct stat model_file_info;
-    auto file_exists = (stat(path.c_str(), &model_file_info) == 0);
+    auto file_exists = std::filesystem::exists(path);
 
     // If the file exists, check its JSON metadata companion file.
     std::string metadata_path = path + ".json";
@@ -1611,6 +1613,18 @@ std::string common_detokenize(llama_context * ctx, const std::vector<llama_token
 //
 // Chat template utils
 //
+
+std::string common_get_builtin_chat_template(const struct llama_model * model) {
+    static const char * template_key = "tokenizer.chat_template";
+    // call with NULL buffer to get the total size of the string
+    int32_t res = llama_model_meta_val_str(model, template_key, NULL, 0);
+    if (res > 0) {
+        std::vector<char> model_template(res + 1, 0);
+        llama_model_meta_val_str(model, template_key, model_template.data(), model_template.size());
+        return std::string(model_template.data(), model_template.size() - 1);
+    }
+    return "";
+}
 
 bool common_chat_verify_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
