@@ -206,7 +206,7 @@ struct server_task {
             const llama_model * model,
             const llama_context * ctx,
             const common_params & params_base,
-            const std::vector<common_lora_adapter_container> & base_lora,
+            const std::vector<common_lora_adapter_container> & lora_base,
             const json & data) {
         slot_params params;
 
@@ -265,12 +265,12 @@ struct server_task {
 
         if (data.contains("lora")) {
             if (data.at("lora").is_array()) {
-                params.lora = parse_lora_request(base_lora, data.at("lora"));
+                params.lora = parse_lora_request(lora_base, data.at("lora"));
             } else {
                 throw std::runtime_error("Error: 'lora' must be an array of objects with 'id' and 'scale' fields");
             }
         } else {
-            params.lora = base_lora;
+            params.lora = lora_base;
         }
 
         // TODO: add more sanity checks for the input parameters
