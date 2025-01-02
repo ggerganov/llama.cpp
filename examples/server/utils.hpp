@@ -826,7 +826,7 @@ static std::vector<common_lora_adapter_container> parse_lora_request(
     }
 
     // set value
-    for (auto entry : data) {
+    for (const auto & entry : data) {
         int id      = json_value(entry, "id", -1);
         float scale = json_value(entry, "scale", 0.0f);
         if (0 <= id && id < max_idx) {

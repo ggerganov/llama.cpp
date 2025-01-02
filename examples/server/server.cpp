@@ -2681,7 +2681,7 @@ struct server_context {
             // check if we can batch this slot with the previous one
             if (!slot_batched) {
                 slot_batched = &slot;
-            } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
+            } else if (!slot_batched->can_batch_with(slot)) {
                 continue;
             }
 
