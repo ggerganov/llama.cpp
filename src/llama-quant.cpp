@@ -464,7 +464,7 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
     return new_size;
 }
 
-void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
+static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type default_type;
     llama_ftype ftype = params->ftype;
 
@@ -892,6 +892,10 @@ void llama_model_quantize_internal(const std::string & fname_inp, const std::str
     }
 }
 
+//
+// interface implementation
+//
+
 struct llama_model_quantize_params llama_model_quantize_default_params() {
     struct llama_model_quantize_params result = {
         /*.nthread                     =*/ 0,
@@ -908,4 +912,18 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     };
 
     return result;
+}
+
+uint32_t llama_model_quantize(
+        const char * fname_inp,
+        const char * fname_out,
+        const llama_model_quantize_params * params) {
+    try {
+        llama_model_quantize_internal(fname_inp, fname_out, params);
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: failed to quantize: %s\n", __func__, err.what());
+        return 1;
+    }
+
+    return 0;
 }

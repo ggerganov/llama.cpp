@@ -41,16 +41,12 @@
 #endif
 
 //
-// helpers
+// tensor loading (TODO: add llama_tesor_loader?)
 //
 
 static int llama_get_device_count(const llama_model & model) {
     return (int) model.devices.size();
 }
-
-//
-// model loading and saving
-//
 
 // checks if the weight tensor can be used with the specified buffer type and device
 static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w, ggml_op op, ggml_backend_buffer_type_t buft, ggml_backend_dev_t dev) {
@@ -11319,21 +11315,6 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
     }
 }
 
-struct llama_lora_adapter * llama_lora_adapter_init(struct llama_model * model, const char * path_lora) {
-    struct llama_lora_adapter * adapter = new llama_lora_adapter();
-
-    try {
-        llama_lora_adapter_init_impl(*model, path_lora, *adapter);
-        return adapter;
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
-
-        delete adapter;
-    }
-
-    return nullptr;
-}
-
 int32_t llama_lora_adapter_set(
             struct llama_context * ctx,
             struct llama_lora_adapter * adapter,
@@ -11585,6 +11566,7 @@ struct llama_model * llama_load_model_from_file(
         } else if (status == -2) {
             LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
+
         llama_free_model(model);
         return nullptr;
     }
@@ -11941,20 +11923,6 @@ struct llama_context * llama_new_context_with_model(
     }
 
     return ctx;
-}
-
-uint32_t llama_model_quantize(
-        const char * fname_inp,
-        const char * fname_out,
-        const llama_model_quantize_params * params) {
-    try {
-        llama_model_quantize_internal(fname_inp, fname_out, params);
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: failed to quantize: %s\n", __func__, err.what());
-        return 1;
-    }
-
-    return 0;
 }
 
 //
@@ -12343,4 +12311,3 @@ void llama_perf_context_reset(struct llama_context * ctx) {
     ctx->t_eval_us   = ctx->n_eval = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
 }
-

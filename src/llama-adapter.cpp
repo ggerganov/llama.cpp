@@ -149,7 +149,7 @@ void llama_lora_adapter_free(struct llama_lora_adapter * adapter) {
     delete adapter;
 }
 
-void llama_lora_adapter_init_impl(struct llama_model & model, const char * path_lora, struct llama_lora_adapter & adapter) {
+static void llama_lora_adapter_init_impl(struct llama_model & model, const char * path_lora, struct llama_lora_adapter & adapter) {
     LLAMA_LOG_INFO("%s: loading lora adapter from '%s' ...\n", __func__, path_lora);
 
     ggml_context * ctx_init;
@@ -316,4 +316,19 @@ void llama_lora_adapter_init_impl(struct llama_model & model, const char * path_
     }
 
     LLAMA_LOG_INFO("%s: loaded %zu tensors from lora file\n", __func__, adapter.ab_map.size()*2);
+}
+
+struct llama_lora_adapter * llama_lora_adapter_init(struct llama_model * model, const char * path_lora) {
+    struct llama_lora_adapter * adapter = new llama_lora_adapter();
+
+    try {
+        llama_lora_adapter_init_impl(*model, path_lora, *adapter);
+        return adapter;
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
+
+        delete adapter;
+    }
+
+    return nullptr;
 }

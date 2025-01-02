@@ -64,5 +64,3 @@ struct llama_lora_adapter {
 
     llama_lora_weight * get_weight(struct ggml_tensor * w);
 };
-
-void llama_lora_adapter_init_impl(struct llama_model & model, const char * path_lora, struct llama_lora_adapter & adapter);
