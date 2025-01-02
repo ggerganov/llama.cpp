@@ -813,7 +813,7 @@ private:
 };
 
 bool rpc_server::get_alloc_size(const rpc_msg_get_alloc_size_req & request, rpc_msg_get_alloc_size_rsp & response) {
-    ggml_backend_buffer_type_t buft; 
+    ggml_backend_buffer_type_t buft;
     struct ggml_init_params params {
         /*.mem_size   =*/ ggml_tensor_overhead(),
         /*.mem_buffer =*/ NULL,
@@ -822,7 +822,7 @@ bool rpc_server::get_alloc_size(const rpc_msg_get_alloc_size_req & request, rpc_
 
     struct ggml_context * ctx = ggml_init(params);
     ggml_tensor * tensor = deserialize_tensor(ctx, &request.tensor);
-    
+
     if (tensor == nullptr) {
         fprintf(stderr,"Null tensor pointer passed to server get_alloc_size function.\n");
         ggml_free(ctx);
