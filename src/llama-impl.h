@@ -3,6 +3,7 @@
 #include "ggml.h" // for ggml_log_level
 
 #include <string>
+#include <vector>
 
 #ifdef __GNUC__
 #ifdef __MINGW32__
@@ -33,6 +34,12 @@ void llama_log_callback_default(ggml_log_level level, const char * text, void * 
 // helpers
 //
 
+template <typename T>
+struct no_init {
+    T value;
+    no_init() { /* do nothing */ }
+};
+
 struct time_meas {
     time_meas(int64_t & t_acc, bool disable = false);
     ~time_meas();
@@ -47,3 +54,8 @@ void replace_all(std::string & s, const std::string & search, const std::string 
 // TODO: rename to llama_format ?
 LLAMA_ATTRIBUTE_FORMAT(1, 2)
 std::string format(const char * fmt, ...);
+
+std::string llama_format_tensor_shape(const std::vector<int64_t> & ne);
+std::string llama_format_tensor_shape(const struct ggml_tensor * t);
+
+std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i);

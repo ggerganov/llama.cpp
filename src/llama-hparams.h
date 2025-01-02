@@ -69,12 +69,13 @@ struct llama_hparams {
     uint32_t time_decay_extra_dim   = 0;
     uint32_t wkv_head_size          = 0;
 
-    float     rope_attn_factor = 1.0f;
-    float     rope_freq_base_train;
-    float     rope_freq_scale_train;
-    uint32_t  n_ctx_orig_yarn;
-    float     rope_yarn_log_mul;
-    int       rope_sections[4]; // TODO: actually this should be std::array (I was wrong)
+    float    rope_attn_factor = 1.0f;
+    float    rope_freq_base_train;
+    float    rope_freq_scale_train;
+    uint32_t n_ctx_orig_yarn;
+    float    rope_yarn_log_mul;
+
+    std::array<int, 4> rope_sections;
 
     // for State Space Models
     uint32_t ssm_d_conv  = 0;

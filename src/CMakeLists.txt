@@ -20,6 +20,7 @@ add_library(llama
             llama-kv-cache.cpp
             llama-mmap.cpp
             llama-model.cpp
+            llama-model-loader.cpp
             llama-sampling.cpp
             llama-vocab.cpp
             unicode.h
