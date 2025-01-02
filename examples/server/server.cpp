@@ -2710,7 +2710,7 @@ struct server_context {
                 if (slot.is_processing()) {
                     if (!slot_batched) {
                         slot_batched = &slot;
-                    } else if (slot_batched && !slot_batched->can_batch_with(slot)) {
+                    } else if (!slot_batched->can_batch_with(slot)) {
                         continue;
                     }
                 }
