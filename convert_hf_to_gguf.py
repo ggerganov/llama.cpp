@@ -3859,9 +3859,9 @@ class DeepseekV2Model(Model):
         self.gguf_writer.add_expert_weights_norm(hparams["norm_topk_prob"])
 
         if hparams["scoring_func"] == "sigmoid":
-            self.gguf_writer.add_expert_weights_func(gguf.ExpertWeightsFuncType.SIGMOID)
+            self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SIGMOID)
         elif hparams["scoring_func"] == "softmax":
-            self.gguf_writer.add_expert_weights_func(gguf.ExpertWeightsFuncType.SOFTMAX)
+            self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SOFTMAX)
         else:
             raise ValueError(f"Unsupported scoring_func value: {hparams['scoring_func']}")
 

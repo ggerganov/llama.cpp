@@ -103,7 +103,7 @@ class Keys:
         EXPERT_SHARED_COUNT               = "{arch}.expert_shared_count"
         EXPERT_WEIGHTS_SCALE              = "{arch}.expert_weights_scale"
         EXPERT_WEIGHTS_NORM               = "{arch}.expert_weights_norm"
-        EXPERT_WEIGHTS_FUNC               = "{arch}.expert_weights_func"
+        EXPERT_GATING_FUNC                = "{arch}.expert_gating_func"
         POOLING_TYPE                      = "{arch}.pooling_type"
         LOGIT_SCALE                       = "{arch}.logit_scale"
         DECODER_START_TOKEN_ID            = "{arch}.decoder_start_token_id"
@@ -1581,7 +1581,7 @@ class GGMLQuantizationType(IntEnum):
     TQ2_0   = 35
 
 
-class ExpertWeightsFuncType(IntEnum):
+class ExpertGatingFuncType(IntEnum):
     SOFTMAX  = 1
     SIGMOID  = 2
 
