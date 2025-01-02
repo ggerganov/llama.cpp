@@ -14,13 +14,14 @@ add_library(llama
             llama-batch.cpp
             llama-chat.cpp
             llama-context.cpp
+            llama-grammar.cpp
             llama-hparams.cpp
             llama-impl.cpp
-            llama-grammar.cpp
             llama-kv-cache.cpp
             llama-mmap.cpp
-            llama-model.cpp
             llama-model-loader.cpp
+            llama-model.cpp
+            llama-quant.cpp
             llama-sampling.cpp
             llama-vocab.cpp
             unicode.h

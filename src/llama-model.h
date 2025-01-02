@@ -378,3 +378,12 @@ ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, in
 struct ggml_tensor * llama_model_get_tensor(const struct llama_model & model, const char * name);
 
 size_t llama_model_max_nodes(const llama_model & model);
+
+struct llama_model_loader;
+
+// TODO: become llama_model methods
+void llm_load_stats     (llama_model_loader & ml, llama_model & model);
+void llm_load_arch      (llama_model_loader & ml, llama_model & model);
+void llm_load_hparams   (llama_model_loader & ml, llama_model & model);
+void llm_load_vocab     (llama_model_loader & ml, llama_model & model);
+void llm_load_print_meta(llama_model_loader & ml, llama_model & model);
