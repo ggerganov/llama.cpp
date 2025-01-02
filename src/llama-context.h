@@ -1,6 +1,6 @@
 #pragma once
 
-#include "llama-impl.h"
+#include "llama.h"
 #include "llama-batch.h"
 #include "llama-cparams.h"
 #include "llama-model.h"
@@ -113,6 +113,8 @@ struct llama_context {
 void llama_set_k_shift(struct llama_context & lctx);
 
 void llama_set_s_copy(struct llama_context & lctx);
+
+void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch);
 
 // Make sure enough space is available for outputs.
 // Returns max number of outputs for which space was reserved.
