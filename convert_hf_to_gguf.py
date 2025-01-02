@@ -3879,7 +3879,7 @@ class DeepseekV2Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # rename e_score_correction_bias tensors
         if name.endswith("e_score_correction_bias"):
-           name = name.replace("e_score_correction_bias", "e_score_correction.bias")
+            name = name.replace("e_score_correction_bias", "e_score_correction.bias")
 
         # skip Multi-Token Prediction (MTP) layers
         block_count = self.hparams["num_hidden_layers"]
