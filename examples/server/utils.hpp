@@ -797,3 +797,44 @@ static std::vector<llama_token_data> get_token_probabilities(llama_context * ctx
 
     return cur;
 }
+
+static bool are_lora_equal(
+        const std::vector<common_lora_adapter_container> & l1,
+        const std::vector<common_lora_adapter_container> & l2) {
+    if (l1.size() != l2.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < l1.size(); ++i) {
+        // we don't check lora.path to reduce the time complexity
+        if (l1[i].scale != l2[i].scale || l1[i].adapter != l2[i].adapter) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// parse lora config from JSON request, returned a copy of base_lora with updated scale
+static std::vector<common_lora_adapter_container> parse_lora_request(
+        const std::vector<common_lora_adapter_container> & base_lora,
+        const json & data) {
+    std::vector<common_lora_adapter_container> lora(base_lora);
+    int max_idx = lora.size();
+
+    // clear existing value
+    for (auto & entry : lora) {
+        entry.scale = 0.0f;
+    }
+
+    // set value
+    for (const auto & entry : data) {
+        int id      = json_value(entry, "id", -1);
+        float scale = json_value(entry, "scale", 0.0f);
+        if (0 <= id && id < max_idx) {
+            lora[id].scale = scale;
+        } else {
+            throw std::runtime_error("invalid adapter id");
+        }
+    }
+
+    return lora;
+}
