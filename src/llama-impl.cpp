@@ -5,6 +5,7 @@
 #include <cinttypes>
 #include <climits>
 #include <cstdarg>
+#include <cstring>
 #include <vector>
 #include <sstream>
 

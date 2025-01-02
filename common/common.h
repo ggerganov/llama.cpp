@@ -24,13 +24,12 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+// TODO: "lora_adapter" is tautology
 struct common_lora_adapter_info {
     std::string path;
     float scale;
-};
 
-struct common_lora_adapter_container : common_lora_adapter_info {
-    llama_lora_adapter_ptr adapter;
+    struct llama_lora_adapter * ptr;
 };
 
 using llama_tokens = std::vector<llama_token>;
@@ -478,11 +477,12 @@ std::string fs_get_cache_file(const std::string & filename);
 // Model utils
 //
 
+// note: defines object's lifetime
 struct common_init_result {
     llama_model_ptr   model;
     llama_context_ptr context;
 
-    std::vector<common_lora_adapter_container> lora_adapters;
+    std::vector<llama_lora_adapter_ptr> lora;
 };
 
 struct common_init_result     common_init_from_params(common_params & params);
@@ -504,7 +504,7 @@ struct llama_model * common_load_model_from_hf(
     const struct llama_model_params & params);
 
 // clear LoRA adapters from context, then apply new list of adapters
-void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters);
+void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_info> & lora);
 
 //
 // Batch utils

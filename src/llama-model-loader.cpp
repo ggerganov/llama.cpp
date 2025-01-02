@@ -2,7 +2,9 @@
 
 #include "ggml.h"
 
+#include <array>
 #include <cinttypes>
+#include <cstring>
 #include <future>
 
 const char * llama_file_version_name(llama_fver version) {
