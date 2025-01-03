@@ -78,6 +78,8 @@ class LLamaAndroid {
 
     private external fun kv_cache_clear(context: Long)
 
+    private external fun apply_chat_template(allmessages: Array<Map<String, String>>, model: Long): String
+
     suspend fun bench(pp: Int, tg: Int, pl: Int, nr: Int = 1): String {
         return withContext(runLoop) {
             when (val state = threadLocalState.get()) {
@@ -151,6 +153,20 @@ class LLamaAndroid {
                 else -> {}
             }
         }
+    }
+
+    suspend fun applyChatTemplate(messages: List<Map<String, String>>): String {
+        var data = ""
+        withContext(runLoop){
+            when(val state = threadLocalState.get()){
+                is State.Loaded -> {
+                    val arrayMessages = messages.toTypedArray() //Convert list to array for JNI compatibility
+                    data = apply_chat_template(allmessages = arrayMessages, model = state.model)
+                }
+                else -> {}
+            }
+        }
+        return data
     }
 
     companion object {
