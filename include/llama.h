@@ -937,7 +937,6 @@ extern "C" {
     LLAMA_API llama_token llama_vocab_bos(const struct llama_vocab * vocab); // beginning-of-sentence
     LLAMA_API llama_token llama_vocab_eos(const struct llama_vocab * vocab); // end-of-sentence
     LLAMA_API llama_token llama_vocab_eot(const struct llama_vocab * vocab); // end-of-turn
-    LLAMA_API llama_token llama_vocab_cls(const struct llama_vocab * vocab); // classification
     LLAMA_API llama_token llama_vocab_sep(const struct llama_vocab * vocab); // sentence separator
     LLAMA_API llama_token llama_vocab_nl (const struct llama_vocab * vocab); // next-line
     LLAMA_API llama_token llama_vocab_pad(const struct llama_vocab * vocab); // padding
@@ -972,6 +971,10 @@ extern "C" {
     DEPRECATED(LLAMA_API llama_token llama_token_fim_pad(const struct llama_vocab * vocab), "use llama_vocab_fim_pad instead");
     DEPRECATED(LLAMA_API llama_token llama_token_fim_rep(const struct llama_vocab * vocab), "use llama_vocab_fim_rep instead");
     DEPRECATED(LLAMA_API llama_token llama_token_fim_sep(const struct llama_vocab * vocab), "use llama_vocab_fim_sep instead");
+
+    // CLS is equivalent to BOS
+    DEPRECATED(LLAMA_API llama_token llama_vocab_cls(const struct llama_vocab * vocab), // classification
+            "use llama_vocab_bos instead");
 
     //
     // Tokenization

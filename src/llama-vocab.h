@@ -53,7 +53,6 @@ struct llama_vocab {
     llama_token token_eot() const;
     llama_token token_eom() const;
     llama_token token_unk() const;
-    llama_token token_cls() const;
     llama_token token_sep() const;
     llama_token token_nl () const;
     llama_token token_pad() const;
