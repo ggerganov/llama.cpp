@@ -226,6 +226,9 @@ target_link_libraries(ggml PUBLIC ggml-base)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(ggml PRIVATE dl)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        target_link_libraries(ggml PRIVATE stdc++fs)
+    endif()
 endif()
 
 function(ggml_add_backend_library backend)
