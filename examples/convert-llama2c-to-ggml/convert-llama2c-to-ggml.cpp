@@ -689,8 +689,8 @@ static void save_as_llama_model(
     gguf_set_val_u32(ctx, KV_TOKENIZER_UNK_ID, UNKNOWN_TOKEN_ID);
     gguf_set_val_u32(ctx, KV_TOKENIZER_BOS_ID, BOS_TOKEN_ID);
     gguf_set_val_u32(ctx, KV_TOKENIZER_EOS_ID, EOS_TOKEN_ID);
-    gguf_set_val_u32(ctx, KV_TOKENIZER_SEP_ID, -1);
-    gguf_set_val_u32(ctx, KV_TOKENIZER_PAD_ID, -1);
+    gguf_set_val_u32(ctx, KV_TOKENIZER_SEP_ID, LLAMA_TOKEN_NULL);
+    gguf_set_val_u32(ctx, KV_TOKENIZER_PAD_ID, LLAMA_TOKEN_NULL);
 
     gguf_set_val_u32(ctx, KV_CONTEXT_LENGTH, model->hparams.n_ctx);
     gguf_set_val_u32(ctx, KV_EMBEDDING_LENGTH, model->hparams.n_embd);
