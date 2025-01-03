@@ -11456,6 +11456,12 @@ int64_t llama_time_us(void) {
 struct llama_model * llama_load_model_from_file(
         const char * path_model,
         struct llama_model_params params) {
+    return llama_model_load_from_file(path_model, params);
+}
+
+struct llama_model * llama_model_load_from_file(
+        const char * path_model,
+        struct llama_model_params params) {
     ggml_time_init();
 
     llama_model * model = new llama_model;

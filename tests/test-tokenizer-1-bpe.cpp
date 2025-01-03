@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
 
         mparams.vocab_only = true;
 
-        model = llama_load_model_from_file(fname.c_str(), mparams);
+        model = llama_model_load_from_file(fname.c_str(), mparams);
 
         if (model == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());

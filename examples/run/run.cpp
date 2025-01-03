@@ -664,7 +664,7 @@ class LlamaData {
             "\r%*s"
             "\rLoading model",
             get_terminal_width(), " ");
-        llama_model_ptr model(llama_load_model_from_file(opt.model_.c_str(), opt.model_params));
+        llama_model_ptr model(llama_model_load_from_file(opt.model_.c_str(), opt.model_params));
         if (!model) {
             printe("%s: error: unable to load model from file: %s\n", __func__, opt.model_.c_str());
         }
