@@ -413,12 +413,19 @@ extern "C" {
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);
 
-    LLAMA_API struct llama_model * llama_load_model_from_file(
+    DEPRECATED(LLAMA_API struct llama_model * llama_load_model_from_file(
+                             const char * path_model,
+              struct llama_model_params   params),
+            "use llama_model_load_from_file instead");
+
+    LLAMA_API struct llama_model * llama_model_load_from_file(
                              const char * path_model,
               struct llama_model_params   params);
 
-    // TODO: rename to llama_model_free
-    LLAMA_API void llama_free_model(struct llama_model * model);
+    DEPRECATED(LLAMA_API void llama_free_model(struct llama_model * model),
+            "use llama_model_free instead");
+
+    LLAMA_API void llama_model_free(struct llama_model * model);
 
     // TODO: rename to llama_init_from_model
     LLAMA_API struct llama_context * llama_new_context_with_model(
