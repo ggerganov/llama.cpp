@@ -1084,7 +1084,7 @@ static std::pair<int, int> test_roundtrip(ggml_backend_dev_t dev, const unsigned
     if (!file) {
         printf("%s: failed to create tmpfile(), needs elevated privileges on Windows");
         printf("%s: skipping tests");
-        return;
+        return std::make_pair(0, 0);
     }
 #else
     GGML_ASSERT(file);
