@@ -6,7 +6,7 @@
 
 // bump if necessary
 #define LLAMA_MAX_LAYERS  512
-#define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
+#define LLAMA_MAX_EXPERTS 256  // DeepSeekV3
 
 struct llama_hparams_posnet {
     uint32_t n_embd;
@@ -54,7 +54,9 @@ struct llama_hparams {
     uint32_t n_expert_shared    = 0;
     uint32_t n_norm_groups      = 0;
 
-    float expert_weights_scale = 0.0;
+    float    expert_weights_scale = 0.0;
+    bool     expert_weights_norm  = false;
+    uint32_t expert_gating_func   = LLAMA_EXPERT_GATING_FUNC_TYPE_NONE;
 
     float f_norm_eps;
     float f_norm_rms_eps;

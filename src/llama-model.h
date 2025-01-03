@@ -63,6 +63,7 @@ enum llm_type {
     MODEL_70B,
     MODEL_236B,
     MODEL_314B,
+    MODEL_671B,
     MODEL_SMALL,
     MODEL_MEDIUM,
     MODEL_LARGE,
@@ -213,6 +214,7 @@ struct llama_layer {
     struct ggml_tensor * ffn_down_b = nullptr; // b2
     struct ggml_tensor * ffn_up_b   = nullptr; // b3
     struct ggml_tensor * ffn_act    = nullptr;
+    struct ggml_tensor * ffn_exp_probs_b = nullptr;
 
     // mamba proj
     struct ggml_tensor * ssm_in  = nullptr;

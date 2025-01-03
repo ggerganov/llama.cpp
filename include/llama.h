@@ -105,6 +105,7 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
         LLAMA_VOCAB_PRE_TYPE_CHAMELEON      = 26,
         LLAMA_VOCAB_PRE_TYPE_MINERVA        = 27,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM  = 28,
     };
 
     enum llama_rope_type {
@@ -113,6 +114,12 @@ extern "C" {
         LLAMA_ROPE_TYPE_NEOX   = GGML_ROPE_TYPE_NEOX,
         LLAMA_ROPE_TYPE_MROPE  = GGML_ROPE_TYPE_MROPE,
         LLAMA_ROPE_TYPE_VISION = GGML_ROPE_TYPE_VISION,
+    };
+
+    enum llama_expert_gating_func_type {
+        LLAMA_EXPERT_GATING_FUNC_TYPE_NONE    = 0,
+        LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX = 1,
+        LLAMA_EXPERT_GATING_FUNC_TYPE_SIGMOID = 2,
     };
 
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
