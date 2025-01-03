@@ -1,4 +1,6 @@
 #include "ggml.h"
+#include "gguf.h"
+
 #include "llama.h"
 #include "common.h"
 #include "log.h"
