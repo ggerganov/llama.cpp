@@ -889,9 +889,8 @@ struct common_init_result common_init_from_params(common_params & params) {
     }
 
     if (params.ctx_shift && !llama_kv_cache_can_shift(lctx)) {
-        LOG_ERR("%s: KV cache shifting is not supported for this model (--no-context-shift to disable)'\n", __func__);
-        llama_free_model(model);
-        return iparams;
+        LOG_WRN("%s: KV cache shifting is not supported for this model, disabling KV cache shifting\n", __func__);
+        params.ctx_shift = false;
     }
 
     if (!params.control_vectors.empty()) {
