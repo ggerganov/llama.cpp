@@ -154,7 +154,7 @@ class LLamaAndroid {
             }
         }
     }
-
+   // call this function before sending the message using send function
     suspend fun applyChatTemplate(messages: List<Map<String, String>>): String {
         var data = ""
         withContext(runLoop){
