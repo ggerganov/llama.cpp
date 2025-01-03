@@ -564,7 +564,7 @@ enum llm_tensor {
     LLM_TENSOR_FFN_DOWN_SHEXP,
     LLM_TENSOR_FFN_GATE_SHEXP,
     LLM_TENSOR_FFN_UP_SHEXP,
-    LLM_TENSOR_FFN_EXPERT_WEIGHTS_B,
+    LLM_TENSOR_FFN_EXP_PROBS_B,
     LLM_TENSOR_ATTN_Q_NORM,
     LLM_TENSOR_ATTN_K_NORM,
     LLM_TENSOR_LAYER_OUT_NORM,
@@ -1434,7 +1434,7 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_FFN_GATE_SHEXP,     "blk.%d.ffn_gate_shexp" },
             { LLM_TENSOR_FFN_DOWN_SHEXP,     "blk.%d.ffn_down_shexp" },
             { LLM_TENSOR_FFN_UP_SHEXP,       "blk.%d.ffn_up_shexp" },
-            { LLM_TENSOR_FFN_EXPERT_WEIGHTS_B, "blk.%d.expert_weights_b" },
+            { LLM_TENSOR_FFN_EXP_PROBS_B,    "blk.%d.exp_probs_b" },
         },
     },
     {
@@ -2934,7 +2934,7 @@ struct llama_layer {
     struct ggml_tensor * ffn_down_b = nullptr; // b2
     struct ggml_tensor * ffn_up_b   = nullptr; // b3
     struct ggml_tensor * ffn_act    = nullptr;
-    struct ggml_tensor * ffn_expert_weights_bias = nullptr;
+    struct ggml_tensor * ffn_exp_probs_b = nullptr;
 
     // mamba proj
     struct ggml_tensor * ssm_in  = nullptr;
@@ -7480,7 +7480,7 @@ static const std::map<llm_tensor, llm_tensor_info> llm_tensor_info_mapping = {
     {LLM_TENSOR_FFN_DOWN_EXPS,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT_ID}},
     {LLM_TENSOR_FFN_GATE_EXPS,              {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT_ID}},
     {LLM_TENSOR_FFN_UP_EXPS,                {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT_ID}},
-    {LLM_TENSOR_FFN_EXPERT_WEIGHTS_B,       {LLM_TENSOR_LAYER_REPEATING, GGML_OP_ADD}},
+    {LLM_TENSOR_FFN_EXP_PROBS_B,            {LLM_TENSOR_LAYER_REPEATING, GGML_OP_ADD}},
     // this tensor is loaded for T5, but never used
     {LLM_TENSOR_DEC_CROSS_ATTN_REL_B,       {LLM_TENSOR_LAYER_REPEATING, GGML_OP_NONE}},
     {LLM_TENSOR_CONV1D,                     {LLM_TENSOR_LAYER_INPUT,     GGML_OP_IM2COL}},
@@ -9283,7 +9283,7 @@ static bool llm_load_tensors(
                             layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, 0);
                         } else {
                             layer.ffn_gate_inp = create_tensor(tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert}, 0);
-                            layer.ffn_expert_weights_bias = create_tensor(tn(LLM_TENSOR_FFN_EXPERT_WEIGHTS_B, "bias", i), {n_expert}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_exp_probs_b = create_tensor(tn(LLM_TENSOR_FFN_EXP_PROBS_B, "bias", i), {n_expert}, llama_model_loader::TENSOR_NOT_REQUIRED);
 
                             if (n_expert == 0) {
                                 throw std::runtime_error("n_expert must be > 0");
@@ -10285,22 +10285,22 @@ llm_expert_gating_func_type   gating_op,
         case LLM_EXPERT_GATING_FUNC_SOFTMAX:
             {
                 probs = ggml_soft_max(ctx, logits); // [n_expert, n_tokens]
-                cb(probs, "ffn_moe_probs", il);
             } break;
         case LLM_EXPERT_GATING_FUNC_SIGMOID:
             {
                 probs = ggml_sigmoid(ctx, logits); // [n_expert, n_tokens]
-                cb(probs, "ffn_moe_sigm", il);
             } break;
         default:
             GGML_ABORT("fatal error");
     }
+    cb(probs, "ffn_moe_probs", il);
 
     // add experts selection bias - introduced in DeepSeek V3
+    // leave probs unbiased as it's later used to get expert weights
     ggml_tensor * selection_probs = probs;
     if (expert_weights_b != nullptr) {
         selection_probs = ggml_add(ctx, probs, expert_weights_b);
-        cb(selection_probs, "ffn_moe_sigm_biased", il);
+        cb(selection_probs, "ffn_moe_probs_biased", il);
     }
 
     // select experts
@@ -16241,7 +16241,7 @@ struct llm_build_context {
                             model.layers[il].ffn_up_exps,
                             model.layers[il].ffn_gate_exps,
                             model.layers[il].ffn_down_exps,
-                            model.layers[il].ffn_expert_weights_bias,
+                            model.layers[il].ffn_exp_probs_b,
                             n_expert, n_expert_used,
                             LLM_FFN_SILU, hparams.expert_weights_norm,
                             true, hparams.expert_weights_scale,
