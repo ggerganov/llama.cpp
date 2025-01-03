@@ -554,7 +554,7 @@ llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap,
             const enum gguf_type type   = gguf_get_kv_type(meta.get(), i);
             const std::string type_name =
                 type == GGUF_TYPE_ARRAY
-                ? format("%s[%s,%d]", gguf_type_name(type), gguf_type_name(gguf_get_arr_type(meta.get(), i)), gguf_get_arr_n(meta.get(), i))
+                ? format("%s[%s,%zu]", gguf_type_name(type), gguf_type_name(gguf_get_arr_type(meta.get(), i)), gguf_get_arr_n(meta.get(), i))
                 : gguf_type_name(type);
 
             std::string value          = gguf_kv_to_str(meta.get(), i);

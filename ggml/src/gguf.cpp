@@ -407,7 +407,7 @@ struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_par
             }
             for (size_t j = 0; ok && j < ctx->kv.size(); ++j) {
                 if (key == ctx->kv[j].key) {
-                    fprintf(stderr, "%s: duplicate key '%s' for tensors %" PRIi64 " and %" PRIi64 " \n", __func__, key.c_str(), j, i);
+                    fprintf(stderr, "%s: duplicate key '%s' for tensors %zu and %" PRIi64 " \n", __func__, key.c_str(), j, i);
                     ok = false;
                 }
             }
