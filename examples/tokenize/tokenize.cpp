@@ -198,6 +198,7 @@ int main(int raw_argc, char ** raw_argv) {
     // variables where to put any arguments we see.
     bool printing_ids = false;
     bool no_bos = false;
+    bool no_escape = false;
     bool no_parse_special = false;
     bool disable_logging = false;
     bool show_token_count = false;
@@ -232,6 +233,9 @@ int main(int raw_argc, char ** raw_argv) {
         }
         else if (arg == "--no-bos") {
             no_bos = true;
+        }
+        else if (arg == "--no-escape") {
+            no_escape = true;
         }
         else if (arg == "--no-parse-special") {
             no_parse_special = true;
@@ -363,6 +367,11 @@ int main(int raw_argc, char ** raw_argv) {
     const bool model_wants_add_bos = llama_add_bos_token(model);
     const bool add_bos = model_wants_add_bos && !no_bos;
     const bool parse_special = !no_parse_special;
+    const bool escape = !no_escape;
+
+    if (escape) {
+        string_process_escapes(prompt);
+    }
 
     std::vector<llama_token> tokens;
     tokens = common_tokenize(model, prompt, add_bos, parse_special);
