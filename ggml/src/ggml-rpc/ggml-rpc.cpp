@@ -110,10 +110,6 @@ struct rpc_msg_init_tensor_req {
     rpc_tensor tensor;
 };
 
-//struct rpc_msg_init_tensor_rsp {
-//    uint8_t result; // success/failure
-//};
-
 struct rpc_msg_alloc_buffer_req {
     uint64_t size;
 };
@@ -824,7 +820,7 @@ bool rpc_server::get_alloc_size(const rpc_msg_get_alloc_size_req & request, rpc_
     ggml_tensor * tensor = deserialize_tensor(ctx, &request.tensor);
 
     if (tensor == nullptr) {
-        fprintf(stderr,"Null tensor pointer passed to server get_alloc_size function.\n");
+        GGML_LOG_ERROR("Null tensor pointer passed to server get_alloc_size function.\n");
         ggml_free(ctx);
         return false;
     }
@@ -986,7 +982,7 @@ bool rpc_server::init_tensor(const rpc_msg_init_tensor_req & request) {
     struct ggml_context * ctx = ggml_init(params);
     ggml_tensor * tensor = deserialize_tensor(ctx, &request.tensor);
     if (tensor == nullptr) {
-        fprintf(stderr,"Null tensor pointer passed to server init_tensor function.\n");
+        GGML_LOG_ERROR("Null tensor pointer passed to server init_tensor function.\n");
         ggml_free(ctx);
         return false;
     }
@@ -996,7 +992,7 @@ bool rpc_server::init_tensor(const rpc_msg_init_tensor_req & request) {
     if (buffer && buffer->iface.init_tensor) {
         buffer->iface.init_tensor(buffer, tensor);
     } else {
-        fprintf(stderr,"Null buffer for tensor passed to init_tensor function\n");
+        GGML_LOG_ERROR("Null buffer for tensor passed to init_tensor function\n");
     }
 
     ggml_free(ctx);
