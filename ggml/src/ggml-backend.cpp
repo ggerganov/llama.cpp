@@ -14,6 +14,7 @@
 #include "ggml-impl.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@
 #include <string.h>
 #include <string>
 #include <vector>
+#include <set>
 
 #ifdef __APPLE__
 #include <sys/types.h>
@@ -1996,4 +1998,198 @@ static ggml_backend_buffer_type_t ggml_backend_cpu_buffer_from_ptr_type(void) {
 ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) {
     GGML_ASSERT((uintptr_t)ptr % TENSOR_ALIGNMENT == 0 && "buffer pointer must be aligned");
     return ggml_backend_buffer_init(ggml_backend_cpu_buffer_from_ptr_type(), ggml_backend_cpu_buffer_from_ptr_i, ptr, size);
+}
+
+static void ggml_backend_sched_splits_fdump_dot(FILE * fp, ggml_backend_sched_t sched, const struct ggml_cgraph * graph) {
+    std::set<void *> visited;
+
+    for (int i = 0; i < sched->n_splits; i++) {
+        struct ggml_backend_sched_split * split = &sched->splits[i];
+        ggml_backend_t split_backend = sched->backends[split->backend_id];
+
+        fprintf(fp, "  subgraph cluster_%d {"
+                    "    node [style=filled];"
+                    "    label = \"SPLIT %d : %s # %d inputs\";\n",
+                i, i, ggml_backend_name(split_backend), split->n_inputs);
+
+        for (int j = split->i_start; j < split->i_end; j++) {
+            struct ggml_tensor *node = graph->nodes[j];
+            fprintf(fp, "    \"%p\";\n", (void *)node);
+            for (int k = 0; k < GGML_MAX_SRC; k++) {
+                struct ggml_tensor *src = node->src[k];
+                if (   (nullptr == src)
+                    || (tensor_backend_id(src) != split->backend_id)
+                    || (visited.find(src) != visited.end())) {
+                    continue;
+                }
+
+                visited.insert(src);
+                fprintf(fp, "    \"%p\";\n", (void *)src);
+            }
+        }
+        fprintf(fp, "  }\n");
+    }
+}
+
+static std::string ggml_color_of_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {
+#ifndef GGML_DOT_FULL_COLOR
+    const int COLOR_NUM = 12;   // number of colors in `set312`
+    const int DEF_COLOR = 0;
+#else
+    const int COLOR_NUM = GGML_SCHED_MAX_BACKENDS;
+    const int DEF_COLOR = COLOR_NUM - 1;
+#endif
+    const int SHUFFLE   = 2027; // a prime
+
+    char color[32];
+    uint32_t color1 = DEF_COLOR;
+    uint32_t color2 = DEF_COLOR;
+
+    ggml_backend_t backend = ggml_backend_sched_get_tensor_backend(sched, node);
+    if (backend) {
+        color1 = (tensor_backend_id(node) * SHUFFLE) % COLOR_NUM;
+        color2 = color1;
+    }
+    if (node->buffer) {
+        ggml_backend_buffer_type_t buft = node->buffer->buft;
+        if (backend && !ggml_backend_supports_buft(backend, buft)) {
+            for (int i = 0; i < sched->n_backends; i++) {
+                if (sched->bufts[i] == buft) {
+                    color2 = (i * SHUFFLE) % COLOR_NUM;
+                    break;
+                }
+            }
+            if (color2 == color1) color2 = (color2 + COLOR_NUM / 2) % COLOR_NUM;
+        }
+    }
+#ifndef GGML_DOT_FULL_COLOR
+    snprintf(color, sizeof(color), "%d;0.5:%d", color1 + 1, color2 + 1);
+#else
+    snprintf(color, sizeof(color), "%.3f 0.4 1.0;0.5:%.3f 0.4 1.0", (float)color1 / COLOR_NUM / 2, (float)color2 / COLOR_NUM / 2);
+#endif
+    return color;
+}
+
+static void ggml_graph_dump_dot_leaf(ggml_backend_sched_t sched, FILE * fp, std::set<void *> &visited_nodes, struct ggml_tensor * node, struct ggml_tensor *parent, const char *label, const int i) {
+    if (visited_nodes.find(node) != visited_nodes.end()) {
+        goto draw_edge;
+    }
+
+    visited_nodes.insert(node);
+
+    fprintf(fp, "  \"%p\" [ style = filled; fillcolor = \"%s\"; shape = record; label=\"<x>",
+            (void *)node, ggml_color_of_backend(sched, node).c_str());
+
+    if (strlen(node->name) > 0) {
+        fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
+    } else {
+        fprintf(fp, "(%s)|", ggml_type_name(node->type));
+    }
+
+    fprintf(fp, "CONST %d [%" PRId64 ", %" PRId64 "]", i, node->ne[0], node->ne[1]);
+    fprintf(fp, "\"; ]\n");
+
+draw_edge:
+    if (parent) {
+        ggml_graph_dump_dot_leaf_edge(fp, parent, node, label);
+    }
+    if (node->view_src) {
+        ggml_graph_dump_dot_leaf_edge(fp, node, node->view_src, label);
+    }
+}
+
+static void ggml_graph_dump_dot_node(ggml_backend_sched_t sched, FILE * fp, std::set<void *> &visited_nodes, const struct ggml_cgraph * graph, struct ggml_tensor * node, struct ggml_tensor *child, const char *label, const int i);
+
+static void ggml_graph_dump_dot_real_node(ggml_backend_sched_t sched, FILE * fp, std::set<void *> &visited_nodes, const struct ggml_cgraph * graph, struct ggml_tensor * node, struct ggml_tensor *child, const char *label, const int i) {
+    char color[16];
+    struct ggml_tensor * grad = nullptr;
+
+    if (visited_nodes.find(node) != visited_nodes.end()) {
+        goto draw_edge;
+    }
+
+    visited_nodes.insert(node);
+
+    grad = ggml_graph_get_grad(graph, node);
+
+    if (node->flags & GGML_TENSOR_FLAG_PARAM) {
+        snprintf(color, sizeof(color), "yellow");
+    } else if (grad) {
+        snprintf(color, sizeof(color), "lightblue");
+    } else {
+        snprintf(color, sizeof(color), "white");
+    }
+
+    fprintf(fp, "  \"%p\" [ style = filled; fillcolor = \"%s\"; shape = record; label=\"",
+            (void *)node, ggml_color_of_backend(sched, node).c_str());
+
+    if (strlen(node->name) > 0) {
+        fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
+    } else {
+        fprintf(fp, "(%s)|", ggml_type_name(node->type));
+    }
+
+    if (ggml_is_matrix(node)) {
+        fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], ggml_op_symbol(node->op));
+    } else {
+        fprintf(fp, "%d [%" PRId64 ", %" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], node->ne[2], ggml_op_symbol(node->op));
+    }
+
+    if (grad) {
+        fprintf(fp, " | <g>%s\"; ]\n", ggml_op_symbol(grad->op));
+    } else {
+        fprintf(fp, "\"; ]\n");
+    }
+
+    for (int j = 0; j < GGML_MAX_SRC; j++) {
+        if (node->src[j]) {
+            char label[16];
+            snprintf(label, sizeof(label), "src %d", j);
+            ggml_graph_dump_dot_node(sched, fp, visited_nodes, graph, node->src[j], node, label, -1);
+        }
+    }
+
+draw_edge:
+    if (child) {
+        ggml_graph_dump_dot_node_edge(fp, graph, child, node, label);
+    }
+}
+
+static void ggml_graph_dump_dot_node(ggml_backend_sched_t sched, FILE * fp, std::set<void *> &visited_nodes, const struct ggml_cgraph * graph, struct ggml_tensor * node, struct ggml_tensor *child, const char *label, const int i) {
+    if ((node->op == GGML_OP_NONE) && !(node->flags & GGML_TENSOR_FLAG_PARAM)) {
+        ggml_graph_dump_dot_leaf(sched, fp, visited_nodes, node, child, label, i);
+    } else {
+        ggml_graph_dump_dot_real_node(sched, fp, visited_nodes, graph, node, child, label, i);
+    }
+}
+
+void ggml_backend_sched_dump_dot(ggml_backend_sched_t sched, const struct ggml_cgraph * graph, const char * filename) {
+    FILE * fp = ggml_fopen(filename, "w");
+    GGML_ASSERT(fp);
+
+    std::set<void *> visited_nodes;
+
+    fprintf(fp, "digraph G {\n");
+#ifndef GGML_DOT_FULL_COLOR
+    fprintf(fp, "node [colorscheme=set312]\n");
+#endif
+    fprintf(fp, "  newrank = true;\n");
+    fprintf(fp, "  rankdir = TB;\n");
+
+    for (int i = 0; i < graph->n_nodes; i++) {
+        struct ggml_tensor * node = graph->nodes[i];
+
+        if (ggml_graph_get_parent(graph, node)) {
+            continue;
+        }
+
+        ggml_graph_dump_dot_node(sched, fp, visited_nodes, graph, node, NULL, NULL, i);
+    }
+
+    ggml_backend_sched_splits_fdump_dot(fp, sched, graph);
+
+    fprintf(fp, "}\n");
+    fclose(fp);
+
+    GGML_LOG_INFO("%s: dot -Tpng %s -o %s.png && open %s.png\n", __func__, filename, filename, filename);
 }
