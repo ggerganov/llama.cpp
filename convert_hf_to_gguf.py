@@ -1764,25 +1764,19 @@ class DeciModel(Model):
             self.gguf_writer.add_token_list(tokens)
             self.gguf_writer.add_token_types(toktypes)
 
-            special_vocab = gguf.SpecialVocab(
-                self.dir_model, load_merges=True,
-                special_token_types = ['bos', 'eos', 'eom', 'eot']
-            )
-            special_vocab._set_special_token("bos", 128000)
-            special_vocab._set_special_token("eos", 128001)
-            special_vocab._set_special_token("eom", 128008)
-            special_vocab._set_special_token("eot", 128009)
+            special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
             special_vocab.add_to_gguf(self.gguf_writer)
         else:
             # DeciLM-7B
             self._set_vocab_llama_hf()
-#            self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
         if "block_configs" in self.hparams: # Llama-3_1-Nemotron-51B
             assert self.block_count == len(self._num_kv_heads)
             assert self.block_count == len(self._num_heads)
             assert self.block_count == len(self._ffn_dims)
+            if (rope_theta := self.hparams.get("rope_theta")) is not None:
+                self.gguf_writer.add_rope_freq_base(rope_theta)
             self.gguf_writer.add_head_count_kv(self._num_kv_heads)
             self.gguf_writer.add_head_count(self._num_heads)
             self.gguf_writer.add_feed_forward_length(self._ffn_dims)
