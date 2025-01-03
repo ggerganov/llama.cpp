@@ -22,7 +22,7 @@ static void zeros(std::ofstream & file, size_t n) {
     }
 }
 
-struct quantize_state_internal {
+struct quantize_state_impl {
     const llama_model                 & model;
     const llama_model_quantize_params * params;
 
@@ -43,13 +43,13 @@ struct quantize_state_internal {
     // used to figure out if a model shares tok_embd with the output weight
     bool has_output = false;
 
-    quantize_state_internal(const llama_model & model, const llama_model_quantize_params * params)
+    quantize_state_impl(const llama_model & model, const llama_model_quantize_params * params)
         : model(model)
         , params(params)
         {}
 };
 
-static void llama_tensor_dequantize_internal(
+static void llama_tensor_dequantize_impl(
     struct ggml_tensor * tensor, std::vector<no_init<float>> & output, std::vector<std::thread> & workers,
     const size_t nelements, const int nthread
 ) {
@@ -121,7 +121,7 @@ static void llama_tensor_dequantize_internal(
     workers.clear();
 }
 
-static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type new_type, const ggml_tensor * tensor, llama_ftype ftype) {
+static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_type, const ggml_tensor * tensor, llama_ftype ftype) {
     const std::string name = ggml_get_name(tensor);
 
     // TODO: avoid hardcoded tensor names - use the TN_* constants
@@ -410,7 +410,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
     return new_type;
 }
 
-static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int64_t chunk_size, int64_t nrows, int64_t n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
+static size_t llama_tensor_quantize_impl(enum ggml_type new_type, const float * f32_data, void * new_data, const int64_t chunk_size, int64_t nrows, int64_t n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
     if (nthread < 2) {
         // single-thread
         size_t new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, imatrix);
@@ -464,7 +464,7 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
     return new_size;
 }
 
-static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
+static void llama_model_quantize_impl(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type default_type;
     llama_ftype ftype = params->ftype;
 
@@ -534,7 +534,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llm_load_hparams(ml, model);
     llm_load_stats  (ml, model);
 
-    struct quantize_state_internal qs(model, params);
+    struct quantize_state_impl qs(model, params);
 
     if (params->only_copy) {
         ftype = model.ftype;
@@ -837,7 +837,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
-                llama_tensor_dequantize_internal(tensor, f32_conv_buf, workers, nelements, nthread);
+                llama_tensor_dequantize_impl(tensor, f32_conv_buf, workers, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.data();
             }
 
@@ -866,7 +866,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 void * new_data_03 = (char *)new_data + ggml_row_size(new_type, n_per_row) * i03 * nrows;
                 const float * imatrix_03 = imatrix ? imatrix + i03 * n_per_row : nullptr;
 
-                new_size += llama_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
+                new_size += llama_tensor_quantize_impl(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
             }
             LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
         }
@@ -919,7 +919,7 @@ uint32_t llama_model_quantize(
         const char * fname_out,
         const llama_model_quantize_params * params) {
     try {
-        llama_model_quantize_internal(fname_inp, fname_out, params);
+        llama_model_quantize_impl(fname_inp, fname_out, params);
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: failed to quantize: %s\n", __func__, err.what());
         return 1;
