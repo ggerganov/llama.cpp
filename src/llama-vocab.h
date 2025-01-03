@@ -57,7 +57,6 @@ struct llama_vocab {
     id special_unk_id  = 0;
     id special_sep_id  = LLAMA_TOKEN_NULL;
     id special_pad_id  = LLAMA_TOKEN_NULL;
-    id special_cls_id  = LLAMA_TOKEN_NULL; // TODO: revisit if this is really needed https://github.com/ggerganov/llama.cpp/pull/10930
     id special_mask_id = LLAMA_TOKEN_NULL;
 
     id linefeed_id = 13;
@@ -124,7 +123,6 @@ llama_token llama_token_bos_impl(const struct llama_vocab & vocab);
 llama_token llama_token_eos_impl(const struct llama_vocab & vocab);
 llama_token llama_token_eot_impl(const struct llama_vocab & vocab);
 llama_token llama_token_eom_impl(const struct llama_vocab & vocab);
-llama_token llama_token_cls_impl(const struct llama_vocab & vocab);
 llama_token llama_token_sep_impl(const struct llama_vocab & vocab);
 llama_token llama_token_nl_impl (const struct llama_vocab & vocab);
 llama_token llama_token_pad_impl(const struct llama_vocab & vocab);

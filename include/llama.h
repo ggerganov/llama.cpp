@@ -916,10 +916,13 @@ extern "C" {
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
     LLAMA_API llama_token llama_token_eot(const struct llama_model * model); // end-of-turn
-    LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
     LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
     LLAMA_API llama_token llama_token_pad(const struct llama_model * model); // padding
+
+    // CLS is equivalent to BOS
+    DEPRECATED(LLAMA_API llama_token llama_token_cls(const struct llama_model * model), // classification
+            "use llama_token_bos instead");
 
     LLAMA_API bool llama_add_bos_token(const struct llama_model * model);
     LLAMA_API bool llama_add_eos_token(const struct llama_model * model);

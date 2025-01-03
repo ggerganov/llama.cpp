@@ -1107,7 +1107,6 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
             vocab.special_unk_id  = LLAMA_TOKEN_NULL;
             vocab.special_sep_id  = LLAMA_TOKEN_NULL;
             vocab.special_pad_id  = LLAMA_TOKEN_NULL;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
             vocab.special_mask_id = LLAMA_TOKEN_NULL;
             vocab.linefeed_id     = LLAMA_TOKEN_NULL;
 
@@ -1128,18 +1127,16 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
             vocab.special_unk_id  = 0;
             vocab.special_sep_id  = LLAMA_TOKEN_NULL;
             vocab.special_pad_id  = LLAMA_TOKEN_NULL;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
             vocab.special_mask_id = LLAMA_TOKEN_NULL;
         } else if (tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
             // default special tokens
-            vocab.special_bos_id  = LLAMA_TOKEN_NULL;
+            vocab.special_bos_id  = 101;
             vocab.special_eos_id  = LLAMA_TOKEN_NULL;
             vocab.special_unk_id  = 100;
             vocab.special_sep_id  = 102;
             vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
         } else if (tokenizer_model == "gpt2") {
             vocab.type = LLAMA_VOCAB_TYPE_BPE;
@@ -1174,7 +1171,6 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
             vocab.special_unk_id  = LLAMA_TOKEN_NULL;
             vocab.special_sep_id  = LLAMA_TOKEN_NULL;
             vocab.special_pad_id  = LLAMA_TOKEN_NULL;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
             vocab.special_mask_id = LLAMA_TOKEN_NULL;
         } else if (tokenizer_model == "t5") {
             vocab.type = LLAMA_VOCAB_TYPE_UGM;
@@ -1185,7 +1181,6 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
             vocab.special_unk_id  = 2;
             vocab.special_sep_id  = LLAMA_TOKEN_NULL;
             vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = LLAMA_TOKEN_NULL;
             vocab.special_mask_id = LLAMA_TOKEN_NULL;
 
             const int precompiled_charsmap_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP).c_str());
@@ -1464,7 +1459,6 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
             { LLM_KV_TOKENIZER_UNK_ID,     vocab.special_unk_id     },
             { LLM_KV_TOKENIZER_SEP_ID,     vocab.special_sep_id     },
             { LLM_KV_TOKENIZER_PAD_ID,     vocab.special_pad_id     },
-            { LLM_KV_TOKENIZER_CLS_ID,     vocab.special_cls_id     },
             { LLM_KV_TOKENIZER_MASK_ID,    vocab.special_mask_id    },
             { LLM_KV_TOKENIZER_FIM_PRE_ID, vocab.special_fim_pre_id },
             { LLM_KV_TOKENIZER_FIM_SUF_ID, vocab.special_fim_suf_id },
@@ -1899,7 +1893,6 @@ void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.special_unk_id  != LLAMA_TOKEN_NULL)    { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,     vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
     if (vocab.special_sep_id  != LLAMA_TOKEN_NULL)    { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,     vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
     if (vocab.special_pad_id  != LLAMA_TOKEN_NULL)    { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,     vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
-    if (vocab.special_cls_id  != LLAMA_TOKEN_NULL)    { LLAMA_LOG_INFO( "%s: CLS token        = %d '%s'\n", __func__, vocab.special_cls_id,     vocab.id_to_token[vocab.special_cls_id].text.c_str() );  }
     if (vocab.special_mask_id != LLAMA_TOKEN_NULL)    { LLAMA_LOG_INFO( "%s: MASK token       = %d '%s'\n", __func__, vocab.special_mask_id,    vocab.id_to_token[vocab.special_mask_id].text.c_str() ); }
 
     if (vocab.linefeed_id != LLAMA_TOKEN_NULL)        { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,        vocab.id_to_token[vocab.linefeed_id].text.c_str() ); }
