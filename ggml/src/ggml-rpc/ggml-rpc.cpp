@@ -479,7 +479,8 @@ static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t buffer, gg
 
     // CUDA backend on the server pads everything to 512 due to CUDA limitations.
     // Due to bandwidth constraints, we only call the server init tensor functions if necessary.
-    if (ggml_is_quantized(tensor->type) && (tensor->ne[0] % 512 != 0)) {
+    // In particular, this is tensors with padding that needs to be cleared, so base tensors only and only misaligned.
+    if (ggml_is_quantized(tensor->type) && (tensor->ne[0] % 512 != 0) && (tensor->view_src == nullptr)) {
         rpc_msg_init_tensor_req request;
 
         request.tensor = serialize_tensor(tensor);
@@ -993,6 +994,14 @@ bool rpc_server::init_tensor(const rpc_msg_init_tensor_req & request) {
         buffer->iface.init_tensor(buffer, tensor);
     } else {
         GGML_LOG_ERROR("Null buffer for tensor passed to init_tensor function\n");
+    }
+
+    if(tensor->extra != nullptr) {
+        // This pointer can either be passed around client/server, or probably better stored server-side and kept track of.
+        // Currently unimplemented.
+        GGML_LOG_ERROR("tensor->extra populated by the backend, this is currently unsupported.\n");
+        ggml_free(ctx);
+        return false;
     }
 
     ggml_free(ctx);
