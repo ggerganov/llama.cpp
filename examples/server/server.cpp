@@ -7,6 +7,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "speculative.h"
+#include "../tts/tts-impl.hpp"
 
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
@@ -65,6 +66,7 @@ enum server_task_type {
     SERVER_TASK_TYPE_SLOT_RESTORE,
     SERVER_TASK_TYPE_SLOT_ERASE,
     SERVER_TASK_TYPE_SET_LORA,
+    SERVER_TASK_TYPE_TTS_EMBD,
 };
 
 enum oaicompat_type {
@@ -551,12 +553,12 @@ struct server_task_result_cmpl_final : server_task_result {
 
     bool post_sampling_probs;
     std::vector<completion_token_output> probs_output;
-    std::vector<std::string>  response_fields;
+    std::vector<std::string>             response_fields;
 
     slot_params generation_params;
 
     // OAI-compat fields
-    bool           verbose        = false;
+    bool           verbose   = false;
     oaicompat_type oaicompat = OAICOMPAT_TYPE_NONE;
     std::string    oaicompat_model;
     std::string    oaicompat_cmpl_id;
@@ -934,6 +936,19 @@ struct server_task_result_embd : server_task_result {
             {"embedding",        embedding[0]},
             {"tokens_evaluated", n_tokens},
         };
+    }
+};
+
+struct server_task_result_tts_embd : server_task_result {
+    int index = 0;
+    std::vector<float> embd;
+
+    virtual int get_index() override {
+        return index; // unused
+    }
+
+    virtual json to_json() override {
+        return json {}; // unused
     }
 };
 
@@ -1629,6 +1644,7 @@ struct server_context {
     // note: keep these alive - they determine the lifetime of the model, context, etc.
     common_init_result llama_init;
     common_init_result llama_init_dft;
+    common_init_result llama_init_vocoder;
 
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
@@ -1729,6 +1745,16 @@ struct server_context {
             // force F16 KV cache for the draft model for extra performance
             cparams_dft.type_k = GGML_TYPE_F16;
             cparams_dft.type_v = GGML_TYPE_F16;
+        }
+
+        if (!params.vocoder.model.empty()) {
+            common_params v_params = params_base;
+            v_params.model     = params.vocoder.model;
+            v_params.model_url = params.vocoder.model_url;
+            v_params.hf_repo   = params.vocoder.hf_repo;
+            v_params.hf_file   = params.vocoder.hf_file;
+            v_params.embedding = true;
+            llama_init_vocoder = common_init_from_params(v_params);
         }
 
         return true;
@@ -2578,6 +2604,24 @@ struct server_context {
                     res->id = task.id;
                     queue_results.send(std::move(res));
                 } break;
+            case SERVER_TASK_TYPE_TTS_EMBD:
+                {
+                    std::vector<float> embd;
+                    SRV_DBG("tts_get_embd with %d tokens", (int) task.prompt_tokens.size());
+                    int status = tts_get_embd(llama_init_vocoder.context.get(), task.prompt_tokens, embd);
+                    if (status != 0) {
+                        send_error(task, string_format("Failed to get TTS embedding, status code = %d", status), ERROR_TYPE_SERVER);
+                        break;
+                    }
+                    if (embd.size() == 0) {
+                        send_error(task, "no embeddings is returned from tts_get_embd()", ERROR_TYPE_SERVER);
+                        break;
+                    }
+                    auto res = std::make_unique<server_task_result_tts_embd>();
+                    res->id   = task.id;
+                    res->embd = std::move(embd);
+                    queue_results.send(std::move(res));
+                } break;
         }
     }
 
@@ -3148,7 +3192,10 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
     LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
 
     LOG_DBG("request:  %s\n", req.body.c_str());
-    LOG_DBG("response: %s\n", res.body.c_str());
+    // exclude TTS endpoint, because response is raw WAV data
+    if (req.path != "/v1/audio/speech") {
+        LOG_DBG("response: %s\n", res.body.c_str());
+    }
 }
 
 std::function<void(int)> shutdown_handler;
@@ -4076,6 +4123,139 @@ int main(int argc, char ** argv) {
         res_ok(res, root);
     };
 
+    // TODO: this is POC, not optimized for performance
+    const auto handle_speech = [&](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.llama_init_vocoder.context.get() == nullptr) {
+            res_error(res, format_error_response("This server does not support TTS. Start it with `--model-vocoder`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
+        const json body = json::parse(req.body);
+
+        // ignore "model" and "voice" for now
+        const std::string input           = json_value(body, "input",           std::string());
+        const std::string response_format = json_value(body, "response_format", std::string("wav"));
+        const float speed                 = json_value(body, "speed",           1.0f);
+        if (input.empty()) {
+            res_error(res, format_error_response("\"input\" must be a non-empty string", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+        if (response_format != "wav") {
+            res_error(res, format_error_response("\"response_format\" must be \"wav\"", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+        if (speed != 1.0f) {
+            res_error(res, format_error_response("\"speed\" must be 1.0", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+
+        llama_tokens audio_tokens;
+        // convert text to audio token
+        {
+            server_task task   = server_task(SERVER_TASK_TYPE_COMPLETION);
+            task.id            = ctx_server.queue_tasks.get_new_id();
+            task.index         = 0;
+            task.prompt_tokens = tts_preprocess_prompt(ctx_server.model, input);
+
+            task.params.stream         = false;
+            task.params.return_tokens  = true;
+            task.params.sampling.temp  = 0.0;
+            task.params.sampling.top_k = 1;
+
+            ctx_server.queue_results.add_waiting_tasks({task});
+            ctx_server.queue_tasks.post(task);
+
+            // get the result
+            const server_task_result_ptr raw_result = ctx_server.queue_results.recv(task.id);
+            if (raw_result->is_error()) {
+                res_error(res, raw_result->to_json());
+                return;
+            }
+            const server_task_result_cmpl_final * result = dynamic_cast<server_task_result_cmpl_final*>(raw_result.get());
+            GGML_ASSERT(result != nullptr);
+            GGML_ASSERT(!result->tokens.empty());
+            audio_tokens = std::move(result->tokens);
+
+            // debug
+            SRV_DBG("codes str (before filter) = %s\n", common_detokenize(ctx_server.ctx, audio_tokens, true).c_str());
+
+            // post-process audio tokens
+            // remove all non-audio tokens (i.e. < 151672 || > 155772)
+            audio_tokens.erase(std::remove_if(
+                audio_tokens.begin(),
+                audio_tokens.end(),
+                [](llama_token t) { return t < 151672 || t > 155772; }),
+                audio_tokens.end());
+            SRV_DBG("codes size = %d\n", (int) audio_tokens.size());
+        }
+
+        // debug
+        SRV_DBG("codes str = %s\n", common_detokenize(ctx_server.ctx, audio_tokens, true).c_str());
+
+        // convert audio token to embeddings
+        int n_embd = llama_n_embd(ctx_server.model);
+        int n_codes = -1;
+        std::vector<float> embd;
+        {
+            server_task task   = server_task(SERVER_TASK_TYPE_TTS_EMBD);
+            task.id            = ctx_server.queue_tasks.get_new_id();
+            task.prompt_tokens = std::move(audio_tokens);
+
+            ctx_server.queue_results.add_waiting_tasks({task});
+            ctx_server.queue_tasks.post(task);
+
+            // get the result
+            const server_task_result_ptr raw_result = ctx_server.queue_results.recv(task.id);
+            if (raw_result->is_error()) {
+                res_error(res, raw_result->to_json());
+                return;
+            }
+            const server_task_result_tts_embd * result = dynamic_cast<server_task_result_tts_embd*>(raw_result.get());
+            GGML_ASSERT(result != nullptr);
+            GGML_ASSERT(!result->embd.empty());
+
+            // flatten the array
+            n_codes = result->embd.size() / n_embd;
+            embd    = std::move(result->embd);
+            SRV_DBG("tts embd n_code = %d\n", n_codes);
+            SRV_DBG("tts embd size   = %zu\n", embd.size());
+            GGML_ASSERT(n_codes > 0);
+        }
+
+        // convert embeddings to wav
+        // will be freed by chunked_content_provider
+        std::vector<float> audio = tts_embd_to_audio(embd.data(), n_codes, n_embd, params.cpuparams.n_threads);
+
+        const auto chunked_content_provider = [audio = std::move(audio)](size_t, httplib::DataSink & sink) mutable {
+            // TODO: some how reuse save_wav16 instead of duplicating the code here
+            const int n_sr = 24000; // sampling rate
+            // zero out first 0.25 seconds
+            for (int i = 0; i < 24000/4; ++i) {
+                audio[i] = 0.0f;
+            }
+
+            wav_header header;
+            header.sample_rate = n_sr;
+            header.byte_rate   = header.sample_rate * header.num_channels * (header.bits_per_sample / 8);
+            header.block_align = header.num_channels * (header.bits_per_sample / 8);
+            header.data_size   = audio.size() * (header.bits_per_sample / 8);
+            header.chunk_size  = 36 + header.data_size;
+
+            sink.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+            for (const auto & sample : audio) {
+                int16_t pcm_sample = static_cast<int16_t>(std::clamp(sample * 32767.0, -32768.0, 32767.0));
+                sink.write(reinterpret_cast<const char*>(&pcm_sample), sizeof(pcm_sample));
+            }
+            sink.done();
+            return false;
+        };
+
+        // https://mimetype.io/audio/vnd.wav
+        res.set_chunked_content_provider("audio/vnd.wav", chunked_content_provider);
+        res.status = 200;
+    };
+
     const auto handle_lora_adapters_list = [&](const httplib::Request &, httplib::Response & res) {
         json result = json::array();
         const auto & loras = ctx_server.params_base.lora_adapters;
@@ -4166,6 +4346,7 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/reranking",        handle_rerank);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    svr->Post("/v1/audio/speech",     handle_speech);
     // LoRA adapters hotswap
     svr->Get ("/lora-adapters",       handle_lora_adapters_list);
     svr->Post("/lora-adapters",       handle_lora_adapters_apply);
