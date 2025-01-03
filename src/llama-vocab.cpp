@@ -1515,8 +1515,8 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
         case LLAMA_VOCAB_TYPE_WPM:
             {
                 if (add_special) {
-                    GGML_ASSERT(vocab.special_cls_id != LLAMA_TOKEN_NULL);
-                    output.push_back(vocab.special_cls_id);
+                    GGML_ASSERT(vocab.special_bos_id != LLAMA_TOKEN_NULL);
+                    output.push_back(vocab.special_bos_id);
                 }
 
                 llm_tokenizer_wpm_session session(vocab);
@@ -1643,7 +1643,7 @@ bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token t
 }
 
 llama_token llama_token_bos_impl(const struct llama_vocab & vocab) {
-    return vocab.type != LLAMA_VOCAB_TYPE_WPM ? vocab.special_bos_id : vocab.special_cls_id;
+    return vocab.special_bos_id;
 }
 
 llama_token llama_token_eos_impl(const struct llama_vocab & vocab) {
@@ -1656,10 +1656,6 @@ llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
 
 llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
     return vocab.special_eom_id;
-}
-
-llama_token llama_token_cls_impl(const struct llama_vocab & vocab) {
-    return vocab.special_cls_id;
 }
 
 llama_token llama_token_sep_impl(const struct llama_vocab & vocab) {

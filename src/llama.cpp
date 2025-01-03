@@ -12061,7 +12061,7 @@ llama_token llama_token_eot(const struct llama_model * model) {
 }
 
 llama_token llama_token_cls(const struct llama_model * model) {
-    return llama_token_cls_impl(model->vocab);
+    return llama_token_bos_impl(model->vocab);
 }
 
 llama_token llama_token_sep(const struct llama_model * model) {
