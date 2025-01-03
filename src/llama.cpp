@@ -10264,7 +10264,7 @@ static struct ggml_tensor * llm_build_moe_ffn(
          struct ggml_tensor * up_exps,
          struct ggml_tensor * gate_exps,
          struct ggml_tensor * down_exps,
-         struct ggml_tensor * expert_weights_b,
+         struct ggml_tensor * exp_probs_b,
                     int64_t   n_expert,
                     int64_t   n_expert_used,
             llm_ffn_op_type   type_op,
@@ -10298,8 +10298,8 @@ llm_expert_gating_func_type   gating_op,
     // add experts selection bias - introduced in DeepSeek V3
     // leave probs unbiased as it's later used to get expert weights
     ggml_tensor * selection_probs = probs;
-    if (expert_weights_b != nullptr) {
-        selection_probs = ggml_add(ctx, probs, expert_weights_b);
+    if (exp_probs_b != nullptr) {
+        selection_probs = ggml_add(ctx, probs, exp_probs_b);
         cb(selection_probs, "ffn_moe_probs_biased", il);
     }
 
