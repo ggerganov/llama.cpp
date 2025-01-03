@@ -1031,7 +1031,7 @@ void gguf_set_arr_str(struct gguf_context * ctx, const char * key, const char **
 
 // set or add KV pairs from another context
 void gguf_set_kv(struct gguf_context * ctx, const struct gguf_context * src) {
-    const int64_t n_kv = gguf_get_n_kv(ctx);
+    const int64_t n_kv = gguf_get_n_kv(src);
     for (int64_t i = 0; i < n_kv; ++i) {
         const struct gguf_kv & kv = src->kv[i];
 
