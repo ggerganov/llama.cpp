@@ -922,20 +922,21 @@ struct common_init_result common_init_from_params(common_params & params) {
 
     // load and optionally apply lora adapters
     for (auto & la : params.lora_adapters) {
-        common_lora_adapter_container loaded_la;
-        loaded_la.path = la.path;
-        loaded_la.scale = la.scale;
-        loaded_la.adapter = llama_lora_adapter_init(model, la.path.c_str());
-        if (loaded_la.adapter == nullptr) {
+        llama_lora_adapter_ptr lora;
+        lora.reset(llama_lora_adapter_init(model, la.path.c_str()));
+        if (lora == nullptr) {
             LOG_ERR("%s: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
             llama_free(lctx);
             llama_free_model(model);
             return iparams;
         }
-        iparams.lora_adapters.push_back(loaded_la); // copy to list of loaded adapters
+
+        la.ptr = lora.get();
+        iparams.lora.emplace_back(std::move(lora)); // copy to list of loaded adapters
     }
+
     if (!params.lora_init_without_apply) {
-        common_lora_adapters_apply(lctx, iparams.lora_adapters);
+        common_lora_adapters_apply(lctx, params.lora_adapters);
     }
 
     if (params.sampling.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
@@ -996,17 +997,17 @@ struct common_init_result common_init_from_params(common_params & params) {
         llama_perf_context_reset(lctx);
     }
 
-    iparams.model   = model;
-    iparams.context = lctx;
+    iparams.model.reset(model);
+    iparams.context.reset(lctx);
 
     return iparams;
 }
 
-void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_container> & lora_adapters) {
+void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_info> & lora) {
     llama_lora_adapter_clear(ctx);
-    for (auto & la : lora_adapters) {
+    for (auto & la : lora) {
         if (la.scale != 0.0f) {
-            llama_lora_adapter_set(ctx, la.adapter, la.scale);
+            llama_lora_adapter_set(ctx, la.ptr, la.scale);
         }
     }
 }
