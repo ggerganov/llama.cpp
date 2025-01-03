@@ -3373,6 +3373,24 @@ class CommandR2Model(Model):
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
 
 
+@Model.register("Cohere2ForCausalLM")
+class Cohere2Model(Model):
+    model_arch = gguf.MODEL_ARCH.COHERE2
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+
+        self.gguf_writer.add_logit_scale(self.hparams["logit_scale"])
+        self.gguf_writer.add_sliding_window(self.hparams["sliding_window"])
+        self.gguf_writer.add_vocab_size(self.hparams["vocab_size"])
+
+        rotary_pct = self.hparams["rotary_pct"]
+        hidden_size = self.hparams["hidden_size"]
+        num_attention_heads = self.hparams["num_attention_heads"]
+        self.gguf_writer.add_rope_dimension_count(int(rotary_pct * (hidden_size // num_attention_heads)))
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
+
+
 @Model.register("OlmoForCausalLM")
 @Model.register("OLMoForCausalLM")
 class OlmoModel(Model):
