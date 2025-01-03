@@ -120,7 +120,7 @@ int main(int argc, char ** argv) {
         }
 
         llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
-        if (decoder_start_token_id == -1) {
+        if (decoder_start_token_id == LLAMA_TOKEN_NULL) {
             decoder_start_token_id = llama_token_bos(model);
         }
 

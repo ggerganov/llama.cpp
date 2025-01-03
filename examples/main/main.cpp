@@ -494,7 +494,7 @@ int main(int argc, char ** argv) {
         }
 
         llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
-        if (decoder_start_token_id == -1) {
+        if (decoder_start_token_id == LLAMA_TOKEN_NULL) {
             decoder_start_token_id = llama_token_bos(model);
         }
 
@@ -831,7 +831,7 @@ int main(int argc, char ** argv) {
                     // if user stop generation mid-way, we must add EOT to finish model's last response
                     if (need_insert_eot && format_chat) {
                         llama_token eot = llama_token_eot(model);
-                        embd_inp.push_back(eot == -1 ? llama_token_eos(model) : eot);
+                        embd_inp.push_back(eot == LLAMA_TOKEN_NULL ? llama_token_eos(model) : eot);
                         need_insert_eot = false;
                     }
 

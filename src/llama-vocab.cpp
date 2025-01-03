@@ -490,7 +490,7 @@ struct llm_tokenizer_bpe_session {
 
     bool append_bos(std::vector<llama_vocab::id> & output) const {
         if (vocab.tokenizer_add_bos) {
-            GGML_ASSERT(vocab.special_bos_id != -1);
+            GGML_ASSERT(vocab.special_bos_id != LLAMA_TOKEN_NULL);
             output.push_back(vocab.special_bos_id);
             return true;
         }
@@ -499,7 +499,7 @@ struct llm_tokenizer_bpe_session {
 
     bool append_eos(std::vector<llama_vocab::id> & output) const {
         if (vocab.tokenizer_add_eos) {
-            GGML_ASSERT(vocab.special_eos_id != -1);
+            GGML_ASSERT(vocab.special_eos_id != LLAMA_TOKEN_NULL);
             output.push_back(vocab.special_eos_id);
             return true;
         }
@@ -1396,7 +1396,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         if (source == 0) {
                             buffer.erase_after(buffer.before_begin());
                         } else {
-                            buffer.erase_after(std::next(buffer.begin(), (source-1)));
+                            buffer.erase_after(std::next(buffer.begin(), (source - 1)));
                         }
 
                         // repeat for the right side
@@ -1410,7 +1410,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         if (source == 0) {
                             buffer.erase_after(buffer.before_begin());
                         } else {
-                            buffer.erase_after(std::next(buffer.begin(), (source-1)));
+                            buffer.erase_after(std::next(buffer.begin(), (source - 1)));
                         }
                         break;
                     }
@@ -1447,7 +1447,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                 bool is_prev_special = true;  // prefix with space if first token
 
                 if (add_special && vocab.tokenizer_add_bos) {
-                    GGML_ASSERT(vocab.special_bos_id != -1);
+                    GGML_ASSERT(vocab.special_bos_id != LLAMA_TOKEN_NULL);
                     output.push_back(vocab.special_bos_id);
                     is_prev_special = true;
                 }
@@ -1482,7 +1482,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                 }
 
                 if (add_special && vocab.tokenizer_add_eos) {
-                    GGML_ASSERT(vocab.special_eos_id != -1);
+                    GGML_ASSERT(vocab.special_eos_id != LLAMA_TOKEN_NULL);
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
@@ -1515,7 +1515,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
         case LLAMA_VOCAB_TYPE_WPM:
             {
                 if (add_special) {
-                    GGML_ASSERT(vocab.special_cls_id != -1);
+                    GGML_ASSERT(vocab.special_cls_id != LLAMA_TOKEN_NULL);
                     output.push_back(vocab.special_cls_id);
                 }
 
@@ -1535,14 +1535,14 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                 }
 
                 if (add_special) {
-                    GGML_ASSERT(vocab.special_sep_id != -1);
+                    GGML_ASSERT(vocab.special_sep_id != LLAMA_TOKEN_NULL);
                     output.push_back(vocab.special_sep_id);
                 }
             } break;
         case LLAMA_VOCAB_TYPE_UGM:
             {
                 if (add_special && vocab.tokenizer_add_bos) {
-                    GGML_ASSERT(vocab.special_bos_id != -1);
+                    GGML_ASSERT(vocab.special_bos_id != LLAMA_TOKEN_NULL);
                     output.push_back(vocab.special_bos_id);
                 }
                 llm_tokenizer_ugm_session session(vocab);
@@ -1567,7 +1567,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
                 }
 
                 if (add_special && vocab.tokenizer_add_eos) {
-                    GGML_ASSERT(vocab.special_eos_id != -1);
+                    GGML_ASSERT(vocab.special_eos_id != LLAMA_TOKEN_NULL);
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
@@ -1635,7 +1635,7 @@ llama_token_attr llama_token_get_attr_impl(const struct llama_vocab & vocab, lla
 }
 
 bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token) {
-    return token != -1 && vocab.special_eog_ids.count(token) > 0;
+    return token != LLAMA_TOKEN_NULL && vocab.special_eog_ids.count(token) > 0;
 }
 
 bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token token) {
@@ -1874,7 +1874,7 @@ int32_t llama_detokenize_impl(
     }
 
     if (remove_special && vocab.tokenizer_add_eos) {
-        if (n_tokens > 0 && tokens[n_tokens-1] == vocab.special_eos_id) {
+        if (n_tokens > 0 && tokens[n_tokens - 1] == vocab.special_eos_id) {
             n_tokens--;
         }
     }

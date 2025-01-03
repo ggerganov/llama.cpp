@@ -257,7 +257,7 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
             for (int i = 0; i < (int)cur_p->size; ++i) {
                 const float val = cur_p->data[i].logit;
                 int ib = int(bucket_scale * val + bucket_inter); //nbuckets * (val - bucket_low) / (bucket_high - bucket_low);
-                ib = std::max(0, std::min(nbuckets-1, ib));
+                ib = std::max(0, std::min(nbuckets - 1, ib));
                 bucket_idx[i] = ib;
                 ++histo[ib];
             }
@@ -280,13 +280,13 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
             for (int i = 0; i < (int)cur_p->size; ++i) {
                 int j = bucket_idx[i];
                 if (j >= ib) {
-                    *bucket_ptrs[nbuckets-1-j]++ = cur_p->data[i];
+                    *bucket_ptrs[nbuckets - 1 - j]++ = cur_p->data[i];
                 }
             }
 
             ptr = tmp_tokens.data();
             int ndone = 0;
-            for (int j = nbuckets-1; j > ib; --j) {
+            for (int j = nbuckets - 1; j > ib; --j) {
                 std::sort(ptr, ptr + histo[j], comp);
                 ptr += histo[j];
                 ndone += histo[j];
@@ -1832,7 +1832,7 @@ static void llama_sampler_dry_apply(struct llama_sampler * smpl, llama_token_dat
                 ctx->dry_repeat_count[last - k] = std::min(n, rep_limit);
                 if (n > 0) {
                     lt = k;
-                    rt = k+n-1;
+                    rt = k + n - 1;
                 }
             } else {
                 // If k is inside the current Z-box, consider two cases.
