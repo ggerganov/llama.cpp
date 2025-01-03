@@ -23,6 +23,7 @@ from typing import (
     Set,
 )
 from re import RegexFlag
+import wget
 
 
 class ServerResponse:
@@ -380,6 +381,26 @@ def match_regex(regex: str, text: str) -> bool:
         ).search(text)
         is not None
     )
+
+
+def download_file(url: str, output_file_path: str | None = None) -> str:
+    """
+    Download a file from a URL to a local path. If the file already exists, it will not be downloaded again.
+
+    output_file_path is the local path to save the downloaded file. If not provided, the file will be saved in the root directory.
+
+    Returns the local path of the downloaded file.
+    """
+    file_name = url.split('/').pop()
+    output_file = f'./tmp/{file_name}' if output_file_path is None else output_file_path
+    if not os.path.exists(output_file):
+        print(f"Downloading {url} to {output_file}")
+        wget.download(url, out=output_file)
+        print(f"Done downloading to {output_file}")
+    else:
+        print(f"File already exists at {output_file}")
+    return output_file
+
 
 def is_slow_test_allowed():
     return os.environ.get("SLOW_TESTS") == "1" or os.environ.get("SLOW_TESTS") == "ON"
