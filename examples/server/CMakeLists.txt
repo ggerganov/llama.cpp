@@ -13,6 +13,7 @@ set(TARGET_SRCS
     server.cpp
     utils.hpp
     httplib.h
+    ../tts/tts-impl.cpp
 )
 set(PUBLIC_ASSETS
     index.html.gz

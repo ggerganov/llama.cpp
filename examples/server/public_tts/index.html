@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llama.cpp TTS</title>
+  <style>
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      margin: 2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>llama.cpp TTS</h1>
+
+  Input text:<br/>
+  <textarea id="input" rows="4" cols="50">Hello world</textarea><br/>
+  <button id="btn_speak" onclick="speak()">Speak</button>
+
+  <script>
+    const input_el = document.getElementById('input');
+    const btn_speak_el = document.getElementById('btn_speak');
+
+    let working = false;
+
+    async function speak() {
+      if (working) {
+        return;
+      }
+
+      working = true;
+      input_el.disabled = true;
+      btn_speak_el.disabled = true;
+
+      try {
+        const res = await fetch('/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            input: input_el.value.trim(),
+            response_format: 'wav',
+          }),
+        });
+
+        if (res.status === 200) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.play();
+        } else {
+          const text = await res.text();
+          throw new Error(`Failed to generate speech: ${text}`);
+        }
+      } catch (e) {
+        console.error(e);
+        alert(e.message);
+      }
+
+      working = false;
+      input_el.disabled = false;
+      btn_speak_el.disabled = false;
+    }
+  </script>
+</body>
+</html>
