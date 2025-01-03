@@ -417,8 +417,10 @@ extern "C" {
                              const char * path_model,
               struct llama_model_params   params);
 
-    // TODO: rename to llama_model_free
-    LLAMA_API void llama_free_model(struct llama_model * model);
+    DEPRECATED(LLAMA_API void llama_free_model(struct llama_model * model),
+            "use llama_model_free instead");
+
+    LLAMA_API void llama_model_free(struct llama_model * model);
 
     // TODO: rename to llama_init_from_model
     LLAMA_API struct llama_context * llama_new_context_with_model(

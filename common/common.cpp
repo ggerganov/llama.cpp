@@ -873,7 +873,7 @@ struct common_init_result common_init_from_params(common_params & params) {
         }
 
         if (!ok) {
-            llama_free_model(model);
+            llama_model_free(model);
 
             return iparams;
         }
@@ -884,7 +884,7 @@ struct common_init_result common_init_from_params(common_params & params) {
     llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
         LOG_ERR("%s: failed to create context with model '%s'\n", __func__, params.model.c_str());
-        llama_free_model(model);
+        llama_model_free(model);
         return iparams;
     }
 
@@ -900,7 +900,7 @@ struct common_init_result common_init_from_params(common_params & params) {
         const auto cvec = common_control_vector_load(params.control_vectors);
         if (cvec.n_embd == -1) {
             llama_free(lctx);
-            llama_free_model(model);
+            llama_model_free(model);
 
             return iparams;
         }
@@ -913,7 +913,7 @@ struct common_init_result common_init_from_params(common_params & params) {
                                              params.control_vector_layer_end);
         if (err) {
             llama_free(lctx);
-            llama_free_model(model);
+            llama_model_free(model);
 
             return iparams;
         }
@@ -926,7 +926,7 @@ struct common_init_result common_init_from_params(common_params & params) {
         if (lora == nullptr) {
             LOG_ERR("%s: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
             llama_free(lctx);
-            llama_free_model(model);
+            llama_model_free(model);
             return iparams;
         }
 

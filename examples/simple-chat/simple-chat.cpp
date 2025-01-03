@@ -194,7 +194,7 @@ int main(int argc, char ** argv) {
     }
     llama_sampler_free(smpl);
     llama_free(ctx);
-    llama_free_model(model);
+    llama_model_free(model);
 
     return 0;
 }

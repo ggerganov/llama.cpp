@@ -9,7 +9,7 @@
 #include "llama.h"
 
 struct llama_model_deleter {
-    void operator()(llama_model * model) { llama_free_model(model); }
+    void operator()(llama_model * model) { llama_model_free(model); }
 };
 
 struct llama_context_deleter {

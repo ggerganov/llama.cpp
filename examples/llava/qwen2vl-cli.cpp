@@ -354,7 +354,7 @@ static void llava_free(struct llava_context * ctx_llava) {
     }
 
     llama_free(ctx_llava->ctx_llama);
-    llama_free_model(ctx_llava->model);
+    llama_model_free(ctx_llava->model);
     llama_backend_free();
 }
 
@@ -575,7 +575,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    llama_free_model(model);
+    llama_model_free(model);
 
     return 0;
 }

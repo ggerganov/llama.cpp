@@ -398,7 +398,7 @@ int main(int raw_argc, char ** raw_argv) {
     }
     // silence valgrind
     llama_free(ctx);
-    llama_free_model(model);
+    llama_model_free(model);
 
     return 0;
 }

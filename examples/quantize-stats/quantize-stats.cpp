@@ -323,7 +323,7 @@ int main(int argc, char ** argv) {
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
-            llama_free_model(model);
+            llama_model_free(model);
             return 1;
         }
     }
@@ -347,7 +347,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: error: Quantization should be tested with a float model, "
                 "this model contains already quantized layers (%s is type %d)\n", __func__, kv_tensor.first.c_str(), kv_tensor.second->type);
             llama_free(ctx);
-            llama_free_model(model);
+            llama_model_free(model);
             return 1;
         }
         included_layers++;
@@ -409,7 +409,7 @@ int main(int argc, char ** argv) {
 
 
     llama_free(ctx);
-    llama_free_model(model);
+    llama_model_free(model);
     // report timing
     {
         const int64_t t_main_end_us = ggml_time_us();

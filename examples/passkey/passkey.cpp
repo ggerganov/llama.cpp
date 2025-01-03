@@ -266,7 +266,7 @@ int main(int argc, char ** argv) {
     llama_batch_free(batch);
 
     llama_free(ctx);
-    llama_free_model(model);
+    llama_model_free(model);
 
     llama_backend_free();
 

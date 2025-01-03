@@ -11494,7 +11494,7 @@ struct llama_model * llama_load_model_from_file(
         ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
         if (!rpc_reg) {
             LLAMA_LOG_ERROR("%s: failed to find RPC backend\n", __func__);
-            llama_free_model(model);
+            llama_model_free(model);
             return nullptr;
         }
 
@@ -11502,7 +11502,7 @@ struct llama_model * llama_load_model_from_file(
         ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
         if (!ggml_backend_rpc_add_device_fn) {
             LLAMA_LOG_ERROR("%s: failed to find RPC device add function\n", __func__);
-            llama_free_model(model);
+            llama_model_free(model);
             return nullptr;
         }
 
@@ -11512,7 +11512,7 @@ struct llama_model * llama_load_model_from_file(
                 model->devices.push_back(dev);
             } else {
                 LLAMA_LOG_ERROR("%s: failed to add RPC device for server '%s'\n", __func__, server.c_str());
-                llama_free_model(model);
+                llama_model_free(model);
                 return nullptr;
             }
         }
@@ -11544,7 +11544,7 @@ struct llama_model * llama_load_model_from_file(
     if (params.split_mode == LLAMA_SPLIT_MODE_NONE) {
         if (params.main_gpu < 0 || params.main_gpu >= (int)model->devices.size()) {
             LLAMA_LOG_ERROR("%s: invalid value for main_gpu: %d (available devices: %d)\n", __func__, params.main_gpu, (int)model->devices.size());
-            llama_free_model(model);
+            llama_model_free(model);
             return nullptr;
         }
         ggml_backend_dev_t main_gpu = model->devices[params.main_gpu];
@@ -11567,7 +11567,7 @@ struct llama_model * llama_load_model_from_file(
             LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
 
-        llama_free_model(model);
+        llama_model_free(model);
         return nullptr;
     }
 
