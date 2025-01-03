@@ -24,7 +24,6 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
-// TODO: "lora_adapter" is tautology
 struct common_lora_adapter_info {
     std::string path;
     float scale;

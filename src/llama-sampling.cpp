@@ -124,6 +124,7 @@ struct ring_buffer {
     size_t sz = 0;
     size_t first = 0;
     size_t pos = 0;
+
     std::vector<T> data;
 };
 

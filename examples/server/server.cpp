@@ -1626,6 +1626,7 @@ struct server_response {
 struct server_context {
     common_params params_base;
 
+    // note: keep these alive - they determine the lifetime of the model, context, etc.
     common_init_result llama_init;
     common_init_result llama_init_dft;
 
