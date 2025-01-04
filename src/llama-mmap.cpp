@@ -245,7 +245,11 @@ int llama_file::file_id() const {
 #ifdef _WIN32
     return _fileno(pimpl->fp);
 #else
+#if defined(fileno)
+    return fileno(pimpl->fp);
+#else
     return ::fileno(pimpl->fp);
+#endif
 #endif
 }
 
