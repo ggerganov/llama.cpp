@@ -8,6 +8,12 @@
 #define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 256  // DeepSeekV3
 
+enum llama_expert_gating_func_type {
+    LLAMA_EXPERT_GATING_FUNC_TYPE_NONE    = 0,
+    LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX = 1,
+    LLAMA_EXPERT_GATING_FUNC_TYPE_SIGMOID = 2,
+};
+
 struct llama_hparams_posnet {
     uint32_t n_embd;
     uint32_t n_layer;

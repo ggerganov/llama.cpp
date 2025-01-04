@@ -116,12 +116,6 @@ extern "C" {
         LLAMA_ROPE_TYPE_VISION = GGML_ROPE_TYPE_VISION,
     };
 
-    enum llama_expert_gating_func_type {
-        LLAMA_EXPERT_GATING_FUNC_TYPE_NONE    = 0,
-        LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX = 1,
-        LLAMA_EXPERT_GATING_FUNC_TYPE_SIGMOID = 2,
-    };
-
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
