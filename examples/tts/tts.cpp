@@ -346,27 +346,13 @@ int main(int argc, char ** argv) {
         LOG_INF("%s: codes audio size: %d\n", __func__, (int) codes.size());
     }
 
-    for (auto & token : codes) {
-        token -= 151672;
-    }
-
     const auto t_voc_start = ggml_time_us();
 
-    const int n_codes = codes.size();
-
-    llama_batch batch = llama_batch_init(n_codes, 0, 1);
-
-    for (size_t i = 0; i < codes.size(); ++i) {
-        common_batch_add(batch, codes[i], i, { 0 }, true); // TODO: all logits?
-    }
-    GGML_ASSERT(batch.n_tokens == n_codes);
-
-    if (llama_decode(ctx_cts, batch) != 0) {
-        LOG_ERR("%s: llama_decode() failed\n", __func__);
+    std::vector<float> embd;
+    if (tts_get_embd(ctx_cts, codes, embd) != 0) {
+        LOG_ERR("%s: tts_get_embd() failed\n", __func__);
         return 1;
     }
-
-    llama_synchronize(ctx_cts);
 
     LOG_INF("%s: time for vocoder:      %.3f ms\n", __func__, (ggml_time_us() - t_voc_start) / 1000.0f);
 
@@ -375,10 +361,9 @@ int main(int argc, char ** argv) {
 #if 1
     // spectral operations
     const int n_embd = llama_n_embd(model_cts);
-    const float * embd = llama_get_embeddings(ctx_cts);
+    const int n_codes = codes.size();
 
-    auto audio = tts_embd_to_audio(embd, n_codes, n_embd, params.cpuparams.n_threads);
-
+    auto audio = tts_embd_to_audio(embd.data(), n_codes, n_embd, params.cpuparams.n_threads);
 #else
     // read the spectrogram from a file for debugging purposes
     std::vector<float> audio;

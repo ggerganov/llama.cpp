@@ -942,6 +942,7 @@ struct server_task_result_embd : server_task_result {
 struct server_task_result_tts_embd : server_task_result {
     int index = 0;
     std::vector<float> embd;
+    double t_ms = 0.0;
 
     virtual int get_index() override {
         return index; // unused
@@ -1749,11 +1750,15 @@ struct server_context {
 
         if (!params.vocoder.model.empty()) {
             common_params v_params = params_base;
-            v_params.model     = params.vocoder.model;
-            v_params.model_url = params.vocoder.model_url;
-            v_params.hf_repo   = params.vocoder.hf_repo;
-            v_params.hf_file   = params.vocoder.hf_file;
-            v_params.embedding = true;
+            v_params.model        = params.vocoder.model;
+            v_params.model_url    = params.vocoder.model_url;
+            v_params.hf_repo      = params.vocoder.hf_repo;
+            v_params.hf_file      = params.vocoder.hf_file;
+            v_params.embedding    = true;
+            v_params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            // make sure the vocoder has the sufficient batch size
+            v_params.n_batch      = v_params.n_ctx;
+            v_params.n_ubatch     = v_params.n_ctx;
             llama_init_vocoder = common_init_from_params(v_params);
         }
 
@@ -2606,9 +2611,18 @@ struct server_context {
                 } break;
             case SERVER_TASK_TYPE_TTS_EMBD:
                 {
+                    const auto ctx_cts = llama_init_vocoder.context.get();
+                    const int n_ubatch = llama_n_ubatch(ctx_cts);
+                    const int n_codes = (int) task.prompt_tokens.size();
+                    if (n_codes > n_ubatch) {
+                        send_error(task, string_format("Number of codes (%d) exceeds the maximum ubatch of vocoder model (%d)", n_codes, n_ubatch), ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
                     std::vector<float> embd;
-                    SRV_DBG("tts_get_embd with %d tokens", (int) task.prompt_tokens.size());
-                    int status = tts_get_embd(llama_init_vocoder.context.get(), task.prompt_tokens, embd);
+                    uint64_t t_start = ggml_time_us();
+                    SRV_DBG("tts_get_embd with %d codes", n_codes);
+                    int status = tts_get_embd(ctx_cts, task.prompt_tokens, embd);
                     if (status != 0) {
                         send_error(task, string_format("Failed to get TTS embedding, status code = %d", status), ERROR_TYPE_SERVER);
                         break;
@@ -2620,6 +2634,7 @@ struct server_context {
                     auto res = std::make_unique<server_task_result_tts_embd>();
                     res->id   = task.id;
                     res->embd = std::move(embd);
+                    res->t_ms = (ggml_time_us() - t_start) / 1e3;
                     queue_results.send(std::move(res));
                 } break;
         }
@@ -4149,8 +4164,9 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        llama_tokens audio_tokens;
-        // convert text to audio token
+        llama_tokens codes;
+        result_timings ttc_timings;
+        // convert text to codes
         {
             server_task task   = server_task(SERVER_TASK_TYPE_COMPLETION);
             task.id            = ctx_server.queue_tasks.get_new_id();
@@ -4174,32 +4190,35 @@ int main(int argc, char ** argv) {
             const server_task_result_cmpl_final * result = dynamic_cast<server_task_result_cmpl_final*>(raw_result.get());
             GGML_ASSERT(result != nullptr);
             GGML_ASSERT(!result->tokens.empty());
-            audio_tokens = std::move(result->tokens);
+            codes = std::move(result->tokens);
 
             // debug
-            SRV_DBG("codes str (before filter) = %s\n", common_detokenize(ctx_server.ctx, audio_tokens, true).c_str());
+            // SRV_DBG("codes str (before filter) = %s\n", common_detokenize(ctx_server.ctx, codes, true).c_str());
 
-            // post-process audio tokens
+            // post-process codes
             // remove all non-audio tokens (i.e. < 151672 || > 155772)
-            audio_tokens.erase(std::remove_if(
-                audio_tokens.begin(),
-                audio_tokens.end(),
+            codes.erase(std::remove_if(
+                codes.begin(),
+                codes.end(),
                 [](llama_token t) { return t < 151672 || t > 155772; }),
-                audio_tokens.end());
-            SRV_DBG("codes size = %d\n", (int) audio_tokens.size());
+                codes.end());
+            SRV_DBG("codes size = %d\n", (int) codes.size());
+
+            ttc_timings = std::move(result->timings);
         }
 
         // debug
-        SRV_DBG("codes str = %s\n", common_detokenize(ctx_server.ctx, audio_tokens, true).c_str());
+        // SRV_DBG("codes str = %s\n", common_detokenize(ctx_server.ctx, codes, true).c_str());
 
-        // convert audio token to embeddings
-        int n_embd = llama_n_embd(ctx_server.model);
+        // convert codes to embeddings
+        int n_embd = llama_n_embd(ctx_server.llama_init_vocoder.model.get());
         int n_codes = -1;
+        double t_voc_ms = 0.0;
         std::vector<float> embd;
         {
             server_task task   = server_task(SERVER_TASK_TYPE_TTS_EMBD);
             task.id            = ctx_server.queue_tasks.get_new_id();
-            task.prompt_tokens = std::move(audio_tokens);
+            task.prompt_tokens = std::move(codes);
 
             ctx_server.queue_results.add_waiting_tasks({task});
             ctx_server.queue_tasks.post(task);
@@ -4215,16 +4234,25 @@ int main(int argc, char ** argv) {
             GGML_ASSERT(!result->embd.empty());
 
             // flatten the array
-            n_codes = result->embd.size() / n_embd;
-            embd    = std::move(result->embd);
-            SRV_DBG("tts embd n_code = %d\n", n_codes);
-            SRV_DBG("tts embd size   = %zu\n", embd.size());
+            n_codes  = result->embd.size() / n_embd;
+            embd     = std::move(result->embd);
+            t_voc_ms = result->t_ms;
+            SRV_DBG("tts embd n_code   = %d\n",  n_codes);
+            SRV_DBG("tts embd size     = %zu\n", embd.size());
+            SRV_DBG("tts embd t_voc_ms = %lf\n", t_voc_ms);
             GGML_ASSERT(n_codes > 0);
         }
 
         // convert embeddings to wav
         // will be freed by chunked_content_provider
+        const auto t_spec_start = ggml_time_us();
         std::vector<float> audio = tts_embd_to_audio(embd.data(), n_codes, n_embd, params.cpuparams.n_threads);
+        double t_spec_ms = (ggml_time_us() - t_spec_start) / 1e3;
+
+        // for now, we can only leave timings in response headers, mostly for debugging
+        res.set_header("X-timings-ttc",  ttc_timings.to_json().dump());
+        res.set_header("X-timings-voc",  (json{{ "t_voc_ms", t_voc_ms }}).dump());
+        res.set_header("X-timings-spec", (json{{ "t_spec_ms", t_spec_ms }}).dump());
 
         const auto chunked_content_provider = [audio = std::move(audio)](size_t, httplib::DataSink & sink) mutable {
             // TODO: some how reuse save_wav16 instead of duplicating the code here

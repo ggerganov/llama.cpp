@@ -14,6 +14,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <cstring>
 
 //
 // Terminal utils

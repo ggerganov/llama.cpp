@@ -6,7 +6,7 @@
   <title>llama.cpp TTS</title>
   <style>
     body {
-      font-family: 'Courier New', Courier, monospace;
+      font-family: monospace;
       margin: 2em;
     }
   </style>
@@ -16,10 +16,15 @@
 
   Input text:<br/>
   <textarea id="input" rows="4" cols="50">Hello world</textarea><br/>
-  <button id="btn_speak" onclick="speak()">Speak</button>
+  <button id="btn_speak" onclick="speak()">Speak</button><br/>
+  <br/>
+  <p id="status">Status: ready</p><br/>
+  <p id="output"></p>
 
   <script>
     const input_el = document.getElementById('input');
+    const output_el = document.getElementById('output');
+    const status_el = document.getElementById('status');
     const btn_speak_el = document.getElementById('btn_speak');
 
     let working = false;
@@ -32,6 +37,9 @@
       working = true;
       input_el.disabled = true;
       btn_speak_el.disabled = true;
+      status_el.textContent = 'Status: generating...';
+
+      const input = input_el.value.trim();
 
       try {
         const res = await fetch('/v1/audio/speech', {
@@ -40,7 +48,7 @@
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            input: input_el.value.trim(),
+            input,
             response_format: 'wav',
           }),
         });
@@ -50,6 +58,11 @@
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
           audio.play();
+          status_el.textContent = 'Status: playing...';
+          audio.addEventListener('ended', () => {
+            status_el.textContent = 'Status: ready';
+          });
+          echoTimings(res.headers, input);
         } else {
           const text = await res.text();
           throw new Error(`Failed to generate speech: ${text}`);
@@ -57,11 +70,42 @@
       } catch (e) {
         console.error(e);
         alert(e.message);
+        status_el.textContent = 'Status: ready';
       }
 
       working = false;
       input_el.disabled = false;
       btn_speak_el.disabled = false;
+    }
+
+    function echoTimings(headers, input_txt) {
+      try {
+        const timingsTTC = JSON.parse(headers.get('X-timings-ttc'));
+        const timingsVoc = JSON.parse(headers.get('X-timings-voc'));
+        const timingsSpec = JSON.parse(headers.get('X-timings-spec'));
+        output_el.innerHTML = `
+          <b>Input text:</b> ${escapeHtml(input_txt)}<br/>
+          <b>Timings:</b><br/>
+          <b>TTC:</b>
+          <ul>
+            ${Object.entries(timingsTTC).map(([k, v]) => `<li>${k}: ${v.toFixed(2)} ms</li>`).join('')}
+          </ul>
+          <b>Voc:</b> ${timingsVoc.t_voc_ms.toFixed(2)} ms<br/>
+          <b>Spec:</b> ${timingsSpec.t_spec_ms.toFixed(2)} ms
+        `;
+      } catch (e) {
+        console.error(e);
+        output_el.innerHTML = 'No timings data is available.';
+      }
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
   </script>
 </body>
