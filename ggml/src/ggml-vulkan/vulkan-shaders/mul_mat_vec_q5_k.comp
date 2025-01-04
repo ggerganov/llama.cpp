@@ -15,8 +15,8 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     // 16 threads are used to process each block
     const uint it_size = gl_WorkGroupSize.x/16;
     const uint tid = gl_LocalInvocationID.x;
-    const uint itid = tid%16;  // 0...16
-    const uint ix  = tid/16;
+    const uint itid = tid%16;  // 0...15
+    const uint ix = tid/16;
 
     const uint il = itid/4;                          // 0...3
     const uint ir = itid - 4*il;                     // 0...7 or 0...3
@@ -49,9 +49,9 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             uint32_t scale0_u32 = data_a_packed16[ib0 + i].scales[v_im    ];
             uint32_t scale4_u32 = data_a_packed16[ib0 + i].scales[v_im + 2];
             uint32_t scale8_u32 = data_a_packed16[ib0 + i].scales[v_im + 4];
-            uvec4 scale0 = uvec4(unpack8(scale0_u32));
-            uvec4 scale4 = uvec4(unpack8(scale4_u32));
-            uvec4 scale8 = uvec4(unpack8(scale8_u32));
+            uvec2 scale0 = uvec2(unpack8(scale0_u32));
+            uvec2 scale4 = uvec2(unpack8(scale4_u32));
+            uvec2 scale8 = uvec2(unpack8(scale8_u32));
 
             const uint32_t sc0 = (  scale0.x       & 0x3f);
             const uint32_t sc1 = (  scale0.y       & 0x3f);
@@ -74,7 +74,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
             uint32_t qs0_16_lo4_offset16 = ((qh >> (2*v_im)) & 0x01010101) << 4;
             uint32_t qs0_16_hi4_offset16 = ((qh >> (2*v_im)) & 0x02020202) << 3;
-            uint32_t qs64_80_lo4_offset16 = ((qh >> (2*v_im)) & 0x10101010) << 0;
+            uint32_t qs64_80_lo4_offset16 = ((qh >> (2*v_im)) & 0x10101010);
             uint32_t qs64_80_hi4_offset16 = ((qh >> (2*v_im)) & 0x20202020) >> 1;
 
             qs0_16_u32_lo4 += qs0_16_lo4_offset16;

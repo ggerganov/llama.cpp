@@ -14,13 +14,11 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     // 16 threads are used to process each block
     const uint it_size = gl_WorkGroupSize.x/16;
     const uint tid = gl_LocalInvocationID.x;
-    const uint itid = tid%16;  // 0...16
-    const uint ix  = tid/16;
+    const uint itid = tid%16;  // 0...15
+    const uint ix = tid/16;
 
-    const uint step = 8;
-
-    const uint v_im = itid/step;                            // 0 or 1. 0 computes 0..., 1 computes 128...
-    const uint v_in = itid - step*v_im;                     // 0...15 or 0...7
+    const uint v_im = itid/8;                               // 0 or 1. 0 computes 0..., 1 computes 128...
+    const uint v_in = itid - 8*v_im;                        // 0...15 or 0...7
 
     const uint8_t m = uint8_t(1 << (4 * v_im));
 
@@ -60,7 +58,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
             [[unroll]] for (uint j = 0; j < NUM_COLS; ++j) {
 
-                B_TYPE_VEC2 b0 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2 + 0];
+                B_TYPE_VEC2 b0 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2];
                 B_TYPE_VEC2 b16 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2 + 8];
                 B_TYPE_VEC2 b32 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2 + 16];
                 B_TYPE_VEC2 b48 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2 + 24];
