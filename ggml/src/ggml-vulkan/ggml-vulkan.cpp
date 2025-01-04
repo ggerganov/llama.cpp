@@ -8094,9 +8094,9 @@ static bool ggml_vk_khr_cooperative_matrix_support(const vk::PhysicalDevicePrope
         if (driver_props.driverID == vk::DriverId::eAmdProprietary || driver_props.driverID == vk::DriverId::eAmdOpenSource) {
             // Workaround for AMD proprietary driver reporting support on all GPUs
             const std::string name = props.deviceName;
-            return name.rfind("AMD Radeon RX 7", 0) == 0 ||    // RDNA 3 consumer GPUs
-                   name.rfind("AMD Radeon PRO W7", 0) == 0 ||  // RDNA 3 workstation GPUs
-                   name.rfind("AMD Radeon 7", 0) == 0;         // RDNA 3 APUs
+            return name.rfind("AMD Radeon RX 7", 0) == 0   || name.rfind("AMD Radeon(TM) RX 7", 0) == 0   || // RDNA 3 consumer GPUs
+                   name.rfind("AMD Radeon PRO W7", 0) == 0 || name.rfind("AMD Radeon(TM) PRO W7", 0) == 0 || // RDNA 3 workstation GPUs
+                   name.rfind("AMD Radeon 7", 0) == 0      || name.rfind("AMD Radeon(TM) 7", 0) == 0;        // RDNA 3 APUs
         }
         return true;
     default:
