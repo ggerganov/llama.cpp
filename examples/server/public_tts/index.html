@@ -98,7 +98,9 @@
           <b>Timings:</b><br/>
           <b>TTC:</b>
           <ul>
-            ${Object.entries(timingsTTC).map(([k, v]) => `<li>${k}: ${v.toFixed(2)} ms</li>`).join('')}
+            ${Object.entries(timingsTTC).map(([k, v]) =>
+              `<li>${k}: ${k.endsWith('_ms') ? (v.toFixed(2) + ' ms') : parseInt(v)}</li>`
+            ).join('')}
           </ul>
           <b>Voc:</b> ${timingsVoc.t_voc_ms.toFixed(2)} ms<br/>
           <b>Spec:</b> ${timingsSpec.t_spec_ms.toFixed(2)} ms
