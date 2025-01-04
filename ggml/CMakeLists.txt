@@ -252,26 +252,6 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml LIBRARY PUBLIC_HEADER)
 install(TARGETS ggml-base LIBRARY)
 
-# FIXME: this should be done in the backend cmake files
-if (GGML_METAL)
-    # FIXME: does this need to be installed with GGML_METAL_EMBED_LIBRARY?
-    install(
-        FILES src/ggml-metal/ggml-metal.metal
-        PERMISSIONS
-            OWNER_READ
-            OWNER_WRITE
-            GROUP_READ
-            WORLD_READ
-        DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-    if (NOT GGML_METAL_EMBED_LIBRARY)
-        install(
-            FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
-            DESTINATION ${CMAKE_INSTALL_BINDIR}
-        )
-    endif()
-endif()
-
 if (GGML_STANDALONE)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ggml.pc.in
         ${CMAKE_CURRENT_BINARY_DIR}/ggml.pc
