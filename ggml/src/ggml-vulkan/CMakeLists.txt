@@ -73,7 +73,7 @@ if (Vulkan_FOUND)
         OUTPUT ${_ggml_vk_header}
                 ${_ggml_vk_source}
 
-        COMMAND ${_ggml_vk_genshaders_cmd}
+        COMMAND "$<TARGET_FILE_DIR:vulkan-shaders-gen>/${_ggml_vk_genshaders_cmd}"
             --glslc      ${Vulkan_GLSLC_EXECUTABLE}
             --input-dir  ${_ggml_vk_input_dir}
             --output-dir ${_ggml_vk_output_dir}
