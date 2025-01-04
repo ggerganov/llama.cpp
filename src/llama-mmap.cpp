@@ -241,7 +241,7 @@ llama_file::~llama_file() = default;
 size_t llama_file::tell() const { return pimpl->tell(); }
 size_t llama_file::size() const { return pimpl->size; }
 
-int llama_file::fileno() const {
+int llama_file::file_id() const {
 #ifdef _WIN32
     return _fileno(pimpl->fp);
 #else
@@ -265,7 +265,7 @@ struct llama_mmap::impl {
 
     impl(struct llama_file * file, size_t prefetch, bool numa) {
         size = file->size();
-        int fd = file->fileno();
+        int fd = file->file_id();
         int flags = MAP_SHARED;
         if (numa) { prefetch = 0; }
 #ifdef __linux__
@@ -357,7 +357,7 @@ struct llama_mmap::impl {
 
         size = file->size();
 
-        HANDLE hFile = (HANDLE) _get_osfhandle(file->fileno());
+        HANDLE hFile = (HANDLE) _get_osfhandle(file->file_id());
 
         HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
 
