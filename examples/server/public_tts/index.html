@@ -10,6 +10,7 @@
       margin: 2em;
     }
   </style>
+  <!-- <script src=" https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script> -->
 </head>
 <body>
   <h1>llama.cpp TTS</h1>
@@ -20,11 +21,13 @@
   <br/>
   <p id="status">Status: ready</p><br/>
   <p id="output"></p>
+  <a id="download"></a>
 
   <script>
     const input_el = document.getElementById('input');
     const output_el = document.getElementById('output');
     const status_el = document.getElementById('status');
+    const download_el = document.getElementById('download');
     const btn_speak_el = document.getElementById('btn_speak');
 
     let working = false;
@@ -38,6 +41,7 @@
       input_el.disabled = true;
       btn_speak_el.disabled = true;
       status_el.textContent = 'Status: generating...';
+      download_el.textContent = '';
 
       const input = input_el.value.trim();
 
@@ -56,6 +60,9 @@
         if (res.status === 200) {
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
+          download_el.href = url;
+          download_el.innerText = 'Download';
+          download_el.download = getFileNameWAV(input);
           const audio = new Audio(url);
           audio.play();
           status_el.textContent = 'Status: playing...';
@@ -63,6 +70,9 @@
             status_el.textContent = 'Status: ready';
           });
           echoTimings(res.headers, input);
+
+          // const buffer = await blob.arrayBuffer();
+          // wavToMp3(new Int16Array(buffer));
         } else {
           const text = await res.text();
           throw new Error(`Failed to generate speech: ${text}`);
@@ -106,6 +116,14 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+    }
+
+    function getFileNameWAV(input) {
+      return input.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 32) + '.wav';
+    }
+
+    function wavToMp3(wavData) {
+      // TODO: implement this using lamejs
     }
   </script>
 </body>
