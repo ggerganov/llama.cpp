@@ -6,6 +6,8 @@
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
+shared FLOAT_TYPE sc[BLOCK_SIZE/16][2][8];
+
 void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
     get_offsets(a_offset, b_offset, d_offset);
@@ -24,6 +26,16 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     const uint v_im = il / 2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
     const uint v_in = il % 2;
+
+	// v_im may be incorrect
+	const uint itid8 = itid%8;
+	const uint a = (itid8 > 5) ? 4 : 0;
+	const uint b = (itid8 > 3) ? 0x0f : 0x3f;
+	const uint c = (itid8 > 3) ? 0xc0 : 0xFF;
+	const uint dd = (itid8 > 3) ? 2 : 0;
+	const uint gg = (itid8 > 1) ? 1 : 0;
+	const uint g = (itid8 > 3) ? 8 : gg;
+	const uint h = itid8%2;
 
     const uint l0 = n * (2 * ir + v_in);            // 0...15
     const uint q_offset = 32*v_im + l0;
@@ -50,18 +62,23 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             const uint32_t scale0_u32 = data_a_packed16[ib0 + i].scales[v_im    ];
             const uint32_t scale4_u32 = data_a_packed16[ib0 + i].scales[v_im + 2];
             const uint32_t scale8_u32 = data_a_packed16[ib0 + i].scales[v_im + 4];
-            uvec2 scale0 = uvec2(unpack8(scale0_u32));
-            uvec2 scale4 = uvec2(unpack8(scale4_u32));
-            uvec2 scale8 = uvec2(unpack8(scale8_u32));
 
-            const uint32_t sc0 = (  scale0.x       & 0x3f);
-            const uint32_t sc1 = (  scale0.y       & 0x3f);
-            const uint32_t sc2 = (  scale4.x       & 0x3f);
-            const uint32_t sc3 = (  scale4.y       & 0x3f);
-            const uint32_t sc4 = (( scale8.x       & 0x0f) | ((scale0.x & 0xc0) >> 2));
-            const uint32_t sc5 = (( scale8.y       & 0x0f) | ((scale0.y & 0xc0) >> 2));
-            const uint32_t sc6 = (((scale8.x >> 4) & 0x0f) | ((scale4.x & 0xc0) >> 2));
-            const uint32_t sc7 = (((scale8.y >> 4) & 0x0f) | ((scale4.y & 0xc0) >> 2));
+			uvec2 scale[3];
+            scale[0] = uvec2(unpack8(scale0_u32));
+            scale[1] = uvec2(unpack8(scale4_u32));
+            scale[2] = uvec2(unpack8(scale8_u32));
+
+			sc[ix][v_im][itid8] = FLOAT_TYPE(((scale[gg][h] >> a) & b) | ((scale[g][h] & c) >> dd));
+			barrier();
+
+            //const uint32_t sc0 = (  scale0.x       & 0x3f);
+            //const uint32_t sc1 = (  scale0.y       & 0x3f);
+            //const uint32_t sc2 = (  scale4.x       & 0x3f);
+            //const uint32_t sc3 = (  scale4.y       & 0x3f);
+            //const uint32_t sc4 = (( scale8.x       & 0x0f) | ((scale0.x & 0xc0) >> 2));
+            //const uint32_t sc5 = (( scale8.y       & 0x0f) | ((scale0.y & 0xc0) >> 2));
+            //const uint32_t sc6 = (((scale8.x >> 4) & 0x0f) | ((scale4.x & 0xc0) >> 2));
+            //const uint32_t sc7 = (((scale8.y >> 4) & 0x0f) | ((scale4.y & 0xc0) >> 2));
 
             uint32_t qs0_u32 = data_a_packed32[ib0 + i].qs[q_offset / 4];
             uint32_t qs64_u32 = data_a_packed32[ib0 + i].qs[q_offset / 4 + 16];
@@ -104,11 +121,11 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
                 const FLOAT_TYPE sz = fma(FLOAT_TYPE(by20.x),      q4_8,  fma(FLOAT_TYPE(by20.y),  q4_9,  fma(FLOAT_TYPE(by20.z),  q4_10, FLOAT_TYPE(by20.w) *  q4_11)));
                 const FLOAT_TYPE sw = fma(FLOAT_TYPE(by232.x),     q4_12, fma(FLOAT_TYPE(by232.y), q4_13, fma(FLOAT_TYPE(by232.z), q4_14, FLOAT_TYPE(by232.w) * q4_15)));
                 const FLOAT_TYPE smin =
-                    fma(FLOAT_TYPE(by10.x), sc2, fma(FLOAT_TYPE(by132.x), sc3, fma(FLOAT_TYPE(by20.x), sc6, fma(FLOAT_TYPE(by232.x), sc7,
-                    fma(FLOAT_TYPE(by10.y), sc2, fma(FLOAT_TYPE(by132.y), sc3, fma(FLOAT_TYPE(by20.y), sc6, fma(FLOAT_TYPE(by232.y), sc7,
-                    fma(FLOAT_TYPE(by10.z), sc2, fma(FLOAT_TYPE(by132.z), sc3, fma(FLOAT_TYPE(by20.z), sc6, fma(FLOAT_TYPE(by232.z), sc7,
-                    fma(FLOAT_TYPE(by10.w), sc2, fma(FLOAT_TYPE(by132.w), sc3, fma(FLOAT_TYPE(by20.w), sc6,     FLOAT_TYPE(by232.w) * sc7)))))))))))))));
-                temp[j][n] = fma(dall, fma(sx, sc0, fma(sy, sc1, fma(sz, sc4, sw * sc5))), fma(-dmin, smin, temp[j][n]));
+                    fma(FLOAT_TYPE(by10.x), sc[ix][v_im][2], fma(FLOAT_TYPE(by132.x), sc[ix][v_im][3], fma(FLOAT_TYPE(by20.x), sc[ix][v_im][6], fma(FLOAT_TYPE(by232.x), sc[ix][v_im][7],
+                    fma(FLOAT_TYPE(by10.y), sc[ix][v_im][2], fma(FLOAT_TYPE(by132.y), sc[ix][v_im][3], fma(FLOAT_TYPE(by20.y), sc[ix][v_im][6], fma(FLOAT_TYPE(by232.y), sc[ix][v_im][7],
+                    fma(FLOAT_TYPE(by10.z), sc[ix][v_im][2], fma(FLOAT_TYPE(by132.z), sc[ix][v_im][3], fma(FLOAT_TYPE(by20.z), sc[ix][v_im][6], fma(FLOAT_TYPE(by232.z), sc[ix][v_im][7],
+                    fma(FLOAT_TYPE(by10.w), sc[ix][v_im][2], fma(FLOAT_TYPE(by132.w), sc[ix][v_im][3], fma(FLOAT_TYPE(by20.w), sc[ix][v_im][6],     FLOAT_TYPE(by232.w) * sc[ix][v_im][7])))))))))))))));
+                temp[j][n] = fma(dall, fma(sx, sc[ix][v_im][0], fma(sy, sc[ix][v_im][1], fma(sz, sc[ix][v_im][4], sw * sc[ix][v_im][5]))), fma(-dmin, smin, temp[j][n]));
             }
         }
     }
