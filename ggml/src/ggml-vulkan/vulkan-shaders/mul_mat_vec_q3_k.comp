@@ -5,7 +5,7 @@
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-shared FLOAT_TYPE sccache[BLOCK_SIZE/16][2][12];
+shared FLOAT_TYPE sccache[BLOCK_SIZE/16][2][8];
 
 void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     uint a_offset, b_offset, d_offset;
@@ -44,7 +44,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             const uint ib0 = a_offset / QUANT_K + (first_row+n)*num_blocks_per_row;
             const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
-            sccache[ix][v_im][itid8] = FLOAT_TYPE(int8_t(((int8_t(data_a[ib0+i].scales[itid8]) >> 4*v_im) & 0xF) | ((int8_t(data_a[ib0+i].scales[itid%4+8]) >> (4*v_im + 2*(itid8/4)) & 0x3) << 4)) - 32);
+            sccache[ix][v_im][itid8] = FLOAT_TYPE(int8_t(((int8_t(data_a[ib0+i].scales[itid8]) >> 4*v_im) & 0xF) | ((int8_t(data_a[ib0+i].scales[itid8%4+8]) >> (4*v_im + 2*(itid8/4)) & 0x3) << 4)) - 32);
             barrier();
 
             [[unroll]] for (uint j = 0; j < NUM_COLS; ++j) {
