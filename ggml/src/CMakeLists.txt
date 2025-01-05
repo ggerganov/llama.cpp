@@ -1068,8 +1068,8 @@ if (GGML_CCACHE)
 
     if (GGML_CCACHE_FOUND)
         # TODO: should not be set globally
-        if (GGML_SYCL)
-            set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "ccache compiler_type=clang-cl")
+        if (GGML_SYCL AND WIN32)
+            set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "ccache compiler_type=icl")
         else ()
             set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
         endif ()
