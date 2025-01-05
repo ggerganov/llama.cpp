@@ -54,6 +54,18 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             uvec2 qs0 =  uvec2(unpack8(qs0_u16));
             uvec2 qs16 = uvec2(unpack8(qs16_u16));
 
+            FLOAT_TYPE sc_q[2][8];
+            [[unroll]] for (int l = 0; l < 2; ++l) {
+                sc_q[l][0] = sccache[ix][v_im][0] * FLOAT_TYPE((qs0[l]      ) & 3);
+                sc_q[l][1] = sccache[ix][v_im][1] * FLOAT_TYPE((qs16[l]     ) & 3);
+                sc_q[l][2] = sccache[ix][v_im][2] * FLOAT_TYPE((qs0[l]  >> 2) & 3);
+                sc_q[l][3] = sccache[ix][v_im][3] * FLOAT_TYPE((qs16[l] >> 2) & 3);
+                sc_q[l][4] = sccache[ix][v_im][4] * FLOAT_TYPE((qs0[l]  >> 4) & 3);
+                sc_q[l][5] = sccache[ix][v_im][5] * FLOAT_TYPE((qs16[l] >> 4) & 3);
+                sc_q[l][6] = sccache[ix][v_im][6] * FLOAT_TYPE((qs0[l]  >> 6) & 3);
+                sc_q[l][7] = sccache[ix][v_im][7] * FLOAT_TYPE((qs16[l] >> 6) & 3);
+            }
+
             [[unroll]] for (uint j = 0; j < NUM_COLS; ++j) {
                 B_TYPE_VEC2 b0 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2];
                 B_TYPE_VEC2 b16 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2 + 8];
@@ -67,14 +79,14 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
                 FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
                 FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
                 [[unroll]] for (int l = 0; l < 2; ++l) {
-                    sum1 = fma(FLOAT_TYPE(b0[l]),   sccache[ix][v_im][0] * FLOAT_TYPE((qs0[l]      ) & 3),
-                           fma(FLOAT_TYPE(b16[l]),  sccache[ix][v_im][1] * FLOAT_TYPE((qs16[l]     ) & 3),
-                           fma(FLOAT_TYPE(b32[l]),  sccache[ix][v_im][2] * FLOAT_TYPE((qs0[l]  >> 2) & 3),
-                           fma(FLOAT_TYPE(b48[l]),  sccache[ix][v_im][3] * FLOAT_TYPE((qs16[l] >> 2) & 3),
-                           fma(FLOAT_TYPE(b64[l]),  sccache[ix][v_im][4] * FLOAT_TYPE((qs0[l]  >> 4) & 3),
-                           fma(FLOAT_TYPE(b80[l]),  sccache[ix][v_im][5] * FLOAT_TYPE((qs16[l] >> 4) & 3),
-                           fma(FLOAT_TYPE(b96[l]),  sccache[ix][v_im][6] * FLOAT_TYPE((qs0[l]  >> 6) & 3),
-                           fma(FLOAT_TYPE(b112[l]), sccache[ix][v_im][7] * FLOAT_TYPE((qs16[l] >> 6) & 3), sum1))))))));
+                    sum1 = fma(FLOAT_TYPE(b0[l]),   sc_q[l][0],
+                           fma(FLOAT_TYPE(b16[l]),  sc_q[l][1],
+                           fma(FLOAT_TYPE(b32[l]),  sc_q[l][2],
+                           fma(FLOAT_TYPE(b48[l]),  sc_q[l][3],
+                           fma(FLOAT_TYPE(b64[l]),  sc_q[l][4],
+                           fma(FLOAT_TYPE(b80[l]),  sc_q[l][5],
+                           fma(FLOAT_TYPE(b96[l]),  sc_q[l][6],
+                           fma(FLOAT_TYPE(b112[l]), sc_q[l][7], sum1))))))));
                     sum2 = fma(FLOAT_TYPE(b0[l]),   sccache[ix][v_im][ 8],
                            fma(FLOAT_TYPE(b16[l]),  sccache[ix][v_im][ 9],
                            fma(FLOAT_TYPE(b32[l]),  sccache[ix][v_im][10],
