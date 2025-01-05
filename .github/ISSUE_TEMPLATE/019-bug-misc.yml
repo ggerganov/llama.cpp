@@ -53,6 +53,15 @@ body:
     validations:
       required: false
   - type: textarea
+    id: command
+    attributes:
+      label: Command line
+      description: >
+        Please provide the exact command you used to run llama.cpp. For example: `llama-server -m ... -c ...`, `llama-cli -m ...`, etc.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
     id: info
     attributes:
       label: Problem description & steps to reproduce

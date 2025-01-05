@@ -66,6 +66,15 @@ body:
     validations:
       required: false
   - type: textarea
+    id: command
+    attributes:
+      label: Compile command
+      description: >
+        Please provide the exact command you used to compile llama.cpp. For example: `cmake -B ...`.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
     id: logs
     attributes:
       label: Relevant log output
