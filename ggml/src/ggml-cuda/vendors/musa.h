@@ -133,3 +133,5 @@
 #define cudaKernelNodeParams musaKernelNodeParams
 #define cudaStreamCaptureModeRelaxed musaStreamCaptureModeRelaxed
 #define cudaStreamEndCapture musaStreamEndCapture
+
+typedef mt_bfloat16 nv_bfloat16;
