@@ -126,14 +126,10 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, const ggml_tensor* s
     stream->submit([&](sycl::handler& cgh) {
         sycl::local_accessor<float, 1> shared_mem_acc(shared_mem_size, cgh);
 
-        cgh.parallel_for(
-            sycl::nd_range<3>(grid_dims * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) {
-                rwkv_wkv_f32_kernel(
-                    B, T, C, H, k_d, v_d, r_d, tf_d, td_d, s_d, dst_d,
-                    item_ct1, shared_mem_acc.get_pointer()
-                );
-            });
+        cgh.parallel_for(sycl::nd_range<3>(grid_dims * block_dims, block_dims), [=](sycl::nd_item<3> item_ct1) {
+            rwkv_wkv_f32_kernel(B, T, C, H, k_d, v_d, r_d, tf_d, td_d, s_d, dst_d, item_ct1,
+                                (float*)shared_mem_acc.get_multi_ptr<sycl::access::decorated::no>().get());
+        });
     });
 
     GGML_UNUSED(src0);
