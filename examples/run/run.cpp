@@ -83,6 +83,7 @@ class Opt {
         }
 
         ctx_params.n_batch        = context_size >= 0 ? context_size : context_size_default;
+        ctx_params.n_ctx          = ctx_params.n_batch;
         model_params.n_gpu_layers = ngl >= 0 ? ngl : ngl_default;
         temperature               = temperature >= 0 ? temperature : temperature_default;
 
