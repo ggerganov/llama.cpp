@@ -68,12 +68,16 @@ if (Vulkan_FOUND)
     set (_ggml_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
 
     file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
+    
+    if (CMAKE_SYSTEM_NAME STREQUAL CMAKE_HOST_SYSTEM)
+        set(_ggml_vk_genshaders_cmd "$<TARGET_FILE_DIR:vulkan-shaders-gen>/${_ggml_vk_genshaders_cmd}")
+    endif ()
 
     add_custom_command(
         OUTPUT ${_ggml_vk_header}
                 ${_ggml_vk_source}
 
-        COMMAND "$<TARGET_FILE_DIR:vulkan-shaders-gen>/${_ggml_vk_genshaders_cmd}"
+        COMMAND ${_ggml_vk_genshaders_cmd}
             --glslc      ${Vulkan_GLSLC_EXECUTABLE}
             --input-dir  ${_ggml_vk_input_dir}
             --output-dir ${_ggml_vk_output_dir}
