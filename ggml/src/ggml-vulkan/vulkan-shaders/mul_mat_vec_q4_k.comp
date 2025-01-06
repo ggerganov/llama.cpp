@@ -47,12 +47,12 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             const FLOAT_TYPE dall = FLOAT_TYPE(d.x);
             const FLOAT_TYPE dmin = FLOAT_TYPE(d.y);
 
-            uint32_t scale0_u32 = data_a_packed16[ib0 + i].scales[v_im    ];
-            uint32_t scale4_u32 = data_a_packed16[ib0 + i].scales[v_im + 2];
-            uint32_t scale8_u32 = data_a_packed16[ib0 + i].scales[v_im + 4];
-            uvec2 scale0 = uvec2(unpack8(scale0_u32));
-            uvec2 scale4 = uvec2(unpack8(scale4_u32));
-            uvec2 scale8 = uvec2(unpack8(scale8_u32));
+            uint16_t scale0_u16 = data_a_packed16[ib0 + i].scales[v_im    ];
+            uint16_t scale4_u16 = data_a_packed16[ib0 + i].scales[v_im + 2];
+            uint16_t scale8_u16 = data_a_packed16[ib0 + i].scales[v_im + 4];
+            uvec2 scale0 = uvec2(unpack8(scale0_u16));
+            uvec2 scale4 = uvec2(unpack8(scale4_u16));
+            uvec2 scale8 = uvec2(unpack8(scale8_u16));
 
             const uint32_t sc0 = (  scale0.x       & 0x3f);
             const uint32_t sc1 = (  scale0.y       & 0x3f);
