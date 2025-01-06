@@ -34,7 +34,6 @@
 
 #define LLAMA_DEFAULT_SEED 0xFFFFFFFF
 
-// TODO: use everywhere in the implementation
 #define LLAMA_TOKEN_NULL -1
 
 #define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
