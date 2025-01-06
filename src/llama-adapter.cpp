@@ -242,6 +242,9 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
             } else {
                 ab_map[name].b = cur;
             }
+        } else if (str_endswith(name, "_norm.weight")) {
+            // norm only has 1 dim, so tensor b == nullptr
+            ab_map[name] = llama_lora_weight(cur);
         } else {
             throw std::runtime_error("LoRA tensor '" + name + "' has unexpected suffix");
         }
@@ -251,6 +254,9 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
     for (auto & it : ab_map) {
         const std::string & name = it.first;
         llama_lora_weight & w = it.second;
+        if (w.is_norm) {
+            continue;
+        }
 
         if (!w.a || !w.b) {
             throw std::runtime_error("LoRA tensor pair for '" + name + "' is missing one component");
@@ -277,6 +283,24 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
         ggml_set_name(tensor_a, w.a->name);
         ggml_set_name(tensor_b, w.b->name);
         adapter.ab_map[name] = llama_lora_weight(tensor_a, tensor_b);
+    }
+
+    // add norm vectors
+    for (auto & it : ab_map) {
+        const std::string & name = it.first;
+        llama_lora_weight & w = it.second;
+        if (w.is_norm) {
+            GGML_ASSERT(w.a != nullptr);
+            // device buft and device ctx
+            auto * model_tensor = llama_model_get_tensor(model, name.c_str());
+            if (!model_tensor) {
+                throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model");
+            }
+            struct ggml_context * dev_ctx = ctx_for_buft(ggml_backend_buffer_get_type(model_tensor->buffer));
+            struct ggml_tensor * tensor_norm = ggml_dup_tensor(dev_ctx, w.a);
+            ggml_set_name(tensor_norm, w.a->name);
+            adapter.ab_map[it.first] = llama_lora_weight(tensor_norm);
+        }
     }
 
     // allocate tensors / buffers and zero
@@ -311,7 +335,9 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
             auto orig = ab_map[it.first];
             auto dev  = it.second;
             set_tensor(orig.a, dev.a);
-            set_tensor(orig.b, dev.b);
+            if (!dev.is_norm) {
+                set_tensor(orig.b, dev.b);
+            }
         }
     }
 

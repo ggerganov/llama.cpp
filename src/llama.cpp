@@ -2545,6 +2545,28 @@ static struct ggml_tensor * llm_build_inp_embd(
         ggml_set_input(lctx.inp_tokens);
 
         inpL = ggml_get_rows(ctx, tok_embd, lctx.inp_tokens);
+        //printf("tok_embd shape: %d x %d\n", tok_embd->ne[0], tok_embd->ne[1]);
+        //printf("inpL shape: %d x %d\n", inpL->ne[0], inpL->ne[1]);
+
+        // apply lora for embedding tokens if needed
+        for (auto & it : lctx.lora_adapters) {
+            struct llama_lora_weight * lora = it.first->get_weight(tok_embd);
+            if (lora == nullptr) {
+                continue;
+            }
+            const float alpha = it.first->alpha;
+            const float rank  = (float) lora->b->ne[0];
+            const float scale = alpha ? it.second * alpha / rank : it.second;
+            auto ss = ggml_get_rows(ctx, lora->b, lctx.inp_tokens);
+            //printf("a  shape: %d x %d\n", lora->a->ne[0], lora->a->ne[1]);
+            //printf("b  shape: %d x %d\n", lora->b->ne[0], lora->b->ne[1]);
+            //printf("ss shape: %d x %d\n", ss->ne[0], ss->ne[1]);
+            struct ggml_tensor * inpL_delta = ggml_scale(ctx, ggml_mul_mat(
+                ctx, ss, ggml_transpose(ctx, lora->a)
+            ), scale);
+            //printf("inpL_delta shape: %d x %d\n", inpL_delta->ne[0], inpL_delta->ne[1]);
+            inpL = ggml_add(ctx, inpL, ggml_cont(ctx, ggml_transpose(ctx, inpL_delta)));
+        }
     } else {
         lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, ubatch.n_tokens);
         inpL = lctx.inp_embd;
@@ -3897,9 +3919,17 @@ struct llm_build_context {
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
+            struct ggml_tensor * attn_norm = model.layers[il].attn_norm;
+            for (auto & it : lctx.lora_adapters) {
+                struct llama_lora_weight * lora = it.first->get_weight(model.layers[il].attn_norm);
+                if (lora && lora->is_norm) {
+                    attn_norm = ggml_add(ctx0, attn_norm, ggml_scale(ctx0, lora->a, 0.5));
+                }
+            }
+
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
-                    model.layers[il].attn_norm, NULL,
+                    attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
             cb(cur, "attn_norm", il);
 
@@ -3967,8 +3997,17 @@ struct llm_build_context {
 
             // feed-forward network
             if (model.layers[il].ffn_gate_inp == nullptr) {
+
+                struct ggml_tensor * ffn_norm = model.layers[il].ffn_norm;
+                // for (auto & it : lctx.lora_adapters) {
+                //     struct llama_lora_weight * lora = it.first->get_weight(ffn_norm);
+                //     if (lora && lora->is_norm) {
+                //         ffn_norm = ggml_add(ctx0, ffn_norm, lora->a);
+                //     }
+                // }
+
                 cur = llm_build_norm(ctx0, ffn_inp, hparams,
-                        model.layers[il].ffn_norm, NULL,
+                        ffn_norm, NULL,
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
