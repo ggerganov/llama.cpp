@@ -57,10 +57,10 @@ body:
     attributes:
       label: Command line
       description: >
-        Please provide the exact command you used to run llama.cpp. For example: `llama-server -m ... -c ...`, `llama-cli -m ...`, etc.
+        Please provide the exact commands you entered, if applicable. For example: `llama-server -m ... -c ...`, `llama-cli -m ...`, etc.
       render: shell
     validations:
-      required: true
+      required: false
   - type: textarea
     id: info
     attributes:
