@@ -52,9 +52,9 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             const uint32_t scale8_u32 = data_a_packed16[ib0 + i].scales[v_im + 4];
 
             const uint32_t scale_0_4_l = (scale4_u32 << 16) | scale0_u32;
-            const uint32_t scale_0_4_h = (scale_0_4_l & 0xc0c0c0c0) >> 2;
-            const vec4 scale_0_4_l_f = vec4(unpack8(scale_0_4_l & 0x3f3f3f3f));
-            const vec4 scale8_f = vec4(unpack8(((((scale8_u32 >> 4) << 16) | scale8_u32) & 0x0f0f0f0f) | scale_0_4_h));
+            const uint32_t scale_0_4_h = (scale_0_4_l & 0xC0C0C0C0) >> 2;
+            const vec4 scale_0_4_l_f = vec4(unpack8(scale_0_4_l & 0x3F3F3F3F));
+            const vec4 scale8_f = vec4(unpack8((((scale8_u32 << 12) | scale8_u32) & 0x0F0F0F0F) | scale_0_4_h));
 
             const FLOAT_TYPE sc0 = scale_0_4_l_f.x;
             const FLOAT_TYPE sc1 = scale_0_4_l_f.y;
