@@ -11,10 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
-#include <map>
-#include <regex>
 #include <string>
-#include <thread>
 #include <vector>
 
 //

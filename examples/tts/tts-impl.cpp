@@ -8,20 +8,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <fstream>
 #include <map>
 #include <regex>
 #include <string>
 #include <thread>
 #include <vector>
 #include <cstring>
-
-//
-// Terminal utils
-//
-
-#define SQR(X)    ((X) * (X))
-#define UNCUBE(x) x < 48 ? 0 : x < 115 ? 1 : (x - 35) / 40
 
 static void fill_hann_window(int length, bool periodic, float * output) {
     int offset = -1;
