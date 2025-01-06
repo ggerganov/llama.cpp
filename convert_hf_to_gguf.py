@@ -361,12 +361,13 @@ class Model:
                     gguf.MODEL_TENSOR.FFN_DOWN,
                     gguf.MODEL_TENSOR.FFN_GATE,
                 ]):
+                    # I2 here is just a symbol for INT_N type.
                     to_dtype = gguf.GGMLQuantizationType.I2
                 else:
                     to_dtype = gguf.GGMLQuantizationType.F16
 
             if to_dtype == gguf.GGMLQuantizationType.I2:
-                bits = 2
+                bits = quantization_config["bits"]
                 group_size = quantization_config["group_size"]
                 w, scales, zeros = self._t_mac_quantize_tensor_bitdistiller(
                     LazyTorchTensor.to_eager(data_torch),

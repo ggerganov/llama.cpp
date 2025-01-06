@@ -331,8 +331,8 @@ void ggml_tmac_transform_tensor(struct ggml_tensor * tensor) {
     tmac_float_type * scales;
 
     if (do_permutate(tensor->type)) {
-            scales = (tmac_float_type *) aligned_malloc(scales_size * sizeof(tmac_float_type));
-            qweights = (uint8_t *) aligned_malloc(k * m / 8);
+        scales = (tmac_float_type *) aligned_malloc(scales_size * sizeof(tmac_float_type));
+        qweights = (uint8_t *) aligned_malloc(k * m / 8);
     } else {
         /* scales could be either float32 or float16, so inplace cast is feasible. */
         GGML_ASSERT(sizeof(tmac_float_type) <= sizeof(float));
