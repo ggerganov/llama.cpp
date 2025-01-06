@@ -32,6 +32,9 @@ static struct llama_model* model;
 static struct omnivlm_context* ctx_omnivlm;
 static std::unique_ptr<struct omni_streaming_sample> g_oss = nullptr;
 
+static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past);
+static void omnivlm_free(struct omnivlm_context * ctx_omnivlm);
+
 struct omni_streaming_sample {
     struct common_sampler * ctx_sampling_;
     std::string image_;
