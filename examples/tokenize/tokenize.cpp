@@ -31,6 +31,7 @@ static void print_usage_information(const char * argv0) {
     printf("    -p PROMPT, --prompt PROMPT           read prompt from the argument.\n");
     printf("    --stdin                              read prompt from standard input.\n");
     printf("    --no-bos                             do not ever add a BOS token to the prompt, even if normally the model uses a BOS token.\n");
+    printf("    --no-escape                          do not escape input (such as \\n, \\t, etc.).\n");
     printf("    --no-parse-special                   do not parse control tokens.\n");
     printf("    --log-disable                        disable logs. Makes stderr quiet when loading the model.\n");
     printf("    --show-count                         print the total number of tokens.\n");
