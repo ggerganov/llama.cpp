@@ -262,7 +262,7 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
         }
 
         // device buft and device ctx
-        const auto * model_tensor = model.get_tensor( name.c_str());
+        const auto * model_tensor = model.get_tensor(name.c_str());
         if (!model_tensor) {
             throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model (hint: maybe wrong base model?)");
         }

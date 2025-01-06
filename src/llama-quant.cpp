@@ -525,10 +525,12 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
         auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
+
     llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
-    llama_model model;
+    llama_model model(llama_model_default_params());
+
     model.load_arch   (ml);
     model.load_hparams(ml);
     model.load_stats  (ml);
@@ -536,7 +538,7 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
     struct quantize_state_impl qs(model, params);
 
     if (params->only_copy) {
-        ftype = model.ftype;
+        ftype = ml.ftype;
     }
     const std::unordered_map<std::string, std::vector<float>> * imatrix_data = nullptr;
     if (params->imatrix) {
