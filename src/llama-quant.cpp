@@ -529,9 +529,9 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
     ml.init_mappings(false); // no prefetching
 
     llama_model model;
-    llm_load_arch   (ml, model);
-    llm_load_hparams(ml, model);
-    llm_load_stats  (ml, model);
+    model.load_arch   (ml);
+    model.load_hparams(ml);
+    model.load_stats  (ml);
 
     struct quantize_state_impl qs(model, params);
 

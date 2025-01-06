@@ -135,16 +135,16 @@ static const char * llama_expert_gating_func_name(llama_expert_gating_func_type 
     }
 }
 
-std::string llama_model_arch_name (const llama_model & model) {
-    return llm_arch_name(model.arch);
+std::string llama_model::arch_name() const {
+    return llm_arch_name(arch);
 }
 
-std::string llama_model_type_name (const llama_model & model) {
-    return llm_type_name(model.type);
+std::string llama_model::type_name() const {
+    return llm_type_name(type);
 }
 
-std::string llama_model_ftype_name(const llama_model & model) {
-    return llama_model_ftype_name(model.ftype);
+std::string llama_model::ftype_name() const {
+    return llama_model_ftype_name(ftype);
 }
 
 template<typename F>
@@ -187,30 +187,30 @@ static ggml_backend_buffer_type_t select_buft(const llama_model::buft_list_t & b
     throw std::runtime_error(format("no suitable buffer type found"));
 }
 
-ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il) {
-    return select_buft(
-            *model.dev_layer.at(il).buft_list,
+ggml_backend_buffer_type_t llama_model::select_buft(int il) const {
+    return ::select_buft(
+            *dev_layer.at(il).buft_list,
             [&](ggml_context * ctx) {
-                ggml_tensor * cur = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);
-                ggml_tensor * layer_dir = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, model.hparams.n_embd);
+                ggml_tensor * cur = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, hparams.n_embd);
+                ggml_tensor * layer_dir = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, hparams.n_embd);
                 return ggml_add(ctx, cur, layer_dir);
             });
 }
 
-struct ggml_tensor * llama_model_get_tensor(const struct llama_model & model, const char * name) {
-    auto it = std::find_if(model.tensors_by_name.begin(), model.tensors_by_name.end(),
+const struct ggml_tensor * llama_model::get_tensor(const char * name) const {
+    auto it = std::find_if(tensors_by_name.begin(), tensors_by_name.end(),
             [name](const std::pair<std::string, struct ggml_tensor *> & it) {
                 return it.first == name;
             });
-    if (it == model.tensors_by_name.end()) {
+    if (it == tensors_by_name.end()) {
         return nullptr;
     }
 
     return it->second;
 }
 
-size_t llama_model_max_nodes(const llama_model & model) {
-    return std::max<size_t>(8192, model.tensors_by_name.size()*5);
+size_t llama_model::max_nodes() const {
+    return std::max<size_t>(8192, tensors_by_name.size()*5);
 }
 
 static const std::map<llama_rope_scaling_type, const char *> LLAMA_ROPE_SCALING_TYPES = {
@@ -231,13 +231,13 @@ static llama_rope_scaling_type llama_rope_scaling_type_from_string(const std::st
 }
 
 // NOTE: avoid ever using this except for building the token_to_piece caches
-static std::string llama_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
+std::string llama_model::token_to_piece(llama_token token, bool special) const {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache
-    const int n_chars = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
+    const int n_chars = llama_token_to_piece(this, token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(model, token, &piece[0], piece.size(), 0, special);
+        int check = llama_token_to_piece(this, token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -247,20 +247,19 @@ static std::string llama_token_to_piece(const struct llama_model * model, llama_
     return piece;
 }
 
-void llm_load_stats(llama_model_loader & ml, llama_model & model) {
-    model.n_elements = ml.n_elements;
-    model.n_bytes = ml.n_bytes;
+void llama_model::load_stats(llama_model_loader & ml) {
+    n_elements = ml.n_elements;
+    n_bytes = ml.n_bytes;
 }
 
-void llm_load_arch(llama_model_loader & ml, llama_model & model) {
-    model.arch = ml.get_arch();
-    if (model.arch == LLM_ARCH_UNKNOWN) {
+void llama_model::load_arch(llama_model_loader & ml) {
+    arch = ml.get_arch();
+    if (arch == LLM_ARCH_UNKNOWN) {
         throw std::runtime_error("unknown model architecture: '" + ml.get_arch_name() + "'");
     }
 }
 
-void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
-    auto & hparams = model.hparams;
+void llama_model::load_hparams(llama_model_loader & ml) {
     const gguf_context * ctx = ml.meta.get();
 
     // get metadata as string
@@ -271,11 +270,11 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
         }
         const char * name = gguf_get_key(ctx, i);
         const std::string value = gguf_kv_to_str(ctx, i);
-        model.gguf_kv.emplace(name, value);
+        gguf_kv.emplace(name, value);
     }
 
     // get general kv
-    ml.get_key(LLM_KV_GENERAL_NAME, model.name, false);
+    ml.get_key(LLM_KV_GENERAL_NAME, name, false);
 
     // get hparams kv
     ml.get_key(LLM_KV_VOCAB_SIZE, hparams.n_vocab, false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab, false);
@@ -291,7 +290,7 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
     ml.get_key(LLM_KV_EXPERT_COUNT,      hparams.n_expert,      false);
     ml.get_key(LLM_KV_EXPERT_USED_COUNT, hparams.n_expert_used, false);
 
-    if (model.arch == LLM_ARCH_WAVTOKENIZER_DEC) {
+    if (arch == LLM_ARCH_WAVTOKENIZER_DEC) {
         ml.get_key(LLM_KV_FEATURES_LENGTH, hparams.n_embd_features);
 
         ml.get_key(LLM_KV_POSNET_EMBEDDING_LENGTH, hparams.posnet.n_embd);
@@ -364,7 +363,7 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
 
         ml.get_key(LLM_KV_ROPE_DIMENSION_COUNT, hparams.n_rot, false);
 
-        if (model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_DECI || model.arch == LLM_ARCH_FALCON) {
+        if (arch == LLM_ARCH_LLAMA || arch == LLM_ARCH_DECI || arch == LLM_ARCH_FALCON) {
             if (hparams.n_rot != hparams.n_embd_head_k) {
                 throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot, hparams.n_embd_head_k));
             }
@@ -378,31 +377,31 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
     using e_model = llm_type; // TMP
 
     // arch-specific KVs
-    switch (model.arch) {
+    switch (arch) {
         case LLM_ARCH_LLAMA:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 if (hparams.n_expert == 8) {
                     switch (hparams.n_layer) {
-                        case 32: model.type = e_model::MODEL_8x7B; break;
-                        case 56: model.type = e_model::MODEL_8x22B; break;
-                        default: model.type = e_model::MODEL_UNKNOWN;
+                        case 32: type = e_model::MODEL_8x7B; break;
+                        case 56: type = e_model::MODEL_8x22B; break;
+                        default: type = e_model::MODEL_UNKNOWN;
                     }
                 } else {
                     switch (hparams.n_layer) {
-                        case 16: model.type = e_model::MODEL_1B; break; // Llama 3.2 1B
-                        case 22: model.type = e_model::MODEL_1B; break;
-                        case 26: model.type = e_model::MODEL_3B; break;
-                        case 28: model.type = e_model::MODEL_3B; break; // Llama 3.2 3B
+                        case 16: type = e_model::MODEL_1B; break; // Llama 3.2 1B
+                        case 22: type = e_model::MODEL_1B; break;
+                        case 26: type = e_model::MODEL_3B; break;
+                        case 28: type = e_model::MODEL_3B; break; // Llama 3.2 3B
                         // granite uses a vocab with len 49152
-                        case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
-                        case 36: model.type = e_model::MODEL_8B; break; // granite
-                        case 40: model.type = e_model::MODEL_13B; break;
-                        case 48: model.type = e_model::MODEL_34B; break;
-                        case 60: model.type = e_model::MODEL_30B; break;
-                        case 80: model.type = hparams.n_head() == hparams.n_head_kv() ? e_model::MODEL_65B : e_model::MODEL_70B; break;
-                        default: model.type = e_model::MODEL_UNKNOWN;
+                        case 32: type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
+                        case 36: type = e_model::MODEL_8B; break; // granite
+                        case 40: type = e_model::MODEL_13B; break;
+                        case 48: type = e_model::MODEL_34B; break;
+                        case 60: type = e_model::MODEL_30B; break;
+                        case 80: type = hparams.n_head() == hparams.n_head_kv() ? e_model::MODEL_65B : e_model::MODEL_70B; break;
+                        default: type = e_model::MODEL_UNKNOWN;
                     }
                 }
             } break;
@@ -410,9 +409,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 80: model.type = e_model::MODEL_70B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 80: type = e_model::MODEL_70B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_MINICPM:
@@ -423,9 +422,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_LOGIT_SCALE, hparams.f_logit_scale);
 
                 switch (hparams.n_layer) {
-                    case 52: model.type = e_model::MODEL_1B; break;
-                    case 40: model.type = e_model::MODEL_2B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 52: type = e_model::MODEL_1B; break;
+                    case 40: type = e_model::MODEL_2B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_MINICPM3:
@@ -435,8 +434,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK, hparams.n_lora_kv);
 
                 switch (hparams.n_layer) {
-                    case 62: model.type = e_model::MODEL_4B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 62: type = e_model::MODEL_4B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_GROK:
@@ -444,8 +443,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 64: model.type = e_model::MODEL_314B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 64: type = e_model::MODEL_314B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_FALCON:
@@ -453,21 +452,21 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 60: model.type = e_model::MODEL_40B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 60: type = e_model::MODEL_40B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_BAICHUAN:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_13B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 40: type = e_model::MODEL_13B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
 
-                if (model.type == e_model::MODEL_13B) {
+                if (type == e_model::MODEL_13B) {
                     // TODO: become GGUF KV parameter
                     hparams.f_max_alibi_bias = 8.0f;
                 }
@@ -476,19 +475,19 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
-                    case 36: model.type = e_model::MODEL_3B; break;
-                    case 42: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_15B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 24: type = e_model::MODEL_1B; break;
+                    case 36: type = e_model::MODEL_3B; break;
+                    case 42: type = e_model::MODEL_7B; break;
+                    case 40: type = e_model::MODEL_15B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_REFACT:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_1B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_1B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
 
                 // TODO: become GGUF KV parameter
@@ -503,18 +502,18 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
 
                 switch (hparams.n_layer) {
                     case 3:
-                        model.type = e_model::MODEL_17M; break; // bge-micro
+                        type = e_model::MODEL_17M; break; // bge-micro
                     case 6:
-                        model.type = e_model::MODEL_22M; break; // MiniLM-L6
+                        type = e_model::MODEL_22M; break; // MiniLM-L6
                     case 12:
                         switch (hparams.n_embd) {
-                            case 384: model.type = e_model::MODEL_33M; break; // MiniLM-L12, bge-small
-                            case 768: model.type = e_model::MODEL_109M; break; // bge-base
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 384: type = e_model::MODEL_33M; break; // MiniLM-L12, bge-small
+                            case 768: type = e_model::MODEL_109M; break; // bge-base
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 24:
-                        model.type = e_model::MODEL_335M; break; // bge-large
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                        type = e_model::MODEL_335M; break; // bge-large
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_JINA_BERT_V2:
@@ -526,9 +525,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 hparams.f_max_alibi_bias = 8.0f;
 
                 switch (hparams.n_layer) {
-                    case 4:  model.type = e_model::MODEL_33M;  break; // jina-embeddings-small
-                    case 12: model.type = e_model::MODEL_137M; break; // jina-embeddings-base
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 4:  type = e_model::MODEL_33M;  break; // jina-embeddings-small
+                    case 12: type = e_model::MODEL_137M; break; // jina-embeddings-base
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_NOMIC_BERT:
@@ -539,7 +538,7 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type);
 
                 if (hparams.n_layer == 12 && hparams.n_embd == 768) {
-                    model.type = e_model::MODEL_137M;
+                    type = e_model::MODEL_137M;
                 }
             } break;
         case LLM_ARCH_BLOOM:
@@ -547,14 +546,14 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
+                    case 24: type = e_model::MODEL_1B; break;
                     case 30:
                         switch (hparams.n_embd) {
-                            case 2560: model.type = e_model::MODEL_3B; break;
-                            case 4096: model.type = e_model::MODEL_7B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 2560: type = e_model::MODEL_3B; break;
+                            case 4096: type = e_model::MODEL_7B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
 
                 // TODO: become GGUF KV parameter
@@ -567,9 +566,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_MAX_ALIBI_BIAS, hparams.f_max_alibi_bias);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 48: model.type = e_model::MODEL_30B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 48: type = e_model::MODEL_30B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_STABLELM:
@@ -577,10 +576,10 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
-                    case 32: model.type = e_model::MODEL_3B; break;
-                    case 40: model.type = e_model::MODEL_12B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 24: type = e_model::MODEL_1B; break;
+                    case 32: type = e_model::MODEL_3B; break;
+                    case 40: type = e_model::MODEL_12B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                }
             } break;
         case LLM_ARCH_QWEN:
@@ -588,9 +587,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_13B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 40: type = e_model::MODEL_13B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_QWEN2VL:
@@ -602,15 +601,15 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 24: model.type = hparams.n_embd == 1024 ? e_model::MODEL_0_5B : e_model::MODEL_1B; break;
-                    case 28: model.type = hparams.n_embd == 1536 ? e_model::MODEL_1_5B : e_model::MODEL_7B; break;
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 36: model.type = e_model::MODEL_3B; break;
-                    case 40: model.type = hparams.n_head() == 20 ? e_model::MODEL_4B : e_model::MODEL_13B; break;
-                    case 48: model.type = e_model::MODEL_14B; break;
-                    case 64: model.type = e_model::MODEL_32B; break;
-                    case 80: model.type = e_model::MODEL_70B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 24: type = hparams.n_embd == 1024 ? e_model::MODEL_0_5B : e_model::MODEL_1B; break;
+                    case 28: type = hparams.n_embd == 1536 ? e_model::MODEL_1_5B : e_model::MODEL_7B; break;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 36: type = e_model::MODEL_3B; break;
+                    case 40: type = hparams.n_head() == 20 ? e_model::MODEL_4B : e_model::MODEL_13B; break;
+                    case 48: type = e_model::MODEL_14B; break;
+                    case 64: type = e_model::MODEL_32B; break;
+                    case 80: type = e_model::MODEL_70B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_QWEN2MOE:
@@ -620,9 +619,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
 
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_A2_7B; break;
-                    case 28: model.type = e_model::MODEL_57B_A14B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 24: type = e_model::MODEL_A2_7B; break;
+                    case 28: type = e_model::MODEL_57B_A14B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_PHI2:
@@ -630,9 +629,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
-                    case 32: model.type = e_model::MODEL_3B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 24: type = e_model::MODEL_1B; break;
+                    case 32: type = e_model::MODEL_3B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_PHI3:
@@ -640,10 +639,10 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
-                    case 32: model.type = e_model::MODEL_3B; break;
-                    case 40: model.type = e_model::MODEL_14B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 24: type = e_model::MODEL_1B; break;
+                    case 32: type = e_model::MODEL_3B; break;
+                    case 40: type = e_model::MODEL_14B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
 
                 // for backward compatibility ; see: https://github.com/ggerganov/llama.cpp/pull/8931
@@ -676,27 +675,27 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 40: model.type = e_model::MODEL_13B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 40: type = e_model::MODEL_13B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                }
             } break;
         case LLM_ARCH_GPT2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 12: model.type = e_model::MODEL_SMALL; break;
-                    case 24: model.type = e_model::MODEL_MEDIUM; break;
-                    case 36: model.type = e_model::MODEL_LARGE; break;
-                    case 48: model.type = e_model::MODEL_XL; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 12: type = e_model::MODEL_SMALL; break;
+                    case 24: type = e_model::MODEL_MEDIUM; break;
+                    case 36: type = e_model::MODEL_LARGE; break;
+                    case 48: type = e_model::MODEL_XL; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_CODESHELL:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 42: model.type = e_model::MODEL_7B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 42: type = e_model::MODEL_7B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_ORION:
@@ -704,17 +703,17 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
                 switch (hparams.n_layer) {
-                    case 40: model.type = e_model::MODEL_14B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 40: type = e_model::MODEL_14B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_INTERNLM2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 48: model.type = e_model::MODEL_20B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 48: type = e_model::MODEL_20B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_GEMMA:
@@ -722,9 +721,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 18: model.type = e_model::MODEL_2B; break;
-                    case 28: model.type = e_model::MODEL_7B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 18: type = e_model::MODEL_2B; break;
+                    case 28: type = e_model::MODEL_7B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                }
             } break;
         case LLM_ARCH_GEMMA2:
@@ -737,22 +736,22 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 hparams.attn_soft_cap = true;
 
                 switch (hparams.n_layer) {
-                    case 26: model.type = e_model::MODEL_2B; break;
-                    case 42: model.type = e_model::MODEL_9B; break;
-                    case 46: model.type = e_model::MODEL_27B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 26: type = e_model::MODEL_2B; break;
+                    case 42: type = e_model::MODEL_9B; break;
+                    case 46: type = e_model::MODEL_27B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                }
             } break;
         case LLM_ARCH_STARCODER2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 30: model.type = e_model::MODEL_3B; break;
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_15B; break;
-                    case 52: model.type = e_model::MODEL_20B; break; // granite
-                    case 88: model.type = e_model::MODEL_34B; break; // granite
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 30: type = e_model::MODEL_3B; break;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 40: type = e_model::MODEL_15B; break;
+                    case 52: type = e_model::MODEL_20B; break; // granite
+                    case 88: type = e_model::MODEL_34B; break; // granite
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_MAMBA:
@@ -768,32 +767,32 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 switch (hparams.n_layer) {
                     case 24:
                         switch (hparams.n_embd) {
-                            case 768: model.type = e_model::MODEL_SMALL; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 768: type = e_model::MODEL_SMALL; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 48:
                         switch (hparams.n_embd) {
-                            case 1024: model.type = e_model::MODEL_MEDIUM; break;
-                            case 1536: model.type = e_model::MODEL_LARGE; break;
-                            case 2048: model.type = e_model::MODEL_XL; break;
-                            default:   model.type = e_model::MODEL_UNKNOWN;
+                            case 1024: type = e_model::MODEL_MEDIUM; break;
+                            case 1536: type = e_model::MODEL_LARGE; break;
+                            case 2048: type = e_model::MODEL_XL; break;
+                            default:   type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 64:
                         switch (hparams.n_embd) {
-                            case 2560: model.type = e_model::MODEL_3B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 2560: type = e_model::MODEL_3B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_XVERSE:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_13B; break;
-                    case 80: model.type = e_model::MODEL_65B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 40: type = e_model::MODEL_13B; break;
+                    case 80: type = e_model::MODEL_65B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_COMMAND_R:
@@ -801,8 +800,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_LOGIT_SCALE, hparams.f_logit_scale);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 40: model.type = e_model::MODEL_35B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 40: type = e_model::MODEL_35B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_COHERE2:
@@ -811,8 +810,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_LOGIT_SCALE, hparams.f_logit_scale);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_8B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_8B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_DBRX:
@@ -821,8 +820,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
             ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV,     hparams.f_clamp_kqv);
 
             switch (hparams.n_layer) {
-                case 40: model.type = e_model::MODEL_16x12B; break;
-                default: model.type = e_model::MODEL_UNKNOWN;
+                case 40: type = e_model::MODEL_16x12B; break;
+                default: type = e_model::MODEL_UNKNOWN;
             }
         } break;
         case LLM_ARCH_OLMO:
@@ -831,10 +830,10 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV,     hparams.f_clamp_kqv, false);
 
                 switch (hparams.n_layer) {
-                    case 22: model.type = e_model::MODEL_1B; break;
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 80: model.type = e_model::MODEL_70B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 22: type = e_model::MODEL_1B; break;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 80: type = e_model::MODEL_70B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_OLMO2:
@@ -842,18 +841,18 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 16: model.type = e_model::MODEL_1B; break;
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_13B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 16: type = e_model::MODEL_1B; break;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 40: type = e_model::MODEL_13B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_OLMOE:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 16: model.type = e_model::MODEL_A1_7B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 16: type = e_model::MODEL_A1_7B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_OPENELM:
@@ -861,11 +860,11 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                case 16: model.type = e_model::MODEL_270M; break;
-                case 20: model.type = e_model::MODEL_450M; break;
-                case 28: model.type = e_model::MODEL_1B; break;
-                case 36: model.type = e_model::MODEL_3B; break;
-                default: model.type = e_model::MODEL_UNKNOWN;
+                case 16: type = e_model::MODEL_270M; break;
+                case 20: type = e_model::MODEL_450M; break;
+                case 28: type = e_model::MODEL_1B; break;
+                case 36: type = e_model::MODEL_3B; break;
+                default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_GPTNEOX:
@@ -875,43 +874,43 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 switch (hparams.n_layer) {
                     case 6:
                         switch (hparams.n_ff()) {
-                            case 512: model.type = e_model::MODEL_14M; break;
-                            case 2048: model.type = e_model::MODEL_70M; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 512:  type = e_model::MODEL_14M; break;
+                            case 2048: type = e_model::MODEL_70M; break;
+                            default:   type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 12:
                         switch (hparams.n_ff()) {
-                            case 3072: model.type = e_model::MODEL_160M; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 3072: type = e_model::MODEL_160M; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 16:
                         switch (hparams.n_ff()) {
-                            case 8192: model.type = e_model::MODEL_1B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 8192: type = e_model::MODEL_1B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 24:
                         switch (hparams.n_ff()) {
-                            case 4096: model.type = e_model::MODEL_410M; break;
-                            case 8192: model.type = e_model::MODEL_1_4B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 4096: type = e_model::MODEL_410M; break;
+                            case 8192: type = e_model::MODEL_1_4B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 32:
                         switch (hparams.n_ff()) {
-                            case 10240: model.type = e_model::MODEL_2_8B; break;
-                            case 16384: model.type = e_model::MODEL_6_9B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 10240: type = e_model::MODEL_2_8B; break;
+                            case 16384: type = e_model::MODEL_6_9B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 36:
                         switch (hparams.n_ff()) {
-                            case 20480: model.type = e_model::MODEL_12B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 20480: type = e_model::MODEL_12B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 44:
                         switch (hparams.n_ff()) {
-                            case 24576: model.type = e_model::MODEL_20B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 24576: type = e_model::MODEL_20B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_ARCTIC:
@@ -920,11 +919,11 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
 
                 if (hparams.n_expert == 128) {
                     switch (hparams.n_layer) {
-                        case 35: model.type = e_model::MODEL_10B_128x3_66B; break;
-                        default: model.type = e_model::MODEL_UNKNOWN;
+                        case 35: type = e_model::MODEL_10B_128x3_66B; break;
+                        default: type = e_model::MODEL_UNKNOWN;
                     }
                 } else {
-                    model.type = e_model::MODEL_UNKNOWN;
+                    type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_DEEPSEEK:
@@ -936,8 +935,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
 
                 switch (hparams.n_layer) {
-                    case 28: model.type = e_model::MODEL_20B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 28: type = e_model::MODEL_20B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_DEEPSEEK2:
@@ -962,19 +961,19 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ROPE_SCALING_YARN_LOG_MUL, hparams.rope_yarn_log_mul);
 
                 switch (hparams.n_layer) {
-                    case 27: model.type = e_model::MODEL_16B; break;
-                    case 60: model.type = e_model::MODEL_236B; break;
-                    case 61: model.type = e_model::MODEL_671B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 27: type = e_model::MODEL_16B; break;
+                    case 60: type = e_model::MODEL_236B; break;
+                    case 61: type = e_model::MODEL_671B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_CHATGLM:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 28: model.type = e_model::MODEL_6B; break;
-                    case 40: model.type = e_model::MODEL_9B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 28: type = e_model::MODEL_6B; break;
+                    case 40: type = e_model::MODEL_9B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_BITNET:
@@ -982,8 +981,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 26: model.type = e_model::MODEL_3B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 26: type = e_model::MODEL_3B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_T5:
@@ -997,32 +996,32 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 }
 
                 switch (hparams.n_layer) {
-                    case 6:  model.type = e_model::MODEL_60M;  break; // t5-small
-                    case 8:  model.type = e_model::MODEL_80M;  break; // flan-t5-small
+                    case 6:  type = e_model::MODEL_60M;  break; // t5-small
+                    case 8:  type = e_model::MODEL_80M;  break; // flan-t5-small
                     case 12:
                         switch (hparams.n_ff()) {
-                            case 3072: model.type = e_model::MODEL_220M; break; // t5-base
-                            case 2048: model.type = e_model::MODEL_250M; break; // flan-t5-base
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 3072: type = e_model::MODEL_220M; break; // t5-base
+                            case 2048: type = e_model::MODEL_250M; break; // flan-t5-base
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 24:
                         switch (hparams.n_ff()) {
-                            case 4096:  model.type = e_model::MODEL_770M; break; // t5-large
-                            case 2816:  model.type = e_model::MODEL_780M; break; // flan-t5-large
-                            case 16384: model.type = e_model::MODEL_3B;   break; // t5-3b
-                            case 5120:  model.type = e_model::MODEL_3B;   break; // flan-t5-xl
-                            case 65536: model.type = e_model::MODEL_11B;  break; // t5-11b
-                            case 10240: model.type = e_model::MODEL_11B;  break; // flan-t5-xxl
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 4096:  type = e_model::MODEL_770M; break; // t5-large
+                            case 2816:  type = e_model::MODEL_780M; break; // flan-t5-large
+                            case 16384: type = e_model::MODEL_3B;   break; // t5-3b
+                            case 5120:  type = e_model::MODEL_3B;   break; // flan-t5-xl
+                            case 65536: type = e_model::MODEL_11B;  break; // t5-11b
+                            case 10240: type = e_model::MODEL_11B;  break; // flan-t5-xxl
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    default: type = e_model::MODEL_UNKNOWN;
                }
             } break;
         case LLM_ARCH_T5ENCODER:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 ml.get_key(LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT, hparams.n_rel_attn_bkts);
-                model.type = e_model::MODEL_UNKNOWN;
+                type = e_model::MODEL_UNKNOWN;
             } break;
         case LLM_ARCH_JAIS:
             {
@@ -1030,18 +1029,18 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_MAX_ALIBI_BIAS, hparams.f_max_alibi_bias);
 
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1_3B; break;
-                    case 40: model.type = e_model::MODEL_13B; break;
+                    case 24: type = e_model::MODEL_1_3B; break;
+                    case 40: type = e_model::MODEL_13B; break;
                     /* TODO: add variants */
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_NEMOTRON:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_4B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_4B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_EXAONE:
@@ -1049,8 +1048,8 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_8B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_8B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_RWKV6:
@@ -1062,15 +1061,15 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_RESCALE_EVERY_N_LAYERS, hparams.rescale_every_n_layers, false);
 
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1_6B; break;
+                    case 24: type = e_model::MODEL_1_6B; break;
                     case 32:
                         switch (hparams.n_embd) {
-                            case 2560: model.type = e_model::MODEL_3B; break;
-                            case 4096: model.type = e_model::MODEL_7B; break;
-                            default: model.type = e_model::MODEL_UNKNOWN;
+                            case 2560: type = e_model::MODEL_3B; break;
+                            case 4096: type = e_model::MODEL_7B; break;
+                            default: type = e_model::MODEL_UNKNOWN;
                         } break;
-                    case 61: model.type = e_model::MODEL_14B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 61: type = e_model::MODEL_14B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_GRANITE:
@@ -1083,10 +1082,10 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_ATTENTION_SCALE, hparams.f_attention_scale);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_3B; break;
-                    case 40: model.type = e_model::MODEL_3B; break;
+                    case 32: type = e_model::MODEL_3B; break;
+                    case 40: type = e_model::MODEL_3B; break;
                     // Add additional layer/vocab/etc checks here for other model sizes
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    default: type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_CHAMELEON:
@@ -1096,9 +1095,9 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 ml.get_key(LLM_KV_SWIN_NORM, hparams.swin_norm);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_7B; break;
-                    case 48: model.type = e_model::MODEL_34B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = e_model::MODEL_7B; break;
+                    case 48: type = e_model::MODEL_34B; break;
+                    default: type = e_model::MODEL_UNKNOWN;
                }
             } break;
         case LLM_ARCH_WAVTOKENIZER_DEC:
@@ -1111,21 +1110,19 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
         default: throw std::runtime_error("unsupported model architecture");
     }
 
-    model.ftype = ml.ftype;
+    ftype = ml.ftype;
 
     if (hparams.f_max_alibi_bias > 0.0f) {
         hparams.use_alibi = true;
     }
 
-    hparams.rope_type = llama_rope_type(&model);
+    hparams.rope_type = llama_rope_type(this);
 }
 
-void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
-    auto & vocab = model.vocab;
-
+void llama_model::load_vocab(llama_model_loader & ml) {
     struct gguf_context * ctx = ml.meta.get();
 
-    const auto kv = LLM_KV(model.arch);
+    const auto kv = LLM_KV(arch);
 
     // determine vocab type
     {
@@ -1769,7 +1766,7 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
         std::vector<llama_vocab::token> cache_token_to_piece(n_vocab);
 
         for (uint32_t id = 0; id < n_vocab; ++id) {
-            cache_token_to_piece[id] = llama_token_to_piece(&model, id, true);
+            cache_token_to_piece[id] = token_to_piece(id, true);
 
             size_cache += cache_token_to_piece[id].size();
         }
@@ -1833,10 +1830,7 @@ void llm_load_vocab(llama_model_loader & ml, llama_model & model) {
     }
 }
 
-void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
-    const auto & hparams = model.hparams;
-    const auto & vocab   = model.vocab;
-
+void llama_model::print_meta(llama_model_loader & ml) {
     const char * rope_scaling_type = LLAMA_ROPE_SCALING_TYPES.at(hparams.rope_scaling_type_train);
 
     auto print_f = [](const std::function<uint32_t(uint32_t)> & f, uint32_t n) {
@@ -1870,7 +1864,7 @@ void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
 
     // hparams
     LLAMA_LOG_INFO("%s: format           = %s\n",     __func__, llama_file_version_name(ml.fver));
-    LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, llm_arch_name(model.arch));
+    LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, arch_name().c_str());
     LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, llama_model_vocab_type_name(vocab.type));
     LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
     LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
@@ -1912,8 +1906,8 @@ void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: ssm_dt_b_c_rms   = %d\n",     __func__, hparams.ssm_dt_b_c_rms);
     }
 
-    LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, llama_model_type_name(model).c_str());
-    LLAMA_LOG_INFO("%s: model ftype      = %s\n",     __func__, llama_model_ftype_name(model).c_str());
+    LLAMA_LOG_INFO("%s: model type       = %s\n",     __func__, type_name().c_str());
+    LLAMA_LOG_INFO("%s: model ftype      = %s\n",     __func__, ftype_name().c_str());
     if (ml.n_elements >= 1e12) {
         LLAMA_LOG_INFO("%s: model params     = %.2f T\n", __func__, ml.n_elements*1e-12);
     } else if (ml.n_elements >= 1e9) {
@@ -1930,7 +1924,7 @@ void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     }
 
     // general kv
-    LLAMA_LOG_INFO("%s: general.name     = %s\n",    __func__, model.name.c_str());
+    LLAMA_LOG_INFO("%s: general.name     = %s\n",    __func__, name.c_str());
 
     // special tokens
     if (vocab.special_bos_id  != LLAMA_TOKEN_NULL)    { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,     vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
@@ -1958,14 +1952,14 @@ void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
 
     LLAMA_LOG_INFO("%s: max token length = %d\n", __func__, vocab.max_token_len);
 
-    if (model.arch == LLM_ARCH_DEEPSEEK) {
+    if (arch == LLM_ARCH_DEEPSEEK) {
         LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
         LLAMA_LOG_INFO("%s: n_ff_exp             = %d\n",     __func__, hparams.n_ff_exp);
         LLAMA_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
         LLAMA_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
     }
 
-    if (model.arch == LLM_ARCH_DEEPSEEK2) {
+    if (arch == LLM_ARCH_DEEPSEEK2) {
         LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
         LLAMA_LOG_INFO("%s: n_lora_q             = %d\n",     __func__, hparams.n_lora_q);
         LLAMA_LOG_INFO("%s: n_lora_kv            = %d\n",     __func__, hparams.n_lora_kv);
@@ -1977,12 +1971,12 @@ void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
         LLAMA_LOG_INFO("%s: rope_yarn_log_mul    = %.4f\n",   __func__, hparams.rope_yarn_log_mul);
     }
 
-    if (model.arch == LLM_ARCH_QWEN2MOE) {
+    if (arch == LLM_ARCH_QWEN2MOE) {
         LLAMA_LOG_INFO("%s: n_ff_exp         = %d\n",     __func__, hparams.n_ff_exp);
         LLAMA_LOG_INFO("%s: n_ff_shexp       = %d\n",     __func__, hparams.n_ff_shexp);
     }
 
-    if (model.arch == LLM_ARCH_MINICPM || model.arch == LLM_ARCH_GRANITE || model.arch == LLM_ARCH_GRANITE_MOE) {
+    if (arch == LLM_ARCH_MINICPM || arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE) {
         LLAMA_LOG_INFO("%s: f_embedding_scale = %f\n", __func__, hparams.f_embedding_scale);
         LLAMA_LOG_INFO("%s: f_residual_scale  = %f\n", __func__, hparams.f_residual_scale);
         LLAMA_LOG_INFO("%s: f_attention_scale = %f\n", __func__, hparams.f_attention_scale);
@@ -2172,9 +2166,9 @@ int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int3
 
 int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
-            llama_model_arch_name (*model).c_str(),
-            llama_model_type_name (*model).c_str(),
-            llama_model_ftype_name(*model).c_str());
+            model->arch_name ().c_str(),
+            model->type_name ().c_str(),
+            model->ftype_name().c_str());
 }
 
 uint64_t llama_model_size(const struct llama_model * model) {
