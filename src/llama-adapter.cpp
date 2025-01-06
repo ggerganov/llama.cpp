@@ -1,5 +1,6 @@
 #include "llama-adapter.h"
 
+#include "llama-mmap.h"
 #include "llama-model.h"
 
 #include <algorithm>
@@ -62,7 +63,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
     cvec.tensors.reserve(hparams.n_layer);
     cvec.tensors.push_back(nullptr); // there's never a tensor for layer 0
     for (size_t il = 1; il < hparams.n_layer; il++) {
-        ggml_backend_buffer_type_t buft = llama_model_select_buft(model, il);
+        ggml_backend_buffer_type_t buft = model.select_buft(il);
         ggml_context * ctx = ctx_for_buft(buft);
         if (!ctx) {
             LLAMA_LOG_ERROR("%s: failed to allocate context for control vector\n", __func__);
@@ -262,7 +263,7 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
         }
 
         // device buft and device ctx
-        auto * model_tensor = llama_model_get_tensor(model, name.c_str());
+        const auto * model_tensor = model.get_tensor(name.c_str());
         if (!model_tensor) {
             throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model (hint: maybe wrong base model?)");
         }

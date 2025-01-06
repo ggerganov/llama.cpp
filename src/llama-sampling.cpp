@@ -1663,8 +1663,8 @@ struct llama_sampler_dry {
 
 // Ported from Koboldcpp, original PR: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
 static void get_overlapping_token_sequences(const llama_vocab & vocab, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
-    for (llama_token token_id = 0; token_id < (llama_token)vocab.n_vocab; token_id++) {
-        std::string word = llama_detokenize(vocab, {token_id}, true);
+    for (llama_token token_id = 0; token_id < (llama_token) vocab.n_vocab(); token_id++) {
+        std::string word = vocab.detokenize({token_id}, true);
         if (word.find(str) != std::string::npos) {
             token_sequences.emplace(token_id, std::vector<llama_token>());
         } else {
@@ -1681,7 +1681,7 @@ static void get_overlapping_token_sequences(const llama_vocab & vocab, const std
                     }
                 }
                 if (match) {
-                    std::vector<llama_token> tokenization = llama_tokenize_internal(vocab, str.substr(i), false, false);
+                    std::vector<llama_token> tokenization = vocab.tokenize(str.substr(i), false, false);
                     if (max_tail_len >= 0 && tokenization.size() > (size_t)max_tail_len) {
                         tokenization.resize(max_tail_len);
                     }
@@ -2153,7 +2153,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     float p_eog_sum = 0.0f;
 
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+        if (ctx->vocab->is_eog(cur_p->data[i].id)) {
             p_eog_sum += cur_p->data[i].p;
         } else {
             p_txt_sum += cur_p->data[i].p;
@@ -2175,7 +2175,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
         float p_sum = 0.0f;
 
         for (size_t i = 0; i < size_org; ++i) {
-            if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+            if (ctx->vocab->is_eog(cur_p->data[i].id)) {
                 p_sum += cur_p->data[i].p;
 
                 cur_p->data[cur_p->size++] = cur_p->data[i];
@@ -2203,17 +2203,17 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
                 continue;
             }
 
-            int len0 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
+            int len0 = ctx->vocab->token_to_piece(cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
             if (len0 < 0) {
                 ctx->buf0.resize(len0);
-                len0 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
+                len0 = ctx->vocab->token_to_piece(cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
                 assert(len0 > 0);
             }
 
-            int len1 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
+            int len1 = ctx->vocab->token_to_piece(cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
             if (len1 < 0) {
                 ctx->buf1.resize(len1);
-                len1 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
+                len1 = ctx->vocab->token_to_piece(cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
                 assert(len1 > 0);
             }
 
@@ -2248,7 +2248,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     LOG_DBG_CUR("%s: n_combined = %zu, applying thold = %.3f\n", __func__, n_combined, thold);
 
     for (size_t i = 0; i < size_org; ++i) {
-        const bool is_eog = llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
+        const bool is_eog = ctx->vocab->is_eog(cur_p->data[i].id);
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
@@ -2269,7 +2269,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     // if no non-EOG tokens are left -> reduce cur_p to single EOT token
     if (n_non_eog == 0) {
         cur_p->size = 1;
-        cur_p->data[0].id = llama_token_eot_impl(*ctx->vocab);
+        cur_p->data[0].id = ctx->vocab->token_eot();
         cur_p->data[0].logit = 1.0f;
 
         return;
@@ -2291,7 +2291,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     LOG_DBG_CUR("%s: applying thold = %.3f\n", __func__, thold);
 
     for (size_t i = 0; i < size_org; ++i) {
-        const bool is_eog = llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
+        const bool is_eog = ctx->vocab->is_eog(cur_p->data[i].id);
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
