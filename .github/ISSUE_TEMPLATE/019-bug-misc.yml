@@ -83,7 +83,7 @@ body:
     attributes:
       label: Relevant log output
       description: >
-          If applicable, please copy and paste any relevant log output, including the command that you entered and any generated text.
+          If applicable, please copy and paste any relevant log output, including any generated text.
           This will be automatically formatted into code, so no need for backticks.
       render: shell
     validations:
