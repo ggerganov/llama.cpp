@@ -10,6 +10,8 @@
 
 #include <vector>
 
+struct llama_model_loader;
+
 // available models
 // TODO: this enum does not follow the enum naming convention
 enum llm_type {
@@ -370,27 +372,26 @@ struct llama_model {
 
     // total size of all the tensors in the model in bytes
     size_t  n_bytes     = 0;
+
+    std::string arch_name() const;
+    std::string type_name() const;
+    std::string ftype_name() const;
+
+    ggml_backend_buffer_type_t select_buft(int il) const;
+
+    const struct ggml_tensor * get_tensor(const char * name) const;
+
+    size_t max_nodes() const;
+
+    void load_stats  (llama_model_loader & ml);
+    void load_arch   (llama_model_loader & ml);
+    void load_hparams(llama_model_loader & ml);
+    void load_vocab  (llama_model_loader & ml);
+
+    void print_meta(llama_model_loader & ml);
+
+private:
+    std::string token_to_piece(llama_token token, bool special) const;
 };
 
 const char * llm_type_name(llm_type type);
-
-std::string llama_model_arch_name (const llama_model & model);
-std::string llama_model_type_name (const llama_model & model);
-std::string llama_model_ftype_name(const llama_model & model);
-
-// used by llama_adapter_cvec
-ggml_backend_buffer_type_t llama_model_select_buft(const llama_model & model, int il);
-
-// used by llama_adapter_lora
-struct ggml_tensor * llama_model_get_tensor(const struct llama_model & model, const char * name);
-
-size_t llama_model_max_nodes(const llama_model & model);
-
-struct llama_model_loader;
-
-// TODO: become llama_model methods
-void llm_load_stats     (llama_model_loader & ml, llama_model & model);
-void llm_load_arch      (llama_model_loader & ml, llama_model & model);
-void llm_load_hparams   (llama_model_loader & ml, llama_model & model);
-void llm_load_vocab     (llama_model_loader & ml, llama_model & model);
-void llm_load_print_meta(llama_model_loader & ml, llama_model & model);
