@@ -2009,6 +2009,10 @@ struct llama_model_params llama_model_default_params() {
 }
 
 void llama_free_model(struct llama_model * model) {
+    llama_model_free(model);
+}
+
+void llama_model_free(struct llama_model * model) {
     delete model;
 }
 
