@@ -12,7 +12,7 @@ FROM ${BASE_ROCM_DEV_CONTAINER} AS build
 
 # Unless otherwise specified, we make a fat build.
 # List from https://github.com/ggerganov/llama.cpp/pull/1087#issuecomment-1682807878
-# This is mostly tied to rocBLAS supported archs.
+# This is mostly tied to HIP supported archs.
 # gfx803, gfx900, gfx1032, gfx1101, gfx1102,not officialy supported
 # gfx906 is deprecated
 #check https://rocm.docs.amd.com/projects/install-on-linux/en/docs-6.2.4/reference/system-requirements.html
