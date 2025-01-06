@@ -58,6 +58,7 @@ body:
       label: Command line
       description: >
         Please provide the exact commands you entered, if applicable. For example: `llama-server -m ... -c ...`, `llama-cli -m ...`, etc.
+        This will be automatically formatted into code, so no need for backticks.
       render: shell
     validations:
       required: false

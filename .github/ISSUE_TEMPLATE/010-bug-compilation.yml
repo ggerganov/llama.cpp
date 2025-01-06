@@ -71,6 +71,7 @@ body:
       label: Compile command
       description: >
         Please provide the exact command you used to compile llama.cpp. For example: `cmake -B ...`.
+        This will be automatically formatted into code, so no need for backticks.
       render: shell
     validations:
       required: true
