@@ -25,7 +25,6 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     const uint l0 = 2*v_in;                                  // 0...15
     const uint q_offset = 32*v_im + l0;
-    const uint s_offset = 8*v_im;
     const uint y_offset = 128*v_im + l0;
 
     FLOAT_TYPE temp[NUM_COLS][NUM_ROWS];
