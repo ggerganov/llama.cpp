@@ -433,8 +433,8 @@ if __name__ == '__main__':
                     assert isinstance(dest_data, LoraTorchTensor)
                     lora_a, lora_b = dest_data.get_lora_A_B()
 
-                    # token_embd A and B are already transposed by mergekit-extract-lora
-                    # we transpose A back again because it is used by llm_build_inp_embd()
+                    # note: mergekit-extract-lora flip and transpose A and B
+                    # here we only need to transpose token_embd.lora_a, see llm_build_inp_embd()
                     if "token_embd.weight" in dest_name:
                         lora_a = lora_a.T
 

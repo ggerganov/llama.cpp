@@ -270,7 +270,7 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
         struct ggml_context * dev_ctx = ctx_for_buft(ggml_backend_buffer_get_type(model_tensor->buffer));
         // validate tensor shape
         if (is_token_embd) {
-            // expect B to be transposed, see llm_build_inp_embd()
+            // expect B to be non-transposed, A and B are flipped; see llm_build_inp_embd()
             if (model_tensor->ne[0] != w.b->ne[1] || model_tensor->ne[1] != w.a->ne[1]) {
                 throw std::runtime_error("tensor '" + name + "' has incorrect shape");
             }
