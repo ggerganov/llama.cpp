@@ -69,7 +69,7 @@ if (Vulkan_FOUND)
 
     file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
 
-    if (CMAKE_SYSTEM_NAME STREQUAL CMAKE_HOST_SYSTEM_NAME)
+    if (NOT CMAKE_CROSSCOMPILING)
         set(_ggml_vk_genshaders_cmd "$<TARGET_FILE_DIR:vulkan-shaders-gen>/${_ggml_vk_genshaders_cmd}")
     endif ()
 
