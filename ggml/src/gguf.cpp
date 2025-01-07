@@ -222,12 +222,12 @@ struct gguf_reader {
     gguf_reader(FILE * file) : file(file) {}
 
     template <typename T>
-    bool read(T & dst) {
+    bool read(T & dst) const {
         return fread(&dst, 1, sizeof(dst), file) == sizeof(dst);
     }
 
     template <typename T>
-    bool read(std::vector<T> & dst, const size_t n) {
+    bool read(std::vector<T> & dst, const size_t n) const {
         dst.resize(n);
         for (size_t i = 0; i < dst.size(); ++i) {
             if constexpr (std::is_same<T, bool>::value) {
@@ -245,7 +245,7 @@ struct gguf_reader {
         return true;
     }
 
-    bool read(bool & dst) {
+    bool read(bool & dst) const {
         int8_t tmp = -1;
         if (!read(tmp)) {
             return false;
@@ -254,7 +254,7 @@ struct gguf_reader {
         return true;
     }
 
-    bool read(enum ggml_type & dst) {
+    bool read(enum ggml_type & dst) const {
         int32_t tmp = -1;
         if (!read(tmp)) {
             return false;
@@ -263,7 +263,7 @@ struct gguf_reader {
         return true;
     }
 
-    bool read(enum gguf_type & dst) {
+    bool read(enum gguf_type & dst) const {
         int32_t tmp = -1;
         if (!read(tmp)) {
             return false;
@@ -272,7 +272,7 @@ struct gguf_reader {
         return true;
     }
 
-    bool read(std::string & dst) {
+    bool read(std::string & dst) const {
         uint64_t size = -1;
         if (!read(size)) {
             return false;
@@ -281,7 +281,7 @@ struct gguf_reader {
         return fread(dst.data(), 1, dst.length(), file) == dst.length();
     }
 
-    bool read(void * dst, const size_t size) {
+    bool read(void * dst, const size_t size) const {
         return fread(dst, 1, size, file) == size;
     }
 };
@@ -291,7 +291,7 @@ struct gguf_context * gguf_init_empty(void) {
 }
 
 template<typename T>
-bool gguf_read_emplace_helper(struct gguf_reader & gr, std::vector<struct gguf_kv> & kv, const std::string & key, const bool is_array, const size_t n) {
+bool gguf_read_emplace_helper(const struct gguf_reader & gr, std::vector<struct gguf_kv> & kv, const std::string & key, const bool is_array, const size_t n) {
     if (is_array) {
         std::vector<T> value;
         try {
@@ -317,7 +317,7 @@ bool gguf_read_emplace_helper(struct gguf_reader & gr, std::vector<struct gguf_k
 }
 
 struct gguf_context * gguf_init_from_file_impl(FILE * file, struct gguf_init_params params) {
-    struct gguf_reader gr(file);
+    const struct gguf_reader gr(file);
     struct gguf_context * ctx = new gguf_context;
 
     bool ok = true;
@@ -1139,22 +1139,22 @@ struct gguf_writer {
     gguf_writer(std::vector<int8_t> & buf) : buf(buf) {}
 
     template <typename T>
-    void write(const T & val) {
+    void write(const T & val) const {
         for (size_t i = 0; i < sizeof(val); ++i) {
             buf.push_back(reinterpret_cast<const int8_t *>(&val)[i]);
         }
     }
 
-    void write(const std::vector<int8_t> & val) {
+    void write(const std::vector<int8_t> & val) const {
         buf.insert(buf.end(), val.begin(), val.end());
     }
 
-    void write(const bool & val) {
+    void write(const bool & val) const {
         const int8_t val8 = val ? 1 : 0;
         write(val8);
     }
 
-    void write(const std::string & val) {
+    void write(const std::string & val) const {
         {
             const uint64_t n = val.length();
             write(n);
@@ -1164,19 +1164,19 @@ struct gguf_writer {
         }
     }
 
-    void write(const char * val) {
+    void write(const char * val) const {
         write(std::string(val));
     }
 
-    void write(const enum ggml_type & val) {
+    void write(const enum ggml_type & val) const {
         write(int32_t(val));
     }
 
-    void write(const enum gguf_type & val) {
+    void write(const enum gguf_type & val) const {
         write(int32_t(val));
     }
 
-    void write(const struct gguf_kv & kv) {
+    void write(const struct gguf_kv & kv) const {
         const uint64_t ne = kv.get_ne();
 
         write(kv.get_key());
@@ -1217,7 +1217,7 @@ struct gguf_writer {
         }
     }
 
-    void write_tensor_meta(const struct gguf_tensor_info & info) {
+    void write_tensor_meta(const struct gguf_tensor_info & info) const {
         write(info.t.name);
 
         const uint32_t n_dims = ggml_n_dims(&info.t);
@@ -1230,14 +1230,14 @@ struct gguf_writer {
         write(info.offset);
     }
 
-    void pad(const size_t alignment) {
+    void pad(const size_t alignment) const {
         while (buf.size() % alignment != 0) {
             const int8_t zero = 0;
             write(zero);
         }
     }
 
-    void write_tensor_data(const struct gguf_tensor_info & info, const size_t offset_data, const size_t alignment) {
+    void write_tensor_data(const struct gguf_tensor_info & info, const size_t offset_data, const size_t alignment) const {
         GGML_ASSERT(buf.size() - offset_data == info.offset);
 
         GGML_ASSERT(ggml_is_contiguous(&info.t));
@@ -1257,7 +1257,7 @@ struct gguf_writer {
 };
 
 void gguf_write_to_buf(const struct gguf_context * ctx, std::vector<int8_t> & buf, bool only_meta) {
-    struct gguf_writer gw(buf);
+    const struct gguf_writer gw(buf);
 
     const int64_t n_kv      = gguf_get_n_kv(ctx);
     const int64_t n_tensors = gguf_get_n_tensors(ctx);
