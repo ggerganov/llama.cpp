@@ -382,13 +382,13 @@ if __name__ == '__main__':
                     if self.lazy:
                         tensor = LazyTorchTensor.from_eager(tensor)
                     base_name = get_base_tensor_name(name)
-                    # note: lora_embedding is transposed by mergekit-extract-lora, so it's reversed here
-                    is_lora_a = ".lora_A.weight" in name or ".lora_embedding_B" in name
-                    is_lora_b = ".lora_B.weight" in name or ".lora_embedding_A" in name
+                    # note: mergekit-extract-lora also adds token embeddings to the adapter
+                    is_lora_a = ".lora_A.weight" in name or ".lora_embedding_A" in name
+                    is_lora_b = ".lora_B.weight" in name or ".lora_embedding_B" in name
                     if not is_lora_a and not is_lora_b:
                         if ".base_layer.weight" in name:
                             continue
-                        # mergekit-extract-lora add these layernorm to the adapter
+                        # mergekit-extract-lora add these layernorm to the adapter, we need to keep them
                         if ".layernorm" or ".norm" in name:
                             yield (base_name, tensor)
                             continue
@@ -397,10 +397,6 @@ if __name__ == '__main__':
                             logger.error("Embeddings is present in the adapter. This can be due to new tokens added during fine tuning")
                             logger.error("Please refer to https://github.com/ggerganov/llama.cpp/pull/9948")
                         sys.exit(1)
-
-                    # mergekit-extract-lora transposes this tensor, we need to transpose it back
-                    if ".lora_embedding" in name:
-                        tensor = tensor.T
 
                     if base_name in tensor_map:
                         if is_lora_a:
@@ -436,6 +432,11 @@ if __name__ == '__main__':
                     # otherwise, we must get the lora_A and lora_B tensors
                     assert isinstance(dest_data, LoraTorchTensor)
                     lora_a, lora_b = dest_data.get_lora_A_B()
+
+                    # token_embd A and B are already transposed by mergekit-extract-lora
+                    # we transpose A back again because it is used by llm_build_inp_embd()
+                    if "token_embd.weight" in dest_name:
+                        lora_a = lora_a.T
 
                     yield (dest_name + ".lora_a", lora_a)
                     yield (dest_name + ".lora_b", lora_b)

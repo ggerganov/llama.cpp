@@ -45,11 +45,14 @@ struct llama_lora_weight {
     struct ggml_tensor * a = nullptr;
     struct ggml_tensor * b = nullptr;
 
-    // note: norm only has 1 dim, so tensor b == nullptr
-    bool is_norm = false; // is this a norm vector? (e.g. _norm.weight)
+    // get actual scale based on rank and alpha
+    float get_scale(float alpha, float adapter_scale) {
+        const float rank  = (float) b->ne[0];
+        const float scale = alpha ? adapter_scale * alpha / rank : adapter_scale;
+        return scale;
+    }
 
     llama_lora_weight() = default;
-    llama_lora_weight(struct ggml_tensor * a) : a(a), is_norm(true) {}
     llama_lora_weight(struct ggml_tensor * a, struct ggml_tensor * b) : a(a), b(b) {}
 };
 
