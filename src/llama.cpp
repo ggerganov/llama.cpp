@@ -2632,9 +2632,8 @@ static struct ggml_tensor * llm_build_lora_mm(
         if (lora == nullptr) {
             continue;
         }
-        const float alpha = it.first->alpha;
-        const float rank  = (float) lora->b->ne[0];
-        const float scale = alpha ? it.second * alpha / rank : it.second;
+        const float adapter_scale = it.second;
+        const float scale = lora->get_scale(it.first->alpha, adapter_scale);
         struct ggml_tensor * ab_cur = ggml_mul_mat(
             ctx0, lora->b,
             ggml_mul_mat(ctx0, lora->a, cur)
