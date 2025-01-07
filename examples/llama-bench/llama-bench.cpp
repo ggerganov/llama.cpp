@@ -690,11 +690,11 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
 
 enum test_kind_type {
     // measure mean prompt processing rate without token generation
-    TEST_KIND_PP, 
+    TEST_KIND_PP,
     // measure mean token generation rate without prompt processing
-    TEST_KIND_TG, 
+    TEST_KIND_TG,
     // measure mean prompt processing and token generation rate
-    TEST_KIND_PG, 
+    TEST_KIND_PG,
     // measure mean token generation rate after processing prompt of given length
     TEST_KIND_GP,
 };
