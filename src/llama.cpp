@@ -8166,9 +8166,9 @@ static struct ggml_cgraph * llama_build_graph(
         const bool full_offload = lctx.model.params.n_gpu_layers > (int) lctx.model.hparams.n_layer;
         if (ubatch.n_tokens < 32 || full_offload) {
             if (il != -1 && strcmp(name, "norm") == 0) {
-                const auto & dev_layer = lctx.model.dev_layer.at(il);
+                const auto & dev_layer = lctx.model.dev_layer(il);
                 for (auto & backend : lctx.backends) {
-                    if (ggml_backend_get_device(backend.get()) == dev_layer.dev) {
+                    if (ggml_backend_get_device(backend.get()) == dev_layer) {
                         if (ggml_backend_supports_op(backend.get(), cur)) {
                             ggml_backend_sched_set_tensor_backend(lctx.sched.get(), cur, backend.get());
                         }
@@ -9490,7 +9490,7 @@ struct llama_model * llama_model_load_from_file(
         LLAMA_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
     }
 
-    int status = llama_model_load(path_model, *model, params);
+    const int status = llama_model_load(path_model, *model, params);
     GGML_ASSERT(status <= 0);
     if (status < 0) {
         if (status == -1) {
@@ -9772,7 +9772,7 @@ struct llama_context * llama_new_context_with_model(
             // TODO: move these checks to ggml_backend_sched
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
             bool pipeline_parallel =
-                model->n_device() > 1 &&
+                model->n_devices() > 1 &&
                 model->params.n_gpu_layers > (int)model->hparams.n_layer &&
                 model->params.split_mode == LLAMA_SPLIT_MODE_LAYER &&
                 params.offload_kqv;
