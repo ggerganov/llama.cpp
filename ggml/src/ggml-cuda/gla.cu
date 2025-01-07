@@ -31,10 +31,10 @@ static __global__ void gated_linear_attn_f32(const int B, const int T, const int
         const float _v = v[t];
         float y = 0;
         for (int j = 0; j < head_size; j += 4) {
-            const float4& k = (float4&)(_k[j]);
-            const float4& r = (float4&)(_r[j]);
-            const float4& td = (float4&)(_td[j]);
-            float4& s = (float4&)(state[j]);
+            const float4 & k = (float4 &)(_k[j]);
+            const float4 & r = (float4 &)(_r[j]);
+            const float4 & td = (float4 &)(_td[j]);
+            float4 & s = (float4 &)(state[j]);
             float4 kv;
 
             kv.x = k.x * _v;
