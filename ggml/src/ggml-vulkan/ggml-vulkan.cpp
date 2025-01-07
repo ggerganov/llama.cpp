@@ -2574,11 +2574,9 @@ static void ggml_vk_print_gpu_info(size_t idx) {
         }
     }
 
-#if defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
     if (!ggml_vk_khr_cooperative_matrix_support(props2.properties, driver_props)) {
         coopmat_support = false;
     }
-#endif
 
     const char* GGML_VK_DISABLE_F16 = getenv("GGML_VK_DISABLE_F16");
     bool force_disable_f16 = GGML_VK_DISABLE_F16 != nullptr;
