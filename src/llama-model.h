@@ -334,7 +334,7 @@ struct llama_model {
     int64_t t_load_us  = 0;
     int64_t t_start_us = 0;
 
-    llama_model(const struct llama_model_params & params);
+    explicit llama_model(const struct llama_model_params & params);
     ~llama_model();
 
     void load_stats  (llama_model_loader & ml);

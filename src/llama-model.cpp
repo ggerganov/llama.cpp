@@ -334,7 +334,6 @@ static buft_list_t make_gpu_buft_list(ggml_backend_dev_t dev, enum llama_split_m
     return buft_list;
 }
 
-
 struct llama_model::impl {
     impl() {}
     ~impl() {}
@@ -374,7 +373,7 @@ struct llama_model::impl {
 llama_model::llama_model(const struct llama_model_params & params) : params(params), pimpl(std::make_unique<impl>()) {
 }
 
-llama_model::~llama_model() = default;
+llama_model::~llama_model() {}
 
 void llama_model::load_stats(llama_model_loader & ml) {
     pimpl->n_elements = ml.n_elements;
