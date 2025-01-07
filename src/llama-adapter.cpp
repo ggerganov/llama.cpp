@@ -1,5 +1,6 @@
 #include "llama-adapter.h"
 
+#include "llama-mmap.h"
 #include "llama-model.h"
 
 #include <algorithm>

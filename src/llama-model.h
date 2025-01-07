@@ -4,10 +4,10 @@
 #include "llama-arch.h"
 #include "llama-hparams.h"
 #include "llama-vocab.h"
-#include "llama-mmap.h"
 
-#include "ggml-cpp.h"
-
+#include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 struct llama_model_loader;
@@ -315,42 +315,15 @@ struct llama_model {
 
     std::vector<llama_layer> layers;
 
+    llama_model_params params;
+
     // gguf metadata
     std::unordered_map<std::string, std::string> gguf_kv;
-
-    llama_model_params params;
 
     std::vector<std::string> rpc_servers;
 
     // list of devices used in this model
     std::vector<ggml_backend_dev_t> devices;
-
-    // lists of buffer types used for each layer
-    using buft_list_t = std::vector<std::pair<ggml_backend_dev_t, ggml_backend_buffer_type_t>>;
-    buft_list_t cpu_buft_list;
-    std::map<ggml_backend_dev_t, buft_list_t> gpu_buft_list;
-
-    struct layer_dev {
-        ggml_backend_dev_t dev;
-        buft_list_t * buft_list;
-    };
-
-    layer_dev dev_input = {};
-    layer_dev dev_output = {};
-    std::vector<layer_dev> dev_layer;
-
-    // contexts where the model tensors metadata is stored
-    std::vector<ggml_context_ptr> ctxs;
-
-    // the model memory buffers for the tensor data
-    std::vector<ggml_backend_buffer_ptr> bufs;
-
-    // model memory mapped files
-    llama_mmaps mappings;
-
-    // objects representing data potentially being locked in memory
-    llama_mlocks mlock_bufs;
-    llama_mlocks mlock_mmaps;
 
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
@@ -358,10 +331,8 @@ struct llama_model {
     int64_t t_load_us  = 0;
     int64_t t_start_us = 0;
 
-    // total number of parameters in the model
-    uint64_t n_elements = 0;
-
     llama_model(const struct llama_model_params & params);
+    ~llama_model();
 
     void load_stats  (llama_model_loader & ml);
     void load_arch   (llama_model_loader & ml);
@@ -376,29 +347,25 @@ struct llama_model {
 
     size_t size() const;
     size_t max_nodes() const;
-    size_t n_device() const;
+    size_t n_devices() const;
+
+    // total number of parameters in the model
+    uint64_t n_elements() const;
 
     void print_info() const;
+
+    ggml_backend_dev_t dev_layer(int il) const;
+    ggml_backend_dev_t dev_output() const;
 
     ggml_backend_buffer_type_t select_buft(int il) const;
 
     const struct ggml_tensor * get_tensor(const char * name) const;
 
 private:
-    size_t n_bytes = 0;
-
-    std::string desc_str;
+    struct impl;
+    std::unique_ptr<impl> pimpl;
 
     std::string token_to_piece(llama_token token, bool special) const;
-
-    // find the first buffer type in the list that can use the tensor
-    ggml_backend_buffer_type_t select_weight_buft(ggml_tensor * tensor, ggml_op op, const llama_model::buft_list_t & buft_list) const;
-
-    // CPU: ACCEL -> CPU extra -> GPU host -> CPU
-    buft_list_t make_cpu_buft_list() const;
-
-    // GPU: split if LLAMA_SPLIT_MODE_ROW -> GPU
-    buft_list_t make_gpu_buft_list(ggml_backend_dev_t dev, enum llama_split_mode split_mode, const float * tensor_split);
 };
 
 const char * llm_type_name(llm_type type);
