@@ -289,7 +289,7 @@ struct llama_model {
     std::string name = "n/a";
 
     llama_hparams hparams = {};
-    llama_vocab   vocab = {};
+    llama_vocab   vocab;
 
     struct ggml_tensor * tok_embd   = nullptr;
     struct ggml_tensor * type_embd  = nullptr;
