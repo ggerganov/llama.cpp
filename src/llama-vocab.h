@@ -83,26 +83,20 @@ struct llama_vocab {
 
     std::string type_name() const;
 
-    // TODO: fix names
-    bool is_normal_token      (llama_token id) const;
-    bool is_unknown_token     (llama_token id) const;
-    bool is_control_token     (llama_token id) const;
-    bool is_byte_token        (llama_token id) const;
-    bool is_user_defined_token(llama_token id) const;
-    bool is_unused_token      (llama_token id) const;
+    bool is_normal      (llama_token id) const;
+    bool is_unknown     (llama_token id) const;
+    bool is_control     (llama_token id) const;
+    bool is_byte        (llama_token id) const;
+    bool is_user_defined(llama_token id) const;
+    bool is_unused      (llama_token id) const;
+    bool is_eog         (llama_token id) const;
 
     uint8_t     token_to_byte(llama_token id) const;
     llama_token byte_to_token(uint8_t ch)     const;
 
-    const char * token_get_text(llama_token token) const;
-
-    float token_get_score(llama_token token) const;
-
-    llama_token_attr token_get_attr(llama_token token) const;
-
-    bool token_is_eog(llama_token token) const;
-
-    bool token_is_control(llama_token token) const;
+    const char *     token_get_text (llama_token id) const;
+    float            token_get_score(llama_token id) const;
+    llama_token_attr token_get_attr (llama_token id) const;
 
     llama_token token_bos() const;
     llama_token token_eos() const;
