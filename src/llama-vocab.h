@@ -9,6 +9,9 @@
 #include <set>
 #include <memory>
 
+struct LLM_KV;
+struct llama_model_loader;
+
 struct llama_vocab {
     using id    = llama_token;
     using token = std::string;
@@ -75,9 +78,7 @@ struct llama_vocab {
     llama_vocab();
     ~llama_vocab();
 
-    int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
-
-    void init_tokenizer();
+    void load(llama_model_loader & ml, const LLM_KV & kv);
 
     enum llama_vocab_type get_type() const;
 
@@ -121,6 +122,8 @@ struct llama_vocab {
     bool add_bos_token() const;
     bool add_eos_token() const;
 
+    int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
+
     std::vector<id> tokenize(
                   std::string   raw_text,
                          bool   add_special,
@@ -162,4 +165,8 @@ struct llama_vocab {
 private:
     struct impl;
     std::unique_ptr<impl> pimpl;
+
+    std::string token_to_piece_for_cache(
+                  llama_token   token,
+                         bool   special) const;
 };

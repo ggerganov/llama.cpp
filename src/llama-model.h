@@ -363,8 +363,6 @@ struct llama_model {
 private:
     struct impl;
     std::unique_ptr<impl> pimpl;
-
-    std::string token_to_piece(llama_token token, bool special) const;
 };
 
 const char * llm_type_name(llm_type type);
