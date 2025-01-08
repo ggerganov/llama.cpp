@@ -208,7 +208,7 @@ private:
             return;
         }
 
-        if (static_cast<uint32_t>(token) >= vocab.n_vocab) {
+        if (static_cast<uint32_t>(token) >= vocab.n_vocab()) {
             return;
         }
 
@@ -734,7 +734,7 @@ struct llm_tokenizer_ugm : llm_tokenizer {
             prefix_replacements_size = precompiled_charsmap.size() - charsmap_offset;
         }
 
-        for (uint32_t id = 0; id < vocab.n_vocab; ++id) {
+        for (uint32_t id = 0; id < vocab.n_vocab(); ++id) {
             const auto & token_data = vocab.get_token_data(id);
 
             if (vocab.is_normal(id)) {
@@ -1119,7 +1119,7 @@ struct llm_tokenizer_rwkv : llm_tokenizer {
         // For now, we decode the vocab here into the lookup we'll use for tokenization.
 
         // build trie
-        for (uint32_t id = 0; id < vocab.n_vocab; ++id) {
+        for (uint32_t id = 0; id < vocab.n_vocab(); ++id) {
             const auto & data = vocab.get_token_data(id);
             const auto text = llama_unescape_rwkv_token(data.text);
             token_matcher.insert((const char *) text.data(), text.size(), id);
@@ -1204,6 +1204,8 @@ struct fragment_buffer_variant {
 };
 
 struct llama_vocab::impl {
+    uint32_t n_vocab = 0;
+
     std::unordered_map<std::string, llama_token> token_to_id;
     std::vector<token_data>                      id_to_token;
 
@@ -1282,6 +1284,13 @@ llama_vocab::~llama_vocab() {
 
 void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
     struct gguf_context * ctx = ml.meta.get();
+
+    auto & n_vocab = pimpl->n_vocab;
+    auto & id_to_token = pimpl->id_to_token;
+    auto & token_to_id = pimpl->token_to_id;
+    auto & special_eog_ids = pimpl->special_eog_ids;
+    auto & cache_special_tokens = pimpl->cache_special_tokens;
+    auto & cache_token_to_piece = pimpl->cache_token_to_piece;
 
     // determine vocab type
     {
@@ -1588,12 +1597,6 @@ void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
     if (toktype_idx != -1) {
         toktypes = (const int * ) gguf_get_arr_data(ctx, toktype_idx);
     }
-
-    auto & id_to_token = pimpl->id_to_token;
-    auto & token_to_id = pimpl->token_to_id;
-    auto & special_eog_ids = pimpl->special_eog_ids;
-    auto & cache_special_tokens = pimpl->cache_special_tokens;
-    auto & cache_token_to_piece = pimpl->cache_token_to_piece;
 
     n_vocab = gguf_get_arr_n(ctx, token_idx);
     id_to_token.resize(n_vocab);
@@ -1908,7 +1911,7 @@ void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
 
     // build special tokens cache
     {
-        for (llama_token id = 0; id < (llama_token)n_vocab; ++id) {
+        for (llama_token id = 0; id < (llama_token) n_vocab; ++id) {
             if (id_to_token[id].attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED | LLAMA_TOKEN_ATTR_UNKNOWN)) {
                 cache_special_tokens.push_back(id);
             }
@@ -2000,6 +2003,10 @@ enum llama_vocab_type llama_vocab::get_type() const {
 
 enum llama_vocab_pre_type llama_vocab::get_pre_type() const {
     return pre_type;
+}
+
+uint32_t llama_vocab::n_vocab() const {
+    return (uint32_t) pimpl->id_to_token.size();
 }
 
 std::string llama_vocab::type_name() const{
@@ -2366,8 +2373,8 @@ int llama_vocab::max_token_text_len() const {
 
 void llama_vocab::print_info() const {
     LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, type_name().c_str());
-    LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, n_vocab);
-    LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) pimpl->bpe_ranks.size());
+    LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, pimpl->n_vocab);
+    LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (uint32_t) pimpl->bpe_ranks.size());
 
     auto & id_to_token = pimpl->id_to_token;
     auto & special_eog_ids = pimpl->special_eog_ids;
