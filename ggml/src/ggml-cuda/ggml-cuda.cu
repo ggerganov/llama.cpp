@@ -2339,7 +2339,7 @@ static bool ggml_graph_node_has_matching_properties(ggml_tensor * node, ggml_gra
 
 
 #ifdef USE_CUDA_GRAPH
-static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vector<void *> ggml_cuda_cpy_fn_ptrs, bool cuda_graph_update_required) {
+static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vector<void *> & ggml_cuda_cpy_fn_ptrs, bool cuda_graph_update_required) {
 
     if (cuda_graph_update_required) {
         // Extract nodes from graph
