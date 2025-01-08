@@ -6,8 +6,6 @@
 
 #include "ggml-cpp.h"
 
-#include "unicode.h" // TODO: remove
-
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -1282,6 +1280,7 @@ void llama_model::load_vocab(llama_model_loader & ml) {
                 vocab.n_vocab = 0;
                 LLAMA_LOG_WARN("%s: there is no vocab_size in metadata, vocab.n_vocab will be set to %u\n", __func__, vocab.n_vocab);
             }
+
             return;
         }
 
@@ -1319,7 +1318,7 @@ void llama_model::load_vocab(llama_model_loader & ml) {
             const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
-                GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
+                //GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
 
                 std::string first;
                 std::string second;
@@ -1913,8 +1912,8 @@ void llama_model::load_vocab(llama_model_loader & ml) {
     //NOTE: Per token attributes are missing from the GGUF file.
     //TODO: Extract attributes from GGUF file.
     {
-        auto _contains_any = [] (const std::string &str, const std::vector<std::string> &substrs) -> bool {
-            for (auto substr : substrs) {
+        auto _contains_any = [] (const std::string & str, const std::vector<std::string> & substrs) -> bool {
+            for (const auto & substr : substrs) {
                 if (str.find(substr) < std::string::npos) {
                     return true;
                 }
