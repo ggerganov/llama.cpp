@@ -21,7 +21,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     const uint itid8 = itid%8;
 
     const uint v_im = itid/8;                                // 0 or 1. 0 computes 0..., 1 computes 128...
-    const uint v_in = itid - 8*v_im;                         // 0...15 or 0...7
+    const uint v_in = itid - 8*v_im;                         // 0...7
 
     const uint l0 = 2*v_in;                                  // 0...15
     const uint q_offset = 32*v_im + l0;

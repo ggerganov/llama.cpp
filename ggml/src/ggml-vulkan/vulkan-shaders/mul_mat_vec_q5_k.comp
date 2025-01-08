@@ -19,7 +19,7 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
     const uint ix = tid/16;
 
     const uint il = itid/4;                          // 0...3
-    const uint ir = itid - 4*il;                     // 0...7 or 0...3
+    const uint ir = itid - 4*il;                     // 0...3
 
     const uint v_im = il / 2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
     const uint v_in = il % 2;
