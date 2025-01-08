@@ -9836,95 +9836,95 @@ int32_t llama_decode(
 // TODO: tmp bridges below until `struct llama_vocab` is exposed through the public API
 
 const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
-    return llama_token_get_text_impl(model->vocab, token);
+    return model->vocab.token_get_text(token);
 }
 
 float llama_token_get_score(const struct llama_model * model, llama_token token) {
-    return llama_token_get_score_impl(model->vocab, token);
+    return model->vocab.token_get_score(token);
 }
 
 enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
-    return llama_token_get_attr_impl(model->vocab, token);
+    return model->vocab.token_get_attr(token);
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    return llama_token_is_eog_impl(model->vocab, token);
+    return model->vocab.token_is_eog(token);
 }
 
 bool llama_token_is_control(const struct llama_model * model, llama_token token) {
-    return llama_token_is_control_impl(model->vocab, token);
+    return model->vocab.token_is_control(token);
 }
 
 llama_token llama_token_bos(const struct llama_model * model) {
-    return llama_token_bos_impl(model->vocab);
+    return model->vocab.token_bos();
 }
 
 llama_token llama_token_eos(const struct llama_model * model) {
-    return llama_token_eos_impl(model->vocab);
+    return model->vocab.token_eos();
 }
 
 llama_token llama_token_eot(const struct llama_model * model) {
-    return llama_token_eot_impl(model->vocab);
+    return model->vocab.token_eot();
 }
 
 llama_token llama_token_cls(const struct llama_model * model) {
-    return llama_token_cls_impl(model->vocab);
+    return model->vocab.token_cls();
 }
 
 llama_token llama_token_sep(const struct llama_model * model) {
-    return llama_token_sep_impl(model->vocab);
+    return model->vocab.token_sep();
 }
 
 llama_token llama_token_nl (const struct llama_model * model) {
-    return llama_token_nl_impl(model->vocab);
+    return model->vocab.token_nl();
 }
 
 llama_token llama_token_pad(const struct llama_model * model) {
-    return llama_token_pad_impl(model->vocab);
+    return model->vocab.token_pad();
 }
 
 bool llama_add_bos_token(const struct llama_model * model) {
-    return llama_add_bos_token_impl(model->vocab);
+    return model->vocab.add_bos_token();
 }
 
 bool llama_add_eos_token(const struct llama_model * model) {
-    return llama_add_eos_token_impl(model->vocab);
+    return model->vocab.add_eos_token();
 }
 
 llama_token llama_token_prefix(const struct llama_model * model) {
-    return llama_token_prefix_impl(model->vocab);
+    return model->vocab.token_prefix();
 }
 
 llama_token llama_token_middle(const struct llama_model * model) {
-    return llama_token_middle_impl(model->vocab);
+    return model->vocab.token_middle();
 }
 
 llama_token llama_token_suffix(const struct llama_model * model) {
-    return llama_token_suffix_impl(model->vocab);
+    return model->vocab.token_suffix();
 }
 
 llama_token llama_token_fim_pre(const struct llama_model * model) {
-    return llama_token_fim_pre_impl(model->vocab);
+    return model->vocab.token_fim_pre();
 }
 
 llama_token llama_token_fim_suf(const struct llama_model * model) {
-    return llama_token_fim_suf_impl(model->vocab);
+    return model->vocab.token_fim_suf();
 }
 
 llama_token llama_token_fim_mid(const struct llama_model * model) {
-    return llama_token_fim_mid_impl(model->vocab);
+    return model->vocab.token_fim_mid();
 }
 
 llama_token llama_token_fim_pad(const struct llama_model * model) {
-    return llama_token_fim_pad_impl(model->vocab);
+    return model->vocab.token_fim_pad();
 }
 
 llama_token llama_token_fim_rep(const struct llama_model * model) {
-    return llama_token_fim_rep_impl(model->vocab);
+    return model->vocab.token_fim_rep();
 }
 
 llama_token llama_token_fim_sep(const struct llama_model * model) {
-    return llama_token_fim_sep_impl(model->vocab);
+    return model->vocab.token_fim_sep();
 }
 
 //
@@ -9939,7 +9939,7 @@ int32_t llama_tokenize(
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
-    return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
+    return model->vocab.tokenize(text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
 int32_t llama_token_to_piece(
@@ -9949,7 +9949,7 @@ int32_t llama_token_to_piece(
                      int32_t   length,
                      int32_t   lstrip,
                         bool   special) {
-    return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
+    return model->vocab.token_to_piece(token, buf, length, lstrip, special);
 }
 
 int32_t llama_detokenize(
@@ -9960,7 +9960,7 @@ int32_t llama_detokenize(
                      int32_t   text_len_max,
                         bool   remove_special,
                         bool   unparse_special) {
-    return llama_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
+    return model->vocab.detokenize(tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
 }
 
 //
