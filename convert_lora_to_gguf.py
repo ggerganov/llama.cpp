@@ -389,7 +389,7 @@ if __name__ == '__main__':
                         if ".base_layer.weight" in name:
                             continue
                         # mergekit-extract-lora add these layernorm to the adapter, we need to keep them
-                        if ".layernorm" or ".norm" in name:
+                        if "_layernorm" in name or ".norm" in name:
                             yield (base_name, tensor)
                             continue
                         logger.error(f"Unexpected name '{name}': Not a lora_A or lora_B tensor")
