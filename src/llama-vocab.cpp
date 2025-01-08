@@ -110,39 +110,43 @@ std::string llama_vocab::type_name() const{
     }
 }
 
-bool llama_vocab::is_normal_token(llama_token id) const {
+bool llama_vocab::is_normal(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
     return id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL;
 }
 
-bool llama_vocab::is_unknown_token(llama_token id) const {
+bool llama_vocab::is_unknown(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
     return id_to_token[id].attr & LLAMA_TOKEN_ATTR_UNKNOWN;
 }
 
-bool llama_vocab::is_control_token(llama_token id) const {
+bool llama_vocab::is_control(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
     return id_to_token[id].attr & LLAMA_TOKEN_ATTR_CONTROL;
 }
 
-bool llama_vocab::is_byte_token(llama_token id) const {
+bool llama_vocab::is_byte(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
     return id_to_token[id].attr & LLAMA_TOKEN_ATTR_BYTE;
 }
 
-bool llama_vocab::is_user_defined_token(llama_token id) const {
+bool llama_vocab::is_user_defined(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
     return id_to_token[id].attr & LLAMA_TOKEN_ATTR_USER_DEFINED;
 }
 
-bool llama_vocab::is_unused_token(llama_token id) const {
+bool llama_vocab::is_unused(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
     return id_to_token[id].attr & LLAMA_TOKEN_ATTR_UNUSED;
 }
 
+bool llama_vocab::is_eog(llama_token id) const {
+    return id != LLAMA_TOKEN_NULL && special_eog_ids.count(id) > 0;
+}
+
 uint8_t llama_vocab::token_to_byte(llama_token id) const {
     GGML_ASSERT(get_type() != LLAMA_VOCAB_TYPE_NONE);
-    GGML_ASSERT(is_byte_token(id));
+    GGML_ASSERT(is_byte(id));
     const auto & token_data = id_to_token.at(id);
     switch (get_type()) {
         case LLAMA_VOCAB_TYPE_SPM:
@@ -832,18 +836,18 @@ struct llm_tokenizer_ugm : llm_tokenizer {
         for (unsigned int id = 0; id < vocab.id_to_token.size(); ++id) {
             const auto &token_data = vocab.id_to_token[id];
 
-            if (vocab.is_normal_token(id)) {
+            if (vocab.is_normal(id)) {
                 min_score = std::min<float>(min_score, token_data.score);
                 max_score = std::max<float>(max_score, token_data.score);
             }
 
-            if (vocab.is_normal_token(id) ||
-                vocab.is_user_defined_token(id) ||
-                vocab.is_unused_token(id)) {
+            if (vocab.is_normal(id) ||
+                vocab.is_user_defined(id) ||
+                vocab.is_unused(id)) {
                 token_matcher.insert(token_data.text.data(), token_data.text.size(), id);
             }
 
-            if (vocab.is_user_defined_token(id)) {
+            if (vocab.is_user_defined(id)) {
                 user_defined_token_matcher.insert(token_data.text.data(), token_data.text.size());
             }
         }
@@ -928,7 +932,7 @@ struct llm_tokenizer_ugm_session {
                     // (normal token scores are log probabilities, so they are negative)
                     // score type is double here to make tokenization results exactly
                     // the same as in the HF tokenizer using SentencePiece
-                    const double token_score = vocab.is_user_defined_token(token_id) ? 0.0 : token_data.score;
+                    const double token_score = vocab.is_user_defined(token_id) ? 0.0 : token_data.score;
                     const double challenger_score = current_best.score_sum + token_score;
                     struct best_tokenization & current_champ = tokenization_results[prefix_offset];
                     if (challenger_score > current_champ.score_sum) {
@@ -1466,27 +1470,19 @@ llama_token llama_vocab::byte_to_token(uint8_t ch) const {
     }
 }
 
-const char * llama_vocab::token_get_text(llama_token token) const {
+const char * llama_vocab::token_get_text(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
-    return id_to_token[token].text.c_str();
+    return id_to_token[id].text.c_str();
 }
 
-float llama_vocab::token_get_score(llama_token token) const {
+float llama_vocab::token_get_score(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
-    return id_to_token[token].score;
+    return id_to_token[id].score;
 }
 
-llama_token_attr llama_vocab::token_get_attr(llama_token token) const {
+llama_token_attr llama_vocab::token_get_attr(llama_token id) const {
     GGML_ASSERT(type != LLAMA_VOCAB_TYPE_NONE);
-    return id_to_token[token].attr;
-}
-
-bool llama_vocab::token_is_eog(llama_token token) const {
-    return token != LLAMA_TOKEN_NULL && special_eog_ids.count(token) > 0;
-}
-
-bool llama_vocab::token_is_control(llama_token token) const {
-    return is_control_token(token);
+    return id_to_token[id].attr;
 }
 
 llama_token llama_vocab::token_bos() const {

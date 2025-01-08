@@ -9973,11 +9973,11 @@ enum llama_token_attr llama_token_get_attr(const struct llama_model * model, lla
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    return model->vocab.token_is_eog(token);
+    return model->vocab.is_eog(token);
 }
 
 bool llama_token_is_control(const struct llama_model * model, llama_token token) {
-    return model->vocab.token_is_control(token);
+    return model->vocab.is_control(token);
 }
 
 llama_token llama_token_bos(const struct llama_model * model) {
