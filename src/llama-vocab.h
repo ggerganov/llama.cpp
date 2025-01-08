@@ -7,8 +7,7 @@
 #include <unordered_map>
 #include <map>
 #include <set>
-
-struct llm_tokenizer;
+#include <memory>
 
 struct llama_vocab {
     using id    = llama_token;
@@ -73,9 +72,7 @@ struct llama_vocab {
 
     std::vector<char> precompiled_charsmap;
 
-    llm_tokenizer * tokenizer = nullptr;
-
-    llama_vocab() = default;
+    llama_vocab();
     ~llama_vocab();
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
@@ -131,30 +128,30 @@ struct llama_vocab {
     bool add_eos_token() const;
 
     std::vector<id> tokenize(
-            std::string raw_text,
-            bool add_special,
-            bool parse_special = false) const;
+                  std::string   raw_text,
+                         bool   add_special,
+                         bool   parse_special = false) const;
 
     int32_t tokenize(
-             const char * text,
-                int32_t   text_len,
-            llama_token * tokens,
-                int32_t   n_tokens_max,
-                   bool   add_special,
-                   bool   parse_special) const;
+                   const char * text,
+                      int32_t   text_len,
+                  llama_token * tokens,
+                      int32_t   n_tokens_max,
+                         bool   add_special,
+                         bool   parse_special) const;
 
     // does not write null-terminator to buf
     int32_t token_to_piece(
-            llama_token   token,
-                   char * buf,
-                int32_t   length,
-                int32_t   lstrip,
-                   bool   special) const;
+                  llama_token   token,
+                         char * buf,
+                      int32_t   length,
+                      int32_t   lstrip,
+                         bool   special) const;
 
     // check if token0 is contained as a prefix in token1
     bool token_is_prefix(
-            llama_token   token0,
-            llama_token   token1) const;
+                  llama_token   token0,
+                  llama_token   token1) const;
 
     int32_t detokenize(
             const llama_token * tokens,
@@ -167,4 +164,8 @@ struct llama_vocab {
     std::string detokenize(
             const std::vector<llama_token> & tokens,
                                       bool   special) const;
+
+private:
+    struct impl;
+    std::unique_ptr<impl> pimpl;
 };

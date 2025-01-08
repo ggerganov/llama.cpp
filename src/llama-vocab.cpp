@@ -66,12 +66,18 @@ struct naive_trie {
 //
 
 struct llm_tokenizer {
-   llm_tokenizer() {}
-   virtual ~llm_tokenizer() = default;
+    llm_tokenizer() {}
+    virtual ~llm_tokenizer() = default;
 };
 
+struct llama_vocab::impl {
+    std::unique_ptr<llm_tokenizer> tokenizer;
+};
+
+llama_vocab::llama_vocab() : pimpl(new impl()) {
+}
+
 llama_vocab::~llama_vocab() {
-    delete tokenizer;
 }
 
 int llama_vocab::find_bpe_rank(const std::string & token_left, const std::string & token_right) const {
@@ -194,7 +200,7 @@ struct llm_bigram_spm {
 };
 
 struct llm_tokenizer_spm : llm_tokenizer {
-    llm_tokenizer_spm(const llama_vocab & /*vocab*/) : llm_tokenizer() {}
+    llm_tokenizer_spm(const llama_vocab & /*vocab*/) {}
 };
 
 struct llm_tokenizer_spm_session {
@@ -364,7 +370,7 @@ struct llm_bigram_bpe {
 };
 
 struct llm_tokenizer_bpe : llm_tokenizer {
-    llm_tokenizer_bpe(const llama_vocab & vocab) : llm_tokenizer() {
+    llm_tokenizer_bpe(const llama_vocab & vocab) {
         GGML_ASSERT(vocab.type == LLAMA_VOCAB_TYPE_BPE);
         switch (vocab.type_pre) {
             case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
@@ -499,8 +505,7 @@ struct llm_tokenizer_bpe : llm_tokenizer {
 };
 
 struct llm_tokenizer_bpe_session {
-    llm_tokenizer_bpe_session(const llama_vocab & vocab) : vocab(vocab),
-        bpe_tokenizer(static_cast<const llm_tokenizer_bpe *>(vocab.tokenizer)) {}
+    llm_tokenizer_bpe_session(const llama_vocab & vocab, const llm_tokenizer_bpe & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
 
     static void append(const llama_vocab::id token_id, std::vector<llama_vocab::id> & output)  {
         output.push_back(token_id);
@@ -541,7 +546,7 @@ struct llm_tokenizer_bpe_session {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
-        const auto word_collection = unicode_regex_split(text, bpe_tokenizer->regex_exprs);
+        const auto word_collection = unicode_regex_split(text, tokenizer.regex_exprs);
 
         symbols_final.clear();
 
@@ -671,7 +676,7 @@ private:
     }
 
     const llama_vocab & vocab;
-    const llm_tokenizer_bpe * bpe_tokenizer;
+    const llm_tokenizer_bpe & tokenizer;
 
     std::vector<llm_symbol> symbols;
     std::vector<llm_symbol> symbols_final;
@@ -683,7 +688,7 @@ private:
 //
 
 struct llm_tokenizer_wpm : llm_tokenizer {
-    llm_tokenizer_wpm(const llama_vocab & /*vocab*/) : llm_tokenizer() {}
+    llm_tokenizer_wpm(const llama_vocab & /*vocab*/) {}
 };
 
 struct llm_tokenizer_wpm_session {
@@ -800,7 +805,7 @@ private:
 //
 
 struct llm_tokenizer_ugm : llm_tokenizer {
-    llm_tokenizer_ugm(const llama_vocab & vocab) : llm_tokenizer() {
+    llm_tokenizer_ugm(const llama_vocab & vocab) {
         if (vocab.precompiled_charsmap.size() > 0) {
             size_t charsmap_offset = 0;
 
@@ -867,8 +872,7 @@ struct llm_tokenizer_ugm : llm_tokenizer {
 };
 
 struct llm_tokenizer_ugm_session {
-    llm_tokenizer_ugm_session(const llama_vocab & vocab) : vocab(vocab),
-        ugm_tokenizer(static_cast<const llm_tokenizer_ugm *>(vocab.tokenizer)) {}
+    llm_tokenizer_ugm_session(const llama_vocab & vocab, const llm_tokenizer_ugm & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
 
     /* This implementation is based on SentencePiece optimized Viterbi algorithm for
      * unigram language models. The general idea is to:
@@ -908,7 +912,7 @@ struct llm_tokenizer_ugm_session {
             // traverse the token matcher trie to find a matching token
             bool single_codepoint_token_found = false;
             const struct best_tokenization & current_best = tokenization_results[input_offset];
-            const struct naive_trie * node = ugm_tokenizer->token_matcher.traverse(normalized[prefix_offset++]);
+            const struct naive_trie * node = tokenizer.token_matcher.traverse(normalized[prefix_offset++]);
 
             while (prefix_offset <= input_len && node != NULL) {
                 // check if we found valid token in prefix
@@ -938,7 +942,7 @@ struct llm_tokenizer_ugm_session {
             // if we didn't find a valid token corresponding to the whole UTF code point
             // then use unknown token as the tokenization of this UTF code point
             if (!single_codepoint_token_found) {
-                const double challenger_score = current_best.score_sum + ugm_tokenizer->unknown_token_score;
+                const double challenger_score = current_best.score_sum + tokenizer.unknown_token_score;
                 prefix_offset = input_offset + n_utf8_code_units;
                 struct best_tokenization & current_champ = tokenization_results[prefix_offset];
                 if (challenger_score > current_champ.score_sum) {
@@ -982,7 +986,7 @@ private:
         normalized->clear();
         normalized->reserve(input.size() * 3);
 
-        const std::string space = vocab.tokenizer_escape_whitespaces ? ugm_tokenizer->escaped_space : " ";
+        const std::string space = vocab.tokenizer_escape_whitespaces ? tokenizer.escaped_space : " ";
 
         bool shall_prepend_space = !vocab.tokenizer_treat_whitespace_as_suffix && vocab.tokenizer_add_space_prefix;
         bool shall_append_space = vocab.tokenizer_treat_whitespace_as_suffix && vocab.tokenizer_add_space_prefix;
@@ -1078,7 +1082,7 @@ private:
 
         // if input prefix matches some user-defined token return this token as normalization result
         auto user_defined_token_match =
-           ugm_tokenizer->user_defined_token_matcher.get_longest_prefix(&input[input_offset], input.size() - input_offset);
+           tokenizer.user_defined_token_matcher.get_longest_prefix(&input[input_offset], input.size() - input_offset);
         if (user_defined_token_match.second > 0) {
             return { &input[input_offset], user_defined_token_match.second, user_defined_token_match.second };
         }
@@ -1086,8 +1090,8 @@ private:
         size_t longest_prefix_length = 0;
         size_t longest_prefix_offset = 0;
 
-        if (ugm_tokenizer->xcda_array_size > 0) {
-            struct xcda_array_view xcda_view(ugm_tokenizer->xcda_array, ugm_tokenizer->xcda_array_size);
+        if (tokenizer.xcda_array_size > 0) {
+            struct xcda_array_view xcda_view(tokenizer.xcda_array, tokenizer.xcda_array_size);
 
             // Find the longest normalized sequence matching the input prefix by walking
             // the XOR-compressed compact double array (XCDA) starting from the root node
@@ -1123,10 +1127,10 @@ private:
 
         if (longest_prefix_length > 0) {
             // we have a match, so return the replacement sequence
-            if (longest_prefix_offset >= ugm_tokenizer->prefix_replacements_size) {
+            if (longest_prefix_offset >= tokenizer.prefix_replacements_size) {
                 throw std::runtime_error("Index out of array bounds in precompiled charsmap!");
             }
-            const char * prefix_replacement = &(ugm_tokenizer->prefix_replacements)[longest_prefix_offset];
+            const char * prefix_replacement = &(tokenizer.prefix_replacements)[longest_prefix_offset];
             return { prefix_replacement, strlen(prefix_replacement), longest_prefix_length };
         }
 
@@ -1143,7 +1147,7 @@ private:
     }
 
     const llama_vocab & vocab;
-    const llm_tokenizer_ugm * ugm_tokenizer;
+    const llm_tokenizer_ugm & tokenizer;
 };
 
 //
@@ -1205,7 +1209,7 @@ static std::vector<uint8_t> llama_unescape_rwkv_token(const std::string & escape
 }
 
 struct llm_tokenizer_rwkv : llm_tokenizer {
-    llm_tokenizer_rwkv(const llama_vocab & vocab) : llm_tokenizer() {
+    llm_tokenizer_rwkv(const llama_vocab & vocab) {
         // RWKV supports arbitrary byte tokens, but the vocab struct only supports string tokens.
         // For now, we decode the vocab here into the lookup we'll use for tokenization.
 
@@ -1221,13 +1225,12 @@ struct llm_tokenizer_rwkv : llm_tokenizer {
 };
 
 struct llm_tokenizer_rwkv_session {
-    llm_tokenizer_rwkv_session(const llama_vocab & vocab) : vocab(vocab),
-        rwkv_tokenizer(static_cast<const llm_tokenizer_rwkv &>(*vocab.tokenizer)) {}
+    llm_tokenizer_rwkv_session(const llama_vocab & vocab, const llm_tokenizer_rwkv & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         uint32_t position = 0;
         while (position < text.size()) {
-            const struct naive_trie * node = rwkv_tokenizer.token_matcher.traverse(text[position]);
+            const struct naive_trie * node = tokenizer.token_matcher.traverse(text[position]);
             if (node == NULL) {
                 // no matching token found, add unknown token
                 output.push_back(vocab.special_unk_id);
@@ -1254,25 +1257,25 @@ struct llm_tokenizer_rwkv_session {
 
 private:
     const llama_vocab & vocab;
-    const llm_tokenizer_rwkv & rwkv_tokenizer;
+    const llm_tokenizer_rwkv & tokenizer;
 };
 
 void llama_vocab::init_tokenizer() {
     switch (type) {
         case LLAMA_VOCAB_TYPE_SPM:
-            tokenizer = new llm_tokenizer_spm(*this);
+            pimpl->tokenizer = std::make_unique<llm_tokenizer_spm>(*this);
             break;
         case LLAMA_VOCAB_TYPE_BPE:
-            tokenizer = new llm_tokenizer_bpe(*this);
+            pimpl->tokenizer = std::make_unique<llm_tokenizer_bpe>(*this);
             break;
         case LLAMA_VOCAB_TYPE_WPM:
-            tokenizer = new llm_tokenizer_wpm(*this);
+            pimpl->tokenizer = std::make_unique<llm_tokenizer_wpm>(*this);
             break;
         case LLAMA_VOCAB_TYPE_UGM:
-            tokenizer = new llm_tokenizer_ugm(*this);
+            pimpl->tokenizer = std::make_unique<llm_tokenizer_ugm>(*this);
             break;
         case LLAMA_VOCAB_TYPE_RWKV:
-            tokenizer = new llm_tokenizer_rwkv(*this);
+            pimpl->tokenizer = std::make_unique<llm_tokenizer_rwkv>(*this);
             break;
         default:
             GGML_ABORT("unsupported vocab type");
@@ -1566,7 +1569,7 @@ std::vector<llama_vocab::id> llama_vocab::tokenize(
         std::string raw_text,
         bool add_special,
         bool parse_special) const {
-    GGML_ASSERT(tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
+    GGML_ASSERT(pimpl->tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
 
     std::vector<id> output;
     std::forward_list<fragment_buffer_variant> fragment_buffer;
@@ -1628,7 +1631,7 @@ std::vector<llama_vocab::id> llama_vocab::tokenize(
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
-                llm_tokenizer_bpe_session session(*this);
+                llm_tokenizer_bpe_session session(*this, *static_cast<const llm_tokenizer_bpe *>(pimpl->tokenizer.get()));
                 // it calls some other methods that are not exist in llm_tokenizer,
                 // here just cast it to bpe tokenizer object
                 if (add_special) {
@@ -1685,7 +1688,7 @@ std::vector<llama_vocab::id> llama_vocab::tokenize(
                     GGML_ASSERT(special_bos_id != LLAMA_TOKEN_NULL);
                     output.push_back(special_bos_id);
                 }
-                llm_tokenizer_ugm_session session(*this);
+                llm_tokenizer_ugm_session session(*this, *static_cast<const llm_tokenizer_ugm *>(pimpl->tokenizer.get()));
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
@@ -1713,7 +1716,7 @@ std::vector<llama_vocab::id> llama_vocab::tokenize(
             } break;
         case LLAMA_VOCAB_TYPE_RWKV:
             {
-                llm_tokenizer_rwkv_session session(*this);
+                llm_tokenizer_rwkv_session session(*this, *static_cast<const llm_tokenizer_rwkv *>(pimpl->tokenizer.get()));
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
@@ -1872,7 +1875,7 @@ int32_t llama_vocab::detokenize(
         return 0;
     }
 
-    GGML_ASSERT(tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
+    GGML_ASSERT(pimpl->tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
 
     int32_t avail = text_len_max;
     int32_t total = 0;
