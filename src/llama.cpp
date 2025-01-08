@@ -65,8 +65,8 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
         model.load_stats(ml);
         model.print_info();
 
-        if (model.vocab.type != LLAMA_VOCAB_TYPE_NONE &&
-            model.hparams.n_vocab != model.vocab.id_to_token.size()) {
+        if (model.vocab.get_type() != LLAMA_VOCAB_TYPE_NONE &&
+            model.hparams.n_vocab != model.vocab.n_vocab) {
             throw std::runtime_error("vocab size mismatch");
         }
 
