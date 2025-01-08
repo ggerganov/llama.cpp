@@ -242,6 +242,10 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
             } else {
                 ab_map[name].b = cur;
             }
+        } else if (str_endswith(name, "_norm.weight")) {
+            // TODO: add support for norm vector
+            // for now, we don't really care because most adapters still work fine without it
+            continue;
         } else {
             throw std::runtime_error("LoRA tensor '" + name + "' has unexpected suffix");
         }
@@ -251,6 +255,7 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
     for (auto & it : ab_map) {
         const std::string & name = it.first;
         llama_lora_weight & w = it.second;
+        bool is_token_embd = str_endswith(name, "token_embd.weight");
 
         if (!w.a || !w.b) {
             throw std::runtime_error("LoRA tensor pair for '" + name + "' is missing one component");
@@ -259,16 +264,23 @@ static void llama_lora_adapter_init_impl(struct llama_model & model, const char 
         // device buft and device ctx
         auto * model_tensor = llama_model_get_tensor(model, name.c_str());
         if (!model_tensor) {
-            throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model");
+            throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model (hint: maybe wrong base model?)");
         }
 
         struct ggml_context * dev_ctx = ctx_for_buft(ggml_backend_buffer_get_type(model_tensor->buffer));
         // validate tensor shape
-        if (model_tensor->ne[0] != w.a->ne[0] || model_tensor->ne[1] != w.b->ne[1]) {
-            throw std::runtime_error("tensor '" + name + "' has incorrect shape");
-        }
-        if (w.a->ne[1] != w.b->ne[0]) {
-            throw std::runtime_error("lora_a tensor is not transposed (hint: adapter from \"finetune\" example is no longer supported)");
+        if (is_token_embd) {
+            // expect B to be non-transposed, A and B are flipped; see llm_build_inp_embd()
+            if (model_tensor->ne[0] != w.b->ne[1] || model_tensor->ne[1] != w.a->ne[1]) {
+                throw std::runtime_error("tensor '" + name + "' has incorrect shape (hint: maybe wrong base model?)");
+            }
+        } else {
+            if (model_tensor->ne[0] != w.a->ne[0] || model_tensor->ne[1] != w.b->ne[1]) {
+                throw std::runtime_error("tensor '" + name + "' has incorrect shape (hint: maybe wrong base model?)");
+            }
+            if (w.a->ne[1] != w.b->ne[0]) {
+                throw std::runtime_error("lora_a tensor is not transposed (hint: adapter from \"finetune\" example is no longer supported)");
+            }
         }
 
         // save tensor to adapter
