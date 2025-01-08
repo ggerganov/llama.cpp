@@ -4,9 +4,6 @@
 
 #include <string>
 #include <vector>
-#include <unordered_map>
-#include <map>
-#include <set>
 #include <memory>
 
 struct LLM_KV;
@@ -19,8 +16,6 @@ struct llama_vocab {
         llama_token_attr attr;
     };
 
-    uint32_t n_vocab = 0; // TODO: not great because has to keep in sync with hparams.n_vocab
-
     llama_vocab();
     ~llama_vocab();
 
@@ -28,6 +23,9 @@ struct llama_vocab {
 
     enum llama_vocab_type     get_type()     const;
     enum llama_vocab_pre_type get_pre_type() const;
+
+    // TODO: how to deduplicate with llama_hparams.n_vocab ?
+    uint32_t n_vocab() const;
 
     std::string type_name() const;
 

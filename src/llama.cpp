@@ -66,7 +66,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
         model.print_info();
 
         if (model.vocab.get_type() != LLAMA_VOCAB_TYPE_NONE &&
-            model.hparams.n_vocab != model.vocab.n_vocab) {
+            model.hparams.n_vocab != model.vocab.n_vocab()) {
             throw std::runtime_error("vocab size mismatch");
         }
 
@@ -8474,7 +8474,7 @@ static int llama_decode_impl(
 
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
+            if (batch.token[i] < 0 || (uint32_t) batch.token[i] >= model.vocab.n_vocab()) {
                 LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
@@ -8809,7 +8809,7 @@ static int llama_encode_impl(
 
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens; ++i) {
-            if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
+            if (batch.token[i] < 0 || (uint32_t) batch.token[i] >= model.vocab.n_vocab()) {
                 LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
                 return -1;
             }
