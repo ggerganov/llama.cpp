@@ -1600,7 +1600,7 @@ void llama_model::load_vocab(llama_model_loader & ml) {
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
         try {
-            vocab.linefeed_id = llama_byte_to_token_impl(vocab, '\n');
+            vocab.linefeed_id = vocab.byte_to_token('\n');
         } catch (const std::exception & e) {
             LLAMA_LOG_WARN("%s: SPM vocabulary, but newline token not found: %s! Using special_pad_id instead.", __func__, e.what());
             vocab.linefeed_id = vocab.special_pad_id;
@@ -1608,11 +1608,11 @@ void llama_model::load_vocab(llama_model_loader & ml) {
     } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
         vocab.linefeed_id = vocab.special_pad_id;
     } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
-        const std::vector<int> ids = llama_tokenize_internal(vocab, "\n", false);
+        const std::vector<int> ids = vocab.tokenize("\n", false);
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     } else {
-        const std::vector<int> ids = llama_tokenize_internal(vocab, "\xC4\x8A", false); // U+010A
+        const std::vector<int> ids = vocab.tokenize("\xC4\x8A", false); // U+010A
 
         //GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         if (ids.empty()) {
@@ -4259,7 +4259,7 @@ void llama_model::print_info() const {
 
     // hparams
     LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, arch_name().c_str());
-    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, llama_model_vocab_type_name(vocab.type));
+    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type_name().c_str());
     LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
     LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
     LLAMA_LOG_INFO("%s: vocab_only       = %d\n",     __func__, hparams.vocab_only);
