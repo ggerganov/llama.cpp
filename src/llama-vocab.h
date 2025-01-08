@@ -73,8 +73,6 @@ struct llama_vocab {
     bool tokenizer_escape_whitespaces         = true;
     bool tokenizer_treat_whitespace_as_suffix = false;
 
-    std::vector<char> precompiled_charsmap;
-
     llama_vocab();
     ~llama_vocab();
 
