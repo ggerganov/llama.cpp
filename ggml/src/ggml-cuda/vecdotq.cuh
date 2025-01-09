@@ -524,9 +524,6 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmq(
     return d6 * sumf_d;
 }
 
-// VDR = vec dot ratio, how many contiguous integers each thread processes when the vec dot kernel is called
-// MMVQ = mul_mat_vec_q, MMQ = mul_mat_q
-
 #define VDR_TQ2_0_Q8_1_MMVQ 2
 #define VDR_TQ2_0_Q8_1_MMQ  8
 
@@ -547,7 +544,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_tq2_0_q8_1_im
             sumi = ggml_cuda_dp4a(__vsub4(vi, 0x01010101), u[vdr*i0 + i], sumi); // SIMD dot product
         }
 
-        // TODO: batch subtract by using d8 sum
         sumf += d8[i0] * sumi;
     }
 
