@@ -790,8 +790,8 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_16x3_8B; break;
-                    default: model.type = e_model::MODEL_UNKNOWN;
+                    case 32: type = LLM_TYPE_16x3_8B; break;
+                    default: type = LLM_TYPE_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_PLAMO:
