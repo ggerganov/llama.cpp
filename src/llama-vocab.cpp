@@ -2345,19 +2345,21 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+                        std::string text;
 
                         // prefix with space if previous is special
                         if (tokenizer_add_space_prefix && is_prev_special) {
-                            raw_text = " " + raw_text;
+                            text = ' ';
                         }
 
+                        text += fragment.raw_text.substr(fragment.offset, fragment.length);
+
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", text.length(), fragment.offset, fragment.length, text.c_str());
 #endif
-                        llama_escape_whitespace(raw_text);
+                        llama_escape_whitespace(text);
                         llm_tokenizer_spm_session session(vocab);
-                        session.tokenize(raw_text, output);
+                        session.tokenize(text, output);
                         is_prev_special = false;
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
@@ -2387,12 +2389,12 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
                 }
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+                        std::string text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", text.length(), fragment.offset, fragment.length, text.c_str());
 #endif
-                        session.tokenize(raw_text, output);
+                        session.tokenize(text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         session.append(fragment.token, output);
                     }
@@ -2414,12 +2416,12 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+                        std::string text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", text.length(), fragment.offset, fragment.length, text.c_str());
 #endif
-                        session.tokenize(raw_text, output);
+                        session.tokenize(text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                     }
@@ -2440,11 +2442,11 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+                        std::string text = fragment.raw_text.substr(fragment.offset, fragment.length);
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", text.length(), fragment.offset, fragment.length, text.c_str());
 #endif
-                        session.tokenize(raw_text, output);
+                        session.tokenize(text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                     }
@@ -2467,13 +2469,13 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
                 llm_tokenizer_rwkv_session session(vocab, *static_cast<const llm_tokenizer_rwkv *>(tokenizer.get()));
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+                        std::string text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", text.length(), fragment.offset, fragment.length, text.c_str());
 #endif
 
-                        session.tokenize(raw_text, output);
+                        session.tokenize(text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                     }
