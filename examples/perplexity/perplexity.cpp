@@ -296,8 +296,11 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+
+    const bool add_bos = llama_add_bos_token(vocab);
+    GGML_ASSERT(!llama_add_eos_token(vocab));
 
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
@@ -382,7 +385,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
+                tokens[batch_start] = llama_token_bos(vocab);
             }
 
             const auto * batch_logits = llama_get_logits(ctx);
@@ -444,8 +447,11 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab *   vocab   = llama_get_vocab(model);
+
+    const bool add_bos = llama_add_bos_token(vocab);
+    GGML_ASSERT(!llama_add_eos_token(vocab));
 
     std::ofstream logits_stream;
     if (!params.logits_file.empty()) {
@@ -557,7 +563,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
 
                 // add BOS token for the first batch of each chunk
                 if (add_bos && j == 0) {
-                    tokens[seq_start] = llama_token_bos(llama_get_model(ctx));
+                    tokens[seq_start] = llama_token_bos(vocab);
                 }
 
                 for (int k = 0; k < batch_size; ++k) {
@@ -732,6 +738,9 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
 }
 
 static void hellaswag_score(llama_context * ctx, const common_params & params) {
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     // Calculates hellaswag score (acc_norm) from prompt
     //
     // Data extracted from the HellaSwag validation dataset (MIT license) https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
@@ -765,7 +774,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
     size_t hs_task_count = prompt_lines.size()/6;
     LOG_INF("%s : loaded %zu tasks from prompt.\n", __func__, hs_task_count);
 
-    const bool is_spm = llama_vocab_type(llama_get_model(ctx)) == LLAMA_VOCAB_TYPE_SPM;
+    const bool is_spm = llama_vocab_type(vocab) == LLAMA_VOCAB_TYPE_SPM;
     LOG_INF("================================= is_spm = %d\n", is_spm);
 
     // The tasks should be randomized so the score stabilizes quickly.
@@ -1655,6 +1664,9 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
 }
 
 static void kl_divergence(llama_context * ctx, const common_params & params) {
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     if (params.logits_file.empty()) {
         LOG_ERR("%s: you must provide a name of a file containing the log probabilities of the base model\n", __func__);
         return;
@@ -1701,8 +1713,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
     const int n_batch = params.n_batch;
     const int num_batches = (n_ctx + n_batch - 1)/n_batch;
     const int nv = 2*((n_vocab + 1)/2) + 4;
-    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
+    const bool add_bos = llama_add_bos_token(vocab);
+    GGML_ASSERT(!llama_add_eos_token(vocab));
 
     std::vector<uint16_t> log_probs_uint16(size_t(n_ctx - 1 - n_ctx/2) * nv);
     std::vector<float>    kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
@@ -1761,7 +1773,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
+                tokens[batch_start] = llama_token_bos(vocab);
             }
 
             common_batch_clear(batch);

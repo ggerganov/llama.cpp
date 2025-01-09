@@ -3679,16 +3679,16 @@ struct llama_model_params llama_model_default_params() {
     return result;
 }
 
+const struct llama_vocab * llama_get_vocab(const struct llama_model * model) {
+    return &model->vocab;
+}
+
 void llama_free_model(struct llama_model * model) {
     llama_model_free(model);
 }
 
 void llama_model_free(struct llama_model * model) {
     delete model;
-}
-
-enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
-    return model->vocab.get_type();
 }
 
 int32_t llama_n_vocab(const struct llama_model * model) {

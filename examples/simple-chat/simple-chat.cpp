@@ -75,6 +75,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     // initialize the context
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = n_ctx;
@@ -97,9 +99,9 @@ int main(int argc, char ** argv) {
         std::string response;
 
         // tokenize the prompt
-        const int n_prompt_tokens = -llama_tokenize(model, prompt.c_str(), prompt.size(), NULL, 0, true, true);
+        const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, true, true);
         std::vector<llama_token> prompt_tokens(n_prompt_tokens);
-        if (llama_tokenize(model, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), llama_get_kv_cache_used_cells(ctx) == 0, true) < 0) {
+        if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), llama_get_kv_cache_used_cells(ctx) == 0, true) < 0) {
             GGML_ABORT("failed to tokenize the prompt\n");
         }
 
@@ -124,13 +126,13 @@ int main(int argc, char ** argv) {
             new_token_id = llama_sampler_sample(smpl, ctx, -1);
 
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id)) {
+            if (llama_token_is_eog(vocab, new_token_id)) {
                 break;
             }
 
             // convert the token to a string, print it and add it to the response
             char buf[256];
-            int n = llama_token_to_piece(model, new_token_id, buf, sizeof(buf), 0, true);
+            int n = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
             if (n < 0) {
                 GGML_ABORT("failed to convert token to piece\n");
             }

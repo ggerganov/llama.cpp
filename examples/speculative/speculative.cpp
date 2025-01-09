@@ -90,10 +90,13 @@ int main(int argc, char ** argv) {
     model_dft = llama_init_dft.model.get();
     ctx_dft   = llama_init_dft.context.get();
 
-    const bool vocab_type_tgt = llama_vocab_type(model_tgt);
+    const llama_vocab * vocab_tgt = llama_get_vocab(model_tgt);
+    const llama_vocab * vocab_dft = llama_get_vocab(model_dft);
+
+    const bool vocab_type_tgt = llama_vocab_type(vocab_tgt);
     LOG_DBG("vocab_type tgt: %d\n", vocab_type_tgt);
 
-    const bool vocab_type_dft = llama_vocab_type(model_dft);
+    const bool vocab_type_dft = llama_vocab_type(vocab_dft);
     LOG_DBG("vocab_type dft: %d\n", vocab_type_dft);
 
     if (vocab_type_tgt != vocab_type_dft) {
@@ -103,10 +106,10 @@ int main(int argc, char ** argv) {
     }
 
     if (
-        llama_add_bos_token(model_tgt) != llama_add_bos_token(model_dft) ||
-        llama_add_eos_token(model_tgt) != llama_add_eos_token(model_dft) ||
-        llama_token_bos(model_tgt) != llama_token_bos(model_dft) ||
-        llama_token_eos(model_tgt) != llama_token_eos(model_dft)
+        llama_add_bos_token(vocab_tgt) != llama_add_bos_token(vocab_dft) ||
+        llama_add_eos_token(vocab_tgt) != llama_add_eos_token(vocab_dft) ||
+        llama_token_bos(vocab_tgt) != llama_token_bos(vocab_dft) ||
+        llama_token_eos(vocab_tgt) != llama_token_eos(vocab_dft)
     ) {
         LOG_ERR("%s: draft model special tokens must match target model to use speculation\n", __func__);
         return 1;
@@ -127,8 +130,8 @@ int main(int argc, char ** argv) {
         }
 
         for (int i = SPEC_VOCAB_CHECK_START_TOKEN_ID; i < std::min(n_vocab_tgt, n_vocab_dft); ++i) {
-            const char * token_text_tgt = llama_token_get_text(model_tgt, i);
-            const char * token_text_dft = llama_token_get_text(model_dft, i);
+            const char * token_text_tgt = llama_token_get_text(vocab_tgt, i);
+            const char * token_text_dft = llama_token_get_text(vocab_dft, i);
             if (std::strcmp(token_text_tgt, token_text_dft) != 0) {
                 LOG_ERR("%s: draft model vocab must match target model to use speculation but ", __func__);
                 LOG_ERR("token %d content differs - target '%s', draft '%s'\n", i,
@@ -386,7 +389,7 @@ int main(int argc, char ** argv) {
                     }
                 }
 
-                if (llama_token_is_eog(model_tgt, token_id)) {
+                if (llama_token_is_eog(vocab_tgt, token_id)) {
                     has_eos = true;
                 }
                 ++n_predict;

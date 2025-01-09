@@ -857,21 +857,23 @@ struct common_init_result common_init_from_params(common_params & params) {
         return iparams;
     }
 
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     if (params.reranking) {
         bool ok = true;
 
-        if (llama_token_bos(model) == LLAMA_TOKEN_NULL) {
-            LOG_WRN("%s: warning: model does not have a  BOS token, reranking will not work\n", __func__);
+        if (llama_token_bos(vocab) == LLAMA_TOKEN_NULL) {
+            LOG_WRN("%s: warning: vocab does not have a  BOS token, reranking will not work\n", __func__);
             ok = false;
         }
 
-        if (llama_token_eos(model) == LLAMA_TOKEN_NULL) {
-            LOG_WRN("%s: warning: model does not have an EOS token, reranking will not work\n", __func__);
+        if (llama_token_eos(vocab) == LLAMA_TOKEN_NULL) {
+            LOG_WRN("%s: warning: vocab does not have an EOS token, reranking will not work\n", __func__);
             ok = false;
         }
 
-        if (llama_token_sep(model) == LLAMA_TOKEN_NULL) {
-            LOG_WRN("%s: warning: model does not have a  SEP token, reranking will not work\n", __func__);
+        if (llama_token_sep(vocab) == LLAMA_TOKEN_NULL) {
+            LOG_WRN("%s: warning: vocab does not have a  SEP token, reranking will not work\n", __func__);
             ok = false;
         }
 
@@ -941,14 +943,14 @@ struct common_init_result common_init_from_params(common_params & params) {
         common_lora_adapters_apply(lctx, params.lora_adapters);
     }
 
-    if (params.sampling.ignore_eos && llama_token_eos(model) == LLAMA_TOKEN_NULL) {
-        LOG_WRN("%s: warning: model does not have an EOS token, ignoring --ignore-eos\n", __func__);
+    if (params.sampling.ignore_eos && llama_token_eos(vocab) == LLAMA_TOKEN_NULL) {
+        LOG_WRN("%s: warning: vocab does not have an EOS token, ignoring --ignore-eos\n", __func__);
         params.sampling.ignore_eos = false;
     }
 
     if (params.sampling.ignore_eos) {
         for (llama_token i = 0; i < llama_n_vocab(model); i++) {
-            if (llama_token_is_eog(model, i)) {
+            if (llama_token_is_eog(vocab, i)) {
                 LOG_INF("%s: added %s logit bias = %f\n", __func__, common_token_to_piece(lctx, i).c_str(), -INFINITY);
                 params.sampling.logit_bias.push_back({i, -INFINITY});
             }
@@ -969,8 +971,9 @@ struct common_init_result common_init_from_params(common_params & params) {
         LOG_WRN("%s: warming up the model with an empty run - please wait ... (--no-warmup to disable)\n", __func__);
 
         std::vector<llama_token> tmp;
-        llama_token bos = llama_token_bos(model);
-        llama_token eos = llama_token_eos(model);
+        llama_token bos = llama_token_bos(vocab);
+        llama_token eos = llama_token_eos(vocab);
+
         // some models (e.g. T5) don't have a BOS token
         if (bos != LLAMA_TOKEN_NULL) {
             tmp.push_back(bos);
@@ -1559,21 +1562,23 @@ std::vector<llama_token> common_tokenize(
            const std::string & text,
                         bool   add_special,
                         bool   parse_special) {
-    return common_tokenize(llama_get_model(ctx), text, add_special, parse_special);
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+    return common_tokenize(vocab, text, add_special, parse_special);
 }
 
 std::vector<llama_token> common_tokenize(
-    const struct llama_model * model,
+    const struct llama_vocab * vocab,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + 2 * add_special;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
+    n_tokens = llama_tokenize(vocab, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
+        int check = llama_tokenize(vocab, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -1582,12 +1587,18 @@ std::vector<llama_token> common_tokenize(
 }
 
 std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+    return common_token_to_piece(vocab, token, special);
+}
+
+std::string common_token_to_piece(const struct llama_vocab * vocab, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+    const int n_chars = llama_token_to_piece(vocab, token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
+        int check = llama_token_to_piece(vocab, token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
@@ -1597,13 +1608,19 @@ std::string common_token_to_piece(const struct llama_context * ctx, llama_token 
     return piece;
 }
 
-std::string common_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
+std::string common_detokenize(const struct llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+    return common_detokenize(vocab, tokens, special);
+}
+
+std::string common_detokenize(const struct llama_vocab * vocab, const std::vector<llama_token> & tokens, bool special) {
     std::string text;
     text.resize(std::max(text.capacity(), tokens.size()));
-    int32_t n_chars = llama_detokenize(llama_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+    int32_t n_chars = llama_detokenize(vocab, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
     if (n_chars < 0) {
         text.resize(-n_chars);
-        n_chars = llama_detokenize(llama_get_model(ctx), tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
+        n_chars = llama_detokenize(vocab, tokens.data(), (int32_t)tokens.size(), &text[0], (int32_t)text.size(), false, special);
         GGML_ASSERT(n_chars <= (int32_t)text.size());  // whitespace trimming is performed after per-token detokenization
     }
 

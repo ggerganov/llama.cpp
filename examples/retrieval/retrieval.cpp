@@ -159,6 +159,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     const int n_ctx_train = llama_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -192,8 +194,8 @@ int main(int argc, char ** argv) {
             return 1;
         }
         // add eos if not present
-        if (llama_token_eos(model) >= 0 && (inp.empty() || inp.back() != llama_token_eos(model))) {
-            inp.push_back(llama_token_eos(model));
+        if (llama_token_eos(vocab) >= 0 && (inp.empty() || inp.back() != llama_token_eos(vocab))) {
+            inp.push_back(llama_token_eos(vocab));
         }
         chunk.tokens = inp;
     }

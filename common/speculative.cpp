@@ -79,10 +79,13 @@ bool common_speculative_are_compatible(
     const struct llama_model * model_tgt = llama_get_model(ctx_tgt);
     const struct llama_model * model_dft = llama_get_model(ctx_dft);
 
-    const bool vocab_type_tgt = llama_vocab_type(model_tgt);
+    const struct llama_vocab * vocab_tgt = llama_get_vocab(model_tgt);
+    const struct llama_vocab * vocab_dft = llama_get_vocab(model_dft);
+
+    const bool vocab_type_tgt = llama_vocab_type(vocab_tgt);
     LOG_DBG("%s: vocab_type tgt: %d\n", __func__, vocab_type_tgt);
 
-    const bool vocab_type_dft = llama_vocab_type(model_dft);
+    const bool vocab_type_dft = llama_vocab_type(vocab_dft);
     LOG_DBG("%s: vocab_type dft: %d\n", __func__, vocab_type_dft);
 
     if (vocab_type_tgt != vocab_type_dft) {
@@ -91,13 +94,13 @@ bool common_speculative_are_compatible(
         return false;
     }
 
-    if (llama_add_bos_token(model_tgt) != llama_add_bos_token(model_dft) ||
-        llama_add_eos_token(model_tgt) != llama_add_eos_token(model_dft) ||
-        llama_token_bos(model_tgt) != llama_token_bos(model_dft) ||
-        llama_token_eos(model_tgt) != llama_token_eos(model_dft)) {
-        LOG_ERR("%s: draft model special tokens must match target model to use speculation\n", __func__);
-        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(model_tgt), llama_add_bos_token(model_tgt), llama_token_eos(model_tgt), llama_add_eos_token(model_tgt));
-        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(model_dft), llama_add_bos_token(model_dft), llama_token_eos(model_dft), llama_add_eos_token(model_dft));
+    if (llama_add_bos_token(vocab_tgt) != llama_add_bos_token(vocab_dft) ||
+        llama_add_eos_token(vocab_tgt) != llama_add_eos_token(vocab_dft) ||
+        llama_token_bos(vocab_tgt) != llama_token_bos(vocab_dft) ||
+        llama_token_eos(vocab_tgt) != llama_token_eos(vocab_dft)) {
+        LOG_ERR("%s: draft vocab special tokens must match target vocab to use speculation\n", __func__);
+        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(vocab_tgt), llama_add_bos_token(vocab_tgt), llama_token_eos(vocab_tgt), llama_add_eos_token(vocab_tgt));
+        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(vocab_dft), llama_add_bos_token(vocab_dft), llama_token_eos(vocab_dft), llama_add_eos_token(vocab_dft));
         return false;
     }
 
@@ -115,10 +118,10 @@ bool common_speculative_are_compatible(
         }
 
         for (int i = SPEC_VOCAB_CHECK_START_TOKEN_ID; i < std::min(n_vocab_tgt, n_vocab_dft); ++i) {
-            const char * token_text_tgt = llama_token_get_text(model_tgt, i);
-            const char * token_text_dft = llama_token_get_text(model_dft, i);
+            const char * token_text_tgt = llama_token_get_text(vocab_tgt, i);
+            const char * token_text_dft = llama_token_get_text(vocab_dft, i);
             if (std::strcmp(token_text_tgt, token_text_dft) != 0) {
-                LOG_ERR("%s: draft model vocab must match target model to use speculation but "
+                LOG_ERR("%s: draft vocab vocab must match target vocab to use speculation but "
                              "token %d content differs - target '%s', draft '%s'\n", __func__, i,
                         common_token_to_piece(ctx_tgt, i).c_str(),
                         common_token_to_piece(ctx_dft, i).c_str());

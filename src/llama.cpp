@@ -9110,7 +9110,7 @@ static void llama_kv_cache_update_impl(struct llama_context & lctx) {
         // build worst-case graph
         uint32_t n_seqs = 1; // TODO: worst-case number of sequences
         uint32_t n_tokens = std::min(lctx.cparams.n_ctx, lctx.cparams.n_ubatch);
-        llama_token token = llama_token_bos(&lctx.model); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
+        llama_token token = lctx.model.vocab.token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
         llama_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
         ggml_cgraph * gf = llama_build_graph(lctx, ubatch, true);
 
@@ -9680,7 +9680,7 @@ struct llama_context * llama_new_context_with_model(
             // initialize scheduler with the worst-case graph
             uint32_t n_seqs = 1; // TODO: worst-case number of sequences
             uint32_t n_tokens = std::min(cparams.n_ctx, cparams.n_ubatch);
-            llama_token token = llama_token_bos(&ctx->model); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
+            llama_token token = ctx->model.vocab.token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
 
             llama_ubatch ubatch_pp = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
             ggml_cgraph * gf_pp = llama_build_graph(*ctx, ubatch_pp, true);
@@ -9830,140 +9830,6 @@ int32_t llama_decode(
 }
 
 //
-// vocab
-//
-
-// TODO: tmp bridges below until `struct llama_vocab` is exposed through the public API
-
-const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
-    return model->vocab.token_get_text(token);
-}
-
-float llama_token_get_score(const struct llama_model * model, llama_token token) {
-    return model->vocab.token_get_score(token);
-}
-
-enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
-    return model->vocab.token_get_attr(token);
-}
-
-bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    return model->vocab.is_eog(token);
-}
-
-bool llama_token_is_control(const struct llama_model * model, llama_token token) {
-    return model->vocab.is_control(token);
-}
-
-llama_token llama_token_bos(const struct llama_model * model) {
-    return model->vocab.token_bos();
-}
-
-llama_token llama_token_eos(const struct llama_model * model) {
-    return model->vocab.token_eos();
-}
-
-llama_token llama_token_eot(const struct llama_model * model) {
-    return model->vocab.token_eot();
-}
-
-llama_token llama_token_cls(const struct llama_model * model) {
-    return model->vocab.token_cls();
-}
-
-llama_token llama_token_sep(const struct llama_model * model) {
-    return model->vocab.token_sep();
-}
-
-llama_token llama_token_nl (const struct llama_model * model) {
-    return model->vocab.token_nl();
-}
-
-llama_token llama_token_pad(const struct llama_model * model) {
-    return model->vocab.token_pad();
-}
-
-bool llama_add_bos_token(const struct llama_model * model) {
-    return model->vocab.add_bos_token();
-}
-
-bool llama_add_eos_token(const struct llama_model * model) {
-    return model->vocab.add_eos_token();
-}
-
-llama_token llama_token_prefix(const struct llama_model * model) {
-    return model->vocab.token_prefix();
-}
-
-llama_token llama_token_middle(const struct llama_model * model) {
-    return model->vocab.token_middle();
-}
-
-llama_token llama_token_suffix(const struct llama_model * model) {
-    return model->vocab.token_suffix();
-}
-
-llama_token llama_token_fim_pre(const struct llama_model * model) {
-    return model->vocab.token_fim_pre();
-}
-
-llama_token llama_token_fim_suf(const struct llama_model * model) {
-    return model->vocab.token_fim_suf();
-}
-
-llama_token llama_token_fim_mid(const struct llama_model * model) {
-    return model->vocab.token_fim_mid();
-}
-
-llama_token llama_token_fim_pad(const struct llama_model * model) {
-    return model->vocab.token_fim_pad();
-}
-
-llama_token llama_token_fim_rep(const struct llama_model * model) {
-    return model->vocab.token_fim_rep();
-}
-
-llama_token llama_token_fim_sep(const struct llama_model * model) {
-    return model->vocab.token_fim_sep();
-}
-
-//
-// tokenization
-//
-
-int32_t llama_tokenize(
-    const struct llama_model * model,
-                  const char * text,
-                     int32_t   text_len,
-                 llama_token * tokens,
-                     int32_t   n_tokens_max,
-                        bool   add_special,
-                        bool   parse_special) {
-    return model->vocab.tokenize(text, text_len, tokens, n_tokens_max, add_special, parse_special);
-}
-
-int32_t llama_token_to_piece(
-    const struct llama_model * model,
-                 llama_token   token,
-                        char * buf,
-                     int32_t   length,
-                     int32_t   lstrip,
-                        bool   special) {
-    return model->vocab.token_to_piece(token, buf, length, lstrip, special);
-}
-
-int32_t llama_detokenize(
-    const struct llama_model * model,
-           const llama_token * tokens,
-                     int32_t   n_tokens,
-                        char * text,
-                     int32_t   text_len_max,
-                        bool   remove_special,
-                        bool   unparse_special) {
-    return model->vocab.detokenize(tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
-}
-
-//
 // chat templates
 //
 
@@ -10010,23 +9876,6 @@ int32_t llama_chat_apply_template(
         strncpy(buf, formatted_chat.c_str(), length);
     }
     return res;
-}
-
-//
-// sampling
-//
-
-// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
-struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
-    return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
-}
-
-struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model) {
-    return llama_sampler_init_infill_impl(model->vocab);
-}
-
-struct llama_sampler * llama_sampler_init_dry(const struct llama_model * model, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
-    return llama_sampler_init_dry_impl(model->vocab, llama_n_ctx_train(model), dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, seq_breakers, num_breakers);
 }
 
 //

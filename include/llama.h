@@ -56,7 +56,7 @@ extern "C" {
     // TODO: show sample usage
     //
 
-    // struct llama_vocab; // TODO: add in the future
+    struct llama_vocab;
     struct llama_model;
     struct llama_context;
     struct llama_sampler;
@@ -456,9 +456,10 @@ extern "C" {
     LLAMA_API int32_t llama_n_head     (const struct llama_model * model);
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
+    LLAMA_API const struct llama_vocab * llama_get_vocab(const struct llama_model * model);
 
     LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
-    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
+    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_vocab * vocab);
     LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
 
     // Get the model's RoPE frequency scaling factor
@@ -908,41 +909,41 @@ extern "C" {
     // Vocab
     //
 
-    LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
+    LLAMA_API const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token);
 
-    LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
+    LLAMA_API float llama_token_get_score(const struct llama_vocab * vocab, llama_token token);
 
-    LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token);
+    LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token);
 
     // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
-    LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+    LLAMA_API bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token);
 
     // Identify if Token Id is a control token or a render-able token
-    LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
+    LLAMA_API bool llama_token_is_control(const struct llama_vocab * vocab, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
-    LLAMA_API llama_token llama_token_eot(const struct llama_model * model); // end-of-turn
-    LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
-    LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
-    LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
-    LLAMA_API llama_token llama_token_pad(const struct llama_model * model); // padding
+    LLAMA_API llama_token llama_token_bos(const struct llama_vocab * vocab); // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(const struct llama_vocab * vocab); // end-of-sentence
+    LLAMA_API llama_token llama_token_eot(const struct llama_vocab * vocab); // end-of-turn
+    LLAMA_API llama_token llama_token_cls(const struct llama_vocab * vocab); // classification
+    LLAMA_API llama_token llama_token_sep(const struct llama_vocab * vocab); // sentence separator
+    LLAMA_API llama_token llama_token_nl (const struct llama_vocab * vocab); // next-line
+    LLAMA_API llama_token llama_token_pad(const struct llama_vocab * vocab); // padding
 
-    LLAMA_API bool llama_add_bos_token(const struct llama_model * model);
-    LLAMA_API bool llama_add_eos_token(const struct llama_model * model);
+    LLAMA_API bool llama_add_bos_token(const struct llama_vocab * vocab);
+    LLAMA_API bool llama_add_eos_token(const struct llama_vocab * vocab);
 
     // infill tokens
-    DEPRECATED(LLAMA_API llama_token llama_token_prefix(const struct llama_model * model), "use llama_token_fim_pre instead");
-    DEPRECATED(LLAMA_API llama_token llama_token_middle(const struct llama_model * model), "use llama_token_fim_mid instead");
-    DEPRECATED(LLAMA_API llama_token llama_token_suffix(const struct llama_model * model), "use llama_token_fim_suf instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_prefix(const struct llama_vocab * vocab), "use llama_token_fim_pre instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_middle(const struct llama_vocab * vocab), "use llama_token_fim_mid instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_suffix(const struct llama_vocab * vocab), "use llama_token_fim_suf instead");
 
-    LLAMA_API llama_token llama_token_fim_pre(const struct llama_model * model);
-    LLAMA_API llama_token llama_token_fim_suf(const struct llama_model * model);
-    LLAMA_API llama_token llama_token_fim_mid(const struct llama_model * model);
-    LLAMA_API llama_token llama_token_fim_pad(const struct llama_model * model);
-    LLAMA_API llama_token llama_token_fim_rep(const struct llama_model * model);
-    LLAMA_API llama_token llama_token_fim_sep(const struct llama_model * model);
+    LLAMA_API llama_token llama_token_fim_pre(const struct llama_vocab * vocab);
+    LLAMA_API llama_token llama_token_fim_suf(const struct llama_vocab * vocab);
+    LLAMA_API llama_token llama_token_fim_mid(const struct llama_vocab * vocab);
+    LLAMA_API llama_token llama_token_fim_pad(const struct llama_vocab * vocab);
+    LLAMA_API llama_token llama_token_fim_rep(const struct llama_vocab * vocab);
+    LLAMA_API llama_token llama_token_fim_sep(const struct llama_vocab * vocab);
 
     //
     // Tokenization
@@ -958,7 +959,7 @@ extern "C" {
     /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
     ///                      as plaintext. Does not insert a leading space.
     LLAMA_API int32_t llama_tokenize(
-        const struct llama_model * model,
+        const struct llama_vocab * vocab,
                       const char * text,
                          int32_t   text_len,
                      llama_token * tokens,
@@ -972,7 +973,7 @@ extern "C" {
     // User can skip up to 'lstrip' leading spaces before copying (useful when encoding/decoding multiple tokens with 'add_space_prefix')
     // @param special If true, special tokens are rendered in the output.
     LLAMA_API int32_t llama_token_to_piece(
-              const struct llama_model * model,
+              const struct llama_vocab * vocab,
                            llama_token   token,
                                   char * buf,
                                int32_t   length,
@@ -986,7 +987,7 @@ extern "C" {
     /// @param remove_special Allow to remove BOS and EOS tokens if model is configured to do so.
     /// @param unparse_special If true, special tokens are rendered in the output.
     LLAMA_API int32_t llama_detokenize(
-        const struct llama_model * model,
+        const struct llama_vocab * vocab,
                const llama_token * tokens,
                          int32_t   n_tokens,
                             char * text,
@@ -1008,6 +1009,7 @@ extern "C" {
     /// @param buf A buffer to hold the output formatted prompt. The recommended alloc size is 2 * (total number of characters of all messages)
     /// @param length The size of the allocated buffer
     /// @return The total number of bytes of the formatted prompt. If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
+    /// TODO: change to llama_vocab
     LLAMA_API int32_t llama_chat_apply_template(
               const struct llama_model * model,
                             const char * tmpl,
@@ -1057,7 +1059,6 @@ extern "C" {
     //    llama_sampler_free(smpl);
     //
     // TODO: In the future, llama_sampler will be utilized to offload the sampling to the backends (e.g. GPU).
-    // TODO: in the future, the entire sampling API that uses llama_model should start using llama_vocab
     //
 
     typedef void * llama_sampler_context_t;
@@ -1157,7 +1158,7 @@ extern "C" {
                                float   eta);
 
     LLAMA_API struct llama_sampler * llama_sampler_init_grammar(
-            const struct llama_model * model,
+            const struct llama_vocab * vocab,
                           const char * grammar_str,
                           const char * grammar_root);
 
@@ -1169,8 +1170,9 @@ extern "C" {
                                float   penalty_present); // 0.0 = disabled
 
     ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
-    LLAMA_API struct llama_sampler *    llama_sampler_init_dry(
-            const struct llama_model *  model,
+    LLAMA_API struct llama_sampler * llama_sampler_init_dry(
+            const struct llama_vocab *  vocab,
+                             int32_t    n_ctx_train,
                                float    dry_multiplier,
                                float    dry_base,
                              int32_t    dry_allowed_length,
@@ -1204,7 +1206,7 @@ extern "C" {
     // 3. discard non-EOG tokens with low prob
     // 4. if no tokens are left -> pick EOT
     //
-    LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_model * model);
+    LLAMA_API struct llama_sampler * llama_sampler_init_infill(const struct llama_vocab * vocab);
 
     // Returns the seed used by the sampler if applicable, LLAMA_DEFAULT_SEED otherwise
     LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);

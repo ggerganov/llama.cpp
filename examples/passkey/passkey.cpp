@@ -70,6 +70,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     // initialize the context
 
     llama_context_params ctx_params = common_context_params_to_llama(params);
@@ -223,7 +225,7 @@ int main(int argc, char ** argv) {
             const llama_token new_token_id = llama_sampler_sample(smpl, ctx, batch.n_tokens - 1);
 
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+            if (llama_token_is_eog(vocab, new_token_id) || n_cur == n_len) {
                 LOG("\n");
 
                 break;

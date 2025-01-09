@@ -52,8 +52,10 @@ int main(int argc, char ** argv) {
         }
     }
 
+    const llama_vocab * vocab = llama_get_vocab(model);
+
     //GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
-    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_SPM) {
+    if (llama_vocab_type(vocab) != LLAMA_VOCAB_TYPE_SPM) {
         return 99;
     }
 
