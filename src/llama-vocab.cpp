@@ -426,7 +426,7 @@ struct llm_tokenizer_bpe_session {
     }
 
     bool append_eos(std::vector<llama_token> & output) const {
-        if (vocab.add_bos_token()) {
+        if (vocab.add_eos_token()) {
             GGML_ASSERT(vocab.token_eos() != LLAMA_TOKEN_NULL);
             output.push_back(vocab.token_eos());
             return true;
