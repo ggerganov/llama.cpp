@@ -804,8 +804,8 @@ static std::vector<llama_token_data> get_token_probabilities(llama_context * ctx
 }
 
 static bool are_lora_equal(
-        const std::vector<common_lora_adapter_info> & l1,
-        const std::vector<common_lora_adapter_info> & l2) {
+        const std::vector<common_adapter_lora_info> & l1,
+        const std::vector<common_adapter_lora_info> & l2) {
     if (l1.size() != l2.size()) {
         return false;
     }
@@ -819,10 +819,10 @@ static bool are_lora_equal(
 }
 
 // parse lora config from JSON request, returned a copy of lora_base with updated scale
-static std::vector<common_lora_adapter_info> parse_lora_request(
-        const std::vector<common_lora_adapter_info> & lora_base,
+static std::vector<common_adapter_lora_info> parse_lora_request(
+        const std::vector<common_adapter_lora_info> & lora_base,
         const json & data) {
-    std::vector<common_lora_adapter_info> lora(lora_base);
+    std::vector<common_adapter_lora_info> lora(lora_base);
     int max_idx = lora.size();
 
     // clear existing value

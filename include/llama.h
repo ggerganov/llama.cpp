@@ -385,8 +385,7 @@ extern "C" {
     } llama_chat_message;
 
     // lora adapter
-    // TODO: rename to llama_adapter_lora
-    struct llama_lora_adapter;
+    struct llama_adapter_lora;
 
     // Helpers for getting default parameters
     // TODO: update API to start accepting pointers to params structs (https://github.com/ggerganov/llama.cpp/discussions/9172)
@@ -520,34 +519,31 @@ extern "C" {
     //
 
     // Load a LoRA adapter from file
-    // TODO: rename to llama_adapter_lora_init
-    LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
+    LLAMA_API struct llama_adapter_lora * llama_adapter_lora_init(
             struct llama_model * model,
             const char * path_lora);
 
+    // Manually free a LoRA adapter
+    // Note: loaded adapters will be free when the associated model is deleted
+    LLAMA_API void llama_adapter_lora_free(struct llama_adapter_lora * adapter);
+
+    // The following functions operate on a llama_context, hence the naming: llama_verb_...
+
     // Add a loaded LoRA adapter to given context
     // This will not modify model's weight
-    // TODO: rename to llama_set_adapter_lora
-    LLAMA_API int32_t llama_lora_adapter_set(
+    LLAMA_API int32_t llama_set_adapter_lora(
             struct llama_context * ctx,
-            struct llama_lora_adapter * adapter,
+            struct llama_adapter_lora * adapter,
             float scale);
 
     // Remove a specific LoRA adapter from given context
     // Return -1 if the adapter is not present in the context
-    // TODO: rename to llama_rm_adapter_lora
-    LLAMA_API int32_t llama_lora_adapter_remove(
+    LLAMA_API int32_t llama_rm_adapter_lora(
             struct llama_context * ctx,
-            struct llama_lora_adapter * adapter);
+            struct llama_adapter_lora * adapter);
 
     // Remove all LoRA adapters from given context
-    // TODO: rename to llama_clear_adapter_lora
-    LLAMA_API void llama_lora_adapter_clear(struct llama_context * ctx);
-
-    // Manually free a LoRA adapter
-    // Note: loaded adapters will be free when the associated model is deleted
-    // TODO: rename to llama_adapter_lora_free
-    LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
+    LLAMA_API void llama_clear_adapter_lora(struct llama_context * ctx);
 
     // Apply a loaded control vector to a llama_context, or if data is NULL, clear
     // the currently loaded vector.
@@ -555,9 +551,8 @@ extern "C" {
     // to an n_embd x n_layers buffer starting from layer 1.
     // il_start and il_end are the layer range the vector should apply to (both inclusive)
     // See llama_control_vector_load in common to load a control vector.
-    // TODO: rename to llama_adapter_cvec_apply
-    LLAMA_API int32_t llama_control_vector_apply(
-            struct llama_context * lctx,
+    LLAMA_API int32_t llama_apply_adapter_cvec(
+            struct llama_context * ctx,
                      const float * data,
                           size_t   len,
                          int32_t   n_embd,

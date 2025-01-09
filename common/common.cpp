@@ -910,12 +910,13 @@ struct common_init_result common_init_from_params(common_params & params) {
             return iparams;
         }
 
-        int err = llama_control_vector_apply(lctx,
-                                             cvec.data.data(),
-                                             cvec.data.size(),
-                                             cvec.n_embd,
-                                             params.control_vector_layer_start,
-                                             params.control_vector_layer_end);
+        int err = llama_apply_adapter_cvec(
+                lctx,
+                cvec.data.data(),
+                cvec.data.size(),
+                cvec.n_embd,
+                params.control_vector_layer_start,
+                params.control_vector_layer_end);
         if (err) {
             llama_free(lctx);
             llama_model_free(model);
@@ -926,8 +927,8 @@ struct common_init_result common_init_from_params(common_params & params) {
 
     // load and optionally apply lora adapters
     for (auto & la : params.lora_adapters) {
-        llama_lora_adapter_ptr lora;
-        lora.reset(llama_lora_adapter_init(model, la.path.c_str()));
+        llama_adapter_lora_ptr lora;
+        lora.reset(llama_adapter_lora_init(model, la.path.c_str()));
         if (lora == nullptr) {
             LOG_ERR("%s: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
             llama_free(lctx);
@@ -940,7 +941,7 @@ struct common_init_result common_init_from_params(common_params & params) {
     }
 
     if (!params.lora_init_without_apply) {
-        common_lora_adapters_apply(lctx, params.lora_adapters);
+        common_set_adapter_lora(lctx, params.lora_adapters);
     }
 
     if (params.sampling.ignore_eos && llama_token_eos(vocab) == LLAMA_TOKEN_NULL) {
@@ -1008,11 +1009,11 @@ struct common_init_result common_init_from_params(common_params & params) {
     return iparams;
 }
 
-void common_lora_adapters_apply(struct llama_context * ctx, std::vector<common_lora_adapter_info> & lora) {
-    llama_lora_adapter_clear(ctx);
+void common_set_adapter_lora(struct llama_context * ctx, std::vector<common_adapter_lora_info> & lora) {
+    llama_clear_adapter_lora(ctx);
     for (auto & la : lora) {
         if (la.scale != 0.0f) {
-            llama_lora_adapter_set(ctx, la.ptr, la.scale);
+            llama_set_adapter_lora(ctx, la.ptr, la.scale);
         }
     }
 }
