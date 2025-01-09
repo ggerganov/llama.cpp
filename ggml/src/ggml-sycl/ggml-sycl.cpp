@@ -54,18 +54,12 @@ static ggml_sycl_device_info ggml_sycl_init() {
     GGML_ASSERT(info.device_count <= GGML_SYCL_MAX_DEVICES);
 
     int64_t total_vram = 0;
-#if defined(GGML_SYCL_FORCE_MMQ)
-    GGML_LOG_INFO("%s: GGML_SYCL_FORCE_MMQ:   yes\n", __func__);
-#else
-    GGML_LOG_INFO("%s: GGML_SYCL_FORCE_MMQ:   no\n", __func__);
-#endif
-#if defined(SYCL_USE_XMX)
-    GGML_LOG_INFO("%s: SYCL_USE_XMX: yes\n", __func__);
-#else
-    GGML_LOG_INFO("%s: SYCL_USE_XMX: no\n", __func__);
-#endif
-    GGML_LOG_INFO("%s: found %d %s devices:\n", __func__, info.device_count, GGML_SYCL_NAME);
-
+/* This is a bit misleading;  reserved for later */
+// #if defined(SYCL_USE_XMX)
+//     GGML_LOG_INFO("%s: SYCL_USE_XMX: yes\n", __func__);
+// #else
+//     GGML_LOG_INFO("%s: SYCL_USE_XMX: no\n", __func__);
+// #endif
     for (int i = 0; i < info.device_count; ++i) {
         info.devices[i].vmm = 0;
         dpct::device_info prop;
@@ -109,11 +103,11 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
     name = std::regex_replace(name, std::regex("\\(TM\\)"), "");
 
     auto global_mem_size = prop.get_global_mem_size()/1000000;
-
-    GGML_LOG_INFO("|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|\n", id, device_type.c_str(),
+    std::string xmx = gpu_has_xmx(device) ? "yes" : "no";
+    GGML_LOG_INFO("|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|%14s|\n", id, device_type.c_str(),
             name.c_str(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
-            global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str());
+            global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str(), xmx.c_str());
 }
 
 void ggml_backend_sycl_print_sycl_devices() {
@@ -124,16 +118,16 @@ void ggml_backend_sycl_print_sycl_devices() {
 
     GGML_LOG_INFO(
         "|  |                   |                                       |      "
-        " |Max    |        |Max  |Global |                     |\n");
+        " |Max    |        |Max  |Global |                     |         XMX  |\n");
     GGML_LOG_INFO(
         "|  |                   |                                       |      "
-        " |compute|Max work|sub  |mem    |                     |\n");
+        " |compute|Max work|sub  |mem    |                     |          or  |\n");
     GGML_LOG_INFO(
         "|ID|        Device Type|                                   "
-        "Name|Version|units  |group   |group|size   |       Driver version|\n");
+        "Name|Version|units  |group   |group|size   |       Driver version| Tensor Cores |\n");
     GGML_LOG_INFO(
         "|--|-------------------|---------------------------------------|------"
-        "-|-------|--------|-----|-------|---------------------|\n");
+        "-|-------|--------|-----|-------|---------------------|--------------|\n");
 
     for (int id = 0; id < device_count; ++id) {
       sycl::device device = dpct::dev_mgr::instance().get_device(id);
@@ -164,14 +158,18 @@ static void ggml_check_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
-        GGML_LOG_INFO("[SYCL] call ggml_check_sycl\n");
+        GGML_SYCL_DEBUG("[SYCL] call ggml_check_sycl\n");
         g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
-        GGML_LOG_INFO("%s: GGML_SYCL_DEBUG: %d\n", __func__, g_ggml_sycl_debug);
-
-#if defined(GGML_SYCL_F16)
-        GGML_LOG_INFO("%s: GGML_SYCL_F16: yes\n", __func__);
+        GGML_LOG_INFO("GGML_SYCL_DEBUG: %d\n", g_ggml_sycl_debug);
+#if defined(GGML_SYCL_FORCE_MMQ)
+        GGML_LOG_INFO("GGML_SYCL_FORCE_MMQ:   yes\n");
 #else
-        GGML_LOG_INFO("%s: GGML_SYCL_F16: no\n", __func__);
+        GGML_LOG_INFO("GGML_SYCL_FORCE_MMQ:   no\n");
+#endif
+#if defined(GGML_SYCL_F16)
+        GGML_LOG_INFO("GGML_SYCL_F16: yes\n");
+#else
+        GGML_LOG_INFO("GGML_SYCL_F16: no\n");
 #endif
 
 /* NOT REMOVE, keep it for next optimize for XMX.
