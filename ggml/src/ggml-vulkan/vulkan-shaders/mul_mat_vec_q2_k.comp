@@ -40,9 +40,6 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
         [[unroll]] for (uint n = 0; n < num_rows; ++n) {
             const uint ib0 = a_offset / QUANT_K + (first_row+n)*num_blocks_per_row;
-            const f16vec2 d = data_a[ib0 + i].d;
-            const FLOAT_TYPE dall = d.x;
-            const FLOAT_TYPE dmin = d.y;
 
             sccache[ix][0][itid] = FLOAT_TYPE(bitfieldExtract(uint(data_a[ib0 + i].scales[itid8]), int(v_im*4), 4)); // lower 8 bytes
             sccache[ix][1][itid] = FLOAT_TYPE(bitfieldExtract(uint(data_a[ib0 + i].scales[itid8+8]), int(v_im*4), 4)); // upper 8 bytes
@@ -53,6 +50,10 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
             const vec4 qs_u32_2 = vec4(unpack8((qs_u32 >> 2) & 0x03030303));
             const vec4 qs_u32_4 = vec4(unpack8((qs_u32 >> 4) & 0x03030303));
             const vec4 qs_u32_6 = vec4(unpack8((qs_u32 >> 6) & 0x03030303));
+
+            const f16vec2 d = data_a[ib0 + i].d;
+            const FLOAT_TYPE dall = d.x;
+            const FLOAT_TYPE dmin = d.y;
 
             [[unroll]] for (uint j = 0; j < NUM_COLS; ++j) {
                 B_TYPE_VEC2 b0 = data_b_v2[(j*p.batch_stride_b + b_offset + y_idx) / 2];
