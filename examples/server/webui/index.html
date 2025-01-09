@@ -62,17 +62,19 @@
           <!-- action buttons (top right) -->
           <div class="flex items-center">
             <div v-if="messages.length > 0" class="dropdown dropdown-end">
-              <!-- "more" button -->
-              <button tabindex="0" role="button" class="btn m-1" :disabled="isGenerating">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                  <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                </svg>
-              </button>
-              <!-- "more" dropdown menu -->
-              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
-                <li @click="downloadConv(viewingConvId)"><a>Download</a></li>
-                <li class="text-error" @click="deleteConv(viewingConvId)"><a>Delete</a></li>
-              </ul>
+              <div class="tooltip tooltip-bottom" data-tip="Chat options">
+                <!-- "..." button -->
+                <button tabindex="0" role="button" class="btn m-1" :disabled="isGenerating">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                    <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                  </svg>
+                </button>
+                <!-- "delete" dropdown menu -->
+                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+                  <li @click="downloadConv(viewingConvId)"><a>Download</a></li>
+                  <li class="text-error" @click="deleteConv(viewingConvId)"><a>Delete</a></li>
+                </ul>
+              </div>
             </div>
             <div class="tooltip tooltip-bottom" data-tip="Settings">
               <button class="btn" @click="showConfigDialog = true" :disabled="isGenerating">
