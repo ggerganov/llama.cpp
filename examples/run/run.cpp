@@ -713,11 +713,11 @@ static void add_message(const char * role, const std::string & text, LlamaData &
 // Function to apply the chat template and resize `formatted` if needed
 static int apply_chat_template(LlamaData & llama_data, const bool append) {
     int result = llama_chat_apply_template(
-        llama_data.model.get(), nullptr, llama_data.messages.data(), llama_data.messages.size(), append,
+        llama_model_chat_template(llama_data.model.get()), llama_data.messages.data(), llama_data.messages.size(), append,
         append ? llama_data.fmtted.data() : nullptr, append ? llama_data.fmtted.size() : 0);
     if (append && result > static_cast<int>(llama_data.fmtted.size())) {
         llama_data.fmtted.resize(result);
-        result = llama_chat_apply_template(llama_data.model.get(), nullptr, llama_data.messages.data(),
+        result = llama_chat_apply_template(llama_model_chat_template(llama_data.model.get()), llama_data.messages.data(),
                                            llama_data.messages.size(), append, llama_data.fmtted.data(),
                                            llama_data.fmtted.size());
     }

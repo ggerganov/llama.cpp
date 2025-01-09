@@ -1740,7 +1740,8 @@ struct server_context {
 
     bool validate_builtin_chat_template() const {
         llama_chat_message chat[] = {{"user", "test"}};
-        int32_t chat_res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        const char * tmpl = llama_model_chat_template(model);
+        const int32_t chat_res = llama_chat_apply_template(tmpl, chat, 1, true, nullptr, 0);
         return chat_res > 0;
     }
 

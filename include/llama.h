@@ -489,6 +489,9 @@ extern "C" {
     // Returns the total size of all the tensors in the model in bytes
     LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
 
+    // Get the default chat template. Returns nullptr if not available
+    LLAMA_API const char * llama_model_chat_template(const struct llama_model * model);
+
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 
@@ -1009,9 +1012,7 @@ extern "C" {
     /// @param buf A buffer to hold the output formatted prompt. The recommended alloc size is 2 * (total number of characters of all messages)
     /// @param length The size of the allocated buffer
     /// @return The total number of bytes of the formatted prompt. If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
-    /// TODO: change to llama_vocab
     LLAMA_API int32_t llama_chat_apply_template(
-              const struct llama_model * model,
                             const char * tmpl,
        const struct llama_chat_message * chat,
                                 size_t   n_msg,

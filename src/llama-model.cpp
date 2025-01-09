@@ -3839,6 +3839,15 @@ uint64_t llama_model_size(const struct llama_model * model) {
     return model->size();
 }
 
+const char * llama_model_chat_template(const struct llama_model * model) {
+    const auto & it = model->gguf_kv.find("tokenizer.chat_template");
+    if (it == model->gguf_kv.end()) {
+        return nullptr;
+    }
+
+    return it->second.c_str();
+}
+
 uint64_t llama_model_n_params(const struct llama_model * model) {
     return model->n_elements();
 }

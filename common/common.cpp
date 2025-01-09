@@ -1648,7 +1648,7 @@ std::string common_get_builtin_chat_template(const struct llama_model * model) {
 
 bool common_chat_verify_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
-    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
+    const int res = llama_chat_apply_template(tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
 }
 
@@ -1659,16 +1659,16 @@ std::string common_chat_apply_template(const struct llama_model * model,
     int alloc_size = 0;
     bool fallback = false; // indicate if we must fallback to default chatml
     std::vector<llama_chat_message> chat;
-    for (auto & msg : msgs) {
+    for (const auto & msg : msgs) {
         chat.push_back({msg.role.c_str(), msg.content.c_str()});
         alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
     }
 
-    const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
+    const char * ptr_tmpl = tmpl.empty() ? llama_model_chat_template(model) : tmpl.c_str();
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    int32_t res = llama_chat_apply_template(ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
 
     // error: chat template is not supported
     if (res < 0) {
@@ -1676,18 +1676,17 @@ std::string common_chat_apply_template(const struct llama_model * model,
             // if the custom "tmpl" is not supported, we throw an error
             // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
             throw std::runtime_error("this custom template is not supported");
-        } else {
-            // If the built-in template is not supported, we default to chatml
-            res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
-            fallback = true;
         }
+
+        // If the built-in template is not supported, we default to chatml
+        res = llama_chat_apply_template("chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+        fallback = true;
     }
 
     // if it turns out that our buffer is too small, we resize it
     if ((size_t) res > buf.size()) {
         buf.resize(res);
         res = llama_chat_apply_template(
-            fallback ? nullptr : model,
             fallback ? "chatml" : ptr_tmpl,
             chat.data(), chat.size(), add_ass, buf.data(), buf.size());
     }

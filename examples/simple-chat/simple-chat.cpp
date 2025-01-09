@@ -161,12 +161,14 @@ int main(int argc, char ** argv) {
             break;
         }
 
+        const char * tmpl = llama_model_chat_template(model);
+
         // add the user input to the message list and format it
         messages.push_back({"user", strdup(user.c_str())});
-        int new_len = llama_chat_apply_template(model, nullptr, messages.data(), messages.size(), true, formatted.data(), formatted.size());
+        int new_len = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, formatted.data(), formatted.size());
         if (new_len > (int)formatted.size()) {
             formatted.resize(new_len);
-            new_len = llama_chat_apply_template(model, nullptr, messages.data(), messages.size(), true, formatted.data(), formatted.size());
+            new_len = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, formatted.data(), formatted.size());
         }
         if (new_len < 0) {
             fprintf(stderr, "failed to apply the chat template\n");
@@ -183,7 +185,7 @@ int main(int argc, char ** argv) {
 
         // add the response to the messages
         messages.push_back({"assistant", strdup(response.c_str())});
-        prev_len = llama_chat_apply_template(model, nullptr, messages.data(), messages.size(), false, nullptr, 0);
+        prev_len = llama_chat_apply_template(tmpl, messages.data(), messages.size(), false, nullptr, 0);
         if (prev_len < 0) {
             fprintf(stderr, "failed to apply the chat template\n");
             return 1;
