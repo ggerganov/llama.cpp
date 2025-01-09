@@ -371,7 +371,10 @@ void llama_sampler_free(struct llama_sampler * smpl) {
 llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx) {
     const auto * logits = llama_get_logits_ith(ctx, idx);
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+
+    const int n_vocab = llama_n_vocab(vocab);
 
     // TODO: do not allocate each time
     std::vector<llama_token_data> cur;
@@ -1445,7 +1448,7 @@ static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
 static struct llama_sampler * llama_sampler_grammar_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_grammar *) smpl->ctx;
 
-    auto * result = llama_sampler_init_grammar_impl(*ctx->vocab, nullptr, nullptr);
+    auto * result = llama_sampler_init_grammar(ctx->vocab, nullptr, nullptr);
 
     // copy the state
     {
@@ -1481,19 +1484,19 @@ static struct llama_sampler_i llama_sampler_grammar_i = {
     /* .free   = */ llama_sampler_grammar_free,
 };
 
-struct llama_sampler * llama_sampler_init_grammar_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
+struct llama_sampler * llama_sampler_init_grammar(const struct llama_vocab * vocab, const char * grammar_str, const char * grammar_root) {
     auto * ctx = new llama_sampler_grammar;
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
         *ctx = {
-            /* .vocab        = */ &vocab,
+            /* .vocab        = */ vocab,
             /* .grammar_str  = */ grammar_str,
             /* .grammar_root = */ grammar_root,
-            /* .grammar      = */ llama_grammar_init_impl(&vocab, grammar_str, grammar_root),
+            /* .grammar      = */ llama_grammar_init_impl(vocab, grammar_str, grammar_root),
         };
     } else {
         *ctx = {
-            /* .vocab        = */ &vocab,
+            /* .vocab        = */ vocab,
             /* .grammar_str  = */ {},
             /* .grammar_root = */ {},
             /* .grammar      = */ nullptr,
@@ -1937,7 +1940,7 @@ static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler
     llama_vocab dummy_vocab;
 
     // dummy vocab is passed because it is only needed for raw sequence breaker processing, which we have already done and will simply be copying
-    auto * result = llama_sampler_init_dry_impl(dummy_vocab, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
+    auto * result = llama_sampler_init_dry(&dummy_vocab, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
 
     // Copy the state, including the processed breakers
     {
@@ -1964,7 +1967,7 @@ static struct llama_sampler_i llama_sampler_dry_i = {
     /* .free   = */ llama_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+struct llama_sampler * llama_sampler_init_dry(const struct llama_vocab * vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
     int32_t effective_dry_penalty_last_n = (dry_penalty_last_n == -1) ? context_size : std::max(dry_penalty_last_n, 0);
     std::unordered_multimap<llama_token, std::vector<llama_token>> processed_breakers;
     const int MAX_CHAR_LEN = 40;
@@ -1991,7 +1994,7 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
                 sequence_break.resize(MAX_CHAR_LEN);
             }
 
-            get_overlapping_token_sequences(vocab, sequence_break, processed_breakers, MAX_SEQ_LEN);
+            get_overlapping_token_sequences(*vocab, sequence_break, processed_breakers, MAX_SEQ_LEN);
         }
     }
 
@@ -2014,7 +2017,7 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
 // wrapper for test-sampling.cpp
 struct llama_sampler * llama_sampler_init_dry_testing(int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<llama_token>>& seq_breakers) {
     llama_vocab dummy_vocab;
-    auto * result = llama_sampler_init_dry_impl(dummy_vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
+    auto * result = llama_sampler_init_dry(&dummy_vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
     auto * ctx = (llama_sampler_dry *) result->ctx;
 
     // Process the token-based sequence breakers
@@ -2314,7 +2317,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
 
 static struct llama_sampler * llama_sampler_infill_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_infill *) smpl->ctx;
-    return llama_sampler_init_infill_impl(*ctx->vocab);
+    return llama_sampler_init_infill(ctx->vocab);
 }
 
 static void llama_sampler_infill_free(struct llama_sampler * smpl) {
@@ -2330,14 +2333,13 @@ static struct llama_sampler_i llama_sampler_infill_i = {
     /* .free   = */ llama_sampler_infill_free,
 };
 
-struct llama_sampler * llama_sampler_init_infill_impl(
-        const struct llama_vocab & vocab) {
+struct llama_sampler * llama_sampler_init_infill(const struct llama_vocab * vocab) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_infill_i,
         /* .ctx   = */ new llama_sampler_infill {
-            /* .vocab = */ &vocab,
-            /* .buf0 = */ std::vector<char>(512),
-            /* .buf1 = */ std::vector<char>(512),
+            /* .vocab = */ vocab,
+            /* .buf0  = */ std::vector<char>(512),
+            /* .buf1  = */ std::vector<char>(512),
         },
     };
 }

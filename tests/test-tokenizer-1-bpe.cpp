@@ -64,8 +64,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    //GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_BPE);
-    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
+    const llama_vocab * vocab = llama_get_vocab(model);
+
+    //GGML_ASSERT(llama_vocab_type(vocab) == LLAMA_VOCAB_TYPE_BPE);
+    if (llama_vocab_type(vocab) != LLAMA_VOCAB_TYPE_BPE) {
         return 99;
     }
 
@@ -75,7 +77,7 @@ int main(int argc, char **argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_n_vocab(model);
+    const int n_vocab = llama_n_vocab(vocab);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = common_detokenize(ctx, std::vector<int>(1, i));

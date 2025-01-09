@@ -1987,14 +1987,18 @@ void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
             for (auto id : cache_special_tokens) {
                 _set_tokenid_attr(id, LLAMA_TOKEN_ATTR_RSTRIP, true);
             }
-            for (auto token : {"</s>"}) {
+            for (const auto * token : {"</s>"}) {
                 _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, true);
             }
-            for (auto token : {"<unk>", "<s>", "<|endoftext|>"}) {
+            for (const auto * token : {"<unk>", "<s>", "<|endoftext|>"}) {
                 _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, false);
             }
         }
     }
+}
+
+int32_t llama_n_vocab(const struct llama_vocab * vocab) {
+    return vocab->n_vocab();
 }
 
 enum llama_vocab_type llama_vocab::get_type() const {
@@ -2851,3 +2855,140 @@ std::string llama_vocab::detokenize(const std::vector<llama_token> & tokens, boo
     // NOTE: the original tokenizer decodes bytes after collecting the pieces.
     return text;
 }
+
+//
+// interface implementation
+//
+
+enum llama_vocab_type llama_vocab_type(const struct llama_vocab * vocab) {
+    return vocab->get_type();
+}
+
+const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token) {
+    return vocab->token_get_text(token);
+}
+
+float llama_token_get_score(const struct llama_vocab * vocab, llama_token token) {
+    return vocab->token_get_score(token);
+}
+
+enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token) {
+    return vocab->token_get_attr(token);
+}
+
+bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token) {
+    return vocab->is_eog(token);
+}
+
+bool llama_token_is_control(const struct llama_vocab * vocab, llama_token token) {
+    return vocab->is_control(token);
+}
+
+llama_token llama_token_bos(const struct llama_vocab * vocab) {
+    return vocab->token_bos();
+}
+
+llama_token llama_token_eos(const struct llama_vocab * vocab) {
+    return vocab->token_eos();
+}
+
+llama_token llama_token_eot(const struct llama_vocab * vocab) {
+    return vocab->token_eot();
+}
+
+llama_token llama_token_cls(const struct llama_vocab * vocab) {
+    return vocab->token_cls();
+}
+
+llama_token llama_token_sep(const struct llama_vocab * vocab) {
+    return vocab->token_sep();
+}
+
+llama_token llama_token_nl (const struct llama_vocab * vocab) {
+    return vocab->token_nl();
+}
+
+llama_token llama_token_pad(const struct llama_vocab * vocab) {
+    return vocab->token_pad();
+}
+
+bool llama_add_bos_token(const struct llama_vocab * vocab) {
+    return vocab->add_bos_token();
+}
+
+bool llama_add_eos_token(const struct llama_vocab * vocab) {
+    return vocab->add_eos_token();
+}
+
+llama_token llama_token_prefix(const struct llama_vocab * vocab) {
+    return vocab->token_prefix();
+}
+
+llama_token llama_token_middle(const struct llama_vocab * vocab) {
+    return vocab->token_middle();
+}
+
+llama_token llama_token_suffix(const struct llama_vocab * vocab) {
+    return vocab->token_suffix();
+}
+
+llama_token llama_token_fim_pre(const struct llama_vocab * vocab) {
+    return vocab->token_fim_pre();
+}
+
+llama_token llama_token_fim_suf(const struct llama_vocab * vocab) {
+    return vocab->token_fim_suf();
+}
+
+llama_token llama_token_fim_mid(const struct llama_vocab * vocab) {
+    return vocab->token_fim_mid();
+}
+
+llama_token llama_token_fim_pad(const struct llama_vocab * vocab) {
+    return vocab->token_fim_pad();
+}
+
+llama_token llama_token_fim_rep(const struct llama_vocab * vocab) {
+    return vocab->token_fim_rep();
+}
+
+llama_token llama_token_fim_sep(const struct llama_vocab * vocab) {
+    return vocab->token_fim_sep();
+}
+
+//
+// tokenization
+//
+
+int32_t llama_tokenize(
+    const struct llama_vocab * vocab,
+                  const char * text,
+                     int32_t   text_len,
+                 llama_token * tokens,
+                     int32_t   n_tokens_max,
+                        bool   add_special,
+                        bool   parse_special) {
+    return vocab->tokenize(text, text_len, tokens, n_tokens_max, add_special, parse_special);
+}
+
+int32_t llama_token_to_piece(
+    const struct llama_vocab * vocab,
+                 llama_token   token,
+                        char * buf,
+                     int32_t   length,
+                     int32_t   lstrip,
+                        bool   special) {
+    return vocab->token_to_piece(token, buf, length, lstrip, special);
+}
+
+int32_t llama_detokenize(
+    const struct llama_vocab * vocab,
+           const llama_token * tokens,
+                     int32_t   n_tokens,
+                        char * text,
+                     int32_t   text_len_max,
+                        bool   remove_special,
+                        bool   unparse_special) {
+    return vocab->detokenize(tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
+}
+

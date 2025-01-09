@@ -11,6 +11,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
     std::vector<std::vector<float>> result;
 
     const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
 
     llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
@@ -19,16 +20,16 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
 
         const std::string input_string = instruction + sentences[i];
 
-        std::vector<llama_token> inputs = common_tokenize(model, input_string, true, false);
+        std::vector<llama_token> inputs = common_tokenize(vocab, input_string, true, false);
 
         const int32_t n_toks = inputs.size();
 
         // GritLM seems to have EOS = ""
         // https://github.com/ContextualAI/gritlm/blob/92025b16534712b31b3c4aaaf069350e222bd5f8/gritlm/gritlm.py#L18
-        // inputs.push_back(llama_token_eos(model));
+        // inputs.push_back(llama_token_eos(vocab));
 
         // we want to ignore instruction tokens for mean pooling
-        const int32_t n_inst = common_tokenize(model, instruction, true, false).size();
+        const int32_t n_inst = common_tokenize(vocab, instruction, true, false).size();
 
 #ifdef GRIT_DEBUG
         // debug tokens - should be matching as referenced in the GritLM sample
@@ -97,7 +98,9 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
     std::string result;
 
     const llama_model * model = llama_get_model(ctx);
-    llama_token eos_token = llama_token_eos(model);
+    const llama_vocab * vocab = llama_get_vocab(model);
+
+    llama_token eos_token = llama_token_eos(vocab);
 
     llama_kv_cache_clear(ctx);
     llama_set_embeddings(ctx, false);
@@ -105,7 +108,7 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
 
     llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
-    std::vector<llama_token> inputs = common_tokenize(model, prompt, false, true);
+    std::vector<llama_token> inputs = common_tokenize(vocab, prompt, false, true);
     int32_t i_current_token = 0;
 
     while (true) {
