@@ -1,5 +1,5 @@
 # llama.cpp/example/tts
-This example demonstrates the Text To Speach feature. It uses a
+This example demonstrates the Text To Speech feature. It uses a
 [model](https://www.outeai.com/blog/outetts-0.2-500m) from
 [outeai](https://www.outeai.com/).
 
