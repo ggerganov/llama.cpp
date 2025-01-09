@@ -30,7 +30,6 @@ struct llama_hparams {
     bool use_par_res;
     bool swin_norm;
 
-    uint32_t n_vocab = 0;
     uint32_t n_ctx_train; // context size the model was trained on
     uint32_t n_embd;
     uint32_t n_embd_features = 0;

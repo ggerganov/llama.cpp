@@ -402,9 +402,6 @@ void llama_model::load_hparams(llama_model_loader & ml) {
     // get general kv
     ml.get_key(LLM_KV_GENERAL_NAME, name, false);
 
-    // get hparams kv
-    ml.get_key(LLM_KV_VOCAB_SIZE, hparams.n_vocab, false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab, false);
-
     // everything past this point is not vocab-related
     if (hparams.vocab_only) {
         return;
@@ -500,6 +497,10 @@ void llama_model::load_hparams(llama_model_loader & ml) {
         hparams.n_embd_head_v = 0;
     }
 
+    uint32_t n_vocab = 0;
+
+    ml.get_key(LLM_KV_VOCAB_SIZE, n_vocab, false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, n_vocab, false);
+
     // arch-specific KVs
     switch (arch) {
         case LLM_ARCH_LLAMA:
@@ -519,7 +520,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                         case 26: type = LLM_TYPE_3B; break;
                         case 28: type = LLM_TYPE_3B; break; // Llama 3.2 3B
                         // granite uses a vocab with len 49152
-                        case 32: type = hparams.n_vocab == 49152 ? LLM_TYPE_3B : (hparams.n_vocab < 40000 ? LLM_TYPE_7B : LLM_TYPE_8B); break;
+                        case 32: type = n_vocab == 49152 ? LLM_TYPE_3B : (n_vocab < 40000 ? LLM_TYPE_7B : LLM_TYPE_8B); break;
                         case 36: type = LLM_TYPE_8B; break; // granite
                         case 40: type = LLM_TYPE_13B; break;
                         case 48: type = LLM_TYPE_34B; break;
@@ -1365,7 +1366,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
         const int64_t n_embd_head_v = hparams.n_embd_head_v;
         const int64_t n_ff          = hparams.n_ff();
         const int64_t n_embd_gqa    = n_embd_v_gqa;
-        const int64_t n_vocab       = hparams.n_vocab;
+        const int64_t n_vocab       = vocab.n_vocab();
         const int64_t n_vocab_type  = hparams.n_vocab_type;
         const int64_t n_rot         = hparams.n_rot;
         const int64_t n_expert      = hparams.n_expert;
@@ -3494,7 +3495,6 @@ void llama_model::print_info() const {
 
     // hparams
     LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, arch_name().c_str());
-    LLAMA_LOG_INFO("%s: n_vocab (hp)     = %u\n",     __func__, hparams.n_vocab);
     LLAMA_LOG_INFO("%s: vocab_only       = %d\n",     __func__, hparams.vocab_only);
 
     if (!hparams.vocab_only) {
