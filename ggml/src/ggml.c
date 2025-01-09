@@ -625,6 +625,8 @@ static void ggml_byteswap_q8_k    (void * restrict buffer, size_t elements);
 static void ggml_byteswap_q4_0_4x4(void * restrict buffer, size_t elements);
 static void ggml_byteswap_q4_0_4x8(void * restrict buffer, size_t elements);
 static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements);
+static void ggml_byteswap_tq1_0   (void * restrict buffer, size_t elements);
+static void ggml_byteswap_tq2_0   (void * restrict buffer, size_t elements);
 
 static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_I8] = {
@@ -911,6 +913,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_tq1_0,
         .from_float_ref           = (ggml_from_float_t) quantize_row_tq1_0_ref,
+        .byteswap                 = ggml_byteswap_tq1_0,
     },
     [GGML_TYPE_TQ2_0] = {
         .type_name                = "tq2_0",
@@ -919,6 +922,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_tq2_0,
         .from_float_ref           = (ggml_from_float_t) quantize_row_tq2_0_ref,
+        .byteswap                 = ggml_byteswap_tq2_0,
     },
     [36] = { // GGML_TYPE_IQ4_NL_4_4
         .type_name                = "TYPE_IQ4_NL_4_4 REMOVED, use IQ4_NL with runtime repacking",
@@ -6791,4 +6795,18 @@ static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements) {
     GGML_ASSERT(false && "byteswap function not implemented yet");
     UNUSED(buffer);
     UNUSED(elements);
+}
+
+static void ggml_byteswap_tq1_0(void * restrict buffer, size_t elements) {
+    block_tq1_0 *data_ptr = (block_tq1_0*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
+}
+
+static void ggml_byteswap_tq2_0(void * restrict buffer, size_t elements) {
+    block_tq2_0 *data_ptr = (block_tq2_0*) buffer;
+    for (size_t i = 0; i < elements; ++i) {
+        convert_from_le16(&(data_ptr[i].d));
+    }
 }
