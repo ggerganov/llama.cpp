@@ -116,8 +116,8 @@ int main(int argc, char ** argv) {
     }
 
     {
-        const int n_vocab_tgt = llama_n_vocab(model_tgt);
-        const int n_vocab_dft = llama_n_vocab(model_dft);
+        const int n_vocab_tgt = llama_n_vocab(vocab_tgt);
+        const int n_vocab_dft = llama_n_vocab(vocab_dft);
         const int vocab_diff  = n_vocab_tgt > n_vocab_dft
             ? n_vocab_tgt - n_vocab_dft
             : n_vocab_dft - n_vocab_tgt;
@@ -125,7 +125,7 @@ int main(int argc, char ** argv) {
         if (vocab_diff > SPEC_VOCAB_MAX_SIZE_DIFFERENCE) {
             LOG_ERR("%s: draft model vocab must closely match target model to use speculation but ", __func__);
             LOG_ERR("target vocab size %d does not match draft vocab size %d - difference %d, max allowed %d\n",
-                    n_vocab_tgt, llama_n_vocab(model_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
+                    n_vocab_tgt, llama_n_vocab(vocab_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
             return 1;
         }
 

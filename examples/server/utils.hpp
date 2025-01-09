@@ -765,14 +765,18 @@ static json format_logit_bias(const std::vector<llama_logit_bias> & logit_bias) 
     return data;
 }
 
-static std::string safe_json_to_str(json data) {
+static std::string safe_json_to_str(const json & data) {
     return data.dump(-1, ' ', false, json::error_handler_t::replace);
 }
 
 static std::vector<llama_token_data> get_token_probabilities(llama_context * ctx, int idx) {
     std::vector<llama_token_data> cur;
     const auto * logits = llama_get_logits_ith(ctx, idx);
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_get_vocab(model);
+
+    const int n_vocab = llama_n_vocab(vocab);
 
     cur.resize(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {

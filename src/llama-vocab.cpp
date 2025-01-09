@@ -1987,14 +1987,18 @@ void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
             for (auto id : cache_special_tokens) {
                 _set_tokenid_attr(id, LLAMA_TOKEN_ATTR_RSTRIP, true);
             }
-            for (auto token : {"</s>"}) {
+            for (const auto * token : {"</s>"}) {
                 _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, true);
             }
-            for (auto token : {"<unk>", "<s>", "<|endoftext|>"}) {
+            for (const auto * token : {"<unk>", "<s>", "<|endoftext|>"}) {
                 _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, false);
             }
         }
     }
+}
+
+int32_t llama_n_vocab(const struct llama_vocab * vocab) {
+    return vocab->n_vocab();
 }
 
 enum llama_vocab_type llama_vocab::get_type() const {

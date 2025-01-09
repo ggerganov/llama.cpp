@@ -3691,10 +3691,6 @@ void llama_model_free(struct llama_model * model) {
     delete model;
 }
 
-int32_t llama_n_vocab(const struct llama_model * model) {
-    return model->hparams.n_vocab;
-}
-
 int32_t llama_n_ctx_train(const struct llama_model * model) {
     return model->hparams.n_ctx_train;
 }

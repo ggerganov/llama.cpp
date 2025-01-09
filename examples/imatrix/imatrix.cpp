@@ -471,7 +471,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const int n_chunk_max = tokens.size() / n_ctx;
 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_vocab = llama_n_vocab(vocab);
     const int n_batch = params.n_batch;
 
     int count = 0;

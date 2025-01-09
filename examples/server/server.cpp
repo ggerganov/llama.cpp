@@ -203,10 +203,12 @@ struct server_task {
     server_task(server_task_type type) : type(type) {}
 
     static slot_params params_from_json_cmpl(
-            const llama_model * model,
             const llama_context * ctx,
             const common_params & params_base,
             const json & data) {
+        const llama_model * model = llama_get_model(ctx);
+        const llama_vocab * vocab = llama_get_vocab(model);
+
         slot_params params;
 
         // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
@@ -329,7 +331,7 @@ struct server_task {
 
             const auto & logit_bias = data.find("logit_bias");
             if (logit_bias != data.end() && logit_bias->is_array()) {
-                const int n_vocab = llama_n_vocab(model);
+                const int n_vocab = llama_n_vocab(vocab);
                 for (const auto & el : *logit_bias) {
                     // TODO: we may want to throw errors here, in case "el" is incorrect
                     if (el.is_array() && el.size() == 2) {
@@ -348,7 +350,7 @@ struct server_task {
                                 params.sampling.logit_bias.push_back({tok, bias});
                             }
                         } else if (el[0].is_string()) {
-                            auto toks = common_tokenize(llama_get_vocab(model), el[0].get<std::string>(), false);
+                            auto toks = common_tokenize(vocab, el[0].get<std::string>(), false);
                             for (auto tok : toks) {
                                 params.sampling.logit_bias.push_back({tok, bias});
                             }
@@ -2079,7 +2081,7 @@ struct server_context {
 
     void populate_token_probs(const server_slot & slot, completion_token_output & result, bool post_sampling, bool special, int idx) {
         size_t n_probs = slot.params.sampling.n_probs;
-        size_t n_vocab = llama_n_vocab(llama_get_model(ctx));
+        size_t n_vocab = llama_n_vocab(vocab);
         if (post_sampling) {
             const auto * cur_p = common_sampler_get_candidates(slot.smpl);
             const size_t max_probs = cur_p->size;
@@ -3135,7 +3137,7 @@ struct server_context {
     json model_meta() const {
         return json {
             {"vocab_type",  llama_vocab_type    (vocab)},
-            {"n_vocab",     llama_n_vocab       (model)},
+            {"n_vocab",     llama_n_vocab       (vocab)},
             {"n_ctx_train", llama_n_ctx_train   (model)},
             {"n_embd",      llama_n_embd        (model)},
             {"n_params",    llama_model_n_params(model)},
@@ -3654,7 +3656,6 @@ int main(int argc, char ** argv) {
 
                 task.prompt_tokens    = std::move(tokenized_prompts[i]);
                 task.params           = server_task::params_from_json_cmpl(
-                                            ctx_server.model,
                                             ctx_server.ctx,
                                             ctx_server.params_base,
                                             data);

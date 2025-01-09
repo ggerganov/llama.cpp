@@ -449,11 +449,12 @@ extern "C" {
     LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
-    LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
     LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
     LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_head     (const struct llama_model * model);
+
+    LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab);
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
     LLAMA_API const struct llama_vocab * llama_get_vocab(const struct llama_model * model);
