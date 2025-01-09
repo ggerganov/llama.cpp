@@ -76,6 +76,7 @@ const char * llm_type_name(llm_type type) {
         case MODEL_8x7B:          return "8x7B";
         case MODEL_8x22B:         return "8x22B";
         case MODEL_16x12B:        return "16x12B";
+        case MODEL_16x3_8B:       return "16x3.8B";
         case MODEL_10B_128x3_66B: return "10B+128x3.66B";
         case MODEL_57B_A14B:      return "57B.A14B";
         case MODEL_27B:           return "27B";
@@ -659,6 +660,15 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 bool found_swa = ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
                 if (!found_swa && hparams.n_swa == 0) {
                     throw std::runtime_error("invalid value for sliding_window");
+                }
+            } break;
+        case LLM_ARCH_PHIMOE:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+
+                switch (hparams.n_layer) {
+                    case 32: model.type = e_model::MODEL_16x3_8B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
         case LLM_ARCH_PLAMO:
@@ -2094,6 +2104,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_OLMOE:
         case LLM_ARCH_PHI2:
         case LLM_ARCH_PHI3:
+        case LLM_ARCH_PHIMOE:
         case LLM_ARCH_GEMMA:
         case LLM_ARCH_GEMMA2:
         case LLM_ARCH_STARCODER2:

@@ -55,7 +55,7 @@ class TensorNameMap:
         # Output
         MODEL_TENSOR.OUTPUT: (
             "embed_out",                 # gptneox
-            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba dbrx jais nemotron exaone olmoe olmo2
+            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba dbrx jais nemotron exaone olmoe olmo2 phimoe
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
@@ -68,7 +68,7 @@ class TensorNameMap:
         MODEL_TENSOR.OUTPUT_NORM: (
             "gpt_neox.final_layer_norm",               # gptneox
             "transformer.ln_f",                        # gpt2 gpt-j falcon jais exaone
-            "model.norm",                              # llama-hf baichuan internlm2 olmoe olmo2
+            "model.norm",                              # llama-hf baichuan internlm2 olmoe olmo2 phimoe
             "norm",                                    # llama-pth
             "transformer.norm_f",                      # mpt dbrx
             "ln_f",                                    # refact bloom qwen gpt2
@@ -108,7 +108,7 @@ class TensorNameMap:
             "transformer.h.{bid}.input_layernorm",                  # falcon7b
             "h.{bid}.input_layernorm",                              # bloom
             "transformer.h.{bid}.ln_mlp",                           # falcon40b
-            "model.layers.{bid}.input_layernorm",                   # llama-hf nemotron olmoe
+            "model.layers.{bid}.input_layernorm",                   # llama-hf nemotron olmoe phimoe
             "layers.{bid}.attention_norm",                          # llama-pth
             "language_model.encoder.layers.{bid}.input_layernorm",  # persimmon
             "model.layers.{bid}.ln1",                               # yi
@@ -152,7 +152,7 @@ class TensorNameMap:
 
         # Attention query
         MODEL_TENSOR.ATTN_Q: (
-            "model.layers.{bid}.self_attn.q_proj",                       # llama-hf nemotron olmoe olmo2
+            "model.layers.{bid}.self_attn.q_proj",                       # llama-hf nemotron olmoe olmo2 phimoe
             "model.layers.{bid}.self_attn.q_proj_no_perm",               # llama-custom
             "layers.{bid}.attention.wq",                                 # llama-pth
             "encoder.layer.{bid}.attention.self.query",                  # bert
@@ -165,7 +165,7 @@ class TensorNameMap:
 
         # Attention key
         MODEL_TENSOR.ATTN_K: (
-            "model.layers.{bid}.self_attn.k_proj",                     # llama-hf nemotron olmoe olmo2
+            "model.layers.{bid}.self_attn.k_proj",                     # llama-hf nemotron olmoe olmo2 phimoe
             "model.layers.{bid}.self_attn.k_proj_no_perm",             # llama-custom
             "layers.{bid}.attention.wk",                               # llama-pth
             "encoder.layer.{bid}.attention.self.key",                  # bert
@@ -179,7 +179,7 @@ class TensorNameMap:
 
         # Attention value
         MODEL_TENSOR.ATTN_V: (
-            "model.layers.{bid}.self_attn.v_proj",                       # llama-hf nemotron olmoe olmo2
+            "model.layers.{bid}.self_attn.v_proj",                       # llama-hf nemotron olmoe olmo2 phimoe
             "layers.{bid}.attention.wv",                                 # llama-pth
             "encoder.layer.{bid}.attention.self.value",                  # bert
             "transformer.h.{bid}.attn.v_proj",                           # gpt-j
@@ -197,7 +197,7 @@ class TensorNameMap:
             "transformer.blocks.{bid}.attn.out_proj",                       # mpt
             "transformer.h.{bid}.self_attention.dense",                     # falcon
             "h.{bid}.self_attention.dense",                                 # bloom
-            "model.layers.{bid}.self_attn.o_proj",                          # llama-hf nemotron olmoe olmo2
+            "model.layers.{bid}.self_attn.o_proj",                          # llama-hf nemotron olmoe olmo2 phimoe
             "model.layers.{bid}.self_attn.linear_attn",                     # deci
             "layers.{bid}.attention.wo",                                    # llama-pth
             "encoder.layer.{bid}.attention.output.dense",                   # bert
@@ -242,7 +242,7 @@ class TensorNameMap:
             "transformer.h.{bid}.ln_2",                                      # gpt2 refact qwen jais exaone
             "h.{bid}.post_attention_layernorm",                              # bloom
             "transformer.blocks.{bid}.norm_2",                               # mpt
-            "model.layers.{bid}.post_attention_layernorm",                   # llama-hf nemotron olmoe
+            "model.layers.{bid}.post_attention_layernorm",                   # llama-hf nemotron olmoe phimoe
             "layers.{bid}.ffn_norm",                                         # llama-pth
             "language_model.encoder.layers.{bid}.post_attention_layernorm",  # persimmon
             "model.layers.{bid}.ln2",                                        # yi
@@ -265,7 +265,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_GATE_INP: (
             "layers.{bid}.feed_forward.gate",                   # mixtral
-            "model.layers.{bid}.block_sparse_moe.gate",         # mixtral
+            "model.layers.{bid}.block_sparse_moe.gate",         # mixtral phimoe
             "model.layers.{bid}.mlp.gate",                      # qwen2moe olmoe
             "transformer.decoder_layer.{bid}.router",           # Grok
             "transformer.blocks.{bid}.ffn.router.layer",        # dbrx
@@ -310,10 +310,11 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
-            "layers.{bid}.feed_forward.experts.w3",          # mixtral (merged)
-            "transformer.decoder_layer.{bid}.moe.linear_v",  # Grok (merged)
-            "transformer.blocks.{bid}.ffn.experts.mlp.v1",   # dbrx
-            "model.layers.{bid}.mlp.experts.up_proj",        # qwen2moe olmoe (merged)
+            "layers.{bid}.feed_forward.experts.w3",           # mixtral (merged)
+            "transformer.decoder_layer.{bid}.moe.linear_v",   # Grok (merged)
+            "transformer.blocks.{bid}.ffn.experts.mlp.v1",    # dbrx
+            "model.layers.{bid}.mlp.experts.up_proj",         # qwen2moe olmoe (merged)
+            "model.layers.{bid}.block_sparse_moe.experts.w3", # phimoe (merged)
         ),
 
         MODEL_TENSOR.FFN_UP_SHEXP: (
@@ -342,10 +343,11 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_GATE_EXP: (
-            "layers.{bid}.feed_forward.experts.w1",         # mixtral (merged)
-            "transformer.decoder_layer.{bid}.moe.linear",   # Grok (merged)
-            "transformer.blocks.{bid}.ffn.experts.mlp.w1",  # dbrx
-            "model.layers.{bid}.mlp.experts.gate_proj",     # qwen2moe olmoe (merged)
+            "layers.{bid}.feed_forward.experts.w1",           # mixtral (merged)
+            "transformer.decoder_layer.{bid}.moe.linear",     # Grok (merged)
+            "transformer.blocks.{bid}.ffn.experts.mlp.w1",    # dbrx
+            "model.layers.{bid}.mlp.experts.gate_proj",       # qwen2moe olmoe (merged)
+            "model.layers.{bid}.block_sparse_moe.experts.w1", # phimoe (merged)
         ),
 
         MODEL_TENSOR.FFN_GATE_SHEXP: (
@@ -387,6 +389,7 @@ class TensorNameMap:
             "transformer.blocks.{bid}.ffn.experts.mlp.w2",       # dbrx
             "model.layers.{bid}.mlp.experts.down_proj",          # qwen2moe olmoe (merged)
             "model.layers.{bid}.block_sparse_moe.output_linear", # granitemoe
+            "model.layers.{bid}.block_sparse_moe.experts.w2",    # phimoe (merged)
         ),
 
         MODEL_TENSOR.FFN_DOWN_SHEXP: (
