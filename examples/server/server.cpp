@@ -98,7 +98,7 @@ struct slot_params {
     int64_t t_max_prompt_ms  = -1; // TODO: implement
     int64_t t_max_predict_ms = -1; // if positive, limit the generation phase to this time limit
 
-    std::vector<common_lora_adapter_info> lora;
+    std::vector<common_adapter_lora_info> lora;
 
     std::vector<std::string> antiprompt;
     std::vector<std::string> response_fields;
@@ -198,7 +198,7 @@ struct server_task {
     bool metrics_reset_bucket = false;
 
     // used by SERVER_TASK_TYPE_SET_LORA
-    std::vector<common_lora_adapter_info> set_lora;
+    std::vector<common_adapter_lora_info> set_lora;
 
     server_task(server_task_type type) : type(type) {}
 
@@ -1133,7 +1133,7 @@ struct server_slot {
 
     common_speculative * spec = nullptr;
 
-    std::vector<common_lora_adapter_info> lora;
+    std::vector<common_adapter_lora_info> lora;
 
     // the index relative to completion multi-task request
     size_t index = 0;
@@ -2934,7 +2934,7 @@ struct server_context {
             // make sure we're in the right embedding mode
             llama_set_embeddings(ctx, slot_batched->is_non_causal());
             // apply lora, only need to do it once per batch
-            common_lora_adapters_apply(ctx, slot_batched->lora);
+            common_set_adapter_lora(ctx, slot_batched->lora);
         }
 
         // process the created batch of tokens

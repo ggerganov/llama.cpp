@@ -1,5 +1,6 @@
 #include "llama-context.h"
 
+#include "llama-impl.h"
 #include "llama-mmap.h"
 
 #include <cassert>
