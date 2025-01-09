@@ -1645,6 +1645,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
 #undef CREATE_MM2
     } else
 #endif  // defined(VK_NV_cooperative_matrix2) && defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
+#if defined(VK_KHR_cooperative_matrix) && defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
     if (device->coopmat_support) {
         // Create 6 variants, {s,m,l}x{unaligned,aligned}
 #define CREATE_MM(PIPELINE_NAME, NAMELC, F16ACC, WG_DENOMS, WARPTILE, PUSHCONST, PARAMCOUNT, ID) \
@@ -1739,7 +1740,9 @@ static void ggml_vk_load_shaders(vk_device& device) {
         }
 #undef CREATE_MM2
 #undef CREATE_MM
-    } else if (device->fp16) {
+    } else
+#endif  // defined(VK_KHR_cooperative_matrix) && defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
+    if (device->fp16) {
         // Create 6 variants, {s,m,l}x{unaligned,aligned}
 #define CREATE_MM(PIPELINE_NAME, NAMELC, F16ACC, WG_DENOMS, WARPTILE, PUSHCONST, PARAMCOUNT, ID) \
         if (device->mul_mat ## ID ## _l) \
@@ -2040,6 +2043,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
     std::cerr << "Done!" << std::endl;
 }
 
+static bool ggml_vk_khr_cooperative_matrix_support(const vk::PhysicalDeviceProperties& props, const vk::PhysicalDeviceDriverProperties& driver_props);
+
 static vk_device ggml_vk_get_device(size_t idx) {
     VK_LOG_DEBUG("ggml_vk_get_device(" << idx << ")");
 
@@ -2175,9 +2180,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         device->fp16 = !force_disable_f16 && fp16_storage && fp16_compute;
 
-        if (device->vendor_id == VK_VENDOR_ID_INTEL || (device->vendor_id == VK_VENDOR_ID_AMD && (driver_props.driverID == vk::DriverId::eAmdProprietary || driver_props.driverID == vk::DriverId::eAmdOpenSource))) {
-            // Intel drivers don't support coopmat properly yet
-            // Only RADV supports coopmat properly on AMD
+        if (!ggml_vk_khr_cooperative_matrix_support(device->properties, driver_props)) {
             device->coopmat_support = false;
         }
 
@@ -2242,6 +2245,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
             last_struct = (VkBaseOutStructure *)&subgroup_size_control_features;
         }
 
+#if defined(VK_KHR_cooperative_matrix)
         VkPhysicalDeviceCooperativeMatrixFeaturesKHR coopmat_features;
         coopmat_features.pNext = nullptr;
         coopmat_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR;
@@ -2251,6 +2255,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
             last_struct->pNext = (VkBaseOutStructure *)&coopmat_features;
             last_struct = (VkBaseOutStructure *)&coopmat_features;
         }
+#endif
 
 #if defined(VK_NV_cooperative_matrix2)
         VkPhysicalDeviceCooperativeMatrix2FeaturesNV coopmat2_features {};
@@ -2283,7 +2288,9 @@ static vk_device ggml_vk_get_device(size_t idx) {
             device_extensions.push_back("VK_EXT_subgroup_size_control");
         }
 
+#if defined(VK_KHR_cooperative_matrix)
         device->coopmat_support = device->coopmat_support && coopmat_features.cooperativeMatrix;
+#endif
 
         if (coopmat2_support) {
 #if defined(VK_NV_cooperative_matrix2) && defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
@@ -2376,6 +2383,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
             device_extensions.push_back("VK_KHR_shader_float16_int8");
         }
 
+#if defined(VK_KHR_cooperative_matrix)
         if (device->coopmat_support) {
             // Query supported shapes
             std::vector<VkCooperativeMatrixPropertiesKHR> cm_props;
@@ -2442,7 +2450,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         if (device->coopmat_support) {
             device_extensions.push_back("VK_KHR_cooperative_matrix");
         }
-
+#endif
         device->name = GGML_VK_NAME + std::to_string(idx);
 
         device_create_info = {
@@ -2515,7 +2523,6 @@ static vk_device ggml_vk_get_device(size_t idx) {
     return vk_instance.devices[idx];
 }
 
-
 static void ggml_vk_print_gpu_info(size_t idx) {
     GGML_ASSERT(idx < vk_instance.device_indices.size());
     size_t dev_num = vk_instance.device_indices[idx];
@@ -2554,9 +2561,11 @@ static void ggml_vk_print_gpu_info(size_t idx) {
             fp16_storage = true;
         } else if (strcmp("VK_KHR_shader_float16_int8", properties.extensionName) == 0) {
             fp16_compute = true;
-        } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0 &&
+#if defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
+       } else if (strcmp("VK_KHR_cooperative_matrix", properties.extensionName) == 0 &&
                    !getenv("GGML_VK_DISABLE_COOPMAT")) {
             coopmat_support = true;
+#endif
 #if defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
         } else if (strcmp("VK_NV_cooperative_matrix2", properties.extensionName) == 0 &&
                    !getenv("GGML_VK_DISABLE_COOPMAT2")) {
@@ -2565,9 +2574,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
         }
     }
 
-    if (props2.properties.vendorID == VK_VENDOR_ID_INTEL || (props2.properties.vendorID == VK_VENDOR_ID_AMD && (driver_props.driverID == vk::DriverId::eAmdProprietary || driver_props.driverID == vk::DriverId::eAmdOpenSource))) {
-        // Intel drivers don't support coopmat properly yet
-        // Only RADV supports coopmat properly on AMD
+    if (!ggml_vk_khr_cooperative_matrix_support(props2.properties, driver_props)) {
         coopmat_support = false;
     }
 
@@ -2596,6 +2603,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     // Pointer to the last chain element
     VkBaseOutStructure * last_struct = (VkBaseOutStructure *)&vk12_features;
 
+#if defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
     VkPhysicalDeviceCooperativeMatrixFeaturesKHR coopmat_features;
     coopmat_features.pNext = nullptr;
     coopmat_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR;
@@ -2611,6 +2619,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     fp16 = fp16 && vk12_features.shaderFloat16;
 
     coopmat_support = coopmat_support && coopmat_features.cooperativeMatrix;
+#endif
 
     std::string matrix_cores = coopmat2_support ? "NV_coopmat2" : coopmat_support ? "KHR_coopmat" : "none";
 
@@ -8086,6 +8095,25 @@ static bool ggml_vk_instance_portability_enumeration_ext_available(const std::ve
     return false;
 
     UNUSED(instance_extensions);
+}
+
+static bool ggml_vk_khr_cooperative_matrix_support(const vk::PhysicalDeviceProperties& props, const vk::PhysicalDeviceDriverProperties& driver_props) {
+    switch (props.vendorID) {
+    case VK_VENDOR_ID_INTEL:
+        // Intel drivers don't support coopmat properly yet
+        return false;
+    case VK_VENDOR_ID_AMD:
+        if (driver_props.driverID == vk::DriverId::eAmdProprietary || driver_props.driverID == vk::DriverId::eAmdOpenSource) {
+            // Workaround for AMD proprietary driver reporting support on all GPUs
+            const std::string name = props.deviceName;
+            return name.rfind("AMD Radeon RX 7", 0) == 0   || name.rfind("AMD Radeon(TM) RX 7", 0) == 0   || // RDNA 3 consumer GPUs
+                   name.rfind("AMD Radeon PRO W7", 0) == 0 || name.rfind("AMD Radeon(TM) PRO W7", 0) == 0 || // RDNA 3 workstation GPUs
+                   name.rfind("AMD Radeon 7", 0) == 0      || name.rfind("AMD Radeon(TM) 7", 0) == 0;        // RDNA 3 APUs
+        }
+        return true;
+    default:
+        return true;
+    }
 }
 
 // checks

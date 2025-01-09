@@ -45,6 +45,13 @@ struct llama_lora_weight {
     struct ggml_tensor * a = nullptr;
     struct ggml_tensor * b = nullptr;
 
+    // get actual scale based on rank and alpha
+    float get_scale(float alpha, float adapter_scale) {
+        const float rank  = (float) b->ne[0];
+        const float scale = alpha ? adapter_scale * alpha / rank : adapter_scale;
+        return scale;
+    }
+
     llama_lora_weight() = default;
     llama_lora_weight(struct ggml_tensor * a, struct ggml_tensor * b) : a(a), b(b) {}
 };
