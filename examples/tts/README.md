@@ -1,7 +1,16 @@
-## Text To Speach (TTS) example
+# llama.cpp/example/tts
 This example demonstrates the Text To Speach feature. It uses a
 [model](https://www.outeai.com/blog/outetts-0.2-500m) from
 [outeai](https://www.outeai.com/).
+
+## Quickstart
+If you have built llama.cpp with `-DLLAMA_CURL=ON` you can simply run the
+following command and the required models will be downloaded automatically:
+```console
+$ build/bin/llama-tts --tts-oute-default -p "Hello world" && aplay output.wav
+```
+For details about the models and how to convert them to the required format
+see the following sections.
 
 ### Model conversion
 Checkout or download the model that contains the LLM model:
