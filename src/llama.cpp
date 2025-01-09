@@ -65,11 +65,6 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
         model.load_stats(ml);
         model.print_info();
 
-        if (model.vocab.get_type() != LLAMA_VOCAB_TYPE_NONE &&
-            model.hparams.n_vocab != model.vocab.n_vocab()) {
-            throw std::runtime_error("vocab size mismatch");
-        }
-
         if (params.vocab_only) {
             LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
             return 0;
@@ -8342,6 +8337,7 @@ static int llama_decode_impl(
     const uint32_t n_tokens_all = batch.n_tokens;
 
     const auto & model   = lctx.model;
+    const auto & vocab   = model.vocab;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
@@ -8369,7 +8365,7 @@ static int llama_decode_impl(
     llama_kv_slot_restorer kv_slot_restorer(kv_self);
 
     const int64_t n_embd  = hparams.n_embd;
-    const int64_t n_vocab = hparams.n_vocab;
+    const int64_t n_vocab = vocab.n_vocab();
 
     uint32_t n_outputs = 0;
     uint32_t n_outputs_prev = 0;
