@@ -40,7 +40,6 @@ struct llama_hparams {
     uint32_t n_embd_head_v; // dimension of values (d_v) aka n_embd_head
     uint32_t n_expert = 0;
     uint32_t n_expert_used = 0;
-    uint32_t n_vocab_type = 0; // for BERT-style token types
     uint32_t n_rel_attn_bkts = 0;
 
     // for WavTokenizer

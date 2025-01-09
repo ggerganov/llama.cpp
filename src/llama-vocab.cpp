@@ -1205,6 +1205,7 @@ struct fragment_buffer_variant {
 
 struct llama_vocab::impl {
     uint32_t n_vocab = 0;
+    uint32_t n_token_types = 0; // for BERT-style token types
 
     std::unordered_map<std::string, llama_token> token_to_id;
     std::vector<token_data>                      id_to_token;
@@ -1286,6 +1287,7 @@ void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
     struct gguf_context * ctx = ml.meta.get();
 
     auto & n_vocab = pimpl->n_vocab;
+    auto & n_token_types = pimpl->n_token_types;
     auto & id_to_token = pimpl->id_to_token;
     auto & token_to_id = pimpl->token_to_id;
     auto & special_eog_ids = pimpl->special_eog_ids;
@@ -1299,6 +1301,8 @@ void llama_vocab::load(llama_model_loader & ml, const LLM_KV & kv) {
 
         ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_model);
         ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
+
+        ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, n_token_types, false);
 
         if (tokenizer_model == "no_vocab" || tokenizer_model == "none") {
             type = LLAMA_VOCAB_TYPE_NONE;
@@ -2011,6 +2015,10 @@ enum llama_vocab_pre_type llama_vocab::get_pre_type() const {
 
 uint32_t llama_vocab::n_vocab() const {
     return (uint32_t) pimpl->id_to_token.size();
+}
+
+uint32_t llama_vocab::n_token_types() const {
+    return (uint32_t) pimpl->n_token_types;
 }
 
 std::string llama_vocab::type_name() const{
