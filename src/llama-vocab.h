@@ -78,16 +78,9 @@ struct llama_vocab {
     bool escape_whitespaces        () const;
     bool treat_whitespace_as_suffix() const;
 
-    int max_token_text_len() const;
-
-    void print_info() const;
+    int max_token_len() const;
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
-
-    std::vector<llama_token> tokenize(
-                  std::string   raw_text,
-                         bool   add_special,
-                         bool   parse_special = false) const;
 
     int32_t tokenize(
                    const char * text,
@@ -96,6 +89,11 @@ struct llama_vocab {
                       int32_t   n_tokens_max,
                          bool   add_special,
                          bool   parse_special) const;
+
+    std::vector<llama_token> tokenize(
+            const std::string & raw_text,
+                         bool   add_special,
+                         bool   parse_special = false) const;
 
     // does not write null-terminator to buf
     int32_t token_to_piece(
@@ -107,11 +105,6 @@ struct llama_vocab {
 
     // use cached data
     const std::string & token_to_piece(llama_token token) const;
-
-    // check if token0 is contained as a prefix in token1
-    bool token_is_prefix(
-                  llama_token   token0,
-                  llama_token   token1) const;
 
     int32_t detokenize(
             const llama_token * tokens,
@@ -125,48 +118,9 @@ struct llama_vocab {
             const std::vector<llama_token> & tokens,
                                       bool   special) const;
 
+    void print_info() const;
+
 private:
     struct impl;
     std::unique_ptr<impl> pimpl;
-
-    std::string token_to_piece_for_cache(
-                  llama_token   token,
-                         bool   special) const;
-
-    enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
-    enum llama_vocab_pre_type pre_type = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-
-    int max_token_len = 0; // used for optimizing longest token search
-
-    // default LLaMA special tokens
-    // TODO: should we set all of these to LLAMA_TOKEN_NULL?
-    llama_token special_bos_id  = 1;
-    llama_token special_eos_id  = 2;
-    llama_token special_eot_id  = LLAMA_TOKEN_NULL;
-    llama_token special_eom_id  = LLAMA_TOKEN_NULL;
-    llama_token special_unk_id  = 0;
-    llama_token special_sep_id  = LLAMA_TOKEN_NULL;
-    llama_token special_pad_id  = LLAMA_TOKEN_NULL;
-    llama_token special_cls_id  = LLAMA_TOKEN_NULL; // TODO: revisit if this is really needed https://github.com/ggerganov/llama.cpp/pull/10930
-    llama_token special_mask_id = LLAMA_TOKEN_NULL;
-
-    llama_token linefeed_id = 13;
-
-    // fim tokens
-    llama_token special_fim_pre_id = LLAMA_TOKEN_NULL;
-    llama_token special_fim_suf_id = LLAMA_TOKEN_NULL;
-    llama_token special_fim_mid_id = LLAMA_TOKEN_NULL;
-    llama_token special_fim_pad_id = LLAMA_TOKEN_NULL;
-    llama_token special_fim_rep_id = LLAMA_TOKEN_NULL; // repo
-    llama_token special_fim_sep_id = LLAMA_TOKEN_NULL; // file separator
-
-    // tokenizer flags
-    bool tokenizer_add_space_prefix           = false;
-    bool tokenizer_add_bos                    = false;
-    bool tokenizer_add_eos                    = false;
-    bool tokenizer_ignore_merges              = false;
-    bool tokenizer_clean_spaces               = false;  // clean_up_tokenization_spaces
-    bool tokenizer_remove_extra_whitespaces   = false;
-    bool tokenizer_escape_whitespaces         = true;
-    bool tokenizer_treat_whitespace_as_suffix = false;
 };
