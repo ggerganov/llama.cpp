@@ -3738,20 +3738,16 @@ struct llama_model_params llama_model_default_params() {
     return result;
 }
 
+const struct llama_vocab * llama_get_vocab(const struct llama_model * model) {
+    return &model->vocab;
+}
+
 void llama_free_model(struct llama_model * model) {
     llama_model_free(model);
 }
 
 void llama_model_free(struct llama_model * model) {
     delete model;
-}
-
-enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
-    return model->vocab.get_type();
-}
-
-int32_t llama_n_vocab(const struct llama_model * model) {
-    return model->hparams.n_vocab;
 }
 
 int32_t llama_n_ctx_train(const struct llama_model * model) {
@@ -3897,6 +3893,15 @@ int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t bu
 
 uint64_t llama_model_size(const struct llama_model * model) {
     return model->size();
+}
+
+const char * llama_model_chat_template(const struct llama_model * model) {
+    const auto & it = model->gguf_kv.find(LLM_KV(model->arch)(LLM_KV_TOKENIZER_CHAT_TEMPLATE));
+    if (it == model->gguf_kv.end()) {
+        return nullptr;
+    }
+
+    return it->second.c_str();
 }
 
 uint64_t llama_model_n_params(const struct llama_model * model) {

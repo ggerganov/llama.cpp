@@ -52,8 +52,8 @@ actor LlamaContext {
     deinit {
         llama_sampler_free(sampling)
         llama_batch_free(batch)
+        llama_model_free(model)
         llama_free(context)
-        llama_free_model(model)
         llama_backend_free()
     }
 
@@ -65,7 +65,7 @@ actor LlamaContext {
         model_params.n_gpu_layers = 0
         print("Running on simulator, force use n_gpu_layers = 0")
 #endif
-        let model = llama_load_model_from_file(path, model_params)
+        let model = llama_model_load_from_file(path, model_params)
         guard let model else {
             print("Could not load model at \(path)")
             throw LlamaError.couldNotInitializeContext

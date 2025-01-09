@@ -541,7 +541,7 @@ std::vector<llama_token> common_tokenize(
                         bool   parse_special = false);
 
 std::vector<llama_token> common_tokenize(
-    const struct llama_model * model,
+    const struct llama_vocab * vocab,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);
@@ -553,11 +553,21 @@ std::string common_token_to_piece(
                        llama_token   token,
                        bool          special = true);
 
+std::string common_token_to_piece(
+          const struct llama_vocab * vocab,
+                       llama_token   token,
+                       bool          special = true);
+
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
 // optionally renders special/control tokens
 std::string common_detokenize(
-                         llama_context * ctx,
+            const struct llama_context * ctx,
+        const std::vector<llama_token> & tokens,
+                                  bool   special = true);
+
+std::string common_detokenize(
+              const struct llama_vocab * vocab,
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
 
