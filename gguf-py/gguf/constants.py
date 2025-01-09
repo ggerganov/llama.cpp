@@ -102,6 +102,8 @@ class Keys:
         EXPERT_USED_COUNT                 = "{arch}.expert_used_count"
         EXPERT_SHARED_COUNT               = "{arch}.expert_shared_count"
         EXPERT_WEIGHTS_SCALE              = "{arch}.expert_weights_scale"
+        EXPERT_WEIGHTS_NORM               = "{arch}.expert_weights_norm"
+        EXPERT_GATING_FUNC                = "{arch}.expert_gating_func"
         POOLING_TYPE                      = "{arch}.pooling_type"
         LOGIT_SCALE                       = "{arch}.logit_scale"
         DECODER_START_TOKEN_ID            = "{arch}.decoder_start_token_id"
@@ -221,6 +223,7 @@ class GGUFType:
 
 class MODEL_ARCH(IntEnum):
     LLAMA            = auto()
+    DECI             = auto()
     FALCON           = auto()
     BAICHUAN         = auto()
     GROK             = auto()
@@ -241,6 +244,7 @@ class MODEL_ARCH(IntEnum):
     QWEN2VL          = auto()
     PHI2             = auto()
     PHI3             = auto()
+    PHIMOE           = auto()
     PLAMO            = auto()
     CODESHELL        = auto()
     ORION            = auto()
@@ -254,6 +258,7 @@ class MODEL_ARCH(IntEnum):
     MAMBA            = auto()
     XVERSE           = auto()
     COMMAND_R        = auto()
+    COHERE2          = auto()
     DBRX             = auto()
     OLMO             = auto()
     OLMO2            = auto()
@@ -311,6 +316,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_GATE_SHEXP       = auto()
     FFN_DOWN_SHEXP       = auto()
     FFN_UP_SHEXP         = auto()
+    FFN_EXP_PROBS_B      = auto()
     ATTN_Q_NORM          = auto()
     ATTN_K_NORM          = auto()
     LAYER_OUT_NORM       = auto()
@@ -402,6 +408,7 @@ class MODEL_TENSOR(IntEnum):
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.LLAMA:            "llama",
+    MODEL_ARCH.DECI:             "deci",
     MODEL_ARCH.FALCON:           "falcon",
     MODEL_ARCH.BAICHUAN:         "baichuan",
     MODEL_ARCH.GROK:             "grok",
@@ -422,6 +429,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN2VL:          "qwen2vl",
     MODEL_ARCH.PHI2:             "phi2",
     MODEL_ARCH.PHI3:             "phi3",
+    MODEL_ARCH.PHIMOE:           "phimoe",
     MODEL_ARCH.PLAMO:            "plamo",
     MODEL_ARCH.CODESHELL:        "codeshell",
     MODEL_ARCH.ORION:            "orion",
@@ -435,6 +443,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MAMBA:            "mamba",
     MODEL_ARCH.XVERSE:           "xverse",
     MODEL_ARCH.COMMAND_R:        "command-r",
+    MODEL_ARCH.COHERE2:          "cohere2",
     MODEL_ARCH.DBRX:             "dbrx",
     MODEL_ARCH.OLMO:             "olmo",
     MODEL_ARCH.OLMO2:            "olmo2",
@@ -494,6 +503,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_GATE_EXP:              "blk.{bid}.ffn_gate_exps",
     MODEL_TENSOR.FFN_DOWN_EXP:              "blk.{bid}.ffn_down_exps",
     MODEL_TENSOR.FFN_UP_EXP:                "blk.{bid}.ffn_up_exps",
+    MODEL_TENSOR.FFN_EXP_PROBS_B:           "blk.{bid}.exp_probs_b",
     MODEL_TENSOR.LAYER_OUT_NORM:            "blk.{bid}.layer_output_norm",
     MODEL_TENSOR.SSM_IN:                    "blk.{bid}.ssm_in",
     MODEL_TENSOR.SSM_CONV1D:                "blk.{bid}.ssm_conv1d",
@@ -583,6 +593,26 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.LLAMA: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+    ],
+    MODEL_ARCH.DECI: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
         MODEL_TENSOR.OUTPUT,
@@ -912,6 +942,24 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.PHIMOE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FACTORS_LONG,
+        MODEL_TENSOR.ROPE_FACTORS_SHORT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+    ],
     MODEL_ARCH.CODESHELL: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.POS_EMBD,
@@ -1114,6 +1162,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_K_NORM,
         MODEL_TENSOR.ATTN_Q_NORM,
     ],
+    MODEL_ARCH.COHERE2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.DBRX: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -1254,6 +1314,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_SHEXP,
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
     ],
     MODEL_ARCH.CHATGLM : [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -1448,6 +1509,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
+    MODEL_ARCH.DECI: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
     MODEL_ARCH.BAICHUAN: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
@@ -1548,6 +1613,11 @@ class GGMLQuantizationType(IntEnum):
     BF16    = 30
     TQ1_0   = 34
     TQ2_0   = 35
+
+
+class ExpertGatingFuncType(IntEnum):
+    SOFTMAX  = 1
+    SIGMOID  = 2
 
 
 # TODO: add GGMLFileType from ggml_ftype in ggml.h

@@ -31,6 +31,7 @@ def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_conte
     })
     assert res.status_code == 200
     assert "cmpl" in res.body["id"] # make sure the completion id has the expected format
+    assert res.body["system_fingerprint"].startswith("b")
     assert res.body["model"] == model if model is not None else server.model_alias
     assert res.body["usage"]["prompt_tokens"] == n_prompt
     assert res.body["usage"]["completion_tokens"] == n_predicted
@@ -63,6 +64,7 @@ def test_chat_completion_stream(system_prompt, user_prompt, max_tokens, re_conte
     last_cmpl_id = None
     for data in res:
         choice = data["choices"][0]
+        assert data["system_fingerprint"].startswith("b")
         assert "gpt-3.5" in data["model"] # DEFAULT_OAICOMPAT_MODEL, maybe changed in the future
         if last_cmpl_id is None:
             last_cmpl_id = data["id"]
@@ -81,7 +83,7 @@ def test_chat_completion_stream(system_prompt, user_prompt, max_tokens, re_conte
 def test_chat_completion_with_openai_library():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         messages=[
@@ -92,9 +94,27 @@ def test_chat_completion_with_openai_library():
         seed=42,
         temperature=0.8,
     )
+    assert res.system_fingerprint is not None and res.system_fingerprint.startswith("b")
     assert res.choices[0].finish_reason == "length"
     assert res.choices[0].message.content is not None
     assert match_regex("(Suddenly)+", res.choices[0].message.content)
+
+
+def test_chat_template():
+    global server
+    server.chat_template = "llama3"
+    server.debug = True  # to get the "__verbose" object in the response
+    server.start()
+    res = server.make_request("POST", "/chat/completions", data={
+        "max_tokens": 8,
+        "messages": [
+            {"role": "system", "content": "Book"},
+            {"role": "user", "content": "What is the best book"},
+        ]
+    })
+    assert res.status_code == 200
+    assert "__verbose" in res.body
+    assert res.body["__verbose"]["prompt"] == "<s> <|start_header_id|>system<|end_header_id|>\n\nBook<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat is the best book<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
 
 @pytest.mark.parametrize("response_format,n_predicted,re_content", [
@@ -167,7 +187,7 @@ def test_chat_completion_with_timings_per_token():
 def test_logprobs():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         temperature=0.0,
@@ -194,7 +214,7 @@ def test_logprobs():
 def test_logprobs_stream():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         temperature=0.0,

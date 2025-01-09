@@ -78,7 +78,8 @@ void execute_command(const std::string& command, std::string& stdout_str, std::s
     }
 
     PROCESS_INFORMATION pi;
-    STARTUPINFOA si = { sizeof(STARTUPINFOA) };
+    STARTUPINFOA si = {};
+    si.cb = sizeof(STARTUPINFOA);
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdOutput = stdout_write;
     si.hStdError = stderr_write;
@@ -341,9 +342,11 @@ void process_shaders() {
         matmul_shaders(true, matmul_id, false, false, false);
         matmul_shaders(true, matmul_id, false, false, true);
 
+#if defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
         // Coopmat, fp32acc and fp16acc
         matmul_shaders(true, matmul_id, true, false, false);
         matmul_shaders(true, matmul_id, true, false, true);
+#endif
 
 #if defined(GGML_VULKAN_COOPMAT2_GLSLC_SUPPORT)
         // Coopmat2, fp32acc and fp16acc
