@@ -6,6 +6,7 @@
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
 shared FLOAT_TYPE sccache[BLOCK_SIZE/16][2][8];
+
 FLOAT_TYPE temp[NUM_COLS][NUM_ROWS];
 
 void calc_superblock(const uint a_offset, const uint b_offset, const uint ix, const uint itid8, const uint v_im, const uint v_im4, const uint v_in, const uint32_t hm_m[4], const uint q_offset, const uint y_offset, const uint s_shift, const uint i, const uint num_blocks_per_row, const uint first_row, const uint num_rows, const bool all_threads) {

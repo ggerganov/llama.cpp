@@ -19,7 +19,7 @@ void calc_superblock(const uint a_offset, const uint b_offset, const uint itid, 
             if (i < num_blocks_per_row) {
                 sccache[ix][0][itid] = FLOAT_TYPE((data_a[ib0 + i].scales[itid8] >> v_im*4) & 0xF); // lower 8 bytes
                 sccache[ix][1][itid] = FLOAT_TYPE((data_a[ib0 + i].scales[itid8+8] >> v_im*4) & 0xF); // upper 8 bytes
-                                                                                                                 }
+            }
             barrier();
 
             if (i >= num_blocks_per_row)
