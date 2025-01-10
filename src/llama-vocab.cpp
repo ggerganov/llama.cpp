@@ -3026,8 +3026,13 @@ void llama_vocab::print_info() const {
 // interface implementation
 //
 
-int32_t llama_n_vocab(const struct llama_vocab * vocab) {
+int32_t llama_vocab_n_vocab(const struct llama_vocab * vocab) {
     return vocab->n_vocab();
+}
+
+// deprecated
+int32_t llama_n_vocab(const struct llama_vocab * vocab) {
+    return llama_vocab_n_vocab(vocab);
 }
 
 enum llama_vocab_type llama_vocab_type(const struct llama_vocab * vocab) {

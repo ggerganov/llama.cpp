@@ -64,7 +64,7 @@ int main(int argc, char ** argv) {
     ctx_params.n_ctx   = n_kv_req;
     ctx_params.n_batch = std::max(n_predict, n_parallel);
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
 
     auto sparams = llama_sampler_chain_default_params();
     sparams.no_perf = false;

@@ -43,7 +43,7 @@ int main(int argc, char ** argv) {
 
         auto cparams = llama_context_default_params();
 
-        ctx = llama_new_context_with_model(model, cparams);
+        ctx = llama_init_from_model(model, cparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
@@ -65,7 +65,7 @@ int main(int argc, char ** argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = common_detokenize(ctx, std::vector<int>(1, i), true);

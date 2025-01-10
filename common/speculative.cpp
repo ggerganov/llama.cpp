@@ -105,15 +105,15 @@ bool common_speculative_are_compatible(
     }
 
     {
-        const int n_vocab_tgt = llama_n_vocab(vocab_tgt);
-        const int n_vocab_dft = llama_n_vocab(vocab_dft);
+        const int n_vocab_tgt = llama_vocab_n_vocab(vocab_tgt);
+        const int n_vocab_dft = llama_vocab_n_vocab(vocab_dft);
 
         const int vocab_diff = std::abs(n_vocab_tgt - n_vocab_dft);
 
         if (vocab_diff > SPEC_VOCAB_MAX_SIZE_DIFFERENCE) {
             LOG_ERR("%s: draft model vocab must closely match target model to use speculation but "
                          "target vocab size %d does not match draft vocab size %d - difference %d, max allowed %d\n",
-                    __func__, n_vocab_tgt, llama_n_vocab(vocab_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
+                    __func__, n_vocab_tgt, llama_vocab_n_vocab(vocab_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
             return false;
         }
 

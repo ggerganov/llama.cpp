@@ -347,7 +347,7 @@ int main(int raw_argc, char ** raw_argv) {
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_context_params ctx_params = llama_context_default_params();
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
     if (!ctx) {
         fprintf(stderr, "Error: could not create context.\n");
         return 1;

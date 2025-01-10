@@ -3747,20 +3747,40 @@ void llama_model_free(struct llama_model * model) {
     delete model;
 }
 
-int32_t llama_n_ctx_train(const struct llama_model * model) {
+int32_t llama_model_n_ctx_train(const struct llama_model * model) {
     return model->hparams.n_ctx_train;
 }
 
-int32_t llama_n_embd(const struct llama_model * model) {
+int32_t llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int32_t llama_n_layer(const struct llama_model * model) {
+int32_t llama_model_n_layer(const struct llama_model * model) {
     return model->hparams.n_layer;
 }
 
-int32_t llama_n_head(const struct llama_model * model) {
+int32_t llama_model_n_head(const struct llama_model * model) {
     return model->hparams.n_head();
+}
+
+// deprecated
+int32_t llama_n_ctx_train(const struct llama_model * model) {
+    return llama_model_n_ctx_train(model);
+}
+
+// deprecated
+int32_t llama_n_embd(const struct llama_model * model) {
+    return llama_model_n_embd(model);
+}
+
+// deprecated
+int32_t llama_n_layer(const struct llama_model * model) {
+    return llama_model_n_layer(model);
+}
+
+// deprecated
+int32_t llama_n_head(const struct llama_model * model) {
+    return llama_model_n_head(model);
 }
 
 enum llama_rope_type llama_model_rope_type(const struct llama_model * model) {

@@ -76,11 +76,11 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = common_context_params_to_llama(params);
 
-    ctx_params.n_ctx = llama_n_ctx_train(model)*n_grp + n_keep;
+    ctx_params.n_ctx = llama_model_n_ctx_train(model)*n_grp + n_keep;
 
     GGML_ASSERT(ctx_params.n_batch % n_grp == 0 && "n_batch must be divisible by n_grp");
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
     if (ctx == NULL) {
         LOG_ERR("%s: failed to create the llama_context\n" , __func__);
         return 1;

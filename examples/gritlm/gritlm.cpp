@@ -53,7 +53,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         llama_decode(ctx, batch);
 
         // get embedding dimensions
-        uint64_t n_embd = llama_n_embd(model);
+        uint64_t n_embd = llama_model_n_embd(model);
 
         // allocate embedding output
         std::vector<float> emb_unorm(n_embd, 0.0f);
@@ -171,7 +171,7 @@ int main(int argc, char * argv[]) {
     llama_model * model = llama_model_load_from_file(params.model.c_str(), mparams);
 
     // create generation context
-    llama_context * ctx = llama_new_context_with_model(model, cparams);
+    llama_context * ctx = llama_init_from_model(model, cparams);
 
     auto sparams = llama_sampler_chain_default_params();
 
@@ -200,7 +200,7 @@ int main(int argc, char * argv[]) {
         const std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
         const std::vector<std::vector<float>> q_rep = encode(ctx, queries,   gritlm_instruction(instruction));
 
-        const int n_embd = llama_n_embd(model);
+        const int n_embd = llama_model_n_embd(model);
 
         const float cosine_sim_q0_d0 = common_embd_similarity_cos(q_rep[0].data(), d_rep[0].data(), n_embd);
         const float cosine_sim_q0_d1 = common_embd_similarity_cos(q_rep[0].data(), d_rep[1].data(), n_embd);

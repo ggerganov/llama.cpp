@@ -113,7 +113,7 @@ int main(int argc, char ** argv) {
     // enable performance counters
     ctx_params.no_perf = false;
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
 
     if (ctx == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);

@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <sstream>
 #include <thread>
 #include <mutex>
 #include <vector>
@@ -40,7 +39,7 @@ public:
     void set_params(common_params params) { m_params = std::move(params); }
     bool collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data);
     void save_imatrix(int ncall = -1) const;
-    bool load_imatrix(const char * file_name);
+    bool load_imatrix(const char * fname);
 private:
     std::unordered_map<std::string, Stats> m_stats;
     common_params                          m_params;
@@ -471,7 +470,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const int n_chunk_max = tokens.size() / n_ctx;
 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
     const int n_batch = params.n_batch;
 
     int count = 0;
@@ -630,7 +629,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = llama_model_n_ctx_train(model);
     if (params.n_ctx > n_ctx_train) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n",
                 __func__, n_ctx_train, params.n_ctx);

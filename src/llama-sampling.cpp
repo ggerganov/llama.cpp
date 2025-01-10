@@ -374,7 +374,7 @@ llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_conte
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     // TODO: do not allocate each time
     std::vector<llama_token_data> cur;

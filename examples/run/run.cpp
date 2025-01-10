@@ -685,7 +685,7 @@ class LlamaData {
 
     // Initializes the context with the specified parameters
     llama_context_ptr initialize_context(const llama_model_ptr & model, const Opt & opt) {
-        llama_context_ptr context(llama_new_context_with_model(model.get(), opt.ctx_params));
+        llama_context_ptr context(llama_init_from_model(model.get(), opt.ctx_params));
         if (!context) {
             printe("%s: error: failed to create the llama_context\n", __func__);
         }

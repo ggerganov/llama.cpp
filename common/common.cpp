@@ -886,7 +886,7 @@ struct common_init_result common_init_from_params(common_params & params) {
 
     auto cparams = common_context_params_to_llama(params);
 
-    llama_context * lctx = llama_new_context_with_model(model, cparams);
+    llama_context * lctx = llama_init_from_model(model, cparams);
     if (lctx == NULL) {
         LOG_ERR("%s: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_model_free(model);
@@ -900,7 +900,7 @@ struct common_init_result common_init_from_params(common_params & params) {
 
     if (!params.control_vectors.empty()) {
         if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
-        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_model_n_layer(model);
 
         const auto cvec = common_control_vector_load(params.control_vectors);
         if (cvec.n_embd == -1) {
@@ -949,7 +949,7 @@ struct common_init_result common_init_from_params(common_params & params) {
     }
 
     if (params.sampling.ignore_eos) {
-        for (llama_token i = 0; i < llama_n_vocab(vocab); i++) {
+        for (llama_token i = 0; i < llama_vocab_n_vocab(vocab); i++) {
             if (llama_token_is_eog(vocab, i)) {
                 LOG_INF("%s: added %s logit bias = %f\n", __func__, common_token_to_piece(lctx, i).c_str(), -INFINITY);
                 params.sampling.logit_bias.push_back({i, -INFINITY});

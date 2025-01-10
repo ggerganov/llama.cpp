@@ -423,8 +423,8 @@ int main(int argc, char ** argv) {
     llama_context * ctx = llama_init.context.get();
 
     // int n_ctx = llama_n_ctx(ctx);
-    int n_layers = llama_n_layer(model);
-    int n_embd = llama_n_embd(model);
+    int n_layers = llama_model_n_layer(model);
+    int n_embd = llama_model_n_embd(model);
 
     // get model hint param (a.k.a model arch name)
     char model_hint[128];

@@ -107,7 +107,7 @@ int main(int argc, char ** argv) {
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = llama_model_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
     const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
@@ -183,7 +183,7 @@ int main(int argc, char ** argv) {
     }
 
     // allocate output
-    const int n_embd = llama_n_embd(model);
+    const int n_embd = llama_model_n_embd(model);
     std::vector<float> embeddings(n_embd_count * n_embd, 0);
     float * emb = embeddings.data();
 

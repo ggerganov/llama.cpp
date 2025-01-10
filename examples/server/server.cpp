@@ -331,7 +331,7 @@ struct server_task {
 
             const auto & logit_bias = data.find("logit_bias");
             if (logit_bias != data.end() && logit_bias->is_array()) {
-                const int n_vocab = llama_n_vocab(vocab);
+                const int n_vocab = llama_vocab_n_vocab(vocab);
                 for (const auto & el : *logit_bias) {
                     // TODO: we may want to throw errors here, in case "el" is incorrect
                     if (el.is_array() && el.size() == 2) {
@@ -1763,7 +1763,7 @@ struct server_context {
             if (model_dft) {
                 slot.batch_spec = llama_batch_init(params_base.speculative.n_max + 1, 0, 1);
 
-                slot.ctx_dft = llama_new_context_with_model(model_dft, cparams_dft);
+                slot.ctx_dft = llama_init_from_model(model_dft, cparams_dft);
                 if (slot.ctx_dft == nullptr) {
                     SRV_ERR("%s", "failed to create draft context\n");
                     return;
@@ -2061,7 +2061,7 @@ struct server_context {
             SLT_DBG(slot, "%s", "stopped by EOS\n");
         }
 
-        const auto n_ctx_train = llama_n_ctx_train(model);
+        const auto n_ctx_train = llama_model_n_ctx_train(model);
 
         if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
             slot.truncated      = true;
@@ -2081,7 +2081,7 @@ struct server_context {
 
     void populate_token_probs(const server_slot & slot, completion_token_output & result, bool post_sampling, bool special, int idx) {
         size_t n_probs = slot.params.sampling.n_probs;
-        size_t n_vocab = llama_n_vocab(vocab);
+        size_t n_vocab = llama_vocab_n_vocab(vocab);
         if (post_sampling) {
             const auto * cur_p = common_sampler_get_candidates(slot.smpl);
             const size_t max_probs = cur_p->size;
@@ -2232,7 +2232,7 @@ struct server_context {
         res->n_tokens  = slot.n_prompt_tokens;
         res->oaicompat = slot.params.oaicompat;
 
-        const int n_embd = llama_n_embd(model);
+        const int n_embd = llama_model_n_embd(model);
 
         std::vector<float> embd_res(n_embd, 0.0f);
 
@@ -3136,12 +3136,12 @@ struct server_context {
 
     json model_meta() const {
         return json {
-            {"vocab_type",  llama_vocab_type    (vocab)},
-            {"n_vocab",     llama_n_vocab       (vocab)},
-            {"n_ctx_train", llama_n_ctx_train   (model)},
-            {"n_embd",      llama_n_embd        (model)},
-            {"n_params",    llama_model_n_params(model)},
-            {"size",        llama_model_size    (model)},
+            {"vocab_type",  llama_vocab_type       (vocab)},
+            {"n_vocab",     llama_vocab_n_vocab    (vocab)},
+            {"n_ctx_train", llama_model_n_ctx_train(model)},
+            {"n_embd",      llama_model_n_embd     (model)},
+            {"n_params",    llama_model_n_params   (model)},
+            {"size",        llama_model_size       (model)},
         };
     }
 };

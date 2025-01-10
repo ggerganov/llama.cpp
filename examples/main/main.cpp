@@ -5,7 +5,6 @@
 #include "sampling.h"
 #include "llama.h"
 
-#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -198,7 +197,7 @@ int main(int argc, char ** argv) {
 
     llama_attach_threadpool(ctx, threadpool, threadpool_batch);
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = llama_model_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
     if (n_ctx > n_ctx_train) {

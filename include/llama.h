@@ -427,10 +427,14 @@ extern "C" {
 
     LLAMA_API void llama_model_free(struct llama_model * model);
 
-    // TODO: rename to llama_init_from_model
-    LLAMA_API struct llama_context * llama_new_context_with_model(
+    LLAMA_API struct llama_context * llama_init_from_model(
                      struct llama_model * model,
             struct llama_context_params   params);
+
+    DEPRECATED(LLAMA_API struct llama_context * llama_new_context_with_model(
+                     struct llama_model * model,
+            struct llama_context_params   params),
+            "use llama_init_from_model instead");
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
@@ -449,12 +453,12 @@ extern "C" {
     LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
-    LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
-    LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
-    LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
-    LLAMA_API int32_t llama_n_head     (const struct llama_model * model);
+    DEPRECATED(LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model), "use llama_model_n_ctx_train instead");
+    DEPRECATED(LLAMA_API int32_t llama_n_embd     (const struct llama_model * model), "use llama_model_n_embd instead");
+    DEPRECATED(LLAMA_API int32_t llama_n_layer    (const struct llama_model * model), "use llama_model_n_layer instead");
+    DEPRECATED(LLAMA_API int32_t llama_n_head     (const struct llama_model * model), "use llama_model_n_head instead");
 
-    LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab);
+    DEPRECATED(LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab), "use llama_vocab_n_vocab instead");
 
     LLAMA_API const struct llama_model * llama_get_model   (const struct llama_context * ctx);
     LLAMA_API enum llama_pooling_type    llama_pooling_type(const struct llama_context * ctx);
@@ -462,10 +466,17 @@ extern "C" {
     LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
     LLAMA_API enum llama_rope_type       llama_model_rope_type(const struct llama_model * model);
 
+    LLAMA_API int32_t llama_model_n_ctx_train(const struct llama_model * model);
+    LLAMA_API int32_t llama_model_n_embd     (const struct llama_model * model);
+    LLAMA_API int32_t llama_model_n_layer    (const struct llama_model * model);
+    LLAMA_API int32_t llama_model_n_head     (const struct llama_model * model);
+
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_model_rope_freq_scale_train(const struct llama_model * model);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_vocab * vocab);
+
+    LLAMA_API int32_t llama_vocab_n_vocab(const struct llama_vocab * vocab);
 
     // Functions to access the model's GGUF metadata scalar values
     // - The functions return the length of the string on success, or -1 on failure
