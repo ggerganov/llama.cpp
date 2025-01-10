@@ -51,24 +51,15 @@
 #define convert_from_le64(x)
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 static inline void convert_from_le16(void * value) {
-    uint16_t temp;
-    memcpy(&temp, value, sizeof(uint16_t));
-    temp = le16toh(temp);
-    memcpy(value, &temp, sizeof(uint16_t));
+    *((uint16_t*)value) = le16toh(*((uint16_t*)value));
 }
 
 static inline void convert_from_le32(void * value) {
-    uint32_t temp;
-    memcpy(&temp, value, sizeof(uint32_t));
-    temp = le32toh(temp);
-    memcpy(value, &temp, sizeof(uint32_t));
+    *((uint32_t*)value) = le32toh(*((uint32_t*)value));
 }
 
 static inline void convert_from_le64(void * value) {
-    uint64_t temp;
-    memcpy(&temp, value, sizeof(uint64_t));
-    temp = le64toh(temp);
-    memcpy(value, &temp, sizeof(uint64_t));
+    *((uint64_t*)value) = le64toh(*((uint64_t*)value));
 }
 #else
 #error Unexpected or undefined __BYTE_ORDER__

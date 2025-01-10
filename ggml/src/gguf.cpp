@@ -36,26 +36,17 @@ static inline void convert_from_le(T * /*value*/)
 
 template <typename T, std::enable_if_t<sizeof(T) == 2, int> = 0>
 static inline void convert_from_le(T * value) {
-    uint16_t temp;
-    memcpy(&temp, value, sizeof(uint16_t));
-    temp = le16toh(temp);
-    memcpy(value, &temp, sizeof(uint16_t));
+    *((uint16_t*)value) = le16toh(*((uint16_t*)value));
 }
 
 template <typename T, std::enable_if_t<sizeof(T) == 4, int> = 0>
 static inline void convert_from_le(T * value) {
-    uint32_t temp;
-    memcpy(&temp, value, sizeof(uint32_t));
-    temp = le32toh(temp);
-    memcpy(value, &temp, sizeof(uint32_t));
+    *((uint32_t*)value) = le32toh(*((uint32_t*)value));
 }
 
 template <typename T, std::enable_if_t<sizeof(T) == 8, int> = 0>
 static inline void convert_from_le(T * value) {
-    uint64_t temp;
-    memcpy(&temp, value, sizeof(uint64_t));
-    temp = le64toh(temp);
-    memcpy(value, &temp, sizeof(uint64_t));
+    *((uint64_t*)value) = le64toh(*((uint64_t*)value));
 }
 #else
 #error Unexpected or undefined __BYTE_ORDER__
