@@ -138,7 +138,7 @@ int main(int argc, char ** argv){
                 LOG("%s", token_str.c_str());
             }
 
-            if (llama_token_is_eog(vocab, id)) {
+            if (llama_vocab_is_eog(vocab, id)) {
                 has_eos = true;
             }
 

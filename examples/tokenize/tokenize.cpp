@@ -367,7 +367,7 @@ int main(int raw_argc, char ** raw_argv) {
         prompt = stdin_buffer.str();
     }
 
-    const bool model_wants_add_bos = llama_add_bos_token(vocab);
+    const bool model_wants_add_bos = llama_vocab_add_bos(vocab);
     const bool add_bos = model_wants_add_bos && !no_bos;
     const bool parse_special = !no_parse_special;
     const bool escape = !no_escape;

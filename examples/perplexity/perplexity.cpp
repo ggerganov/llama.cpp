@@ -299,8 +299,8 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_add_bos_token(vocab);
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    const bool add_bos = llama_vocab_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
@@ -385,7 +385,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(vocab);
+                tokens[batch_start] = llama_vocab_bos(vocab);
             }
 
             const auto * batch_logits = llama_get_logits(ctx);
@@ -450,8 +450,8 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_add_bos_token(vocab);
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    const bool add_bos = llama_vocab_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     std::ofstream logits_stream;
     if (!params.logits_file.empty()) {
@@ -563,7 +563,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
 
                 // add BOS token for the first batch of each chunk
                 if (add_bos && j == 0) {
-                    tokens[seq_start] = llama_token_bos(vocab);
+                    tokens[seq_start] = llama_vocab_bos(vocab);
                 }
 
                 for (int k = 0; k < batch_size; ++k) {
@@ -1717,8 +1717,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
     const int n_batch = params.n_batch;
     const int num_batches = (n_ctx + n_batch - 1)/n_batch;
     const int nv = 2*((n_vocab + 1)/2) + 4;
-    const bool add_bos = llama_add_bos_token(vocab);
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    const bool add_bos = llama_vocab_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     std::vector<uint16_t> log_probs_uint16(size_t(n_ctx - 1 - n_ctx/2) * nv);
     std::vector<float>    kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
@@ -1777,7 +1777,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(vocab);
+                tokens[batch_start] = llama_vocab_bos(vocab);
             }
 
             common_batch_clear(batch);

@@ -126,7 +126,7 @@ int main(int argc, char ** argv) {
             new_token_id = llama_sampler_sample(smpl, ctx, -1);
 
             // is it an end of generation?
-            if (llama_token_is_eog(vocab, new_token_id)) {
+            if (llama_vocab_is_eog(vocab, new_token_id)) {
                 break;
             }
 

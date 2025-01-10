@@ -141,7 +141,7 @@ while n_cur <= n_len {
         let new_token_id = llama_sampler_sample(smpl, context, i_batch[i])
 
         // is it an end of stream? -> mark the stream as finished
-        if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
+        if llama_vocab_is_eog(model, new_token_id) || n_cur == n_len {
             i_batch[i] = -1
             // print("")
             if n_parallel > 1 {

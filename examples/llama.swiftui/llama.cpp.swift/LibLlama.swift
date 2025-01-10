@@ -151,7 +151,7 @@ actor LlamaContext {
 
         new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
 
-        if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
+        if llama_vocab_is_eog(model, new_token_id) || n_cur == n_len {
             print("\n")
             is_done = true
             let new_token_str = String(cString: temporary_invalid_cchars + [0])

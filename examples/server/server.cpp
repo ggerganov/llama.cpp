@@ -1698,8 +1698,8 @@ struct server_context {
 
         n_ctx = llama_n_ctx(ctx);
 
-        add_bos_token = llama_add_bos_token(vocab);
-        has_eos_token = llama_token_eos(vocab) != LLAMA_TOKEN_NULL;
+        add_bos_token = llama_vocab_add_bos(vocab);
+        has_eos_token = llama_vocab_eos(vocab) != LLAMA_TOKEN_NULL;
 
         if (!params_base.speculative.model.empty()) {
             SRV_INF("loading draft model '%s'\n", params_base.speculative.model.c_str());
@@ -1898,7 +1898,7 @@ struct server_context {
         }
 
         if (slot.params.ignore_eos && has_eos_token) {
-            slot.params.sampling.logit_bias.push_back({llama_token_eos(vocab), -INFINITY});
+            slot.params.sampling.logit_bias.push_back({llama_vocab_eos(vocab), -INFINITY});
         }
 
         {
@@ -2054,7 +2054,7 @@ struct server_context {
                     slot.n_decoded, slot.n_prompt_tokens, slot.n_past, slot.n_ctx);
         }
 
-        if (llama_token_is_eog(vocab, result.tok)) {
+        if (llama_vocab_is_eog(vocab, result.tok)) {
             slot.stop           = STOP_TYPE_EOS;
             slot.has_next_token = false;
 
@@ -3751,13 +3751,13 @@ int main(int argc, char ** argv) {
     const auto handle_infill = [&ctx_server, &res_error, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
         // check model compatibility
         std::string err;
-        if (llama_token_fim_pre(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_pre(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "prefix token is missing. ";
         }
-        if (llama_token_fim_suf(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_suf(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "suffix token is missing. ";
         }
-        if (llama_token_fim_mid(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_mid(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "middle token is missing. ";
         }
         if (!err.empty()) {

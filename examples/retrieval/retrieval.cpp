@@ -194,8 +194,8 @@ int main(int argc, char ** argv) {
             return 1;
         }
         // add eos if not present
-        if (llama_token_eos(vocab) >= 0 && (inp.empty() || inp.back() != llama_token_eos(vocab))) {
-            inp.push_back(llama_token_eos(vocab));
+        if (llama_vocab_eos(vocab) >= 0 && (inp.empty() || inp.back() != llama_vocab_eos(vocab))) {
+            inp.push_back(llama_vocab_eos(vocab));
         }
         chunk.tokens = inp;
     }

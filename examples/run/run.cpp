@@ -792,7 +792,7 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
 
         // sample the next token, check is it an end of generation?
         new_token_id = llama_sampler_sample(llama_data.sampler.get(), llama_data.context.get(), -1);
-        if (llama_token_is_eog(vocab, new_token_id)) {
+        if (llama_vocab_is_eog(vocab, new_token_id)) {
             break;
         }
 

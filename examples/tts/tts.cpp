@@ -737,9 +737,9 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
                 const auto * cands = common_sampler_get_candidates(smpl[i]);
 
                 // is it an end of generation? -> mark the stream as finished
-                if (llama_token_is_eog(vocab, new_token_id) || n_decode == n_predict) {
+                if (llama_vocab_is_eog(vocab, new_token_id) || n_decode == n_predict) {
                     std::string reason;
-                    if (llama_token_is_eog(vocab, new_token_id)) {
+                    if (llama_vocab_is_eog(vocab, new_token_id)) {
                         reason = "eos";
                     } else {
                         reason = "n_predict";

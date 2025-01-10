@@ -94,13 +94,13 @@ bool common_speculative_are_compatible(
         return false;
     }
 
-    if (llama_add_bos_token(vocab_tgt) != llama_add_bos_token(vocab_dft) ||
-        llama_add_eos_token(vocab_tgt) != llama_add_eos_token(vocab_dft) ||
-        llama_token_bos(vocab_tgt) != llama_token_bos(vocab_dft) ||
-        llama_token_eos(vocab_tgt) != llama_token_eos(vocab_dft)) {
+    if (llama_vocab_add_bos(vocab_tgt) != llama_vocab_add_bos(vocab_dft) ||
+        llama_vocab_add_eos(vocab_tgt) != llama_vocab_add_eos(vocab_dft) ||
+        llama_vocab_bos(vocab_tgt) != llama_vocab_bos(vocab_dft) ||
+        llama_vocab_eos(vocab_tgt) != llama_vocab_eos(vocab_dft)) {
         LOG_ERR("%s: draft vocab special tokens must match target vocab to use speculation\n", __func__);
-        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(vocab_tgt), llama_add_bos_token(vocab_tgt), llama_token_eos(vocab_tgt), llama_add_eos_token(vocab_tgt));
-        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_token_bos(vocab_dft), llama_add_bos_token(vocab_dft), llama_token_eos(vocab_dft), llama_add_eos_token(vocab_dft));
+        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_vocab_bos(vocab_tgt), llama_vocab_add_bos(vocab_tgt), llama_vocab_eos(vocab_tgt), llama_vocab_add_eos(vocab_tgt));
+        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_vocab_bos(vocab_dft), llama_vocab_add_bos(vocab_dft), llama_vocab_eos(vocab_dft), llama_vocab_add_eos(vocab_dft));
         return false;
     }
 
@@ -118,8 +118,8 @@ bool common_speculative_are_compatible(
         }
 
         for (int i = SPEC_VOCAB_CHECK_START_TOKEN_ID; i < std::min(n_vocab_tgt, n_vocab_dft); ++i) {
-            const char * token_text_tgt = llama_token_get_text(vocab_tgt, i);
-            const char * token_text_dft = llama_token_get_text(vocab_dft, i);
+            const char * token_text_tgt = llama_vocab_get_text(vocab_tgt, i);
+            const char * token_text_dft = llama_vocab_get_text(vocab_dft, i);
             if (std::strcmp(token_text_tgt, token_text_dft) != 0) {
                 LOG_ERR("%s: draft vocab vocab must match target vocab to use speculation but "
                              "token %d content differs - target '%s', draft '%s'\n", __func__, i,

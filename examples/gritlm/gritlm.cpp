@@ -26,7 +26,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
 
         // GritLM seems to have EOS = ""
         // https://github.com/ContextualAI/gritlm/blob/92025b16534712b31b3c4aaaf069350e222bd5f8/gritlm/gritlm.py#L18
-        // inputs.push_back(llama_token_eos(vocab));
+        // inputs.push_back(llama_vocab_eos(vocab));
 
         // we want to ignore instruction tokens for mean pooling
         const int32_t n_inst = common_tokenize(vocab, instruction, true, false).size();
@@ -100,7 +100,7 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    llama_token eos_token = llama_token_eos(vocab);
+    llama_token eos_token = llama_vocab_eos(vocab);
 
     llama_kv_cache_clear(ctx);
     llama_set_embeddings(ctx, false);

@@ -862,17 +862,17 @@ struct common_init_result common_init_from_params(common_params & params) {
     if (params.reranking) {
         bool ok = true;
 
-        if (llama_token_bos(vocab) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_bos(vocab) == LLAMA_TOKEN_NULL) {
             LOG_WRN("%s: warning: vocab does not have a  BOS token, reranking will not work\n", __func__);
             ok = false;
         }
 
-        if (llama_token_eos(vocab) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_eos(vocab) == LLAMA_TOKEN_NULL) {
             LOG_WRN("%s: warning: vocab does not have an EOS token, reranking will not work\n", __func__);
             ok = false;
         }
 
-        if (llama_token_sep(vocab) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_sep(vocab) == LLAMA_TOKEN_NULL) {
             LOG_WRN("%s: warning: vocab does not have a  SEP token, reranking will not work\n", __func__);
             ok = false;
         }
@@ -943,14 +943,14 @@ struct common_init_result common_init_from_params(common_params & params) {
         common_lora_adapters_apply(lctx, params.lora_adapters);
     }
 
-    if (params.sampling.ignore_eos && llama_token_eos(vocab) == LLAMA_TOKEN_NULL) {
+    if (params.sampling.ignore_eos && llama_vocab_eos(vocab) == LLAMA_TOKEN_NULL) {
         LOG_WRN("%s: warning: vocab does not have an EOS token, ignoring --ignore-eos\n", __func__);
         params.sampling.ignore_eos = false;
     }
 
     if (params.sampling.ignore_eos) {
         for (llama_token i = 0; i < llama_vocab_n_vocab(vocab); i++) {
-            if (llama_token_is_eog(vocab, i)) {
+            if (llama_vocab_is_eog(vocab, i)) {
                 LOG_INF("%s: added %s logit bias = %f\n", __func__, common_token_to_piece(lctx, i).c_str(), -INFINITY);
                 params.sampling.logit_bias.push_back({i, -INFINITY});
             }
@@ -971,8 +971,8 @@ struct common_init_result common_init_from_params(common_params & params) {
         LOG_WRN("%s: warming up the model with an empty run - please wait ... (--no-warmup to disable)\n", __func__);
 
         std::vector<llama_token> tmp;
-        llama_token bos = llama_token_bos(vocab);
-        llama_token eos = llama_token_eos(vocab);
+        llama_token bos = llama_vocab_bos(vocab);
+        llama_token eos = llama_vocab_eos(vocab);
 
         // some models (e.g. T5) don't have a BOS token
         if (bos != LLAMA_TOKEN_NULL) {

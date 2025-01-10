@@ -431,10 +431,10 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_add_bos_token(vocab);
+    const bool add_bos = llama_vocab_add_bos(vocab);
     const int n_ctx = llama_n_ctx(ctx);
 
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
@@ -510,7 +510,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(vocab);
+                tokens[batch_start] = llama_vocab_bos(vocab);
             }
 
             common_batch_clear(batch);

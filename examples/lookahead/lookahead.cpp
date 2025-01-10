@@ -299,7 +299,7 @@ int main(int argc, char ** argv) {
                 }
                 fflush(stdout);
 
-                if (llama_token_is_eog(vocab, id)) {
+                if (llama_vocab_is_eog(vocab, id)) {
                     has_eos = true;
                 }
 

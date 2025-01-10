@@ -235,12 +235,12 @@ static llama_tokens format_rerank(const struct llama_vocab * vocab, const llama_
     llama_tokens result;
 
     result.reserve(doc.size() + query.size() + 4);
-    result.push_back(llama_token_bos(vocab));
+    result.push_back(llama_vocab_bos(vocab));
     result.insert(result.end(), query.begin(), query.end());
-    result.push_back(llama_token_eos(vocab));
-    result.push_back(llama_token_sep(vocab));
+    result.push_back(llama_vocab_eos(vocab));
+    result.push_back(llama_vocab_sep(vocab));
     result.insert(result.end(), doc.begin(), doc.end());
-    result.push_back(llama_token_eos(vocab));
+    result.push_back(llama_vocab_eos(vocab));
 
     return result;
 }
@@ -277,11 +277,11 @@ static llama_tokens format_infill(
     auto tokens_prefix = tokenize_mixed(vocab, input_prefix, false, false);
     auto tokens_suffix = tokenize_mixed(vocab, input_suffix, false, false);
 
-    if (llama_token_fim_rep(vocab) != LLAMA_TOKEN_NULL) {
+    if (llama_vocab_fim_rep(vocab) != LLAMA_TOKEN_NULL) {
         // TODO: make project name an input
         static const auto k_fim_repo = common_tokenize(vocab, "myproject\n", false, false);
 
-        extra_tokens.push_back(llama_token_fim_rep(vocab));
+        extra_tokens.push_back(llama_vocab_fim_rep(vocab));
         extra_tokens.insert(extra_tokens.end(), k_fim_repo.begin(), k_fim_repo.end());
     }
     for (const auto & chunk : input_extra) {
@@ -289,10 +289,10 @@ static llama_tokens format_infill(
         const std::string text     = json_value(chunk, "text",     std::string());
         const std::string filename = json_value(chunk, "filename", std::string("tmp"));
 
-        if (llama_token_fim_sep(vocab) != LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_sep(vocab) != LLAMA_TOKEN_NULL) {
             const auto k_fim_file = common_tokenize(vocab, filename + "\n", false, false);
 
-            extra_tokens.insert(extra_tokens.end(), llama_token_fim_sep(vocab));
+            extra_tokens.insert(extra_tokens.end(), llama_vocab_fim_sep(vocab));
             extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
         } else {
             // chunk separator in binary form to avoid confusing the AI
@@ -306,11 +306,11 @@ static llama_tokens format_infill(
         extra_tokens.insert(extra_tokens.end(), chunk_tokens.begin(), chunk_tokens.end());
     }
 
-    if (llama_token_fim_sep(vocab) != LLAMA_TOKEN_NULL) {
+    if (llama_vocab_fim_sep(vocab) != LLAMA_TOKEN_NULL) {
         // TODO: current filename
         static const auto k_fim_file = common_tokenize(vocab, "filename\n", false, false);
 
-        extra_tokens.insert(extra_tokens.end(), llama_token_fim_sep(vocab));
+        extra_tokens.insert(extra_tokens.end(), llama_vocab_fim_sep(vocab));
         extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
     }
 
@@ -326,15 +326,15 @@ static llama_tokens format_infill(
     tokens_prefix.erase(tokens_prefix.begin(), tokens_prefix.begin() + tokens_prefix.size() - n_prefix_take);
     tokens_suffix.resize(n_suffix_take);
 
-    tokens_prefix.insert(tokens_prefix.begin(), llama_token_fim_pre(vocab));
+    tokens_prefix.insert(tokens_prefix.begin(), llama_vocab_fim_pre(vocab));
     tokens_prefix.insert(tokens_prefix.end(),   tokens_prompt.begin(), tokens_prompt.end());
-    tokens_suffix.insert(tokens_suffix.begin(), llama_token_fim_suf(vocab));
+    tokens_suffix.insert(tokens_suffix.begin(), llama_vocab_fim_suf(vocab));
 
     auto embd_inp = spm_infill ? tokens_suffix : tokens_prefix;
     auto embd_end = spm_infill ? tokens_prefix : tokens_suffix;
 
-    if (llama_add_bos_token(vocab)) {
-        embd_inp.insert(embd_inp.begin(), llama_token_bos(vocab));
+    if (llama_vocab_add_bos(vocab)) {
+        embd_inp.insert(embd_inp.begin(), llama_vocab_bos(vocab));
     }
 
     SRV_DBG("extra: n_ctx = %d, n_extra_take = %d, n_extra = %d\n", n_ctx, n_extra_take, (int) extra_tokens.size());
@@ -343,7 +343,7 @@ static llama_tokens format_infill(
     embd_inp.insert(embd_inp.begin(), extra_tokens.end() - n_extra_take, extra_tokens.end());
 
     embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
-    embd_inp.push_back(llama_token_fim_mid(vocab));
+    embd_inp.push_back(llama_vocab_fim_mid(vocab));
 
     return embd_inp;
 }

@@ -198,7 +198,7 @@ int main(int argc, char ** argv) {
 
             id_last = ids[i];
 
-            if (llama_token_is_eog(vocab, id_last)) {
+            if (llama_vocab_is_eog(vocab, id_last)) {
                 has_eos = true;
                 break;
             }

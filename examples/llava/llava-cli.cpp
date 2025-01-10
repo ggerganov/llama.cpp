@@ -52,7 +52,7 @@ static const char * sample(struct common_sampler * smpl,
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
     static std::string ret;
-    if (llama_token_is_eog(vocab, id)) {
+    if (llama_vocab_is_eog(vocab, id)) {
         ret = "</s>";
     } else {
         ret = common_token_to_piece(ctx_llama, id);
