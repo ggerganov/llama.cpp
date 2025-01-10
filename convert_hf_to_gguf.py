@@ -479,6 +479,11 @@ class Model:
         return func
 
     @classmethod
+    def print_registered_models(cls):
+        for name in cls._model_classes.keys():
+            logger.error(f"- {name}")
+
+    @classmethod
     def from_model_architecture(cls, arch: str) -> type[Model]:
         try:
             return cls._model_classes[arch]
@@ -4929,6 +4934,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "model", type=Path,
         help="directory containing model file",
+        nargs="?",
     )
     parser.add_argument(
         "--use-temp-file", action="store_true",
@@ -4966,8 +4972,15 @@ def parse_args() -> argparse.Namespace:
         "--metadata", type=Path,
         help="Specify the path for an authorship metadata override file"
     )
+    parser.add_argument(
+        "--print-supported-models", action="store_true",
+        help="Print the supported models"
+    )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.print_supported_models and args.model is None:
+        parser.error("the following arguments are required: model")
+    return args
 
 
 def split_str_to_n_bytes(split_str: str) -> int:
@@ -4990,6 +5003,11 @@ def split_str_to_n_bytes(split_str: str) -> int:
 
 def main() -> None:
     args = parse_args()
+
+    if args.print_supported_models:
+        logger.error("Supported models:")
+        Model.print_registered_models()
+        sys.exit(0)
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
