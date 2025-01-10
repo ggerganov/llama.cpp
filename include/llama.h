@@ -400,18 +400,19 @@ extern "C" {
     // Call once at the start of the program
     LLAMA_API void llama_backend_init(void);
 
+    // Call once at the end of the program - currently only used for MPI
+    LLAMA_API void llama_backend_free(void);
+
     //optional:
     LLAMA_API void llama_numa_init(enum ggml_numa_strategy numa);
 
     // Optional: an auto threadpool gets created in ggml if not passed explicitly
     LLAMA_API void llama_attach_threadpool(
-               struct   llama_context * ctx,
-            ggml_threadpool_t   threadpool,
-            ggml_threadpool_t   threadpool_batch);
-    LLAMA_API void llama_detach_threadpool(struct llama_context * ctx);
+            struct llama_context * ctx,
+               ggml_threadpool_t   threadpool,
+               ggml_threadpool_t   threadpool_batch);
 
-    // Call once at the end of the program - currently only used for MPI
-    LLAMA_API void llama_backend_free(void);
+    LLAMA_API void llama_detach_threadpool(struct llama_context * ctx);
 
     DEPRECATED(LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
@@ -956,26 +957,26 @@ extern "C" {
     LLAMA_API llama_token llama_vocab_fim_rep(const struct llama_vocab * vocab);
     LLAMA_API llama_token llama_vocab_fim_sep(const struct llama_vocab * vocab);
 
-    DEPRECATED(LLAMA_API const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token), "deprecated");
-    DEPRECATED(LLAMA_API float llama_token_get_score(const struct llama_vocab * vocab, llama_token token), "deprecated");
-    DEPRECATED(LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token), "deprecated");
-    DEPRECATED(LLAMA_API bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token), "deprecated");
-    DEPRECATED(LLAMA_API bool llama_token_is_control(const struct llama_vocab * vocab, llama_token token), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_bos(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_eos(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_eot(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_cls(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_sep(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_nl (const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_pad(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API bool llama_add_bos_token(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API bool llama_add_eos_token(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_fim_pre(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_fim_suf(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_fim_mid(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_fim_pad(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_fim_rep(const struct llama_vocab * vocab), "deprecated");
-    DEPRECATED(LLAMA_API llama_token llama_token_fim_sep(const struct llama_vocab * vocab), "deprecated");
+    DEPRECATED(LLAMA_API const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token), "use llama_vocabable_get_text instead");
+    DEPRECATED(LLAMA_API float llama_token_get_score(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_score instead");
+    DEPRECATED(LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_attr instead");
+    DEPRECATED(LLAMA_API bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_eog instead");
+    DEPRECATED(LLAMA_API bool llama_token_is_control(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_control instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_bos(const struct llama_vocab * vocab), "use llama_vocab_bos instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_eos(const struct llama_vocab * vocab), "use llama_vocab_eos instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_eot(const struct llama_vocab * vocab), "use llama_vocab_eot instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_cls(const struct llama_vocab * vocab), "use llama_vocab_cls instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_sep(const struct llama_vocab * vocab), "use llama_vocab_sep instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_nl (const struct llama_vocab * vocab), "use llama_vocab_nl instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_pad(const struct llama_vocab * vocab), "use llama_vocab_pad instead");
+    DEPRECATED(LLAMA_API bool llama_add_bos_token(const struct llama_vocab * vocab), "use llama_vocab_add_bos instead");
+    DEPRECATED(LLAMA_API bool llama_add_eos_token(const struct llama_vocab * vocab), "use llama_vocab_add_eos instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_fim_pre(const struct llama_vocab * vocab), "use llama_vocab_fim_pre instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_fim_suf(const struct llama_vocab * vocab), "use llama_vocab_fim_suf instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_fim_mid(const struct llama_vocab * vocab), "use llama_vocab_fim_mid instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_fim_pad(const struct llama_vocab * vocab), "use llama_vocab_fim_pad instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_fim_rep(const struct llama_vocab * vocab), "use llama_vocab_fim_rep instead");
+    DEPRECATED(LLAMA_API llama_token llama_token_fim_sep(const struct llama_vocab * vocab), "use llama_vocab_fim_sep instead");
 
     //
     // Tokenization
