@@ -10,6 +10,43 @@
 #include <string>
 #include <vector>
 
+#if defined(__gnu_linux__)
+#include <endian.h>
+#else
+#define le64toh(x) (x)
+#define le32toh(x) (x)
+#define le16toh(x) (x)
+#endif
+
+// endianness conversion
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define convert_to_le(x)
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#include <type_traits>
+
+template <typename T, std::enable_if_t<sizeof(T) == 1, int> = 0>
+static inline void convert_to_le(T * /*value*/)
+{
+}
+
+template <typename T, std::enable_if_t<sizeof(T) == 2, int> = 0>
+static inline void convert_to_le(T * value) {
+    *((uint16_t*)value) = htole16(*((uint16_t*)value));
+}
+
+template <typename T, std::enable_if_t<sizeof(T) == 4, int> = 0>
+static inline void convert_to_le(T * value) {
+    *((uint32_t*)value) = htole32(*((uint32_t*)value));
+}
+
+template <typename T, std::enable_if_t<sizeof(T) == 8, int> = 0>
+static inline void convert_to_le(T * value) {
+    *((uint64_t*)value) = htole64(*((uint64_t*)value));
+}
+#else
+#error Unexpected or undefined __BYTE_ORDER__
+#endif
+
 constexpr int offset_has_kv      = 1000;
 constexpr int offset_has_tensors = 2000;
 constexpr int offset_has_data    = 3000;
@@ -146,7 +183,8 @@ std::vector<std::pair<enum gguf_type, enum gguf_type>> get_kv_types(std::mt19937
 }
 
 template <typename T>
-static void helper_write(FILE * file, const T & val) {
+static void helper_write(FILE * file, T val) {
+    convert_to_le(&val);
     GGML_ASSERT(fwrite(&val, 1, sizeof(val), file) == sizeof(val));
 }
 
@@ -363,7 +401,9 @@ static FILE * get_handcrafted_file(const unsigned int seed, const enum handcraft
                 helper_write(file, big_dim);
             }
         } else {
-            helper_write(file, shape.data(), n_dims*sizeof(int64_t));
+            for (uint32_t j = 0; j < n_dims; ++j) {
+                helper_write(file, shape[j]);
+            }
         }
 
         {
@@ -533,6 +573,33 @@ static bool handcrafted_check_kv(const gguf_context * gguf_ctx, const unsigned i
                 continue;
             }
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            switch (type_arr) {
+                case GGUF_TYPE_UINT16:
+                case GGUF_TYPE_INT16:
+                    for (size_t j = 0; j < arr_n; ++j) {
+                        convert_to_le((uint16_t*)(data8 + j * 2));
+                    }
+                    break;
+
+                case GGUF_TYPE_UINT32:
+                case GGUF_TYPE_INT32:
+                case GGUF_TYPE_FLOAT32:
+                    for (size_t j = 0; j < arr_n; ++j) {
+                        convert_to_le((uint32_t*)(data8 + j * 4));
+                    }
+                    break;
+
+                case GGUF_TYPE_UINT64:
+                case GGUF_TYPE_INT64:
+                case GGUF_TYPE_FLOAT64:
+                    for (size_t j = 0; j < arr_n; ++j) {
+                        convert_to_le((uint64_t*)(data8 + j * 8));
+                    }
+                    break;
+            }
+#endif
+
             if (!std::equal(data8, data8 + arr_n*type_size, data_gguf)) {
                 ok = false;
             }
@@ -547,6 +614,27 @@ static bool handcrafted_check_kv(const gguf_context * gguf_ctx, const unsigned i
             }
             continue;
         }
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        switch (type) {
+            case GGUF_TYPE_UINT16:
+            case GGUF_TYPE_INT16:
+                convert_to_le((uint16_t*)(data8));
+                break;
+
+            case GGUF_TYPE_UINT32:
+            case GGUF_TYPE_INT32:
+            case GGUF_TYPE_FLOAT32:
+                convert_to_le((uint32_t*)(data8));
+                break;
+
+            case GGUF_TYPE_UINT64:
+            case GGUF_TYPE_INT64:
+            case GGUF_TYPE_FLOAT64:
+                convert_to_le((uint64_t*)(data8));
+                break;
+        }
+#endif
 
         if (!std::equal(data8, data8 + gguf_type_size(type), data_gguf)) {
             ok = false;

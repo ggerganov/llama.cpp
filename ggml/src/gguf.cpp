@@ -1180,7 +1180,13 @@ struct gguf_writer {
     template <typename T>
     void write(const T & val) const {
         for (size_t i = 0; i < sizeof(val); ++i) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
             buf.push_back(reinterpret_cast<const int8_t *>(&val)[i]);
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            buf.push_back(reinterpret_cast<const int8_t *>(&val)[sizeof(val) - i - 1]);
+#else
+#error Unexpected or undefined __BYTE_ORDER__
+#endif
         }
     }
 
@@ -1229,6 +1235,7 @@ struct gguf_writer {
         }
 
         switch (kv.get_type()) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
             case GGUF_TYPE_UINT8:
             case GGUF_TYPE_INT8:
             case GGUF_TYPE_UINT16:
@@ -1241,6 +1248,60 @@ struct gguf_writer {
             case GGUF_TYPE_FLOAT64: {
                 write(kv.data);
             } break;
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            case GGUF_TYPE_UINT8: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<uint8_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_INT8: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<int8_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_UINT16: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<uint16_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_INT16: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<int16_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_UINT32: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<uint32_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_INT32: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<int32_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_FLOAT32: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<float>(i));
+                }
+            } break;
+            case GGUF_TYPE_UINT64: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<uint64_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_INT64: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<int64_t>(i));
+                }
+            } break;
+            case GGUF_TYPE_FLOAT64: {
+                for (size_t i = 0; i < ne; ++i) {
+                    write(kv.get_val<double>(i));
+                }
+            } break;
+#else
+#error Unexpected or undefined __BYTE_ORDER__
+#endif
             case GGUF_TYPE_BOOL: {
                 for (size_t i = 0; i < ne; ++i) {
                     write(kv.get_val<bool>(i));
@@ -1290,6 +1351,13 @@ struct gguf_writer {
             GGML_ASSERT(info.t.data);
             memcpy(buf.data() + offset, info.t.data, nbytes);
         }
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        auto byteswap = ggml_get_type_traits(info.t.type)->byteswap;
+        if (byteswap != nullptr) {
+            byteswap(buf.data() + offset, ggml_nelements(&(info.t)) / ggml_blck_size(info.t.type));
+        }
+#endif
 
         pad(alignment);
     }
