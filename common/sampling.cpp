@@ -176,28 +176,32 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     }
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_k      (params.top_k));
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_p      (params.top_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_MIN_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_min_p      (params.min_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_XTC:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc        (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
                     break;
                 case COMMON_SAMPLER_TYPE_TYPICAL_P:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_typical    (params.typ_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext   (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                     break;
                 case COMMON_SAMPLER_TYPE_INFILL:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill   (model));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_infill     (model));
                     break;
                 case COMMON_SAMPLER_TYPE_PENALTIES:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_penalties(params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present));
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_penalties  (params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present));
+                    break;
+                case COMMON_SAMPLER_TYPE_TOP_N_SIGMA:
+                    // llama_sampler_chain_add(result->chain, )
+                    llama_sampler_chain_add(result->chain, llama_sampler_init_top_n_sigma(params.top_n_sigma))
                     break;
                 default:
                     GGML_ASSERT(false && "unknown sampler type");
@@ -407,6 +411,7 @@ char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_XTC:         return 'x';
         case COMMON_SAMPLER_TYPE_INFILL:      return 'i';
         case COMMON_SAMPLER_TYPE_PENALTIES:   return 'e';
+        case COMMON_SAMPLER_TYPE_TOP_N_SIGMA: return 's';
         default : return '?';
     }
 }
@@ -422,6 +427,7 @@ std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_XTC:         return "xtc";
         case COMMON_SAMPLER_TYPE_INFILL:      return "infill";
         case COMMON_SAMPLER_TYPE_PENALTIES:   return "penalties";
+        case COMMON_SAMPLER_TYPE_TOP_N_SIGMA: return "top_n_sigma";
         default : return "";
     }
 }
@@ -437,6 +443,7 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
         { "xtc",         COMMON_SAMPLER_TYPE_XTC },
         { "infill",      COMMON_SAMPLER_TYPE_INFILL },
         { "penalties",   COMMON_SAMPLER_TYPE_PENALTIES },
+        { "top_n_sigma", COMMON_SAMPLER_TYPE_TOP_N_SIGMA },
     };
 
     // since samplers names are written multiple ways
@@ -451,6 +458,9 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
         { "typ",         COMMON_SAMPLER_TYPE_TYPICAL_P },
         { "min-p",       COMMON_SAMPLER_TYPE_MIN_P },
         { "temp",        COMMON_SAMPLER_TYPE_TEMPERATURE },
+        { "top-n-sigma", COMMON_SAMPLER_TYPE_TOP_N_SIGMA },
+        { "top-nsigma",  COMMON_SAMPLER_TYPE_TOP_N_SIGMA },
+        { "top_nsigma",  COMMON_SAMPLER_TYPE_TOP_N_SIGMA },
     };
 
     std::vector<common_sampler_type> samplers;
@@ -484,6 +494,7 @@ std::vector<common_sampler_type> common_sampler_types_from_chars(const std::stri
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_XTC),         COMMON_SAMPLER_TYPE_XTC },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_INFILL),      COMMON_SAMPLER_TYPE_INFILL },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_PENALTIES),   COMMON_SAMPLER_TYPE_PENALTIES },
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_TOP_N_SIGMA), COMMON_SAMPLER_TYPE_TOP_N_SIGMA}
     };
 
     std::vector<common_sampler_type> samplers;

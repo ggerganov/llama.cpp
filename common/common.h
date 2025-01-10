@@ -95,6 +95,7 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_XTC         = 8,
     COMMON_SAMPLER_TYPE_INFILL      = 9,
     COMMON_SAMPLER_TYPE_PENALTIES   = 10,
+    COMMON_SAMPLER_TYPE_TOP_N_SIGMA = 11
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -128,6 +129,7 @@ struct common_params_sampling {
     int32_t dry_allowed_length = 2;     // tokens extending repetitions beyond this receive penalty
     int32_t dry_penalty_last_n = -1;    // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
     int32_t mirostat           = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    int32_t top_n_sigma        = 2;
     float   mirostat_tau       = 5.00f; // target entropy
     float   mirostat_eta       = 0.10f; // learning rate
     bool    ignore_eos         = false;
@@ -146,6 +148,7 @@ struct common_params_sampling {
         COMMON_SAMPLER_TYPE_MIN_P,
         COMMON_SAMPLER_TYPE_XTC,
         COMMON_SAMPLER_TYPE_TEMPERATURE,
+        COMMON_SAMPLER_TYPE_TOP_N_SIGMA,
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
