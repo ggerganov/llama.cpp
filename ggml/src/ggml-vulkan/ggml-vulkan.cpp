@@ -2277,6 +2277,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         if (device->subgroup_size_control) {
             device->subgroup_min_size = subgroup_size_control_props.minSubgroupSize;
             device->subgroup_max_size = subgroup_size_control_props.maxSubgroupSize;
+            device_extensions.push_back("VK_EXT_subgroup_size_control");
         }
 
         device->subgroup_size_control = device->subgroup_size_control &&
@@ -2285,7 +2286,6 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         if (device->subgroup_size_control) {
             device->subgroup_require_full_support = subgroup_size_control_features.computeFullSubgroups;
-            device_extensions.push_back("VK_EXT_subgroup_size_control");
         }
 
 #if defined(VK_KHR_cooperative_matrix)
