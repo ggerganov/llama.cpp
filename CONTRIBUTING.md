@@ -22,11 +22,38 @@
 - Avoid fancy-looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
-- Naming usually optimizes for common prefix (see https://github.com/ggerganov/ggml/pull/302#discussion_r1243240963)
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
 - Matrix multiplication is unconventional: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
 
 ![matmul](media/matmul.png)
+
+# Naming convention
+
+- Naming usually optimizes for common prefix (see https://github.com/ggerganov/ggml/pull/302#discussion_r1243240963)
+
+  ```cpp
+  // not OK
+  int small_number;
+  int big_number;
+
+  // OK
+  int number_small;
+  int number_big;
+  ```
+
+- The general pattern is `subject_verb_object`:
+
+  ```cpp
+  llama_model_init();           // sub: "llama_model",         vrb: "init",   obj: ""
+  llama_sampler_chain_remove(); // sub: "llama_sampler_chain", vrb: "remove", obj: ""
+  llama_sampler_get_seed();     // sub: "llama_sampler",       vrb: "get",    obj: "seed"
+  llama_set_embeddings();       // sub: "llama_context",       vrb: "set",    obj: "embeddings"
+  llama_n_threads();            // sub: "llama_context",       vrb: "",       obj: "n_threads"
+  llama_adapter_lora_free();    // sub: "llama_adapter_lora",  vrb: "free",   obj: ""
+  ```
+
+- The `get` verb is optional
+- The `_context` suffix of the subject is optional
 
 # Resources
 
