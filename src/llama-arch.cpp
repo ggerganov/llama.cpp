@@ -1127,6 +1127,7 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_TIME_MIX_LERP_V,           "blk.%d.time_mix_lerp_v" },
             { LLM_TENSOR_TIME_MIX_LERP_R,           "blk.%d.time_mix_lerp_r" },
             { LLM_TENSOR_TIME_MIX_LERP_G,           "blk.%d.time_mix_lerp_g" },
+            { LLM_TENSOR_TIME_MIX_LERP_FUSED,       "blk.%d.time_mix_lerp_fused" },
             { LLM_TENSOR_TIME_MIX_FIRST,            "blk.%d.time_mix_first" },
             { LLM_TENSOR_TIME_MIX_DECAY,            "blk.%d.time_mix_decay" },
             { LLM_TENSOR_TIME_MIX_DECAY_W1,         "blk.%d.time_mix_decay_w1" },
