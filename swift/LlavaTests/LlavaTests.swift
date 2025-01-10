@@ -3,13 +3,13 @@ import XCTest
 
 final class LlavaTests: XCTestCase {
     func testOmniVlm() {
-        omnivlm_init("/Users/liute/Downloads/model-q4_0.gguf",
-                     "/Users/liute/Downloads/projector-q4_0.gguf",
+        omnivlm_init("model-q4_0.gguf",
+                     "projector-q4_0.gguf",
                      "vlm-81-instruct")
 
         let startTime = Date()
 
-        if let cString = omnivlm_inference("describe the image", "/Users/liute/Downloads/cat.png") {
+        if let cString = omnivlm_inference("describe the image", "cat.png") {
             let res = String(cString: cString)
             print("res: \(res)")
             
