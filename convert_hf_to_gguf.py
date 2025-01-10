@@ -480,7 +480,7 @@ class Model:
 
     @classmethod
     def print_registered_models(cls):
-        for name in cls._model_classes.keys():
+        for name in sorted(cls._model_classes.keys()):
             logger.error(f"- {name}")
 
     @classmethod
