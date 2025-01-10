@@ -1054,12 +1054,15 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                 }
             } break;
         case LLM_ARCH_RWKV6:
+        case LLM_ARCH_RWKV6QWEN2:
             {
-                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps, false);
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps, false);
                 ml.get_key(LLM_KV_WKV_HEAD_SIZE, hparams.wkv_head_size);
                 ml.get_key(LLM_KV_TIME_MIX_EXTRA_DIM, hparams.time_mix_extra_dim);
                 ml.get_key(LLM_KV_TIME_DECAY_EXTRA_DIM, hparams.time_decay_extra_dim);
                 ml.get_key(LLM_KV_RESCALE_EVERY_N_LAYERS, hparams.rescale_every_n_layers, false);
+                ml.get_key(LLM_KV_TOKEN_SHIFT_COUNT, hparams.token_shift_count, false);
 
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1_6B; break;
@@ -1070,6 +1073,7 @@ void llm_load_hparams(llama_model_loader & ml, llama_model & model) {
                             default: model.type = e_model::MODEL_UNKNOWN;
                         } break;
                     case 61: model.type = e_model::MODEL_14B; break;
+                    case 64: model.type = e_model::MODEL_32B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
@@ -2064,6 +2068,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_T5ENCODER:
         case LLM_ARCH_JAIS:
         case LLM_ARCH_RWKV6:
+        case LLM_ARCH_RWKV6QWEN2:
         case LLM_ARCH_WAVTOKENIZER_DEC:
             return LLAMA_ROPE_TYPE_NONE;
 
@@ -2208,6 +2213,7 @@ bool llama_model_is_recurrent(const struct llama_model * model) {
     switch (model->arch) {
         case LLM_ARCH_MAMBA:  return true;
         case LLM_ARCH_RWKV6:  return true;
+        case LLM_ARCH_RWKV6QWEN2: return true;
         default:              return false;
     }
 }

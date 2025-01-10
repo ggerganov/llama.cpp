@@ -326,6 +326,7 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
+                            gguf.MODEL_TENSOR.TIME_MIX_LERP_FUSED,
                             gguf.MODEL_TENSOR.POSNET_NORM1,
                             gguf.MODEL_TENSOR.POSNET_NORM2,
                         )
@@ -3316,6 +3317,8 @@ class Rwkv6Model(Model):
         # required by llama.cpp, unused
         self.gguf_writer.add_head_count(0)
 
+    lerp_weights: dict[int, dict[str, Tensor]] = {}
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)
 
@@ -3331,12 +3334,82 @@ class Rwkv6Model(Model):
         if new_name.endswith("time_mix_decay.weight") or "lerp" in new_name:
             data_torch = data_torch.squeeze()
 
-        rescale_every_n_layers = self.hparams["rescale_every"]
-        if rescale_every_n_layers > 0:
-            if new_name.endswith("time_mix_output.weight") or new_name.endswith("channel_mix_value.weight"):
-                data_torch = data_torch.div_(2 ** int(bid // rescale_every_n_layers))
+        try:
+            rescale_every_n_layers = self.hparams["rescale_every"]
+            if rescale_every_n_layers > 0:
+                if new_name.endswith("time_mix_output.weight") or new_name.endswith("channel_mix_value.weight"):
+                    data_torch = data_torch.div_(2 ** int(bid // rescale_every_n_layers))
+        except KeyError:
+            pass
+
+        # concat time_mix_lerp weights to reduce some cpu overhead
+        # also reduces the number of tensors in the model
+        if bid is not None and "time_mix_lerp" in new_name and "time_mix_lerp_x" not in new_name:
+            try:
+                self.lerp_weights[bid][new_name] = data_torch
+            except KeyError:
+                self.lerp_weights[bid] = {new_name: data_torch}
+            if all(f"blk.{bid}.time_mix_lerp_{i}.weight" in self.lerp_weights[bid].keys() for i in ["w", "k", "v", "r", "g"]):
+                new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
+                data = torch.stack([self.lerp_weights[bid][f"blk.{bid}.time_mix_lerp_{i}.weight"].unsqueeze(0) for i in ["w", "k", "v", "r", "g"]], dim=0).unsqueeze(1)
+                yield (new_name, data)
+            return
 
         yield (new_name, data_torch)
+
+
+@Model.register("RWKV6Qwen2ForCausalLM")
+class RWKV6Qwen2Model(Rwkv6Model):
+    model_arch = gguf.MODEL_ARCH.RWKV6QWEN2
+
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        num_attention_heads = self.hparams["num_attention_heads"]
+        num_key_value_heads = self.hparams["num_key_value_heads"]
+        hidden_size = self.hparams["hidden_size"]
+        head_size = hidden_size // num_attention_heads
+        rms_norm_eps = self.hparams["rms_norm_eps"]
+        intermediate_size = self.hparams["intermediate_size"]
+        time_mix_extra_dim = 64 if hidden_size >= 4096 else 32
+        time_decay_extra_dim = 128 if hidden_size >= 4096 else 64
+
+        # RWKV isn't context limited
+        self.gguf_writer.add_context_length(1048576)
+        self.gguf_writer.add_embedding_length(hidden_size)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_wkv_head_size(head_size)
+        self.gguf_writer.add_time_mix_extra_dim(time_mix_extra_dim)
+        self.gguf_writer.add_time_decay_extra_dim(time_decay_extra_dim)
+        self.gguf_writer.add_feed_forward_length(intermediate_size)
+        self.gguf_writer.add_file_type(self.ftype)
+
+        # special parameters for time_mixing in RWKV6QWEN2
+        self.gguf_writer.add_layer_norm_rms_eps(rms_norm_eps)
+        self.gguf_writer.add_token_shift_count(1)
+        # RWKV6QWEN2 use grouped key/value like GQA
+        self.gguf_writer.add_head_count_kv(num_key_value_heads)
+
+        # required by llama.cpp, unused
+        self.gguf_writer.add_head_count(0)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        for new_name, data in super().modify_tensors(data_torch, name, bid):
+            if "time_mix_w1" in new_name or "time_mix_w2" in new_name:
+                data = data.view(5, -1, data.shape[-1])
+                # rwkv6qwen2 has a different order of rkvwg instead of the original wkvrg
+                # permute them here to avoid code changes
+                data = torch.stack([data[3], data[1], data[2], data[0], data[4]], dim=0).view(-1, data.shape[-1])
+                if "w2" in new_name:
+                    data = data.view(5, -1, data.shape[-1])
+                yield (new_name, data)
+                continue
+            yield (new_name, data)
 
 
 @Model.register("MambaForCausalLM", "MambaLMHeadModel", "FalconMambaForCausalLM")

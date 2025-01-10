@@ -5633,9 +5633,9 @@ static void ggml_vk_op_f32_rwkv6(ggml_backend_vk_context * ctx, vk_context& subc
 }
 
 static void ggml_vk_rwkv_wkv6(ggml_backend_vk_context * ctx, vk_context& subctx, ggml_tensor * dst, bool dryrun = false) {
-    const size_t seq_length = dst->src[0]->ne[3];
+    const size_t seq_length = dst->src[0]->ne[2];
     const size_t n_embed = dst->ne[0];
-    const size_t n_heads = dst->src[0]->ne[2];
+    const size_t n_heads = dst->src[0]->ne[1];
     const size_t n_seqs = dst->src[5]->ne[1];
 
     ggml_vk_op_f32_rwkv6(
