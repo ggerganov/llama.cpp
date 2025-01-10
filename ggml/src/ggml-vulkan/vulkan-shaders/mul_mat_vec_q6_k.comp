@@ -106,9 +106,8 @@ void compute_outputs(const uint first_row, const uint num_rows) {
     const uint nbr_par_th = num_blocks_per_row%it_size;
     const uint nbr_all_th = num_blocks_per_row - nbr_par_th;
     uint i0 = 0;
-    [[unroll]] for (; i0 < nbr_all_th; i0 += it_size) {
+    [[unroll]] for (; i0 < nbr_all_th; i0 += it_size)
         calc_superblock(a_offset, b_offset, itid, ix, ql_offset, qh_offset, s_offset, y_offset, i0 + ix, num_blocks_per_row, first_row, num_rows, true);
-    }
     calc_superblock(a_offset, b_offset, itid, ix, ql_offset, qh_offset, s_offset, y_offset, i0 + ix, num_blocks_per_row, first_row, num_rows, false);
 
     reduce_result(temp, d_offset, first_row, num_rows, tid);
