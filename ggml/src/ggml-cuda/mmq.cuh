@@ -1848,13 +1848,11 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
 #ifdef INT8_MMA_AVAILABLE
             x_qs[i*MMQ_MMA_TILE_X_K_Q8_0 + k] = q;
 #else
-            // NOTE: this might assume WARP_SIZE is >= 32
             x_qs[i*(2*WARP_SIZE + 1) + k] = q;
 #endif // INT8_MMA_AVAILABLE
         }
     }
 
-    // TODO: does this work with WARP_SIZE != 32?
 #pragma unroll
     for (int i0 = 0; i0 < mmq_y; i0 += nwarps * WARP_SIZE/(QI2_0/2)) {
         int i = i0 + threadIdx.y*(2*WARP_SIZE/QI2_0) + threadIdx.x/(QI2_0/2);
