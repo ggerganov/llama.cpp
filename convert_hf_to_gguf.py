@@ -481,7 +481,7 @@ class Model:
     @classmethod
     def print_registered_models(cls):
         for name in cls._model_classes.keys():
-            print(f"- {name}")
+            logger.error(f"- {name}")
 
     @classmethod
     def from_model_architecture(cls, arch: str) -> type[Model]:
@@ -5005,7 +5005,7 @@ def main() -> None:
     args = parse_args()
 
     if args.print_supported_models:
-        print("Supported models:")
+        logger.error("Supported models:")
         Model.print_registered_models()
         sys.exit(0)
 
