@@ -137,17 +137,13 @@ if (Vulkan_FOUND)
         )
         ExternalProject_Add_StepTargets(vulkan-shaders-gen build install)
     endif()
-    set (_ggml_vk_genshaders_cmd ${CMAKE_BINARY_DIR}/bin/vulkan-shaders-gen)
+    set (_ggml_vk_genshaders_cmd ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan-shaders-gen)
     set (_ggml_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
     set (_ggml_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
     set (_ggml_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
     set (_ggml_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
 
     file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
-
-    if (NOT CMAKE_CROSSCOMPILING)
-        set(_ggml_vk_genshaders_cmd "$<TARGET_FILE_DIR:vulkan-shaders-gen>/${_ggml_vk_genshaders_cmd}")
-    endif ()
 
     if (CMAKE_CROSSCOMPILING)
         set(_ggml_vk_shader_deps ${_ggml_vk_shader_deps} vulkan-shaders-gen-build vulkan-shaders-gen-install)
