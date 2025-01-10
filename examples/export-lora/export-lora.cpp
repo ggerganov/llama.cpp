@@ -8,7 +8,6 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <thread>
 #include <fstream>
 
 static bool g_verbose = false;

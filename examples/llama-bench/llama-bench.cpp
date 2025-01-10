@@ -1401,7 +1401,7 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_batch, int n_th
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     const llama_model * model   = llama_get_model(ctx);
-    const llama_vocab * vocab   = llama_get_vocab(model);
+    const llama_vocab * vocab   = llama_model_get_vocab(model);
     const int32_t       n_vocab = llama_n_vocab(vocab);
 
     std::vector<llama_token> tokens(n_batch);
@@ -1425,7 +1425,7 @@ static void test_gen(llama_context * ctx, int n_gen, int n_threads) {
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     const llama_model * model   = llama_get_model(ctx);
-    const llama_vocab * vocab   = llama_get_vocab(model);
+    const llama_vocab * vocab   = llama_model_get_vocab(model);
     const int32_t       n_vocab = llama_n_vocab(vocab);
 
     llama_token token = llama_add_bos_token(vocab) ? llama_token_bos(vocab) : std::rand() % n_vocab;

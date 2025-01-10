@@ -90,8 +90,8 @@ int main(int argc, char ** argv) {
     model_dft = llama_init_dft.model.get();
     ctx_dft   = llama_init_dft.context.get();
 
-    const llama_vocab * vocab_tgt = llama_get_vocab(model_tgt);
-    const llama_vocab * vocab_dft = llama_get_vocab(model_dft);
+    const llama_vocab * vocab_tgt = llama_model_get_vocab(model_tgt);
+    const llama_vocab * vocab_dft = llama_model_get_vocab(model_dft);
 
     const bool vocab_type_tgt = llama_vocab_type(vocab_tgt);
     LOG_DBG("vocab_type tgt: %d\n", vocab_type_tgt);

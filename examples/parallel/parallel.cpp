@@ -135,7 +135,7 @@ int main(int argc, char ** argv) {
     llama_model * model = llama_init.model.get();
     llama_context * ctx = llama_init.context.get();
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // load the prompts from an external file if there are any
     if (params.prompt.empty()) {

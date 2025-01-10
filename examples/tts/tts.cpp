@@ -462,7 +462,7 @@ int main(int argc, char ** argv) {
     model_ttc = llama_init_ttc.model.get();
     ctx_ttc   = llama_init_ttc.context.get();
 
-    const llama_vocab * vocab = llama_get_vocab(model_ttc);
+    const llama_vocab * vocab = llama_model_get_vocab(model_ttc);
 
     // TODO: refactor in a common struct
     params.model     = params.vocoder.model;

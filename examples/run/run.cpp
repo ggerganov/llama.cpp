@@ -773,7 +773,7 @@ static void print_word_and_concatenate_to_response(const std::string & piece, st
 
 // helper function to evaluate a prompt and generate a response
 static int generate(LlamaData & llama_data, const std::string & prompt, std::string & response) {
-    const llama_vocab * vocab = llama_get_vocab(llama_data.model.get());
+    const llama_vocab * vocab = llama_model_get_vocab(llama_data.model.get());
 
     std::vector<llama_token> tokens;
     if (tokenize_prompt(vocab, prompt, tokens) < 0) {

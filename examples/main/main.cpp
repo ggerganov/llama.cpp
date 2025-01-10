@@ -163,7 +163,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
 

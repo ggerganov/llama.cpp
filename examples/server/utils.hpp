@@ -774,7 +774,7 @@ static std::vector<llama_token_data> get_token_probabilities(llama_context * ctx
     const auto * logits = llama_get_logits_ith(ctx, idx);
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     const int n_vocab = llama_n_vocab(vocab);
 

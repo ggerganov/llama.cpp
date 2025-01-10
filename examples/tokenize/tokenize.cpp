@@ -344,7 +344,7 @@ int main(int raw_argc, char ** raw_argv) {
         return 1;
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_context_params ctx_params = llama_context_default_params();
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);

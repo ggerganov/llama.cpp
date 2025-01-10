@@ -857,7 +857,7 @@ struct common_init_result common_init_from_params(common_params & params) {
         return iparams;
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     if (params.reranking) {
         bool ok = true;
@@ -1563,7 +1563,7 @@ std::vector<llama_token> common_tokenize(
                         bool   add_special,
                         bool   parse_special) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
     return common_tokenize(vocab, text, add_special, parse_special);
 }
 
@@ -1588,7 +1588,7 @@ std::vector<llama_token> common_tokenize(
 
 std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
     return common_token_to_piece(vocab, token, special);
 }
 
@@ -1610,7 +1610,7 @@ std::string common_token_to_piece(const struct llama_vocab * vocab, llama_token 
 
 std::string common_detokenize(const struct llama_context * ctx, const std::vector<llama_token> & tokens, bool special) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
     return common_detokenize(vocab, tokens, special);
 }
 

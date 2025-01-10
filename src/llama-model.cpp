@@ -1244,7 +1244,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
         hparams.use_alibi = true;
     }
 
-    hparams.rope_type = llama_rope_type(this);
+    hparams.rope_type = llama_model_rope_type(this);
 }
 
 void llama_model::load_vocab(llama_model_loader & ml) {
@@ -3735,7 +3735,7 @@ struct llama_model_params llama_model_default_params() {
     return result;
 }
 
-const struct llama_vocab * llama_get_vocab(const struct llama_model * model) {
+const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model) {
     return &model->vocab;
 }
 
@@ -3763,7 +3763,7 @@ int32_t llama_n_head(const struct llama_model * model) {
     return model->hparams.n_head();
 }
 
-enum llama_rope_type llama_rope_type(const struct llama_model * model) {
+enum llama_rope_type llama_model_rope_type(const struct llama_model * model) {
     switch (model->arch) {
         // these models do not use RoPE
         case LLM_ARCH_GPT2:
@@ -3841,7 +3841,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
     return LLAMA_ROPE_TYPE_NONE;
 }
 
-float llama_rope_freq_scale_train(const struct llama_model * model) {
+float llama_model_rope_freq_scale_train(const struct llama_model * model) {
     return model->hparams.rope_freq_scale_train;
 }
 

@@ -48,7 +48,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // tokenize the prompt
 

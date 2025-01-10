@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     //GGML_ASSERT(llama_vocab_type(vocab) == LLAMA_VOCAB_TYPE_BPE);
     if (llama_vocab_type(vocab) != LLAMA_VOCAB_TYPE_BPE) {

@@ -207,7 +207,7 @@ struct server_task {
             const common_params & params_base,
             const json & data) {
         const llama_model * model = llama_get_model(ctx);
-        const llama_vocab * vocab = llama_get_vocab(model);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
 
         slot_params params;
 
@@ -1694,7 +1694,7 @@ struct server_context {
             return false;
         }
 
-        vocab = llama_get_vocab(model);
+        vocab = llama_model_get_vocab(model);
 
         n_ctx = llama_n_ctx(ctx);
 

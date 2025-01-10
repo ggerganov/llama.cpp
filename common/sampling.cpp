@@ -114,7 +114,7 @@ struct common_sampler {
         const auto * logits = llama_get_logits_ith(ctx, idx);
 
         const llama_model * model = llama_get_model(ctx);
-        const llama_vocab * vocab = llama_get_vocab(model);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
 
         const int n_vocab = llama_n_vocab(vocab);
 
@@ -145,7 +145,7 @@ std::string common_params_sampling::print() const {
 }
 
 struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_params_sampling & params) {
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 

@@ -11,7 +11,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
     std::vector<std::vector<float>> result;
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
@@ -98,7 +98,7 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
     std::string result;
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_token eos_token = llama_token_eos(vocab);
 

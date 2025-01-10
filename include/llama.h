@@ -456,15 +456,16 @@ extern "C" {
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab);
 
-    LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
-    LLAMA_API const struct llama_vocab * llama_get_vocab(const struct llama_model * model);
+    LLAMA_API const struct llama_model * llama_get_model   (const struct llama_context * ctx);
+    LLAMA_API enum llama_pooling_type    llama_pooling_type(const struct llama_context * ctx);
 
-    LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
-    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_vocab * vocab);
-    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
+    LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
+    LLAMA_API enum llama_rope_type       llama_model_rope_type(const struct llama_model * model);
 
     // Get the model's RoPE frequency scaling factor
-    LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
+    LLAMA_API float llama_model_rope_freq_scale_train(const struct llama_model * model);
+
+    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_vocab * vocab);
 
     // Functions to access the model's GGUF metadata scalar values
     // - The functions return the length of the string on success, or -1 on failure

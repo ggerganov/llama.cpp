@@ -297,7 +297,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     // BOS tokens will be added for each chunk before eval
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     const bool add_bos = llama_add_bos_token(vocab);
     GGML_ASSERT(!llama_add_eos_token(vocab));
@@ -448,7 +448,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     // BOS tokens will be added for each chunk before eval
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab *   vocab   = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     const bool add_bos = llama_add_bos_token(vocab);
     GGML_ASSERT(!llama_add_eos_token(vocab));
@@ -739,7 +739,7 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
 
 static void hellaswag_score(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // Calculates hellaswag score (acc_norm) from prompt
     //
@@ -1082,7 +1082,7 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string 
  */
 static void winogrande_score(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     constexpr int k_min_trailing_ctx = 3;
 
@@ -1386,7 +1386,7 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choic
 //
 static void multiple_choice_score(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     std::istringstream strstream(params.prompt);
     uint32_t n_task;
@@ -1669,7 +1669,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
 
 static void kl_divergence(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     if (params.logits_file.empty()) {
         LOG_ERR("%s: you must provide a name of a file containing the log probabilities of the base model\n", __func__);

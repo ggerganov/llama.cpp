@@ -134,7 +134,7 @@ static const char * sample(struct common_sampler * smpl,
     common_sampler_accept(smpl, id, true);
 
     const llama_model * model = llama_get_model(ctx_llama);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     static std::string ret;
     if (llama_token_is_eog(vocab, id)) {

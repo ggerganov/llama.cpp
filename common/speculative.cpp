@@ -79,8 +79,8 @@ bool common_speculative_are_compatible(
     const struct llama_model * model_tgt = llama_get_model(ctx_tgt);
     const struct llama_model * model_dft = llama_get_model(ctx_dft);
 
-    const struct llama_vocab * vocab_tgt = llama_get_vocab(model_tgt);
-    const struct llama_vocab * vocab_dft = llama_get_vocab(model_dft);
+    const struct llama_vocab * vocab_tgt = llama_model_get_vocab(model_tgt);
+    const struct llama_vocab * vocab_dft = llama_model_get_vocab(model_dft);
 
     const bool vocab_type_tgt = llama_vocab_type(vocab_tgt);
     LOG_DBG("%s: vocab_type tgt: %d\n", __func__, vocab_type_tgt);
