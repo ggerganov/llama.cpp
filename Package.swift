@@ -52,7 +52,7 @@ var omniVlmSources = [
 ]
 
 var testSources = [
-   "tests/LlavaTests/LlavaTests.swift"
+   "swift/LlavaTests/LlavaTests.swift"
 ]
 
 var resources: [Resource] = []
