@@ -1,10 +1,10 @@
 # Pull requests (for contributors)
 
 - Test your changes:
-  - Execute [the full CI locally on your machine](ci/README.md) before publishing
-  - Verify that the perplexity and the performance are not affected negatively by your changes (use `llama-perplexity` and `llama-bench`)
-  - If you modified the `ggml` source, run the `test-backend-ops` tool to check whether different backend implementations of the `ggml` operators produce consistent results (this requires access to at least two different `ggml` backends)
-  - If you modified a `ggml` operator or added a new one, add the corresponding test cases to `test-backend-ops`
+    - Execute [the full CI locally on your machine](ci/README.md) before publishing
+    - Verify that the perplexity and the performance are not affected negatively by your changes (use `llama-perplexity` and `llama-bench`)
+    - If you modified the `ggml` source, run the `test-backend-ops` tool to check whether different backend implementations of the `ggml` operators produce consistent results (this requires access to at least two different `ggml` backends)
+    - If you modified a `ggml` operator or added a new one, add the corresponding test cases to `test-backend-ops`
 - Consider allowing write access to your branch for faster reviews, as reviewers can push commits directly
 - If your PR becomes stale, don't hesitate to ping the maintainers in the comments
 
@@ -29,31 +29,56 @@
 
 # Naming convention
 
+- Use `snake_case` for function, variable and type names
+- Use sized integer types in the public API
 - Naming usually optimizes for common prefix (see https://github.com/ggerganov/ggml/pull/302#discussion_r1243240963)
 
-  ```cpp
-  // not OK
-  int small_number;
-  int big_number;
+    ```cpp
+    // not OK
+    int small_number;
+    int big_number;
 
-  // OK
-  int number_small;
-  int number_big;
-  ```
+    // OK
+    int number_small;
+    int number_big;
+    ```
 
-- The general pattern is `subject_verb_object`:
+- Enum values are always in upper case and prefixed with the enum name
 
-  ```cpp
-  llama_model_init();           // sub: "llama_model",         vrb: "init",   obj: ""
-  llama_sampler_chain_remove(); // sub: "llama_sampler_chain", vrb: "remove", obj: ""
-  llama_sampler_get_seed();     // sub: "llama_sampler",       vrb: "get",    obj: "seed"
-  llama_set_embeddings();       // sub: "llama_context",       vrb: "set",    obj: "embeddings"
-  llama_n_threads();            // sub: "llama_context",       vrb: "",       obj: "n_threads"
-  llama_adapter_lora_free();    // sub: "llama_adapter_lora",  vrb: "free",   obj: ""
-  ```
+    ```cpp
+    enum llama_vocab_type {
+        LLAMA_VOCAB_TYPE_NONE = 0,
+        LLAMA_VOCAB_TYPE_SPM  = 1,
+        LLAMA_VOCAB_TYPE_BPE  = 2,
+        LLAMA_VOCAB_TYPE_WPM  = 3,
+        LLAMA_VOCAB_TYPE_UGM  = 4,
+        LLAMA_VOCAB_TYPE_RWKV = 5,
+    };
+    ```
 
-- The `get` verb is optional
-- The `_context` suffix of the subject is optional
+- The general naming pattern is `<class>_<method>`, with `<method>` being `<action>_<noun>`
+
+    ```cpp
+    llama_model_init();           // class: "llama_model",         method: "init"
+    llama_sampler_chain_remove(); // class: "llama_sampler_chain", method: "remove"
+    llama_sampler_get_seed();     // class: "llama_sampler",       method: "get_seed"
+    llama_set_embeddings();       // class: "llama_context",       method: "set_embeddings"
+    llama_n_threads();            // class: "llama_context",       method: "n_threads"
+    llama_adapter_lora_free();    // class: "llama_adapter_lora",  method: "free"
+    ```
+
+    - The `get` `<action>` can be omitted
+    - The `<noun>` can be omitted if not necessary
+    - The `_context` suffix of the subject is optional
+    - Use `init`/`free` for constructor/destructor `<action>`
+
+- Declare structs with `struct x {}` instead of `typedef struct x {} x`
+    - In C++ code omit the `struct` keyword whenever it is not necessary
+    - Use `_t` suffix when ...
+
+- Follow the existing code style, in case of doubt use `clang-format` to format the added code
+
+- (TODO: abbreviations usage)
 
 # Resources
 
