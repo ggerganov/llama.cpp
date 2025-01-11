@@ -27,7 +27,7 @@
 
 ![matmul](media/matmul.png)
 
-# Naming convention
+# Naming guidelines
 
 - Use `snake_case` for function, variable and type names
 - Use sized integer types in the public API
