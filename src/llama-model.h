@@ -73,6 +73,7 @@ enum llm_type {
     MODEL_8x7B,
     MODEL_8x22B,
     MODEL_16x12B,
+    MODEL_16x3_8B,
     MODEL_10B_128x3_66B,
     MODEL_57B_A14B,
     MODEL_27B,
@@ -240,15 +241,19 @@ struct llama_layer {
     struct ggml_tensor * time_mix_lerp_v     = nullptr;
     struct ggml_tensor * time_mix_lerp_r     = nullptr;
     struct ggml_tensor * time_mix_lerp_g     = nullptr;
+    struct ggml_tensor * time_mix_lerp_fused = nullptr;
 
-    struct ggml_tensor * time_mix_first      = nullptr;
-    struct ggml_tensor * time_mix_decay      = nullptr;
-    struct ggml_tensor * time_mix_decay_w1   = nullptr;
-    struct ggml_tensor * time_mix_decay_w2   = nullptr;
-    struct ggml_tensor * time_mix_key        = nullptr;
-    struct ggml_tensor * time_mix_value      = nullptr;
-    struct ggml_tensor * time_mix_receptance = nullptr;
-    struct ggml_tensor * time_mix_gate       = nullptr;
+    struct ggml_tensor * time_mix_first        = nullptr;
+    struct ggml_tensor * time_mix_decay        = nullptr;
+    struct ggml_tensor * time_mix_decay_w1     = nullptr;
+    struct ggml_tensor * time_mix_decay_w2     = nullptr;
+    struct ggml_tensor * time_mix_key          = nullptr;
+    struct ggml_tensor * time_mix_key_b        = nullptr;
+    struct ggml_tensor * time_mix_value        = nullptr;
+    struct ggml_tensor * time_mix_value_b      = nullptr;
+    struct ggml_tensor * time_mix_receptance   = nullptr;
+    struct ggml_tensor * time_mix_receptance_b = nullptr;
+    struct ggml_tensor * time_mix_gate         = nullptr;
 
     struct ggml_tensor * time_mix_ln     = nullptr;
     struct ggml_tensor * time_mix_ln_b   = nullptr;

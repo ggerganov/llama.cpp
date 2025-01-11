@@ -69,6 +69,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
 - [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
 - [x] [Phi models](https://huggingface.co/models?search=microsoft/phi)
+- [x] [PhiMoE](https://github.com/ggerganov/llama.cpp/pull/11003)
 - [x] [GPT-2](https://huggingface.co/gpt2)
 - [x] [Orion 14B](https://github.com/ggerganov/llama.cpp/pull/5118)
 - [x] [InternLM2](https://huggingface.co/models?search=internlm2)
@@ -98,6 +99,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [Jais](https://huggingface.co/inceptionai/jais-13b-chat)
 - [x] [Bielik-11B-v2.3](https://huggingface.co/collections/speakleash/bielik-11b-v23-66ee813238d9b526a072408a)
 - [x] [RWKV-6](https://github.com/BlinkDL/RWKV-LM)
+- [x] [QRWKV-6](https://huggingface.co/recursal/QRWKV6-32B-Instruct-Preview-v0.1)
 - [x] [GigaChat-20B-A3B](https://huggingface.co/ai-sage/GigaChat-20B-A3B-instruct)
 
 #### Multimodal
