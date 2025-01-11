@@ -1127,6 +1127,7 @@ static bool curl_perform_with_retry(const std::string & url, CURL * curl, int ma
 static bool common_download_file(const std::string & url, const std::string & path, const std::string & hf_token) {
     // Initialize libcurl
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
+    std::unique_ptr<struct curl_slist, decltype(&curl_slist_free_all)> http_headers(nullptr, &curl_slist_free_all);
     if (!curl) {
         LOG_ERR("%s: error initializing libcurl\n", __func__);
         return false;
@@ -1140,11 +1141,9 @@ static bool common_download_file(const std::string & url, const std::string & pa
 
     // Check if hf-token or bearer-token was specified
     if (!hf_token.empty()) {
-      std::string auth_header = "Authorization: Bearer ";
-      auth_header += hf_token.c_str();
-      struct curl_slist *http_headers = NULL;
-      http_headers = curl_slist_append(http_headers, auth_header.c_str());
-      curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, http_headers);
+        std::string auth_header = "Authorization: Bearer " + hf_token;
+        http_headers.reset(curl_slist_append(http_headers.get(), auth_header.c_str()));
+        curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, http_headers.get());
     }
 
 #if defined(_WIN32)
