@@ -9501,7 +9501,7 @@ struct llama_model * llama_model_load_from_file(
     return model;
 }
 
-struct llama_context * llama_new_context_with_model(
+struct llama_context * llama_init_from_model(
                  struct llama_model * model,
         struct llama_context_params   params) {
 
@@ -9850,6 +9850,12 @@ struct llama_context * llama_new_context_with_model(
     }
 
     return ctx;
+}
+
+struct llama_context * llama_new_context_with_model(
+                 struct llama_model * model,
+        struct llama_context_params   params) {
+    return llama_init_from_model(model, params);
 }
 
 //

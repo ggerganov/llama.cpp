@@ -36,7 +36,7 @@ int main(int argc, char ** argv){
     llama_model * model = llama_init.model.get();
     llama_context * ctx = llama_init.context.get();
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // tokenize the prompt
     std::vector<llama_token> inp;
@@ -138,7 +138,7 @@ int main(int argc, char ** argv){
                 LOG("%s", token_str.c_str());
             }
 
-            if (llama_token_is_eog(vocab, id)) {
+            if (llama_vocab_is_eog(vocab, id)) {
                 has_eos = true;
             }
 

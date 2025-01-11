@@ -48,7 +48,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // tokenize the prompt
 
@@ -64,7 +64,7 @@ int main(int argc, char ** argv) {
     ctx_params.n_ctx   = n_kv_req;
     ctx_params.n_batch = std::max(n_predict, n_parallel);
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
 
     auto sparams = llama_sampler_chain_default_params();
     sparams.no_perf = false;
@@ -123,7 +123,7 @@ int main(int argc, char ** argv) {
 
         llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
         if (decoder_start_token_id == LLAMA_TOKEN_NULL) {
-            decoder_start_token_id = llama_token_bos(vocab);
+            decoder_start_token_id = llama_vocab_bos(vocab);
         }
 
         common_batch_clear(batch);
@@ -176,7 +176,7 @@ int main(int argc, char ** argv) {
             const llama_token new_token_id = llama_sampler_sample(smpl, ctx, i_batch[i]);
 
             // is it an end of generation? -> mark the stream as finished
-            if (llama_token_is_eog(vocab, new_token_id) || n_cur == n_predict) {
+            if (llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_predict) {
                 i_batch[i] = -1;
                 LOG("\n");
                 if (n_parallel > 1) {

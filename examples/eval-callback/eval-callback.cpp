@@ -128,9 +128,9 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 
 static bool run(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_add_bos_token(vocab);
+    const bool add_bos = llama_vocab_add_bos(vocab);
 
     std::vector<llama_token> tokens = common_tokenize(ctx, params.prompt, add_bos);
 

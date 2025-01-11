@@ -405,7 +405,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     const auto batch   = reinterpret_cast<llama_batch   *>(batch_pointer);
     const auto sampler = reinterpret_cast<llama_sampler *>(sampler_pointer);
     const auto model = llama_get_model(context);
-    const auto vocab = llama_get_vocab(model);
+    const auto vocab = llama_model_get_vocab(model);
 
     if (!la_int_var) la_int_var = env->GetObjectClass(intvar_ncur);
     if (!la_int_var_value) la_int_var_value = env->GetMethodID(la_int_var, "getValue", "()I");
@@ -415,7 +415,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     const auto new_token_id = llama_sampler_sample(sampler, context, -1);
 
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
-    if (llama_token_is_eog(vocab, new_token_id) || n_cur == n_len) {
+    if (llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len) {
         return nullptr;
     }
 

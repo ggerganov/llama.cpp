@@ -114,9 +114,9 @@ struct common_sampler {
         const auto * logits = llama_get_logits_ith(ctx, idx);
 
         const llama_model * model = llama_get_model(ctx);
-        const llama_vocab * vocab = llama_get_vocab(model);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
 
-        const int n_vocab = llama_n_vocab(vocab);
+        const int n_vocab = llama_vocab_n_vocab(vocab);
 
         cur.resize(n_vocab);
 
@@ -145,7 +145,7 @@ std::string common_params_sampling::print() const {
 }
 
 struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_params_sampling & params) {
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
@@ -162,7 +162,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
     llama_sampler_chain_add(result->chain,
             llama_sampler_init_logit_bias(
-                llama_n_vocab(vocab),
+                llama_vocab_n_vocab(vocab),
                 params.logit_bias.size(),
                 params.logit_bias.data()));
 
@@ -177,7 +177,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                             c_breakers.push_back(str.c_str());
                         }
 
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (vocab, llama_n_ctx_train(model), params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (vocab, llama_model_n_ctx_train(model), params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
                     }
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
@@ -211,7 +211,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
     } else if (params.mirostat == 1) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_vocab_n_vocab(vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
         llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));

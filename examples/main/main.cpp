@@ -5,7 +5,6 @@
 #include "sampling.h"
 #include "llama.h"
 
-#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -163,7 +162,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
 
@@ -198,7 +197,7 @@ int main(int argc, char ** argv) {
 
     llama_attach_threadpool(ctx, threadpool, threadpool_batch);
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = llama_model_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
     if (n_ctx > n_ctx_train) {
@@ -243,9 +242,9 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool add_bos = llama_add_bos_token(vocab);
+    const bool add_bos = llama_vocab_add_bos(vocab);
     if (!llama_model_has_encoder(model)) {
-        GGML_ASSERT(!llama_add_eos_token(vocab));
+        GGML_ASSERT(!llama_vocab_add_eos(vocab));
     }
 
     LOG_DBG("n_ctx: %d, add_bos: %d\n", n_ctx, add_bos);
@@ -271,7 +270,7 @@ int main(int argc, char ** argv) {
     // Should not run without any tokens
     if (embd_inp.empty()) {
         if (add_bos) {
-            embd_inp.push_back(llama_token_bos(vocab));
+            embd_inp.push_back(llama_vocab_bos(vocab));
             LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from(ctx, embd_inp).c_str());
         } else {
             LOG_ERR("input is empty\n");
@@ -497,7 +496,7 @@ int main(int argc, char ** argv) {
 
         llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
         if (decoder_start_token_id == LLAMA_TOKEN_NULL) {
-            decoder_start_token_id = llama_token_bos(vocab);
+            decoder_start_token_id = llama_vocab_bos(vocab);
         }
 
         embd_inp.clear();
@@ -744,7 +743,7 @@ int main(int argc, char ** argv) {
             }
 
             // deal with end of generation tokens in interactive mode
-            if (llama_token_is_eog(vocab, common_sampler_last(smpl))) {
+            if (llama_vocab_is_eog(vocab, common_sampler_last(smpl))) {
                 LOG_DBG("found an EOG token\n");
 
                 if (params.interactive) {
@@ -778,7 +777,7 @@ int main(int argc, char ** argv) {
 
                 if (params.input_prefix_bos) {
                     LOG_DBG("adding input prefix BOS token\n");
-                    embd_inp.push_back(llama_token_bos(vocab));
+                    embd_inp.push_back(llama_vocab_bos(vocab));
                 }
 
                 std::string buffer;
@@ -832,8 +831,8 @@ int main(int argc, char ** argv) {
 
                     // if user stop generation mid-way, we must add EOT to finish model's last response
                     if (need_insert_eot && format_chat) {
-                        llama_token eot = llama_token_eot(vocab);
-                        embd_inp.push_back(eot == LLAMA_TOKEN_NULL ? llama_token_eos(vocab) : eot);
+                        llama_token eot = llama_vocab_eot(vocab);
+                        embd_inp.push_back(eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab) : eot);
                         need_insert_eot = false;
                     }
 
@@ -868,7 +867,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of generation
-        if (!embd.empty() && llama_token_is_eog(vocab, embd.back()) && !(params.interactive)) {
+        if (!embd.empty() && llama_vocab_is_eog(vocab, embd.back()) && !(params.interactive)) {
             LOG(" [end of text]\n");
             break;
         }

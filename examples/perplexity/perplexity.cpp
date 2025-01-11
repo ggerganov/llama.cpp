@@ -297,10 +297,10 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     // BOS tokens will be added for each chunk before eval
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_add_bos_token(vocab);
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    const bool add_bos = llama_vocab_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     LOG_INF("%s: tokenizing the input ..\n", __func__);
 
@@ -341,7 +341,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     int count = 0;
     double nll = 0.0;
@@ -385,7 +385,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(vocab);
+                tokens[batch_start] = llama_vocab_bos(vocab);
             }
 
             const auto * batch_logits = llama_get_logits(ctx);
@@ -448,10 +448,10 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     // BOS tokens will be added for each chunk before eval
 
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab *   vocab   = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_add_bos_token(vocab);
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    const bool add_bos = llama_vocab_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     std::ofstream logits_stream;
     if (!params.logits_file.empty()) {
@@ -491,7 +491,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     int count = 0;
     double nll = 0.0;
@@ -563,7 +563,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
 
                 // add BOS token for the first batch of each chunk
                 if (add_bos && j == 0) {
-                    tokens[seq_start] = llama_token_bos(vocab);
+                    tokens[seq_start] = llama_vocab_bos(vocab);
                 }
 
                 for (int k = 0; k < batch_size; ++k) {
@@ -739,7 +739,7 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
 
 static void hellaswag_score(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // Calculates hellaswag score (acc_norm) from prompt
     //
@@ -857,7 +857,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     const int max_tasks_per_batch = 32;
     const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
@@ -1082,7 +1082,7 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string 
  */
 static void winogrande_score(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     constexpr int k_min_trailing_ctx = 3;
 
@@ -1141,7 +1141,7 @@ static void winogrande_score(llama_context * ctx, const common_params & params) 
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     const int max_tasks_per_batch = 128;
     const int max_seq = std::min(2*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
@@ -1386,7 +1386,7 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choic
 //
 static void multiple_choice_score(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     std::istringstream strstream(params.prompt);
     uint32_t n_task;
@@ -1495,7 +1495,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_vocab(vocab);
 
     const int max_tasks_per_batch = 32;
     const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
@@ -1669,7 +1669,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
 
 static void kl_divergence(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     if (params.logits_file.empty()) {
         LOG_ERR("%s: you must provide a name of a file containing the log probabilities of the base model\n", __func__);
@@ -1704,8 +1704,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
         LOG_ERR("%s: failed reading n_vocab, n_chunk from %s\n", __func__, params.logits_file.c_str());
         return;
     }
-    if (n_vocab != llama_n_vocab(vocab)) {
-        LOG_ERR("%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, llama_n_vocab(vocab));
+    if (n_vocab != llama_vocab_n_vocab(vocab)) {
+        LOG_ERR("%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, llama_vocab_n_vocab(vocab));
     }
 
     std::vector<llama_token> tokens(size_t(n_ctx) * n_chunk);
@@ -1717,8 +1717,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
     const int n_batch = params.n_batch;
     const int num_batches = (n_ctx + n_batch - 1)/n_batch;
     const int nv = 2*((n_vocab + 1)/2) + 4;
-    const bool add_bos = llama_add_bos_token(vocab);
-    GGML_ASSERT(!llama_add_eos_token(vocab));
+    const bool add_bos = llama_vocab_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_add_eos(vocab));
 
     std::vector<uint16_t> log_probs_uint16(size_t(n_ctx - 1 - n_ctx/2) * nv);
     std::vector<float>    kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
@@ -1777,7 +1777,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(vocab);
+                tokens[batch_start] = llama_vocab_bos(vocab);
             }
 
             common_batch_clear(batch);
@@ -2011,7 +2011,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = llama_model_n_ctx_train(model);
 
     if (params.n_ctx > n_ctx_train) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n",
