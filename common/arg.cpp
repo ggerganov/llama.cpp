@@ -206,7 +206,7 @@ static std::pair<std::string, std::string> common_get_hf_file(const std::string 
     return std::make_pair(hf_repo, gguf_file.at("rfilename"));
 }
 #else
-static std::string common_get_hf_file(const std::string &, const std::string &) {
+static std::pair<std::string, std::string> common_get_hf_file(const std::string &, const std::string &) {
     throw std::runtime_error("error: llama.cpp built without libcurl");
 }
 #endif
