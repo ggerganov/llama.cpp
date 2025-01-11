@@ -69,7 +69,7 @@
 
     - The `get` `<action>` can be omitted
     - The `<noun>` can be omitted if not necessary
-    - The `_context` suffix of the subject is optional
+    - The `_context` suffix of the `<class>` is optional
     - Use `init`/`free` for constructor/destructor `<action>`
 
 - Declare structs with `struct x {}` instead of `typedef struct x {} x`
