@@ -74,7 +74,16 @@
 
 - Declare structs with `struct x {}` instead of `typedef struct x {} x`
     - In C++ code omit the `struct` keyword whenever it is not necessary
-    - Use `_t` suffix when ...
+    - Use the `_t` suffix when the types are supposed to be opaque to the user - it's not relevant to them if it is a struct or anything else
+
+        ```cpp
+        typedef struct llama_context * llama_context_t;
+
+        enum llama_pooling_type llama_pooling_type(const llama_context_t ctx);
+        ```
+
+        > [!NOTE]
+        > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
 
 - Follow the existing code style, in case of doubt use `clang-format` to format the added code
 
