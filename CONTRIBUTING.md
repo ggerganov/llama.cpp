@@ -20,16 +20,16 @@
 - Avoid adding third-party dependencies, extra files, extra headers, etc.
 - Always consider cross-compatibility with other operating systems and architectures
 - Avoid fancy-looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
-- There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
+- Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - Use sized integer types in the public API
-- Follow the existing code style, in case of doubt use `clang-format` to format the added code
 - Declare structs with `struct x {}` instead of `typedef struct x {} x`
     - In C++ code omit the `struct` keyword whenever it is not necessary
     > [!NOTE]
     > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
 - Matrix multiplication is unconventional: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
+- Try to follow the existing patterns in the code (indentation, spaces, etc.). In case of doubt use `clang-format` to format the added code
 
 ![matmul](media/matmul.png)
 
