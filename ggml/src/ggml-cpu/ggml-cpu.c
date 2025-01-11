@@ -3982,6 +3982,11 @@ static void ggml_compute_forward_dup_q(
     size_t qk = ggml_blck_size(type);
     const int64_t nr = ggml_nelements(src1) / qk;
 
+    // destination must be contiguous in the first dimension
+    GGML_ASSERT(nb10 == ggml_type_size(dst->type));
+    // must either have first dimension large enough to hold a row, or fully contiguous
+    GGML_ASSERT((ne10 % qk) == 0 || ggml_is_contiguous(dst));
+
     const int ith = params->ith;
     const int nth = params->nth;
 
