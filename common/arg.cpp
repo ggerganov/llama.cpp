@@ -2224,8 +2224,9 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.hf_file = "OuteTTS-0.2-500M-Q8_0.gguf";
             params.vocoder.hf_repo = "ggml-org/WavTokenizer";
             params.vocoder.hf_file = "WavTokenizer-Large-75-F16.gguf";
+            params.ctx_shift = false; // for better results
         }
-    ).set_examples({LLAMA_EXAMPLE_TTS}));
+    ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
 
     return ctx_arg;
 }

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llama.cpp TTS</title>
+  <style>
+    body {
+      font-family: monospace;
+      margin: 2em;
+    }
+  </style>
+  <!-- <script src=" https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script> -->
+</head>
+<body>
+  <h1>llama.cpp TTS</h1>
+
+  Input text:<br/>
+  <textarea id="input" rows="4" cols="50">Hello world</textarea><br/>
+  <button id="btn_speak" onclick="speak()">Speak</button><br/>
+  <br/>
+  <p id="status">Status: ready</p><br/>
+  <p id="output"></p>
+  <a id="download"></a>
+
+  <script>
+    const input_el = document.getElementById('input');
+    const output_el = document.getElementById('output');
+    const status_el = document.getElementById('status');
+    const download_el = document.getElementById('download');
+    const btn_speak_el = document.getElementById('btn_speak');
+
+    let working = false;
+
+    async function speak() {
+      if (working) {
+        return;
+      }
+
+      working = true;
+      input_el.disabled = true;
+      btn_speak_el.disabled = true;
+      status_el.textContent = 'Status: generating...';
+      download_el.textContent = '';
+
+      const input = input_el.value.trim();
+
+      try {
+        const res = await fetch('/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            input,
+            response_format: 'wav',
+          }),
+        });
+
+        if (res.status === 200) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          download_el.href = url;
+          download_el.innerText = 'Download';
+          download_el.download = getFileNameWAV(input);
+          const audio = new Audio(url);
+          audio.play();
+          status_el.textContent = 'Status: playing...';
+          audio.addEventListener('ended', () => {
+            status_el.textContent = 'Status: ready';
+          });
+          echoTimings(res.headers, input);
+
+          // const buffer = await blob.arrayBuffer();
+          // wavToMp3(new Int16Array(buffer));
+        } else {
+          const text = await res.text();
+          throw new Error(`Failed to generate speech: ${text}`);
+        }
+      } catch (e) {
+        console.error(e);
+        alert(e.message);
+        status_el.textContent = 'Status: ready';
+      }
+
+      working = false;
+      input_el.disabled = false;
+      btn_speak_el.disabled = false;
+    }
+
+    function echoTimings(headers, input_txt) {
+      try {
+        const timingsTTC = JSON.parse(headers.get('X-timings-ttc'));
+        const timingsVoc = JSON.parse(headers.get('X-timings-voc'));
+        const timingsSpec = JSON.parse(headers.get('X-timings-spec'));
+        output_el.innerHTML = `
+          <b>Input text:</b> ${escapeHtml(input_txt)}<br/>
+          <b>Timings:</b><br/>
+          <b>TTC:</b>
+          <ul>
+            ${Object.entries(timingsTTC).map(([k, v]) =>
+              `<li>${k}: ${k.endsWith('_ms') ? (v.toFixed(2) + ' ms') : parseInt(v)}</li>`
+            ).join('')}
+          </ul>
+          <b>Voc:</b> ${timingsVoc.t_voc_ms.toFixed(2)} ms<br/>
+          <b>Spec:</b> ${timingsSpec.t_spec_ms.toFixed(2)} ms
+        `;
+      } catch (e) {
+        console.error(e);
+        output_el.innerHTML = 'No timings data is available.';
+      }
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function getFileNameWAV(input) {
+      return input.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 32) + '.wav';
+    }
+
+    function wavToMp3(wavData) {
+      // TODO: implement this using lamejs
+    }
+  </script>
+</body>
+</html>
