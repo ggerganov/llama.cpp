@@ -13,7 +13,7 @@ function(llama_add_compile_flags)
             list(APPEND C_FLAGS -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes
                                 -Werror=implicit-int -Werror=implicit-function-declaration)
 
-            list(APPEND CXX_FLAGS -Wmissing-declarations -Wmissing-noreturn)
+            list(APPEND CXX_FLAGS -Wshadow -Wmissing-declarations -Wmissing-noreturn)
 
             list(APPEND WARNING_FLAGS -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
 
