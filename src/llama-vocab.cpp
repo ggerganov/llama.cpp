@@ -15,7 +15,6 @@
 #include <map>
 #include <queue>
 #include <set>
-#include <sstream>
 #include <unordered_map>
 
 //
@@ -416,7 +415,7 @@ struct llm_tokenizer_bpe_session {
     }
 
     bool append_bos(std::vector<llama_token> & output) const {
-        if (vocab.add_bos_token()) {
+        if (vocab.get_add_bos()) {
             GGML_ASSERT(vocab.token_bos() != LLAMA_TOKEN_NULL);
             output.push_back(vocab.token_bos());
             return true;
@@ -425,7 +424,7 @@ struct llm_tokenizer_bpe_session {
     }
 
     bool append_eos(std::vector<llama_token> & output) const {
-        if (vocab.add_eos_token()) {
+        if (vocab.get_add_eos()) {
             GGML_ASSERT(vocab.token_eos() != LLAMA_TOKEN_NULL);
             output.push_back(vocab.token_eos());
             return true;
@@ -434,13 +433,13 @@ struct llm_tokenizer_bpe_session {
     }
 
     void check_double_bos_eos(const std::vector<llama_token> & output) const {
-        if (vocab.add_bos_token() && output.size() >= 2 && output[1] == vocab.token_bos()) {
+        if (vocab.get_add_bos() && output.size() >= 2 && output[1] == vocab.token_bos()) {
             LLAMA_LOG_WARN(
                 "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                 "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                 "Are you sure this is what you want?\n", __FUNCTION__);
         }
-        if (vocab.add_bos_token() && output.size() >= 2 && *(output.end()-2) == vocab.token_eos()) {
+        if (vocab.get_add_bos() && output.size() >= 2 && *(output.end()-2) == vocab.token_eos()) {
             LLAMA_LOG_WARN(
                 "%s: Added a EOS token to the prompt as specified by the model but the prompt "
                 "also ends with a EOS token. So now the final prompt ends with 2 EOS tokens. "
@@ -462,7 +461,7 @@ struct llm_tokenizer_bpe_session {
             size_t offset = 0;
 
             //if (vocab.tokenizer_ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
-            if (vocab.ignore_merges() && vocab.text_to_token(word) != LLAMA_TOKEN_NULL) {
+            if (vocab.get_ignore_merges() && vocab.text_to_token(word) != LLAMA_TOKEN_NULL) {
                 symbols.emplace_back(llm_symbol{-1, -1, word.c_str(), word.size()});
                 offset = word.size();
             }
@@ -890,11 +889,11 @@ private:
         normalized->clear();
         normalized->reserve(input.size() * 3);
 
-        const std::string space = vocab.escape_whitespaces() ? tokenizer.escaped_space : " ";
+        const std::string space = vocab.get_escape_whitespaces() ? tokenizer.escaped_space : " ";
 
-        const bool shall_prepend_space = !vocab.treat_whitespace_as_suffix() && vocab.add_space_prefix();
-        const bool shall_append_space  =  vocab.treat_whitespace_as_suffix() && vocab.add_space_prefix();
-        const bool shall_merge_spaces  =  vocab.remove_extra_whitespaces();
+        const bool shall_prepend_space = !vocab.get_treat_whitespace_as_suffix() && vocab.get_add_space_prefix();
+        const bool shall_append_space  =  vocab.get_treat_whitespace_as_suffix() && vocab.get_add_space_prefix();
+        const bool shall_merge_spaces  =  vocab.get_remove_extra_whitespaces();
 
         bool is_space_prepended = false;
         bool processing_non_ws = false;
@@ -1234,14 +1233,14 @@ struct llama_vocab::impl {
     llama_token special_fim_sep_id = LLAMA_TOKEN_NULL; // file separator
 
     // tokenizer flags
-    bool tokenizer_add_space_prefix           = false;
-    bool tokenizer_add_bos                    = false;
-    bool tokenizer_add_eos                    = false;
-    bool tokenizer_ignore_merges              = false;
-    bool tokenizer_clean_spaces               = false;  // clean_up_tokenization_spaces
-    bool tokenizer_remove_extra_whitespaces   = false;
-    bool tokenizer_escape_whitespaces         = true;
-    bool tokenizer_treat_whitespace_as_suffix = false;
+    bool add_space_prefix           = false;
+    bool add_bos                    = false;
+    bool add_eos                    = false;
+    bool ignore_merges              = false;
+    bool clean_spaces               = false;  // clean_up_tokenization_spaces
+    bool remove_extra_whitespaces   = false;
+    bool escape_whitespaces         = true;
+    bool treat_whitespace_as_suffix = false;
 
     std::unordered_map<std::string, llama_token> token_to_id;
     std::vector<token_data>                      id_to_token;
@@ -1468,8 +1467,8 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
 
         // for now, only BPE models have pre-tokenizers
         if (type == LLAMA_VOCAB_TYPE_BPE) {
-            tokenizer_add_space_prefix = false;
-            tokenizer_clean_spaces = true;
+            add_space_prefix = false;
+            clean_spaces = true;
             if (tokenizer_pre.empty()) {
                 LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
                 LLAMA_LOG_WARN("%s:                                             \n", __func__);
@@ -1487,20 +1486,20 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
                     tokenizer_pre == "llama-bpe"||
                     tokenizer_pre == "falcon3") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
-                tokenizer_ignore_merges = true;
-                tokenizer_add_bos = true;
+                ignore_merges = true;
+                add_bos = true;
             } else if (
                     tokenizer_pre == "deepseek-llm") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                     tokenizer_pre == "deepseek-coder") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                     tokenizer_pre == "deepseek-v3") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                     tokenizer_pre == "falcon") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_FALCON;
@@ -1528,11 +1527,11 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             } else if (
                 tokenizer_pre == "command-r") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_COMMAND_R;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                 tokenizer_pre == "qwen2") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_QWEN2;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                 tokenizer_pre == "stablelm2") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_STABLELM2;
@@ -1548,7 +1547,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             } else if (
                 tokenizer_pre == "poro-chat") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_PORO;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                 tokenizer_pre == "chatglm-bpe") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_CHATGLM4;
@@ -1556,20 +1555,20 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             } else if (
                 tokenizer_pre == "viking") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_VIKING;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                 tokenizer_pre == "jais") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_JAIS;
             } else if (
                 tokenizer_pre == "tekken") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
-                tokenizer_clean_spaces = false;
-                tokenizer_ignore_merges = true;
-                tokenizer_add_bos = true;
+                clean_spaces = false;
+                ignore_merges = true;
+                add_bos = true;
             } else if (
                 tokenizer_pre == "smollm") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_SMOLLM;
-                tokenizer_clean_spaces = false;
+                clean_spaces = false;
             } else if (
                 tokenizer_pre == "codeshell") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_CODESHELL;
@@ -1585,8 +1584,8 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             } else if (
                 tokenizer_pre == "chameleon") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_CHAMELEON;
-                tokenizer_add_bos = true;
-                tokenizer_clean_spaces = false;
+                add_bos = true;
+                clean_spaces = false;
             } else if (
                 tokenizer_pre == "minerva-7b") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_MINERVA;
@@ -1598,32 +1597,32 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             }
         } else if (type == LLAMA_VOCAB_TYPE_SPM) {
             pre_type = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-            tokenizer_add_space_prefix = true;
-            tokenizer_clean_spaces = false;
-            tokenizer_add_bos = true;
-            tokenizer_add_eos = false;
+            add_space_prefix = true;
+            clean_spaces = false;
+            add_bos = true;
+            add_eos = false;
         } else if (type == LLAMA_VOCAB_TYPE_WPM) {
             pre_type = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-            tokenizer_add_space_prefix = false;
-            tokenizer_clean_spaces = true;
-            tokenizer_add_bos = true;
-            tokenizer_add_eos = false;
+            add_space_prefix = false;
+            clean_spaces = true;
+            add_bos = true;
+            add_eos = false;
         } else if (type == LLAMA_VOCAB_TYPE_UGM) {
             pre_type = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-            tokenizer_add_bos = false;
-            tokenizer_add_eos = true;
+            add_bos = false;
+            add_eos = true;
         } else if (type == LLAMA_VOCAB_TYPE_RWKV) {
             pre_type = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-            tokenizer_add_space_prefix = false;
-            tokenizer_clean_spaces = false;
-            tokenizer_add_bos = false;
-            tokenizer_add_eos = false;
+            add_space_prefix = false;
+            clean_spaces = false;
+            add_bos = false;
+            add_eos = false;
         } else {
             pre_type = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         }
 
-        ml.get_key(LLM_KV_TOKENIZER_ADD_PREFIX,      tokenizer_add_space_prefix,         false);
-        ml.get_key(LLM_KV_TOKENIZER_REMOVE_EXTRA_WS, tokenizer_remove_extra_whitespaces, false);
+        ml.get_key(LLM_KV_TOKENIZER_ADD_PREFIX,      add_space_prefix,         false);
+        ml.get_key(LLM_KV_TOKENIZER_REMOVE_EXTRA_WS, remove_extra_whitespaces, false);
     }
 
     const int token_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_LIST).c_str());
@@ -1745,15 +1744,15 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             }
         }
 
-        // Handle add_bos_token and add_eos_token
+        // Handle add_bos and add_eos
         {
             bool temp = true;
 
             if (ml.get_key(LLM_KV_TOKENIZER_ADD_BOS, temp, false)) {
-                tokenizer_add_bos = temp;
+                add_bos = temp;
             }
             if (ml.get_key(LLM_KV_TOKENIZER_ADD_EOS, temp, false)) {
-                tokenizer_add_eos = temp;
+                add_eos = temp;
             }
         }
 
@@ -2337,7 +2336,7 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
 
                 bool is_prev_special = true;  // prefix with space if first token
 
-                if (add_special && tokenizer_add_bos) {
+                if (add_special && add_bos) {
                     GGML_ASSERT(special_bos_id != LLAMA_TOKEN_NULL);
                     output.push_back(special_bos_id);
                     is_prev_special = true;
@@ -2348,7 +2347,7 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
                         std::string text;
 
                         // prefix with space if previous is special
-                        if (tokenizer_add_space_prefix && is_prev_special) {
+                        if (add_space_prefix && is_prev_special) {
                             text = ' ';
                         }
 
@@ -2367,14 +2366,14 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
                     }
                 }
 
-                if (add_special && tokenizer_add_bos && output.size() >= 2 && output[1] == special_bos_id) {
+                if (add_special && add_bos && output.size() >= 2 && output[1] == special_bos_id) {
                     LLAMA_LOG_WARN(
                         "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                         "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                         "Are you sure this is what you want?\n", __FUNCTION__);
                 }
 
-                if (add_special && tokenizer_add_eos) {
+                if (add_special && add_eos) {
                     GGML_ASSERT(special_eos_id != LLAMA_TOKEN_NULL);
                     output.push_back(special_eos_id);
                 }
@@ -2434,7 +2433,7 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
             } break;
         case LLAMA_VOCAB_TYPE_UGM:
             {
-                if (add_special && tokenizer_add_bos) {
+                if (add_special && add_bos) {
                     GGML_ASSERT(special_bos_id != LLAMA_TOKEN_NULL);
                     output.push_back(special_bos_id);
                 }
@@ -2452,14 +2451,14 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
                     }
                 }
 
-                if (add_special && tokenizer_add_bos && output.size() >= 2 && output[1] == special_bos_id) {
+                if (add_special && add_bos && output.size() >= 2 && output[1] == special_bos_id) {
                     LLAMA_LOG_WARN(
                         "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                         "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                         "Are you sure this is what you want?\n", __FUNCTION__);
                 }
 
-                if (add_special && tokenizer_add_eos) {
+                if (add_special && add_eos) {
                     GGML_ASSERT(special_eos_id != LLAMA_TOKEN_NULL);
                     output.push_back(special_eos_id);
                 }
@@ -2594,9 +2593,9 @@ int32_t llama_vocab::impl::detokenize(
     int32_t total = 0;
 
     // remove the leading space
-    bool remove_space = tokenizer_add_space_prefix;
+    bool remove_space = add_space_prefix;
 
-    if (remove_special && tokenizer_add_bos) {
+    if (remove_special && add_bos) {
         if (n_tokens > 0 && tokens[0] == special_bos_id) {
             remove_space = false;
             n_tokens--;
@@ -2604,7 +2603,7 @@ int32_t llama_vocab::impl::detokenize(
         }
     }
 
-    if (remove_special && tokenizer_add_eos) {
+    if (remove_special && add_eos) {
         if (n_tokens > 0 && tokens[n_tokens - 1] == special_eos_id) {
             n_tokens--;
         }
@@ -2628,7 +2627,7 @@ int32_t llama_vocab::impl::detokenize(
         return -total;
     }
 
-    if (tokenizer_clean_spaces) {
+    if (clean_spaces) {
         text -= total;  // restart text
 
         // first pass: characters ?!.,  //TODO: where do these characters come from?
@@ -2907,36 +2906,36 @@ llama_token llama_vocab::token_fim_sep() const {
     return pimpl->special_fim_sep_id;
 }
 
-bool llama_vocab::add_space_prefix() const {
-    return pimpl->tokenizer_add_space_prefix;
+bool llama_vocab::get_add_space_prefix() const {
+    return pimpl->add_space_prefix;
 }
 
-bool llama_vocab::add_bos_token() const {
-    return pimpl->tokenizer_add_bos;
+bool llama_vocab::get_add_bos() const {
+    return pimpl->add_bos;
 }
 
-bool llama_vocab::add_eos_token() const {
-    return pimpl->tokenizer_add_eos;
+bool llama_vocab::get_add_eos() const {
+    return pimpl->add_eos;
 }
 
-bool llama_vocab::ignore_merges() const {
-    return pimpl->tokenizer_ignore_merges;
+bool llama_vocab::get_ignore_merges() const {
+    return pimpl->ignore_merges;
 }
 
-bool llama_vocab::clean_spaces() const {
-    return pimpl->tokenizer_clean_spaces;
+bool llama_vocab::get_clean_spaces() const {
+    return pimpl->clean_spaces;
 }
 
-bool llama_vocab::remove_extra_whitespaces() const {
-    return pimpl->tokenizer_remove_extra_whitespaces;
+bool llama_vocab::get_remove_extra_whitespaces() const {
+    return pimpl->remove_extra_whitespaces;
 }
 
-bool llama_vocab::escape_whitespaces() const {
-    return pimpl->tokenizer_escape_whitespaces;
+bool llama_vocab::get_escape_whitespaces() const {
+    return pimpl->escape_whitespaces;
 }
 
-bool llama_vocab::treat_whitespace_as_suffix() const {
-    return pimpl->tokenizer_treat_whitespace_as_suffix;
+bool llama_vocab::get_treat_whitespace_as_suffix() const {
+    return pimpl->treat_whitespace_as_suffix;
 }
 
 int llama_vocab::max_token_len() const {
@@ -3087,12 +3086,12 @@ llama_token llama_vocab_pad(const struct llama_vocab * vocab) {
     return vocab->token_pad();
 }
 
-bool llama_vocab_add_bos(const struct llama_vocab * vocab) {
-    return vocab->add_bos_token();
+bool llama_vocab_get_add_bos(const struct llama_vocab * vocab) {
+    return vocab->get_add_bos();
 }
 
-bool llama_vocab_add_eos(const struct llama_vocab * vocab) {
-    return vocab->add_eos_token();
+bool llama_vocab_get_add_eos(const struct llama_vocab * vocab) {
+    return vocab->get_add_eos();
 }
 
 llama_token llama_vocab_fim_pre(const struct llama_vocab * vocab) {
@@ -3181,12 +3180,12 @@ llama_token llama_token_pad(const struct llama_vocab * vocab) {
 
 // deprecated
 bool llama_add_bos_token(const struct llama_vocab * vocab) {
-    return llama_vocab_add_bos(vocab);
+    return llama_vocab_get_add_bos(vocab);
 }
 
 // deprecated
 bool llama_add_eos_token(const struct llama_vocab * vocab) {
-    return llama_vocab_add_eos(vocab);
+    return llama_vocab_get_add_eos(vocab);
 }
 
 // deprecated

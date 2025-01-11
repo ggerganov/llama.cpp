@@ -94,13 +94,13 @@ bool common_speculative_are_compatible(
         return false;
     }
 
-    if (llama_vocab_add_bos(vocab_tgt) != llama_vocab_add_bos(vocab_dft) ||
-        llama_vocab_add_eos(vocab_tgt) != llama_vocab_add_eos(vocab_dft) ||
+    if (llama_vocab_get_add_bos(vocab_tgt) != llama_vocab_get_add_bos(vocab_dft) ||
+        llama_vocab_get_add_eos(vocab_tgt) != llama_vocab_get_add_eos(vocab_dft) ||
         llama_vocab_bos(vocab_tgt) != llama_vocab_bos(vocab_dft) ||
         llama_vocab_eos(vocab_tgt) != llama_vocab_eos(vocab_dft)) {
         LOG_ERR("%s: draft vocab special tokens must match target vocab to use speculation\n", __func__);
-        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_vocab_bos(vocab_tgt), llama_vocab_add_bos(vocab_tgt), llama_vocab_eos(vocab_tgt), llama_vocab_add_eos(vocab_tgt));
-        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_vocab_bos(vocab_dft), llama_vocab_add_bos(vocab_dft), llama_vocab_eos(vocab_dft), llama_vocab_add_eos(vocab_dft));
+        LOG_ERR("%s: tgt: bos = %d (%d), eos = %d (%d)\n", __func__, llama_vocab_bos(vocab_tgt), llama_vocab_get_add_bos(vocab_tgt), llama_vocab_eos(vocab_tgt), llama_vocab_get_add_eos(vocab_tgt));
+        LOG_ERR("%s: dft: bos = %d (%d), eos = %d (%d)\n", __func__, llama_vocab_bos(vocab_dft), llama_vocab_get_add_bos(vocab_dft), llama_vocab_eos(vocab_dft), llama_vocab_get_add_eos(vocab_dft));
         return false;
     }
 

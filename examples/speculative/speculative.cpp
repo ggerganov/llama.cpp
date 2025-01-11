@@ -106,8 +106,8 @@ int main(int argc, char ** argv) {
     }
 
     if (
-        llama_vocab_add_bos(vocab_tgt) != llama_vocab_add_bos(vocab_dft) ||
-        llama_vocab_add_eos(vocab_tgt) != llama_vocab_add_eos(vocab_dft) ||
+        llama_vocab_get_add_bos(vocab_tgt) != llama_vocab_get_add_bos(vocab_dft) ||
+        llama_vocab_get_add_eos(vocab_tgt) != llama_vocab_get_add_eos(vocab_dft) ||
         llama_vocab_bos(vocab_tgt) != llama_vocab_bos(vocab_dft) ||
         llama_vocab_eos(vocab_tgt) != llama_vocab_eos(vocab_dft)
     ) {

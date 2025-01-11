@@ -154,8 +154,8 @@ int main(int argc, char ** argv) {
         LOG_INF("\n");
         LOG_INF("%s\n", common_params_get_system_info(params).c_str());
     }
-    const bool add_bos = llama_vocab_add_bos(vocab);
-    GGML_ASSERT(!llama_vocab_add_eos(vocab));
+    const bool add_bos = llama_vocab_get_add_bos(vocab);
+    GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
 
     std::vector<llama_token> embd_inp;
     std::vector<llama_token> embd_end;

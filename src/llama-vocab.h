@@ -69,14 +69,14 @@ struct llama_vocab {
     llama_token token_fim_rep() const;
     llama_token token_fim_sep() const;
 
-    bool add_space_prefix          () const;
-    bool add_bos_token             () const;
-    bool add_eos_token             () const;
-    bool ignore_merges             () const;
-    bool clean_spaces              () const;
-    bool remove_extra_whitespaces  () const;
-    bool escape_whitespaces        () const;
-    bool treat_whitespace_as_suffix() const;
+    bool get_add_space_prefix          () const;
+    bool get_add_bos                   () const;
+    bool get_add_eos                   () const;
+    bool get_ignore_merges             () const;
+    bool get_clean_spaces              () const;
+    bool get_remove_extra_whitespaces  () const;
+    bool get_escape_whitespaces        () const;
+    bool get_treat_whitespace_as_suffix() const;
 
     int max_token_len() const;
 

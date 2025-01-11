@@ -333,7 +333,7 @@ static llama_tokens format_infill(
     auto embd_inp = spm_infill ? tokens_suffix : tokens_prefix;
     auto embd_end = spm_infill ? tokens_prefix : tokens_suffix;
 
-    if (llama_vocab_add_bos(vocab)) {
+    if (llama_vocab_get_add_bos(vocab)) {
         embd_inp.insert(embd_inp.begin(), llama_vocab_bos(vocab));
     }
 

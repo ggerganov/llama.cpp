@@ -1698,7 +1698,7 @@ struct server_context {
 
         n_ctx = llama_n_ctx(ctx);
 
-        add_bos_token = llama_vocab_add_bos(vocab);
+        add_bos_token = llama_vocab_get_add_bos(vocab);
         has_eos_token = llama_vocab_eos(vocab) != LLAMA_TOKEN_NULL;
 
         if (!params_base.speculative.model.empty()) {

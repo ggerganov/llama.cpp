@@ -242,9 +242,9 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool add_bos = llama_vocab_add_bos(vocab);
+    const bool add_bos = llama_vocab_get_add_bos(vocab);
     if (!llama_model_has_encoder(model)) {
-        GGML_ASSERT(!llama_vocab_add_eos(vocab));
+        GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
     }
 
     LOG_DBG("n_ctx: %d, add_bos: %d\n", n_ctx, add_bos);

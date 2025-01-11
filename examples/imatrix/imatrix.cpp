@@ -431,10 +431,10 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const bool add_bos = llama_vocab_add_bos(vocab);
+    const bool add_bos = llama_vocab_get_add_bos(vocab);
     const int n_ctx = llama_n_ctx(ctx);
 
-    GGML_ASSERT(!llama_vocab_add_eos(vocab));
+    GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
 
     auto tim1 = std::chrono::high_resolution_clock::now();
     LOG_INF("%s: tokenizing the input ..\n", __func__);
