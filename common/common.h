@@ -8,6 +8,12 @@
 #include <vector>
 #include <sstream>
 
+#if defined(LLAMA_USE_CURL)
+#include <curl/curl.h>
+#include <curl/easy.h>
+#include <future>
+#endif
+
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
 #else
@@ -650,5 +656,23 @@ namespace {
 const char * const LLM_KV_SPLIT_NO            = "split.no";
 const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
+
+#if defined(LLAMA_USE_CURL)
+//
+// CURL utils
+//
+
+using curl_ptr = std::unique_ptr<CURL, decltype(&curl_easy_cleanup)>;
+
+// cannot use unique_ptr for curl_slist, because we cannot update without destroying the old one
+struct curl_slist_ptr {
+    struct curl_slist * ptr = nullptr;
+    ~curl_slist_ptr() {
+        if (ptr) {
+            curl_slist_free_all(ptr);
+        }
+    }
+};
+#endif
 
 }
