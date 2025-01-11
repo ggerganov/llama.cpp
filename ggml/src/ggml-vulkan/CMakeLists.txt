@@ -109,6 +109,13 @@ if (Vulkan_FOUND)
 
     if (NOT CMAKE_CROSSCOMPILING)
         add_subdirectory(vulkan-shaders)
+        if (MSVC)
+            foreach(CONFIG ${CMAKE_CONFIGURATION_TYPES})
+                string(TOUPPER ${CONFIG} CONFIG)
+                set_target_properties(vulkan-shaders-gen PROPERTIES
+                    RUNTIME_OUTPUT_DIRECTORY_${CONFIG} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+            endforeach()
+        endif()
     else()
         if (GGML_SHADERS_GEN_TOOLCHAIN)
             set(HOST_CMAKE_TOOLCHAIN_FILE ${GGML_SHADERS_GEN_TOOLCHAIN})
@@ -137,13 +144,15 @@ if (Vulkan_FOUND)
         )
         ExternalProject_Add_StepTargets(vulkan-shaders-gen build install)
     endif()
-    set (_ggml_vk_genshaders_cmd ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan-shaders-gen)
+    set (_ggml_vk_host_suffix $<IF:$<STREQUAL:${CMAKE_HOST_SYSTEM_NAME},Windows>,.exe,>)
+    set (_ggml_vk_genshaders_cmd ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan-shaders-gen${_ggml_vk_host_suffix})
     set (_ggml_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
     set (_ggml_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
     set (_ggml_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
     set (_ggml_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
 
     file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
+    set (_ggml_vk_shader_deps ${_ggml_vk_shader_deps} vulkan-shaders-gen)
 
     if (CMAKE_CROSSCOMPILING)
         set(_ggml_vk_shader_deps ${_ggml_vk_shader_deps} vulkan-shaders-gen-build vulkan-shaders-gen-install)
@@ -161,7 +170,7 @@ if (Vulkan_FOUND)
             --target-cpp ${_ggml_vk_source}
             --no-clean
 
-        DEPENDS ${_ggml_vk_shader_deps} ${_ggml_vk_genshaders_cmd}
+        DEPENDS ${_ggml_vk_shader_deps}
         COMMENT "Generate vulkan shaders"
     )
 
