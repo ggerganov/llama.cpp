@@ -16,7 +16,7 @@ function(llama_add_compile_flags)
             list(APPEND CXX_FLAGS -Wmissing-declarations -Wmissing-noreturn)
 
             # GCC -Wshadow is way too agressive
-            if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
                 list(APPEND CXX_FLAGS -Wshadow)
             endif()
 
