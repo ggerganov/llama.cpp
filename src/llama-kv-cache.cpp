@@ -79,7 +79,7 @@ bool llama_kv_cache_init(
 
         ggml_backend_buffer_type_t buft;
         if (offload) {
-            auto * dev = model.dev_layer.at(i).dev;
+            auto * dev = model.dev_layer(i);
             buft = ggml_backend_dev_buffer_type(dev);
         } else {
             buft = ggml_backend_cpu_buffer_type();

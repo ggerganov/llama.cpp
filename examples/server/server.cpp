@@ -98,7 +98,7 @@ struct slot_params {
     int64_t t_max_prompt_ms  = -1; // TODO: implement
     int64_t t_max_predict_ms = -1; // if positive, limit the generation phase to this time limit
 
-    std::vector<common_lora_adapter_info> lora;
+    std::vector<common_adapter_lora_info> lora;
 
     std::vector<std::string> antiprompt;
     std::vector<std::string> response_fields;
@@ -198,15 +198,17 @@ struct server_task {
     bool metrics_reset_bucket = false;
 
     // used by SERVER_TASK_TYPE_SET_LORA
-    std::vector<common_lora_adapter_info> set_lora;
+    std::vector<common_adapter_lora_info> set_lora;
 
     server_task(server_task_type type) : type(type) {}
 
     static slot_params params_from_json_cmpl(
-            const llama_model * model,
             const llama_context * ctx,
             const common_params & params_base,
             const json & data) {
+        const llama_model * model = llama_get_model(ctx);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
+
         slot_params params;
 
         // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
@@ -329,7 +331,7 @@ struct server_task {
 
             const auto & logit_bias = data.find("logit_bias");
             if (logit_bias != data.end() && logit_bias->is_array()) {
-                const int n_vocab = llama_n_vocab(model);
+                const int n_vocab = llama_vocab_n_tokens(vocab);
                 for (const auto & el : *logit_bias) {
                     // TODO: we may want to throw errors here, in case "el" is incorrect
                     if (el.is_array() && el.size() == 2) {
@@ -348,7 +350,7 @@ struct server_task {
                                 params.sampling.logit_bias.push_back({tok, bias});
                             }
                         } else if (el[0].is_string()) {
-                            auto toks = common_tokenize(model, el[0].get<std::string>(), false);
+                            auto toks = common_tokenize(vocab, el[0].get<std::string>(), false);
                             for (auto tok : toks) {
                                 params.sampling.logit_bias.push_back({tok, bias});
                             }
@@ -1131,7 +1133,7 @@ struct server_slot {
 
     common_speculative * spec = nullptr;
 
-    std::vector<common_lora_adapter_info> lora;
+    std::vector<common_adapter_lora_info> lora;
 
     // the index relative to completion multi-task request
     size_t index = 0;
@@ -1633,6 +1635,8 @@ struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
 
+    const llama_vocab * vocab = nullptr;
+
     llama_model * model_dft = nullptr;
 
     llama_context_params cparams_dft;
@@ -1690,10 +1694,12 @@ struct server_context {
             return false;
         }
 
+        vocab = llama_model_get_vocab(model);
+
         n_ctx = llama_n_ctx(ctx);
 
-        add_bos_token = llama_add_bos_token(model);
-        has_eos_token = llama_token_eos(model) != LLAMA_TOKEN_NULL;
+        add_bos_token = llama_vocab_get_add_bos(vocab);
+        has_eos_token = llama_vocab_eos(vocab) != LLAMA_TOKEN_NULL;
 
         if (!params_base.speculative.model.empty()) {
             SRV_INF("loading draft model '%s'\n", params_base.speculative.model.c_str());
@@ -1736,7 +1742,8 @@ struct server_context {
 
     bool validate_builtin_chat_template() const {
         llama_chat_message chat[] = {{"user", "test"}};
-        int32_t chat_res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+        const char * tmpl = llama_model_chat_template(model);
+        const int32_t chat_res = llama_chat_apply_template(tmpl, chat, 1, true, nullptr, 0);
         return chat_res > 0;
     }
 
@@ -1756,7 +1763,7 @@ struct server_context {
             if (model_dft) {
                 slot.batch_spec = llama_batch_init(params_base.speculative.n_max + 1, 0, 1);
 
-                slot.ctx_dft = llama_new_context_with_model(model_dft, cparams_dft);
+                slot.ctx_dft = llama_init_from_model(model_dft, cparams_dft);
                 if (slot.ctx_dft == nullptr) {
                     SRV_ERR("%s", "failed to create draft context\n");
                     return;
@@ -1891,7 +1898,7 @@ struct server_context {
         }
 
         if (slot.params.ignore_eos && has_eos_token) {
-            slot.params.sampling.logit_bias.push_back({llama_token_eos(model), -INFINITY});
+            slot.params.sampling.logit_bias.push_back({llama_vocab_eos(vocab), -INFINITY});
         }
 
         {
@@ -2047,14 +2054,14 @@ struct server_context {
                     slot.n_decoded, slot.n_prompt_tokens, slot.n_past, slot.n_ctx);
         }
 
-        if (llama_token_is_eog(model, result.tok)) {
+        if (llama_vocab_is_eog(vocab, result.tok)) {
             slot.stop           = STOP_TYPE_EOS;
             slot.has_next_token = false;
 
             SLT_DBG(slot, "%s", "stopped by EOS\n");
         }
 
-        const auto n_ctx_train = llama_n_ctx_train(model);
+        const auto n_ctx_train = llama_model_n_ctx_train(model);
 
         if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
             slot.truncated      = true;
@@ -2074,7 +2081,7 @@ struct server_context {
 
     void populate_token_probs(const server_slot & slot, completion_token_output & result, bool post_sampling, bool special, int idx) {
         size_t n_probs = slot.params.sampling.n_probs;
-        size_t n_vocab = llama_n_vocab(llama_get_model(ctx));
+        size_t n_vocab = llama_vocab_n_tokens(vocab);
         if (post_sampling) {
             const auto * cur_p = common_sampler_get_candidates(slot.smpl);
             const size_t max_probs = cur_p->size;
@@ -2225,7 +2232,7 @@ struct server_context {
         res->n_tokens  = slot.n_prompt_tokens;
         res->oaicompat = slot.params.oaicompat;
 
-        const int n_embd = llama_n_embd(model);
+        const int n_embd = llama_model_n_embd(model);
 
         std::vector<float> embd_res(n_embd, 0.0f);
 
@@ -2927,7 +2934,7 @@ struct server_context {
             // make sure we're in the right embedding mode
             llama_set_embeddings(ctx, slot_batched->is_non_causal());
             // apply lora, only need to do it once per batch
-            common_lora_adapters_apply(ctx, slot_batched->lora);
+            common_set_adapter_lora(ctx, slot_batched->lora);
         }
 
         // process the created batch of tokens
@@ -3129,12 +3136,12 @@ struct server_context {
 
     json model_meta() const {
         return json {
-            {"vocab_type",  llama_vocab_type    (model)},
-            {"n_vocab",     llama_n_vocab       (model)},
-            {"n_ctx_train", llama_n_ctx_train   (model)},
-            {"n_embd",      llama_n_embd        (model)},
-            {"n_params",    llama_model_n_params(model)},
-            {"size",        llama_model_size    (model)},
+            {"vocab_type",  llama_vocab_type       (vocab)},
+            {"n_vocab",     llama_vocab_n_tokens   (vocab)},
+            {"n_ctx_train", llama_model_n_ctx_train(model)},
+            {"n_embd",      llama_model_n_embd     (model)},
+            {"n_params",    llama_model_n_params   (model)},
+            {"size",        llama_model_size       (model)},
         };
     }
 };
@@ -3639,7 +3646,7 @@ int main(int argc, char ** argv) {
         std::vector<server_task> tasks;
 
         try {
-            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, data.at("prompt"), true, true);
+            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, data.at("prompt"), true, true);
             tasks.reserve(tokenized_prompts.size());
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
                 server_task task = server_task(type);
@@ -3649,7 +3656,6 @@ int main(int argc, char ** argv) {
 
                 task.prompt_tokens    = std::move(tokenized_prompts[i]);
                 task.params           = server_task::params_from_json_cmpl(
-                                            ctx_server.model,
                                             ctx_server.ctx,
                                             ctx_server.params_base,
                                             data);
@@ -3745,13 +3751,13 @@ int main(int argc, char ** argv) {
     const auto handle_infill = [&ctx_server, &res_error, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
         // check model compatibility
         std::string err;
-        if (llama_token_fim_pre(ctx_server.model) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_pre(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "prefix token is missing. ";
         }
-        if (llama_token_fim_suf(ctx_server.model) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_suf(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "suffix token is missing. ";
         }
-        if (llama_token_fim_mid(ctx_server.model) == LLAMA_TOKEN_NULL) {
+        if (llama_vocab_fim_mid(ctx_server.vocab) == LLAMA_TOKEN_NULL) {
             err += "middle token is missing. ";
         }
         if (!err.empty()) {
@@ -3797,10 +3803,10 @@ int main(int argc, char ** argv) {
         data["input_extra"] = input_extra; // default to empty array if it's not exist
 
         std::string prompt = json_value(data, "prompt", std::string());
-        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, false, true);
+        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, false, true);
         SRV_DBG("creating infill tasks, n_prompts = %d\n", (int) tokenized_prompts.size());
         data["prompt"] = format_infill(
-            ctx_server.ctx,
+            ctx_server.vocab,
             data.at("input_prefix"),
             data.at("input_suffix"),
             data.at("input_extra"),
@@ -3857,7 +3863,7 @@ int main(int argc, char ** argv) {
             const bool add_special = json_value(body, "add_special", false);
             const bool with_pieces = json_value(body, "with_pieces", false);
 
-            llama_tokens tokens = tokenize_mixed(ctx_server.ctx, body.at("content"), add_special, true);
+            llama_tokens tokens = tokenize_mixed(ctx_server.vocab, body.at("content"), add_special, true);
 
             if (with_pieces) {
                 for (const auto& token : tokens) {
@@ -3933,7 +3939,7 @@ int main(int argc, char ** argv) {
             }
         }
 
-        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.ctx, prompt, true, true);
+        std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
         for (const auto & tokens : tokenized_prompts) {
             // this check is necessary for models that do not add BOS token to the input
             if (tokens.empty()) {
@@ -4033,20 +4039,20 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        llama_tokens tokenized_query = tokenize_input_prompts(ctx_server.ctx, query, /* add_special */ false, true)[0];
+        llama_tokens tokenized_query = tokenize_input_prompts(ctx_server.vocab, query, /* add_special */ false, true)[0];
 
         // create and queue the task
         json responses = json::array();
         bool error = false;
         {
             std::vector<server_task> tasks;
-            std::vector<llama_tokens> tokenized_docs = tokenize_input_prompts(ctx_server.ctx, documents, /* add_special */ false, true);
+            std::vector<llama_tokens> tokenized_docs = tokenize_input_prompts(ctx_server.vocab, documents, /* add_special */ false, true);
             tasks.reserve(tokenized_docs.size());
             for (size_t i = 0; i < tokenized_docs.size(); i++) {
                 server_task task   = server_task(SERVER_TASK_TYPE_RERANK);
                 task.id            = ctx_server.queue_tasks.get_new_id();
                 task.index         = i;
-                task.prompt_tokens = format_rerank(ctx_server.model, tokenized_query, tokenized_docs[i]);
+                task.prompt_tokens = format_rerank(ctx_server.vocab, tokenized_query, tokenized_docs[i]);
                 tasks.push_back(task);
             }
 

@@ -371,7 +371,10 @@ void llama_sampler_free(struct llama_sampler * smpl) {
 llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx) {
     const auto * logits = llama_get_logits_ith(ctx, idx);
 
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const llama_model * model = llama_get_model(ctx);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     // TODO: do not allocate each time
     std::vector<llama_token_data> cur;
@@ -1445,7 +1448,7 @@ static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
 static struct llama_sampler * llama_sampler_grammar_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_grammar *) smpl->ctx;
 
-    auto * result = llama_sampler_init_grammar_impl(*ctx->vocab, nullptr, nullptr);
+    auto * result = llama_sampler_init_grammar(ctx->vocab, nullptr, nullptr);
 
     // copy the state
     {
@@ -1481,19 +1484,19 @@ static struct llama_sampler_i llama_sampler_grammar_i = {
     /* .free   = */ llama_sampler_grammar_free,
 };
 
-struct llama_sampler * llama_sampler_init_grammar_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
+struct llama_sampler * llama_sampler_init_grammar(const struct llama_vocab * vocab, const char * grammar_str, const char * grammar_root) {
     auto * ctx = new llama_sampler_grammar;
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
         *ctx = {
-            /* .vocab        = */ &vocab,
+            /* .vocab        = */ vocab,
             /* .grammar_str  = */ grammar_str,
             /* .grammar_root = */ grammar_root,
-            /* .grammar      = */ llama_grammar_init_impl(&vocab, grammar_str, grammar_root),
+            /* .grammar      = */ llama_grammar_init_impl(vocab, grammar_str, grammar_root),
         };
     } else {
         *ctx = {
-            /* .vocab        = */ &vocab,
+            /* .vocab        = */ vocab,
             /* .grammar_str  = */ {},
             /* .grammar_root = */ {},
             /* .grammar      = */ nullptr,
@@ -1663,8 +1666,8 @@ struct llama_sampler_dry {
 
 // Ported from Koboldcpp, original PR: https://github.com/LostRuins/koboldcpp/pull/982 (Original author: pi6am)
 static void get_overlapping_token_sequences(const llama_vocab & vocab, const std::string& str, std::unordered_multimap<llama_token, std::vector<llama_token>>& token_sequences, int max_tail_len = -1) {
-    for (llama_token token_id = 0; token_id < (llama_token)vocab.n_vocab; token_id++) {
-        std::string word = llama_detokenize(vocab, {token_id}, true);
+    for (llama_token token_id = 0; token_id < (llama_token) vocab.n_tokens(); token_id++) {
+        std::string word = vocab.detokenize({token_id}, true);
         if (word.find(str) != std::string::npos) {
             token_sequences.emplace(token_id, std::vector<llama_token>());
         } else {
@@ -1681,7 +1684,7 @@ static void get_overlapping_token_sequences(const llama_vocab & vocab, const std
                     }
                 }
                 if (match) {
-                    std::vector<llama_token> tokenization = llama_tokenize_internal(vocab, str.substr(i), false, false);
+                    std::vector<llama_token> tokenization = vocab.tokenize(str.substr(i), false, false);
                     if (max_tail_len >= 0 && tokenization.size() > (size_t)max_tail_len) {
                         tokenization.resize(max_tail_len);
                     }
@@ -1937,7 +1940,7 @@ static struct llama_sampler * llama_sampler_dry_clone(const struct llama_sampler
     llama_vocab dummy_vocab;
 
     // dummy vocab is passed because it is only needed for raw sequence breaker processing, which we have already done and will simply be copying
-    auto * result = llama_sampler_init_dry_impl(dummy_vocab, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
+    auto * result = llama_sampler_init_dry(&dummy_vocab, ctx->total_context_size, ctx->dry_multiplier, ctx->dry_base, ctx->dry_allowed_length, ctx->dry_penalty_last_n, NULL, 0);
 
     // Copy the state, including the processed breakers
     {
@@ -1964,7 +1967,7 @@ static struct llama_sampler_i llama_sampler_dry_i = {
     /* .free   = */ llama_sampler_dry_free,
 };
 
-struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
+struct llama_sampler * llama_sampler_init_dry(const struct llama_vocab * vocab, int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const char** seq_breakers, size_t num_breakers) {
     int32_t effective_dry_penalty_last_n = (dry_penalty_last_n == -1) ? context_size : std::max(dry_penalty_last_n, 0);
     std::unordered_multimap<llama_token, std::vector<llama_token>> processed_breakers;
     const int MAX_CHAR_LEN = 40;
@@ -1991,7 +1994,7 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
                 sequence_break.resize(MAX_CHAR_LEN);
             }
 
-            get_overlapping_token_sequences(vocab, sequence_break, processed_breakers, MAX_SEQ_LEN);
+            get_overlapping_token_sequences(*vocab, sequence_break, processed_breakers, MAX_SEQ_LEN);
         }
     }
 
@@ -2014,7 +2017,7 @@ struct llama_sampler * llama_sampler_init_dry_impl(const struct llama_vocab & vo
 // wrapper for test-sampling.cpp
 struct llama_sampler * llama_sampler_init_dry_testing(int32_t context_size, float dry_multiplier, float dry_base, int32_t dry_allowed_length, int32_t dry_penalty_last_n, const std::vector<std::vector<llama_token>>& seq_breakers) {
     llama_vocab dummy_vocab;
-    auto * result = llama_sampler_init_dry_impl(dummy_vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
+    auto * result = llama_sampler_init_dry(&dummy_vocab, context_size, dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n, NULL, 0);
     auto * ctx = (llama_sampler_dry *) result->ctx;
 
     // Process the token-based sequence breakers
@@ -2153,7 +2156,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     float p_eog_sum = 0.0f;
 
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+        if (ctx->vocab->is_eog(cur_p->data[i].id)) {
             p_eog_sum += cur_p->data[i].p;
         } else {
             p_txt_sum += cur_p->data[i].p;
@@ -2175,7 +2178,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
         float p_sum = 0.0f;
 
         for (size_t i = 0; i < size_org; ++i) {
-            if (llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id)) {
+            if (ctx->vocab->is_eog(cur_p->data[i].id)) {
                 p_sum += cur_p->data[i].p;
 
                 cur_p->data[cur_p->size++] = cur_p->data[i];
@@ -2203,17 +2206,17 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
                 continue;
             }
 
-            int len0 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
+            int len0 = ctx->vocab->token_to_piece(cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
             if (len0 < 0) {
                 ctx->buf0.resize(len0);
-                len0 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
+                len0 = ctx->vocab->token_to_piece(cur_p->data[i0].id, ctx->buf0.data(), ctx->buf0.size(), 0, false);
                 assert(len0 > 0);
             }
 
-            int len1 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
+            int len1 = ctx->vocab->token_to_piece(cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
             if (len1 < 0) {
                 ctx->buf1.resize(len1);
-                len1 = llama_token_to_piece_impl(*ctx->vocab, cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
+                len1 = ctx->vocab->token_to_piece(cur_p->data[i1].id, ctx->buf1.data(), ctx->buf1.size(), 0, false);
                 assert(len1 > 0);
             }
 
@@ -2248,7 +2251,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     LOG_DBG_CUR("%s: n_combined = %zu, applying thold = %.3f\n", __func__, n_combined, thold);
 
     for (size_t i = 0; i < size_org; ++i) {
-        const bool is_eog = llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
+        const bool is_eog = ctx->vocab->is_eog(cur_p->data[i].id);
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
@@ -2269,7 +2272,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     // if no non-EOG tokens are left -> reduce cur_p to single EOT token
     if (n_non_eog == 0) {
         cur_p->size = 1;
-        cur_p->data[0].id = llama_token_eot_impl(*ctx->vocab);
+        cur_p->data[0].id = ctx->vocab->token_eot();
         cur_p->data[0].logit = 1.0f;
 
         return;
@@ -2291,7 +2294,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
     LOG_DBG_CUR("%s: applying thold = %.3f\n", __func__, thold);
 
     for (size_t i = 0; i < size_org; ++i) {
-        const bool is_eog = llama_token_is_eog_impl(*ctx->vocab, cur_p->data[i].id);
+        const bool is_eog = ctx->vocab->is_eog(cur_p->data[i].id);
 
         if (cur_p->data[i].p < thold && !is_eog) {
             continue;
@@ -2314,7 +2317,7 @@ static void llama_sampler_infill_apply(struct llama_sampler * smpl, llama_token_
 
 static struct llama_sampler * llama_sampler_infill_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_infill *) smpl->ctx;
-    return llama_sampler_init_infill_impl(*ctx->vocab);
+    return llama_sampler_init_infill(ctx->vocab);
 }
 
 static void llama_sampler_infill_free(struct llama_sampler * smpl) {
@@ -2330,14 +2333,13 @@ static struct llama_sampler_i llama_sampler_infill_i = {
     /* .free   = */ llama_sampler_infill_free,
 };
 
-struct llama_sampler * llama_sampler_init_infill_impl(
-        const struct llama_vocab & vocab) {
+struct llama_sampler * llama_sampler_init_infill(const struct llama_vocab * vocab) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_infill_i,
         /* .ctx   = */ new llama_sampler_infill {
-            /* .vocab = */ &vocab,
-            /* .buf0 = */ std::vector<char>(512),
-            /* .buf1 = */ std::vector<char>(512),
+            /* .vocab = */ vocab,
+            /* .buf0  = */ std::vector<char>(512),
+            /* .buf1  = */ std::vector<char>(512),
         },
     };
 }

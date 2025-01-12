@@ -155,4 +155,8 @@ struct llama_model_loader {
             llama_mlocks * lmlocks,
             llama_progress_callback progress_callback,
             void * progress_callback_user_data);
+
+    std::string ftype_name() const;
+
+    void print_info() const;
 };

@@ -685,7 +685,7 @@ class LlamaData {
 
     // Initializes the context with the specified parameters
     llama_context_ptr initialize_context(const llama_model_ptr & model, const Opt & opt) {
-        llama_context_ptr context(llama_new_context_with_model(model.get(), opt.ctx_params));
+        llama_context_ptr context(llama_init_from_model(model.get(), opt.ctx_params));
         if (!context) {
             printe("%s: error: failed to create the llama_context\n", __func__);
         }
@@ -713,11 +713,11 @@ static void add_message(const char * role, const std::string & text, LlamaData &
 // Function to apply the chat template and resize `formatted` if needed
 static int apply_chat_template(LlamaData & llama_data, const bool append) {
     int result = llama_chat_apply_template(
-        llama_data.model.get(), nullptr, llama_data.messages.data(), llama_data.messages.size(), append,
+        llama_model_chat_template(llama_data.model.get()), llama_data.messages.data(), llama_data.messages.size(), append,
         append ? llama_data.fmtted.data() : nullptr, append ? llama_data.fmtted.size() : 0);
     if (append && result > static_cast<int>(llama_data.fmtted.size())) {
         llama_data.fmtted.resize(result);
-        result = llama_chat_apply_template(llama_data.model.get(), nullptr, llama_data.messages.data(),
+        result = llama_chat_apply_template(llama_model_chat_template(llama_data.model.get()), llama_data.messages.data(),
                                            llama_data.messages.size(), append, llama_data.fmtted.data(),
                                            llama_data.fmtted.size());
     }
@@ -726,11 +726,11 @@ static int apply_chat_template(LlamaData & llama_data, const bool append) {
 }
 
 // Function to tokenize the prompt
-static int tokenize_prompt(const llama_model_ptr & model, const std::string & prompt,
+static int tokenize_prompt(const llama_vocab * vocab, const std::string & prompt,
                            std::vector<llama_token> & prompt_tokens) {
-    const int n_prompt_tokens = -llama_tokenize(model.get(), prompt.c_str(), prompt.size(), NULL, 0, true, true);
+    const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, true, true);
     prompt_tokens.resize(n_prompt_tokens);
-    if (llama_tokenize(model.get(), prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), true,
+    if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), true,
                        true) < 0) {
         printe("failed to tokenize the prompt\n");
         return -1;
@@ -753,9 +753,9 @@ static int check_context_size(const llama_context_ptr & ctx, const llama_batch &
 }
 
 // convert the token to a string
-static int convert_token_to_string(const llama_model_ptr & model, const llama_token token_id, std::string & piece) {
+static int convert_token_to_string(const llama_vocab * vocab, const llama_token token_id, std::string & piece) {
     char buf[256];
-    int  n = llama_token_to_piece(model.get(), token_id, buf, sizeof(buf), 0, true);
+    int  n = llama_token_to_piece(vocab, token_id, buf, sizeof(buf), 0, true);
     if (n < 0) {
         printe("failed to convert token to piece\n");
         return 1;
@@ -773,8 +773,10 @@ static void print_word_and_concatenate_to_response(const std::string & piece, st
 
 // helper function to evaluate a prompt and generate a response
 static int generate(LlamaData & llama_data, const std::string & prompt, std::string & response) {
+    const llama_vocab * vocab = llama_model_get_vocab(llama_data.model.get());
+
     std::vector<llama_token> tokens;
-    if (tokenize_prompt(llama_data.model, prompt, tokens) < 0) {
+    if (tokenize_prompt(vocab, prompt, tokens) < 0) {
         return 1;
     }
 
@@ -790,12 +792,12 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
 
         // sample the next token, check is it an end of generation?
         new_token_id = llama_sampler_sample(llama_data.sampler.get(), llama_data.context.get(), -1);
-        if (llama_token_is_eog(llama_data.model.get(), new_token_id)) {
+        if (llama_vocab_is_eog(vocab, new_token_id)) {
             break;
         }
 
         std::string piece;
-        if (convert_token_to_string(llama_data.model, new_token_id, piece)) {
+        if (convert_token_to_string(vocab, new_token_id, piece)) {
             return 1;
         }
 

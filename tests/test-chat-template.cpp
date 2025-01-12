@@ -157,7 +157,7 @@ int main(void) {
     }
 
     // test invalid chat template
-    res = llama_chat_apply_template(nullptr, "INVALID TEMPLATE", conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
+    res = llama_chat_apply_template("INVALID TEMPLATE", conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
     assert(res < 0);
 
     for (size_t i = 0; i < templates.size(); i++) {
@@ -165,7 +165,6 @@ int main(void) {
         std::string expected = expected_output[i];
         formatted_chat.resize(1024);
         res = llama_chat_apply_template(
-            nullptr,
             custom_template.c_str(),
             conversation,
             message_count,
