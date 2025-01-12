@@ -454,8 +454,8 @@ struct llama_mlock::impl {
         return (size_t) sysconf(_SC_PAGESIZE);
     }
 
-    bool raw_lock(const void * addr, size_t size) const {
-        if (!mlock(addr, size)) {
+    bool raw_lock(const void * addr_cur, size_t size_cur) const {
+        if (!mlock(addr_cur, size_cur)) {
             return true;
         }
 
@@ -475,12 +475,12 @@ struct llama_mlock::impl {
         if (suggest && getrlimit(RLIMIT_MEMLOCK, &lock_limit)) {
             suggest = false;
         }
-        if (suggest && (lock_limit.rlim_max > lock_limit.rlim_cur + size)) {
+        if (suggest && (lock_limit.rlim_max > lock_limit.rlim_cur + size_cur)) {
             suggest = false;
         }
 
         LLAMA_LOG_WARN("warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n%s",
-                size, this->size, errmsg, suggest ? MLOCK_SUGGESTION : "");
+                size_cur, size, errmsg, suggest ? MLOCK_SUGGESTION : "");
         return false;
     }
 
@@ -535,7 +535,7 @@ struct llama_mlock::impl {
         return (size_t) 65536;
     }
 
-    bool raw_lock(const void * addr, size_t len) const {
+    bool raw_lock(const void * addr_cur, size_t size_cur) const {
         LLAMA_LOG_WARN("warning: mlock not supported on this system\n");
         return false;
     }

@@ -45,9 +45,9 @@ struct llama_sbatch {
     std::vector<size_t> ids;
     // batch indices of the output
     std::vector<size_t> out_ids;
-    std::vector<llama_sbatch_seq> seq;
+    std::vector<llama_sbatch_seq> seqs;
 
-    const llama_batch * batch = nullptr;
+    const llama_batch * batch_ptr = nullptr;
 
     // buffers for the ubatch
     std::vector<llama_token>    ubatch_token;
