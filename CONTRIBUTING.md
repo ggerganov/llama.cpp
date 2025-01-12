@@ -98,6 +98,9 @@
     > [!NOTE]
     > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
 
+- C/C++ filenames are all lowercase with dashes. Headers use the `.h` extension. Source files use the `.c` or `.cpp` extension
+- Python filenames are all lowercase with underscores
+
 - (TODO: abbreviations usage)
 
 # Preprocessor directives
