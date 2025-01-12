@@ -3702,8 +3702,8 @@ int main(int argc, char ** argv) {
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result_ptr & result) -> bool {
                     json res_json = result->to_json();
                     if (res_json.is_array()) {
-                        for (const auto & res : res_json) {
-                            if (!server_sent_event(sink, "data", res)) {
+                        for (const auto & item : res_json) {
+                            if (!server_sent_event(sink, "data", item)) {
                                 return false;
                             }
                         }
@@ -3973,9 +3973,9 @@ int main(int argc, char ** argv) {
             std::unordered_set<int> task_ids = server_task::get_list_id(tasks);
 
             ctx_server.receive_multi_results(task_ids, [&](std::vector<server_task_result_ptr> & results) {
-                for (auto & res : results) {
-                    GGML_ASSERT(dynamic_cast<server_task_result_embd*>(res.get()) != nullptr);
-                    responses.push_back(res->to_json());
+                for (auto & result : results) {
+                    GGML_ASSERT(dynamic_cast<server_task_result_embd*>(result.get()) != nullptr);
+                    responses.push_back(result->to_json());
                 }
             }, [&](const json & error_data) {
                 res_error(res, error_data);
@@ -4063,9 +4063,9 @@ int main(int argc, char ** argv) {
             std::unordered_set<int> task_ids = server_task::get_list_id(tasks);
 
             ctx_server.receive_multi_results(task_ids, [&](std::vector<server_task_result_ptr> & results) {
-                for (auto & res : results) {
-                    GGML_ASSERT(dynamic_cast<server_task_result_rerank*>(res.get()) != nullptr);
-                    responses.push_back(res->to_json());
+                for (auto & result : results) {
+                    GGML_ASSERT(dynamic_cast<server_task_result_rerank*>(result.get()) != nullptr);
+                    responses.push_back(result->to_json());
                 }
             }, [&](const json & error_data) {
                 res_error(res, error_data);

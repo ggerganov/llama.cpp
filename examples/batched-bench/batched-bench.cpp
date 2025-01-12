@@ -62,7 +62,7 @@ int main(int argc, char ** argv) {
     llama_batch batch = llama_batch_init(n_kv_max, 0, 1);
 
     // decode in batches of ctx_params.n_batch tokens
-    auto decode_helper = [](llama_context * ctx, llama_batch & batch, int32_t n_batch) {
+    auto decode_helper = [&ctx, &batch](int32_t n_batch) {
         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch) {
             const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
 
@@ -94,7 +94,7 @@ int main(int argc, char ** argv) {
             common_batch_add(batch, 0, i, { 0 }, false);
         }
 
-        if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
+        if (!decode_helper(ctx_params.n_batch)) {
             LOG_ERR("%s: llama_decode() failed\n", __func__);
             return 1;
         }
@@ -134,7 +134,7 @@ int main(int argc, char ** argv) {
 
                 llama_kv_cache_clear(ctx);
 
-                if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
+                if (!decode_helper(ctx_params.n_batch)) {
                     LOG_ERR("%s: llama_decode() failed\n", __func__);
                     return 1;
                 }
@@ -156,7 +156,7 @@ int main(int argc, char ** argv) {
                         common_batch_add(batch, 0, pp + i, { j }, true);
                     }
 
-                    if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
+                    if (!decode_helper(ctx_params.n_batch)) {
                         LOG_ERR("%s: llama_decode() failed\n", __func__);
                         return 1;
                     }

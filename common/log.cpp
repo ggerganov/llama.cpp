@@ -255,8 +255,8 @@ public:
         thrd = std::thread([this]() {
             while (true) {
                 {
-                    std::unique_lock<std::mutex> lock(mtx);
-                    cv.wait(lock, [this]() { return head != tail; });
+                    std::unique_lock<std::mutex> lock_thrd(mtx);
+                    cv.wait(lock_thrd, [this]() { return head != tail; });
 
                     cur = entries[head];
 

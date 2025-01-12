@@ -311,9 +311,9 @@ static buft_list_t make_gpu_buft_list(ggml_backend_dev_t dev, enum llama_split_m
             ggml_backend_reg_get_proc_address(reg, "ggml_backend_split_buffer_type");
         if (ggml_backend_split_buffer_type_fn) {
             size_t dev_index = [&]() {
-                auto * reg = ggml_backend_dev_backend_reg(dev);
-                for (size_t i = 0; i < ggml_backend_reg_dev_count(reg); ++i) {
-                    if (ggml_backend_reg_dev_get(reg, i) == dev) {
+                ggml_backend_reg_t reg_dev = ggml_backend_dev_backend_reg(dev);
+                for (size_t i = 0; i < ggml_backend_reg_dev_count(reg_dev); ++i) {
+                    if (ggml_backend_reg_dev_get(reg_dev, i) == dev) {
                         return i;
                     }
                 }
@@ -1304,7 +1304,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
     const int act_gpu_layers = devices.empty() ? 0 : std::min(n_gpu_layers, (int)n_layer + 1);
     auto get_layer_buft_list = [&](int il) -> llama_model::impl::layer_dev {
         if (il < i_gpu_start || (il - i_gpu_start) >= act_gpu_layers) {
-            return {cpu_dev, &pimpl->cpu_buft_list};
+            return { cpu_dev, &pimpl->cpu_buft_list };
         }
         const int layer_gpu = std::upper_bound(splits.begin(), splits.begin() + n_devices(), float(il - i_gpu_start)/act_gpu_layers) - splits.begin();
         auto * dev = devices.at(layer_gpu);
@@ -1453,7 +1453,6 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             // avoid using a host buffer when using mmap
             auto * buft_dev = ggml_backend_buft_get_device(buft);
             if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev)) {
-                auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
                 buft = ggml_backend_dev_buffer_type(cpu_dev);
             }
 
@@ -3697,8 +3696,8 @@ ggml_backend_buffer_type_t llama_model::select_buft(int il) const {
 
 const struct ggml_tensor * llama_model::get_tensor(const char * name) const {
     auto it = std::find_if(tensors_by_name.begin(), tensors_by_name.end(),
-            [name](const std::pair<std::string, struct ggml_tensor *> & it) {
-                return it.first == name;
+            [name](const std::pair<std::string, struct ggml_tensor *> & entry) {
+                return entry.first == name;
             });
     if (it == tensors_by_name.end()) {
         return nullptr;

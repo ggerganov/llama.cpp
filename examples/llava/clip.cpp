@@ -2082,7 +2082,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
     }
     else if (ctx->has_qwen2vl_merger) {
         clip_image_u8 * resized = clip_image_u8_init();
-        auto patch_size = clip_patch_size(ctx) * 2;
+        auto patch_size = clip_get_patch_size(ctx) * 2;
         int nx = ceil((float)img->nx / patch_size) * patch_size;
         int ny = ceil((float)img->ny / patch_size) * patch_size;
         bicubic_resize(*img, *resized, nx, ny);
@@ -2293,15 +2293,15 @@ size_t clip_embd_nbytes_by_img(const struct clip_ctx * ctx, int img_h, int img_w
     return clip_n_patches_by_img(ctx, &img) * clip_n_mmproj_embd(ctx) * sizeof(float);
 }
 
-int32_t clip_image_size(const struct clip_ctx * ctx) {
+int32_t clip_get_image_size(const struct clip_ctx * ctx) {
     return ctx->vision_model.hparams.image_size;
 }
 
-int32_t clip_patch_size(const struct clip_ctx * ctx) {
+int32_t clip_get_patch_size(const struct clip_ctx * ctx) {
     return ctx->vision_model.hparams.patch_size;
 }
 
-int32_t clip_hidden_size(const struct clip_ctx * ctx) {
+int32_t clip_get_hidden_size(const struct clip_ctx * ctx) {
     return ctx->vision_model.hparams.hidden_size;
 }
 

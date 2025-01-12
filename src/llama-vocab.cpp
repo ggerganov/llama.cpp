@@ -2496,15 +2496,15 @@ int32_t llama_vocab::impl::token_to_piece(llama_token token, char * buf, int32_t
 
     // copy piece chars to output text buffer
     // skip up to 'lstrip' leading spaces before copying
-    auto _try_copy = [=] (const char * token, size_t size) -> int32_t {
-        for (int32_t i = 0; i < lstrip && size && *token == ' '; ++i) {
-            token++;
+    auto _try_copy = [=] (const char * text, size_t size) -> int32_t {
+        for (int32_t i = 0; i < lstrip && size && *text == ' '; ++i) {
+            text++;
             size--;
         }
         if (length < (int32_t)size) {
             return -(int32_t) size;
         }
-        memcpy(buf, token, size);
+        memcpy(buf, text, size);
         return (int32_t) size;
     };
 
