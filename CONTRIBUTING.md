@@ -46,7 +46,7 @@
 # Naming guidelines
 
 - Use `snake_case` for function, variable and type names
-- Naming usually optimizes for common prefix (see https://github.com/ggerganov/ggml/pull/302#discussion_r1243240963)
+- Naming usually optimizes for longest common prefix (see https://github.com/ggerganov/ggml/pull/302#discussion_r1243240963)
 
     ```cpp
     // not OK
