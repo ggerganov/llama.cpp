@@ -1174,14 +1174,15 @@ struct llm_build_context {
         ggml_set_input(lctx.inp_K_shift);
 
         for (int il = 0; il < n_layer; ++il) {
-            const int64_t n_head_kv = hparams.n_head_kv(il);
-            const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
+            const int64_t n_head_kv_i    = hparams.n_head_kv(il);
+            const int64_t n_embd_k_gqa_i = hparams.n_embd_k_gqa(il);
+
             struct ggml_tensor * rope_factors = build_rope_factors(il);
             struct ggml_tensor * k =
                 ggml_view_3d(ctx0, kv_self.k_l[il],
-                    n_embd_head_k, n_head_kv, n_ctx,
+                    n_embd_head_k, n_head_kv_i, n_ctx,
                     ggml_row_size(kv_self.k_l[il]->type, n_embd_head_k),
-                    ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
+                    ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i),
                     0);
 
             struct ggml_tensor * tmp;
@@ -1231,18 +1232,18 @@ struct llm_build_context {
             }
 
             for (int il = 0; il < n_layer; ++il) {
-                const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
-                const int64_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
+                const int64_t n_embd_k_gqa_i = hparams.n_embd_k_gqa(il);
+                const int64_t n_embd_v_gqa_i = hparams.n_embd_v_gqa(il);
 
                 ggml_tensor * view_k_src = ggml_view_2d(ctx0, kv_self.k_l[il],
-                        n_embd_k_gqa, nm,
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*i));
+                        n_embd_k_gqa_i, nm,
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i),
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i*i));
 
                 ggml_tensor * view_k_dst = ggml_view_2d(ctx0, kv_self.k_l[il],
-                        n_embd_k_gqa, nm,
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*id));
+                        n_embd_k_gqa_i, nm,
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i),
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i*id));
 
                 ggml_tensor * view_v_src;
                 ggml_tensor * view_v_dst;
@@ -1250,22 +1251,22 @@ struct llm_build_context {
                 if (flash_attn) {
                     // NOTE: the V cache is not transposed when using flash attention
                     view_v_src = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            n_embd_v_gqa, nm,
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa),
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa*i));
+                            n_embd_v_gqa_i, nm,
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i),
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i*i));
 
                     view_v_dst = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            n_embd_v_gqa, nm,
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa),
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa*id));
+                            n_embd_v_gqa_i, nm,
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i),
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i*id));
                 } else {
                     view_v_src = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            nm, n_embd_v_gqa,
+                            nm, n_embd_v_gqa_i,
                             ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
                             ggml_row_size(kv_self.v_l[il]->type, i));
 
                     view_v_dst = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            nm, n_embd_v_gqa,
+                            nm, n_embd_v_gqa_i,
                             ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
                             ggml_row_size(kv_self.v_l[il]->type, id));
                 }
@@ -1459,7 +1460,6 @@ struct llm_build_context {
     }
 
     struct ggml_tensor * llm_build_inp_embd_enc() {
-        const int64_t n_embd = hparams.n_embd;
         lctx.inp_embd_enc = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_outputs_enc);
         ggml_set_input(lctx.inp_embd_enc);
         cb(lctx.inp_embd_enc, "embd_enc", -1);

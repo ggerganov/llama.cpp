@@ -204,13 +204,15 @@ static bool gguf_ex_read_1(const std::string & fname, bool check_data) {
                 __func__, i, ggml_n_dims(cur), int(cur->ne[0]), int(cur->ne[1]), int(cur->ne[2]), int(cur->ne[3]), cur->name, cur->data);
 
             // print first 10 elements
-            const float * data = (const float *) cur->data;
+            {
+                const float * data = (const float *) cur->data;
 
-            printf("%s data[:10] : ", name);
-            for (int j = 0; j < MIN(10, ggml_nelements(cur)); ++j) {
-                printf("%f ", data[j]);
+                printf("%s data[:10] : ", name);
+                for (int j = 0; j < MIN(10, ggml_nelements(cur)); ++j) {
+                    printf("%f ", data[j]);
+                }
+                printf("\n\n");
             }
-            printf("\n\n");
 
             // check data
             if (check_data) {
