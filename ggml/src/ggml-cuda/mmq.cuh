@@ -1837,7 +1837,9 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
         const int qs0 = get_int_b2(bxi->qs, kqsx);
 
 #pragma unroll
-        for (int l = 0; l < QR2_0; ++l) {
+        for (int l0 = 0; l0 < QR2_0; ++l0) {
+            const int l = (l0 + kqsx/8) % QR2_0; // avoid shared memory bank conflicts
+
             //  0..7,  32..39
             //  8..15, 40..47
             // 16..23, 48..55

@@ -287,7 +287,7 @@ static __global__ void dequantize_block_tq2_0(const void * __restrict__ vx, dst_
     const int64_t n   = tid/32;      // 0 or 1
     const int64_t l   = tid - 32*n;  // 0..32
 
-    const uint8_t q = x[i].qs[32*n + l];
+    const uint8_t q = x[i].qs[tid];
     dst_t * y = yy + i*QK_K + 128*n;
 
     float d = __half2float(x[i].d);
