@@ -65,7 +65,7 @@ int main(int argc, char ** argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = common_detokenize(ctx, std::vector<int>(1, i), true);

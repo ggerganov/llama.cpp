@@ -116,7 +116,7 @@ struct common_sampler {
         const llama_model * model = llama_get_model(ctx);
         const llama_vocab * vocab = llama_model_get_vocab(model);
 
-        const int n_vocab = llama_vocab_n_vocab(vocab);
+        const int n_vocab = llama_vocab_n_tokens(vocab);
 
         cur.resize(n_vocab);
 
@@ -162,7 +162,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
     llama_sampler_chain_add(result->chain,
             llama_sampler_init_logit_bias(
-                llama_vocab_n_vocab(vocab),
+                llama_vocab_n_tokens(vocab),
                 params.logit_bias.size(),
                 params.logit_bias.data()));
 
@@ -211,7 +211,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
     } else if (params.mirostat == 1) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_vocab_n_vocab(vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_vocab_n_tokens(vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
         llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));

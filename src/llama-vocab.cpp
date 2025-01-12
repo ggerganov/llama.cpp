@@ -206,7 +206,7 @@ private:
             return;
         }
 
-        if (static_cast<uint32_t>(token) >= vocab.n_vocab()) {
+        if (static_cast<uint32_t>(token) >= vocab.n_tokens()) {
             return;
         }
 
@@ -732,7 +732,7 @@ struct llm_tokenizer_ugm : llm_tokenizer {
             prefix_replacements_size = precompiled_charsmap.size() - charsmap_offset;
         }
 
-        for (uint32_t id = 0; id < vocab.n_vocab(); ++id) {
+        for (uint32_t id = 0; id < vocab.n_tokens(); ++id) {
             const auto & token_data = vocab.get_token_data(id);
 
             if (vocab.is_normal(id)) {
@@ -1117,7 +1117,7 @@ struct llm_tokenizer_rwkv : llm_tokenizer {
         // For now, we decode the vocab here into the lookup we'll use for tokenization.
 
         // build trie
-        for (uint32_t id = 0; id < vocab.n_vocab(); ++id) {
+        for (uint32_t id = 0; id < vocab.n_tokens(); ++id) {
             const auto & data = vocab.get_token_data(id);
             const auto text = llama_unescape_rwkv_token(data.text);
             token_matcher.insert((const char *) text.data(), text.size(), id);
@@ -1202,7 +1202,6 @@ struct fragment_buffer_variant {
 };
 
 struct llama_vocab::impl {
-    uint32_t n_vocab = 0;
     uint32_t n_token_types = 0; // for BERT-style token types
 
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
@@ -1358,9 +1357,9 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             linefeed_id     = LLAMA_TOKEN_NULL;
 
             // read vocab size from metadata
-            if (!ml.get_key(LLM_KV_VOCAB_SIZE, n_vocab, false)) {
-                n_vocab = 0;
-                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata, n_vocab will be set to %u\n", __func__, n_vocab);
+            uint32_t n_tokens = 0;
+            if (!ml.get_key(LLM_KV_VOCAB_SIZE, n_tokens, false)) {
+                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata\n", __func__);
             }
 
             return;
@@ -1642,10 +1641,10 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
         toktypes = (const int * ) gguf_get_arr_data(ctx, toktype_idx);
     }
 
-    n_vocab = gguf_get_arr_n(ctx, token_idx);
-    id_to_token.resize(n_vocab);
+    uint32_t n_tokens = gguf_get_arr_n(ctx, token_idx);
+    id_to_token.resize(n_tokens);
 
-    for (uint32_t i = 0; i < n_vocab; i++) {
+    for (uint32_t i = 0; i < n_tokens; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
         if (word.empty()) {
             LLAMA_LOG_WARN("%s: empty token at index %u\n", __func__, i);
@@ -1955,7 +1954,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
 
     // build special tokens cache
     {
-        for (llama_token id = 0; id < (llama_token) n_vocab; ++id) {
+        for (llama_token id = 0; id < (llama_token) n_tokens; ++id) {
             if (id_to_token[id].attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED | LLAMA_TOKEN_ATTR_UNKNOWN)) {
                 cache_special_tokens.push_back(id);
             }
@@ -1974,9 +1973,9 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
     {
         size_t size_cache = 0;
 
-        std::vector<std::string> cache(n_vocab);
+        std::vector<std::string> cache(n_tokens);
 
-        for (uint32_t id = 0; id < n_vocab; ++id) {
+        for (uint32_t id = 0; id < n_tokens; ++id) {
             cache[id] = token_to_piece_for_cache(id, true);
 
             size_cache += cache[id].size();
@@ -2690,7 +2689,7 @@ int32_t llama_vocab::impl::detokenize(
 
 void llama_vocab::impl::print_info() const {
     LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, type_name().c_str());
-    LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, n_vocab);
+    LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, vocab.n_tokens());
     LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (uint32_t) bpe_ranks.size());
 
     // special tokens
@@ -2738,7 +2737,7 @@ enum llama_vocab_pre_type llama_vocab::get_pre_type() const {
     return pimpl->pre_type;
 }
 
-uint32_t llama_vocab::n_vocab() const {
+uint32_t llama_vocab::n_tokens() const {
     return (uint32_t) pimpl->id_to_token.size();
 }
 
@@ -3025,13 +3024,13 @@ void llama_vocab::print_info() const {
 // interface implementation
 //
 
-int32_t llama_vocab_n_vocab(const struct llama_vocab * vocab) {
-    return vocab->n_vocab();
+int32_t llama_vocab_n_tokens(const struct llama_vocab * vocab) {
+    return vocab->n_tokens();
 }
 
 // deprecated
 int32_t llama_n_vocab(const struct llama_vocab * vocab) {
-    return llama_vocab_n_vocab(vocab);
+    return llama_vocab_n_tokens(vocab);
 }
 
 enum llama_vocab_type llama_vocab_type(const struct llama_vocab * vocab) {

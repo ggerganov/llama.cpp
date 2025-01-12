@@ -341,7 +341,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     int count = 0;
     double nll = 0.0;
@@ -491,7 +491,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     int count = 0;
     double nll = 0.0;
@@ -857,7 +857,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     const int max_tasks_per_batch = 32;
     const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
@@ -1141,7 +1141,7 @@ static void winogrande_score(llama_context * ctx, const common_params & params) 
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     const int max_tasks_per_batch = 128;
     const int max_seq = std::min(2*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
@@ -1495,7 +1495,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_batch = params.n_batch;
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     const int max_tasks_per_batch = 32;
     const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
@@ -1704,8 +1704,8 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
         LOG_ERR("%s: failed reading n_vocab, n_chunk from %s\n", __func__, params.logits_file.c_str());
         return;
     }
-    if (n_vocab != llama_vocab_n_vocab(vocab)) {
-        LOG_ERR("%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, llama_vocab_n_vocab(vocab));
+    if (n_vocab != llama_vocab_n_tokens(vocab)) {
+        LOG_ERR("%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, llama_vocab_n_tokens(vocab));
     }
 
     std::vector<llama_token> tokens(size_t(n_ctx) * n_chunk);

@@ -950,7 +950,7 @@ struct common_init_result common_init_from_params(common_params & params) {
     }
 
     if (params.sampling.ignore_eos) {
-        for (llama_token i = 0; i < llama_vocab_n_vocab(vocab); i++) {
+        for (llama_token i = 0; i < llama_vocab_n_tokens(vocab); i++) {
             if (llama_vocab_is_eog(vocab, i)) {
                 LOG_INF("%s: added %s logit bias = %f\n", __func__, common_token_to_piece(lctx, i).c_str(), -INFINITY);
                 params.sampling.logit_bias.push_back({i, -INFINITY});

@@ -1367,7 +1367,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
         const int64_t n_embd_head_v = hparams.n_embd_head_v;
         const int64_t n_ff          = hparams.n_ff();
         const int64_t n_embd_gqa    = n_embd_v_gqa;
-        const int64_t n_vocab       = vocab.n_vocab();
+        const int64_t n_vocab       = vocab.n_tokens();
         const int64_t n_token_types = vocab.n_token_types();
         const int64_t n_rot         = hparams.n_rot;
         const int64_t n_expert      = hparams.n_expert;

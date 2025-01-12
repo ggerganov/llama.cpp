@@ -116,8 +116,8 @@ int main(int argc, char ** argv) {
     }
 
     {
-        const int n_vocab_tgt = llama_vocab_n_vocab(vocab_tgt);
-        const int n_vocab_dft = llama_vocab_n_vocab(vocab_dft);
+        const int n_vocab_tgt = llama_vocab_n_tokens(vocab_tgt);
+        const int n_vocab_dft = llama_vocab_n_tokens(vocab_dft);
         const int vocab_diff  = n_vocab_tgt > n_vocab_dft
             ? n_vocab_tgt - n_vocab_dft
             : n_vocab_dft - n_vocab_tgt;
@@ -125,7 +125,7 @@ int main(int argc, char ** argv) {
         if (vocab_diff > SPEC_VOCAB_MAX_SIZE_DIFFERENCE) {
             LOG_ERR("%s: draft model vocab must closely match target model to use speculation but ", __func__);
             LOG_ERR("target vocab size %d does not match draft vocab size %d - difference %d, max allowed %d\n",
-                    n_vocab_tgt, llama_vocab_n_vocab(vocab_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
+                    n_vocab_tgt, llama_vocab_n_tokens(vocab_dft), vocab_diff, SPEC_VOCAB_MAX_SIZE_DIFFERENCE);
             return 1;
         }
 
@@ -173,7 +173,7 @@ int main(int argc, char ** argv) {
     const auto t_enc_end = ggml_time_us();
 
     // the 2 models should have the same vocab
-    //GGML_ASSERT(n_vocab == llama_vocab_n_vocab(model_dft));
+    //GGML_ASSERT(n_vocab == llama_vocab_n_tokens(model_dft));
 
     // how many tokens to draft each time
     int n_draft = params.speculative.n_max;

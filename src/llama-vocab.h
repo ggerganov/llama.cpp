@@ -24,7 +24,7 @@ struct llama_vocab {
     enum llama_vocab_type     get_type()     const;
     enum llama_vocab_pre_type get_pre_type() const;
 
-    uint32_t n_vocab() const;
+    uint32_t n_tokens() const;
     uint32_t n_token_types() const;
 
     std::string type_name() const;

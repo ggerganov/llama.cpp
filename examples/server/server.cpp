@@ -331,7 +331,7 @@ struct server_task {
 
             const auto & logit_bias = data.find("logit_bias");
             if (logit_bias != data.end() && logit_bias->is_array()) {
-                const int n_vocab = llama_vocab_n_vocab(vocab);
+                const int n_vocab = llama_vocab_n_tokens(vocab);
                 for (const auto & el : *logit_bias) {
                     // TODO: we may want to throw errors here, in case "el" is incorrect
                     if (el.is_array() && el.size() == 2) {
@@ -2081,7 +2081,7 @@ struct server_context {
 
     void populate_token_probs(const server_slot & slot, completion_token_output & result, bool post_sampling, bool special, int idx) {
         size_t n_probs = slot.params.sampling.n_probs;
-        size_t n_vocab = llama_vocab_n_vocab(vocab);
+        size_t n_vocab = llama_vocab_n_tokens(vocab);
         if (post_sampling) {
             const auto * cur_p = common_sampler_get_candidates(slot.smpl);
             const size_t max_probs = cur_p->size;
@@ -3137,7 +3137,7 @@ struct server_context {
     json model_meta() const {
         return json {
             {"vocab_type",  llama_vocab_type       (vocab)},
-            {"n_vocab",     llama_vocab_n_vocab    (vocab)},
+            {"n_vocab",     llama_vocab_n_tokens   (vocab)},
             {"n_ctx_train", llama_model_n_ctx_train(model)},
             {"n_embd",      llama_model_n_embd     (model)},
             {"n_params",    llama_model_n_params   (model)},

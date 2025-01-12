@@ -149,7 +149,7 @@ int main(int argc, char ** argv) {
     }
 
     // here we keep adding new n-grams as we go
-    ngram_container ngrams_observed(llama_vocab_n_vocab(vocab), N, G);
+    ngram_container ngrams_observed(llama_vocab_n_tokens(vocab), N, G);
 
     // debug
     struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, W + G + 1);

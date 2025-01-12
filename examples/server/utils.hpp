@@ -776,7 +776,7 @@ static std::vector<llama_token_data> get_token_probabilities(llama_context * ctx
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    const int n_vocab = llama_vocab_n_vocab(vocab);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
 
     cur.resize(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
