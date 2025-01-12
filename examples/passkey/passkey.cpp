@@ -70,15 +70,17 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
     // initialize the context
 
     llama_context_params ctx_params = common_context_params_to_llama(params);
 
-    ctx_params.n_ctx = llama_n_ctx_train(model)*n_grp + n_keep;
+    ctx_params.n_ctx = llama_model_n_ctx_train(model)*n_grp + n_keep;
 
     GGML_ASSERT(ctx_params.n_batch % n_grp == 0 && "n_batch must be divisible by n_grp");
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
     if (ctx == NULL) {
         LOG_ERR("%s: failed to create the llama_context\n" , __func__);
         return 1;
@@ -223,7 +225,7 @@ int main(int argc, char ** argv) {
             const llama_token new_token_id = llama_sampler_sample(smpl, ctx, batch.n_tokens - 1);
 
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+            if (llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len) {
                 LOG("\n");
 
                 break;

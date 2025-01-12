@@ -105,7 +105,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
+    const int n_ctx_train = llama_model_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
     const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
@@ -148,7 +150,7 @@ int main(int argc, char ** argv) {
     // check if the last token is SEP
     // it should be automatically added by the tokenizer when 'tokenizer.ggml.add_eos_token' is set to 'true'
     for (auto & inp : inputs) {
-        if (inp.empty() || inp.back() != llama_token_sep(model)) {
+        if (inp.empty() || inp.back() != llama_vocab_sep(vocab)) {
             LOG_WRN("%s: last token in the prompt is not SEP\n", __func__);
             LOG_WRN("%s: 'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header\n", __func__);
         }
@@ -181,7 +183,7 @@ int main(int argc, char ** argv) {
     }
 
     // allocate output
-    const int n_embd = llama_n_embd(model);
+    const int n_embd = llama_model_n_embd(model);
     std::vector<float> embeddings(n_embd_count * n_embd, 0);
     float * emb = embeddings.data();
 
