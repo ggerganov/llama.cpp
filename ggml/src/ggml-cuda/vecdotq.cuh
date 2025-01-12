@@ -831,13 +831,13 @@ static __device__ __forceinline__ float vec_dot_tq2_0_q8_1(
     }
 
 #pragma unroll
-    for (int i0 = 0; i0 < QR2_0; ++i0) {
-        const block_q8_1 * bq8i = bq8_1 + bq8_offset + i0;
+    for (int i = 0; i < QR2_0; ++i) {
+        const block_q8_1 * bq8i = bq8_1 + bq8_offset + i;
 
-        for (int i = 0; i < VDR_TQ2_0_Q8_1_MMVQ; ++i) {
-            u[VDR_TQ2_0_Q8_1_MMVQ*i0 + i] = get_int_b4(bq8i->qs, (iqs % QI8_1) + i);
+        for (int j = 0; j < VDR_TQ2_0_Q8_1_MMVQ; ++j) {
+            u[VDR_TQ2_0_Q8_1_MMVQ*i + j] = get_int_b4(bq8i->qs, (iqs % QI8_1) + j);
         }
-        d8[i0] = __low2float(bq8i->ds);
+        d8[i] = __low2float(bq8i->ds);
     }
 
     return vec_dot_tq2_0_q8_1_impl<VDR_TQ2_0_Q8_1_MMVQ>(v, u, btq2_0->d, d8);
