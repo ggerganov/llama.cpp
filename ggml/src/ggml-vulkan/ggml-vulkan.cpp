@@ -31,6 +31,12 @@
 
 #define VK_API_VERSION VK_API_VERSION_1_2
 
+#ifdef GGML_VULKAN_RENDERDOC_PATH
+#include "renderdoc_app.h"
+
+RENDERDOC_API_1_1_2* rdoc_api = nullptr;
+#endif
+
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
 #define VK_VENDOR_ID_AMD 0x1002
@@ -2802,6 +2808,15 @@ void ggml_vk_instance_init() {
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         ggml_vk_print_gpu_info(i);
     }
+
+#ifdef GGML_VULKAN_RENDERDOC_PATH
+    if (void* mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD)) {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void **)&rdoc_api);
+        assert(ret == 1);
+        GGML_LOG_DEBUG("ggml_vulkan: Renderdoc tracing active");
+    }
+#endif
 }
 
 static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
@@ -7454,9 +7469,17 @@ static const char * ggml_backend_vk_name(ggml_backend_t backend) {
     return ctx->name.c_str();
 }
 
+#ifdef GGML_VULKAN_RENDERDOC_PATH
+    static RENDERDOC_DevicePointer rd_dev_ptr = nullptr;
+#endif
+
 static void ggml_backend_vk_free(ggml_backend_t backend) {
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
     VK_LOG_DEBUG("ggml_backend_vk_free(" << ctx->name << ")");
+
+#ifdef GGML_VULKAN_RENDERDOC_PATH
+    if(rdoc_api) rdoc_api->EndFrameCapture(rd_dev_ptr, NULL);
+#endif
 
     ggml_vk_cleanup(ctx);
 
@@ -7576,6 +7599,7 @@ static bool ggml_vk_is_empty(ggml_tensor * node) {
 
 static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     VK_LOG_DEBUG("ggml_backend_vk_graph_compute(" << cgraph->n_nodes << " nodes)");
+
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
@@ -7681,6 +7705,12 @@ ggml_backend_t ggml_backend_vk_init(size_t dev_num) {
         /* .device    = */ ggml_backend_reg_dev_get(ggml_backend_vk_reg(), dev_num),
         /* .context   = */ ctx,
     };
+
+#ifdef GGML_VULKAN_RENDERDOC_PATH
+    rd_dev_ptr = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(((VkInstance)vk_instance.instance));
+
+    if(rdoc_api) rdoc_api->StartFrameCapture(rd_dev_ptr, NULL);
+#endif
 
     return vk_backend;
 }

@@ -73,6 +73,13 @@ if (Vulkan_FOUND)
         add_compile_definitions(GGML_VULKAN_RUN_TESTS)
     endif()
 
+    if (GGML_VULKAN_RENDERDOC_PATH)
+        message(STATUS "Using renderdoc in ${GGML_VULKAN_RENDERDOC_PATH} for tracing")
+        target_include_directories(ggml-vulkan PRIVATE ${GGML_VULKAN_RENDERDOC_PATH}/include)
+        # target_link_libraries(ggml-vulkan PRIVATE ${GGML_VULKAN_RENDERDOC_PATH}/lib/librenderdoc.so)
+        add_compile_definitions(GGML_VULKAN_RENDERDOC_PATH=\"${GGML_VULKAN_RENDERDOC_PATH}\")
+    endif()
+
     add_subdirectory(vulkan-shaders)
 
     set (_ggml_vk_genshaders_cmd vulkan-shaders-gen)
