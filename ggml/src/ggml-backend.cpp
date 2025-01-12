@@ -1724,7 +1724,7 @@ static void graph_copy_init_tensor(struct ggml_hash_set * hash_set, struct ggml_
     }
 }
 
-struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, struct ggml_cgraph * graph) {
+struct ggml_backend_graph_copy ggml_backend_graph_copy_init(ggml_backend_t backend, struct ggml_cgraph * graph) {
     struct ggml_hash_set hash_set = ggml_hash_set_new(graph->visited_hash_set.size);
     struct ggml_tensor ** node_copies = (ggml_tensor **) calloc(hash_set.size, sizeof(node_copies[0])); // NOLINT
     bool * node_init = (bool *) calloc(hash_set.size, sizeof(node_init[0]));
@@ -1812,7 +1812,7 @@ void ggml_backend_graph_copy_free(struct ggml_backend_graph_copy copy) {
 }
 
 bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t backend2, struct ggml_cgraph * graph, ggml_backend_eval_callback callback, void * user_data) {
-    struct ggml_backend_graph_copy copy = ggml_backend_graph_copy(backend2, graph);
+    struct ggml_backend_graph_copy copy = ggml_backend_graph_copy_init(backend2, graph);
     if (copy.buffer == NULL) {
         return false;
     }
