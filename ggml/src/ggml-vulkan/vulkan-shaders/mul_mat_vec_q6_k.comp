@@ -17,6 +17,7 @@ void calc_superblock(const uint a_offset, const uint b_offset, const uint itid, 
         const uint ib0 = a_offset / QUANT_K + (first_row+n)*num_blocks_per_row;
 
         if (!all_threads) { // when we don't have enough blocks to use all threads
+            barrier();
             if (i < num_blocks_per_row)
                 sccache[ix][itid] = FLOAT_TYPE(data_a[ib0 + i].scales[itid]);
             barrier();
@@ -50,6 +51,7 @@ void calc_superblock(const uint a_offset, const uint b_offset, const uint itid, 
         const vec4 q3 = vec4(unpack8(q3_u32)) - 32;
 
         if (all_threads) {
+            barrier();
             sccache[ix][itid] = FLOAT_TYPE(data_a[ib0 + i].scales[itid]);
             barrier();
         }

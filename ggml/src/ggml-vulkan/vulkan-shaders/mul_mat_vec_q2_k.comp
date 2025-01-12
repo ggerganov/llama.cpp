@@ -16,6 +16,7 @@ void calc_superblock(const uint a_offset, const uint b_offset, const uint itid, 
     [[unroll]] for (uint n = 0; n < num_rows; ++n) {
         const uint ib0 = a_offset / QUANT_K + (first_row+n)*num_blocks_per_row;
 
+        barrier();
         if (!all_threads) { // when we don't have enough blocks to use all threads
             if (i < num_blocks_per_row) {
                 const uint32_t scale = uint32_t(data_a[ib0 + i].scales[itid]);
