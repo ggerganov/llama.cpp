@@ -29,7 +29,7 @@
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(_WIN32)
 [[noreturn]] static void sigint_handler(int) {
-    printf("\n");
+    printf("\n\033[0m");
     exit(0);  // not ideal, but it's the only way to guarantee exit in all cases
 }
 #endif
