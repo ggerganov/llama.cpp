@@ -17,7 +17,7 @@ struct llama_logger_state {
 
 static llama_logger_state g_logger_state;
 
-time_meas::time_meas(int64_t & t_acc, bool disable) : t_start_us(disable ? -1 : ggml_time_us()), t_acc(t_acc) {}
+time_meas::time_meas(int64_t & t_acc_, bool disable) : t_start_us(disable ? -1 : ggml_time_us()), t_acc(t_acc_) {}
 
 time_meas::~time_meas() {
         if (t_start_us >= 0) {

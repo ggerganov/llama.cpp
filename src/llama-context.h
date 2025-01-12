@@ -15,8 +15,8 @@
 #include <set>
 
 struct llama_context {
-    llama_context(const llama_model & model)
-        : model(model)
+    llama_context(const llama_model & model_)
+        : model(model_)
         , t_start_us(model.t_start_us)
         , t_load_us(model.t_load_us) {}
 

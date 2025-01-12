@@ -55,7 +55,7 @@ struct llama_adapter_lora_weight {
     }
 
     llama_adapter_lora_weight() = default;
-    llama_adapter_lora_weight(struct ggml_tensor * a, struct ggml_tensor * b) : a(a), b(b) {}
+    llama_adapter_lora_weight(struct ggml_tensor * a_, struct ggml_tensor * b_) : a(a_), b(b_) {}
 };
 
 struct llama_adapter_lora {

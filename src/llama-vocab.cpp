@@ -115,7 +115,7 @@ struct llm_tokenizer_spm : llm_tokenizer {
 };
 
 struct llm_tokenizer_spm_session {
-    llm_tokenizer_spm_session(const llama_vocab & vocab) : vocab(vocab) {}
+    llm_tokenizer_spm_session(const llama_vocab & vocab_) : vocab(vocab_) {}
 
     void tokenize(const std::string & text, std::vector<llama_token> & output) {
         // split string into utf8 chars
@@ -415,7 +415,7 @@ struct llm_tokenizer_bpe : llm_tokenizer {
 };
 
 struct llm_tokenizer_bpe_session {
-    llm_tokenizer_bpe_session(const llama_vocab & vocab, const llm_tokenizer_bpe & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
+    llm_tokenizer_bpe_session(const llama_vocab & vocab_, const llm_tokenizer_bpe & tokenizer_) : vocab(vocab_), tokenizer(tokenizer_) {}
 
     static void append(const llama_token token_id, std::vector<llama_token> & output)  {
         output.push_back(token_id);
@@ -603,7 +603,7 @@ struct llm_tokenizer_wpm : llm_tokenizer {
 };
 
 struct llm_tokenizer_wpm_session {
-    llm_tokenizer_wpm_session(const llama_vocab & vocab) : vocab(vocab) {}
+    llm_tokenizer_wpm_session(const llama_vocab & vocab_) : vocab(vocab_) {}
 
     void tokenize(const std::string & text, std::vector<llama_token> & output) {
         // normalize and split by whitespace
@@ -782,7 +782,7 @@ struct llm_tokenizer_ugm : llm_tokenizer {
 };
 
 struct llm_tokenizer_ugm_session {
-    llm_tokenizer_ugm_session(const llama_vocab & vocab, const llm_tokenizer_ugm & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
+    llm_tokenizer_ugm_session(const llama_vocab & vocab_, const llm_tokenizer_ugm & tokenizer_) : vocab(vocab_), tokenizer(tokenizer_) {}
 
     /* This implementation is based on SentencePiece optimized Viterbi algorithm for
      * unigram language models. The general idea is to:
@@ -949,7 +949,7 @@ private:
      */
     struct xcda_array_view {
     public:
-        xcda_array_view(const uint32_t * xcda_array, size_t xcda_array_size) : xcda_array(xcda_array), xcda_array_size(xcda_array_size) {
+        xcda_array_view(const uint32_t * xcda_array_, size_t xcda_array_size_) : xcda_array(xcda_array_), xcda_array_size(xcda_array_size_) {
         }
         uint32_t get_base(size_t index) {
             uint32_t packed_node = get_node(index);
@@ -1135,7 +1135,7 @@ struct llm_tokenizer_rwkv : llm_tokenizer {
 };
 
 struct llm_tokenizer_rwkv_session {
-    llm_tokenizer_rwkv_session(const llama_vocab & vocab, const llm_tokenizer_rwkv & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
+    llm_tokenizer_rwkv_session(const llama_vocab & vocab_, const llm_tokenizer_rwkv & tokenizer_) : vocab(vocab_), tokenizer(tokenizer_) {}
 
     void tokenize(const std::string & text, std::vector<llama_token> & output) {
         uint32_t position = 0;
@@ -1262,7 +1262,7 @@ struct llama_vocab::impl {
 
     std::vector<char> precompiled_charsmap;
 
-    impl(const llama_vocab & vocab) : vocab(vocab) {
+    impl(const llama_vocab & vocab_) : vocab(vocab_) {
     }
 
     ~impl() = default;

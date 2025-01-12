@@ -41,9 +41,9 @@ struct quantize_state_impl {
     // used to figure out if a model shares tok_embd with the output weight
     bool has_output = false;
 
-    quantize_state_impl(const llama_model & model, const llama_model_quantize_params * params)
-        : model(model)
-        , params(params)
+    quantize_state_impl(const llama_model & model_, const llama_model_quantize_params * params_)
+        : model(model_)
+        , params(params_)
         {}
 };
 

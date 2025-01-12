@@ -204,14 +204,14 @@ struct split_strategy {
     // temporary buffer for reading in tensor data
     std::vector<uint8_t> read_buf;
 
-    split_strategy(const split_params & params,
-            std::ifstream & f_input,
-            struct gguf_context * ctx_gguf,
-            struct ggml_context * ctx_meta) :
-        params(params),
-        f_input(f_input),
-        ctx_gguf(ctx_gguf),
-        ctx_meta(ctx_meta),
+    split_strategy(const split_params & params_,
+            std::ifstream & f_input_,
+            struct gguf_context * ctx_gguf_,
+            struct ggml_context * ctx_meta_) :
+        params(params_),
+        f_input(f_input_),
+        ctx_gguf(ctx_gguf_),
+        ctx_meta(ctx_meta_),
         n_tensors(gguf_get_n_tensors(ctx_gguf)) {
 
         // because we need to know list of tensors for each file in advance, we will build all the ctx_out for all output splits

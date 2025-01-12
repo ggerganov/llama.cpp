@@ -1089,16 +1089,16 @@ struct llm_build_context {
 
     // TODO: consider making the entire interface noexcept
     llm_build_context(
-        llama_context  & lctx,
-    const llama_ubatch & ubatch,
-    const llm_build_cb & cb,
+         llama_context & lctx_,
+    const llama_ubatch & ubatch_,
+    const llm_build_cb & cb_,
                   bool   worst_case) :
-        model            (lctx.model),
-        lctx             (lctx),
+        model            (lctx_.model),
+        lctx             (lctx_),
         hparams          (model.hparams),
-        cparams          (lctx.cparams),
-        ubatch           (ubatch),
-        kv_self          (lctx.kv_self),
+        cparams          (lctx_.cparams),
+        ubatch           (ubatch_),
+        kv_self          (lctx_.kv_self),
         n_embd           (hparams.n_embd),
         n_layer          (hparams.n_layer),
         n_rot            (hparams.n_rot),
@@ -1119,17 +1119,17 @@ struct llm_build_context {
         beta_slow        (cparams.yarn_beta_slow),
         norm_eps         (hparams.f_norm_eps),
         norm_rms_eps     (hparams.f_norm_rms_eps),
-        n_tokens         (ubatch.n_tokens),
+        n_tokens         (ubatch_.n_tokens),
         n_kv             (worst_case ? kv_self.size : kv_self.n),
-        n_outputs        (worst_case ? n_tokens : lctx.n_outputs),
-        n_outputs_enc    (worst_case ? n_tokens : lctx.embd_enc.size() / hparams.n_embd),
+        n_outputs        (worst_case ? n_tokens : lctx_.n_outputs),
+        n_outputs_enc    (worst_case ? n_tokens : lctx_.embd_enc.size() / hparams.n_embd),
         kv_head          (worst_case ? (kv_self.recurrent ? 0 : kv_self.size - n_tokens) : kv_self.head),
         n_ctx_orig       (cparams.n_ctx_orig_yarn),
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
-        cb               (cb),
-        buf_compute_meta (lctx.buf_compute_meta) {
+        cb               (cb_),
+        buf_compute_meta (lctx_.buf_compute_meta) {
             // all initializations should be done in init()
         }
 

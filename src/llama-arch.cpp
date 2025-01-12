@@ -1443,7 +1443,7 @@ static const std::map<llm_tensor, llm_tensor_info> LLM_TENSOR_INFOS = {
     {LLM_TENSOR_CONVNEXT_GAMMA,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL}},
 };
 
-LLM_KV::LLM_KV(llm_arch arch) : arch(arch) {}
+LLM_KV::LLM_KV(llm_arch arch_) : arch(arch_) {}
 
 std::string LLM_KV::operator()(llm_kv kv) const {
     return ::format(LLM_KV_NAMES.at(kv), LLM_ARCH_NAMES.at(arch));

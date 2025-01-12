@@ -66,7 +66,7 @@ struct file_input {
     float alpha;
     float scale;
 
-    file_input(std::string & fname, float scale): f_in(fname, std::ios::binary), scale(scale) {
+    file_input(std::string & fname, float scale_): f_in(fname, std::ios::binary), scale(scale_) {
         if (!f_in.is_open()) {
             throw std::runtime_error("failed to open input gguf from " + fname);
         }
@@ -131,7 +131,7 @@ struct lora_merge_ctx {
             std::string & base_fname,
             std::vector<common_adapter_lora_info> & lora_files,
             std::string & outfile,
-            int n_threads) : base_model(base_fname, 0), n_threads(n_threads), fout(outfile, std::ios::binary) {
+            int n_threads_) : base_model(base_fname, 0), n_threads(n_threads_), fout(outfile, std::ios::binary) {
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
 
         if (gguf_find_key(base_model.ctx_gguf, LLM_KV_SPLIT_COUNT) >= 0) {
@@ -157,7 +157,7 @@ struct lora_merge_ctx {
         allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
     }
 
-    void check_metadata_lora(file_input * adapter) {
+    void check_metadata_lora(const file_input * adapter) const {
         auto general_type = get_kv_str(adapter->ctx_gguf, "general.type");
         if (general_type != "adapter") {
             throw std::runtime_error("expect general.type to be 'adapter', but got: " + general_type);
@@ -175,7 +175,7 @@ struct lora_merge_ctx {
         }
     }
 
-    ggml_type get_out_tensor_type(struct ggml_tensor * t) {
+    static ggml_type get_out_tensor_type(struct ggml_tensor * t) {
         if (t->type == GGML_TYPE_F32) {
             return GGML_TYPE_F32;
         } else {

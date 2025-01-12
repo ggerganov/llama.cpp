@@ -369,7 +369,7 @@ struct llama_model::impl {
     std::vector<layer_dev> dev_layer;
 };
 
-llama_model::llama_model(const struct llama_model_params & params) : params(params), pimpl(std::make_unique<impl>()) {
+llama_model::llama_model(const struct llama_model_params & params_) : params(params_), pimpl(std::make_unique<impl>()) {
 }
 
 llama_model::~llama_model() {}

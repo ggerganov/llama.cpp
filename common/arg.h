@@ -25,33 +25,33 @@ struct common_arg {
     void (*handler_int)    (common_params & params, int) = nullptr;
 
     common_arg(
-        const std::initializer_list<const char *> & args,
-        const char * value_hint,
-        const std::string & help,
+        const std::initializer_list<const char *> & args_,
+        const char * value_hint_,
+        const std::string & help_,
         void (*handler)(common_params & params, const std::string &)
-    ) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
+    ) : args(args_), value_hint(value_hint_), help(help_), handler_string(handler) {}
 
     common_arg(
-        const std::initializer_list<const char *> & args,
-        const char * value_hint,
-        const std::string & help,
+        const std::initializer_list<const char *> & args_,
+        const char * value_hint_,
+        const std::string & help_,
         void (*handler)(common_params & params, int)
-    ) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
+    ) : args(args_), value_hint(value_hint_), help(help_), handler_int(handler) {}
 
     common_arg(
-        const std::initializer_list<const char *> & args,
-        const std::string & help,
+        const std::initializer_list<const char *> & args_,
+        const std::string & help_,
         void (*handler)(common_params & params)
-    ) : args(args), help(help), handler_void(handler) {}
+    ) : args(args_), help(help_), handler_void(handler) {}
 
     // support 2 values for arg
     common_arg(
-        const std::initializer_list<const char *> & args,
-        const char * value_hint,
-        const char * value_hint_2,
-        const std::string & help,
+        const std::initializer_list<const char *> & args_,
+        const char * value_hint_,
+        const char * value_hint_2_,
+        const std::string & help_,
         void (*handler)(common_params & params, const std::string &, const std::string &)
-    ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
+    ) : args(args_), value_hint(value_hint_), value_hint_2(value_hint_2_), help(help_), handler_str_str(handler) {}
 
     common_arg & set_examples(std::initializer_list<enum llama_example> vals);
     common_arg & set_excludes(std::initializer_list<enum llama_example> vals);
@@ -69,7 +69,7 @@ struct common_params_context {
     common_params & params;
     std::vector<common_arg> options;
     void(*print_usage)(int, char **) = nullptr;
-    common_params_context(common_params & params) : params(params) {}
+    common_params_context(common_params & params_) : params(params_) {}
 };
 
 // parse input arguments from CLI
