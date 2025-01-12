@@ -84,7 +84,7 @@
 
     - The `get` `<action>` can be omitted
     - The `<noun>` can be omitted if not necessary
-    - The `_context` suffix of the `<class>` is optional
+    - The `_context` suffix of the `<class>` is optional. Use it to disambiguate symbols when needed.
     - Use `init`/`free` for constructor/destructor `<action>`
 
 - Use the `_t` suffix when a type is supposed to be opaque to the user - it's not relevant to them if it is a struct or anything else
