@@ -1294,18 +1294,18 @@ static bool common_download_file(const std::string & url, const std::string & pa
         curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
 
         // helper function to hide password in URL
-        auto llama_download_hide_password_in_url = [](const std::string & url) -> std::string {
-            std::size_t protocol_pos = url.find("://");
+        auto llama_download_hide_password_in_url = [](const std::string & url_full) -> std::string {
+            std::size_t protocol_pos = url_full.find("://");
             if (protocol_pos == std::string::npos) {
-                return url;  // Malformed URL
+                return url_full;  // Malformed URL
             }
 
-            std::size_t at_pos = url.find('@', protocol_pos + 3);
+            std::size_t at_pos = url_full.find('@', protocol_pos + 3);
             if (at_pos == std::string::npos) {
-                return url;  // No password in URL
+                return url_full;  // No password in URL
             }
 
-            return url.substr(0, protocol_pos + 3) + "********" + url.substr(at_pos);
+            return url_full.substr(0, protocol_pos + 3) + "********" + url_full.substr(at_pos);
         };
 
         // start the download
