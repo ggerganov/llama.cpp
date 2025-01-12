@@ -19,7 +19,7 @@ function(llama_add_compile_flags)
                 list(APPEND CXX_FLAGS -Wshadow)
 
                 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-                    list(APPEND CXX_FLAGS -Wshadow -Wshadow-field-in-constructor)
+                    list(APPEND CXX_FLAGS -Wshadow-field-in-constructor)
                 endif()
             endif()
 

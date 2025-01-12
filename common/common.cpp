@@ -1208,7 +1208,7 @@ static bool common_download_file(const std::string & url, const std::string & pa
     {
         typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
-            common_load_model_from_url_headers * headers = (common_load_model_from_url_headers *) userdata;
+            common_load_model_from_url_headers * cur = (common_load_model_from_url_headers *) userdata;
 
             static std::regex header_regex("([^:]+): (.*)\r\n");
             static std::regex etag_regex("ETag", std::regex_constants::icase);
@@ -1220,9 +1220,9 @@ static bool common_download_file(const std::string & url, const std::string & pa
                 const std::string & key = match[1];
                 const std::string & value = match[2];
                 if (std::regex_match(key, match, etag_regex)) {
-                    headers->etag = value;
+                    cur->etag = value;
                 } else if (std::regex_match(key, match, last_modified_regex)) {
-                    headers->last_modified = value;
+                    cur->last_modified = value;
                 }
             }
             return n_items;
