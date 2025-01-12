@@ -1636,15 +1636,8 @@ std::string common_detokenize(const struct llama_vocab * vocab, const std::vecto
 //
 
 std::string common_get_builtin_chat_template(const struct llama_model * model) {
-    static const char * template_key = "tokenizer.chat_template";
-    // call with NULL buffer to get the total size of the string
-    int32_t res = llama_model_meta_val_str(model, template_key, NULL, 0);
-    if (res > 0) {
-        std::vector<char> model_template(res + 1, 0);
-        llama_model_meta_val_str(model, template_key, model_template.data(), model_template.size());
-        return std::string(model_template.data(), model_template.size() - 1);
-    }
-    return "";
+    const char * ptr_tmpl = llama_model_chat_template(model);
+    return ptr_tmpl == nullptr ? "" : ptr_tmpl;
 }
 
 bool common_chat_verify_template(const std::string & tmpl) {
