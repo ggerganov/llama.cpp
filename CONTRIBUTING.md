@@ -24,22 +24,24 @@
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - Use sized integer types in the public API
 - Declare structs with `struct foo {}` instead of `typedef struct foo {} foo`
-    - In C++ code omit the `struct` keyword whenever it is not necessary
+    - In C++ code omit optional `struct` and `enum` keyword whenever they are not necessary
+    ```cpp
+    // OK
+    llama_context * ctx;
+    const llama_rope_type rope_type;
+
+    // not OK
+    struct llama_context * ctx;
+    const enum llama_rope_type rope_type;
+    ```
     > [!NOTE]
     > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
 - Try to follow the existing patterns in the code (indentation, spaces, etc.). In case of doubt use `clang-format` to format the added code
+- For anything not covered in the current guidelines, refer to the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
 - Matrix multiplication is unconventional: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
 
 ![matmul](media/matmul.png)
-
-- Preprocessor directives
-    - (TODO: add guidelines with examples and apply them to the codebase)
-
-    ```cpp
-    #ifdef FOO
-    #endif // FOO
-    ```
 
 # Naming guidelines
 
@@ -97,6 +99,21 @@
     > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
 
 - (TODO: abbreviations usage)
+
+# Preprocessor directives
+
+- (TODO: add guidelines with examples and apply them to the codebase)
+
+    ```cpp
+    #ifdef FOO
+    #endif // FOO
+    ```
+
+# Documentation
+
+- Documentation is a community effort
+- When you need to look into the source code to figure out implementation details to figure out how to use an API consider adding a short summary to the header file for future reference
+- When you notice incorrect or outdated documentation, please update it
 
 # Resources
 
