@@ -318,6 +318,7 @@ struct common_params {
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
     int32_t n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
     int32_t n_cache_reuse  = 0;            // min chunk size to reuse from the cache via KV shifting
+    int32_t standby_timeout  = 0;          // seconds that must pass since a request has been processed before server terminates in order to save resources. If -1, then never terminate automatically.
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";                                                                         // NOLINT

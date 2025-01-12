@@ -29,6 +29,8 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <chrono>
+#include <variant>
 
 using json = nlohmann::ordered_json;
 
@@ -1413,6 +1415,8 @@ struct server_queue {
     std::function<void(server_task)> callback_new_task;
     std::function<void(void)>        callback_update_slots;
 
+    int standby_timeout;
+
     // Add a new task to the end of the queue
     int post(server_task task, bool front = false) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
@@ -1527,9 +1531,18 @@ struct server_queue {
                         QUE_DBG("%s", "terminate\n");
                         return;
                     }
-                    condition_tasks.wait(lock, [&]{
-                        return (!queue_tasks.empty() || !running);
-                    });
+                    const auto pred = [&] {
+                            return (!queue_tasks.empty() || !running);
+                    };
+                    if (standby_timeout > 0) {
+                        if (!condition_tasks.wait_for(lock, std::chrono::seconds(standby_timeout), pred)) {
+                            QUE_INF("%s", "stand-by timeout reached\n");
+                            running = false;
+                            break;
+                        }
+                    } else {
+                        condition_tasks.wait(lock, pred);
+                    }
                 }
             }
         }
@@ -1691,6 +1704,8 @@ struct server_context {
         }
 
         n_ctx = llama_n_ctx(ctx);
+
+        queue_tasks.standby_timeout = params.standby_timeout;
 
         add_bos_token = llama_add_bos_token(model);
         has_eos_token = llama_token_eos(model) != LLAMA_TOKEN_NULL;
