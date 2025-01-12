@@ -548,11 +548,11 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 GGML_ASSERT(split_arg.size() <= llama_max_devices());
 
                 std::vector<float> tensor_split(llama_max_devices());
-                for (size_t i = 0; i < llama_max_devices(); ++i) {
-                    if (i < split_arg.size()) {
-                        tensor_split[i] = std::stof(split_arg[i]);
+                for (size_t is = 0; is < llama_max_devices(); ++is) {
+                    if (is < split_arg.size()) {
+                        tensor_split[is] = std::stof(split_arg[is]);
                     } else {
-                        tensor_split[i] = 0.0f;
+                        tensor_split[is] = 0.0f;
                     }
                 }
                 params.tensor_split.push_back(tensor_split);

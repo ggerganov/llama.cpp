@@ -17,19 +17,19 @@
 
 using json = nlohmann::ordered_json;
 
-common_arg & common_arg::set_examples(std::initializer_list<enum llama_example> examples) {
-    this->examples = std::move(examples);
+common_arg & common_arg::set_examples(std::initializer_list<enum llama_example> vals) {
+    examples = std::move(vals);
     return *this;
 }
 
-common_arg & common_arg::set_excludes(std::initializer_list<enum llama_example> excludes) {
-    this->excludes = std::move(excludes);
+common_arg & common_arg::set_excludes(std::initializer_list<enum llama_example> vals) {
+    excludes = std::move(vals);
     return *this;
 }
 
-common_arg & common_arg::set_env(const char * env) {
-    help = help + "\n(env: " + env + ")";
-    this->env = env;
+common_arg & common_arg::set_env(const char * val) {
+    help = help + "\n(env: " + val + ")";
+    env = val;
     return *this;
 }
 
@@ -46,8 +46,10 @@ bool common_arg::is_exclude(enum llama_example ex) {
     return excludes.find(ex) != excludes.end();
 }
 
-bool common_arg::get_value_from_env(std::string & output) {
-    if (env == nullptr) return false;
+bool common_arg::get_value_from_env(std::string & output) const {
+    if (env == nullptr) {
+        return false;
+    }
     char * value = std::getenv(env);
     if (value) {
         output = value;
@@ -56,7 +58,7 @@ bool common_arg::get_value_from_env(std::string & output) {
     return false;
 }
 
-bool common_arg::has_value_from_env() {
+bool common_arg::has_value_from_env() const {
     return env != nullptr && std::getenv(env);
 }
 
@@ -87,7 +89,7 @@ static std::vector<std::string> break_str_into_lines(std::string input, size_t m
     return result;
 }
 
-std::string common_arg::to_string() {
+std::string common_arg::to_string() const {
     // params for printing to console
     const static int n_leading_spaces = 40;
     const static int n_char_per_line_help = 70; // TODO: detect this based on current console
@@ -192,8 +194,6 @@ static std::string get_all_kv_cache_types() {
 //
 
 static bool common_params_parse_ex(int argc, char ** argv, common_params_context & ctx_arg) {
-    std::string arg;
-    const std::string arg_prefix = "--";
     common_params & params = ctx_arg.params;
 
     std::unordered_map<std::string, common_arg *> arg_to_options;

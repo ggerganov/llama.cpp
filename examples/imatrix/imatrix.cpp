@@ -294,7 +294,7 @@ void IMatrixCollector::save_imatrix(int ncall) const {
 bool IMatrixCollector::load_imatrix(const char * fname) {
     std::ifstream in(fname, std::ios::binary);
     if (!in) {
-        LOG_ERR("%s: failed to open %s\n",__func__, fname);
+        LOG_ERR("%s: failed to open %s\n", __func__, fname);
         return false;
     }
     int n_entries;
@@ -308,7 +308,7 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
         std::vector<char> name_as_vec(len+1);
         in.read((char *)name_as_vec.data(), len);
         if (in.fail()) {
-            LOG_ERR("%s: failed reading name for entry %d from %s\n",__func__,i+1, fname);
+            LOG_ERR("%s: failed reading name for entry %d from %s\n", __func__, i + 1, fname);
             return false;
         }
         name_as_vec[len] = 0;
@@ -319,7 +319,7 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
         int nval;
         in.read((char *)&nval, sizeof(nval));
         if (in.fail() || nval < 1) {
-            LOG_ERR("%s: failed reading number of values for entry %d\n",__func__,i);
+            LOG_ERR("%s: failed reading number of values for entry %d\n", __func__, i);
             m_stats = {};
             return false;
         }
@@ -332,15 +332,15 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
         std::vector<float> tmp(nval);
         in.read((char*)tmp.data(), nval*sizeof(float));
         if (in.fail()) {
-            LOG_ERR("%s: failed reading data for entry %d\n",__func__,i);
+            LOG_ERR("%s: failed reading data for entry %d\n", __func__, i);
             m_stats = {};
             return false;
         }
 
         // Recreate the state as expected by save_imatrix(), and corerct for weighted sum.
-        for (int i = 0; i < nval; i++) {
-            e.values[i] += tmp[i];
-            e.counts[i] += ncall;
+        for (int j = 0; j < nval; j++) {
+            e.values[j] += tmp[j];
+            e.counts[j] += ncall;
         }
         e.ncall += ncall;
 
@@ -488,11 +488,9 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
         logits.reserve((size_t)n_ctx * n_vocab);
     }
 
-    for (int i = 0; i < n_chunk; ++i) {
-        const int start =     i * n_ctx;
+    for (int ich = 0; ich < n_chunk; ++ich) {
+        const int start =   ich * n_ctx;
         const int end   = start + n_ctx;
-
-        std::vector<float> logits;
 
         const auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -537,7 +535,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
-        if (i == 0) {
+        if (ich == 0) {
             const float t_total = std::chrono::duration<float>(t_end - t_start).count();
             LOG_INF("%s: %.2f seconds per pass - ETA ", __func__, t_total);
             int total_seconds = (int)(t_total * n_chunk);
@@ -555,7 +553,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
                     workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
             count += n_ctx - first - 1;
 
-            LOG("[%d]%.4lf,", i + 1, std::exp(nll / count));
+            LOG("[%d]%.4lf,", ich + 1, std::exp(nll / count));
             fflush(stdout);
 
             logits.clear();

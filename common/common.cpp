@@ -763,9 +763,11 @@ bool fs_create_directory_with_parents(const std::string & path) {
     return true;
 #else
     // if the path already exists, check whether it's a directory
-    struct stat info;
-    if (stat(path.c_str(), &info) == 0) {
-        return S_ISDIR(info.st_mode);
+    {
+        struct stat info;
+        if (stat(path.c_str(), &info) == 0) {
+            return S_ISDIR(info.st_mode);
+        }
     }
 
     size_t pos_slash = 1; // skip leading slashes for directory creation
@@ -796,7 +798,7 @@ bool fs_create_directory_with_parents(const std::string & path) {
 }
 
 std::string fs_get_cache_directory() {
-    std::string cache_directory = "";
+    std::string cache_directory;
     auto ensure_trailing_slash = [](std::string p) {
         // Make sure to add trailing slash
         if (p.back() != DIRECTORY_SEPARATOR) {

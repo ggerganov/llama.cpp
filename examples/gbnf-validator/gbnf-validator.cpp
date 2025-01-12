@@ -60,13 +60,6 @@ int main(int argc, char** argv) {
     const std::string grammar_filename = argv[1];
     const std::string input_filename = argv[2];
 
-    // Read the GBNF grammar file
-    FILE* grammar_file = fopen(grammar_filename.c_str(), "r");
-    if (!grammar_file) {
-        fprintf(stdout, "Failed to open grammar file: %s\n", grammar_filename.c_str());
-        return 1;
-    }
-
     std::string grammar_str;
     {
         std::ifstream grammar_file(grammar_filename);

@@ -129,15 +129,15 @@ static llama_tokens tokenize_mixed(const llama_vocab * vocab, const json & json_
             if (p.is_string()) {
                 auto s = p.template get<std::string>();
 
-                llama_tokens p;
+                llama_tokens ids;
                 if (first) {
-                    p = common_tokenize(vocab, s, add_special, parse_special);
+                    ids = common_tokenize(vocab, s, add_special, parse_special);
                     first = false;
                 } else {
-                    p = common_tokenize(vocab, s, false, parse_special);
+                    ids = common_tokenize(vocab, s, false, parse_special);
                 }
 
-                prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
+                prompt_tokens.insert(prompt_tokens.end(), ids.begin(), ids.end());
             } else {
                 if (first) {
                     first = false;

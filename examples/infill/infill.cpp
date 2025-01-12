@@ -462,14 +462,14 @@ int main(int argc, char ** argv) {
                 }
 
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = common_tokenize(ctx, params.input_prefix, false);
-                std::vector<llama_token> inp_sfx = common_tokenize(ctx, params.input_suffix, false);
+                std::vector<llama_token> inp_pfx_cur = common_tokenize(ctx, params.input_prefix, false);
+                std::vector<llama_token> inp_sfx_cur = common_tokenize(ctx, params.input_suffix, false);
 
-                inp_pfx.insert(inp_pfx.begin(), llama_vocab_fim_pre(vocab));
-                inp_sfx.insert(inp_sfx.begin(), llama_vocab_fim_suf(vocab));
+                inp_pfx_cur.insert(inp_pfx_cur.begin(), llama_vocab_fim_pre(vocab));
+                inp_sfx_cur.insert(inp_sfx_cur.begin(), llama_vocab_fim_suf(vocab));
 
-                embd_inp = params.spm_infill ? inp_sfx : inp_pfx;
-                embd_end = params.spm_infill ? inp_pfx : inp_sfx;
+                embd_inp = params.spm_infill ? inp_sfx_cur : inp_pfx_cur;
+                embd_end = params.spm_infill ? inp_pfx_cur : inp_sfx_cur;
                 if (add_bos) {
                     embd_inp.insert(embd_inp.begin(), llama_vocab_bos(vocab));
                 }

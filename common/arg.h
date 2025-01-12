@@ -53,15 +53,15 @@ struct common_arg {
         void (*handler)(common_params & params, const std::string &, const std::string &)
     ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
 
-    common_arg & set_examples(std::initializer_list<enum llama_example> examples);
-    common_arg & set_excludes(std::initializer_list<enum llama_example> excludes);
-    common_arg & set_env(const char * env);
+    common_arg & set_examples(std::initializer_list<enum llama_example> vals);
+    common_arg & set_excludes(std::initializer_list<enum llama_example> vals);
+    common_arg & set_env(const char * val);
     common_arg & set_sparam();
     bool in_example(enum llama_example ex);
     bool is_exclude(enum llama_example ex);
-    bool get_value_from_env(std::string & output);
-    bool has_value_from_env();
-    std::string to_string();
+    bool get_value_from_env(std::string & output) const;
+    bool has_value_from_env() const;
+    std::string to_string() const;
 };
 
 struct common_params_context {
