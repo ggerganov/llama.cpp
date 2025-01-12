@@ -40,7 +40,6 @@ static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
-static bool need_insert_eot = false;
 
 static void print_usage(int argc, char ** argv) {
     (void) argc;
@@ -70,7 +69,6 @@ static void sigint_handler(int signo) {
             g_chat->interrupt();
         } else if (!is_interacting && g_params->interactive) {
             is_interacting  = true;
-            need_insert_eot = true;
         } else {
             console::cleanup();
             LOG("\n");
@@ -763,18 +761,8 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            // if current token is not EOG, we add it to current assistant message
-            if (params.conversation) {
-                const auto id = common_sampler_last(smpl);
-                assistant_ss << common_token_to_piece(ctx, id, false);
-            }
-
             if (n_past > 0 && is_interacting) {
                 LOG_DBG("waiting for user input\n");
-
-                if (params.conversation) {
-                    LOG("\n> ");
-                }
 
                 if (params.input_prefix_bos) {
                     LOG_DBG("adding input prefix BOS token\n");
@@ -782,7 +770,7 @@ int main(int argc, char ** argv) {
                 }
 
                 std::string buffer;
-                if (!params.input_prefix.empty() && !params.conversation) {
+                if (!params.input_prefix.empty()) {
                     LOG_DBG("appending input prefix: '%s'\n", params.input_prefix.c_str());
                     LOG("%s", params.input_prefix.c_str());
                 }
@@ -806,7 +794,7 @@ int main(int argc, char ** argv) {
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
                     // append input suffix if any
-                    if (!params.input_suffix.empty() && !params.conversation) {
+                    if (!params.input_suffix.empty()) {
                         LOG_DBG("appending input suffix: '%s'\n", params.input_suffix.c_str());
                         LOG("%s", params.input_suffix.c_str());
                     }
@@ -819,21 +807,13 @@ int main(int argc, char ** argv) {
                         string_process_escapes(buffer);
                     }
 
-                    bool format_chat = params.conversation && params.enable_chat_template;
                     std::string user_inp = std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
                     const auto line_pfx = common_tokenize(ctx, params.input_prefix, false, true);
-                    const auto line_inp = common_tokenize(ctx, user_inp,            false, format_chat);
+                    const auto line_inp = common_tokenize(ctx, user_inp,            false, true);
                     const auto line_sfx = common_tokenize(ctx, params.input_suffix, false, true);
 
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
-
-                    // if user stop generation mid-way, we must add EOT to finish model's last response
-                    if (need_insert_eot && format_chat) {
-                        llama_token eot = llama_vocab_eot(vocab);
-                        embd_inp.push_back(eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab) : eot);
-                        need_insert_eot = false;
-                    }
 
                     embd_inp.insert(embd_inp.end(), line_pfx.begin(), line_pfx.end());
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
