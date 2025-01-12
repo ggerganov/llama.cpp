@@ -24,25 +24,30 @@
 struct naive_trie {
     naive_trie() : has_value(false), value(0) {
     }
-    void insert(const char * key, size_t len, int32_t value = 0) {
+
+    void insert(const char * key, size_t len, int32_t val = 0) {
         if (len == 0) {
-            this->has_value = true;
-            this->value = value;
+            has_value = true;
+            value = val;
+
             return;
         }
+
         char c = key[0];
         auto res = children.find(c);
         if (res != children.end()) {
-            res->second.insert(key + 1, len - 1, value);
+            res->second.insert(key + 1, len - 1, val);
         } else {
             auto res = children.insert(std::make_pair(c, naive_trie()));
-            res.first->second.insert(key + 1, len - 1, value);
+            res.first->second.insert(key + 1, len - 1, val);
         }
     }
+
     std::pair<const char *, size_t> get_longest_prefix(const char * key, size_t len, size_t offset = 0) const {
         if (len == 0 || offset == len) {
             return std::make_pair(key, offset);
         }
+
         char c = key[offset];
         auto res = children.find(c);
         if (res != children.end()) {
@@ -51,6 +56,7 @@ struct naive_trie {
 
         return std::make_pair(key, offset);
     }
+
     const struct naive_trie * traverse(const char c) const {
         auto res = children.find(c);
         if (res != children.end()) {
@@ -59,6 +65,7 @@ struct naive_trie {
 
         return NULL;
     }
+
     std::map<char, struct naive_trie> children;
     bool has_value;
     llama_token value;

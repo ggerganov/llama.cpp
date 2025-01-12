@@ -1656,10 +1656,10 @@ struct llm_build_context {
         const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
-            const int64_t n_head_kv = hparams.n_head_kv(il);
-            const int64_t n_head    = hparams.n_head(il);
+            const int64_t n_head_kv_i = hparams.n_head_kv(il);
+            const int64_t n_head_i    = hparams.n_head(il);
 
-            if (n_head == 0) {
+            if (n_head_i == 0) {
                 // attention-free layer of Llama-3_1-Nemotron-51B
                 cur = inpL;
             } else {
@@ -1670,11 +1670,11 @@ struct llm_build_context {
                 cb(cur, "attn_norm", il);
             }
 
-            if (n_head > 0 && n_head_kv == 0) {
+            if (n_head_i > 0 && n_head_kv_i == 0) {
                 // "linear attention" of Llama-3_1-Nemotron-51B
                 cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wo, cur);
                 cb(cur, "wo", il);
-            } else if (n_head > 0) {
+            } else if (n_head_i > 0) {
                 // self-attention
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
                 struct ggml_tensor * rope_factors = build_rope_factors(il);
@@ -1702,14 +1702,14 @@ struct llm_build_context {
                 }
 
                 Qcur = ggml_rope_ext(
-                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, rope_factors,
+                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head_i, n_tokens), inp_pos, rope_factors,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
-                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, rope_factors,
+                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv_i, n_tokens), inp_pos, rope_factors,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
@@ -1734,7 +1734,7 @@ struct llm_build_context {
 
             // modified to support attention-free layer of Llama-3_1-Nemotron-51B
             struct ggml_tensor * ffn_inp = cur;
-            if (n_head > 0) {
+            if (n_head_i > 0) {
                 ffn_inp = ggml_add(ctx0, cur, inpSA);
                 cb(ffn_inp, "ffn_inp", il);
             }
@@ -2643,7 +2643,7 @@ struct llm_build_context {
 
         // iterate layers
         for (int il = 0; il < n_layer; ++il) {
-            struct ggml_tensor * cur = inpL;
+            cur = inpL;
 
             struct ggml_tensor * Qcur;
             struct ggml_tensor * Kcur;
@@ -4717,8 +4717,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_gemma() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        const int64_t n_embd_head_k = hparams.n_embd_head_k;
-
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
@@ -4824,8 +4822,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_gemma2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        const int64_t n_embd_head_k = hparams.n_embd_head_k;
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -4962,6 +4958,7 @@ struct llm_build_context {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -5800,9 +5797,9 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
         for (int il = 0; il < n_layer; ++il) {
-            const int64_t n_head    = hparams.n_head(il);
-            const int64_t n_head_kv = hparams.n_head_kv(il);
-            const int64_t n_head_qkv = 2*n_head_kv + n_head;
+            const int64_t n_head_i     = hparams.n_head(il);
+            const int64_t n_head_kv_i  = hparams.n_head_kv(il);
+            const int64_t n_head_qkv_i = 2*n_head_kv_i + n_head_i;
 
             cur = inpL;
             struct ggml_tensor * residual = cur;
@@ -5818,15 +5815,15 @@ struct llm_build_context {
                 cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
 
-                cur = ggml_reshape_3d(ctx0, cur, n_embd_head_k, n_head_qkv, n_tokens);
+                cur = ggml_reshape_3d(ctx0, cur, n_embd_head_k, n_head_qkv_i, n_tokens);
 
-                struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head, n_tokens, cur->nb[1], cur->nb[2], 0));
+                struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_i, n_tokens, cur->nb[1], cur->nb[2], 0));
                 cb(Qcur, "Qcur", il);
 
-                struct ggml_tensor * Kcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*n_head));
+                struct ggml_tensor * Kcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv_i, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*n_head_i));
                 cb(Kcur, "Kcur", il);
 
-                struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*(n_head+n_head_kv)));
+                struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv_i, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*(n_head_i+n_head_kv_i)));
                 cb(Vcur, "Vcur", il);
 
                 Qcur = llm_build_norm(ctx0, Qcur, hparams,
@@ -5851,7 +5848,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                Vcur = ggml_reshape_2d(ctx0, Vcur, n_embd_head * n_head_kv, n_tokens);
+                Vcur = ggml_reshape_2d(ctx0, Vcur, n_embd_head * n_head_kv_i, n_tokens);
                 cb(Qcur, "Vcur", il);
 
                 cur = llm_build_kv(ctx0, lctx, kv_self, gf,
@@ -7495,9 +7492,9 @@ struct llm_build_context {
         // Token shift state dimensions should be 2 * n_emb
         GGML_ASSERT(n_embd == hparams.n_embd_k_s() / 2);
 
-        const int64_t n_seqs = ubatch.n_seqs;
+        const int64_t n_seqs       = ubatch.n_seqs;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
-        const int64_t n_tokens = ubatch.n_tokens;
+
         GGML_ASSERT(n_seqs != 0);
         GGML_ASSERT(ubatch.equal_seqs);
         GGML_ASSERT(n_tokens == n_seq_tokens * n_seqs);
@@ -7608,9 +7605,9 @@ struct llm_build_context {
 
         GGML_ASSERT(n_embd == hparams.n_embd_k_s());
 
-        const int64_t n_seqs = ubatch.n_seqs;
+        const int64_t n_seqs       = ubatch.n_seqs;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
-        const int64_t n_tokens = ubatch.n_tokens;
+
         GGML_ASSERT(n_seqs != 0);
         GGML_ASSERT(ubatch.equal_seqs);
         GGML_ASSERT(n_tokens == n_seq_tokens * n_seqs);
