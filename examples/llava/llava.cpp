@@ -216,7 +216,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     return true;
 }
 
-static clip_image_f32 * only_v2_5_reshape_by_patch(clip_image_f32 * image, int patch_size) {
+static clip_image_f32 * reshape_by_patch(clip_image_f32 * image, int patch_size) {
     int width = image->nx;
     int height = image->ny;
     int num_patches = (height / patch_size) * (width / patch_size);
@@ -277,13 +277,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
                 encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
             }
             else {
-                int has_minicpmv_projector = clip_is_minicpmv(ctx_clip);
-                if (has_minicpmv_projector == 2) {
-                    encoded = clip_image_encode(ctx_clip, n_threads, only_v2_5_reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
-                }
-                else if (has_minicpmv_projector == 3) {
-                    encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
-                }
+                encoded = clip_image_encode(ctx_clip, n_threads, reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
             }
 
             if (!encoded) {

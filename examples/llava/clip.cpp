@@ -718,6 +718,9 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         else if (ctx->minicpmv_version == 3) {
             pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 3584, pos_w * pos_h, 1);
         }
+        else if (ctx->minicpmv_version == 4) {
+            pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 3584, pos_w * pos_h, 1);
+        }
         ggml_set_name(pos_embed, "pos_embed");
         ggml_set_input(pos_embed);
     }
@@ -1049,6 +1052,11 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                     num_query = 96;
                 }
                 else if (ctx->minicpmv_version == 3) {
+                    hidden_size = 3584;
+                    n_head = hidden_size/d_head;
+                    num_query = 64;
+                }
+                else if (ctx->minicpmv_version == 4) {
                     hidden_size = 3584;
                     n_head = hidden_size/d_head;
                     num_query = 64;
@@ -2335,6 +2343,9 @@ int clip_n_patches_by_img(const struct clip_ctx * ctx, struct clip_image_f32 * i
         else if (ctx->minicpmv_version == 3) {
             n_patches = 64;
         }
+        else if (ctx->minicpmv_version == 4) {
+            n_patches = 64;
+        }
     } else if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
         int patch_size = params.patch_size * 2;
         int x_patch = img->nx / patch_size + (int)(img->nx % patch_size > 0);
@@ -2541,6 +2552,9 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
                 embed_dim = 4096;
             }
             else if (ctx->minicpmv_version == 3) {
+                embed_dim = 3584;
+            }
+            else if (ctx->minicpmv_version == 4) {
                 embed_dim = 3584;
             }
             auto pos_embed_t = get_2d_sincos_pos_embed(embed_dim, std::make_pair(pos_w, pos_h));
@@ -2784,6 +2798,9 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
             return 4096;
         }
         else if (ctx->minicpmv_version == 3) {
+            return 3584;
+        }
+        else if (ctx->minicpmv_version == 4) {
             return 3584;
         }
     }
