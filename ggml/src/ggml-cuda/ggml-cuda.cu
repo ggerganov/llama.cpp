@@ -2345,10 +2345,8 @@ static bool check_node_graph_compatibility_and_refresh_copy_ops(ggml_backend_cud
 
     return use_cuda_graph;
 }
-#endif
 
 
-#ifdef USE_CUDA_GRAPH
 static void set_ggml_graph_node_properties(ggml_tensor * node, ggml_graph_node_properties * graph_node_properties) {
     graph_node_properties->node_address = node->data;
     graph_node_properties->node_op = node->op;
@@ -2399,10 +2397,8 @@ static bool ggml_graph_node_has_matching_properties(ggml_tensor * node, ggml_gra
 
     return true;
 }
-#endif
 
 
-#ifdef USE_CUDA_GRAPH
 static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vector<void *> & ggml_cuda_cpy_fn_ptrs, bool cuda_graph_update_required) {
 
     if (cuda_graph_update_required) {
@@ -2447,10 +2443,8 @@ static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vecto
         }
     }
 }
-#endif
 
 
-#ifdef USE_CUDA_GRAPH
 static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, bool cuda_graph_update_required) {
 
     if (cuda_ctx->cuda_graph->instance == nullptr) {
@@ -2478,10 +2472,8 @@ static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, 
 
     return cuda_graph_update_required;
 }
-#endif
 
 
-#ifdef USE_CUDA_GRAPH
 static void update_cuda_graph_executable(ggml_backend_cuda_context * cuda_ctx) {
 
     cudaGraphExecUpdateResultInfo result_info;
