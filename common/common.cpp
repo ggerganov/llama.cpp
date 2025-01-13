@@ -1822,17 +1822,6 @@ std::string common_chat_format_example(const struct llama_model * model,
     return common_chat_apply_template(model, tmpl, msgs, true);
 }
 
-static std::string _llama_model_meta_val_str(const struct llama_model * model, const char * key) {
-    int32_t tlen = llama_model_meta_val_str(model, key, nullptr, 0);
-    if (tlen > 0) {
-        std::vector<char> curr_tmpl_buf(tlen + 1, 0);
-        if (llama_model_meta_val_str(model, key, curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
-            return std::string(curr_tmpl_buf.data(), tlen);
-        }
-    }
-    return "";
-}
-
 llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
@@ -1841,9 +1830,8 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
     std::string default_template_src = chat_template_override;
     std::string tool_use_template_src = chat_template_override;
     if (chat_template_override.empty()) {
-        // TODO: 
-        default_template_src = _llama_model_meta_val_str(model, "tokenizer.chat_template");
-        tool_use_template_src = _llama_model_meta_val_str(model, "tokenizer.chat_template.tool_use");
+        default_template_src = llama_model_chat_template(model, /* name */ nullptr);
+        tool_use_template_src = llama_model_chat_template(model, /* name */ "tool_use");
     }
     if (default_template_src.empty() || default_template_src == "chatml") {
         if (!tool_use_template_src.empty()) {
