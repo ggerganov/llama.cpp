@@ -2284,7 +2284,6 @@ static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
     GGML_UNUSED(backend);
 }
 
-
 #ifdef USE_CUDA_GRAPH
 static bool check_node_graph_compatibility_and_refresh_copy_ops(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph,
     std::vector<void *> & ggml_cuda_cpy_fn_ptrs, bool use_cuda_graph) {
@@ -2346,7 +2345,6 @@ static bool check_node_graph_compatibility_and_refresh_copy_ops(ggml_backend_cud
     return use_cuda_graph;
 }
 
-
 static void set_ggml_graph_node_properties(ggml_tensor * node, ggml_graph_node_properties * graph_node_properties) {
     graph_node_properties->node_address = node->data;
     graph_node_properties->node_op = node->op;
@@ -2398,7 +2396,6 @@ static bool ggml_graph_node_has_matching_properties(ggml_tensor * node, ggml_gra
     return true;
 }
 
-
 static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vector<void *> & ggml_cuda_cpy_fn_ptrs, bool cuda_graph_update_required) {
 
     if (cuda_graph_update_required) {
@@ -2444,7 +2441,6 @@ static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vecto
     }
 }
 
-
 static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph) {
 
     bool cuda_graph_update_required = false;
@@ -2475,7 +2471,6 @@ static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, 
     return cuda_graph_update_required;
 }
 
-
 static void update_cuda_graph_executable(ggml_backend_cuda_context * cuda_ctx) {
 
     cudaGraphExecUpdateResultInfo result_info;
@@ -2495,7 +2490,6 @@ static void update_cuda_graph_executable(ggml_backend_cuda_context * cuda_ctx) {
     }
 }
 #endif
-
 
 static void evaluate_and_capture_cuda_graph(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph,
    [[maybe_unused]] std::vector<void *> & ggml_cuda_cpy_fn_ptrs,  bool & graph_evaluated_or_captured, bool & use_cuda_graph,
@@ -2563,7 +2557,6 @@ static void evaluate_and_capture_cuda_graph(ggml_backend_cuda_context * cuda_ctx
 #endif  // USE_CUDA_GRAPH
     }
 }
-
 
 static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
