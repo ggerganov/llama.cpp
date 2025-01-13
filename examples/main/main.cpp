@@ -30,6 +30,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+static const char * DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant";
+
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
 static common_sampler          ** g_smpl;
@@ -204,8 +206,24 @@ int main(int argc, char ** argv) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n", __func__, n_ctx_train, n_ctx);
     }
 
+    // auto enable conversation mode if chat template is available
+    const bool has_chat_template = !common_get_builtin_chat_template(model).empty() || !params.chat_template.empty();
+    if (params.conversation_mode == COMMON_CONVERSATION_MODE_AUTO) {
+        if (has_chat_template) {
+            LOG_INF("%s: chat template is available, enabling conversation mode (disable it with -no-cnv)\n", __func__);
+            params.conversation_mode = COMMON_CONVERSATION_MODE_ENABLED;
+        } else {
+            params.conversation_mode = COMMON_CONVERSATION_MODE_DISABLED;
+        }
+    }
+
+    // in case user force-activate conversation mode (via -cnv) without proper chat template, we show a warning
+    if (params.conversation_mode && !has_chat_template) {
+        LOG_WRN("%s: chat template is not available or is not supported. This may cause the model to output suboptimal responses\n", __func__);
+    }
+
     // print chat template example in conversation mode
-    if (params.conversation) {
+    if (params.conversation_mode) {
         if (params.enable_chat_template) {
             LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(model, params.chat_template).c_str());
         } else {
@@ -252,8 +270,10 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_inp;
 
     {
-        auto prompt = (params.conversation && params.enable_chat_template && !params.prompt.empty())
-            ? chat_add_and_format(model, chat_msgs, "system", params.prompt) // format the system prompt in conversation mode
+        auto prompt = (params.conversation_mode && params.enable_chat_template)
+            // format the system prompt in conversation mode (fallback to default if empty)
+            ? chat_add_and_format(model, chat_msgs, "system", params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt)
+            // otherwise use the prompt as is
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_DBG("tokenize the prompt\n");
@@ -327,7 +347,7 @@ int main(int argc, char ** argv) {
         params.n_keep += add_bos; // always keep the BOS token
     }
 
-    if (params.conversation) {
+    if (params.conversation_mode) {
         params.interactive_first = true;
     }
 
@@ -451,7 +471,11 @@ int main(int argc, char ** argv) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
         LOG_INF(       " - Press Ctrl+C to interject at any time.\n");
 #endif
-        LOG_INF(       "%s\n", control_message);
+        LOG_INF(       "%s", control_message);
+        if (params.conversation_mode && params.enable_chat_template && params.prompt.empty()) {
+            LOG_INF(   " - Using default system message. To change it, set a different value via -p PROMPT or -f FILE argument.\n");
+        }
+        LOG_INF("\n");
 
         is_interacting = params.interactive_first;
     }
@@ -763,7 +787,7 @@ int main(int argc, char ** argv) {
             }
 
             // if current token is not EOG, we add it to current assistant message
-            if (params.conversation) {
+            if (params.conversation_mode) {
                 const auto id = common_sampler_last(smpl);
                 assistant_ss << common_token_to_piece(ctx, id, false);
             }
@@ -771,7 +795,7 @@ int main(int argc, char ** argv) {
             if (n_past > 0 && is_interacting) {
                 LOG_DBG("waiting for user input\n");
 
-                if (params.conversation) {
+                if (params.conversation_mode) {
                     LOG("\n> ");
                 }
 
@@ -781,7 +805,7 @@ int main(int argc, char ** argv) {
                 }
 
                 std::string buffer;
-                if (!params.input_prefix.empty() && !params.conversation) {
+                if (!params.input_prefix.empty() && !params.conversation_mode) {
                     LOG_DBG("appending input prefix: '%s'\n", params.input_prefix.c_str());
                     LOG("%s", params.input_prefix.c_str());
                 }
@@ -805,7 +829,7 @@ int main(int argc, char ** argv) {
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
                     // append input suffix if any
-                    if (!params.input_suffix.empty() && !params.conversation) {
+                    if (!params.input_suffix.empty() && !params.conversation_mode) {
                         LOG_DBG("appending input suffix: '%s'\n", params.input_suffix.c_str());
                         LOG("%s", params.input_suffix.c_str());
                     }
@@ -818,7 +842,7 @@ int main(int argc, char ** argv) {
                         string_process_escapes(buffer);
                     }
 
-                    bool format_chat = params.conversation && params.enable_chat_template;
+                    bool format_chat = params.conversation_mode && params.enable_chat_template;
                     std::string user_inp = format_chat
                         ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
                         : std::move(buffer);

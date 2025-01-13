@@ -103,6 +103,12 @@ enum dimre_method {
     DIMRE_METHOD_MEAN,
 };
 
+enum common_conversation_mode {
+    COMMON_CONVERSATION_MODE_DISABLED = 0,
+    COMMON_CONVERSATION_MODE_ENABLED  = 1,
+    COMMON_CONVERSATION_MODE_AUTO     = 2,
+};
+
 // sampling parameters
 struct common_params_sampling {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
@@ -275,7 +281,6 @@ struct common_params {
     bool special           = false; // enable special token output
     bool interactive       = false; // interactive mode
     bool interactive_first = false; // wait for user input immediately
-    bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
@@ -300,6 +305,8 @@ struct common_params {
 
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
+
+    common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 
     // multimodal models (see examples/llava)
     std::string mmproj = "";        // path to multimodal projector                                         // NOLINT
