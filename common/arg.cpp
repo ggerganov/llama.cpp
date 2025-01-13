@@ -135,9 +135,9 @@ std::string common_arg::to_string() {
  * - bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M
  * - bartowski/Llama-3.2-3B-Instruct-GGUF:q5_k_s
  * Tag is optional, default to "latest" (meaning it checks for Q4_K_M first, then Q4, then if not found, return the first GGUF file in repo)
- * 
+ *
  * Return pair of <repo, file> (with "repo" already having tag removed)
- * 
+ *
  * Note: we use the Ollama-compatible HF API, but not using the blobId. Instead, we use the special "ggufFile" field which returns the value for "hf_file". This is done to be backward-compatible with existing cache files.
  */
 static std::pair<std::string, std::string> common_get_hf_file(const std::string & hf_repo_with_tag, const std::string & hf_token) {
