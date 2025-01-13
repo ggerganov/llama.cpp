@@ -60,6 +60,7 @@ extern "C" {
     struct llama_model;
     struct llama_context;
     struct llama_sampler;
+    struct llama_kv_cache;
 
     typedef int32_t llama_pos;
     typedef int32_t llama_token;
@@ -467,8 +468,9 @@ extern "C" {
 
     DEPRECATED(LLAMA_API int32_t llama_n_vocab    (const struct llama_vocab * vocab), "use llama_vocab_n_tokens instead");
 
-    LLAMA_API const struct llama_model * llama_get_model   (const struct llama_context * ctx);
-    LLAMA_API enum llama_pooling_type    llama_pooling_type(const struct llama_context * ctx);
+    LLAMA_API const struct llama_model * llama_get_model   (const struct llama_context * ctx); // TODO: remove const?
+    LLAMA_API    struct llama_kv_cache * llama_get_kv_cache(      struct llama_context * ctx);
+    LLAMA_API  enum llama_pooling_type   llama_pooling_type(const struct llama_context * ctx);
 
     LLAMA_API const struct llama_vocab * llama_model_get_vocab(const struct llama_model * model);
     LLAMA_API enum llama_rope_type       llama_model_rope_type(const struct llama_model * model);
@@ -584,7 +586,7 @@ extern "C" {
     // KV cache
     //
 
-    // TODO: remove llama_kv_cache_view_* API
+    // TODO: start using struct llama_kv_cache
 
     // Information associated with an individual cell in the KV cache view.
     struct llama_kv_cache_view_cell {
@@ -639,14 +641,20 @@ extern "C" {
 
     // Returns the number of tokens in the KV cache (slow, use only for debug)
     // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
-    LLAMA_API int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx);
+    LLAMA_API int32_t llama_kv_cache_n_tokens(const struct llama_kv_cache * kv);
+
+    DEPRECATED(LLAMA_API int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx),
+            "use llama_kv_cache_n_tokens instead");
 
     // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
-    LLAMA_API int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx);
+    LLAMA_API int32_t llama_kv_cache_used_cells(const struct llama_kv_cache * kv);
+
+    DEPRECATED(LLAMA_API int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx),
+            "use llama_kv_cache_used_cells instead");
 
     // Clear the KV cache - both cell info is erased and KV data is zeroed
     LLAMA_API void llama_kv_cache_clear(
-            struct llama_context * ctx);
+            struct llama_kv_cache * kv);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
     // Returns false if a partial sequence cannot be removed. Removing a whole sequence never fails
@@ -654,26 +662,26 @@ extern "C" {
     // p0 < 0     : [0,  p1]
     // p1 < 0     : [p0, inf)
     LLAMA_API bool llama_kv_cache_seq_rm(
-            struct llama_context * ctx,
-                    llama_seq_id   seq_id,
-                       llama_pos   p0,
-                       llama_pos   p1);
+            struct llama_kv_cache * kv,
+                     llama_seq_id   seq_id,
+                        llama_pos   p0,
+                        llama_pos   p1);
 
     // Copy all tokens that belong to the specified sequence to another sequence
     // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_cp(
-            struct llama_context * ctx,
-                    llama_seq_id   seq_id_src,
-                    llama_seq_id   seq_id_dst,
-                       llama_pos   p0,
-                       llama_pos   p1);
+            struct llama_kv_cache * kv,
+                     llama_seq_id   seq_id_src,
+                     llama_seq_id   seq_id_dst,
+                        llama_pos   p0,
+                        llama_pos   p1);
 
     // Removes all tokens that do not belong to the specified sequence
     LLAMA_API void llama_kv_cache_seq_keep(
-            struct llama_context * ctx,
-                    llama_seq_id   seq_id);
+            struct llama_kv_cache * kv,
+                     llama_seq_id   seq_id);
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     // If the KV cache is RoPEd, the KV data is updated accordingly:
@@ -682,11 +690,11 @@ extern "C" {
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_add(
-            struct llama_context * ctx,
-                    llama_seq_id   seq_id,
-                       llama_pos   p0,
-                       llama_pos   p1,
-                       llama_pos   delta);
+            struct llama_kv_cache * kv,
+                     llama_seq_id   seq_id,
+                        llama_pos   p0,
+                        llama_pos   p1,
+                        llama_pos   delta);
 
     // Integer division of the positions by factor of `d > 1`
     // If the KV cache is RoPEd, the KV data is updated accordingly:
@@ -695,31 +703,28 @@ extern "C" {
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_div(
-            struct llama_context * ctx,
-                    llama_seq_id   seq_id,
-                       llama_pos   p0,
-                       llama_pos   p1,
-                             int   d);
+            struct llama_kv_cache * kv,
+                     llama_seq_id   seq_id,
+                        llama_pos   p0,
+                        llama_pos   p1,
+                              int   d);
 
     // Returns the largest position present in the KV cache for the specified sequence
     LLAMA_API llama_pos llama_kv_cache_seq_pos_max(
-            struct llama_context * ctx,
-                    llama_seq_id   seq_id);
-
-    // TODO: the llama_kv_cache_defrag and llama_kv_cache_update API tightly couples llama_context with llama_kv_cache
-    //       how to avoid this?
+            struct llama_kv_cache * kv,
+                     llama_seq_id   seq_id);
 
     // Defragment the KV cache
     // This will be applied:
     //   - lazily on next llama_decode()
     //   - explicitly with llama_kv_cache_update()
-    LLAMA_API void llama_kv_cache_defrag(struct llama_context * ctx);
-
-    // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
-    LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
+    LLAMA_API void llama_kv_cache_defrag(struct llama_kv_cache * kv);
 
     // Check if the context supports KV cache shifting
-    LLAMA_API bool llama_kv_cache_can_shift(struct llama_context * ctx);
+    LLAMA_API bool llama_kv_cache_can_shift(const struct llama_kv_cache * kv);
+
+    // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
+    LLAMA_API void llama_update_kv_cache(struct llama_context * ctx, struct llama_kv_cache * kv);
 
     //
     // State / sessions

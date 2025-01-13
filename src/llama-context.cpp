@@ -602,11 +602,15 @@ uint32_t llama_n_seq_max(const struct llama_context * ctx) {
     return ctx->kv_self.size;
 }
 
-const struct llama_model * llama_get_model(const struct llama_context * ctx) {
+const llama_model * llama_get_model(const llama_context * ctx) {
     return &ctx->model;
 }
 
-enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
+llama_kv_cache * llama_get_kv_cache(llama_context * ctx) {
+    return &ctx->kv_self;
+}
+
+enum llama_pooling_type llama_pooling_type(const llama_context * ctx) {
     return ctx->cparams.pooling_type;
 }
 
@@ -1142,7 +1146,7 @@ struct llama_data_read {
         if (dest_seq_id != -1) {
             // single sequence
 
-            llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            kv_self.seq_rm(dest_seq_id, -1, -1);
 
             llama_ubatch batch = ctx->sbatch.reserve_ubatch(cell_count, /* has_embd */ false);
             batch.n_tokens = cell_count;
@@ -1185,7 +1189,7 @@ struct llama_data_read {
                 return false;
             }
 
-            llama_kv_cache_clear(kv_self);
+            kv_self.clear();
 
             for (uint32_t i = 0; i < cell_count; ++i) {
                 llama_kv_cell & cell = kv_self.cells[i];
@@ -1362,9 +1366,9 @@ struct llama_data_read {
 
         if (!res) {
             if (seq_id == -1) {
-                llama_kv_cache_clear(ctx);
+                ctx->kv_self.clear();
             } else {
-                llama_kv_cache_seq_rm(ctx, seq_id, -1, -1);
+                ctx->kv_self.seq_rm(seq_id, -1, -1);
             }
             throw std::runtime_error("failed to restore kv cache");
         }

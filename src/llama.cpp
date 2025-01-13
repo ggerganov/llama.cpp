@@ -8564,7 +8564,7 @@ static int llama_decode_impl(
 
         // non-causal masks do not use the KV cache
         if (hparams.causal_attn) {
-            llama_kv_cache_update(&lctx);
+            llama_update_kv_cache(&lctx, &lctx.kv_self); // TODO: lctx->update_kv_cache()
 
             // if we have enough unused cells before the current head ->
             //   better to start searching from the beginning of the cache, hoping to fill it
@@ -8760,7 +8760,7 @@ static int llama_decode_impl(
         if (fragmentation > cparams.defrag_thold) {
             //LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
 
-            llama_kv_cache_defrag(kv_self);
+            kv_self.defrag();
         }
     }
 
@@ -9182,11 +9182,11 @@ static void llama_kv_cache_defrag_impl(struct llama_context & lctx) {
     //LLAMA_LOG_INFO("(tmp log) KV defrag time: %.3f ms\n", (t_end - t_start)/1000.0);
 }
 
-static void llama_kv_cache_update_impl(struct llama_context & lctx) {
+static void llama_update_kv_cache_impl(llama_context & lctx, llama_kv_cache & kv) {
     bool need_reserve = false;
 
-    if (lctx.kv_self.has_shift) {
-        if (!llama_kv_cache_can_shift(&lctx)) {
+    if (kv.has_shift) {
+        if (!kv.can_shift) {
             GGML_ABORT("The current context does not support K-shift");
         }
 
@@ -9206,23 +9206,21 @@ static void llama_kv_cache_update_impl(struct llama_context & lctx) {
         }
 
         {
-            auto & kv_self = lctx.kv_self;
+            kv.has_shift = false;
 
-            kv_self.has_shift = false;
-
-            for (uint32_t i = 0; i < kv_self.size; ++i) {
-                kv_self.cells[i].delta = 0;
+            for (uint32_t i = 0; i < kv.size; ++i) {
+                kv.cells[i].delta = 0;
             }
         }
     }
 
     // defragment the KV cache if needed
-    if (lctx.kv_self.do_defrag) {
+    if (kv.do_defrag) {
         llama_kv_cache_defrag_impl(lctx);
 
         need_reserve = true;
 
-        lctx.kv_self.do_defrag = false;
+        kv.do_defrag = false;
     }
 
     // reserve a worst case graph again
@@ -9845,6 +9843,7 @@ struct llama_context * llama_init_from_model(
     return ctx;
 }
 
+// deprecated
 struct llama_context * llama_new_context_with_model(
                  struct llama_model * model,
         struct llama_context_params   params) {
@@ -9855,73 +9854,27 @@ struct llama_context * llama_new_context_with_model(
 // kv cache
 //
 
-// TODO: tmp bridges below until `struct llama_kv_cache` is exposed through the public API
-
-struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_seq_max) {
+struct llama_kv_cache_view llama_kv_cache_view_init(const llama_context * ctx, int32_t n_seq_max) {
     return llama_kv_cache_view_init(ctx->kv_self, n_seq_max);
 }
 
-void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view) {
+void llama_kv_cache_view_update(const llama_context * ctx, llama_kv_cache_view * view) {
     llama_kv_cache_view_update(view, ctx->kv_self);
 }
 
-int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx) {
-    return llama_get_kv_cache_token_count(ctx->kv_self);
+// deprecated
+int32_t llama_get_kv_cache_token_count(const llama_context * ctx) {
+    return llama_kv_cache_n_tokens(&ctx->kv_self);
 }
 
-int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx) {
-    return llama_get_kv_cache_used_cells(ctx->kv_self);
+// deprecated
+int32_t llama_get_kv_cache_used_cells(const llama_context * ctx) {
+    return llama_kv_cache_used_cells(&ctx->kv_self);
 }
 
-void llama_kv_cache_clear(struct llama_context * ctx) {
-    llama_kv_cache_clear(ctx->kv_self);
-}
-
-bool llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
-    return llama_kv_cache_seq_rm(ctx->kv_self, seq_id, p0, p1);
-}
-
-void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
-    if (seq_id_src == seq_id_dst) {
-        return;
-    }
-    llama_kv_cache_seq_cp(ctx->kv_self, seq_id_src, seq_id_dst, p0, p1);
-}
-
-void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_kv_cache_seq_keep(ctx->kv_self, seq_id);
-}
-
-void llama_kv_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
-    if (delta == 0) {
-        return;
-    }
-
-    llama_kv_cache_seq_add(ctx->kv_self, seq_id, p0, p1, delta);
-}
-
-void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
-    if (d == 1) {
-        return;
-    }
-
-    llama_kv_cache_seq_div(ctx->kv_self, seq_id, p0, p1, d);
-}
-
-llama_pos llama_kv_cache_seq_pos_max(struct llama_context * ctx, llama_seq_id seq_id) {
-    return llama_kv_cache_seq_pos_max(ctx->kv_self, seq_id);
-}
-
-void llama_kv_cache_defrag(struct llama_context * ctx) {
-    llama_kv_cache_defrag(ctx->kv_self);
-}
-
-void llama_kv_cache_update(struct llama_context * ctx) {
-    llama_kv_cache_update_impl(*ctx);
-}
-
-bool llama_kv_cache_can_shift(struct llama_context * ctx) {
-    return llama_kv_cache_can_shift(ctx->kv_self);
+// TODO: move to llama-context
+void llama_update_kv_cache(llama_context * ctx, llama_kv_cache * kv) {
+    llama_update_kv_cache_impl(*ctx, *kv);
 }
 
 ///
