@@ -1729,7 +1729,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
                 continue;
             }
             if (new_id >= id_to_token.size()) {
-                LLAMA_LOG_WARN("%s: bad special token: '%s' = %ud, using default id %d\n",
+                LLAMA_LOG_WARN("%s: bad special token: '%s' = %u, using default id %d\n",
                     __func__, key.c_str(), new_id, id);
             } else {
                 id = new_id;
