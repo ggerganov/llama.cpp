@@ -301,7 +301,6 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
     cur_p->size = k;
 }
 
-
 static uint32_t get_rng_seed(uint32_t seed) {
     if (seed == LLAMA_DEFAULT_SEED) {
         // use system clock if std::random_device is not a true RNG
@@ -1677,7 +1676,7 @@ static void llama_sampler_top_n_sigma_apply(struct llama_sampler * smpl, llama_t
         acc += pow(cur_p->data[i].logit - mean, 2);
     }
     float std = sqrt((float)acc/cur_p->size);
-    
+
     //apply mask
     for(size_t i = 0; i < cur_p->size; ++i){
         if(cur_p->data[i].logit < max - ((float)ctx->n * std)) {
