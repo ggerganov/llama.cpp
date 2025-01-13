@@ -22,7 +22,7 @@
 - Avoid fancy-looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
 - Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
-- Use sized integer types in the public API
+- Use sized integer types such as `int32_t` in the public API, e.g. `size_t` may also be appropriate for allocation sizes or byte offsets
 - Declare structs with `struct foo {}` instead of `typedef struct foo {} foo`
     - In C++ code omit optional `struct` and `enum` keyword whenever they are not necessary
     ```cpp
@@ -115,7 +115,7 @@
 # Documentation
 
 - Documentation is a community effort
-- When you need to look into the source code to figure out implementation details to figure out how to use an API consider adding a short summary to the header file for future reference
+- When you need to look into the source code to figure out how to use an API consider adding a short summary to the header file for future reference
 - When you notice incorrect or outdated documentation, please update it
 
 # Resources
