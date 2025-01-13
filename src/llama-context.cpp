@@ -1169,7 +1169,7 @@ struct llama_data_read {
             }
             batch.n_seq_id[0] = 1;
             batch.seq_id[0] = &dest_seq_id;
-            if (!llama_kv_cache_find_slot(kv_self, batch)) {
+            if (!kv_self.find_slot(batch)) {
                 LLAMA_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
                 return false;
             }
