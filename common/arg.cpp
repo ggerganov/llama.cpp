@@ -130,17 +130,26 @@ std::string common_arg::to_string() {
 
 static void common_params_handle_model_default(
         std::string & model,
-        std::string & model_url,
+        const std::string & model_url,
         std::string & hf_repo,
-        std::string & hf_file) {
+        std::string & hf_file,
+        const std::string & hf_token) {
     if (!hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
         if (hf_file.empty()) {
             if (model.empty()) {
-                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
+                auto auto_detected = common_get_hf_file(hf_repo, hf_token);
+                if (auto_detected.first.empty() || auto_detected.second.empty()) {
+                    exit(1); // built without CURL, error message already printed
+                }
+                hf_repo = auto_detected.first;
+                hf_file = auto_detected.second;
+            } else {
+                hf_file = model;
             }
-            hf_file = model;
-        } else if (model.empty()) {
+        }
+        // make sure model path is present (for caching purposes)
+        if (model.empty()) {
             // this is to avoid different repo having same file name, or same file name in different subdirs
             std::string filename = hf_repo + "_" + hf_file;
             // to make sure we don't have any slashes in the filename
@@ -290,8 +299,8 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
     }
 
     // TODO: refactor model params in a common struct
-    common_params_handle_model_default(params.model,         params.model_url,         params.hf_repo,         params.hf_file);
-    common_params_handle_model_default(params.vocoder.model, params.vocoder.model_url, params.vocoder.hf_repo, params.vocoder.hf_file);
+    common_params_handle_model_default(params.model,         params.model_url,         params.hf_repo,         params.hf_file,         params.hf_token);
+    common_params_handle_model_default(params.vocoder.model, params.vocoder.model_url, params.vocoder.hf_repo, params.vocoder.hf_file, params.hf_token);
 
     if (params.escape) {
         string_process_escapes(params.prompt);
@@ -1583,21 +1592,23 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MODEL_URL"));
     add_opt(common_arg(
-        {"-hfr", "--hf-repo"}, "REPO",
-        "Hugging Face model repository (default: unused)",
+        {"-hf", "-hfr", "--hf-repo"}, "<user>/<model>[:quant]",
+        "Hugging Face model repository; quant is optional, case-insensitive, default to Q4_K_M, or falls back to the first file in the repo if Q4_K_M doesn't exist.\n"
+        "example: unsloth/phi-4-GGUF:q4_k_m\n"
+        "(default: unused)",
         [](common_params & params, const std::string & value) {
             params.hf_repo = value;
         }
     ).set_env("LLAMA_ARG_HF_REPO"));
     add_opt(common_arg(
         {"-hff", "--hf-file"}, "FILE",
-        "Hugging Face model file (default: unused)",
+        "Hugging Face model file. If specified, it will override the quant in --hf-repo (default: unused)",
         [](common_params & params, const std::string & value) {
             params.hf_file = value;
         }
     ).set_env("LLAMA_ARG_HF_FILE"));
     add_opt(common_arg(
-        {"-hfrv", "--hf-repo-v"}, "REPO",
+        {"-hfv", "-hfrv", "--hf-repo-v"}, "<user>/<model>[:quant]",
         "Hugging Face model repository for the vocoder model (default: unused)",
         [](common_params & params, const std::string & value) {
             params.vocoder.hf_repo = value;

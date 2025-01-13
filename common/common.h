@@ -454,6 +454,11 @@ static bool string_starts_with(const std::string & str,
     return str.rfind(prefix, 0) == 0;
 }
 
+static bool string_ends_with(const std::string & str,
+                               const std::string & suffix) {  // While we wait for C++20's std::string::ends_with...
+    return str.size() >= suffix.size() && str.compare(str.size()-suffix.size(), suffix.size(), suffix) == 0;
+}
+
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);
 
@@ -501,6 +506,9 @@ struct llama_model * common_load_model_from_hf(
     const std::string & local_path,
     const std::string & hf_token,
     const struct llama_model_params & params);
+std::pair<std::string, std::string> common_get_hf_file(
+    const std::string & hf_repo_with_tag,
+    const std::string & hf_token);
 
 // clear LoRA adapters from context, then apply new list of adapters
 void common_set_adapter_lora(struct llama_context * ctx, std::vector<common_adapter_lora_info> & lora);
