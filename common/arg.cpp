@@ -3,10 +3,6 @@
 #include "log.h"
 #include "sampling.h"
 
-#ifdef _WIN32
-#define NOMINMAX
-#endif
-
 #include <algorithm>
 #include <climits>
 #include <cstdarg>
@@ -131,86 +127,6 @@ std::string common_arg::to_string() {
 //
 // utils
 //
-
-#if defined(LLAMA_USE_CURL)
-/**
- * Allow getting the HF file from the HF repo with tag (like ollama), for example:
- * - bartowski/Llama-3.2-3B-Instruct-GGUF:q4
- * - bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M
- * - bartowski/Llama-3.2-3B-Instruct-GGUF:q5_k_s
- * Tag is optional, default to "latest" (meaning it checks for Q4_K_M first, then Q4, then if not found, return the first GGUF file in repo)
- *
- * Return pair of <repo, file> (with "repo" already having tag removed)
- *
- * Note: we use the Ollama-compatible HF API, but not using the blobId. Instead, we use the special "ggufFile" field which returns the value for "hf_file". This is done to be backward-compatible with existing cache files.
- */
-static std::pair<std::string, std::string> common_get_hf_file(const std::string & hf_repo_with_tag, const std::string & hf_token) {
-    auto parts = string_split<std::string>(hf_repo_with_tag, ':');
-    std::string tag = parts.size() > 1 ? parts.back() : "latest";
-    std::string hf_repo = parts[0];
-    if (string_split<std::string>(hf_repo, '/').size() != 2) {
-        throw std::invalid_argument("error: invalid HF repo format, expected <user>/<model>[:quant]\n");
-    }
-
-    // fetch model info from Hugging Face Hub API
-    json model_info;
-    curl_ptr       curl(curl_easy_init(), &curl_easy_cleanup);
-    curl_slist_ptr http_headers;
-    std::string res_str;
-    std::string url = "https://huggingface.co/v2/" + hf_repo + "/manifests/" + tag;
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L);
-    typedef size_t(*CURLOPT_WRITEFUNCTION_PTR)(void * ptr, size_t size, size_t nmemb, void * data);
-    auto write_callback = [](void * ptr, size_t size, size_t nmemb, void * data) -> size_t {
-        static_cast<std::string *>(data)->append((char * ) ptr, size * nmemb);
-        return size * nmemb;
-    };
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, static_cast<CURLOPT_WRITEFUNCTION_PTR>(write_callback));
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &res_str);
-#if defined(_WIN32)
-    curl_easy_setopt(curl.get(), CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
-#endif
-    if (!hf_token.empty()) {
-        std::string auth_header = "Authorization: Bearer " + hf_token;
-        http_headers.ptr = curl_slist_append(http_headers.ptr, auth_header.c_str());
-    }
-    // Important: the User-Agent must be "llama-cpp" to get the "ggufFile" field in the response
-    http_headers.ptr = curl_slist_append(http_headers.ptr, "User-Agent: llama-cpp");
-    http_headers.ptr = curl_slist_append(http_headers.ptr, "Accept: application/json");
-    curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, http_headers.ptr);
-
-    CURLcode res = curl_easy_perform(curl.get());
-
-    if (res != CURLE_OK) {
-        throw std::runtime_error("error: cannot make GET request to HF API");
-    }
-
-    long res_code;
-    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &res_code);
-    if (res_code == 200) {
-        model_info = json::parse(res_str);
-    } else if (res_code == 401) {
-        throw std::runtime_error("error: model is private or does not exist; if you are accessing a gated model, please provide a valid HF token");
-    } else {
-        throw std::runtime_error(string_format("error from HF API, response code: %ld, data: %s", res_code, res_str.c_str()));
-    }
-
-    // check response
-    if (!model_info.contains("ggufFile")) {
-        throw std::runtime_error("error: model does not have ggufFile");
-    }
-    json & gguf_file = model_info.at("ggufFile");
-    if (!gguf_file.contains("rfilename")) {
-        throw std::runtime_error("error: ggufFile does not have rfilename");
-    }
-
-    return std::make_pair(hf_repo, gguf_file.at("rfilename"));
-}
-#else
-static std::pair<std::string, std::string> common_get_hf_file(const std::string &, const std::string &) {
-    throw std::runtime_error("error: llama.cpp built without libcurl");
-}
-#endif
 
 static void common_params_handle_model_default(
         std::string & model,

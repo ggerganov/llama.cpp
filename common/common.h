@@ -8,12 +8,6 @@
 #include <vector>
 #include <sstream>
 
-#if defined(LLAMA_USE_CURL)
-#include <curl/curl.h>
-#include <curl/easy.h>
-#include <future>
-#endif
-
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
 #else
@@ -512,6 +506,9 @@ struct llama_model * common_load_model_from_hf(
     const std::string & local_path,
     const std::string & hf_token,
     const struct llama_model_params & params);
+std::pair<std::string, std::string> common_get_hf_file(
+    const std::string & hf_repo_with_tag,
+    const std::string & hf_token);
 
 // clear LoRA adapters from context, then apply new list of adapters
 void common_set_adapter_lora(struct llama_context * ctx, std::vector<common_adapter_lora_info> & lora);
@@ -666,23 +663,5 @@ namespace {
 const char * const LLM_KV_SPLIT_NO            = "split.no";
 const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
-
-#if defined(LLAMA_USE_CURL)
-//
-// CURL utils
-//
-
-using curl_ptr = std::unique_ptr<CURL, decltype(&curl_easy_cleanup)>;
-
-// cannot use unique_ptr for curl_slist, because we cannot update without destroying the old one
-struct curl_slist_ptr {
-    struct curl_slist * ptr = nullptr;
-    ~curl_slist_ptr() {
-        if (ptr) {
-            curl_slist_free_all(ptr);
-        }
-    }
-};
-#endif
 
 }
