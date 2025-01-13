@@ -1401,7 +1401,8 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_batch, int n_th
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     const llama_model * model   = llama_get_model(ctx);
-    const int32_t       n_vocab = llama_n_vocab(model);
+    const llama_vocab * vocab   = llama_model_get_vocab(model);
+    const int32_t       n_vocab = llama_vocab_n_tokens(vocab);
 
     std::vector<llama_token> tokens(n_batch);
 
@@ -1409,7 +1410,7 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_batch, int n_th
 
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
-        tokens[0]    = n_processed == 0 && llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
+        tokens[0]    = n_processed == 0 && llama_vocab_get_add_bos(vocab) ? llama_vocab_bos(vocab) : std::rand() % n_vocab;
         for (int i = 1; i < n_tokens; i++) {
             tokens[i] = std::rand() % n_vocab;
         }
@@ -1424,9 +1425,10 @@ static void test_gen(llama_context * ctx, int n_gen, int n_threads) {
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     const llama_model * model   = llama_get_model(ctx);
-    const int32_t       n_vocab = llama_n_vocab(model);
+    const llama_vocab * vocab   = llama_model_get_vocab(model);
+    const int32_t       n_vocab = llama_vocab_n_tokens(vocab);
 
-    llama_token token = llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
+    llama_token token = llama_vocab_get_add_bos(vocab) ? llama_vocab_bos(vocab) : std::rand() % n_vocab;
 
     for (int i = 0; i < n_gen; i++) {
         llama_decode(ctx, llama_batch_get_one(&token, 1));
@@ -1526,10 +1528,10 @@ int main(int argc, char ** argv) {
         // keep the same model between tests when possible
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
             if (lmodel) {
-                llama_free_model(lmodel);
+                llama_model_free(lmodel);
             }
 
-            lmodel = llama_load_model_from_file(inst.model.c_str(), inst.to_llama_mparams());
+            lmodel = llama_model_load_from_file(inst.model.c_str(), inst.to_llama_mparams());
             if (lmodel == NULL) {
                 fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
                 return 1;
@@ -1537,10 +1539,10 @@ int main(int argc, char ** argv) {
             prev_inst = &inst;
         }
 
-        llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());
+        llama_context * ctx = llama_init_from_model(lmodel, inst.to_llama_cparams());
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, inst.model.c_str());
-            llama_free_model(lmodel);
+            llama_model_free(lmodel);
             return 1;
         }
 
@@ -1626,7 +1628,7 @@ int main(int argc, char ** argv) {
         ggml_threadpool_free_fn(threadpool);
     }
 
-    llama_free_model(lmodel);
+    llama_model_free(lmodel);
 
     if (p) {
         p->print_footer();
