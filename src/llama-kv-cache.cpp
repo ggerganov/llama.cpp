@@ -350,277 +350,67 @@ uint32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
     return 0;
 }
 
-void llama_kv_cache_clear(struct llama_kv_cache & cache) {
-    for (int32_t i = 0; i < (int32_t) cache.size; ++i) {
-        cache.cells[i].pos = -1;
-        cache.cells[i].seq_id.clear();
-        cache.cells[i].src = -1;
-        cache.cells[i].tail = -1;
-    }
-    cache.head = 0;
-    cache.used = 0;
-
-    for (auto & buf : cache.bufs) {
-        ggml_backend_buffer_clear(buf.get(), 0);
-    }
+void llama_kv_cache_clear(llama_kv_cache * kv) {
+    kv->clear();
 }
 
 bool llama_kv_cache_seq_rm(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id,
-                    llama_pos   p0,
-                    llama_pos   p1) {
-    uint32_t new_head = cache.size;
-
-    if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
-
-    // models like Mamba or RWKV can't have a state partially erased
-    if (cache.recurrent) {
-        if (seq_id >= (int64_t) cache.size) {
-            // could be fatal
-            return false;
-        }
-        if (0 <= seq_id) {
-            int32_t & tail_id = cache.cells[seq_id].tail;
-            if (tail_id >= 0) {
-                const llama_kv_cell & cell = cache.cells[tail_id];
-                // partial intersection is invalid
-                if ((0 < p0 && p0 <= cell.pos) || (0 < p1 && p1 <= cell.pos)) {
-                    return false;
-                }
-                // invalidate tails which will be cleared
-                if (p0 <= cell.pos && cell.pos < p1) {
-                    tail_id = -1;
-                }
-            }
-        } else {
-            // seq_id is negative, then the range should include everything or nothing
-            if (p0 != p1 && (p0 != 0 || p1 != std::numeric_limits<llama_pos>::max())) {
-                return false;
-            }
-        }
-    }
-
-    for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
-            if (seq_id < 0) {
-                cache.cells[i].seq_id.clear();
-            } else if (cache.cells[i].has_seq_id(seq_id)) {
-                cache.cells[i].seq_id.erase(seq_id);
-            } else {
-                continue;
-            }
-            if (cache.cells[i].is_empty()) {
-                // keep count of the number of used cells
-                if (cache.cells[i].pos >= 0) cache.used--;
-
-                cache.cells[i].pos = -1;
-                cache.cells[i].src = -1;
-                if (new_head == cache.size) new_head = i;
-            }
-        }
-    }
-
-    // If we freed up a slot, set head to it so searching can start there.
-    if (new_head != cache.size && new_head < cache.head) cache.head = new_head;
-
-    return true;
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id,
+             llama_pos   p0,
+             llama_pos   p1) {
+    return kv->seq_rm(seq_id, p0, p1);
 }
 
 void llama_kv_cache_seq_cp(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id_src,
-                 llama_seq_id   seq_id_dst,
-                    llama_pos   p0,
-                    llama_pos   p1) {
-    if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
-
-    if (cache.recurrent) {
-        if ((uint32_t) seq_id_dst < cache.size && (uint32_t) seq_id_src < cache.size) {
-            llama_kv_cell & tail_src = cache.cells[seq_id_src];
-            llama_kv_cell & tail_dst = cache.cells[seq_id_dst];
-            if (tail_dst.tail >= 0) {
-                // clear destination seq_id if it wasn't empty
-                llama_kv_cell & cell_dst = cache.cells[tail_dst.tail];
-
-                cell_dst.seq_id.erase(seq_id_dst);
-                tail_dst.tail = -1;
-                if (cell_dst.seq_id.empty()) {
-                    cell_dst.pos = -1;
-                    cell_dst.delta = -1;
-                    cell_dst.src = -1;
-                    cache.used -= 1;
-                }
-            }
-            if (tail_src.tail >= 0) {
-                llama_kv_cell & cell_src = cache.cells[tail_src.tail];
-
-                cell_src.seq_id.insert(seq_id_dst);
-                tail_dst.tail = tail_src.tail;
-            }
-        }
-
-        return;
-    }
-    // otherwise, this is the KV cache of a Transformer-like model
-
-    cache.head = 0;
-
-    for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.cells[i].has_seq_id(seq_id_src) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
-            cache.cells[i].seq_id.insert(seq_id_dst);
-        }
-    }
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id_src,
+          llama_seq_id   seq_id_dst,
+             llama_pos   p0,
+             llama_pos   p1) {
+    kv->seq_cp(seq_id_src, seq_id_dst, p0, p1);
 }
 
-void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id seq_id) {
-    uint32_t new_head = cache.size;
-
-    for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.recurrent && (llama_seq_id) i != seq_id) {
-            cache.cells[i].tail = -1;
-        }
-        if (!cache.cells[i].has_seq_id(seq_id)) {
-            if (cache.cells[i].pos >= 0) cache.used--;
-            cache.cells[i].pos = -1;
-            cache.cells[i].src = -1;
-            cache.cells[i].seq_id.clear();
-            if (new_head == cache.size) new_head = i;
-        } else {
-            cache.cells[i].seq_id.clear();
-            cache.cells[i].seq_id.insert(seq_id);
-        }
-    }
-
-    // If we freed up a slot, set head to it so searching can start there.
-    if (new_head != cache.size && new_head < cache.head) cache.head = new_head;
+void llama_kv_cache_seq_keep(llama_kv_cache * kv, llama_seq_id seq_id) {
+    kv->seq_keep(seq_id);
 }
 
 void llama_kv_cache_seq_add(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id,
-                    llama_pos   p0,
-                    llama_pos   p1,
-                    llama_pos   delta) {
-    uint32_t new_head = cache.size;
-
-    if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
-    // If there is no range then return early to avoid looping over the cache.
-    if (p0 == p1) return;
-
-    if (cache.recurrent) {
-        // for Mamba-like or RWKV models, only the pos needs to be shifted
-        if (0 <= seq_id && seq_id < (int64_t) cache.size) {
-            const int32_t tail_id = cache.cells[seq_id].tail;
-            if (tail_id >= 0) {
-                llama_kv_cell & cell = cache.cells[tail_id];
-                if (cell.has_seq_id(seq_id) && p0 <= cell.pos && cell.pos < p1) {
-                    cell.pos += delta;
-                }
-            }
-        }
-        return;
-    }
-
-    for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
-            cache.has_shift = true;
-            cache.cells[i].pos   += delta;
-            cache.cells[i].delta += delta;
-
-            if (cache.cells[i].pos < 0) {
-                if (!cache.cells[i].is_empty()) {
-                    cache.used--;
-                }
-                cache.cells[i].pos = -1;
-                cache.cells[i].seq_id.clear();
-                if (new_head == cache.size) {
-                    new_head = i;
-                }
-            }
-        }
-    }
-
-    // If we freed up a slot, set head to it so searching can start there.
-    // Otherwise we just start the next search from the beginning.
-    cache.head = new_head != cache.size ? new_head : 0;
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id,
+             llama_pos   p0,
+             llama_pos   p1,
+             llama_pos   delta) {
+    kv->seq_add(seq_id, p0, p1, delta);
 }
 
 void llama_kv_cache_seq_div(
-        struct llama_kv_cache & cache,
-                 llama_seq_id   seq_id,
-                    llama_pos   p0,
-                    llama_pos   p1,
-                          int   d) {
-    if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
-    // If there is no range then return early to avoid looping over the cache.
-    if (p0 == p1) return;
-
-    if (cache.recurrent) {
-        // for Mamba-like or RWKV models, only the pos needs to be changed
-        if (0 <= seq_id && seq_id < (int64_t) cache.size) {
-            const int32_t tail_id = cache.cells[seq_id].tail;
-            if (tail_id >= 0) {
-                llama_kv_cell & cell = cache.cells[tail_id];
-                if (cell.has_seq_id(seq_id) && p0 <= cell.pos && cell.pos < p1) {
-                    cell.pos /= d;
-                }
-            }
-        }
-        return;
-    }
-
-    for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
-            cache.has_shift = true;
-
-            {
-                llama_pos p_old = cache.cells[i].pos;
-                cache.cells[i].pos   /= d;
-                cache.cells[i].delta += cache.cells[i].pos - p_old;
-            }
-        }
-    }
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id,
+             llama_pos   p0,
+             llama_pos   p1,
+                   int   d) {
+    kv->seq_div(seq_id, p0, p1, d);
 }
 
-llama_pos llama_kv_cache_seq_pos_max(struct llama_kv_cache & cache, llama_seq_id seq_id) {
-    llama_pos result = 0;
-
-    for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.cells[i].has_seq_id(seq_id)) {
-            result = std::max(result, cache.cells[i].pos);
-        }
-    }
-
-    return result;
+llama_pos llama_kv_cache_seq_pos_max(llama_kv_cache * kv, llama_seq_id seq_id) {
+    return kv->seq_pos_max(seq_id);
 }
 
-void llama_kv_cache_defrag(struct llama_kv_cache & cache) {
-    if (!cache.recurrent) {
-        cache.do_defrag = true;
-    }
+void llama_kv_cache_defrag(llama_kv_cache * kv) {
+    kv->defrag();
 }
 
-int32_t llama_get_kv_cache_token_count(const struct llama_kv_cache & kv) {
-    int result = 0;
-
-    for (uint32_t i = 0; i < kv.size; i++) {
-        result += kv.cells[i].seq_id.size();
-    }
-
-    return result;
+int32_t llama_kv_cache_n_tokens(const llama_kv_cache * kv) {
+    return kv->n_tokens();
 }
 
-int32_t llama_get_kv_cache_used_cells(const struct llama_kv_cache & kv) {
-    return kv.used;
+int32_t llama_kv_cache_used_cells(const llama_kv_cache * kv) {
+    return kv->used;
 }
 
-bool llama_kv_cache_can_shift(const struct llama_kv_cache & kv) {
-    return kv.can_shift;
+bool llama_kv_cache_can_shift(const llama_kv_cache * kv) {
+    return kv->can_shift;
 }
 
 //
@@ -632,7 +422,7 @@ struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_kv_cache 
         /*.n_cells            = */ 0,
         /*.n_seq_max          = */ n_seq_max,
         /*.token_count        = */ 0,
-        /*.used_cells         = */ llama_get_kv_cache_used_cells(kv),
+        /*.used_cells         = */ llama_kv_cache_used_cells(&kv),
         /*.max_contiguous     = */ 0,
         /*.max_contiguous_idx = */ -1,
         /*.cells              = */ nullptr,
