@@ -777,15 +777,19 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"-cnv", "--conversation"},
-        string_format(
-            "run in conversation mode:\n"
-            "- does not print special tokens and suffix/prefix\n"
-            "- interactive mode is also enabled\n"
-            "(default: %s)",
-            params.conversation ? "true" : "false"
-        ),
+        "run in conversation mode:\n"
+        "- does not print special tokens and suffix/prefix\n"
+        "- interactive mode is also enabled\n"
+        "(default: auto enabled if chat template is available)",
         [](common_params & params) {
-            params.conversation = true;
+            params.conversation_mode = COMMON_CONVERSATION_MODE_ENABLED;
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN}));
+    add_opt(common_arg(
+        {"-no-cnv", "--no-conversation"},
+        "force disable conversation mode (default: false)",
+        [](common_params & params) {
+            params.conversation_mode = COMMON_CONVERSATION_MODE_DISABLED;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(common_arg(
