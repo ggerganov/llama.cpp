@@ -8572,18 +8572,18 @@ static int llama_decode_impl(
                 kv_self.head = 0;
             }
 
-            const auto slot = llama_kv_cache_find_slot(kv_self, ubatch);
-            if (!slot) {
+            const auto slot_info = kv_self.find_slot(ubatch);
+            if (!slot_info) {
                 return 1;
             }
-            kv_slot_restorer.save(slot);
+            kv_slot_restorer.save(slot_info);
 
             if (!kv_self.recurrent) {
                 // a heuristic, to avoid attending the full cache if it is not yet utilized
                 // after enough generations, the benefit from this heuristic disappears
                 // if we start defragmenting the cache, the benefit from this will be more important
-                const uint32_t pad = llama_kv_cache_get_padding(cparams);
-                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self), pad)));
+                const uint32_t pad = kv_self.get_padding(cparams);
+                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(kv_self.cell_max(), pad)));
                 //kv_self.n = llama_kv_cache_cell_max(kv_self);
             }
         }
@@ -8969,7 +8969,7 @@ static void llama_kv_cache_defrag_impl(struct llama_context & lctx) {
 
     const uint32_t n_layer = hparams.n_layer;
 
-    const uint32_t n_kv   = llama_kv_cache_cell_max(kv_self);
+    const uint32_t n_kv   = kv_self.cell_max();
     const uint32_t n_used = kv_self.used;
 
     assert(n_used <= n_kv);
@@ -9550,7 +9550,7 @@ struct llama_context * llama_init_from_model(
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;
 
     // this is necessary due to kv_self.n being padded later during inference
-    cparams.n_ctx            = GGML_PAD(cparams.n_ctx, llama_kv_cache_get_padding(cparams));
+    cparams.n_ctx            = GGML_PAD(cparams.n_ctx, ctx->kv_self.get_padding(cparams));
 
     // with causal attention, the batch size is limited by the context size
     cparams.n_batch          = hparams.causal_attn ? std::min(cparams.n_ctx, params.n_batch) : params.n_batch;
@@ -9692,7 +9692,7 @@ struct llama_context * llama_init_from_model(
 
         llama_set_abort_callback(ctx, params.abort_callback, params.abort_callback_data);
 
-        if (!llama_kv_cache_init(ctx->kv_self, ctx->model, ctx->cparams, type_k, type_v, kv_size, cparams.offload_kqv)) {
+        if (!ctx->kv_self.init(ctx->model, ctx->cparams, type_k, type_v, kv_size, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
