@@ -143,6 +143,7 @@ if (NOT GGML_BACKEND_DL)
     llama_target_and_test(test-rope.cpp)
 endif()
 
+# llama_target_and_test(test-parse-amd-ids.c)
 
 # dummy executable - not installed
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
