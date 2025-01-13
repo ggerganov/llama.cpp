@@ -1830,8 +1830,10 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
     std::string default_template_src = chat_template_override;
     std::string tool_use_template_src = chat_template_override;
     if (chat_template_override.empty()) {
-        default_template_src = llama_model_chat_template(model, /* name */ nullptr);
-        tool_use_template_src = llama_model_chat_template(model, /* name */ "tool_use");
+        auto str = llama_model_chat_template(model, /* name */ nullptr);
+        if (str) default_template_src = str;
+        str = llama_model_chat_template(model, /* name */ "tool_use");
+        if (str) tool_use_template_src = str;
     }
     if (default_template_src.empty() || default_template_src == "chatml") {
         if (!tool_use_template_src.empty()) {
