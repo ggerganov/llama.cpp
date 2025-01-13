@@ -35,8 +35,8 @@ bool llama_kv_cache::init(
     size = kv_size;
     used = 0;
 
-    type_k = type_k;
-    type_v = type_v;
+    this->type_k = type_k;
+    this->type_v = type_v;
 
     cells.clear();
     cells.resize(kv_size);
