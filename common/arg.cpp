@@ -3,6 +3,10 @@
 #include "log.h"
 #include "sampling.h"
 
+#ifdef _WIN32
+#define NOMINMAX
+#endif
+
 #include <algorithm>
 #include <climits>
 #include <cstdarg>
