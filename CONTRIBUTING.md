@@ -34,9 +34,9 @@
     struct llama_context * ctx;
     const enum llama_rope_type rope_type;
     ```
-    
+
     _(NOTE: this guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.)_
-  
+
 - Try to follow the existing patterns in the code (indentation, spaces, etc.). In case of doubt use `clang-format` to format the added code
 - For anything not covered in the current guidelines, refer to the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
@@ -105,7 +105,7 @@
 
 # Preprocessor directives
 
-- (TODO: add guidelines with examples and apply them to the codebase)
+- _(TODO: add guidelines with examples and apply them to the codebase)_
 
     ```cpp
     #ifdef FOO
