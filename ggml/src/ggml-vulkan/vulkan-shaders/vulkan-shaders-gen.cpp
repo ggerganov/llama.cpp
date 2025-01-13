@@ -30,8 +30,6 @@
     #include <fcntl.h>
 #endif
 
-#include <vulkan/vulkan_core.h>
-
 #define ASYNCIO_CONCURRENCY 64
 
 std::mutex lock;
