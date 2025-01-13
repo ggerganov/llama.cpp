@@ -60,6 +60,7 @@ int main(int argc, char ** argv) {
 
     llama_model * model = llama_init.model.get();
     llama_context * ctx = llama_init.context.get();
+    llama_kv_cache * kv = llama_get_kv_cache(ctx);
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
@@ -95,7 +96,7 @@ int main(int argc, char ** argv) {
     llama_decode(ctx, llama_batch_get_one(&inp.back(),           1));
 
     for (int s = 1; s < W + G + 1; ++s) {
-        llama_kv_cache_seq_cp(ctx, 0, s, -1, -1);
+        llama_kv_cache_seq_cp(kv, 0, s, -1, -1);
     }
 
     const auto t_enc_end = ggml_time_us();
@@ -437,17 +438,17 @@ int main(int argc, char ** argv) {
 
         // KV cache management
         // if no verification token matched, we simply remove all cells from this batch -> no fragmentation
-        llama_kv_cache_seq_rm(ctx, -1, n_past, -1);
+        llama_kv_cache_seq_rm(kv, -1, n_past, -1);
 
         if (seq_id_best != 0) {
             // if a verification token matched, we keep the best sequence and remove the rest
             // this leads to some KV cache fragmentation
-            llama_kv_cache_seq_keep(ctx, seq_id_best);
-            llama_kv_cache_seq_cp  (ctx, seq_id_best, 0, -1, -1);
-            llama_kv_cache_seq_rm  (ctx, seq_id_best,    -1, -1);
+            llama_kv_cache_seq_keep(kv, seq_id_best);
+            llama_kv_cache_seq_cp  (kv, seq_id_best, 0, -1, -1);
+            llama_kv_cache_seq_rm  (kv, seq_id_best,    -1, -1);
 
             for (int s = 1; s < W + G + 1; ++s) {
-                llama_kv_cache_seq_cp(ctx, 0, s, -1, -1);
+                llama_kv_cache_seq_cp(kv, 0, s, -1, -1);
             }
         }
     }
