@@ -2445,7 +2445,9 @@ static void maintain_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::vecto
 }
 
 
-static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, bool cuda_graph_update_required) {
+static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph) {
+
+    bool cuda_graph_update_required = false;
 
     if (cuda_ctx->cuda_graph->instance == nullptr) {
         cuda_graph_update_required = true;
@@ -2603,7 +2605,7 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
     }
 
     if (use_cuda_graph) {
-        cuda_graph_update_required = is_cuda_graph_update_required(cuda_ctx, cgraph, cuda_graph_update_required);
+        cuda_graph_update_required = is_cuda_graph_update_required(cuda_ctx, cgraph);
 
         use_cuda_graph = check_node_graph_compatibility_and_refresh_copy_ops(cuda_ctx, cgraph,
                              ggml_cuda_cpy_fn_ptrs, use_cuda_graph);
