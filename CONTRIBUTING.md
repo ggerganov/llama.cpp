@@ -34,8 +34,9 @@
     struct llama_context * ctx;
     const enum llama_rope_type rope_type;
     ```
-    > [!NOTE]
-    > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
+    
+    _(NOTE: this guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.)_
+  
 - Try to follow the existing patterns in the code (indentation, spaces, etc.). In case of doubt use `clang-format` to format the added code
 - For anything not covered in the current guidelines, refer to the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
@@ -84,7 +85,7 @@
 
     - The `get` `<action>` can be omitted
     - The `<noun>` can be omitted if not necessary
-    - The `_context` suffix of the `<class>` is optional. Use it to disambiguate symbols when needed.
+    - The `_context` suffix of the `<class>` is optional. Use it to disambiguate symbols when needed
     - Use `init`/`free` for constructor/destructor `<action>`
 
 - Use the `_t` suffix when a type is supposed to be opaque to the user - it's not relevant to them if it is a struct or anything else
@@ -95,13 +96,12 @@
     enum llama_pooling_type llama_pooling_type(const llama_context_t ctx);
     ```
 
-    > [!NOTE]
-    > This guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.
+    _(NOTE: this guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline)_
 
 - C/C++ filenames are all lowercase with dashes. Headers use the `.h` extension. Source files use the `.c` or `.cpp` extension
 - Python filenames are all lowercase with underscores
 
-- (TODO: abbreviations usage)
+- _(TODO: abbreviations usage)_
 
 # Preprocessor directives
 
