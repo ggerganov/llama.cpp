@@ -1555,7 +1555,8 @@ struct llama_model * common_load_model_from_hf(
 }
 
 std::pair<std::string, std::string> common_get_hf_file(const std::string &, const std::string &) {
-    throw std::runtime_error("error: llama.cpp built without libcurl, downloading from Hugging Face not supported.");
+    LOG_WRN("%s: llama.cpp built without libcurl, downloading from Hugging Face not supported.\n", __func__);
+    return std::make_pair("", "");
 }
 
 #endif // LLAMA_USE_CURL

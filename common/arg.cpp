@@ -138,15 +138,12 @@ static void common_params_handle_model_default(
         // short-hand to avoid specifying --hf-file -> default it to --model
         if (hf_file.empty()) {
             if (model.empty()) {
-                try {
-                    auto auto_detected = common_get_hf_file(hf_repo, hf_token);
-                    hf_repo = auto_detected.first;
-                    hf_file = auto_detected.second;
-                    LOG_INF("%s: using hf_file = %s\n", __func__, hf_file.c_str());
-                } catch (std::exception & e) {
-                    fprintf(stderr, "%s: %s\n", __func__, e.what());
-                    exit(1);
+                auto auto_detected = common_get_hf_file(hf_repo, hf_token);
+                if (auto_detected.first.empty() || auto_detected.second.empty()) {
+                    exit(1); // built without CURL, error message already printed
                 }
+                hf_repo = auto_detected.first;
+                hf_file = auto_detected.second;
             } else {
                 hf_file = model;
             }
