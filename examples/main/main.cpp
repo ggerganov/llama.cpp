@@ -4,6 +4,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "llama.h"
+#include "chat.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -34,11 +35,11 @@ static llama_context           ** g_ctx;
 static llama_model             ** g_model;
 static common_sampler          ** g_smpl;
 static common_params            * g_params;
+static llama_cli_chat           * g_chat;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
-static bool need_insert_eot = false;
 
 static void print_usage(int argc, char ** argv) {
     (void) argc;
@@ -64,9 +65,10 @@ static bool file_is_empty(const std::string & path) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 static void sigint_handler(int signo) {
     if (signo == SIGINT) {
-        if (!is_interacting && g_params->interactive) {
+        if (g_chat) {
+            g_chat->interrupt();
+        } else if (!is_interacting && g_params->interactive) {
             is_interacting  = true;
-            need_insert_eot = true;
         } else {
             console::cleanup();
             LOG("\n");
@@ -81,14 +83,6 @@ static void sigint_handler(int signo) {
     }
 }
 #endif
-
-static std::string chat_add_and_format(struct llama_model * model, std::vector<common_chat_msg> & chat_msgs, const std::string & role, const std::string & content) {
-    common_chat_msg new_msg{role, content};
-    auto formatted = common_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
-    chat_msgs.push_back({role, content});
-    LOG_DBG("formatted: '%s'\n", formatted.c_str());
-    return formatted;
-}
 
 int main(int argc, char ** argv) {
     common_params params;
@@ -204,6 +198,12 @@ int main(int argc, char ** argv) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n", __func__, n_ctx_train, n_ctx);
     }
 
+    // switch on conversation mode if chat template is present
+    if (!params.chat_template.empty() || !common_get_builtin_chat_template(model).empty()) {
+        LOG("%s: using chat mode\n", __func__);
+        params.conversation = true;
+    }
+
     // print chat template example in conversation mode
     if (params.conversation) {
         if (params.enable_chat_template) {
@@ -252,18 +252,15 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_inp;
 
     {
-        auto prompt = (params.conversation && params.enable_chat_template && !params.prompt.empty())
-            ? chat_add_and_format(model, chat_msgs, "system", params.prompt) // format the system prompt in conversation mode
-            : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_DBG("tokenize the prompt\n");
-            embd_inp = common_tokenize(ctx, prompt, true, true);
+            embd_inp = common_tokenize(ctx, params.prompt, true, true);
         } else {
             LOG_DBG("use session tokens\n");
             embd_inp = session_tokens;
         }
 
-        LOG_DBG("prompt: \"%s\"\n", prompt.c_str());
+        LOG_DBG("prompt: \"%s\"\n", params.prompt.c_str());
         LOG_DBG("tokens: %s\n", string_from(ctx, embd_inp).c_str());
     }
 
@@ -420,6 +417,12 @@ int main(int argc, char ** argv) {
     LOG_INF("sampler chain: %s\n",    common_sampler_print(smpl).c_str());
 
     LOG_INF("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
+
+    if (params.conversation) {
+        llama_cli_chat chat(params, ctx, smpl);
+        g_chat = &chat;
+        chat.run();
+    }
 
     // group-attention state
     // number of grouped KV tokens so far (used only if params.grp_attn_n > 1)
@@ -753,27 +756,13 @@ int main(int argc, char ** argv) {
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
-
-                    if (params.enable_chat_template) {
-                        chat_add_and_format(model, chat_msgs, "assistant", assistant_ss.str());
-                    }
                     is_interacting = true;
                     LOG("\n");
                 }
             }
 
-            // if current token is not EOG, we add it to current assistant message
-            if (params.conversation) {
-                const auto id = common_sampler_last(smpl);
-                assistant_ss << common_token_to_piece(ctx, id, false);
-            }
-
             if (n_past > 0 && is_interacting) {
                 LOG_DBG("waiting for user input\n");
-
-                if (params.conversation) {
-                    LOG("\n> ");
-                }
 
                 if (params.input_prefix_bos) {
                     LOG_DBG("adding input prefix BOS token\n");
@@ -781,7 +770,7 @@ int main(int argc, char ** argv) {
                 }
 
                 std::string buffer;
-                if (!params.input_prefix.empty() && !params.conversation) {
+                if (!params.input_prefix.empty()) {
                     LOG_DBG("appending input prefix: '%s'\n", params.input_prefix.c_str());
                     LOG("%s", params.input_prefix.c_str());
                 }
@@ -805,7 +794,7 @@ int main(int argc, char ** argv) {
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
                     // append input suffix if any
-                    if (!params.input_suffix.empty() && !params.conversation) {
+                    if (!params.input_suffix.empty()) {
                         LOG_DBG("appending input suffix: '%s'\n", params.input_suffix.c_str());
                         LOG("%s", params.input_suffix.c_str());
                     }
@@ -818,23 +807,13 @@ int main(int argc, char ** argv) {
                         string_process_escapes(buffer);
                     }
 
-                    bool format_chat = params.conversation && params.enable_chat_template;
-                    std::string user_inp = format_chat
-                        ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
-                        : std::move(buffer);
+                    std::string user_inp = std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
                     const auto line_pfx = common_tokenize(ctx, params.input_prefix, false, true);
-                    const auto line_inp = common_tokenize(ctx, user_inp,            false, format_chat);
+                    const auto line_inp = common_tokenize(ctx, user_inp,            false, true);
                     const auto line_sfx = common_tokenize(ctx, params.input_suffix, false, true);
 
                     LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
-
-                    // if user stop generation mid-way, we must add EOT to finish model's last response
-                    if (need_insert_eot && format_chat) {
-                        llama_token eot = llama_vocab_eot(vocab);
-                        embd_inp.push_back(eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab) : eot);
-                        need_insert_eot = false;
-                    }
 
                     embd_inp.insert(embd_inp.end(), line_pfx.begin(), line_pfx.end());
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
