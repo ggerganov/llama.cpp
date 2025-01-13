@@ -720,14 +720,14 @@ static int apply_chat_template(const minja::chat_template & tmpl, LlamaData & ll
         for (const auto & msg : llama_data.messages) {
             messages.push_back({
                 {"role", msg.role},
-                { "content", msg.content}
+                {"content", msg.content},
             });
         }
         try {
             auto result = tmpl.apply(messages, /* tools= */ json(), append);
             llama_data.fmtted.resize(result.size() + 1);
             memcpy(llama_data.fmtted.data(), result.c_str(), result.size() + 1);
-            return llama_data.fmtted.size();
+            return result.size();
         } catch (const std::exception & e) {
             printe("failed to render the chat template: %s\n", e.what());
             return -1;
