@@ -11,17 +11,19 @@ def create_server():
 
 
 @pytest.mark.parametrize(
-    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason,jinja",
+    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason,jinja,chat_template",
     [
-        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", False),
-        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", True),
-        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", False),
-        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", True),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", False, None),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", True, None),
+        (None, "Book", "What is the best book", 8, " blue and shin", 23, 8, "length", True, "This is not a chat template, it is"),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", False, None),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", True, None),
     ]
 )
-def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason, jinja):
+def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason, jinja, chat_template):
     global server
     server.jinja = jinja
+    server.chat_template = chat_template
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
         "model": model,

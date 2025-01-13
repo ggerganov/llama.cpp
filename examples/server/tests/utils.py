@@ -70,13 +70,13 @@ class ServerProcess:
     draft: int | None = None
     api_key: str | None = None
     lora_files: List[str] | None = None
-    chat_template_file: str | None = None
-    jinja: bool | None = None
     disable_ctx_shift: int | None = False
     draft_min: int | None = None
     draft_max: int | None = None
     no_webui: bool | None = None
+    jinja: bool | None = None
     chat_template: str | None = None
+    chat_template_file: str | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -157,10 +157,6 @@ class ServerProcess:
         if self.lora_files:
             for lora_file in self.lora_files:
                 server_args.extend(["--lora", lora_file])
-        if self.chat_template_file:
-            server_args.extend(["--chat-template-file", self.chat_template_file])
-        if self.jinja:
-            server_args.append("--jinja")
         if self.disable_ctx_shift:
             server_args.extend(["--no-context-shift"])
         if self.api_key:
@@ -171,9 +167,13 @@ class ServerProcess:
             server_args.extend(["--draft-min", self.draft_min])
         if self.no_webui:
             server_args.append("--no-webui")
+        if self.jinja:
+            server_args.append("--jinja")
         if self.chat_template:
             server_args.extend(["--chat-template", self.chat_template])
-
+        if self.chat_template_file:
+            server_args.extend(["--chat-template-file", self.chat_template_file])
+        
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
 
