@@ -1811,15 +1811,23 @@ std::string common_chat_format_single(const struct llama_model * model,
     return ss.str();
 }
 
-std::string common_chat_format_example(const struct llama_model * model,
-        const std::string & tmpl) {
+std::string common_chat_format_example(const struct llama_model * model, const minja::chat_template & tmpl, bool use_jinja) {
     std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant"},
         {"user",      "Hello"},
         {"assistant", "Hi there"},
         {"user",      "How are you?"},
     };
-    return common_chat_apply_template(model, tmpl, msgs, true);
+    const auto add_generation_prompt = true;
+    if (use_jinja) {
+        auto messages = json::array();
+        for (const auto & msg : msgs) {
+            messages.push_back({{"role", msg.role}, {"content", msg.content}});
+        }
+        return tmpl.apply(messages, /* tools= */ json(), add_generation_prompt);
+    } else {
+        return common_chat_apply_template(model, tmpl.source(), msgs, add_generation_prompt);
+    }
 }
 
 llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)

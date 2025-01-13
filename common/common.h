@@ -619,7 +619,7 @@ std::string common_chat_format_single(const struct llama_model * model,
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(const struct llama_model * model,
-        const std::string & tmpl);
+    const minja::chat_template & tmpl, bool use_jinja);
 
 
 struct llama_chat_templates {
