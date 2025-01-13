@@ -45,6 +45,8 @@ int main(int argc, char ** argv) {
     model_tgt = llama_init_tgt.model.get();
     ctx_tgt   = llama_init_tgt.context.get();
 
+    const llama_vocab * vocab = llama_model_get_vocab(model_tgt);
+
     // load the draft model
     params.devices      = params.speculative.devices;
     params.model        = params.speculative.model;
@@ -196,7 +198,7 @@ int main(int argc, char ** argv) {
 
             id_last = ids[i];
 
-            if (llama_token_is_eog(model_tgt, id_last)) {
+            if (llama_vocab_is_eog(vocab, id_last)) {
                 has_eos = true;
                 break;
             }

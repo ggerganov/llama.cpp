@@ -87,7 +87,7 @@ Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring fi
     auto path_to_model = env->GetStringUTFChars(filename, 0);
     LOGi("Loading model from %s", path_to_model);
 
-    auto model = llama_load_model_from_file(path_to_model, model_params);
+    auto model = llama_model_load_from_file(path_to_model, model_params);
     env->ReleaseStringUTFChars(filename, path_to_model);
 
     if (!model) {
@@ -102,7 +102,7 @@ Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring fi
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_free_1model(JNIEnv *, jobject, jlong model) {
-    llama_free_model(reinterpret_cast<llama_model *>(model));
+    llama_model_free(reinterpret_cast<llama_model *>(model));
 }
 
 extern "C"
@@ -405,6 +405,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     const auto batch   = reinterpret_cast<llama_batch   *>(batch_pointer);
     const auto sampler = reinterpret_cast<llama_sampler *>(sampler_pointer);
     const auto model = llama_get_model(context);
+    const auto vocab = llama_model_get_vocab(model);
 
     if (!la_int_var) la_int_var = env->GetObjectClass(intvar_ncur);
     if (!la_int_var_value) la_int_var_value = env->GetMethodID(la_int_var, "getValue", "()I");
@@ -414,7 +415,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     const auto new_token_id = llama_sampler_sample(sampler, context, -1);
 
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
-    if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+    if (llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len) {
         return nullptr;
     }
 
