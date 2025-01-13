@@ -82,8 +82,10 @@ static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & toke
 }
 
 static void batch_decode(llama_context * ctx, llama_batch & batch, float * output, int n_seq, int n_embd) {
+    llama_kv_cache * kv = llama_get_kv_cache(ctx);
+
     // clear previous kv_cache values (irrelevant for embeddings)
-    llama_kv_cache_clear(ctx);
+    llama_kv_cache_clear(kv);
 
     // run model
     LOG_INF("%s: n_tokens = %d, n_seq = %d\n", __func__, batch.n_tokens, n_seq);

@@ -139,6 +139,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    llama_kv_cache * kv = llama_get_kv_cache(ctx);
+
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
     const int n_ctx_train = llama_model_n_ctx_train(model);
@@ -332,8 +334,8 @@ int main(int argc, char ** argv) {
                 LOG_DBG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
                     n_past, n_left, n_ctx, params.n_keep, n_discard);
 
-                llama_kv_cache_seq_rm (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
-                llama_kv_cache_seq_add(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
+                llama_kv_cache_seq_rm (kv, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
+                llama_kv_cache_seq_add(kv, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
 
                 n_past -= n_discard;
 

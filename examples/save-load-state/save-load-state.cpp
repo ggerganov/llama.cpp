@@ -156,6 +156,8 @@ int main(int argc, char ** argv) {
     // make new context
     llama_context * ctx3 = llama_init_from_model(model, common_context_params_to_llama(params));
 
+    llama_kv_cache * kv3 = llama_get_kv_cache(ctx3);
+
     llama_sampler * smpl3 = llama_sampler_chain_init(sparams);
 
     llama_sampler_chain_add(smpl3, llama_sampler_init_dist(params.sampling.seed));
@@ -196,7 +198,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s : seq 0 copied, %zd bytes\n", __func__, ncopy);
 
         // erase whole kv
-        llama_kv_cache_clear(ctx3);
+        llama_kv_cache_clear(kv3);
         fprintf(stderr, "%s : kv cache cleared\n", __func__);
 
         // restore kv into seq 1

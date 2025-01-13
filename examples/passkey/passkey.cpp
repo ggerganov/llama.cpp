@@ -86,6 +86,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    llama_kv_cache * kv = llama_get_kv_cache(ctx);
+
     auto sparams = llama_sampler_chain_default_params();
 
     llama_sampler * smpl = llama_sampler_chain_init(sparams);
@@ -132,11 +134,11 @@ int main(int argc, char ** argv) {
             const int ib = i/n_batch - 1;
             const int bd = n_batch_grp*(n_grp - 1);
 
-            llama_kv_cache_seq_add (ctx, 0, n_past - n_batch,         n_past,         ib*bd);
-            llama_kv_cache_seq_div (ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
-            llama_kv_cache_update  (ctx);
+            llama_kv_cache_seq_add(kv, 0, n_past - n_batch,         n_past,         ib*bd);
+            llama_kv_cache_seq_div(kv, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
+            llama_update_kv_cache (ctx, kv);
 
-            n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
+            n_past = llama_kv_cache_seq_pos_max(kv, 0) + 1;
         }
 
         common_batch_clear(batch);
@@ -166,12 +168,12 @@ int main(int argc, char ** argv) {
 
         LOG_INF("%s: shifting KV cache with %d\n", __func__, n_discard);
 
-        llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
-        llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
-      //llama_kv_cache_defrag (ctx);
-        llama_kv_cache_update (ctx);
+        llama_kv_cache_seq_rm (kv, 0, n_keep            , n_keep + n_discard);
+        llama_kv_cache_seq_add(kv, 0, n_keep + n_discard, n_ctx,  -n_discard);
+      //llama_kv_cache_defrag (kv);
+        llama_update_kv_cache (ctx, kv);
 
-        n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
+        n_past = llama_kv_cache_seq_pos_max(kv, 0) + 1;
 
         common_batch_clear(batch);
 
@@ -197,12 +199,12 @@ int main(int argc, char ** argv) {
         if (n_discard > 0) {
             LOG_INF("%s: shifting KV cache with %d to free space for the answer\n", __func__, n_discard);
 
-            llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
-            llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
-          //llama_kv_cache_defrag (ctx);
-            llama_kv_cache_update (ctx);
+            llama_kv_cache_seq_rm (kv, 0, n_keep            , n_keep + n_discard);
+            llama_kv_cache_seq_add(kv, 0, n_keep + n_discard, n_ctx,  -n_discard);
+          //llama_kv_cache_defrag (kv);
+            llama_update_kv_cache (ctx, kv);
 
-            n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
+            n_past = llama_kv_cache_seq_pos_max(kv, 0) + 1;
         }
     }
 

@@ -45,6 +45,8 @@ int main(int argc, char ** argv) {
     model_tgt = llama_init_tgt.model.get();
     ctx_tgt   = llama_init_tgt.context.get();
 
+    llama_kv_cache * kv = llama_get_kv_cache(ctx_tgt);
+
     const llama_vocab * vocab = llama_model_get_vocab(model_tgt);
 
     // load the draft model
@@ -217,7 +219,7 @@ int main(int argc, char ** argv) {
         {
             LOG_DBG("clear kv cache from any extra tokens, n_past = %d\n", n_past);
 
-            llama_kv_cache_seq_rm(ctx_tgt, 0, n_past, -1);
+            llama_kv_cache_seq_rm(kv, 0, n_past, -1);
         }
 
         if ((params.n_predict >= 0 && n_predict > params.n_predict) || has_eos) {
