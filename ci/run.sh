@@ -13,6 +13,9 @@
 # # with SYCL support
 # GG_BUILD_SYCL=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
 #
+# # with METAL support
+# GG_BUILD_METAL=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
+#
 # # with VULKAN support
 # GG_BUILD_VULKAN=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
 #

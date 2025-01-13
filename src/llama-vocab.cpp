@@ -24,41 +24,48 @@
 struct naive_trie {
     naive_trie() : has_value(false), value(0) {
     }
-    void insert(const char * key, size_t len, int32_t value = 0) {
+
+    void insert(const char * key, size_t len, int32_t val = 0) {
         if (len == 0) {
-            this->has_value = true;
-            this->value = value;
+            has_value = true;
+            value = val;
+
             return;
         }
+
         char c = key[0];
-        auto res = children.find(c);
-        if (res != children.end()) {
-            res->second.insert(key + 1, len - 1, value);
+        auto child = children.find(c);
+        if (child != children.end()) {
+            child->second.insert(key + 1, len - 1, val);
         } else {
-            auto res = children.insert(std::make_pair(c, naive_trie()));
-            res.first->second.insert(key + 1, len - 1, value);
+            auto child_new = children.insert(std::make_pair(c, naive_trie()));
+            child_new.first->second.insert(key + 1, len - 1, val);
         }
     }
+
     std::pair<const char *, size_t> get_longest_prefix(const char * key, size_t len, size_t offset = 0) const {
         if (len == 0 || offset == len) {
             return std::make_pair(key, offset);
         }
+
         char c = key[offset];
-        auto res = children.find(c);
-        if (res != children.end()) {
-            return res->second.get_longest_prefix(key, len, offset + 1);
+        auto child = children.find(c);
+        if (child != children.end()) {
+            return child->second.get_longest_prefix(key, len, offset + 1);
         }
 
         return std::make_pair(key, offset);
     }
+
     const struct naive_trie * traverse(const char c) const {
-        auto res = children.find(c);
-        if (res != children.end()) {
-            return &res->second;
+        auto child = children.find(c);
+        if (child != children.end()) {
+            return &child->second;
         }
 
         return NULL;
     }
+
     std::map<char, struct naive_trie> children;
     bool has_value;
     llama_token value;
@@ -108,7 +115,7 @@ struct llm_tokenizer_spm : llm_tokenizer {
 };
 
 struct llm_tokenizer_spm_session {
-    llm_tokenizer_spm_session(const llama_vocab & vocab) : vocab(vocab) {}
+    llm_tokenizer_spm_session(const llama_vocab & vocab_) : vocab(vocab_) {}
 
     void tokenize(const std::string & text, std::vector<llama_token> & output) {
         // split string into utf8 chars
@@ -408,7 +415,7 @@ struct llm_tokenizer_bpe : llm_tokenizer {
 };
 
 struct llm_tokenizer_bpe_session {
-    llm_tokenizer_bpe_session(const llama_vocab & vocab, const llm_tokenizer_bpe & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
+    llm_tokenizer_bpe_session(const llama_vocab & vocab_, const llm_tokenizer_bpe & tokenizer_) : vocab(vocab_), tokenizer(tokenizer_) {}
 
     static void append(const llama_token token_id, std::vector<llama_token> & output)  {
         output.push_back(token_id);
@@ -596,7 +603,7 @@ struct llm_tokenizer_wpm : llm_tokenizer {
 };
 
 struct llm_tokenizer_wpm_session {
-    llm_tokenizer_wpm_session(const llama_vocab & vocab) : vocab(vocab) {}
+    llm_tokenizer_wpm_session(const llama_vocab & vocab_) : vocab(vocab_) {}
 
     void tokenize(const std::string & text, std::vector<llama_token> & output) {
         // normalize and split by whitespace
@@ -775,7 +782,7 @@ struct llm_tokenizer_ugm : llm_tokenizer {
 };
 
 struct llm_tokenizer_ugm_session {
-    llm_tokenizer_ugm_session(const llama_vocab & vocab, const llm_tokenizer_ugm & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
+    llm_tokenizer_ugm_session(const llama_vocab & vocab_, const llm_tokenizer_ugm & tokenizer_) : vocab(vocab_), tokenizer(tokenizer_) {}
 
     /* This implementation is based on SentencePiece optimized Viterbi algorithm for
      * unigram language models. The general idea is to:
@@ -942,7 +949,7 @@ private:
      */
     struct xcda_array_view {
     public:
-        xcda_array_view(const uint32_t * xcda_array, size_t xcda_array_size) : xcda_array(xcda_array), xcda_array_size(xcda_array_size) {
+        xcda_array_view(const uint32_t * xcda_array_, size_t xcda_array_size_) : xcda_array(xcda_array_), xcda_array_size(xcda_array_size_) {
         }
         uint32_t get_base(size_t index) {
             uint32_t packed_node = get_node(index);
@@ -1128,7 +1135,7 @@ struct llm_tokenizer_rwkv : llm_tokenizer {
 };
 
 struct llm_tokenizer_rwkv_session {
-    llm_tokenizer_rwkv_session(const llama_vocab & vocab, const llm_tokenizer_rwkv & tokenizer) : vocab(vocab), tokenizer(tokenizer) {}
+    llm_tokenizer_rwkv_session(const llama_vocab & vocab_, const llm_tokenizer_rwkv & tokenizer_) : vocab(vocab_), tokenizer(tokenizer_) {}
 
     void tokenize(const std::string & text, std::vector<llama_token> & output) {
         uint32_t position = 0;
@@ -1255,7 +1262,7 @@ struct llama_vocab::impl {
 
     std::vector<char> precompiled_charsmap;
 
-    impl(const llama_vocab & vocab) : vocab(vocab) {
+    impl(const llama_vocab & vocab_) : vocab(vocab_) {
     }
 
     ~impl() = default;
@@ -1278,7 +1285,7 @@ struct llama_vocab::impl {
 
     llama_token_attr token_get_attr(llama_token id) const;
 
-    void init_tokenizer(enum llama_vocab_type type);
+    void init_tokenizer();
 
     void tokenizer_st_partition(std::forward_list<fragment_buffer_variant> & buffer, bool parse_special) const;
 
@@ -1668,7 +1675,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
     }
     GGML_ASSERT(id_to_token.size() == token_to_id.size());
 
-    init_tokenizer(type);
+    init_tokenizer();
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (type == LLAMA_VOCAB_TYPE_SPM) {
@@ -2109,7 +2116,7 @@ llama_token_attr llama_vocab::impl::token_get_attr(llama_token id) const {
     return id_to_token.at(id).attr;
 }
 
-void llama_vocab::impl::init_tokenizer(enum llama_vocab_type type) {
+void llama_vocab::impl::init_tokenizer() {
     LLAMA_LOG_DEBUG("%s: initializing tokenizer for type %d\n", __func__, type);
 
     switch (type) {
@@ -2489,15 +2496,15 @@ int32_t llama_vocab::impl::token_to_piece(llama_token token, char * buf, int32_t
 
     // copy piece chars to output text buffer
     // skip up to 'lstrip' leading spaces before copying
-    auto _try_copy = [=] (const char * token, size_t size) -> int32_t {
-        for (int32_t i = 0; i < lstrip && size && *token == ' '; ++i) {
-            token++;
+    auto _try_copy = [=] (const char * text, size_t size) -> int32_t {
+        for (int32_t i = 0; i < lstrip && size && *text == ' '; ++i) {
+            text++;
             size--;
         }
         if (length < (int32_t)size) {
             return -(int32_t) size;
         }
-        memcpy(buf, token, size);
+        memcpy(buf, text, size);
         return (int32_t) size;
     };
 

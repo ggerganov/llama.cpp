@@ -579,8 +579,8 @@ private:
                     seq.back().second = false;
                 } else {
                     std::string literal;
-                    auto is_non_literal = [&](char c) {
-                        return NON_LITERAL_SET.find(c) != NON_LITERAL_SET.end();
+                    auto is_non_literal = [&](char ch) {
+                        return NON_LITERAL_SET.find(ch) != NON_LITERAL_SET.end();
                     };
                     while (i < length) {
                         if (sub_pattern[i] == '\\' && i < length - 1) {

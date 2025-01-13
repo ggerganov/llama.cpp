@@ -41,9 +41,9 @@ struct quantize_state_impl {
     // used to figure out if a model shares tok_embd with the output weight
     bool has_output = false;
 
-    quantize_state_impl(const llama_model & model, const llama_model_quantize_params * params)
-        : model(model)
-        , params(params)
+    quantize_state_impl(const llama_model & model_, const llama_model_quantize_params * params_)
+        : model(model_)
+        , params(params_)
         {}
 };
 
@@ -130,17 +130,17 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
         return i_layer < n_layers/8 || i_layer >= 7*n_layers/8 || (i_layer - n_layers/8)%3 == 2;
     };
     const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
-    auto layer_info = [n_expert] (int i_layer, int n_layer, const char * name) {
+    auto layer_info = [n_expert] (int i_layer, int n_layer, const char * name_layer) {
         if (n_expert > 1) {
             // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but occasionally randomly
             // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
             // for getting the current layer as I initially thought, and we need to resort to parsing the
             // tensor name.
-            if (sscanf(name, "blk.%d.", &i_layer) != 1) {
-                throw std::runtime_error(format("Failed to determine layer for tensor %s", name));
+            if (sscanf(name_layer, "blk.%d.", &i_layer) != 1) {
+                throw std::runtime_error(format("Failed to determine layer for tensor %s", name_layer));
             }
             if (i_layer < 0 || i_layer >= n_layer) {
-                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name, n_layer));
+                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name_layer, n_layer));
             }
         }
         return std::make_pair(i_layer, n_layer);
@@ -423,8 +423,7 @@ static size_t llama_tensor_quantize_impl(enum ggml_type new_type, const float * 
     int64_t counter = 0;
     size_t new_size = 0;
     bool valid = true;
-    auto compute = [&mutex, &counter, &new_size, &valid, new_type, f32_data, new_data, chunk_size,
-            nrows, n_per_row, imatrix]() {
+    auto compute = [&mutex, &counter, &new_size, &valid, new_type, f32_data, new_data, chunk_size, nrows, n_per_row, imatrix]() {
         const int64_t nrows_per_chunk = chunk_size / n_per_row;
         size_t local_size = 0;
         while (true) {
@@ -437,6 +436,7 @@ static size_t llama_tensor_quantize_impl(enum ggml_type new_type, const float * 
                 break;
             }
             lock.unlock();
+
             const int64_t this_nrow = std::min(nrows - first_row, nrows_per_chunk);
             size_t this_size = ggml_quantize_chunk(new_type, f32_data, new_data, first_row * n_per_row, this_nrow, n_per_row, imatrix);
             local_size += this_size;
@@ -445,7 +445,7 @@ static size_t llama_tensor_quantize_impl(enum ggml_type new_type, const float * 
             const size_t row_size  = ggml_row_size(new_type, n_per_row);
             void * this_data = (char *) new_data + first_row * row_size;
             if (!ggml_validate_row_data(new_type, this_data, this_size)) {
-                std::unique_lock<std::mutex> lock(mutex);
+                lock.lock();
                 valid = false;
                 break;
             }
@@ -589,15 +589,15 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
     }
 
     // make a list of weights
-    std::vector<const llama_model_loader::llama_tensor_weight *> tensors;
-    tensors.reserve(ml.weights_map.size());
+    std::vector<const llama_model_loader::llama_tensor_weight *> tensor_weights;
+    tensor_weights.reserve(ml.weights_map.size());
     for (const auto & it : ml.weights_map) {
-        tensors.push_back(&it.second);
+        tensor_weights.push_back(&it.second);
     }
 
     // keep_split requires that the weights are sorted by split index
     if (params->keep_split) {
-        std::sort(tensors.begin(), tensors.end(), [](const llama_model_loader::llama_tensor_weight * a, const llama_model_loader::llama_tensor_weight * b) {
+        std::sort(tensor_weights.begin(), tensor_weights.end(), [](const llama_model_loader::llama_tensor_weight * a, const llama_model_loader::llama_tensor_weight * b) {
             if (a->idx == b->idx) {
                 return a->offs < b->offs;
             }
@@ -605,8 +605,8 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
         });
     }
 
-    for (const auto * it : tensors) {
-        const struct ggml_tensor * tensor = it->tensor;
+    for (const auto * tw : tensor_weights) {
+        const ggml_tensor * tensor = tw->tensor;
 
         const std::string name = ggml_get_name(tensor);
 
@@ -650,17 +650,17 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
 
     // Assume split index is continuous
     if (params->keep_split) {
-        for (const auto * it : tensors) {
-            n_split = std::max(uint16_t(it->idx + 1), n_split);
+        for (const auto * tw : tensor_weights) {
+            n_split = std::max(uint16_t(tw->idx + 1), n_split);
         }
     }
     std::vector<gguf_context_ptr> ctx_outs(n_split);
     ctx_outs[0] = std::move(ctx_out);
 
-    // populate the original tensors so we get an initial meta data
-    for (const auto * it : tensors) {
-        uint16_t i_split = params->keep_split ? it->idx : 0;
-        struct ggml_tensor * tensor = it->tensor;
+    // populate the original tensor_weights so we get an initial meta data
+    for (const auto * tw : tensor_weights) {
+        uint16_t i_split = params->keep_split ? tw->idx : 0;
+        ggml_tensor * tensor = tw->tensor;
         if (!ctx_outs[i_split]) {
             ctx_outs[i_split].reset(gguf_init_empty());
         }
@@ -707,12 +707,11 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
 
     const auto tn = LLM_TN(model.arch);
     new_ofstream(0);
-    for (const auto * it : tensors) {
-        const auto & weight = *it;
-        struct ggml_tensor * tensor = weight.tensor;
-        if (weight.idx != cur_split && params->keep_split) {
+    for (const auto * tw : tensor_weights) {
+        ggml_tensor * tensor = tw->tensor;
+        if (tw->idx != cur_split && params->keep_split) {
             close_ofstream();
-            new_ofstream(weight.idx);
+            new_ofstream(tw->idx);
         }
 
         const std::string name = ggml_get_name(tensor);

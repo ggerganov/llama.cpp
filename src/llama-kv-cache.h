@@ -58,12 +58,12 @@ struct llama_kv_cache {
     std::vector<ggml_backend_buffer_ptr> bufs;
 
     size_t total_size() const {
-        size_t size = 0;
+        size_t size_all = 0;
         for (const auto & buf : bufs) {
-            size += ggml_backend_buffer_get_size(buf.get());
+            size_all += ggml_backend_buffer_get_size(buf.get());
         }
 
-        return size;
+        return size_all;
     }
 
     // TODO: better data structures to reduce the cost of this operation

@@ -471,12 +471,12 @@ struct my_llama_file {
         GGML_ASSERT(ret == 0); // same
     }
 
-    void read_raw(void * ptr, size_t size) {
-        if (size == 0) {
+    void read_raw(void * raw_addr, size_t raw_size) {
+        if (raw_size == 0) {
             return;
         }
         errno = 0;
-        std::size_t ret = std::fread(ptr, size, 1, fp);
+        std::size_t ret = std::fread(raw_addr, raw_size, 1, fp);
         if (ferror(fp)) {
             die_fmt("fread failed: %s", strerror(errno));
         }

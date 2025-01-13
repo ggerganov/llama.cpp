@@ -1089,16 +1089,16 @@ struct llm_build_context {
 
     // TODO: consider making the entire interface noexcept
     llm_build_context(
-        llama_context  & lctx,
-    const llama_ubatch & ubatch,
-    const llm_build_cb & cb,
+         llama_context & lctx_,
+    const llama_ubatch & ubatch_,
+    const llm_build_cb & cb_,
                   bool   worst_case) :
-        model            (lctx.model),
-        lctx             (lctx),
+        model            (lctx_.model),
+        lctx             (lctx_),
         hparams          (model.hparams),
-        cparams          (lctx.cparams),
-        ubatch           (ubatch),
-        kv_self          (lctx.kv_self),
+        cparams          (lctx_.cparams),
+        ubatch           (ubatch_),
+        kv_self          (lctx_.kv_self),
         n_embd           (hparams.n_embd),
         n_layer          (hparams.n_layer),
         n_rot            (hparams.n_rot),
@@ -1119,17 +1119,17 @@ struct llm_build_context {
         beta_slow        (cparams.yarn_beta_slow),
         norm_eps         (hparams.f_norm_eps),
         norm_rms_eps     (hparams.f_norm_rms_eps),
-        n_tokens         (ubatch.n_tokens),
+        n_tokens         (ubatch_.n_tokens),
         n_kv             (worst_case ? kv_self.size : kv_self.n),
-        n_outputs        (worst_case ? n_tokens : lctx.n_outputs),
-        n_outputs_enc    (worst_case ? n_tokens : lctx.embd_enc.size() / hparams.n_embd),
+        n_outputs        (worst_case ? n_tokens : lctx_.n_outputs),
+        n_outputs_enc    (worst_case ? n_tokens : lctx_.embd_enc.size() / hparams.n_embd),
         kv_head          (worst_case ? (kv_self.recurrent ? 0 : kv_self.size - n_tokens) : kv_self.head),
         n_ctx_orig       (cparams.n_ctx_orig_yarn),
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
-        cb               (cb),
-        buf_compute_meta (lctx.buf_compute_meta) {
+        cb               (cb_),
+        buf_compute_meta (lctx_.buf_compute_meta) {
             // all initializations should be done in init()
         }
 
@@ -1174,14 +1174,15 @@ struct llm_build_context {
         ggml_set_input(lctx.inp_K_shift);
 
         for (int il = 0; il < n_layer; ++il) {
-            const int64_t n_head_kv = hparams.n_head_kv(il);
-            const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
+            const int64_t n_head_kv_i    = hparams.n_head_kv(il);
+            const int64_t n_embd_k_gqa_i = hparams.n_embd_k_gqa(il);
+
             struct ggml_tensor * rope_factors = build_rope_factors(il);
             struct ggml_tensor * k =
                 ggml_view_3d(ctx0, kv_self.k_l[il],
-                    n_embd_head_k, n_head_kv, n_ctx,
+                    n_embd_head_k, n_head_kv_i, n_ctx,
                     ggml_row_size(kv_self.k_l[il]->type, n_embd_head_k),
-                    ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
+                    ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i),
                     0);
 
             struct ggml_tensor * tmp;
@@ -1231,18 +1232,18 @@ struct llm_build_context {
             }
 
             for (int il = 0; il < n_layer; ++il) {
-                const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
-                const int64_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
+                const int64_t n_embd_k_gqa_i = hparams.n_embd_k_gqa(il);
+                const int64_t n_embd_v_gqa_i = hparams.n_embd_v_gqa(il);
 
                 ggml_tensor * view_k_src = ggml_view_2d(ctx0, kv_self.k_l[il],
-                        n_embd_k_gqa, nm,
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*i));
+                        n_embd_k_gqa_i, nm,
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i),
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i*i));
 
                 ggml_tensor * view_k_dst = ggml_view_2d(ctx0, kv_self.k_l[il],
-                        n_embd_k_gqa, nm,
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
-                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*id));
+                        n_embd_k_gqa_i, nm,
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i),
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa_i*id));
 
                 ggml_tensor * view_v_src;
                 ggml_tensor * view_v_dst;
@@ -1250,22 +1251,22 @@ struct llm_build_context {
                 if (flash_attn) {
                     // NOTE: the V cache is not transposed when using flash attention
                     view_v_src = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            n_embd_v_gqa, nm,
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa),
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa*i));
+                            n_embd_v_gqa_i, nm,
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i),
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i*i));
 
                     view_v_dst = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            n_embd_v_gqa, nm,
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa),
-                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa*id));
+                            n_embd_v_gqa_i, nm,
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i),
+                            ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa_i*id));
                 } else {
                     view_v_src = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            nm, n_embd_v_gqa,
+                            nm, n_embd_v_gqa_i,
                             ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
                             ggml_row_size(kv_self.v_l[il]->type, i));
 
                     view_v_dst = ggml_view_2d(ctx0, kv_self.v_l[il],
-                            nm, n_embd_v_gqa,
+                            nm, n_embd_v_gqa_i,
                             ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
                             ggml_row_size(kv_self.v_l[il]->type, id));
                 }
@@ -1459,7 +1460,6 @@ struct llm_build_context {
     }
 
     struct ggml_tensor * llm_build_inp_embd_enc() {
-        const int64_t n_embd = hparams.n_embd;
         lctx.inp_embd_enc = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_outputs_enc);
         ggml_set_input(lctx.inp_embd_enc);
         cb(lctx.inp_embd_enc, "embd_enc", -1);
@@ -1475,9 +1475,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_llama() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -1553,7 +1550,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -1642,9 +1638,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_deci() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -1663,10 +1656,10 @@ struct llm_build_context {
         const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
-            const int64_t n_head_kv = hparams.n_head_kv(il);
-            const int64_t n_head    = hparams.n_head(il);
+            const int64_t n_head_kv_i = hparams.n_head_kv(il);
+            const int64_t n_head_i    = hparams.n_head(il);
 
-            if (n_head == 0) {
+            if (n_head_i == 0) {
                 // attention-free layer of Llama-3_1-Nemotron-51B
                 cur = inpL;
             } else {
@@ -1677,11 +1670,11 @@ struct llm_build_context {
                 cb(cur, "attn_norm", il);
             }
 
-            if (n_head > 0 && n_head_kv == 0) {
+            if (n_head_i > 0 && n_head_kv_i == 0) {
                 // "linear attention" of Llama-3_1-Nemotron-51B
                 cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wo, cur);
                 cb(cur, "wo", il);
-            } else if (n_head > 0) {
+            } else if (n_head_i > 0) {
                 // self-attention
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
                 struct ggml_tensor * rope_factors = build_rope_factors(il);
@@ -1709,14 +1702,14 @@ struct llm_build_context {
                 }
 
                 Qcur = ggml_rope_ext(
-                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, rope_factors,
+                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head_i, n_tokens), inp_pos, rope_factors,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
-                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, rope_factors,
+                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv_i, n_tokens), inp_pos, rope_factors,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
@@ -1730,7 +1723,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -1742,7 +1734,7 @@ struct llm_build_context {
 
             // modified to support attention-free layer of Llama-3_1-Nemotron-51B
             struct ggml_tensor * ffn_inp = cur;
-            if (n_head > 0) {
+            if (n_head_i > 0) {
                 ffn_inp = ggml_add(ctx0, cur, inpSA);
                 cb(ffn_inp, "ffn_inp", il);
             }
@@ -2141,9 +2133,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_grok() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -2218,7 +2207,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -2300,9 +2288,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_dbrx() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -2370,7 +2355,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -2659,7 +2643,7 @@ struct llm_build_context {
 
         // iterate layers
         for (int il = 0; il < n_layer; ++il) {
-            struct ggml_tensor * cur = inpL;
+            cur = inpL;
 
             struct ggml_tensor * Qcur;
             struct ggml_tensor * Kcur;
@@ -3553,9 +3537,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_qwen2moe() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -3620,7 +3601,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -4737,8 +4717,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_gemma() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        const int64_t n_embd_head_k = hparams.n_embd_head_k;
-
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
@@ -4844,8 +4822,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_gemma2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        const int64_t n_embd_head_k = hparams.n_embd_head_k;
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -4982,6 +4958,7 @@ struct llm_build_context {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -5440,9 +5417,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_olmo() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -5513,7 +5487,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -5563,9 +5536,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_olmo2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -5637,7 +5607,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -5691,9 +5660,6 @@ struct llm_build_context {
     //   * added q, k norm
     struct ggml_cgraph * build_olmoe() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -5764,7 +5730,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -5832,9 +5797,9 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
         for (int il = 0; il < n_layer; ++il) {
-            const int64_t n_head    = hparams.n_head(il);
-            const int64_t n_head_kv = hparams.n_head_kv(il);
-            const int64_t n_head_qkv = 2*n_head_kv + n_head;
+            const int64_t n_head_i     = hparams.n_head(il);
+            const int64_t n_head_kv_i  = hparams.n_head_kv(il);
+            const int64_t n_head_qkv_i = 2*n_head_kv_i + n_head_i;
 
             cur = inpL;
             struct ggml_tensor * residual = cur;
@@ -5850,15 +5815,15 @@ struct llm_build_context {
                 cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
 
-                cur = ggml_reshape_3d(ctx0, cur, n_embd_head_k, n_head_qkv, n_tokens);
+                cur = ggml_reshape_3d(ctx0, cur, n_embd_head_k, n_head_qkv_i, n_tokens);
 
-                struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head, n_tokens, cur->nb[1], cur->nb[2], 0));
+                struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_i, n_tokens, cur->nb[1], cur->nb[2], 0));
                 cb(Qcur, "Qcur", il);
 
-                struct ggml_tensor * Kcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*n_head));
+                struct ggml_tensor * Kcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv_i, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*n_head_i));
                 cb(Kcur, "Kcur", il);
 
-                struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*(n_head+n_head_kv)));
+                struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_head_kv_i, n_tokens, cur->nb[1], cur->nb[2], cur->nb[1]*(n_head_i+n_head_kv_i)));
                 cb(Vcur, "Vcur", il);
 
                 Qcur = llm_build_norm(ctx0, Qcur, hparams,
@@ -5883,7 +5848,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                Vcur = ggml_reshape_2d(ctx0, Vcur, n_embd_head * n_head_kv, n_tokens);
+                Vcur = ggml_reshape_2d(ctx0, Vcur, n_embd_head * n_head_kv_i, n_tokens);
                 cb(Qcur, "Vcur", il);
 
                 cur = llm_build_kv(ctx0, lctx, kv_self, gf,
@@ -6085,9 +6050,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_arctic() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -6146,7 +6108,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -6218,9 +6179,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_deepseek() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -6295,7 +6253,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -6375,9 +6332,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_deepseek2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
 
         bool is_lite = (hparams.n_layer == 27);
 
@@ -6527,7 +6481,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -6757,9 +6710,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_t5_enc() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
@@ -6833,7 +6783,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -6888,9 +6837,6 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_t5_dec() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
-
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
@@ -7033,7 +6979,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
                 inpCA = ggml_get_rows(ctx0, inpCA, inp_out_ids);
@@ -7421,9 +7366,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_exaone() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -7497,7 +7439,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
@@ -7551,9 +7492,9 @@ struct llm_build_context {
         // Token shift state dimensions should be 2 * n_emb
         GGML_ASSERT(n_embd == hparams.n_embd_k_s() / 2);
 
-        const int64_t n_seqs = ubatch.n_seqs;
+        const int64_t n_seqs       = ubatch.n_seqs;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
-        const int64_t n_tokens = ubatch.n_tokens;
+
         GGML_ASSERT(n_seqs != 0);
         GGML_ASSERT(ubatch.equal_seqs);
         GGML_ASSERT(n_tokens == n_seq_tokens * n_seqs);
@@ -7664,9 +7605,9 @@ struct llm_build_context {
 
         GGML_ASSERT(n_embd == hparams.n_embd_k_s());
 
-        const int64_t n_seqs = ubatch.n_seqs;
+        const int64_t n_seqs       = ubatch.n_seqs;
         const int64_t n_seq_tokens = ubatch.n_seq_tokens;
-        const int64_t n_tokens = ubatch.n_tokens;
+
         GGML_ASSERT(n_seqs != 0);
         GGML_ASSERT(ubatch.equal_seqs);
         GGML_ASSERT(n_tokens == n_seq_tokens * n_seqs);
@@ -7779,9 +7720,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_chameleon() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
@@ -7878,7 +7816,6 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }

@@ -916,8 +916,8 @@ struct llama_data_write {
                 write(&n_seq_id, sizeof(n_seq_id));
 
                 if (n_seq_id) {
-                    for (auto seq_id : cell.seq_id) {
-                        write(&seq_id, sizeof(seq_id));
+                    for (auto sid : cell.seq_id) {
+                        write(&sid, sizeof(sid));
                     }
                 }
             }

@@ -374,7 +374,7 @@ struct LLM_TN_IMPL {
 };
 
 struct LLM_TN {
-    LLM_TN(llm_arch arch) : arch(arch) {}
+    LLM_TN(llm_arch arch_) : arch(arch_) {}
 
     llm_arch arch;
 

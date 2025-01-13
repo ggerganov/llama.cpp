@@ -43,7 +43,7 @@ namespace console {
     static bool      simple_io        = true;
     static display_t current_display  = reset;
 
-    static FILE*     out              = stdout;
+    static FILE*     fout             = stdout;
 
 #if defined (_WIN32)
     static void*     hConsole;
@@ -110,7 +110,7 @@ namespace console {
 
             tty = fopen("/dev/tty", "w+");
             if (tty != nullptr) {
-                out = tty;
+                fout = tty;
             }
         }
 
@@ -126,7 +126,7 @@ namespace console {
         // Restore settings on POSIX systems
         if (!simple_io) {
             if (tty != nullptr) {
-                out = stdout;
+                fout = stdout;
                 fclose(tty);
                 tty = nullptr;
             }
@@ -145,19 +145,19 @@ namespace console {
             fflush(stdout);
             switch(display) {
                 case reset:
-                    fprintf(out, ANSI_COLOR_RESET);
+                    fprintf(fout, ANSI_COLOR_RESET);
                     break;
                 case prompt:
-                    fprintf(out, ANSI_COLOR_YELLOW);
+                    fprintf(fout, ANSI_COLOR_YELLOW);
                     break;
                 case user_input:
-                    fprintf(out, ANSI_BOLD ANSI_COLOR_GREEN);
+                    fprintf(fout, ANSI_BOLD ANSI_COLOR_GREEN);
                     break;
                 case error:
-                    fprintf(out, ANSI_BOLD ANSI_COLOR_RED);
+                    fprintf(fout, ANSI_BOLD ANSI_COLOR_RED);
             }
             current_display = display;
-            fflush(out);
+            fflush(fout);
         }
     }
 
@@ -233,7 +233,7 @@ namespace console {
             return;
         }
 #endif
-        putc('\b', out);
+        putc('\b', fout);
     }
 
     static int estimateWidth(char32_t codepoint) {
@@ -274,7 +274,7 @@ namespace console {
 #else
         // We can trust expectedWidth if we've got one
         if (expectedWidth >= 0 || tty == nullptr) {
-            fwrite(utf8_codepoint, length, 1, out);
+            fwrite(utf8_codepoint, length, 1, fout);
             return expectedWidth;
         }
 
@@ -311,7 +311,7 @@ namespace console {
         pop_cursor();
         put_codepoint(&ch, 1, 1);
 #else
-        fprintf(out, "\b%c", ch);
+        fprintf(fout, "\b%c", ch);
 #endif
     }
 
@@ -353,7 +353,7 @@ namespace console {
     }
 
     static bool readline_advanced(std::string & line, bool multiline_input) {
-        if (out != stdout) {
+        if (fout != stdout) {
             fflush(stdout);
         }
 
@@ -364,7 +364,7 @@ namespace console {
 
         char32_t input_char;
         while (true) {
-            fflush(out); // Ensure all output is displayed before waiting for input
+            fflush(fout); // Ensure all output is displayed before waiting for input
             input_char = getchar32();
 
             if (input_char == '\r' || input_char == '\n') {
@@ -432,7 +432,7 @@ namespace console {
             line.pop_back();
             if (last == '\\') {
                 line += '\n';
-                fputc('\n', out);
+                fputc('\n', fout);
                 has_more = !has_more;
             } else {
                 // llama will just eat the single space, it won't act as a space
@@ -447,11 +447,11 @@ namespace console {
                 has_more = false;
             } else {
                 line += '\n';
-                fputc('\n', out);
+                fputc('\n', fout);
             }
         }
 
-        fflush(out);
+        fflush(fout);
         return has_more;
     }
 

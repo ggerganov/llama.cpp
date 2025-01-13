@@ -323,7 +323,7 @@ extern "C" {
     // Utils
     //
 
-    struct ggml_backend_graph_copy {
+    struct ggml_backend_graph_copy_state {
         ggml_backend_buffer_t buffer;
         struct ggml_context * ctx_allocated;
         struct ggml_context * ctx_unallocated;
@@ -331,8 +331,8 @@ extern "C" {
     };
 
     // Copy a graph to a different backend
-    GGML_API struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, struct ggml_cgraph * graph);
-    GGML_API void                           ggml_backend_graph_copy_free(struct ggml_backend_graph_copy copy);
+    GGML_API struct ggml_backend_graph_copy_state ggml_backend_graph_copy(ggml_backend_t backend, struct ggml_cgraph * graph);
+    GGML_API void                                 ggml_backend_graph_copy_free(struct ggml_backend_graph_copy_state copy);
 
     typedef bool (*ggml_backend_eval_callback)(int node_index, struct ggml_tensor * t1, struct ggml_tensor * t2, void * user_data);
 

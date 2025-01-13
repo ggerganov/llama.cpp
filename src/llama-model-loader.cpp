@@ -413,7 +413,7 @@ namespace GGUFMeta {
     template bool llama_model_loader::get_key_or_arr<std::array<int, 4>>(enum llm_kv kid, std::array<int, 4> & result, uint32_t n, bool required);
     template bool llama_model_loader::get_key_or_arr<std::array<uint32_t, 512>>(enum llm_kv kid, std::array<uint32_t, 512> & result, uint32_t n, bool required);
 
-llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
+llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap_cur, bool check_tensors_cur, const struct llama_model_kv_override * param_overrides_p) {
     int trace = 0;
     if (getenv("LLAMA_TRACE")) {
         trace = atoi(getenv("LLAMA_TRACE"));
@@ -626,11 +626,11 @@ llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap,
 
     if (!llama_mmap::SUPPORTED) {
         LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
-        use_mmap = false;
+        use_mmap_cur = false;
     }
 
-    this->use_mmap = use_mmap;
-    this->check_tensors = check_tensors;
+    use_mmap = use_mmap_cur;
+    check_tensors = check_tensors_cur;
 }
 
 std::string llama_model_loader::get_arch_name() const {
@@ -887,15 +887,15 @@ bool llama_model_loader::load_all_data(
 
         // If the backend is supported, create pinned memory buffers and events for synchronisation.
         for (size_t idx = 0; idx < n_buffers; ++idx) {
-            auto * buf = ggml_backend_buft_alloc_buffer(host_buft, buffer_size);
-            if (!buf) {
+            auto * buf_new = ggml_backend_buft_alloc_buffer(host_buft, buffer_size);
+            if (!buf_new) {
                 LLAMA_LOG_DEBUG("%s: failed to allocate host buffer for async uploads for device %s\n", func,
                     ggml_backend_dev_name(dev));
                 return nullptr;
             }
 
-            host_buffers.emplace_back(buf);
-            host_ptrs.emplace_back(ggml_backend_buffer_get_base(buf));
+            host_buffers.emplace_back(buf_new);
+            host_ptrs.emplace_back(ggml_backend_buffer_get_base(buf_new));
 
             auto * event = ggml_backend_event_new(dev);
             if (!event) {

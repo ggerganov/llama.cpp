@@ -544,26 +544,26 @@ int main(int argc, char ** argv) {
                 for (int is = 0; is < (int) sa.size(); ++is) {
                     const llama_token id = cur_p->data[is].id;
 
-                    const int s = sa[is];
+                    const int sd = sa[is];
 
-                    common_sampler_accept(drafts[s].smpl, id, true);
+                    common_sampler_accept(drafts[sd].smpl, id, true);
 
-                    drafts[s].tokens.push_back(id);
-                    // save cur_p.data into drafts[s].dists
-                    drafts[s].dists.push_back({cur_p->data, cur_p->data + cur_p->size});
+                    drafts[sd].tokens.push_back(id);
+                    // save cur_p.data into drafts[sd].dists
+                    drafts[sd].dists.push_back({cur_p->data, cur_p->data + cur_p->size});
 
                     // add unique drafted tokens to the target batch
-                    drafts[s].i_batch_tgt.push_back(batch_tgt.n_tokens);
+                    drafts[sd].i_batch_tgt.push_back(batch_tgt.n_tokens);
 
-                    common_batch_add(batch_tgt, id, n_past_tgt + i + 1, { s }, true);
+                    common_batch_add(batch_tgt, id, n_past_tgt + i + 1, { sd }, true);
 
                     // add the token to the batch for batched decoding with the draft model
-                    drafts[s].i_batch_dft = batch_dft.n_tokens;
+                    drafts[sd].i_batch_dft = batch_dft.n_tokens;
 
-                    common_batch_add(batch_dft, id, n_past_cur, { s }, true);
+                    common_batch_add(batch_dft, id, n_past_cur, { sd }, true);
 
                     if (batch_tgt.n_tokens > n_draft) {
-                        drafts[s].drafting = false;
+                        drafts[sd].drafting = false;
                     }
                 }
             }

@@ -412,8 +412,8 @@ static void llama_sampler_chain_accept(struct llama_sampler * smpl, llama_token 
 
     time_meas tm(chain->t_sample_us, chain->params.no_perf);
 
-    for (auto * smpl : chain->samplers) {
-        llama_sampler_accept(smpl, token);
+    for (auto * cur : chain->samplers) {
+        llama_sampler_accept(cur, token);
     }
 
     chain->n_sample++;
@@ -424,16 +424,16 @@ static void llama_sampler_chain_apply(struct llama_sampler * smpl, llama_token_d
 
     time_meas tm(chain->t_sample_us, chain->params.no_perf);
 
-    for (auto * smpl : chain->samplers) {
-        llama_sampler_apply(smpl, cur_p);
+    for (auto * cur : chain->samplers) {
+        llama_sampler_apply(cur, cur_p);
     }
 }
 
 static void llama_sampler_chain_reset(struct llama_sampler * smpl) {
     auto * chain = (llama_sampler_chain *) smpl->ctx;
 
-    for (auto * smpl : chain->samplers) {
-        llama_sampler_reset(smpl);
+    for (auto * cur : chain->samplers) {
+        llama_sampler_reset(cur);
     }
 
     chain->t_sample_us = 0;
@@ -445,8 +445,8 @@ static struct llama_sampler * llama_sampler_chain_clone(const struct llama_sampl
 
     auto * result = llama_sampler_chain_init(chain_src->params);
 
-    for (auto * smpl : chain_src->samplers) {
-        llama_sampler_chain_add(result, llama_sampler_clone(smpl));
+    for (auto * cur : chain_src->samplers) {
+        llama_sampler_chain_add(result, llama_sampler_clone(cur));
     }
 
     return result;
@@ -455,8 +455,8 @@ static struct llama_sampler * llama_sampler_chain_clone(const struct llama_sampl
 static void llama_sampler_chain_free(struct llama_sampler * smpl) {
     auto * chain = (llama_sampler_chain *) smpl->ctx;
 
-    for (auto * smpl : chain->samplers) {
-        llama_sampler_free(smpl);
+    for (auto * cur : chain->samplers) {
+        llama_sampler_free(cur);
     }
 
     delete chain;

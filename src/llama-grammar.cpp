@@ -490,7 +490,7 @@ const char * llama_grammar_parser::parse_sequence(
                     pos = parse_space(pos + 1, is_nested);
 
                     if (is_digit_char(*pos)) {
-                        const char * int_end = parse_int(pos);
+                        int_end = parse_int(pos);
                         max_times = std::stoul(std::string(pos, int_end - pos));
                         pos = parse_space(int_end, is_nested);
                     }

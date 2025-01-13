@@ -47,9 +47,9 @@ CLIP_API void clip_free(struct clip_ctx * ctx);
 CLIP_API size_t clip_embd_nbytes(const struct clip_ctx * ctx);
 CLIP_API size_t clip_embd_nbytes_by_img(const struct clip_ctx * ctx, int img_h, int img_w);
 
-CLIP_API int32_t clip_image_size (const struct clip_ctx * ctx);
-CLIP_API int32_t clip_patch_size (const struct clip_ctx * ctx);
-CLIP_API int32_t clip_hidden_size(const struct clip_ctx * ctx);
+CLIP_API int32_t clip_get_image_size (const struct clip_ctx * ctx);
+CLIP_API int32_t clip_get_patch_size (const struct clip_ctx * ctx);
+CLIP_API int32_t clip_get_hidden_size(const struct clip_ctx * ctx);
 
 // TODO: should be enum, not string
 CLIP_API const char * clip_patch_merge_type(const struct clip_ctx * ctx);

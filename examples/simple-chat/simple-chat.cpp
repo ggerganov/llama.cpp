@@ -110,9 +110,8 @@ int main(int argc, char ** argv) {
         llama_token new_token_id;
         while (true) {
             // check if we have enough space in the context to evaluate this batch
-            int n_ctx = llama_n_ctx(ctx);
             int n_ctx_used = llama_get_kv_cache_used_cells(ctx);
-            if (n_ctx_used + batch.n_tokens > n_ctx) {
+            if (n_ctx_used + batch.n_tokens > (int) llama_n_ctx(ctx)) {
                 printf("\033[0m\n");
                 fprintf(stderr, "context size exceeded\n");
                 exit(0);

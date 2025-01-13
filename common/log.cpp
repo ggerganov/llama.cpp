@@ -255,8 +255,8 @@ public:
         thrd = std::thread([this]() {
             while (true) {
                 {
-                    std::unique_lock<std::mutex> lock(mtx);
-                    cv.wait(lock, [this]() { return head != tail; });
+                    std::unique_lock<std::mutex> lock_thrd(mtx);
+                    cv.wait(lock_thrd, [this]() { return head != tail; });
 
                     cur = entries[head];
 
@@ -338,16 +338,16 @@ public:
         resume();
     }
 
-    void set_prefix(bool prefix) {
+    void set_prefix(bool val) {
         std::lock_guard<std::mutex> lock(mtx);
 
-        this->prefix = prefix;
+        prefix = val;
     }
 
-    void set_timestamps(bool timestamps) {
+    void set_timestamps(bool val) {
         std::lock_guard<std::mutex> lock(mtx);
 
-        this->timestamps = timestamps;
+        timestamps = val;
     }
 };
 

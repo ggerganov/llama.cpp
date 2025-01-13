@@ -763,9 +763,11 @@ bool fs_create_directory_with_parents(const std::string & path) {
     return true;
 #else
     // if the path already exists, check whether it's a directory
-    struct stat info;
-    if (stat(path.c_str(), &info) == 0) {
-        return S_ISDIR(info.st_mode);
+    {
+        struct stat info;
+        if (stat(path.c_str(), &info) == 0) {
+            return S_ISDIR(info.st_mode);
+        }
     }
 
     size_t pos_slash = 1; // skip leading slashes for directory creation
@@ -796,7 +798,7 @@ bool fs_create_directory_with_parents(const std::string & path) {
 }
 
 std::string fs_get_cache_directory() {
-    std::string cache_directory = "";
+    std::string cache_directory;
     auto ensure_trailing_slash = [](std::string p) {
         // Make sure to add trailing slash
         if (p.back() != DIRECTORY_SEPARATOR) {
@@ -1206,7 +1208,7 @@ static bool common_download_file(const std::string & url, const std::string & pa
     {
         typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
-            common_load_model_from_url_headers * headers = (common_load_model_from_url_headers *) userdata;
+            common_load_model_from_url_headers * cur = (common_load_model_from_url_headers *) userdata;
 
             static std::regex header_regex("([^:]+): (.*)\r\n");
             static std::regex etag_regex("ETag", std::regex_constants::icase);
@@ -1218,9 +1220,9 @@ static bool common_download_file(const std::string & url, const std::string & pa
                 const std::string & key = match[1];
                 const std::string & value = match[2];
                 if (std::regex_match(key, match, etag_regex)) {
-                    headers->etag = value;
+                    cur->etag = value;
                 } else if (std::regex_match(key, match, last_modified_regex)) {
-                    headers->last_modified = value;
+                    cur->last_modified = value;
                 }
             }
             return n_items;
@@ -1292,18 +1294,18 @@ static bool common_download_file(const std::string & url, const std::string & pa
         curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
 
         // helper function to hide password in URL
-        auto llama_download_hide_password_in_url = [](const std::string & url) -> std::string {
-            std::size_t protocol_pos = url.find("://");
+        auto llama_download_hide_password_in_url = [](const std::string & url_full) -> std::string {
+            std::size_t protocol_pos = url_full.find("://");
             if (protocol_pos == std::string::npos) {
-                return url;  // Malformed URL
+                return url_full;  // Malformed URL
             }
 
-            std::size_t at_pos = url.find('@', protocol_pos + 3);
+            std::size_t at_pos = url_full.find('@', protocol_pos + 3);
             if (at_pos == std::string::npos) {
-                return url;  // No password in URL
+                return url_full;  // No password in URL
             }
 
-            return url.substr(0, protocol_pos + 3) + "********" + url.substr(at_pos);
+            return url_full.substr(0, protocol_pos + 3) + "********" + url_full.substr(at_pos);
         };
 
         // start the download

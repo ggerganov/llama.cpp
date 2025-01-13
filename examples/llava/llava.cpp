@@ -105,8 +105,8 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
         struct ggml_context * ctx;
     } model;
 
-    const int32_t image_size = clip_image_size(ctx_clip);
-    const int32_t patch_size = clip_patch_size(ctx_clip);
+    const int32_t image_size = clip_get_image_size(ctx_clip);
+    const int32_t patch_size = clip_get_patch_size(ctx_clip);
 
     int32_t num_patches_per_side = image_size / patch_size; // 336 / 14 = 24 - used for embedding-patching boxes (24*24 = 576 patches)
 
@@ -353,7 +353,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         img_res_v.size = 0;
         img_res_v.data = nullptr;
 
-        const int32_t image_size = clip_image_size(ctx_clip);
+        const int32_t image_size = clip_get_image_size(ctx_clip);
 
         struct clip_image_grid_shape grid_shape = get_anyres_image_grid_shape({img->nx,img->ny}, grid_pinpoints, image_size);
 

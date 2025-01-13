@@ -7,9 +7,9 @@ llama_ubatch llama_sbatch::reserve_ubatch(size_t n_ubatch, bool has_embd) {
     // clear empty sequences
     // the previous ubatch is assumed to be gone,
     // so nothing should refer to values in these sequences anymore.
-    for (size_t i = seq.size(); i-- > 0;) {
-        if (seq[i].length == 0) {
-            seq.pop_back();
+    for (size_t i = seqs.size(); i-- > 0;) {
+        if (seqs[i].length == 0) {
+            seqs.pop_back();
         } else {
             break;
         }
@@ -36,48 +36,48 @@ llama_ubatch llama_sbatch::reserve_ubatch(size_t n_ubatch, bool has_embd) {
 }
 
 void llama_sbatch::add_seq_to_ubatch(llama_ubatch & ubatch, llama_sbatch_seq & seq, size_t length) {
-    GGML_ASSERT(batch != nullptr);
+    GGML_ASSERT(batch_ptr != nullptr);
     GGML_ASSERT(length <= seq.length);
     // Can only add sequences of equal lengths to a batch,
     // otherwise it isn't clear to which sequence a token belongs
     GGML_ASSERT(seq.n_seq_id == 0 || ubatch.n_seqs == 0 || length == (size_t) ubatch.n_tokens / ubatch.n_seqs);
     GGML_ASSERT((seq.n_seq_id != 0) == ubatch.equal_seqs);
     // NOTE: loops are separated for cache-friendliness
-    if (batch->token) {
+    if (batch_ptr->token) {
         if (ubatch.equal_seqs) {
             for (size_t i = 0; i < length; ++i) {
-                ubatch.token[ubatch.n_tokens + i] = batch->token[ids[seq.offset + i]];
+                ubatch.token[ubatch.n_tokens + i] = batch_ptr->token[ids[seq.offset + i]];
             }
         } else {
             // simple split
-            ubatch.token = batch->token + seq.offset;
+            ubatch.token = batch_ptr->token + seq.offset;
         }
     } else {
         ubatch.token = nullptr;
     }
-    if (batch->embd) {
+    if (batch_ptr->embd) {
         if (ubatch.equal_seqs) {
             for (size_t i = 0; i < length; ++i) {
                 memcpy(
                         ubatch.embd + (n_embd * (ubatch.n_tokens + i)),
-                        batch->embd + (n_embd * ids[seq.offset + i]),
+                        batch_ptr->embd + (n_embd * ids[seq.offset + i]),
                         n_embd * sizeof(float)
                       );
             }
         } else {
             // simple split
-            ubatch.embd = batch->embd + (n_embd * seq.offset);
+            ubatch.embd = batch_ptr->embd + (n_embd * seq.offset);
         }
     } else {
         ubatch.embd = nullptr;
     }
     if (ubatch.equal_seqs) {
         for (size_t i = 0; i < length; ++i) {
-            ubatch.pos[ubatch.n_tokens + i] = batch->pos[ids[seq.offset + i]];
+            ubatch.pos[ubatch.n_tokens + i] = batch_ptr->pos[ids[seq.offset + i]];
         }
     } else {
         // simple split
-        ubatch.pos = batch->pos + seq.offset;
+        ubatch.pos = batch_ptr->pos + seq.offset;
     }
     if (ubatch.equal_seqs) {
         ubatch.n_seq_id[ubatch.n_seqs] = seq.n_seq_id;
@@ -86,15 +86,15 @@ void llama_sbatch::add_seq_to_ubatch(llama_ubatch & ubatch, llama_sbatch_seq & s
         }
     } else {
         // simple split
-        if (batch->n_seq_id) {
-            ubatch.n_seq_id = batch->n_seq_id + seq.offset;
+        if (batch_ptr->n_seq_id) {
+            ubatch.n_seq_id = batch_ptr->n_seq_id + seq.offset;
         } else {
             for (size_t i = 0; i < length; ++i) {
                 ubatch.n_seq_id[ubatch.n_seqs + i] = 1;
             }
         }
-        if (batch->seq_id) {
-            ubatch.seq_id = batch->seq_id + seq.offset;
+        if (batch_ptr->seq_id) {
+            ubatch.seq_id = batch_ptr->seq_id + seq.offset;
         }
     }
     if (logits_all) {
@@ -102,17 +102,17 @@ void llama_sbatch::add_seq_to_ubatch(llama_ubatch & ubatch, llama_sbatch_seq & s
             ubatch.output[ubatch.n_tokens + i] = 1;
             out_ids.push_back(ids[seq.offset + i]);
         }
-    } else if (batch->logits) {
+    } else if (batch_ptr->logits) {
         if (ubatch.equal_seqs) {
             for (size_t i = 0; i < length; ++i) {
                 size_t id = ids[seq.offset + i];
-                int8_t is_output = batch->logits[id];
+                int8_t is_output = batch_ptr->logits[id];
                 ubatch.output[ubatch.n_tokens + i] = is_output;
                 if (is_output) { out_ids.push_back(id); }
             }
         } else {
             // simple split
-            ubatch.output = batch->logits + seq.offset;
+            ubatch.output = batch_ptr->logits + seq.offset;
             for (size_t i = 0; i < length; ++i) {
                 if (ubatch.output[i] != 0) { out_ids.push_back(seq.offset + i); }
             }
@@ -139,12 +139,12 @@ void llama_sbatch::add_seq_to_ubatch(llama_ubatch & ubatch, llama_sbatch_seq & s
 
 llama_ubatch llama_sbatch::split_simple(size_t n_ubatch) {
     n_ubatch = n_tokens < n_ubatch ? n_tokens : n_ubatch;
-    llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
+    llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch_ptr->embd != nullptr);
     ubatch.equal_seqs = false;
-    if (!seq.empty()) {
-        llama_sbatch_seq & s = seq[0];
+    if (!seqs.empty()) {
+        llama_sbatch_seq & s = seqs[0];
         size_t length = s.length < n_ubatch ? s.length : n_ubatch;
-        GGML_ASSERT(seq.size() == 1 && s.n_seq_id == 0); // don't mix with other splits
+        GGML_ASSERT(seqs.size() == 1 && s.n_seq_id == 0); // don't mix with other splits
         add_seq_to_ubatch(ubatch, s, length);
     }
     return ubatch;
@@ -152,15 +152,15 @@ llama_ubatch llama_sbatch::split_simple(size_t n_ubatch) {
 
 llama_ubatch llama_sbatch::split_equal(size_t n_ubatch) {
     n_ubatch = n_tokens < n_ubatch ? n_tokens : n_ubatch;
-    llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
-    if (!seq.empty()) {
+    llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch_ptr->embd != nullptr);
+    if (!seqs.empty()) {
         size_t length = 0;
         size_t n_tokens_in_ubatch = 0;
-        GGML_ASSERT(seq[0].n_seq_id > 0); // should not be mixed with simple splits
+        GGML_ASSERT(seqs[0].n_seq_id > 0); // should not be mixed with simple splits
                                           // smallest first, because it's easier to split this way;
                                           // starting from the end to pop in constant time.
-        for (size_t i = seq.size(); i-- > 0;) {
-            llama_sbatch_seq & s = seq[i];
+        for (size_t i = seqs.size(); i-- > 0;) {
+            llama_sbatch_seq & s = seqs[i];
             GGML_ASSERT(s.length > 0);
             if (length == 0) {
                 length = s.length < n_ubatch ? s.length : n_ubatch;
@@ -179,9 +179,9 @@ llama_ubatch llama_sbatch::split_equal(size_t n_ubatch) {
 
 llama_ubatch llama_sbatch::split_seq(size_t n_ubatch) {
     n_ubatch = n_tokens < n_ubatch ? n_tokens : n_ubatch;
-    llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch->embd != nullptr);
-    if (!seq.empty()) {
-        llama_sbatch_seq & s = seq[seq.size() - 1];
+    llama_ubatch ubatch = reserve_ubatch(n_ubatch, /* has_embd */ batch_ptr->embd != nullptr);
+    if (!seqs.empty()) {
+        llama_sbatch_seq & s = seqs.back();
         size_t length = s.length < n_ubatch ? s.length : n_ubatch;
         GGML_ASSERT(s.n_seq_id > 0); // should not be mixed with simple splits
         add_seq_to_ubatch(ubatch, s, length);
@@ -189,23 +189,24 @@ llama_ubatch llama_sbatch::split_seq(size_t n_ubatch) {
     return ubatch;
 }
 
-void llama_sbatch::from_batch(const llama_batch & batch, size_t n_embd, bool simple_split, bool logits_all) {
+void llama_sbatch::from_batch(const llama_batch & batch, size_t n_embd_cur, bool simple_split, bool logits_all_cur) {
     GGML_ASSERT(batch.n_tokens >= 0);
-    this->batch = &batch;
-    this->n_embd = n_embd;
-    this->logits_all = logits_all;
+
+    batch_ptr = &batch;
+    n_embd = n_embd_cur;
+    logits_all = logits_all_cur;
 
     n_tokens = batch.n_tokens;
     ids.resize(n_tokens);
     out_ids.clear();
-    // TODO: reserve out_ids and seq
+    // TODO: reserve out_ids and seqs
 
     for (size_t i = 0; i < n_tokens; ++i) {
         ids[i] = i;
     }
     if (simple_split) {
-        seq.resize(1);
-        llama_sbatch_seq & s = seq[0];
+        seqs.resize(1);
+        llama_sbatch_seq & s = seqs[0];
         s.n_seq_id = 0;
         s.seq_id = nullptr;
         s.offset = 0;
@@ -259,11 +260,11 @@ void llama_sbatch::from_batch(const llama_batch & batch, size_t n_embd, bool sim
             }
         }
         llama_sbatch_seq new_seq = {n_seqs, seq_ids, i, 1};
-        seq.push_back(new_seq);
-        last_seq = &seq.back();
+        seqs.push_back(new_seq);
+        last_seq = &seqs.back();
     }
     // keep shared prompts first at the end, then sort by length descending.
-    std::sort(seq.begin(), seq.end(),
+    std::sort(seqs.begin(), seqs.end(),
             [](llama_sbatch_seq & a, llama_sbatch_seq & b) {
                 if (a.n_seq_id == b.n_seq_id) {
                     return a.length > b.length;

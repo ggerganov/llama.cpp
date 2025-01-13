@@ -15,6 +15,14 @@ function(llama_add_compile_flags)
 
             list(APPEND CXX_FLAGS -Wmissing-declarations -Wmissing-noreturn)
 
+            if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+                list(APPEND CXX_FLAGS -Wshadow)
+
+                if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+                    list(APPEND CXX_FLAGS -Wshadow-field-in-constructor)
+                endif()
+            endif()
+
             list(APPEND WARNING_FLAGS -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
 
             list(APPEND C_FLAGS   ${WARNING_FLAGS})
