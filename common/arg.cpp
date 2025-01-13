@@ -135,7 +135,10 @@ std::string common_arg::to_string() {
  * - bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M
  * - bartowski/Llama-3.2-3B-Instruct-GGUF:q5_k_s
  * Tag is optional, default to "latest" (meaning it checks for Q4_K_M first, then Q4, then if not found, return the first GGUF file in repo)
+ * 
  * Return pair of <repo, file> (with "repo" already having tag removed)
+ * 
+ * Note: we use the Ollama-compatible HF API, but not using the blobId. Instead, we use the special "ggufFile" field which returns the value for "hf_file". This is done to be backward-compatible with existing cache files.
  */
 static std::pair<std::string, std::string> common_get_hf_file(const std::string & hf_repo_with_tag, const std::string & hf_token) {
     auto parts = string_split<std::string>(hf_repo_with_tag, ':');
@@ -219,7 +222,7 @@ static void common_params_handle_model_default(
                     auto auto_detected = common_get_hf_file(hf_repo, hf_token);
                     hf_repo = auto_detected.first;
                     hf_file = auto_detected.second;
-                    printf("%s: using hf_file = %s\n", __func__, hf_file.c_str());
+                    LOG_INF("%s: using hf_file = %s\n", __func__, hf_file.c_str());
                 } catch (std::exception & e) {
                     fprintf(stderr, "%s: %s\n", __func__, e.what());
                     exit(1);
@@ -227,7 +230,9 @@ static void common_params_handle_model_default(
             } else {
                 hf_file = model;
             }
-        } else if (model.empty()) {
+        }
+        // make sure model path is present (for caching purposes)
+        if (model.empty()) {
             // this is to avoid different repo having same file name, or same file name in different subdirs
             std::string filename = hf_repo + "_" + hf_file;
             // to make sure we don't have any slashes in the filename
