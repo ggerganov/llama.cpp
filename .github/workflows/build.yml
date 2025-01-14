@@ -850,7 +850,7 @@ jobs:
             arch: 89-real
             package: false
 
-    container: nvidia/cuda:${{ matrix.cuda.version }}-devel-ubuntu24.04
+    container: ${{ matrix.cuda.container }}
 
     name: ubuntu-22-cuda (${{ matrix.cuda.version }} cap ${{ matrix.cuda.cap }}, e.g. ${{ matrix.cuda.example }})
 
