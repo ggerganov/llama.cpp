@@ -44,6 +44,7 @@ struct llama_kv_cache_slot_info {
 
 // ring-buffer of cached KV data
 // TODO: pimpl
+// TODO: add notion of max sequences
 struct llama_kv_cache {
     bool has_shift = false;
     bool do_defrag = false;
