@@ -6,8 +6,10 @@
 
 #include <set>
 #include <vector>
+#include <functional>
 
 struct llama_cparams;
+struct llama_hparams;
 struct llama_ubatch;
 
 struct llama_kv_cell {
@@ -45,6 +47,7 @@ struct llama_kv_cache_slot_info {
 // ring-buffer of cached KV data
 // TODO: pimpl
 // TODO: add notion of max sequences
+// TODO: add llama_hparams &
 struct llama_kv_cache {
     bool has_shift = false;
     bool do_defrag = false;
@@ -111,12 +114,29 @@ struct llama_kv_cache {
     size_t size_k_bytes() const;
     size_t size_v_bytes() const;
 
+    struct io {
+        std::function<void(const void * src, size_t size)> write;
+        std::function<void(const struct ggml_tensor * tensor, size_t offset, size_t size)> write_tensor_data;
+
+        std::function<const uint8_t * (size_t size)> read;
+        std::function<void(void * dst, size_t size)> read_to;
+    };
+
+    void state_write(const io & io, const llama_hparams & hparams, llama_seq_id seq_id = -1) const;
+    void state_read (const io & io, const llama_hparams & hparams, llama_seq_id seq_id = -1);
+
 private:
     ggml_type type_k = GGML_TYPE_F16;
     ggml_type type_v = GGML_TYPE_F16;
 
     std::vector<ggml_context_ptr> ctxs;
     std::vector<ggml_backend_buffer_ptr> bufs;
+
+    void state_write_meta(const io & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, llama_seq_id seq_id = -1) const;
+    void state_write_data(const io & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, const llama_hparams & hparams) const;
+
+    bool state_read_meta(const io & io, uint32_t cell_count, llama_seq_id dest_seq_id = -1);
+    bool state_read_data(const io & io, const llama_hparams & hparams, uint32_t cell_count);
 };
 
 //
