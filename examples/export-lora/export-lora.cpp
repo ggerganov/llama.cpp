@@ -1,12 +1,13 @@
-#include "arg.h"
-#include "common.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
+#include "gguf.h"
+
+#include "arg.h"
+#include "common.h"
 
 #include <map>
 #include <vector>
 #include <string>
-#include <thread>
 #include <fstream>
 
 static bool g_verbose = false;
@@ -128,7 +129,7 @@ struct lora_merge_ctx {
 
     lora_merge_ctx(
             std::string & base_fname,
-            std::vector<common_lora_adapter_info> & lora_files,
+            std::vector<common_adapter_lora_info> & lora_files,
             std::string & outfile,
             int n_threads) : base_model(base_fname, 0), n_threads(n_threads), fout(outfile, std::ios::binary) {
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
