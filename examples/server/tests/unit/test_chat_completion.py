@@ -11,14 +11,19 @@ def create_server():
 
 
 @pytest.mark.parametrize(
-    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason",
+    "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason,jinja,chat_template",
     [
-        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length"),
-        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length"),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", False, None),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", True, None),
+        (None, "Book", "What is the best book", 8, "^ blue", 23, 8, "length", True, "This is not a chat template, it is"),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", False, None),
+        ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", True, None),
     ]
 )
-def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason):
+def test_chat_completion(model, system_prompt, user_prompt, max_tokens, re_content, n_prompt, n_predicted, finish_reason, jinja, chat_template):
     global server
+    server.jinja = jinja
+    server.chat_template = chat_template
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
         "model": model,
@@ -82,7 +87,7 @@ def test_chat_completion_stream(system_prompt, user_prompt, max_tokens, re_conte
 def test_chat_completion_with_openai_library():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         messages=[
@@ -97,6 +102,23 @@ def test_chat_completion_with_openai_library():
     assert res.choices[0].finish_reason == "length"
     assert res.choices[0].message.content is not None
     assert match_regex("(Suddenly)+", res.choices[0].message.content)
+
+
+def test_chat_template():
+    global server
+    server.chat_template = "llama3"
+    server.debug = True  # to get the "__verbose" object in the response
+    server.start()
+    res = server.make_request("POST", "/chat/completions", data={
+        "max_tokens": 8,
+        "messages": [
+            {"role": "system", "content": "Book"},
+            {"role": "user", "content": "What is the best book"},
+        ]
+    })
+    assert res.status_code == 200
+    assert "__verbose" in res.body
+    assert res.body["__verbose"]["prompt"] == "<s> <|start_header_id|>system<|end_header_id|>\n\nBook<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat is the best book<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
 
 @pytest.mark.parametrize("response_format,n_predicted,re_content", [
@@ -336,7 +358,7 @@ def test_hello_world_tool_call(tool: dict, expected_arguments: dict, hf_repo: st
 def test_logprobs():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         temperature=0.0,
@@ -363,7 +385,7 @@ def test_logprobs():
 def test_logprobs_stream():
     global server
     server.start()
-    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}")
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
     res = client.chat.completions.create(
         model="gpt-3.5-turbo-instruct",
         temperature=0.0,

@@ -21,19 +21,18 @@ class chat_template {
   public:
 
   private:
-    bool _supports_tools = true;
+    bool supports_tools_ = true;
     // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
-    bool _requires_object_arguments = false;
-    bool _supports_system_role = true;
-    bool _supports_parallel_tool_calls = false;
-    std::string _source;
-    std::string _bos_token;
-    std::string _eos_token;
-    std::shared_ptr<minja::TemplateNode> _template_root;
+    bool requires_object_arguments_ = false;
+    bool supports_system_role_ = true;
+    bool supports_parallel_tool_calls_ = false;
+    std::string source_;
+    std::string bos_token_;
+    std::string eos_token_;
+    std::shared_ptr<minja::TemplateNode> template_root_;
 
-    bool renders_needles(
-        const std::vector<std::string> & needles,
+    std::string try_render(
         const nlohmann::ordered_json & messages,
         const nlohmann::ordered_json & tools,
         bool add_generation_prompt,
@@ -41,41 +40,81 @@ class chat_template {
     {
         try {
             auto prompt = apply(messages, tools, add_generation_prompt, extra_context);
-            for (const auto & needle : needles) {
-                if (prompt.find(needle) == std::string::npos) {
-                    return false;
-                }
-            }
-            return true;
+            // fprintf(stderr, "Prompt: %s\n", prompt.c_str());
+            return prompt;
         } catch (const std::exception & e) {
-            return false;
+            // fprintf(stderr, "Error: %s\n", e.what());
+            return "";
         }
     }
 
   public:
     chat_template(const std::string & source, const std::string & bos_token, const std::string & eos_token)
-        : _source(source), _bos_token(bos_token), _eos_token(eos_token)
+        : source_(source), bos_token_(bos_token), eos_token_(eos_token)
     {
-        _template_root = minja::Parser::parse(_source, {
+        template_root_ = minja::Parser::parse(source_, {
             /* .trim_blocks = */ true,
             /* .lstrip_blocks = */ true,
             /* .keep_trailing_newline = */ false,
         });
-        _supports_tools = source.find("tools") != std::string::npos;
-        _requires_object_arguments =
-            source.find("tool_call.arguments | items") != std::string::npos
-            || source.find("tool_call.arguments | tojson") != std::string::npos;
-        _supports_parallel_tool_calls = source.find("tool_call_id") != std::string::npos;
+        supports_tools_ = source.find("tools") != std::string::npos;
 
-        _supports_system_role = renders_needles({"<System Needle>"}, {
+        auto renders_string_arguments =
+            try_render({
+                {
+                    {"role", "user"},
+                    {"content", "Hey"}
+                },
+                {
+                    {"role", "assistant"},
+                    {"tool_calls", json::array({
+                        {
+                            {"id", "call_1___"},
+                            {"type", "function"},
+                            {"function", {
+                                {"arguments", "{\"code\": \"print('Hello, World!')\"}"},
+                                {"name", "ipython"},
+                            }},
+                        },
+                    })},
+                }
+            }, {}, false).find("{\"code\": \"print") != std::string::npos;
+        if (!renders_string_arguments) {
+            auto renders_object_arguments =
+                try_render({
+                    {
+                        {"role", "user"},
+                        {"content", "Hey"}
+                    },
+                    {
+                        {"role", "assistant"},
+                        {"tool_calls", json::array({
+                            {
+                                {"id", "call_1___"},
+                                {"type", "function"},
+                                {"function", {
+                                    {"arguments", {
+                                        {"code", "print('Hello, World!')"},
+                                    }},
+                                    {"name", "ipython"},
+                                }},
+                            },
+                        })},
+                    }
+                }, {}, false).find("{\"code\": \"print") != std::string::npos;
+            requires_object_arguments_ = renders_object_arguments;
+        }
+        supports_parallel_tool_calls_ = source.find("tool_call_id") != std::string::npos;
+
+        supports_system_role_ = try_render({
             {{"role", "system"}, {"content", "<System Needle>"}},
             {{"role", "user"},   {"content", "Hey"}}
-        }, {}, false);
+        }, {}, false).find("<System Needle>") != std::string::npos;
     }
 
-    const std::string & source() const { return _source; }
-    bool supports_tools() const { return _supports_tools; }
-    bool supports_parallel_tool_calls() const { return _supports_parallel_tool_calls; }
+    const std::string & source() const { return source_; }
+    bool supports_tools() const { return supports_tools_; }
+    bool supports_parallel_tool_calls() const { return supports_parallel_tool_calls_; }
 
     std::string apply(
         const nlohmann::ordered_json & messages,
@@ -87,7 +126,7 @@ class chat_template {
 
         // First, "fix" messages so they have a chance to be rendered correctly by the template
 
-        if (_requires_object_arguments || !_supports_system_role || !_supports_tools) {
+        if (requires_object_arguments_ || !supports_system_role_ || !supports_tools_) {
             actual_messages = json::array();
 
             std::string pending_system;
@@ -108,7 +147,7 @@ class chat_template {
                 std::string role = message.at("role");
 
                 if (message.contains("tool_calls")) {
-                    if (_requires_object_arguments || !_supports_tools) {
+                    if (requires_object_arguments_ || !supports_tools_) {
                         for (auto & tool_call : message.at("tool_calls")) {
                             if (tool_call["type"] == "function") {
                                 auto & function = tool_call.at("function");
@@ -117,7 +156,7 @@ class chat_template {
                             }
                         }
                     }
-                    if (!_supports_tools) {
+                    if (!supports_tools_) {
                         auto content = message.at("content");
                         auto tool_calls = json::array();
                         for (const auto & tool_call : message.at("tool_calls")) {
@@ -144,7 +183,7 @@ class chat_template {
                         message.erase("tool_calls");
                     }
                 }
-                if (!_supports_tools && role == "tool") {
+                if (!supports_tools_ && role == "tool") {
                     message["role"] = "user";
                     auto obj = json {
                         {"tool_response", {
@@ -159,8 +198,7 @@ class chat_template {
                     message.erase("name");
                 }
 
-                // std::string content = message["content"];
-                if (!message["content"].is_null() && !_supports_system_role) {
+                if (!message["content"].is_null() && !supports_system_role_) {
                     std::string content = message.at("content");
                     if (role == "system") {
                         if (!pending_system.empty()) pending_system += "\n";
@@ -187,8 +225,8 @@ class chat_template {
         auto context = minja::Context::make(json({
             {"messages", actual_messages},
             {"add_generation_prompt", add_generation_prompt},
-            {"bos_token", _bos_token},
-            {"eos_token", _eos_token},
+            {"bos_token", bos_token_},
+            {"eos_token", eos_token_},
         }));
 
         if (!tools.is_null()) {
@@ -202,7 +240,7 @@ class chat_template {
             }
         }
 
-        return _template_root->render(context);
+        return template_root_->render(context);
     }
 };
 

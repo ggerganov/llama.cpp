@@ -1,14 +1,15 @@
+#!/usr/bin/env python
 '''
   Fetches the Jinja chat template of a HuggingFace model.
-  If a model
+  If a model has multiple chat templates, you can specify the variant name.
 
   Syntax:
-    get_hf_chat_template.py model_id [variant]
+    ./scripts/get_hf_chat_template.py model_id [variant]
 
   Examples:
-    python ./scripts/get_hf_chat_template.py NousResearch/Meta-Llama-3-8B-Instruct
-    python ./scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use
-    python ./scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct
+    ./scripts/get_hf_chat_template.py NousResearch/Meta-Llama-3-8B-Instruct
+    ./scripts/get_hf_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use
+    ./scripts/get_hf_chat_template.py meta-llama/Llama-3.2-3B-Instruct
 '''
 
 import json
@@ -16,12 +17,7 @@ import re
 import sys
 
 
-def main(args):
-    if len(args) < 1:
-        raise ValueError("Please provide a model ID and an optional variant name")
-    model_id = args[0]
-    variant = None if len(args) < 2 else args[1]
-
+def get_hf_chat_template(model_id, variant=None):
     try:
         # Use huggingface_hub library if available.
         # Allows access to gated models if the user has access and ran `huggingface-cli login`.
@@ -46,7 +42,7 @@ def main(args):
 
     chat_template = config['chat_template']
     if isinstance(chat_template, str):
-        print(chat_template, end=None)
+        return chat_template
     else:
         variants = {
             ct['name']: ct['template']
@@ -60,11 +56,21 @@ def main(args):
             if 'default' not in variants:
                 raise Exception(f'Please specify a chat template variant (one of {format_variants()})')
             variant = 'default'
-            print(f'Note: picked "default" chat template variant (out of {format_variants()})', file=sys.stderr)
+            sys.stderr.write(f'Note: picked "default" chat template variant (out of {format_variants()})\n')
         elif variant not in variants:
             raise Exception(f"Variant {variant} not found in chat template (found {format_variants()})")
 
-        print(variants[variant], end=None)
+        return variants[variant]
+
+
+def main(args):
+    if len(args) < 1:
+        raise ValueError("Please provide a model ID and an optional variant name")
+    model_id = args[0]
+    variant = None if len(args) < 2 else args[1]
+
+    template = get_hf_chat_template(model_id, variant)
+    sys.stdout.write(template)
 
 
 if __name__ == '__main__':

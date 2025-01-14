@@ -384,7 +384,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
 bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx * ctx_clip) {
         // make sure that the correct mmproj was used, i.e., compare apples to apples
-    int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
+    int n_llama_embd = llama_model_n_embd(llama_get_model(ctx_llama));
     auto n_image_embd = clip_n_mmproj_embd(ctx_clip);
     if (n_image_embd != n_llama_embd) {
         LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
@@ -456,7 +456,7 @@ struct llava_embd_batch {
 };
 
 bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, int n_batch, int * n_past) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
+    int n_embd  = llama_model_n_embd(llama_get_model(ctx_llama));
 
     for (int i = 0; i < image_embed->n_image_pos; i += n_batch) {
         int n_eval = image_embed->n_image_pos - i;
