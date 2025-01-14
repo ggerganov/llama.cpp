@@ -595,7 +595,7 @@ static json oaicompat_completion_params_parse(
     if (has_tools) {
         if (stream) {
             throw std::runtime_error("Cannot use tools with stream");
-        }    
+        }
         if (use_jinja) {
             if (tool_call_style == llama_tool_call_style::UnknownToolCallStyle) {
                 throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");

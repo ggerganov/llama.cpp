@@ -1511,11 +1511,6 @@ static struct llama_sampler_i llama_sampler_grammar_i = {
     /* .free   = */ llama_sampler_grammar_free,
 };
 
-bool llama_sampler_is_grammar_empty(struct llama_sampler * gsmpl) {
-    struct llama_sampler_grammar * ctx = (struct llama_sampler_grammar *) gsmpl->ctx;
-    return ctx->grammar == nullptr;
-}
-
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_vocab * vocab, const char * grammar_str, const char * grammar_root) {
     auto * ctx = new llama_sampler_grammar;
 

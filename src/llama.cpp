@@ -1130,8 +1130,7 @@ struct llm_build_context {
         rope_type        (hparams.rope_type),
         cb               (cb),
         buf_compute_meta (lctx.buf_compute_meta) {
-            // all 
-            ializations should be done in init()
+            // all initializations should be done in init()
         }
 
     void init() {

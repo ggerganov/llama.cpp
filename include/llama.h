@@ -1193,8 +1193,6 @@ extern "C" {
                           const char * grammar_str,
                           const char * grammar_root);
 
-    LLAMA_API bool llama_sampler_is_grammar_empty(struct llama_sampler * gsmpl);
-
     /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
                              int32_t   penalty_last_n,   // last n tokens to penalize (0 = disable penalty, -1 = context size)
@@ -1255,6 +1253,8 @@ extern "C" {
     //    return token;
     // Returns the sampled token
     LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx);
+
+    LLAMA_API bool llama_sampler_is_grammar_empty(struct llama_sampler * smpl);
 
     // TODO: extend in the future
     //LLAMA_API void llama_decode_with_sampler(struct llama_context * ctx, struct llama_sampler * smpl, struct llama_batch batch, ...);

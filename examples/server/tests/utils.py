@@ -157,10 +157,6 @@ class ServerProcess:
         if self.lora_files:
             for lora_file in self.lora_files:
                 server_args.extend(["--lora", lora_file])
-        if self.chat_template_file:
-            server_args.extend(["--chat-template-file", self.chat_template_file])
-        if self.use_jinja:
-            server_args.append("--jinja")
         if self.disable_ctx_shift:
             server_args.extend(["--no-context-shift"])
         if self.api_key:

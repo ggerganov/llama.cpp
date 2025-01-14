@@ -3729,7 +3729,7 @@ int main(int argc, char ** argv) {
     const auto handle_props = [&ctx_server, &res_ok, &get_chat_templates](const httplib::Request &, httplib::Response & res) {
         // this endpoint is publicly available, please only return what is safe to be exposed
         const auto & templates = get_chat_templates();
-        const auto vocab = llama_vocab_from_model(ctx_server.model);
+        const auto vocab = llama_model_get_vocab(ctx_server.model);
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
@@ -3765,7 +3765,6 @@ int main(int argc, char ** argv) {
             json & data,
             httplib::Response & res,
             oaicompat_type oaicompat,
-            bool oaicompat_chat = false,
             llama_tool_call_style tool_call_style = llama_tool_call_style::None) {
         GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
 
@@ -3976,7 +3975,8 @@ int main(int argc, char ** argv) {
             SERVER_TASK_TYPE_COMPLETION,
             data,
             res,
-            OAICOMPAT_TYPE_CHAT);
+            OAICOMPAT_TYPE_CHAT,
+            tool_call_style);
     };
 
     const auto handle_models = [&params, &ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {

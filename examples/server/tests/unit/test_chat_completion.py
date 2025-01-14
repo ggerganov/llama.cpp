@@ -241,7 +241,7 @@ CODE_INTEPRETER_TOOL = {
 ])
 def test_completion_with_required_tool(template_name: str, n_predict: int, tool: dict, expected_arguments: dict):
     global server
-    server.use_jinja = True
+    server.jinja = True
     server.n_predict = n_predict
     server.chat_template_file = f'../../../tests/chat/templates/{template_name}.jinja'
     server.start()
@@ -278,7 +278,7 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
 ])
 def test_completion_without_tool_call(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
     global server
-    server.use_jinja = True
+    server.jinja = True
     server.n_predict = n_predict
     server.chat_template_file = f'../../../tests/chat/templates/{template_name}.jinja'
     server.start()
@@ -322,7 +322,7 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
 ])
 def test_hello_world_tool_call(tool: dict, expected_arguments: dict, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     global server
-    server.use_jinja = True
+    server.jinja = True
     server.n_ctx = 8192
     server.n_predict = 128
     server.model_hf_repo = hf_repo

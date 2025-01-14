@@ -1929,8 +1929,9 @@ minja::chat_template llama_chat_template_from_model(
             chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template");
         }
     }
-    auto bos_token = _common_token_to_piece(model, llama_token_bos(model), true);
-    auto eos_token = _common_token_to_piece(model, llama_token_eos(model), true);
+    const auto vocab = llama_model_get_vocab(model);
+    auto bos_token = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
+    auto eos_token = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     return {std::move(chat_template), bos_token, eos_token};
 }
 
