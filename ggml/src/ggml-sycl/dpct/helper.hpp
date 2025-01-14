@@ -18,8 +18,15 @@
 #include <syclcompat/math.hpp>
 #include <oneapi/mkl.hpp>
 #include <map>
+#include <cassert>
 
+#include "ggml-sycl.h"
 #include "ggml.h"
+
+#include "ggml-backend.h"
+#include "ggml-backend-impl.h"
+#include "ggml-alloc.h"
+#include "ggml-impl.h"
 
 #if defined(__linux__)
 #include <sys/mman.h>
@@ -81,6 +88,16 @@ inline std::string get_device_backend_and_type(const sycl::device &device) {
     device_type <<  backend << ":" << get_device_type_name(device);
     return device_type.str();
 }
+
+template<typename Ts>
+struct matrix_info_t
+{
+    oneapi::mkl::transpose transpose_info[2];
+    Ts value_info[2];
+    std::int64_t size_info[3];
+    std::int64_t ld_info[3];
+    std::int64_t groupsize_info;
+};
 
 namespace dpct
 {
@@ -1731,22 +1748,12 @@ namespace dpct
                                     oneapi::mkl::transpose b_trans, int m, int n, int k,
                                     const void *alpha, const void **a, int lda,
                                     const void **b, int ldb, const void *beta, void **c,
-                                    int ldc, int batch_size)
+                                    int ldc, int batch_size, matrix_info_t<float>* matrix_info)
         {
-            struct matrix_info_t
-            {
-                oneapi::mkl::transpose transpose_info[2];
-                Ts value_info[2];
-                std::int64_t size_info[3];
-                std::int64_t ld_info[3];
-                std::int64_t groupsize_info;
-            };
 
             Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts *>(alpha), q);
             Ts beta_value = dpct::get_value(reinterpret_cast<const Ts *>(beta), q);
 
-            matrix_info_t *matrix_info =
-                (matrix_info_t *)std::malloc(sizeof(matrix_info_t));
             matrix_info->transpose_info[0] = a_trans;
             matrix_info->transpose_info[1] = b_trans;
             matrix_info->value_info[0] = alpha_value;
@@ -1763,23 +1770,19 @@ namespace dpct
             sycl::event e = oneapi::mkl::blas::column_major::gemm_batch(
                 oneapi::mkl::backend_selector<oneapi::mkl::backend::cublas>{ q }, matrix_info->transpose_info,
                 matrix_info->transpose_info + 1, matrix_info->size_info, matrix_info->size_info + 1,
-                matrix_info->size_info + 2, matrix_info->value_info, reinterpret_cast<const Ta **>(a),
+                matrix_info->size_info + 2, reinterpret_cast<Ts*>(matrix_info->value_info), reinterpret_cast<const Ta **>(a),
                 matrix_info->ld_info, reinterpret_cast<const Tb **>(b), matrix_info->ld_info + 1,
-                matrix_info->value_info + 1, reinterpret_cast<Tc **>(c), matrix_info->ld_info + 2, 1,
+                reinterpret_cast<Ts*>(matrix_info->value_info+1), reinterpret_cast<Tc **>(c), matrix_info->ld_info + 2, 1,
                 &(matrix_info->groupsize_info));
 #else
             sycl::event e = oneapi::mkl::blas::column_major::gemm_batch(
                 q, matrix_info->transpose_info, matrix_info->transpose_info + 1, matrix_info->size_info,
-                matrix_info->size_info + 1, matrix_info->size_info + 2, matrix_info->value_info,
+                matrix_info->size_info + 1, matrix_info->size_info + 2, reinterpret_cast<Ts*>(matrix_info->value_info),
                 reinterpret_cast<const Ta **>(a), matrix_info->ld_info, reinterpret_cast<const Tb **>(b),
-                matrix_info->ld_info + 1, matrix_info->value_info + 1, reinterpret_cast<Tc **>(c),
+                matrix_info->ld_info + 1, reinterpret_cast<Ts*>(matrix_info->value_info + 1), reinterpret_cast<Tc **>(c),
                 matrix_info->ld_info + 2, 1, &(matrix_info->groupsize_info));
 #endif
 
-            q.submit([&](sycl::handler &cgh)
-                     {
-    cgh.depends_on(e);
-    cgh.host_task([=] { std::free(matrix_info); }); });
         }
 
         template <class Ta, class Tb, class Tc, class Ts>
@@ -2428,19 +2431,9 @@ namespace dpct
                            library_data_t a_type, int lda, const void *b[],
                            library_data_t b_type, int ldb, const void *beta,
                            void *c[], library_data_t c_type, int ldc,
-                           int batch_size, library_data_t scaling_type)
+                           int batch_size, library_data_t scaling_type,
+                           matrix_info_t<float>* matrix_info)
     {
-        if (scaling_type == library_data_t::real_float &&
-            c_type == library_data_t::complex_float)
-        {
-            scaling_type = library_data_t::complex_float;
-        }
-        else if (scaling_type == library_data_t::real_double &&
-                 c_type == library_data_t::complex_double)
-        {
-            scaling_type = library_data_t::complex_double;
-        }
-
         std::uint64_t key =
             detail::get_type_combination_id(a_type, b_type, c_type, scaling_type);
         switch (key)
@@ -2451,7 +2444,7 @@ namespace dpct
         {
             detail::gemm_batch_impl<float, float, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
+                batch_size, matrix_info);
             break;
         }
         case detail::get_type_combination_id(
@@ -2460,27 +2453,7 @@ namespace dpct
         {
             detail::gemm_batch_impl<double, double, double, double>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
-            break;
-        }
-        case detail::get_type_combination_id(
-            library_data_t::complex_float, library_data_t::complex_float,
-            library_data_t::complex_float, library_data_t::complex_float):
-        {
-            detail::gemm_batch_impl<std::complex<float>, std::complex<float>,
-                                    std::complex<float>, std::complex<float>>(
-                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
-            break;
-        }
-        case detail::get_type_combination_id(
-            library_data_t::complex_double, library_data_t::complex_double,
-            library_data_t::complex_double, library_data_t::complex_double):
-        {
-            detail::gemm_batch_impl<std::complex<double>, std::complex<double>,
-                                    std::complex<double>, std::complex<double>>(
-                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
+                batch_size, matrix_info);
             break;
         }
         case detail::get_type_combination_id(
@@ -2490,7 +2463,7 @@ namespace dpct
             detail::gemm_batch_impl<sycl::half, sycl::half, sycl::half,
                                     sycl::half>(q, a_trans, b_trans, m, n, k, alpha,
                                                 a, lda, b, ldb, beta, c, ldc,
-                                                batch_size);
+                                                batch_size, matrix_info);
             break;
         }
 #ifdef __INTEL_MKL__
@@ -2501,7 +2474,7 @@ namespace dpct
             detail::gemm_batch_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16,
                                     oneapi::mkl::bfloat16, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
+                batch_size, matrix_info);
             break;
         }
         case detail::get_type_combination_id(
@@ -2510,7 +2483,7 @@ namespace dpct
         {
             detail::gemm_batch_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16, float,
                                     float>(q, a_trans, b_trans, m, n, k, alpha, a, lda,
-                                           b, ldb, beta, c, ldc, batch_size);
+                                           b, ldb, beta, c, ldc, batch_size, matrix_info);
             break;
         }
 #endif
@@ -2525,7 +2498,7 @@ namespace dpct
             detail::gemm_batch_impl<std::int8_t, std::int8_t, std::int32_t,
                                     float>(q, a_trans, b_trans, m, n, k, &alpha_float,
                                            a, lda, b, ldb, &beta_float, c, ldc,
-                                           batch_size);
+                                           batch_size, matrix_info);
             break;
         }
         case detail::get_type_combination_id(
@@ -2534,7 +2507,7 @@ namespace dpct
         {
             detail::gemm_batch_impl<std::int8_t, std::int8_t, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
+                batch_size, matrix_info);
             break;
         }
         case detail::get_type_combination_id(
@@ -2543,7 +2516,7 @@ namespace dpct
         {
             detail::gemm_batch_impl<sycl::half, sycl::half, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                batch_size);
+                batch_size, matrix_info);
             break;
         }
         case detail::get_type_combination_id(
@@ -2558,7 +2531,7 @@ namespace dpct
             sycl::half beta_half(beta_value);
             detail::gemm_batch_impl<sycl::half, sycl::half, sycl::half, sycl::half>(
                 q, a_trans, b_trans, m, n, k, &alpha_half, a, lda, b, ldb, &beta_half, c, ldc,
-                batch_size);
+                batch_size, matrix_info);
             break;
         }
         default:
