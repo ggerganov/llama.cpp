@@ -111,12 +111,12 @@ const VueMarkdown = defineComponent(
       highlight: function (str, lang) { // Add highlight.js
         if (lang && hljs.getLanguage(lang)) {
           try {
-            return '<pre><code class="hljs">' +
+            return '<pre dir="auto"><code class="hljs">' +
                    hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
                    '</code></pre>';
           } catch (__) {}
         }
-        return '<pre><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
+        return '<pre dir="auto"><code class="hljs">' + md.value.utils.escapeHtml(str) + '</code></pre>';
       }
     }));
     // support latex with double dollar sign and square brackets
