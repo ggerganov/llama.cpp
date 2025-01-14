@@ -34,11 +34,10 @@ static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & toke
 
 static void batch_decode(llama_context * ctx, llama_batch & batch, float * output, int n_seq, int n_embd, int embd_norm) {
     const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
-    const llama_model * model = llama_get_model(ctx);
-    llama_kv_cache * kv = llama_get_kv_cache(ctx);
+    const struct llama_model * model = llama_get_model(ctx);
 
     // clear previous kv_cache values (irrelevant for embeddings)
-    llama_kv_cache_clear(kv);
+    llama_kv_self_clear(ctx);
 
     // run model
     LOG_INF("%s: n_tokens = %d, n_seq = %d\n", __func__, batch.n_tokens, n_seq);

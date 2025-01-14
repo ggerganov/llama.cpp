@@ -741,10 +741,8 @@ static int tokenize_prompt(const llama_vocab * vocab, const std::string & prompt
 
 // Check if we have enough space in the context to evaluate this batch
 static int check_context_size(const llama_context_ptr & ctx, const llama_batch & batch) {
-    llama_kv_cache * kv = llama_get_kv_cache(ctx.get());
-
     const int n_ctx      = llama_n_ctx(ctx.get());
-    const int n_ctx_used = llama_kv_cache_used_cells(kv);
+    const int n_ctx_used = llama_kv_self_used_cells(ctx.get());
     if (n_ctx_used + batch.n_tokens > n_ctx) {
         printf("\033[0m\n");
         printe("context size exceeded\n");

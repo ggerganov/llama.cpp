@@ -431,8 +431,6 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
     const llama_model * model = llama_get_model(ctx);
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
-    llama_kv_cache * kv = llama_get_kv_cache(ctx);
-
     const bool add_bos = llama_vocab_get_add_bos(vocab);
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -499,7 +497,7 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params) {
         const auto t_start = std::chrono::high_resolution_clock::now();
 
         // clear the KV cache
-        llama_kv_cache_clear(kv);
+        llama_kv_self_clear(ctx);
 
         llama_batch batch = llama_batch_init(n_batch, 0, 1);
 

@@ -606,7 +606,7 @@ const llama_model * llama_get_model(const llama_context * ctx) {
     return &ctx->model;
 }
 
-llama_kv_cache * llama_get_kv_cache(llama_context * ctx) {
+llama_kv_cache * llama_get_kv_self(llama_context * ctx) {
     return &ctx->kv_self;
 }
 
@@ -1147,14 +1147,14 @@ static size_t llama_state_get_data_internal(struct llama_context * ctx, llama_da
     data_ctx.write_embeddings(ctx);
 
     llama_kv_cache::io io = {
-        /* .write =*/ [&](const void * src, size_t size) {
+        /* .write = */ [&](const void * src, size_t size) {
             data_ctx.write(src, size);
         },
-        /* .write_tensor_data =*/ [&](const struct ggml_tensor * tensor, size_t offset, size_t size) {
+        /* .write_tensor_data = */ [&](const struct ggml_tensor * tensor, size_t offset, size_t size) {
             data_ctx.write_tensor_data(tensor, offset, size);
         },
-        /* .read    =*/ nullptr,
-        /* .read_to =*/ nullptr,
+        /* .read    = */ nullptr,
+        /* .read_to = */ nullptr,
     };
 
     ctx->kv_self.state_write(io, ctx->model.hparams);
@@ -1195,12 +1195,12 @@ static size_t llama_state_set_data_internal(struct llama_context * ctx, llama_da
     data_ctx.read_embeddings(ctx);
 
     llama_kv_cache::io io = {
-        /* .write =*/ nullptr,
-        /* .write_tensor_data =*/ nullptr,
-        /* .read =*/ [&](size_t size) {
+        /* .write = */ nullptr,
+        /* .write_tensor_data = */ nullptr,
+        /* .read = */ [&](size_t size) {
             return data_ctx.read(size);
         },
-        /* .read_to =*/ [&](void * dst, size_t size) {
+        /* .read_to = */ [&](void * dst, size_t size) {
             data_ctx.read_to(dst, size);
         },
     };
@@ -1302,14 +1302,14 @@ static size_t llama_state_seq_get_data_internal(struct llama_context * ctx, llam
     llama_synchronize(ctx);
 
     llama_kv_cache::io io = {
-        /* .write =*/ [&](const void * src, size_t size) {
+        /* .write = */ [&](const void * src, size_t size) {
             data_ctx.write(src, size);
         },
-        /* .write_tensor_data =*/ [&](const struct ggml_tensor * tensor, size_t offset, size_t size) {
+        /* .write_tensor_data = */ [&](const struct ggml_tensor * tensor, size_t offset, size_t size) {
             data_ctx.write_tensor_data(tensor, offset, size);
         },
-        /* .read =*/    nullptr,
-        /* .read_to =*/ nullptr,
+        /* .read = */    nullptr,
+        /* .read_to = */ nullptr,
     };
 
     ctx->kv_self.state_write(io, ctx->model.hparams, seq_id);
@@ -1336,12 +1336,12 @@ static size_t llama_state_seq_set_data_internal(struct llama_context * ctx, llam
     llama_synchronize(ctx);
 
     llama_kv_cache::io io = {
-        /* .write =*/ nullptr,
-        /* .write_tensor_data =*/ nullptr,
-        /* .read =*/ [&](size_t size) {
+        /* .write = */ nullptr,
+        /* .write_tensor_data = */ nullptr,
+        /* .read = */ [&](size_t size) {
             return data_ctx.read(size);
         },
-        /* .read_to =*/ [&](void * dst, size_t size) {
+        /* .read_to = */ [&](void * dst, size_t size) {
             data_ctx.read_to(dst, size);
         },
     };

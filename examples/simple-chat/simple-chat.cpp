@@ -88,8 +88,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_kv_cache * kv = llama_get_kv_cache(ctx);
-
     // initialize the sampler
     llama_sampler * smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(smpl, llama_sampler_init_min_p(0.05f, 1));
@@ -103,7 +101,7 @@ int main(int argc, char ** argv) {
         // tokenize the prompt
         const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, true, true);
         std::vector<llama_token> prompt_tokens(n_prompt_tokens);
-        if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), llama_kv_cache_used_cells(kv) == 0, true) < 0) {
+        if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), llama_kv_self_used_cells(ctx) == 0, true) < 0) {
             GGML_ABORT("failed to tokenize the prompt\n");
         }
 
@@ -113,7 +111,7 @@ int main(int argc, char ** argv) {
         while (true) {
             // check if we have enough space in the context to evaluate this batch
             int n_ctx = llama_n_ctx(ctx);
-            int n_ctx_used = llama_kv_cache_used_cells(kv);
+            int n_ctx_used = llama_kv_self_used_cells(ctx);
             if (n_ctx_used + batch.n_tokens > n_ctx) {
                 printf("\033[0m\n");
                 fprintf(stderr, "context size exceeded\n");
