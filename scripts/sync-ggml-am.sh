@@ -73,6 +73,7 @@ while read c; do
         src/ggml*.h \
         src/ggml*.c \
         src/ggml*.cpp \
+        src/gguf*.cpp \
         src/ggml-blas/* \
         src/ggml-cann/* \
         src/ggml-cpu/* \
@@ -86,6 +87,7 @@ while read c; do
         src/ggml-sycl/* \
         src/ggml-vulkan/* \
         include/ggml*.h \
+        include/gguf*.h \
         tests/test-opt.cpp \
         tests/test-quantize-fns.cpp \
         tests/test-quantize-perf.cpp \
@@ -124,6 +126,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml*.c          -> ggml/src/ggml*.c
     # src/ggml*.cpp        -> ggml/src/ggml*.cpp
     # src/ggml*.h          -> ggml/src/ggml*.h
+    # src/gguf*.cpp        -> ggml/src/gguf*.cpp
     # src/ggml-blas/*      -> ggml/src/ggml-blas/*
     # src/ggml-cann/*      -> ggml/src/ggml-cann/*
     # src/ggml-cpu/*       -> ggml/src/ggml-cpu/*
@@ -138,6 +141,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-vulkan/*    -> ggml/src/ggml-vulkan/*
     #
     # include/ggml*.h -> ggml/include/ggml*.h
+    # include/gguf*.h -> ggml/include/gguf*.h
     #
     # tests/test*.cpp -> tests/
     #
@@ -151,6 +155,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml(.*)\.c/\1ggml\/src\/ggml\2.c/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml(.*)\.cpp/\1ggml\/src\/ggml\2.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml(.*)\.h/\1ggml\/src\/ggml\2.h/g' \
+        -e 's/([[:space:]]|[ab]\/)src\/gguf(.*)\.cpp/\1ggml\/src\/gguf\2.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-blas\//\1ggml\/src\/ggml-blas\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\//\1ggml\/src\/ggml-cann\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cpu\//\1ggml\/src\/ggml-cpu\//g' \
@@ -163,6 +168,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml-sycl\//\1ggml\/src\/ggml-sycl\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-vulkan\//\1ggml\/src\/ggml-vulkan\//g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml(.*)\.h/\1ggml\/include\/ggml\2.h/g' \
+        -e 's/([[:space:]]|[ab]\/)include\/gguf(.*)\.h/\1ggml\/include\/gguf\2.h/g' \
         -e 's/([[:space:]]|[ab]\/)tests\/(.*)\.cpp/\1tests\/\2.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)LICENSE/\1LICENSE/g' \
         -e 's/([[:space:]]|[ab]\/)scripts\/gen-authors\.sh/\1scripts\/gen-authors.sh/g' \
