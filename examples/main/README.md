@@ -273,7 +273,7 @@ Top-nσ sampling is a text generation method that selects tokens based on a stat
 
 Example usage: `--top-nsigma 1`
 
-### Logit Bias  
+### Logit Bias
 
 -   `-l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS`: Modify the likelihood of a token appearing in the generated text completion.
 

@@ -1672,7 +1672,7 @@ static void llama_sampler_top_n_sigma_apply(struct llama_sampler * smpl, llama_t
         logits_sum += cur_p->data[i].logit;
     }
     float mean = (float)logits_sum/cur_p->size;
-    
+
     // calculate standard deviation
     float acc = 0;
     for(size_t i = 0; i < cur_p->size; ++i){
