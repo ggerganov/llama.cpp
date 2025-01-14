@@ -815,44 +815,44 @@ jobs:
           # Capabilities of GPUs are listed on https://developer.nvidia.com/cuda-gpus, can test w/ `nvidia-smi --query-gpu=compute_cap --format=csv`
           # See available containers at https://hub.docker.com/r/nvidia/cuda/tags
           - version: 12.2
-            container: nvidia/cuda:12.2.2-devel-ubuntu24.04
+            container: nvidia/cuda:12.2.2-devel-ubuntu22.04
             cap: 7.5
             arch: 75-real
             example: 'T4'
             package: true
           - version: 12.2
-            container: nvidia/cuda:12.2.2-devel-ubuntu24.04
+            container: nvidia/cuda:12.2.2-devel-ubuntu22.04
             cap: 8.0
             arch: 80-real
             example: 'A100'
             package: true
           - version: 12.2
-            container: nvidia/cuda:12.2.2-devel-ubuntu24.04
+            container: nvidia/cuda:12.2.2-devel-ubuntu22.04
             cap: 8.6
             arch: 86-real
             example: 'A10'
             package: true
           - version: 12.2
-            container: nvidia/cuda:12.2.2-devel-ubuntu24.04
+            container: nvidia/cuda:12.2.2-devel-ubuntu22.04
             cap: 8.9
             arch: 89-real
             example: 'L4, L40S'
           - version: 12.2
-            container: nvidia/cuda:12.2.2-devel-ubuntu24.04
+            container: nvidia/cuda:12.2.2-devel-ubuntu22.04
             cap: 9.0
             arch: 90-real
             example: 'H100'
             package: true
           # Build only, don't package.
           - version: 12.6
-            container: nvidia/cuda:12.6.2-devel-ubuntu24.04
+            container: nvidia/cuda:12.6.2-devel-ubuntu22.04
             cap: 8.9
             arch: 89-real
             package: false
 
     container: nvidia/cuda:${{ matrix.cuda.version }}-devel-ubuntu24.04
 
-    name: Linux CUDA ${{ matrix.cuda.version }} Cap ${{ matrix.cuda.cap }} (e.g. ${{ matrix.cuda_cap.example_gpu }})
+    name: ubuntu-22-cuda (${{ matrix.cuda.version }} cap ${{ matrix.cuda.cap }}, e.g. ${{ matrix.cuda.example }})
 
     steps:
         - name: Clone
