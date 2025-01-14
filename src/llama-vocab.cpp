@@ -1356,8 +1356,9 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
 
             // read vocab size from metadata
             uint32_t n_tokens = 0;
-            if (!ml.get_key(LLM_KV_VOCAB_SIZE, n_tokens, false)) {
-                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata\n", __func__);
+            if (ml.get_key(LLM_KV_VOCAB_SIZE, n_tokens, false)) {
+                LLAMA_LOG_WARN("%s: adding %u dummy tokens\n", __func__, n_tokens);
+                id_to_token.resize(n_tokens);
             }
 
             return;
