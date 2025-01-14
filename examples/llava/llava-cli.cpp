@@ -47,8 +47,12 @@ static const char * sample(struct common_sampler * smpl,
                            int * n_past) {
     const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
     common_sampler_accept(smpl, id, true);
+
+    const llama_model * model = llama_get_model(ctx_llama);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
     static std::string ret;
-    if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
+    if (llama_vocab_is_eog(vocab, id)) {
         ret = "</s>";
     } else {
         ret = common_token_to_piece(ctx_llama, id);
@@ -239,11 +243,10 @@ static struct llava_context * llava_init_context(common_params * params, llama_m
 
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
-
     llama_context_params ctx_params = common_context_params_to_llama(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
-    llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx_llama = llama_init_from_model(model, ctx_params);
 
     if (ctx_llama == NULL) {
         LOG_ERR("%s: failed to create the llama_context\n" , __func__);

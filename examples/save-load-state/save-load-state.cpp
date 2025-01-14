@@ -97,7 +97,7 @@ int main(int argc, char ** argv) {
     printf("\n\n");
 
     // make new context
-    llama_context * ctx2 = llama_new_context_with_model(model, common_context_params_to_llama(params));
+    llama_context * ctx2 = llama_init_from_model(model, common_context_params_to_llama(params));
 
     llama_sampler * smpl2 = llama_sampler_chain_init(sparams);
 
@@ -154,7 +154,7 @@ int main(int argc, char ** argv) {
     }
 
     // make new context
-    llama_context * ctx3 = llama_new_context_with_model(model, common_context_params_to_llama(params));
+    llama_context * ctx3 = llama_init_from_model(model, common_context_params_to_llama(params));
 
     llama_sampler * smpl3 = llama_sampler_chain_init(sparams);
 

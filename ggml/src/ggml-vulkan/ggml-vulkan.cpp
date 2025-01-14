@@ -2277,6 +2277,7 @@ static vk_device ggml_vk_get_device(size_t idx) {
         if (device->subgroup_size_control) {
             device->subgroup_min_size = subgroup_size_control_props.minSubgroupSize;
             device->subgroup_max_size = subgroup_size_control_props.maxSubgroupSize;
+            device_extensions.push_back("VK_EXT_subgroup_size_control");
         }
 
         device->subgroup_size_control = device->subgroup_size_control &&
@@ -2285,7 +2286,6 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         if (device->subgroup_size_control) {
             device->subgroup_require_full_support = subgroup_size_control_features.computeFullSubgroups;
-            device_extensions.push_back("VK_EXT_subgroup_size_control");
         }
 
 #if defined(VK_KHR_cooperative_matrix)
@@ -5633,9 +5633,9 @@ static void ggml_vk_op_f32_rwkv6(ggml_backend_vk_context * ctx, vk_context& subc
 }
 
 static void ggml_vk_rwkv_wkv6(ggml_backend_vk_context * ctx, vk_context& subctx, ggml_tensor * dst, bool dryrun = false) {
-    const size_t seq_length = dst->src[0]->ne[3];
+    const size_t seq_length = dst->src[0]->ne[2];
     const size_t n_embed = dst->ne[0];
-    const size_t n_heads = dst->src[0]->ne[2];
+    const size_t n_heads = dst->src[0]->ne[1];
     const size_t n_seqs = dst->src[5]->ne[1];
 
     ggml_vk_op_f32_rwkv6(
