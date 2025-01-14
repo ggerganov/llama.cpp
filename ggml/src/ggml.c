@@ -46,9 +46,9 @@
 
 // endianness conversion
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define convert_from_le16(x)
-#define convert_from_le32(x)
-#define convert_from_le64(x)
+#define convert_from_le16(x) UNUSED(x)
+#define convert_from_le32(x) UNUSED(x)
+#define convert_from_le64(x) UNUSED(x)
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 static inline void convert_from_le16(void * value) {
     *((uint16_t*)value) = le16toh(*((uint16_t*)value));

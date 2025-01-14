@@ -25,7 +25,7 @@
 
 // endianness conversion
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define convert_from_le(x)
+#define convert_from_le(x) (void)(x)
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #include <type_traits>
 
