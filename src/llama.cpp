@@ -1973,7 +1973,7 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                cur   = ggml_get_rows(ctx0,      cur, inp_out_ids);
+                cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
 
@@ -8456,7 +8456,7 @@ static int llama_decode_impl(
     }
 
     // temporary allocate memory for the input batch if needed
-    llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.kv_self.max_pos() + 1);
+    llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.kv_self.pos_max() + 1);
 
     const llama_batch & batch = batch_allocr.batch;
     const uint32_t n_tokens_all = batch.n_tokens;
@@ -8792,7 +8792,7 @@ static int llama_encode_impl(
     }
 
     // temporary allocate memory for the input batch if needed
-    llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.kv_self.max_pos() + 1);
+    llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.kv_self.pos_max() + 1);
 
     const llama_batch & batch = batch_allocr.batch;
     const uint32_t n_tokens = batch.n_tokens;
@@ -9699,16 +9699,8 @@ struct llama_context * llama_init_from_model(
         }
 
         {
-            size_t memory_size_k = 0;
-            size_t memory_size_v = 0;
-
-            for (auto & k : ctx->kv_self.k_l) {
-                memory_size_k += ggml_nbytes(k);
-            }
-
-            for (auto & v : ctx->kv_self.v_l) {
-                memory_size_v += ggml_nbytes(v);
-            }
+            const size_t memory_size_k = ctx->kv_self.size_k_bytes();
+            const size_t memory_size_v = ctx->kv_self.size_v_bytes();
 
             LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
                       (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),

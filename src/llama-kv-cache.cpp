@@ -73,17 +73,22 @@ bool llama_kv_cache::init(
         const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa(i) + hparams.n_embd_k_s();
         const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa(i) + hparams.n_embd_v_s();
 
-        LLAMA_LOG_DEBUG("%s: layer %d: n_embd_k_gqa = %d, n_embd_v_gqa = %d\n", __func__, i, n_embd_k_gqa, n_embd_v_gqa);
+        const char * dev_name = "CPU";
 
         ggml_backend_buffer_type_t buft;
         if (offload) {
             auto * dev = model.dev_layer(i);
             buft = ggml_backend_dev_buffer_type(dev);
+
+            dev_name = ggml_backend_dev_name(dev);
         } else {
             buft = ggml_backend_cpu_buffer_type();
         }
-        ggml_context * ctx = ctx_for_buft(buft);
 
+        LLAMA_LOG_DEBUG("%s: layer %3d: n_embd_k_gqa = %d, n_embd_v_gqa = %d, dev = %s\n", __func__,
+                i, n_embd_k_gqa, n_embd_v_gqa, dev_name);
+
+        ggml_context * ctx = ctx_for_buft(buft);
         if (!ctx) {
             LLAMA_LOG_ERROR("%s: failed to create ggml context for kv cache\n", __func__);
             return false;
@@ -134,14 +139,13 @@ size_t llama_kv_cache::total_size() const {
     return size;
 }
 
-// TODO: better data structures to reduce the cost of this operation
-llama_pos llama_kv_cache::max_pos() const {
-    llama_pos max_pos = -1;
+llama_pos llama_kv_cache::pos_max() const {
+    llama_pos pos_max = -1;
     for (const auto & cell : cells) {
-        max_pos = std::max(max_pos, cell.pos);
+        pos_max = std::max(pos_max, cell.pos);
     }
 
-    return max_pos;
+    return pos_max;
 }
 
 void llama_kv_cache::clear() {
@@ -670,6 +674,26 @@ uint32_t llama_kv_cache::cell_max() const {
     }
 
     return 0;
+}
+
+size_t llama_kv_cache::size_k_bytes() const {
+    size_t size_k_bytes = 0;
+
+    for (const auto & k : k_l) {
+        size_k_bytes += ggml_nbytes(k);
+    }
+
+    return size_k_bytes;
+}
+
+size_t llama_kv_cache::size_v_bytes() const {
+    size_t size_v_bytes = 0;
+
+    for (const auto & v : v_l) {
+        size_v_bytes += ggml_nbytes(v);
+    }
+
+    return size_v_bytes;
 }
 
 void llama_kv_cache_clear(llama_kv_cache * kv) {
