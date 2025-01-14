@@ -61,16 +61,10 @@ struct llama_kv_cache {
     // computed before each graph build
     uint32_t n = 0;
 
-    ggml_type type_k = GGML_TYPE_F16;
-    ggml_type type_v = GGML_TYPE_F16;
-
     std::vector<llama_kv_cell> cells;
 
     std::vector<struct ggml_tensor *> k_l; // per layer
     std::vector<struct ggml_tensor *> v_l;
-
-    std::vector<ggml_context_ptr> ctxs;
-    std::vector<ggml_backend_buffer_ptr> bufs;
 
     // TODO: become constructor
     bool init(
@@ -86,7 +80,7 @@ struct llama_kv_cache {
     size_t total_size() const;
 
     // TODO: better data structures to reduce the cost of this operation
-    llama_pos max_pos() const;
+    llama_pos pos_max() const;
 
     void clear();
 
@@ -112,6 +106,16 @@ struct llama_kv_cache {
 
     // find how many cells are currently in use
     uint32_t cell_max() const;
+
+    size_t size_k_bytes() const;
+    size_t size_v_bytes() const;
+
+private:
+    ggml_type type_k = GGML_TYPE_F16;
+    ggml_type type_v = GGML_TYPE_F16;
+
+    std::vector<ggml_context_ptr> ctxs;
+    std::vector<ggml_backend_buffer_ptr> bufs;
 };
 
 //
