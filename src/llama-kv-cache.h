@@ -190,6 +190,48 @@ struct llama_kv_slot_restorer {
     }
 };
 
+// TODO: maybe become part of the public llama_kv_cache in the future
+int32_t llama_kv_cache_n_tokens(const llama_kv_cache * kv);
+
+int32_t llama_kv_cache_used_cells(const llama_kv_cache * kv);
+
+void llama_kv_cache_clear(llama_kv_cache * kv);
+
+bool llama_kv_cache_seq_rm(
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id,
+             llama_pos   p0,
+             llama_pos   p1);
+
+void llama_kv_cache_seq_cp(
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id_src,
+          llama_seq_id   seq_id_dst,
+             llama_pos   p0,
+             llama_pos   p1);
+
+void llama_kv_cache_seq_keep(llama_kv_cache * kv, llama_seq_id seq_id);
+
+void llama_kv_cache_seq_add(
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id,
+             llama_pos   p0,
+             llama_pos   p1,
+             llama_pos   delta);
+
+void llama_kv_cache_seq_div(
+        llama_kv_cache * kv,
+          llama_seq_id   seq_id,
+             llama_pos   p0,
+             llama_pos   p1,
+                   int   d);
+
+llama_pos llama_kv_cache_seq_pos_max(llama_kv_cache * kv, llama_seq_id seq_id);
+
+void llama_kv_cache_defrag(llama_kv_cache * kv);
+
+bool llama_kv_cache_can_shift(const llama_kv_cache * kv);
+
 //
 // kv cache view
 //

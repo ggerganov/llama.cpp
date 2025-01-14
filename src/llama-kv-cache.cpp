@@ -1072,7 +1072,17 @@ bool llama_kv_cache::state_read_data(const io & io, const llama_hparams & hparam
     return true;
 }
 
-/////////////
+//
+// interface implementation
+//
+
+int32_t llama_kv_cache_n_tokens(const llama_kv_cache * kv) {
+    return kv->n_tokens();
+}
+
+int32_t llama_kv_cache_used_cells(const llama_kv_cache * kv) {
+    return kv->used;
+}
 
 void llama_kv_cache_clear(llama_kv_cache * kv) {
     kv->clear();
@@ -1123,14 +1133,6 @@ llama_pos llama_kv_cache_seq_pos_max(llama_kv_cache * kv, llama_seq_id seq_id) {
 
 void llama_kv_cache_defrag(llama_kv_cache * kv) {
     kv->defrag();
-}
-
-int32_t llama_kv_cache_n_tokens(const llama_kv_cache * kv) {
-    return kv->n_tokens();
-}
-
-int32_t llama_kv_cache_used_cells(const llama_kv_cache * kv) {
-    return kv->used;
 }
 
 bool llama_kv_cache_can_shift(const llama_kv_cache * kv) {
