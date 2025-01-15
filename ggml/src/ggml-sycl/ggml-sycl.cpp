@@ -1207,7 +1207,6 @@ struct ggml_sycl_pool_host : public ggml_sycl_pool {
     void * alloc(size_t size, size_t * actual_size) override {
         if (counter == MAX_POOL_SIZE) {
             ggml_sycl_buffer b               = buffer_pool[0];
-            size_t           look_ahead_size = (size_t) (1.05 * size);
             void *           ptr             = b.ptr;
             *actual_size                     = b.size;
             counter                          = 1;
