@@ -1534,6 +1534,49 @@ kernel void kernel_rms_norm(
     }
 }
 
+kernel void kernel_l2_norm(
+        constant ggml_metal_kargs_l2_norm & args,
+        device const char * src0,
+        device       char * dst,
+        threadgroup float * shmem_f32 [[threadgroup(0)]],
+        uint   tgpig[[threadgroup_position_in_grid]],
+        ushort tpitg[[thread_position_in_threadgroup]],
+        ushort sgitg[[simdgroup_index_in_threadgroup]],
+        ushort tiisg[[thread_index_in_simdgroup]],
+        ushort   ntg[[threads_per_threadgroup]]) {
+    if (sgitg == 0) {
+        shmem_f32[tiisg] = 0.0f;
+    }
+
+    device const float4 * x = (device const float4 *) (src0 + tgpig*args.nb01);
+
+    float sumf = 0.0f;
+
+    // parallel sum
+    for (int i00 = tpitg; i00 < args.ne00_4; i00 += ntg) {
+        sumf += dot(x[i00], x[i00]);
+    }
+    sumf = simd_sum(sumf);
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (tiisg == 0) {
+        shmem_f32[sgitg] = sumf;
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    sumf = shmem_f32[tiisg];
+    sumf = simd_sum(sumf);
+
+    const float scale = 1.0f/sqrt(max(sumf, args.eps));
+
+    device float4 * y = (device float4 *) dst + tgpig*args.ne00_4;
+    for (int i00 = tpitg; i00 < args.ne00_4; i00 += ntg) {
+        y[i00] = x[i00] * scale;
+    }
+}
+
 kernel void kernel_group_norm(
         device const float * src0,
         device       float * dst,
