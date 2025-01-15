@@ -88,11 +88,11 @@ struct llama_kv_cache {
 
     void clear();
 
-    bool seq_rm  (llama_seq_id seq_id, llama_pos p0, llama_pos p1);
+    bool seq_rm  (llama_seq_id seq_id,                              llama_pos p0, llama_pos p1);
     void seq_cp  (llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1);
     void seq_keep(llama_seq_id seq_id);
-    void seq_add (llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta);
-    void seq_div (llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d);
+    void seq_add (llama_seq_id seq_id,                              llama_pos p0, llama_pos p1, llama_pos delta);
+    void seq_div (llama_seq_id seq_id,                              llama_pos p0, llama_pos p1, int d);
 
     llama_pos seq_pos_max(llama_seq_id seq_id);
 

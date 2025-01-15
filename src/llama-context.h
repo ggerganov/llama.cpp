@@ -18,7 +18,7 @@ struct llama_context {
     llama_context(const llama_model & model)
         : model(model)
         , t_start_us(model.t_start_us)
-        , t_load_us(model.t_load_us) {}
+        , t_load_us (model.t_load_us) {}
 
     const struct llama_model & model;
 
@@ -107,13 +107,11 @@ struct llama_context {
     struct ggml_tensor * inp_pos_bucket;    // I32 [n_batch|n_kv, n_batch]
     struct ggml_tensor * inp_embd_enc;      // F32 [n_embd, n_outputs_enc]
     struct ggml_tensor * inp_KQ_mask_cross; // F32 [n_outputs_enc, n_batch]
+
+    void set_k_shift(llama_kv_cache & kv);
 };
 
 // TODO: make these methods of llama_context
-void llama_set_k_shift(struct llama_context & lctx);
-
-void llama_set_s_copy(struct llama_context & lctx);
-
 void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch);
 
 // Make sure enough space is available for outputs.
