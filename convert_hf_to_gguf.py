@@ -2833,14 +2833,14 @@ class InternLM3Model(Model):
         self.gguf_writer.add_token_types(toktypes)
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        
+
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
             with open(tokenizer_config_file, "r", encoding="utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 if "add_prefix_space" in tokenizer_config_json:
                     self.gguf_writer.add_add_space_prefix(tokenizer_config_json["add_prefix_space"])
-                
+
                 if "added_tokens_decoder" in tokenizer_config_json:
                     for token_id, token_data in tokenizer_config_json["added_tokens_decoder"].items():
                         if token_data.get("special"):
