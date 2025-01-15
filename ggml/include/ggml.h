@@ -2144,7 +2144,7 @@ extern "C" {
 #endif
     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k);
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
-    typedef void (*ggml_byteswap_t) (        void * GGML_RESTRICT buffer, size_t elements);
+    typedef void (*ggml_byteswap_t)  (      void  * GGML_RESTRICT buffer, size_t elements);
 
     struct ggml_type_traits {
         const char             * type_name;
