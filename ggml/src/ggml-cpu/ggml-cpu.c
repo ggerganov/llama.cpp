@@ -13668,6 +13668,7 @@ struct ggml_cplan ggml_graph_plan(
                     } break;
                 case GGML_OP_SOFT_MAX:
                 case GGML_OP_ROPE:
+                case GGML_OP_ROPE_BACK:
                     {
                         cur = ggml_type_size(GGML_TYPE_F32) * node->ne[0] * n_tasks;
                     } break;
