@@ -561,7 +561,7 @@ static bool handcrafted_check_kv(const gguf_context * gguf_ctx, const unsigned i
                     }
                     break;
             }
-#endif
+#endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 
             if (!std::equal(data8, data8 + arr_n*type_size, data_gguf)) {
                 ok = false;
@@ -597,7 +597,7 @@ static bool handcrafted_check_kv(const gguf_context * gguf_ctx, const unsigned i
                 ggml_convert_to_le((uint64_t*)(data8));
                 break;
         }
-#endif
+#endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 
         if (!std::equal(data8, data8 + gguf_type_size(type), data_gguf)) {
             ok = false;
