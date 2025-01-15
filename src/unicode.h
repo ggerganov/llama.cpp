@@ -53,9 +53,9 @@ struct unicode_cpt_flags {
         is_lowercase   = (flags & LOWERCASE)   ? 1 : 0;
         is_uppercase   = (flags & UPPERCASE)   ? 1 : 0;
         is_nfd         = (flags & NFD)         ? 1 : 0;
-#else
+#else // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #error Unexpected or undefined __BYTE_ORDER__
-#endif
+#endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     }
 
     inline uint16_t as_uint() const {
@@ -78,9 +78,9 @@ struct unicode_cpt_flags {
             ;
 
         return result;
-#else
+#else // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #error Unexpected or undefined __BYTE_ORDER__
-#endif
+#endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     }
 
     inline uint16_t category_flag() const {

@@ -1030,7 +1030,7 @@ bool llama_model_loader::load_all_data(
                 if (byteswap != nullptr) {
                     byteswap(cur->data, ggml_nelements(cur) / ggml_blck_size(cur->type));
                 }
-#endif
+#endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 
                 if (check_tensors) {
                     validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
@@ -1066,7 +1066,7 @@ bool llama_model_loader::load_all_data(
                     if (byteswap != nullptr) {
                         byteswap(read_buf.data(), read_buf.size() / ggml_blck_size(cur->type));
                     }
-#endif
+#endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                     if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
