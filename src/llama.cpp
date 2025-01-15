@@ -1373,9 +1373,9 @@ struct llm_build_context {
             inp = ggml_graph_node(gf, i);
             if (strcmp(inp->name, "result_norm") == 0 || strcmp(inp->name, "result_embd") == 0) {
                 break;
-            } else {
-                inp = nullptr;
             }
+
+            inp = nullptr;
         }
         GGML_ASSERT(inp != nullptr && "missing result_norm/result_embd tensor");
 
@@ -1431,7 +1431,7 @@ struct llm_build_context {
         return gf;
     }
 
-    struct ggml_tensor * llm_build_pos_bucket(bool causal) {
+    struct ggml_tensor * build_pos_bucket(bool causal) {
         if (causal) {
             lctx.inp_pos_bucket = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_kv,     n_tokens);
         } else {
@@ -1444,7 +1444,7 @@ struct llm_build_context {
         return lctx.inp_pos_bucket;
     }
 
-    struct ggml_tensor * llm_build_pos_bias(struct ggml_tensor * pos_bucket, struct ggml_tensor * attn_rel_b) {
+    struct ggml_tensor * build_pos_bias(struct ggml_tensor * pos_bucket, struct ggml_tensor * attn_rel_b) {
         struct ggml_tensor * pos_bucket_1d = ggml_view_1d(ctx0, pos_bucket, pos_bucket->ne[0] * pos_bucket->ne[1], 0);
         cb(pos_bucket_1d, "pos_bucket_1d", -1);
 
@@ -1463,7 +1463,7 @@ struct llm_build_context {
         return pos_bias;
     }
 
-    struct ggml_tensor * llm_build_inp_embd_enc() {
+    struct ggml_tensor * build_inp_embd_enc() {
         const int64_t n_embd = hparams.n_embd;
         lctx.inp_embd_enc = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_outputs_enc);
         ggml_set_input(lctx.inp_embd_enc);
@@ -1471,7 +1471,7 @@ struct llm_build_context {
         return lctx.inp_embd_enc;
     }
 
-    struct ggml_tensor * llm_build_inp_KQ_mask_cross() {
+    struct ggml_tensor * build_inp_KQ_mask_cross() {
         lctx.inp_KQ_mask_cross = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_outputs_enc, GGML_PAD(n_tokens, GGML_KQ_MASK_PAD));
         ggml_set_input(lctx.inp_KQ_mask_cross);
         cb(lctx.inp_KQ_mask_cross, "KQ_mask_cross", -1);
@@ -6775,7 +6775,7 @@ struct llm_build_context {
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, ubatch, model.tok_embd, cb);
 
         GGML_ASSERT(lctx.is_encoding);
-        struct ggml_tensor * pos_bucket_enc = llm_build_pos_bucket(false);
+        struct ggml_tensor * pos_bucket_enc = build_pos_bucket(false);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask_enc = build_inp_KQ_mask(false);
@@ -6810,7 +6810,7 @@ struct llm_build_context {
                 cb(kq, "kq", il);
 
                 struct ggml_tensor * attn_rel_b = model.layers[il].attn_rel_b_enc ? model.layers[il].attn_rel_b_enc : model.layers[0].attn_rel_b_enc;
-                struct ggml_tensor * pos_bias = llm_build_pos_bias(pos_bucket_enc, attn_rel_b);
+                struct ggml_tensor * pos_bias = build_pos_bias(pos_bucket_enc, attn_rel_b);
                 struct ggml_tensor * kq_b = ggml_add(ctx0, kq, pos_bias);
                 cb(kq_b, "kq_b", il);
 
@@ -6909,11 +6909,11 @@ struct llm_build_context {
         GGML_ASSERT(!lctx.is_encoding);
         GGML_ASSERT(n_outputs_enc > 0 && "call llama_encode() first");
 
-        struct ggml_tensor * embd_enc       = llm_build_inp_embd_enc();
-        struct ggml_tensor * pos_bucket_dec = llm_build_pos_bucket(true);
+        struct ggml_tensor * embd_enc       = build_inp_embd_enc();
+        struct ggml_tensor * pos_bucket_dec = build_pos_bucket(true);
 
         struct ggml_tensor * KQ_mask_dec   = build_inp_KQ_mask();
-        struct ggml_tensor * KQ_mask_cross = llm_build_inp_KQ_mask_cross();
+        struct ggml_tensor * KQ_mask_cross = build_inp_KQ_mask_cross();
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -6961,7 +6961,7 @@ struct llm_build_context {
                 cb(kq, "kq", il);
 
                 struct ggml_tensor * attn_rel_b = model.layers[il].attn_rel_b ? model.layers[il].attn_rel_b : model.layers[0].attn_rel_b;
-                struct ggml_tensor * pos_bias = llm_build_pos_bias(pos_bucket_dec, attn_rel_b);
+                struct ggml_tensor * pos_bias = build_pos_bias(pos_bucket_dec, attn_rel_b);
                 struct ggml_tensor * kq_b = ggml_add(ctx0, kq, pos_bias);
                 cb(kq_b, "kq_b", il);
 
