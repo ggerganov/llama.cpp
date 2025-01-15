@@ -502,6 +502,7 @@ extern "C" {
         GGML_OP_GET_REL_POS,
         GGML_OP_ADD_REL_POS,
         GGML_OP_RWKV_WKV6,
+        GGML_OP_RWKV_WKV7,
         GGML_OP_GATED_LINEAR_ATTN,
 
         GGML_OP_UNARY,
@@ -1892,6 +1893,16 @@ extern "C" {
             struct ggml_tensor  * r,
             struct ggml_tensor  * tf,
             struct ggml_tensor  * td,
+            struct ggml_tensor  * state);
+
+    GGML_API struct ggml_tensor * ggml_rwkv_wkv7(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * r,
+            struct ggml_tensor  * w,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
             struct ggml_tensor  * state);
 
     GGML_API struct ggml_tensor * ggml_gated_linear_attn(
