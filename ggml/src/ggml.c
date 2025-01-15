@@ -36,35 +36,6 @@
 #include <syscall.h>
 #endif
 
-#if defined(__gnu_linux__)
-#include <endian.h>
-#else
-#define le64toh(x) (x)
-#define le32toh(x) (x)
-#define le16toh(x) (x)
-#endif
-
-// endianness conversion
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define convert_from_le16(x) UNUSED(x)
-#define convert_from_le32(x) UNUSED(x)
-#define convert_from_le64(x) UNUSED(x)
-#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-static inline void convert_from_le16(void * value) {
-    *((uint16_t*)value) = le16toh(*((uint16_t*)value));
-}
-
-static inline void convert_from_le32(void * value) {
-    *((uint32_t*)value) = le32toh(*((uint32_t*)value));
-}
-
-static inline void convert_from_le64(void * value) {
-    *((uint64_t*)value) = le64toh(*((uint64_t*)value));
-}
-#else
-#error Unexpected or undefined __BYTE_ORDER__
-#endif
-
 #if defined(__APPLE__)
 #include <unistd.h>
 #include <mach/mach.h>
@@ -6593,113 +6564,113 @@ bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, cons
 static void ggml_byteswap_i16(void * restrict buffer, size_t elements) {
     uint16_t *data_ptr = (uint16_t*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(data_ptr + i);
+        ggml_convert_from_le16(data_ptr + i);
     }
 }
 
 static void ggml_byteswap_i32(void * restrict buffer, size_t elements) {
     uint32_t *data_ptr = (uint32_t*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le32(data_ptr + i);
+        ggml_convert_from_le32(data_ptr + i);
     }
 }
 
 static void ggml_byteswap_i64(void * restrict buffer, size_t elements) {
     uint64_t *data_ptr = (uint64_t*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le64(data_ptr + i);
+        ggml_convert_from_le64(data_ptr + i);
     }
 }
 
 static void ggml_byteswap_q4_0(void * restrict buffer, size_t elements) {
     block_q4_0 *data_ptr = (block_q4_0*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_q4_1(void * restrict buffer, size_t elements) {
     block_q4_1 *data_ptr = (block_q4_1*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].m));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].m));
     }
 }
 
 static void ggml_byteswap_q5_0(void * restrict buffer, size_t elements) {
     block_q5_0 *data_ptr = (block_q5_0*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_q5_1(void * restrict buffer, size_t elements) {
     block_q5_1 *data_ptr = (block_q5_1*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].m));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].m));
     }
 }
 
 static void ggml_byteswap_q8_0(void * restrict buffer, size_t elements) {
     block_q8_0 *data_ptr = (block_q8_0*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_q8_1(void * restrict buffer, size_t elements) {
     block_q8_1 *data_ptr = (block_q8_1*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].s));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].s));
     }
 }
 
 static void ggml_byteswap_q2_k(void * restrict buffer, size_t elements) {
     block_q2_K *data_ptr = (block_q2_K*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].dmin));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].dmin));
     }
 }
 
 static void ggml_byteswap_q3_k(void * restrict buffer, size_t elements) {
     block_q3_K *data_ptr = (block_q3_K*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_q4_k(void * restrict buffer, size_t elements) {
     block_q4_K *data_ptr = (block_q4_K*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].dmin));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].dmin));
     }
 }
 
 static void ggml_byteswap_q5_k(void * restrict buffer, size_t elements) {
     block_q5_K *data_ptr = (block_q5_K*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].dmin));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].dmin));
     }
 }
 
 static void ggml_byteswap_q6_k(void * restrict buffer, size_t elements) {
     block_q6_K *data_ptr = (block_q6_K*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_iq2_xxs(void * restrict buffer, size_t elements) {
     block_iq2_xxs *data_ptr = (block_iq2_xxs*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
         for (size_t j = 0; j < QK_K/8; ++j) {
-            convert_from_le16(&(data_ptr[i].qs[j]));
+            ggml_convert_from_le16(&(data_ptr[i].qs[j]));
         }
     }
 }
@@ -6707,9 +6678,9 @@ static void ggml_byteswap_iq2_xxs(void * restrict buffer, size_t elements) {
 static void ggml_byteswap_iq2_xs(void * restrict buffer, size_t elements) {
     block_iq2_xs *data_ptr = (block_iq2_xs*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
         for (size_t j = 0; j < QK_K/8; ++j) {
-            convert_from_le16(&(data_ptr[i].qs[j]));
+            ggml_convert_from_le16(&(data_ptr[i].qs[j]));
         }
     }
 }
@@ -6717,30 +6688,30 @@ static void ggml_byteswap_iq2_xs(void * restrict buffer, size_t elements) {
 static void ggml_byteswap_iq3_xxs(void * restrict buffer, size_t elements) {
     block_iq3_xxs *data_ptr = (block_iq3_xxs*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_iq3_s(void * restrict buffer, size_t elements) {
     block_iq3_s *data_ptr = (block_iq3_s*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_iq2_s(void * restrict buffer, size_t elements) {
     block_iq2_s *data_ptr = (block_iq2_s*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_iq1_s(void * restrict buffer, size_t elements) {
     block_iq1_s *data_ptr = (block_iq1_s*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
         for (size_t j = 0; j < QK_K/32; ++j) {
-            convert_from_le16(&(data_ptr[i].qh[j]));
+            ggml_convert_from_le16(&(data_ptr[i].qh[j]));
         }
     }
 }
@@ -6748,24 +6719,24 @@ static void ggml_byteswap_iq1_s(void * restrict buffer, size_t elements) {
 static void ggml_byteswap_iq4_nl(void * restrict buffer, size_t elements) {
     block_iq4_nl *data_ptr = (block_iq4_nl*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_iq4_xs(void * restrict buffer, size_t elements) {
     block_iq4_xs *data_ptr = (block_iq4_xs*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
-        convert_from_le16(&(data_ptr[i].scales_h));
+        ggml_convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].scales_h));
     }
 }
 
 static void ggml_byteswap_q8_k(void * restrict buffer, size_t elements) {
     block_q8_K *data_ptr = (block_q8_K*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le32(&(data_ptr[i].d));
+        ggml_convert_from_le32(&(data_ptr[i].d));
         for (size_t j = 0; j < QK_K/16; ++j) {
-            convert_from_le16(&(data_ptr[i].bsums[j]));
+            ggml_convert_from_le16(&(data_ptr[i].bsums[j]));
         }
     }
 }
@@ -6791,13 +6762,13 @@ static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements) {
 static void ggml_byteswap_tq1_0(void * restrict buffer, size_t elements) {
     block_tq1_0 *data_ptr = (block_tq1_0*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
 
 static void ggml_byteswap_tq2_0(void * restrict buffer, size_t elements) {
     block_tq2_0 *data_ptr = (block_tq2_0*) buffer;
     for (size_t i = 0; i < elements; ++i) {
-        convert_from_le16(&(data_ptr[i].d));
+        ggml_convert_from_le16(&(data_ptr[i].d));
     }
 }
