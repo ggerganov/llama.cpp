@@ -1,4 +1,5 @@
 ## MiniCPM-o 2.6
+Currently, this readme only supports minicpm-omni's image capabilities, and we will update the full-mode support as soon as possible.
 
 ### Prepare models and code
 
