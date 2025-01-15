@@ -37,7 +37,6 @@
 #include "ggml-backend-impl.h"
 
 #include "ggml-sycl/backend.hpp"
-#include "ggml-sycl/dpct/helper.hpp"
 #include "ggml-sycl/presets.hpp"
 #include "ggml-sycl/gemm.hpp"
 
@@ -3486,7 +3485,7 @@ static void ggml_sycl_mul_mat_batched_sycl(ggml_backend_sycl_context & ctx,
             (const void **)(ptrs_src.get() + 1 * ne23),
             dpct::library_data_t::real_half, nb11 / nb10, beta,
             (void **)(ptrs_dst.get() + 0 * ne23), cu_data_type, ne01, ne23,
-            cu_compute_type, (matrix_info_t<float>*)matrix_info.get())));
+            cu_compute_type, matrix_info.get())));
     }
 }
 catch (sycl::exception const &exc) {

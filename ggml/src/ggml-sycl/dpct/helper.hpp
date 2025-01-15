@@ -18,15 +18,8 @@
 #include <syclcompat/math.hpp>
 #include <oneapi/mkl.hpp>
 #include <map>
-#include <cassert>
 
-#include "ggml-sycl.h"
 #include "ggml.h"
-
-#include "ggml-backend.h"
-#include "ggml-backend-impl.h"
-#include "ggml-alloc.h"
-#include "ggml-impl.h"
 
 #if defined(__linux__)
 #include <sys/mman.h>
