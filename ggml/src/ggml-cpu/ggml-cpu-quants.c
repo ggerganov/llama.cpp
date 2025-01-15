@@ -5582,7 +5582,7 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
         const int16x8_t q8sums = vpaddq_s16(vld1q_s16(y[i].bsums), vld1q_s16(y[i].bsums + 8));
 
-        memcpy(utmp, x[i].scales, 12);
+        memcpy(utmp, x[i].scales, K_SCALE_SIZE);
 
         uint32x2_t mins8 = { 0 };
         mins8 = vset_lane_u32(utmp[1] & kmask1, mins8, 0);
