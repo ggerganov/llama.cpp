@@ -1174,20 +1174,20 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
 };
 
 struct ggml_sycl_pool_host : public ggml_sycl_pool {
-
     queue_ptr qptr;
-    int device;
+    int       device;
 
-    inline static int counter{0};
+    inline static int counter{ 0 };
+
     struct ggml_sycl_buffer {
-        void * ptr = nullptr;
+        void * ptr  = nullptr;
         size_t size = 0;
     };
 
     // Set arbitrarly to 64
-    static constexpr int MAX_POOL_SIZE{64};
+    static constexpr int          MAX_POOL_SIZE{ 64 };
     std::vector<ggml_sycl_buffer> buffer_pool = std::vector<ggml_sycl_buffer>(MAX_POOL_SIZE);
-    size_t pool_size = 0;
+    size_t                        pool_size   = 0;
 
     explicit ggml_sycl_pool_host(queue_ptr qptr_, int device_) : qptr(qptr_), device(device_) {}
 
@@ -1205,32 +1205,29 @@ struct ggml_sycl_pool_host : public ggml_sycl_pool {
     }
 
     void * alloc(size_t size, size_t * actual_size) override {
-        if ( counter == MAX_POOL_SIZE){
-            ggml_sycl_buffer b = buffer_pool[0];
-            size_t look_ahead_size = (size_t) (1.05 * size);
-            void *ptr = b.ptr;
-            *actual_size = b.size;
-            counter = 1;
+        if (counter == MAX_POOL_SIZE) {
+            ggml_sycl_buffer b               = buffer_pool[0];
+            size_t           look_ahead_size = (size_t) (1.05 * size);
+            void *           ptr             = b.ptr;
+            *actual_size                     = b.size;
+            counter                          = 1;
             return ptr;
         }
-        ggml_sycl_buffer& b = buffer_pool[counter];
+        ggml_sycl_buffer & b = buffer_pool[counter];
 
         if (b.ptr == nullptr) {
-                void * ptr;
+            void * ptr;
 
-                SYCL_CHECK(
-                    CHECK_TRY_ERROR(ptr = (void *)sycl::malloc_host(
-                                        size, *qptr)));
-                if (!ptr) {
-                    GGML_LOG_ERROR("%s: can't allocate %lu Bytes of memory on host\n", __func__, size);
-                    return nullptr;
-                }
-                pool_size += size;
-                *actual_size = size;
-                counter = counter + 1;
-                return ptr;
-        }
-        else if (b.ptr != nullptr) {
+            SYCL_CHECK(CHECK_TRY_ERROR(ptr = (void *) sycl::malloc_host(size, *qptr)));
+            if (!ptr) {
+                GGML_LOG_ERROR("%s: can't allocate %lu Bytes of memory on host\n", __func__, size);
+                return nullptr;
+            }
+            pool_size += size;
+            *actual_size = size;
+            counter      = counter + 1;
+            return ptr;
+        } else if (b.ptr != nullptr) {
             ++counter;
             b.size = size;
             return b.ptr;
@@ -1241,9 +1238,9 @@ struct ggml_sycl_pool_host : public ggml_sycl_pool {
         // if the pool is not completed add the pointer to it in place of the first nullptr found.
         // Otherwise do nothing, pointers will be freed once the pool is deallocated.
         for (int i = 0; i < MAX_POOL_SIZE; ++i) {
-            ggml_sycl_buffer& b = buffer_pool[i];
+            ggml_sycl_buffer & b = buffer_pool[i];
             if (b.ptr == nullptr) {
-                b.ptr = ptr;
+                b.ptr  = ptr;
                 b.size = size;
                 return;
             }
@@ -3446,7 +3443,7 @@ static void ggml_sycl_mul_mat_batched_sycl(ggml_backend_sycl_context & ctx,
 
         ggml_sycl_pool_alloc<const void *> ptrs_src(ctx.pool(), 2*ne23);
         ggml_sycl_pool_alloc<      void *> ptrs_dst(ctx.pool(), 1*ne23);
-        ggml_sycl_pool_alloc<matrix_info_t<float>> matrix_info(ctx.host_pool(),1);
+        ggml_sycl_pool_alloc<matrix_info_t<float>> matrix_info(ctx.host_pool(), 1);
 
         sycl::range<3> block_dims(1, ne12, ne13);
         /*
@@ -3475,14 +3472,10 @@ static void ggml_sycl_mul_mat_batched_sycl(ggml_backend_sycl_context & ctx,
             });
         }
         SYCL_CHECK(CHECK_TRY_ERROR(dpct::gemm_batch(
-            *main_stream, oneapi::mkl::transpose::trans,
-            oneapi::mkl::transpose::nontrans, ne01, ne11, ne10, alpha,
-            (const void **)(ptrs_src.get() + 0 * ne23),
-            dpct::library_data_t::real_half, nb01 / nb00,
-            (const void **)(ptrs_src.get() + 1 * ne23),
-            dpct::library_data_t::real_half, nb11 / nb10, beta,
-            (void **)(ptrs_dst.get() + 0 * ne23), cu_data_type, ne01, ne23,
-            cu_compute_type, matrix_info.get())));
+            *main_stream, oneapi::mkl::transpose::trans, oneapi::mkl::transpose::nontrans, ne01, ne11, ne10, alpha,
+            (const void **) (ptrs_src.get() + 0 * ne23), dpct::library_data_t::real_half, nb01 / nb00,
+            (const void **) (ptrs_src.get() + 1 * ne23), dpct::library_data_t::real_half, nb11 / nb10, beta,
+            (void **) (ptrs_dst.get() + 0 * ne23), cu_data_type, ne01, ne23, cu_compute_type, matrix_info.get())));
     }
 }
 catch (sycl::exception const &exc) {
