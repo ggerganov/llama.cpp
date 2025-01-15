@@ -1175,8 +1175,8 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
 
 struct ggml_sycl_pool_host : public ggml_sycl_pool {
 
-    int device;
     queue_ptr qptr;
+    int device;
 
     inline static int counter{0};
     struct ggml_sycl_buffer {
@@ -1189,10 +1189,7 @@ struct ggml_sycl_pool_host : public ggml_sycl_pool {
     std::vector<ggml_sycl_buffer> buffer_pool = std::vector<ggml_sycl_buffer>(MAX_POOL_SIZE);
     size_t pool_size = 0;
 
-    explicit ggml_sycl_pool_host(queue_ptr qptr_, int device_) :
-        qptr(qptr_),
-        device(device_) {
-    }
+    explicit ggml_sycl_pool_host(queue_ptr qptr_, int device_) : qptr(qptr_), device(device_) {}
 
     ~ggml_sycl_pool_host() {
         for (int i = 0; i < MAX_POOL_SIZE; ++i) {
