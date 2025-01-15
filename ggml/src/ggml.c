@@ -6742,19 +6742,19 @@ static void ggml_byteswap_q8_k(void * restrict buffer, size_t elements) {
 }
 
 static void ggml_byteswap_q4_0_4x4(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
+    GGML_ASSERT(false && "function ggml_byteswap_q4_0_4x4 is not implemented yet");
     UNUSED(buffer);
     UNUSED(elements);
 }
 
 static void ggml_byteswap_q4_0_4x8(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
+    GGML_ASSERT(false && "function ggml_byteswap_q4_0_4x8 is not implemented yet");
     UNUSED(buffer);
     UNUSED(elements);
 }
 
 static void ggml_byteswap_q4_0_8x8(void * restrict buffer, size_t elements) {
-    GGML_ASSERT(false && "byteswap function not implemented yet");
+    GGML_ASSERT(false && "function ggml_byteswap_q4_0_8x8 is not implemented yet");
     UNUSED(buffer);
     UNUSED(elements);
 }
