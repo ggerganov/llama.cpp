@@ -1142,18 +1142,18 @@ struct llm_build_context {
 
         ctx0 = ggml_init(params);
 
-        lctx.inp_tokens      = nullptr;
-        lctx.inp_embd        = nullptr;
-        lctx.inp_pos         = nullptr;
-        lctx.inp_out_ids     = nullptr;
-        lctx.inp_KQ_mask     = nullptr;
-        lctx.inp_KQ_mask_swa = nullptr;
-        lctx.inp_K_shift     = nullptr;
-        lctx.inp_mean        = nullptr;
-        lctx.inp_cls         = nullptr;
-        lctx.inp_s_copy      = nullptr;
-        lctx.inp_s_mask      = nullptr;
-        lctx.inp_s_seq       = nullptr;
+        lctx.inp_tokens        = nullptr;
+        lctx.inp_embd          = nullptr;
+        lctx.inp_pos           = nullptr;
+        lctx.inp_out_ids       = nullptr;
+        lctx.inp_KQ_mask       = nullptr;
+        lctx.inp_KQ_mask_swa   = nullptr;
+        lctx.inp_K_shift       = nullptr;
+        lctx.inp_mean          = nullptr;
+        lctx.inp_cls           = nullptr;
+        lctx.inp_s_copy        = nullptr;
+        lctx.inp_s_mask        = nullptr;
+        lctx.inp_s_seq         = nullptr;
         lctx.inp_pos_bucket    = nullptr;
         lctx.inp_embd_enc      = nullptr;
         lctx.inp_KQ_mask_cross = nullptr;
@@ -1174,9 +1174,11 @@ struct llm_build_context {
         ggml_set_input(lctx.inp_K_shift);
 
         for (int il = 0; il < n_layer; ++il) {
-            const int64_t n_head_kv = hparams.n_head_kv(il);
+            const int64_t n_head_kv    = hparams.n_head_kv(il);
             const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
+
             struct ggml_tensor * rope_factors = build_rope_factors(il);
+
             struct ggml_tensor * k =
                 ggml_view_3d(ctx0, kv_self.k_l[il],
                     n_embd_head_k, n_head_kv, n_ctx,
@@ -1189,6 +1191,7 @@ struct llm_build_context {
                 // dequantize to f32 -> RoPE -> quantize back
                 tmp = ggml_cast(ctx0, k, GGML_TYPE_F32);
                 cb(tmp, "K_f32", il);
+
                 for (auto & backend : lctx.backends) {
                     // Figure out which backend KV cache belongs to
                     if (ggml_backend_supports_buft(backend.get(), ggml_backend_buffer_get_type(kv_self.k_l[il]->buffer))) {
@@ -1200,6 +1203,7 @@ struct llm_build_context {
                         lctx.inp_K_shift, rope_factors, n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(tmp, "K_shifted_f32", il);
+
                 tmp = ggml_cpy(ctx0, tmp, k);
             } else {
                 // we rotate only the first n_rot dimensions
@@ -1208,6 +1212,7 @@ struct llm_build_context {
                         ext_factor, attn_factor, beta_fast, beta_slow);
             }
             cb(tmp, "K_shifted", il);
+
             ggml_build_forward_expand(gf, tmp);
         }
 
@@ -9201,7 +9206,7 @@ static void llama_kv_self_update_impl(llama_context & lctx) {
 
             ggml_backend_sched_alloc_graph(lctx.sched.get(), gf);
 
-            llama_set_k_shift(lctx);
+            lctx.set_k_shift(kv);
 
             llama_graph_compute(lctx, gf, lctx.cparams.n_threads, lctx.threadpool);
 
