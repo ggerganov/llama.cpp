@@ -6695,10 +6695,10 @@ static void ggml_compute_forward_silu_back_f32(
     const struct ggml_tensor * src1 = dst->src[1];
 
     assert(ggml_is_contiguous_1(grad));
-    assert(ggml_is_contiguous_1(src0));
+    assert(ggml_is_contiguous_1(src1));
     assert(ggml_is_contiguous_1(dst));
-    assert(ggml_are_same_shape(src0, dst));
-    assert(ggml_are_same_shape(src0, grad));
+    assert(ggml_are_same_shape(src1, dst));
+    assert(ggml_are_same_shape(src1, grad));
 
     const int ith = params->ith;
     const int nth = params->nth;
