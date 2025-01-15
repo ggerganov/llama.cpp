@@ -90,7 +90,12 @@ struct llama_model_loader {
     size_t size_data = 0;
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
-    llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p);
+    llama_model_loader(
+        const std::string & fname,
+        std::vector<std::string> & splits, // optional, only need if the split does not follow naming scheme
+        bool use_mmap,
+        bool check_tensors,
+        const struct llama_model_kv_override * param_overrides_p);
 
     template<typename T>
     typename std::enable_if<std::is_integral<T>::value, bool>::type
@@ -160,3 +165,7 @@ struct llama_model_loader {
 
     void print_info() const;
 };
+
+// return a list of splits for a given path
+// for example, given "<name>-00002-of-00004.gguf", returns list of all 4 splits
+std::vector<std::string> llama_get_list_splits(const std::string & path, const int n_split);
