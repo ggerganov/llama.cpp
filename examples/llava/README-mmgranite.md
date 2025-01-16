@@ -1,8 +1,9 @@
 # Instructions to Convert Multimodal Granite -> GGUF
-`export GRANITE_MODEL=/Users/alexanderjbrooks/Desktop/llava-granite-2b-vllm`
-
 Disclaimer that this branch is super WIP; eventually this should be combined with the main README in this directory, but separating it for now since we use a different method for converting the LLM.
 
+First, set the env var `$GRANITE_MODEL` to your vLLM/transformers format multimodal granite model.
+
+`export GRANITE_MODEL=...`
 
 
 ### 1. Running llava surgery v2.
