@@ -10,8 +10,8 @@ static __global__ void cross_entropy_loss_f32(
         const float * __restrict__ logits, const float * __restrict__ labels, float * __restrict__ dst, const int nclasses, const int k) {
     extern __shared__ float tmp[];
 
-    logits += blockIdx.x*nclasses;
-    labels += blockIdx.x*nclasses;
+    logits += int64_t(blockIdx.x)*nclasses;
+    labels += int64_t(blockIdx.x)*nclasses;
 
     // Find maximum for softmax:
     float max_logit = -INFINITY;
@@ -55,9 +55,9 @@ static __global__ void cross_entropy_loss_back_f32(
         float * __restrict__ dst, const int nclasses) {
     extern __shared__ float tmp[];
 
-    logits += blockIdx.x*nclasses;
-    labels += blockIdx.x*nclasses;
-    dst    += blockIdx.x*nclasses;
+    logits += int64_t(blockIdx.x)*nclasses;
+    labels += int64_t(blockIdx.x)*nclasses;
+    dst    += int64_t(blockIdx.x)*nclasses;
 
     float maxval = -INFINITY;
     for (int i = threadIdx.x; i < nclasses; i += WARP_SIZE) {
@@ -115,10 +115,10 @@ void ggml_cuda_cross_entropy_loss(ggml_backend_cuda_context & ctx, ggml_tensor *
 
     const dim3 blocks_dim(WARP_SIZE, 1, 1);
     const dim3 blocks_num(nrows, 1, 1);
-    const int nbytes_shared = ne00*sizeof(float);
+    const size_t nbytes_shared = ne00*sizeof(float);
 
-    const int id    = ggml_cuda_get_device();
-    const int smpbo = ggml_cuda_info().devices[id].smpbo;
+    const int    id    = ggml_cuda_get_device();
+    const size_t smpbo = ggml_cuda_info().devices[id].smpbo;
 
     ggml_cuda_pool_alloc<float> dst_tmp(pool, blocks_num.x);
 
@@ -169,10 +169,10 @@ void ggml_cuda_cross_entropy_loss_back(ggml_backend_cuda_context & ctx, ggml_ten
 
     const dim3 blocks_dim(WARP_SIZE, 1, 1);
     const dim3 blocks_num(nrows, 1, 1);
-    const int nbytes_shared = ne00*sizeof(float);
+    const size_t nbytes_shared = ne00*sizeof(float);
 
-    const int id    = ggml_cuda_get_device();
-    const int smpbo = ggml_cuda_info().devices[id].smpbo;
+    const int    id    = ggml_cuda_get_device();
+    const size_t smpbo = ggml_cuda_info().devices[id].smpbo;
 
     if (nbytes_shared <= smpbo) {
 #if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__))

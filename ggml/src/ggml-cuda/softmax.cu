@@ -23,9 +23,9 @@ static __global__ void soft_max_f32(
     const int rowx = blockIdx.x;
     const int rowy = rowx % nrows_y; // broadcast the mask in the row dimension
 
-    x    += rowx*ncols;
-    mask += rowy*ncols * (mask != nullptr);
-    dst  += rowx*ncols;
+    x    += int64_t(rowx)*ncols;
+    mask += int64_t(rowy)*ncols * (mask != nullptr);
+    dst  += int64_t(rowx)*ncols;
 
     const int block_size = block_size_template == 0 ? blockDim.x : block_size_template;
 
@@ -124,9 +124,9 @@ static __global__ void soft_max_back_f32(
     const int tid  = threadIdx.x;
     const int rowx = blockIdx.x;
 
-    grad += rowx*ncols;
-    dstf += rowx*ncols;
-    dst  += rowx*ncols;
+    grad += int64_t(rowx)*ncols;
+    dstf += int64_t(rowx)*ncols;
+    dst  += int64_t(rowx)*ncols;
 
     float dgf_dot = 0.0f; // dot product of dst from forward pass and gradients
 

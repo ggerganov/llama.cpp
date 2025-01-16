@@ -5,8 +5,8 @@ static __global__ void norm_f32(const float * x, float * dst, const int ncols, c
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
-    x   += row*ncols;
-    dst += row*ncols;
+    x   += int64_t(row)*ncols;
+    dst += int64_t(row)*ncols;
 
     float2 mean_var = make_float2(0.0f, 0.0f);
 
@@ -101,8 +101,8 @@ static __global__ void rms_norm_f32(const float * x, float * dst, const int ncol
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
-    x   += row*ncols;
-    dst += row*ncols;
+    x   += int64_t(row)*ncols;
+    dst += int64_t(row)*ncols;
 
     float tmp = 0.0f; // partial sum for thread in warp
 
@@ -140,9 +140,9 @@ static __global__ void rms_norm_back_f32(
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
-    grad += row*ncols;
-    xf   += row*ncols;
-    dst  += row*ncols;
+    grad += int64_t(row)*ncols;
+    xf   += int64_t(row)*ncols;
+    dst  += int64_t(row)*ncols;
 
     float sum_xx = 0.0f; // sum for squares of x, equivalent to forward pass
     float sum_xg = 0.0f; // sum for x * gradient, needed because RMS norm mixes inputs
