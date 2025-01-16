@@ -97,9 +97,6 @@ static void rwkv_wkv_f32_kernel(
 
 void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
 
-    const ggml_tensor *src0 = dst->src[0];
-    const ggml_tensor *src1 = dst->src[1];
-
     const float* k_d = (const float*)dst->src[0]->data;
     const float* v_d = (const float*)dst->src[1]->data;
     const float* r_d = (const float*)dst->src[2]->data;
@@ -137,7 +134,4 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
                 );
             });
     });
-
-    GGML_UNUSED(src0);
-    GGML_UNUSED(src1);
 }
