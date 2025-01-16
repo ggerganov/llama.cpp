@@ -1485,5 +1485,9 @@ jobs:
 
           mkdir build
           cd build
-          cmake -B .. -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DGGML_CANN=on -DGGML_NATIVE=OFF -DSOC_TYPE=${{ matrix.device }}
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build }}\
+            -DGGML_CANN=on\
+            -DGGML_NATIVE=OFF\
+            -DSOC_TYPE=${{ matrix.device }}
           cmake --build .
