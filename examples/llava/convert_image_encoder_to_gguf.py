@@ -6,7 +6,7 @@ import re
 import torch
 import numpy as np
 from gguf import *
-from transformers import CLIPModel, CLIPProcessor, CLIPVisionModel
+from transformers import CLIPModel, CLIPProcessor, CLIPVisionModel, SiglipModel, SiglipProcessor, SiglipVisionModel
 
 TEXT = "clip.text"
 VISION = "clip.vision"
@@ -85,6 +85,8 @@ ap.add_argument("--clip-model-is-vision", action="store_true", required=False,
                 help="The clip model is a pure vision model (ShareGPT4V vision extract for example)")
 ap.add_argument("--clip-model-is-openclip", action="store_true", required=False,
                 help="The clip model is from openclip (for ViT-SO400M type))")
+ap.add_argument("--clip-model-is-siglip", action="store_true", required=False,
+                help="the visual encoder is Siglip.")
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
 ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp, ldpv2", choices=["mlp", "ldp", "ldpv2"], default="mlp")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
@@ -109,7 +111,7 @@ if args.use_f32:
 # output in the same directory as the model if output_dir is None
 dir_model = args.model_dir
 
-if args.clip_model_is_vision or not os.path.exists(dir_model + "/vocab.json") or args.clip_model_is_openclip:
+if args.clip_model_is_vision or not os.path.exists(dir_model + "/vocab.json") or args.clip_model_is_openclip or args.clip_model_is_siglip:
     vocab = None
     tokens = None
 else:
@@ -137,7 +139,11 @@ ftype = 1
 if args.use_f32:
     ftype = 0
 
-if args.clip_model_is_vision or args.clip_model_is_openclip:
+# HACK - not sure if we need the vision model of the model + processor; check the difference
+if args.clip_model_is_vision or args.clip_model_is_siglip:
+    model = SiglipVisionModel.from_pretrained(dir_model)
+    processor = None
+elif args.clip_model_is_vision or args.clip_model_is_openclip:
     model = CLIPVisionModel.from_pretrained(dir_model)
     processor = None
 else:
@@ -187,26 +193,34 @@ else:
 if has_text_encoder:
     assert t_hparams is not None
     assert tokens is not None
+    if args.clip_model_is_siglip:
+        text_projection_dim = 0
+    else:
+        text_projection_dim = t_hparams.get("projection_dim", config["projection_dim"])
     # text_model hparams
     fout.add_uint32(k(KEY_CONTEXT_LENGTH, TEXT), t_hparams["max_position_embeddings"])
     fout.add_uint32(k(KEY_EMBEDDING_LENGTH, TEXT), t_hparams["hidden_size"])
     fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, TEXT), t_hparams["intermediate_size"])
-    fout.add_uint32("clip.text.projection_dim", t_hparams.get("projection_dim", config["projection_dim"]))
+    fout.add_uint32("clip.text.projection_dim", text_projection_dim)
     fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, TEXT), t_hparams["num_attention_heads"])
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, TEXT), t_hparams["layer_norm_eps"])
     fout.add_uint32(k(KEY_BLOCK_COUNT, TEXT), t_hparams["num_hidden_layers"])
     fout.add_token_list(tokens)
 
 if has_vision_encoder:
+    if args.clip_model_is_siglip:
+        visual_projection_dim = 0
+    else:
+        visual_projection_dim = v_hparams.get("projection_dim", config["projection_dim"])
     # vision_model hparams
     fout.add_uint32("clip.vision.image_size", v_hparams["image_size"])
     fout.add_uint32("clip.vision.patch_size", v_hparams["patch_size"])
     fout.add_uint32(k(KEY_EMBEDDING_LENGTH, VISION), v_hparams["hidden_size"])
     fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, VISION), v_hparams["intermediate_size"])
-    fout.add_uint32("clip.vision.projection_dim", v_hparams.get("projection_dim", config["projection_dim"]))
+    fout.add_uint32("clip.vision.projection_dim", visual_projection_dim)
     fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), v_hparams["num_attention_heads"])
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), v_hparams["layer_norm_eps"])
-    block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"]
+    block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"] # Why is this decremented? Should be 27...
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
                             #     /**
                             #      "image_grid_pinpoints": [
