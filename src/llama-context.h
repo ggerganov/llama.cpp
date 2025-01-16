@@ -14,6 +14,8 @@
 #include <vector>
 #include <set>
 
+using llama_loras = std::unordered_map<struct llama_adapter_lora *, float>;
+
 struct llama_context {
     llama_context(const llama_model & model)
         : model(model)
@@ -22,12 +24,10 @@ struct llama_context {
 
     const struct llama_model & model;
 
-    struct llama_cparams      cparams;
-    struct llama_sbatch       sbatch;  // TODO: revisit if needed
-    struct llama_kv_cache     kv_self;
-    struct llama_adapter_cvec cvec;
-
-    std::unordered_map<struct llama_adapter_lora *, float> lora;
+    llama_cparams      cparams;
+    llama_sbatch       sbatch;  // TODO: revisit if needed
+    llama_adapter_cvec cvec;
+    llama_loras        loras;
 
     std::vector<ggml_backend_ptr> backends;
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
@@ -72,18 +72,6 @@ struct llama_context {
     // populated only when pooling_type != LLAMA_POOLING_TYPE_NONE
     std::map<llama_seq_id, std::vector<float>> embd_seq;
 
-    // whether we are computing encoder output or decoder output
-    bool is_encoding = false;
-
-    // TODO: find a better way to accommodate mutli-dimension position encoding methods
-    // number of position id each token get, 1 for each token in most cases.
-    // when using m-rope, it will be 3 position ids per token to representing 3 dimension coordinate.
-    int n_pos_per_token = 1;
-
-    // output of the encoder part of the encoder-decoder models
-    std::vector<float> embd_enc;
-    std::vector<std::set<llama_seq_id>> seq_ids_enc;
-
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_ptr sched;
@@ -91,28 +79,144 @@ struct llama_context {
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
 
+    void reset();
+
+    void prepare_k_shift();
+    void prepare_defrag();
+    void prepare_decode(const llama_ubatch & ubatch);
+
+    void set_inputs(const llama_ubatch & ubatch);
+
+    ggml_tensor * build_lora_mm(
+            ggml_context * ctx0,
+             ggml_tensor * w,
+             ggml_tensor * cur);
+
+    ggml_tensor * build_lora_mm_id(
+            ggml_context * ctx0,
+             ggml_tensor * w,   // struct ggml_tensor * as
+             ggml_tensor * cur, // struct ggml_tensor * b
+             ggml_tensor * ids);
+
     // input tensors
     struct ggml_tensor * inp_tokens;        // I32 [n_batch]
     struct ggml_tensor * inp_embd;          // F32 [n_embd, n_batch]
     struct ggml_tensor * inp_pos;           // I32 [n_batch]
     struct ggml_tensor * inp_out_ids;       // I32 [n_outputs]
-    struct ggml_tensor * inp_KQ_mask;       // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_swa;   // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_K_shift;       // I32 [kv_size]
     struct ggml_tensor * inp_mean;          // F32 [n_batch, n_batch]
     struct ggml_tensor * inp_cls;           // I32 [n_batch]
+
+    // === encoder-decoder ===
+
+    // whether we are computing encoder output or decoder output
+    bool is_encoding = false;
+
+    // output of the encoder part of the encoder-decoder models
+    std::vector<float> embd_enc;
+    std::vector<std::set<llama_seq_id>> seq_ids_enc;
+
+    struct ggml_tensor * inp_embd_enc;      // F32 [n_embd, n_outputs_enc]
+    struct ggml_tensor * inp_pos_bucket;    // I32 [n_batch|n_kv, n_batch]
+
+    // === unified KV cache ===
+
+    llama_kv_cache     kv_self;
+
+    struct ggml_tensor * inp_KQ_mask;         // F32 [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_cnv;     //     [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_swa;     // F32 [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_cross;   // F32 [n_outputs_enc, n_batch]
+    struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
+
+    void build_attn_inp(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   causal,
+                    bool   swa,
+                    bool   worst_case);
+
+    void build_attn_kv_store(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * k_cur,
+             ggml_tensor * v_cur,
+                 int32_t   n_tokens,
+                 int64_t   il,
+                 bool      worst_case);
+
+    ggml_tensor * build_attn_qkv(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * wo,
+             ggml_tensor * wo_b,
+             ggml_tensor * q_cur,
+                 int32_t   n_tokens,
+                 float     kq_scale,
+                 int       il,
+                 bool      worst_case);
+
+    ggml_tensor * build_soft_max_ext(
+            ggml_context * ctx0,
+             ggml_tensor * kq,
+                 float     kq_scale);
+
+    ggml_tensor * get_rope_factors(int il);
+
+    void build_k_shift(
+            ggml_context * ctx0,
+             ggml_cgraph * graph);
+
+    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
+    void build_defrag(
+            ggml_context * ctx0,
+             ggml_cgraph * graph);
+
+    // === recurrent ===
+
+    // TODO: add recurrent cache
+    // TODO: add mamba-specific llama_context
+
+    // TODO: change these to build_mamba_inp and hide `state_copy` and `state_mask` inside the llama_context impl
+    ggml_tensor * build_inp_s_copy(
+            ggml_context * ctx0,
+                    bool   worst_case);
+
+    ggml_tensor * build_inp_s_mask(
+            ggml_context * ctx0,
+                    bool   worst_case);
+
+    ggml_tensor * build_copy_mask_state(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * s,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+                 int32_t   n_tokens,
+                 int32_t   n_state,
+                 int32_t   n_seqs,
+                    bool   worst_case);
+
+    ggml_tensor * build_mamba_layer(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * cur,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case);
+
     struct ggml_tensor * inp_s_copy;        // I32 [kv_size]
     struct ggml_tensor * inp_s_mask;        // F32 [1, n_kv]
-    struct ggml_tensor * inp_s_seq;         // I32 [n_kv, n_batch]
-    struct ggml_tensor * inp_pos_bucket;    // I32 [n_batch|n_kv, n_batch]
-    struct ggml_tensor * inp_embd_enc;      // F32 [n_embd, n_outputs_enc]
-    struct ggml_tensor * inp_KQ_mask_cross; // F32 [n_outputs_enc, n_batch]
 
-    void set_k_shift(llama_kv_cache & kv);
+    // === vision ===
+
+    // TODO: find a better way to accommodate mutli-dimension position encoding methods
+    // number of position id each token get, 1 for each token in most cases.
+    // when using m-rope, it will be 3 position ids per token to representing 3 dimension coordinate.
+    int n_pos_per_token = 1;
 };
-
-// TODO: make these methods of llama_context
-void llama_set_inputs(llama_context & lctx, const llama_ubatch & ubatch);
 
 // Make sure enough space is available for outputs.
 // Returns max number of outputs for which space was reserved.
