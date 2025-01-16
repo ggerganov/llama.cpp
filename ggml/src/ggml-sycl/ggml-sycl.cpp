@@ -1226,7 +1226,7 @@ struct ggml_sycl_pool_host : public ggml_sycl_pool {
             *actual_size = size;
             counter      = counter + 1;
             return ptr;
-        } else if (b.ptr != nullptr) {
+        } else {
             ++counter;
             b.size = size;
             return b.ptr;
