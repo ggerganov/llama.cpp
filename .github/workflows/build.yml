@@ -1465,25 +1465,24 @@ jobs:
       matrix:
         cann: ['python3.9-cann8.0.rc2.beta1']
         build: ['Release']
-
-    container:
-      image: ascendai/cann:openeuler-${{ matrix.cann }}
+        device: ['ascend910b3']
 
     steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
+    - name: Clone
+      id: checkout
+      uses: actions/checkout@v4
 
-      - name: Dependencies
-        id: depends
+    - name: Dependencies & Build
+      uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: aarch64
+        distro: ubuntu22.04
+        base_image: --platform=linux/arm64 ascendai/cann:openeuler-${{ matrix.cann }}
         run: |
           yum update -y
-          yum install cmake gcc gcc-c++ make -y
+          yum install git cmake gcc gcc-c++ make -y
+          export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/devlib/:${LD_LIBRARY_PATH}
 
-      - name: Build
-        id: cmake-build
-        run: |
-            mkdir build
-            cd build
-            cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DWITH_CANN=on
-            cmake --build . -j $(nproc)
+          cd llama.cpp
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DGGML_CANN=on -DGGML_NATIVE=OFF -DSOC_TYPE=${{ matrix.device }}
+          cmake --build build
