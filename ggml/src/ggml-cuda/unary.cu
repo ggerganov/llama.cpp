@@ -1,6 +1,6 @@
 #include "unary.cuh"
 
-static __global__ void neg_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void neg_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -10,7 +10,7 @@ static __global__ void neg_f32(const float * __restrict__ x, float * __restrict_
     dst[i] = -x[i];
 }
 
-static __global__ void step_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void step_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -20,7 +20,7 @@ static __global__ void step_f32(const float * __restrict__ x, float * __restrict
     dst[i] = x[i] > 0.0f;
 }
 
-static __global__ void gelu_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void gelu_f32(const float * x, float * dst, const int k) {
     const float GELU_COEF_A    = 0.044715f;
     const float SQRT_2_OVER_PI = 0.79788456080286535587989211986876f;
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
@@ -33,7 +33,7 @@ static __global__ void gelu_f32(const float * __restrict__ x, float * __restrict
     dst[i] = 0.5f*xi*(1.0f + tanhf(SQRT_2_OVER_PI*xi*(1.0f + GELU_COEF_A*xi*xi)));
 }
 
-static __global__ void gelu_quick_f32(const float * __restrict__ x, float * __restrict__ dst, int k) {
+static __global__ void gelu_quick_f32(const float * x, float * dst, int k) {
     const float GELU_QUICK_COEF = -1.702f;
     const int i  = blockDim.x*blockIdx.x + threadIdx.x;
     if (i >= k) {
@@ -42,7 +42,7 @@ static __global__ void gelu_quick_f32(const float * __restrict__ x, float * __re
     dst[i] = x[i] * (1.0f / (1.0f + expf(GELU_QUICK_COEF * x[i])));
 }
 
-static __global__ void silu_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void silu_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -52,7 +52,7 @@ static __global__ void silu_f32(const float * __restrict__ x, float * __restrict
 }
 
 static __global__ void silu_back_f32(
-        const float * __restrict__ grad, const float * __restrict__ xf, float * __restrict__ dst, const int k) {
+        const float * grad, const float * xf, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -64,7 +64,7 @@ static __global__ void silu_back_f32(
     dst[i] = grad[i] * s * (1.0f + xfi * (1.0f - s));
 }
 
-static __global__ void tanh_f32(const float * __restrict__ x, float * __restrict__ dst, int k) {
+static __global__ void tanh_f32(const float * x, float * dst, int k) {
     const int i  = blockDim.x*blockIdx.x + threadIdx.x;
     if (i >= k) {
         return;
@@ -72,7 +72,7 @@ static __global__ void tanh_f32(const float * __restrict__ x, float * __restrict
     dst[i] = tanhf(x[i]);
 }
 
-static __global__ void relu_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void relu_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -81,7 +81,7 @@ static __global__ void relu_f32(const float * __restrict__ x, float * __restrict
     dst[i] = fmaxf(x[i], 0);
 }
 
-static __global__ void sigmoid_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void sigmoid_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -90,7 +90,7 @@ static __global__ void sigmoid_f32(const float * __restrict__ x, float * __restr
     dst[i] = 1.0f / (1.0f + expf(-x[i]));
 }
 
-static __global__ void hardsigmoid_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void hardsigmoid_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -99,7 +99,7 @@ static __global__ void hardsigmoid_f32(const float * __restrict__ x, float * __r
     dst[i] = fminf(1.0f, fmaxf(0.0f, (x[i] + 3.0f) / 6.0f));
 }
 
-static __global__ void hardswish_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void hardswish_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -108,7 +108,7 @@ static __global__ void hardswish_f32(const float * __restrict__ x, float * __res
     dst[i] = x[i] * fminf(1.0f, fmaxf(0.0f, (x[i] + 3.0f) / 6.0f));
 }
 
-static __global__ void exp_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void exp_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -117,7 +117,7 @@ static __global__ void exp_f32(const float * __restrict__ x, float * __restrict_
     dst[i] = expf(x[i]);
 }
 
-static __global__ void leaky_relu_f32(const float * __restrict__ x, float * __restrict__ dst, const int k, const float negative_slope) {
+static __global__ void leaky_relu_f32(const float * x, float * dst, const int k, const float negative_slope) {
     const int i  = blockDim.x*blockIdx.x + threadIdx.x;
     if (i >= k) {
         return;
@@ -125,7 +125,7 @@ static __global__ void leaky_relu_f32(const float * __restrict__ x, float * __re
     dst[i] = fmaxf(x[i], 0) + fminf(x[i], 0.0f) * negative_slope;
 }
 
-static __global__ void sqr_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void sqr_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -134,7 +134,7 @@ static __global__ void sqr_f32(const float * __restrict__ x, float * __restrict_
     dst[i] = x[i] * x[i];
 }
 
-static __global__ void sqrt_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void sqrt_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -143,7 +143,7 @@ static __global__ void sqrt_f32(const float * __restrict__ x, float * __restrict
     dst[i] = sqrtf(x[i]);
 }
 
-static __global__ void sin_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void sin_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {
@@ -152,7 +152,7 @@ static __global__ void sin_f32(const float * __restrict__ x, float * __restrict_
     dst[i] = sinf(x[i]);
 }
 
-static __global__ void cos_f32(const float * __restrict__ x, float * __restrict__ dst, const int k) {
+static __global__ void cos_f32(const float * x, float * dst, const int k) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i >= k) {

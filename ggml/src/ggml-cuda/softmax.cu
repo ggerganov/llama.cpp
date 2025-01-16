@@ -15,7 +15,7 @@ __device__ float __forceinline__ t2f32<half>(half val) {
 
 template <bool use_shared, int ncols_template, int block_size_template, typename T>
 static __global__ void soft_max_f32(
-        const float * __restrict__ x, const T * __restrict__ mask, float * __restrict__ dst, const int ncols_par, const int nrows_y,
+        const float * x, const T * mask, float * dst, const int ncols_par, const int nrows_y,
         const float scale, const float max_bias, const float m0, const float m1, uint32_t n_head_log2) {
     const int ncols = ncols_template == 0 ? ncols_par : ncols_template;
 
@@ -120,7 +120,7 @@ static __global__ void soft_max_f32(
 }
 
 static __global__ void soft_max_back_f32(
-        const float * __restrict__ grad, const float * __restrict__ dstf, float * __restrict__ dst, const int ncols, const float scale) {
+        const float * grad, const float * dstf, float * dst, const int ncols, const float scale) {
     const int tid  = threadIdx.x;
     const int rowx = blockIdx.x;
 

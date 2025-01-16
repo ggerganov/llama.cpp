@@ -1,7 +1,7 @@
 #include "norm.cuh"
 
 template <int block_size>
-static __global__ void norm_f32(const float * __restrict__ x, float * __restrict__ dst, const int ncols, const float eps) {
+static __global__ void norm_f32(const float * x, float * dst, const int ncols, const float eps) {
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
@@ -41,7 +41,7 @@ static __global__ void norm_f32(const float * __restrict__ x, float * __restrict
 }
 
 template <int block_size>
-static __global__ void group_norm_f32(const float * __restrict__ x, float * __restrict__ dst, const int group_size, const int ne_elements, const float eps) {
+static __global__ void group_norm_f32(const float * x, float * dst, const int group_size, const int ne_elements, const float eps) {
     // blockIdx.x: num_groups idx
     // threadIdx.x: block_size idx
     const int start =     blockIdx.x*group_size + threadIdx.x;
@@ -97,7 +97,7 @@ static __global__ void group_norm_f32(const float * __restrict__ x, float * __re
 }
 
 template <int block_size>
-static __global__ void rms_norm_f32(const float * __restrict__ x, float * __restrict__ dst, const int ncols, const float eps) {
+static __global__ void rms_norm_f32(const float * x, float * dst, const int ncols, const float eps) {
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
@@ -136,7 +136,7 @@ static __global__ void rms_norm_f32(const float * __restrict__ x, float * __rest
 
 template <int block_size>
 static __global__ void rms_norm_back_f32(
-        const float * __restrict__ grad, const float * __restrict__ xf, float * __restrict__ dst, const int ncols, const float eps) {
+        const float * grad, const float * xf, float * dst, const int ncols, const float eps) {
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
 
