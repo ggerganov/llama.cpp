@@ -3967,6 +3967,57 @@ static void ggml_compute_forward_dup_bytes(
     }
 }
 
+static void ggml_compute_forward_dup_q(
+        const struct ggml_compute_params * params,
+              struct ggml_tensor * dst) {
+
+    const struct ggml_tensor * src0 = dst->src[0];
+    const struct ggml_tensor * src1 = dst->src[1];
+
+    GGML_TENSOR_BINARY_OP_LOCALS
+
+    const enum ggml_type type = src0->type;
+    ggml_to_float_t const dequantize_row_q = ggml_get_type_traits(type)->to_float;
+
+    size_t qk = ggml_blck_size(type);
+    const int64_t nr = ggml_nelements(src1) / qk;
+
+    // destination must be contiguous in the first dimension
+    GGML_ASSERT(nb10 == ggml_type_size(dst->type));
+    // must either have first dimension large enough to hold a row, or fully contiguous
+    GGML_ASSERT((ne10 % qk) == 0 || ggml_is_contiguous(dst));
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int dr = (nr + nth - 1)/nth;
+
+    // row range for this thread
+    const int ir0 = dr*ith;
+    const int ir1 = MIN(ir0 + dr, nr);
+
+    for (int64_t ir = ir0; ir < ir1; ++ir) {
+
+        uint32_t i = ir * qk;
+
+        const int64_t i03 = i/(ne00 * ne01 * ne02);
+        const int64_t i02 = (i - i03*ne00*ne01*ne02 )/ (ne00*ne01);
+        const int64_t i01 = (i - i03*ne00*ne01*ne02  -  i02*ne01*ne00) / ne00;
+        const int64_t i00 = i - i03*ne00*ne01*ne02 - i02*ne01*ne00 - i01*ne00;
+        const int64_t x_offset = (i00/qk)*nb00 + i01*nb01 + i02*nb02 + i03 * nb03;
+
+        const int64_t i13 = i/(ne10 * ne11 * ne12);
+        const int64_t i12 = (i - i13*ne10*ne11*ne12) / (ne10*ne11);
+        const int64_t i11 = (i - i13*ne10*ne11*ne12 - i12*ne10*ne11) / ne10;
+        const int64_t i10 = i - i13*ne10*ne11*ne12 - i12*ne10*ne11 - i11*ne10;
+        const int64_t dst_offset = i10*nb10 + i11*nb11 + i12*nb12 + i13*nb13;
+
+        dequantize_row_q(
+                (const void *) ((char *) src0->data + x_offset),
+                     (float *) ((char *)  dst->data + dst_offset), qk);
+    }
+}
+
 static void ggml_compute_forward_dup(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst) {
@@ -3993,6 +4044,10 @@ static void ggml_compute_forward_dup(
             } break;
         default:
             {
+                if (ggml_is_quantized(src0->type) && dst->type == GGML_TYPE_F32) {
+                    ggml_compute_forward_dup_q(params, dst);
+                    break;
+                }
                 GGML_ABORT("fatal error");
             }
     }
