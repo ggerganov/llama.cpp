@@ -9496,6 +9496,7 @@ static struct llama_model * llama_model_load_from_file_impl(
     return model;
 }
 
+// deprecated
 struct llama_model * llama_load_model_from_file(
         const char * path_model,
         struct llama_model_params params) {

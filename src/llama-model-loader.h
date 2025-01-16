@@ -165,7 +165,3 @@ struct llama_model_loader {
 
     void print_info() const;
 };
-
-// return a list of splits for a given path
-// for example, given "<name>-00002-of-00004.gguf", returns list of all 4 splits
-std::vector<std::string> llama_get_list_splits(const std::string & path, const int n_split);
