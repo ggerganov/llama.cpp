@@ -79,6 +79,13 @@ struct llama_context {
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
 
+    // returns the result of ggml_backend_sched_graph_compute_async execution
+    enum ggml_status compute_graph(
+                ggml_cgraph * graph,
+                       bool   batched);
+
+    llama_pos pos_max() const;
+
     void reset();
 
     void prepare_k_shift();
@@ -128,6 +135,9 @@ struct llama_context {
     struct ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
     struct ggml_tensor * inp_KQ_mask_cross;   // F32 [n_outputs_enc, n_batch]
     struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
+
+    // return true if need to reserve new worst-case graph
+    bool kv_self_update();
 
     void build_attn_inp(
             ggml_context * ctx0,
