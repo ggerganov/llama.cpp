@@ -25,11 +25,12 @@ python ./convert_hf_to_gguf.py ../MiniCPM-o-2_6/model
 ./llama-quantize ../MiniCPM-o-2_6/model/ggml-model-f16.gguf ../MiniCPM-o-2_6/model/ggml-model-Q4_K_M.gguf Q4_K_M
 ```
 
-Build for Linux or Mac
+Build llama.cpp using `CMake`:
+https://github.com/ggerganov/llama.cpp/blob/master/docs/build.md
 
 ```bash
-make
-make llama-minicpmv-cli
+cmake -B build
+cmake --build build --config Release
 ```
 
 Inference on Linux or Mac
