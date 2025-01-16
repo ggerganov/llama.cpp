@@ -418,9 +418,19 @@ extern "C" {
               struct llama_model_params   params),
             "use llama_model_load_from_file instead");
 
+    // Load the model from a file
+    // If the file is split into multiple parts, the file name must follow this pattern: <name>-%05d-of-%05d.gguf
+    // If the split file name does not follow this pattern, use llama_model_load_from_splits
     LLAMA_API struct llama_model * llama_model_load_from_file(
                              const char * path_model,
               struct llama_model_params   params);
+
+    // Load the model from multiple splits (support custom naming scheme)
+    // The paths must be in the correct order
+    LLAMA_API struct llama_model * llama_model_load_from_splits(
+                             const char ** paths,
+                                 size_t    n_paths,
+              struct llama_model_params    params);
 
     DEPRECATED(LLAMA_API void llama_free_model(struct llama_model * model),
             "use llama_model_free instead");
