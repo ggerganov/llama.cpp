@@ -2,6 +2,8 @@
 
 find_package(Threads REQUIRED)
 
+llama_add_compile_flags()
+
 # Build info header
 #
 
@@ -66,6 +68,8 @@ add_library(${TARGET} STATIC
     ngram-cache.h
     sampling.cpp
     sampling.h
+    speculative.cpp
+    speculative.h
     )
 
 if (BUILD_SHARED_LIBS)
@@ -77,12 +81,12 @@ set(LLAMA_COMMON_EXTRA_LIBS build_info)
 # Use curl to download model url
 if (LLAMA_CURL)
     find_package(CURL REQUIRED)
-    add_definitions(-DLLAMA_USE_CURL)
+    target_compile_definitions(${TARGET} PUBLIC LLAMA_USE_CURL)
     include_directories(${CURL_INCLUDE_DIRS})
     find_library(CURL_LIBRARY curl REQUIRED)
     set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARY})
 endif ()
 
 target_include_directories(${TARGET} PUBLIC .)
-target_compile_features   (${TARGET} PUBLIC cxx_std_11)
+target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)

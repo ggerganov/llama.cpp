@@ -46,7 +46,7 @@ Terminals support the full range of Unicode. Unicode characters can be specified
 
 Character ranges can be negated with `^`:
 ```
-single-line ::= [^\n]+ "\n"`
+single-line ::= [^\n]+ "\n"
 ```
 
 ## Sequences and Alternatives

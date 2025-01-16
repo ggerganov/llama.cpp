@@ -26,7 +26,11 @@
 
 #define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
+/* suppress warning spam */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
 #include "ggml-common.h"
+#pragma clang diagnostic pop
 
 void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
@@ -626,6 +630,7 @@ struct bin_bcast_sycl {
                     });
             }
         }
+        GGML_UNUSED(ctx);
     }
 };
 
@@ -657,6 +662,7 @@ inline void ggml_sycl_op_bin_bcast(ggml_backend_sycl_context & ctx, const ggml_t
     }
 }
 
+bool gpu_has_xmx(sycl::device &dev);
 
 void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
                                  const ggml_tensor *src1, ggml_tensor *dst,

@@ -5,7 +5,6 @@
 #include "sampling.h"
 #include "llama.h"
 
-#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -30,6 +29,8 @@
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
+
+static const char * DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant";
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
@@ -62,49 +63,6 @@ static bool file_is_empty(const std::string & path) {
     return f.tellg() == 0;
 }
 
-static void write_logfile(
-    const llama_context * ctx, const common_params & params, const llama_model * model,
-    const std::vector<llama_token> & input_tokens, const std::string & output,
-    const std::vector<llama_token> & output_tokens
-) {
-    if (params.logdir.empty()) {
-        return;
-    }
-
-    const std::string timestamp = string_get_sortable_timestamp();
-
-    const bool success = fs_create_directory_with_parents(params.logdir);
-    if (!success) {
-        LOG_ERR("%s: failed to create logdir %s, cannot write logfile\n", __func__, params.logdir.c_str());
-        return;
-    }
-
-    const std::string logfile_path = params.logdir + timestamp + ".yml";
-    FILE * logfile = fopen(logfile_path.c_str(), "w");
-
-    if (logfile == NULL) {
-        LOG_ERR("%s: failed to open logfile %s\n", __func__, logfile_path.c_str());
-        return;
-    }
-
-    fprintf(logfile, "binary: main\n");
-    char model_desc[128];
-    llama_model_desc(model, model_desc, sizeof(model_desc));
-    yaml_dump_non_result_info(logfile, params, ctx, timestamp, input_tokens, model_desc);
-
-    fprintf(logfile, "\n");
-    fprintf(logfile, "######################\n");
-    fprintf(logfile, "# Generation Results #\n");
-    fprintf(logfile, "######################\n");
-    fprintf(logfile, "\n");
-
-    yaml_dump_string_multiline(logfile, "output", output.c_str());
-    yaml_dump_vector_int(logfile, "output_tokens", output_tokens);
-
-    llama_perf_dump_yaml(logfile, ctx);
-    fclose(logfile);
-}
-
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 static void sigint_handler(int signo) {
     if (signo == SIGINT) {
@@ -115,7 +73,6 @@ static void sigint_handler(int signo) {
             console::cleanup();
             LOG("\n");
             common_perf_print(*g_ctx, *g_smpl);
-            write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
 
             // make sure all logs are flushed
             LOG("Interrupted by user\n");
@@ -144,7 +101,7 @@ int main(int argc, char ** argv) {
 
     common_init();
 
-    auto & sparams = params.sparams;
+    auto & sparams = params.sampling;
 
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
@@ -189,25 +146,31 @@ int main(int argc, char ** argv) {
     llama_context * ctx = nullptr;
     common_sampler * smpl = nullptr;
 
-    std::vector<common_chat_msg> chat_msgs;
-
     g_model = &model;
     g_ctx = &ctx;
     g_smpl = &smpl;
+
+    std::vector<common_chat_msg> chat_msgs;
 
     // load the model and apply lora adapter, if any
     LOG_INF("%s: load the model and apply lora adapter, if any\n", __func__);
     common_init_result llama_init = common_init_from_params(params);
 
-    model = llama_init.model;
-    ctx = llama_init.context;
+    model = llama_init.model.get();
+    ctx = llama_init.context.get();
 
     if (model == NULL) {
         LOG_ERR("%s: error: unable to load model\n", __func__);
         return 1;
     }
 
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
+
+    auto * reg = ggml_backend_dev_backend_reg(ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU));
+    auto * ggml_threadpool_new_fn = (decltype(ggml_threadpool_new) *) ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_new");
+    auto * ggml_threadpool_free_fn = (decltype(ggml_threadpool_free) *) ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
 
     struct ggml_threadpool_params tpp_batch =
             ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);
@@ -218,7 +181,7 @@ int main(int argc, char ** argv) {
 
     struct ggml_threadpool * threadpool_batch = NULL;
     if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {
-        threadpool_batch = ggml_threadpool_new(&tpp_batch);
+        threadpool_batch = ggml_threadpool_new_fn(&tpp_batch);
         if (!threadpool_batch) {
             LOG_ERR("%s: batch threadpool create failed : n_threads %d\n", __func__, tpp_batch.n_threads);
             return 1;
@@ -228,7 +191,7 @@ int main(int argc, char ** argv) {
         tpp.paused = true;
     }
 
-    struct ggml_threadpool * threadpool = ggml_threadpool_new(&tpp);
+    struct ggml_threadpool * threadpool = ggml_threadpool_new_fn(&tpp);
     if (!threadpool) {
         LOG_ERR("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
         return 1;
@@ -236,15 +199,31 @@ int main(int argc, char ** argv) {
 
     llama_attach_threadpool(ctx, threadpool, threadpool_batch);
 
-    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx_train = llama_model_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
     if (n_ctx > n_ctx_train) {
         LOG_WRN("%s: model was trained on only %d context tokens (%d specified)\n", __func__, n_ctx_train, n_ctx);
     }
 
+    // auto enable conversation mode if chat template is available
+    const bool has_chat_template = !common_get_builtin_chat_template(model).empty() || !params.chat_template.empty();
+    if (params.conversation_mode == COMMON_CONVERSATION_MODE_AUTO) {
+        if (has_chat_template) {
+            LOG_INF("%s: chat template is available, enabling conversation mode (disable it with -no-cnv)\n", __func__);
+            params.conversation_mode = COMMON_CONVERSATION_MODE_ENABLED;
+        } else {
+            params.conversation_mode = COMMON_CONVERSATION_MODE_DISABLED;
+        }
+    }
+
+    // in case user force-activate conversation mode (via -cnv) without proper chat template, we show a warning
+    if (params.conversation_mode && !has_chat_template) {
+        LOG_WRN("%s: chat template is not available or is not supported. This may cause the model to output suboptimal responses\n", __func__);
+    }
+
     // print chat template example in conversation mode
-    if (params.conversation) {
+    if (params.conversation_mode) {
         if (params.enable_chat_template) {
             LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(model, params.chat_template).c_str());
         } else {
@@ -281,9 +260,9 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool add_bos = llama_add_bos_token(model);
+    const bool add_bos = llama_vocab_get_add_bos(vocab);
     if (!llama_model_has_encoder(model)) {
-        GGML_ASSERT(!llama_add_eos_token(model));
+        GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
     }
 
     LOG_DBG("n_ctx: %d, add_bos: %d\n", n_ctx, add_bos);
@@ -291,8 +270,10 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_inp;
 
     {
-        auto prompt = (params.conversation && params.enable_chat_template && !params.prompt.empty())
-            ? chat_add_and_format(model, chat_msgs, "system", params.prompt) // format the system prompt in conversation mode
+        auto prompt = (params.conversation_mode && params.enable_chat_template)
+            // format the system prompt in conversation mode (fallback to default if empty)
+            ? chat_add_and_format(model, chat_msgs, "system", params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt)
+            // otherwise use the prompt as is
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_DBG("tokenize the prompt\n");
@@ -309,7 +290,7 @@ int main(int argc, char ** argv) {
     // Should not run without any tokens
     if (embd_inp.empty()) {
         if (add_bos) {
-            embd_inp.push_back(llama_token_bos(model));
+            embd_inp.push_back(llama_vocab_bos(vocab));
             LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from(ctx, embd_inp).c_str());
         } else {
             LOG_ERR("input is empty\n");
@@ -366,7 +347,7 @@ int main(int argc, char ** argv) {
         params.n_keep += add_bos; // always keep the BOS token
     }
 
-    if (params.conversation) {
+    if (params.conversation_mode) {
         params.interactive_first = true;
     }
 
@@ -490,7 +471,11 @@ int main(int argc, char ** argv) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
         LOG_INF(       " - Press Ctrl+C to interject at any time.\n");
 #endif
-        LOG_INF(       "%s\n", control_message);
+        LOG_INF(       "%s", control_message);
+        if (params.conversation_mode && params.enable_chat_template && params.prompt.empty()) {
+            LOG_INF(   " - Using default system message. To change it, set a different value via -p PROMPT or -f FILE argument.\n");
+        }
+        LOG_INF("\n");
 
         is_interacting = params.interactive_first;
     }
@@ -534,8 +519,8 @@ int main(int argc, char ** argv) {
         }
 
         llama_token decoder_start_token_id = llama_model_decoder_start_token(model);
-        if (decoder_start_token_id == -1) {
-            decoder_start_token_id = llama_token_bos(model);
+        if (decoder_start_token_id == LLAMA_TOKEN_NULL) {
+            decoder_start_token_id = llama_vocab_bos(vocab);
         }
 
         embd_inp.clear();
@@ -782,7 +767,7 @@ int main(int argc, char ** argv) {
             }
 
             // deal with end of generation tokens in interactive mode
-            if (llama_token_is_eog(model, common_sampler_last(smpl))) {
+            if (llama_vocab_is_eog(vocab, common_sampler_last(smpl))) {
                 LOG_DBG("found an EOG token\n");
 
                 if (params.interactive) {
@@ -802,7 +787,7 @@ int main(int argc, char ** argv) {
             }
 
             // if current token is not EOG, we add it to current assistant message
-            if (params.conversation) {
+            if (params.conversation_mode) {
                 const auto id = common_sampler_last(smpl);
                 assistant_ss << common_token_to_piece(ctx, id, false);
             }
@@ -810,17 +795,17 @@ int main(int argc, char ** argv) {
             if (n_past > 0 && is_interacting) {
                 LOG_DBG("waiting for user input\n");
 
-                if (params.conversation) {
+                if (params.conversation_mode) {
                     LOG("\n> ");
                 }
 
                 if (params.input_prefix_bos) {
                     LOG_DBG("adding input prefix BOS token\n");
-                    embd_inp.push_back(llama_token_bos(model));
+                    embd_inp.push_back(llama_vocab_bos(vocab));
                 }
 
                 std::string buffer;
-                if (!params.input_prefix.empty() && !params.conversation) {
+                if (!params.input_prefix.empty() && !params.conversation_mode) {
                     LOG_DBG("appending input prefix: '%s'\n", params.input_prefix.c_str());
                     LOG("%s", params.input_prefix.c_str());
                 }
@@ -844,7 +829,7 @@ int main(int argc, char ** argv) {
                 // Entering a empty line lets the user pass control back
                 if (buffer.length() > 1) {
                     // append input suffix if any
-                    if (!params.input_suffix.empty() && !params.conversation) {
+                    if (!params.input_suffix.empty() && !params.conversation_mode) {
                         LOG_DBG("appending input suffix: '%s'\n", params.input_suffix.c_str());
                         LOG("%s", params.input_suffix.c_str());
                     }
@@ -857,7 +842,7 @@ int main(int argc, char ** argv) {
                         string_process_escapes(buffer);
                     }
 
-                    bool format_chat = params.conversation && params.enable_chat_template;
+                    bool format_chat = params.conversation_mode && params.enable_chat_template;
                     std::string user_inp = format_chat
                         ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
                         : std::move(buffer);
@@ -870,8 +855,8 @@ int main(int argc, char ** argv) {
 
                     // if user stop generation mid-way, we must add EOT to finish model's last response
                     if (need_insert_eot && format_chat) {
-                        llama_token eot = llama_token_eot(model);
-                        embd_inp.push_back(eot == -1 ? llama_token_eos(model) : eot);
+                        llama_token eot = llama_vocab_eot(vocab);
+                        embd_inp.push_back(eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab) : eot);
                         need_insert_eot = false;
                     }
 
@@ -906,7 +891,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of generation
-        if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !(params.interactive)) {
+        if (!embd.empty() && llama_vocab_is_eog(vocab, embd.back()) && !(params.interactive)) {
             LOG(" [end of text]\n");
             break;
         }
@@ -926,17 +911,13 @@ int main(int argc, char ** argv) {
 
     LOG("\n\n");
     common_perf_print(ctx, smpl);
-    write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     common_sampler_free(smpl);
 
-    llama_free(ctx);
-    llama_free_model(model);
-
     llama_backend_free();
 
-    ggml_threadpool_free(threadpool);
-    ggml_threadpool_free(threadpool_batch);
+    ggml_threadpool_free_fn(threadpool);
+    ggml_threadpool_free_fn(threadpool_batch);
 
     return 0;
 }

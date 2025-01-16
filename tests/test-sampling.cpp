@@ -145,7 +145,7 @@ static void test_penalties(
     sampler_tester tester(probs, probs_expected);
 
     const size_t n_vocab = probs.size();
-    auto * sampler = llama_sampler_init_penalties(n_vocab, LLAMA_TOKEN_NULL, LLAMA_TOKEN_NULL, last_tokens.size(), repeat_penalty, alpha_frequency, alpha_presence, false, false);
+    auto * sampler = llama_sampler_init_penalties(last_tokens.size(), repeat_penalty, alpha_frequency, alpha_presence);
 
     for (size_t i = 0; i < last_tokens.size(); i++) {
         llama_sampler_accept(sampler, last_tokens[i]);
@@ -284,7 +284,7 @@ static void test_perf() {
 
     data.reserve(n_vocab);
     for (int i = 0; i < n_vocab; i++) {
-        const float logit = 2.0f*((float)(rand())/RAND_MAX - 0.5f);
+        const float logit = 2.0f*((double)(rand())/RAND_MAX - 0.5);
         data.emplace_back(llama_token_data{i, logit, 0.0f});
     }
 

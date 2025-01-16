@@ -1,11 +1,14 @@
 #!/bin/bash
 
+# make sure we are in the right directory
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd $SCRIPT_DIR
+
 set -eu
 
 if [ $# -lt 1 ]
 then
-    # Start @llama.cpp scenario
-    behave --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
+    pytest -v -x
 else
-    behave "$@"
+    pytest "$@"
 fi
