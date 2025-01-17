@@ -62,6 +62,7 @@ struct llama_context {
     int32_t n_outputs   = 0; // number of actually-used outputs in the current ubatch or last logical batch
 
     bool logits_all = false;
+    bool need_reserve = false;
 
     // embeddings output (2-dimensional array: [n_outputs][n_embd])
     // populated only when pooling_type == LLAMA_POOLING_TYPE_NONE
@@ -87,6 +88,7 @@ struct llama_context {
     // max token position across all sequences in the current context
     llama_pos pos_max() const;
 
+    // certain implementations could require a padding for the context size
     uint32_t get_ctx_padding(const llama_cparams & cparams) const;
 
     void reset();
@@ -140,7 +142,7 @@ struct llama_context {
     struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
 
     // return true if need to reserve new worst-case graph
-    bool kv_self_update();
+    void kv_self_update();
 
     void build_attn_inp(
             ggml_context * ctx0,

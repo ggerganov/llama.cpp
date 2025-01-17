@@ -576,9 +576,7 @@ ggml_tensor * llama_context::build_lora_mm_id(
     return res;
 }
 
-bool llama_context::kv_self_update() {
-    bool need_reserve = false;
-
+void llama_context::kv_self_update() {
     auto & kv = kv_self;
 
     if (kv.has_shift) {
@@ -655,12 +653,14 @@ bool llama_context::kv_self_update() {
 
         ggml_free(ctx0);
 
-        need_reserve = true;
-
         kv.do_defrag = false;
-    }
 
-    return need_reserve;
+        need_reserve = true;
+    }
+}
+
+void llama_kv_self_update(llama_context * ctx) {
+    ctx->kv_self_update();
 }
 
 void llama_context::build_attn_inp(
@@ -1824,6 +1824,165 @@ int32_t llama_apply_adapter_cvec(
     return ctx->cvec.apply(ctx->model, data, len, n_embd, il_start, il_end);
 }
 
+//
+// kv cache view
+//
+
+struct llama_kv_cache_view llama_kv_cache_view_init(const llama_context * ctx, int32_t n_seq_max) {
+    return llama_kv_cache_view_init(ctx->kv_self, n_seq_max);
+}
+
+void llama_kv_cache_view_update(const llama_context * ctx, llama_kv_cache_view * view) {
+    llama_kv_cache_view_update(view, ctx->kv_self);
+}
+
+//
+// kv cache
+//
+
+// deprecated
+int32_t llama_get_kv_cache_token_count(const llama_context * ctx) {
+    return llama_kv_self_n_tokens(ctx);
+}
+
+int32_t llama_kv_self_n_tokens(const llama_context * ctx) {
+    return llama_kv_cache_n_tokens(&ctx->kv_self);
+}
+
+// deprecated
+int32_t llama_get_kv_cache_used_cells(const llama_context * ctx) {
+    return llama_kv_self_used_cells(ctx);
+}
+
+int32_t llama_kv_self_used_cells(const llama_context * ctx) {
+    return llama_kv_cache_used_cells(&ctx->kv_self);
+}
+
+// deprecated
+void llama_kv_cache_clear(llama_context * ctx) {
+    llama_kv_self_clear(ctx);
+}
+
+void llama_kv_self_clear(llama_context * ctx) {
+    llama_kv_cache_clear(&ctx->kv_self);
+}
+
+// deprecated
+bool llama_kv_cache_seq_rm(
+        llama_context * ctx,
+         llama_seq_id   seq_id,
+            llama_pos   p0,
+            llama_pos   p1) {
+    return llama_kv_self_seq_rm(ctx, seq_id, p0, p1);
+}
+
+bool llama_kv_self_seq_rm(
+        llama_context * ctx,
+         llama_seq_id   seq_id,
+            llama_pos   p0,
+            llama_pos   p1) {
+    return llama_kv_cache_seq_rm(&ctx->kv_self, seq_id, p0, p1);
+}
+
+// deprecated
+void llama_kv_cache_seq_cp(
+        llama_context * ctx,
+         llama_seq_id   seq_id_src,
+         llama_seq_id   seq_id_dst,
+            llama_pos   p0,
+            llama_pos   p1) {
+    return llama_kv_self_seq_cp(ctx, seq_id_src, seq_id_dst, p0, p1);
+}
+
+void llama_kv_self_seq_cp(
+        llama_context * ctx,
+         llama_seq_id   seq_id_src,
+         llama_seq_id   seq_id_dst,
+            llama_pos   p0,
+            llama_pos   p1) {
+    return llama_kv_cache_seq_cp(&ctx->kv_self, seq_id_src, seq_id_dst, p0, p1);
+}
+
+// deprecated
+void llama_kv_cache_seq_keep(
+        llama_context * ctx,
+         llama_seq_id   seq_id) {
+    return llama_kv_self_seq_keep(ctx, seq_id);
+}
+
+void llama_kv_self_seq_keep(llama_context * ctx, llama_seq_id seq_id) {
+    return llama_kv_cache_seq_keep(&ctx->kv_self, seq_id);
+}
+
+// deprecated
+void llama_kv_cache_seq_add(
+        llama_context * ctx,
+         llama_seq_id   seq_id,
+            llama_pos   p0,
+            llama_pos   p1,
+            llama_pos   delta) {
+    return llama_kv_self_seq_add(ctx, seq_id, p0, p1, delta);
+}
+
+void llama_kv_self_seq_add(
+        llama_context * ctx,
+         llama_seq_id   seq_id,
+            llama_pos   p0,
+            llama_pos   p1,
+            llama_pos   delta) {
+    return llama_kv_cache_seq_add(&ctx->kv_self, seq_id, p0, p1, delta);
+}
+
+// deprecated
+void llama_kv_cache_seq_div(
+        llama_context * ctx,
+         llama_seq_id   seq_id,
+            llama_pos   p0,
+            llama_pos   p1,
+                  int   d) {
+    return llama_kv_self_seq_div(ctx, seq_id, p0, p1, d);
+}
+
+void llama_kv_self_seq_div(
+        llama_context * ctx,
+         llama_seq_id   seq_id,
+            llama_pos   p0,
+            llama_pos   p1,
+                  int   d) {
+    return llama_kv_cache_seq_div(&ctx->kv_self, seq_id, p0, p1, d);
+}
+
+// deprecated
+llama_pos llama_kv_cache_seq_pos_max(llama_context * ctx, llama_seq_id seq_id) {
+    return llama_kv_self_seq_pos_max(ctx, seq_id);
+}
+
+llama_pos llama_kv_self_seq_pos_max(llama_context * ctx, llama_seq_id seq_id) {
+    return llama_kv_cache_seq_pos_max(&ctx->kv_self, seq_id);
+}
+
+// deprecated
+void llama_kv_cache_defrag(llama_context * ctx) {
+    return llama_kv_self_defrag(ctx);
+}
+
+void llama_kv_self_defrag(llama_context * ctx) {
+    return llama_kv_cache_defrag(&ctx->kv_self);
+}
+
+// deprecated
+bool llama_kv_cache_can_shift(const llama_context * ctx) {
+    return llama_kv_self_can_shift(ctx);
+}
+
+bool llama_kv_self_can_shift(const llama_context * ctx) {
+    return llama_kv_cache_can_shift(&ctx->kv_self);
+}
+
+// deprecated
+void llama_kv_cache_update(llama_context * ctx) {
+    llama_kv_self_update(ctx);
+}
 
 // llama state API
 
