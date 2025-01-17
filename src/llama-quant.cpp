@@ -148,6 +148,7 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
 
     // for arches that share the same tensor between the token embeddings and the output, we quantize the token embeddings
     // with the quantization of the output tensor
+    const bool is_quantized = ggml_is_quantized(new_type);
     if (name == tn(LLM_TENSOR_OUTPUT, "weight") || (!qs.has_output && name == tn(LLM_TENSOR_TOKEN_EMBD, "weight"))) {
         if (qs.params->output_tensor_type < GGML_TYPE_COUNT) {
             new_type = qs.params->output_tensor_type;
@@ -155,7 +156,8 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
             const int64_t nx = tensor->ne[0];
             const int64_t qk_k = ggml_blck_size(new_type);
 
-            if (arch == LLM_ARCH_FALCON || arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE || nx % qk_k != 0) {
+            if (arch == LLM_ARCH_FALCON || nx % qk_k != 0 ||
+                (is_quantized && (arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE))) {
                 new_type = GGML_TYPE_Q8_0;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
@@ -171,7 +173,7 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
         if (qs.params->token_embedding_type < GGML_TYPE_COUNT) {
             new_type = qs.params->token_embedding_type;
         } else {
-            if (arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE) {
+            if (is_quantized && (arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE)) {
                 new_type = GGML_TYPE_Q8_0;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS ||
