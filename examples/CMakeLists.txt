@@ -8,7 +8,7 @@ find_package(Threads REQUIRED)
 
 # flags
 
-# ...
+llama_add_compile_flags()
 
 # examples
 

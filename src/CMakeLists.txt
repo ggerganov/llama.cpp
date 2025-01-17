@@ -1,3 +1,5 @@
+llama_add_compile_flags()
+
 #
 # libraries
 #
