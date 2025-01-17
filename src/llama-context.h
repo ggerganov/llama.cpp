@@ -30,11 +30,14 @@ struct llama_batch_manager_i {
     virtual void finalize() = 0;
 };
 
+// TODO: make implementation details private
+// TODO: become abstract base class, split the current implementation into different child classes
 struct llama_context {
-    llama_context(const llama_model & model)
-        : model(model)
-        , t_start_us(model.t_start_us)
-        , t_load_us (model.t_load_us) {}
+    // TODO: store the worst-case graph build function and reuse it later
+    llama_context(
+            const llama_model & model,
+            const llama_context_params & params,
+            std::function<ggml_cgraph *(llama_context &, const llama_ubatch &)> fn_build_graph_worst);
 
     const struct llama_model & model;
 
