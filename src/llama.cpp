@@ -7773,6 +7773,7 @@ static int llama_decode_impl(
     llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.pos_max() + 1);
 
     const llama_batch & batch = batch_allocr.batch;
+
     const uint32_t n_tokens_all = batch.n_tokens;
 
     const auto & model   = lctx.model;
@@ -7800,9 +7801,6 @@ static int llama_decode_impl(
     }
     lctx.n_queued_tokens += n_tokens_all;
 
-    auto & kv_self = lctx.kv_self;
-    llama_kv_slot_restorer kv_slot_restorer(kv_self);
-
     const int64_t n_embd  = hparams.n_embd;
     const int64_t n_vocab = vocab.n_tokens();
 
@@ -7828,15 +7826,18 @@ static int llama_decode_impl(
         n_outputs = 1;
     }
 
-    lctx.sbatch.from_batch(batch, n_embd,
-        /* simple_split */ !kv_self.recurrent,
-        /* logits_all   */ n_outputs == n_tokens_all);
-
     // reserve output buffer
     if (llama_output_reserve(lctx, n_outputs) < n_outputs) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_outputs);
         return -2;
     };
+
+    auto & kv_self = lctx.kv_self;
+    llama_kv_slot_restorer kv_slot_restorer(kv_self);
+
+    lctx.sbatch.from_batch(batch, n_embd,
+        /* simple_split */ !kv_self.recurrent,
+        /* logits_all   */ n_outputs == n_tokens_all);
 
     while (lctx.sbatch.n_tokens > 0) {
         llama_ubatch ubatch;
@@ -8645,7 +8646,6 @@ struct llama_context * llama_init_from_model(
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;
 
-    // this is necessary due to kv_self.n being padded later during inference
     cparams.n_ctx            = GGML_PAD(cparams.n_ctx, ctx->get_ctx_padding(cparams));
 
     // with causal attention, the batch size is limited by the context size
