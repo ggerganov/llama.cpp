@@ -155,7 +155,7 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
             const int64_t nx = tensor->ne[0];
             const int64_t qk_k = ggml_blck_size(new_type);
 
-            if (arch == LLM_ARCH_FALCON || nx % qk_k != 0) {
+            if (arch == LLM_ARCH_FALCON || arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE || nx % qk_k != 0) {
                 new_type = GGML_TYPE_Q8_0;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
@@ -171,7 +171,10 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
         if (qs.params->token_embedding_type < GGML_TYPE_COUNT) {
             new_type = qs.params->token_embedding_type;
         } else {
-            if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS ||
+            if (arch == LLM_ARCH_GRANITE || arch == LLM_ARCH_GRANITE_MOE) {
+                new_type = GGML_TYPE_Q8_0;
+            }
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS ||
                 ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
                 new_type = GGML_TYPE_Q2_K;
             }
