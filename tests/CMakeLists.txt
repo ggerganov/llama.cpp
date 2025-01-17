@@ -1,22 +1,5 @@
 llama_add_compile_flags()
 
-if (NOT MSVC)
-    if (LLAMA_SANITIZE_THREAD)
-        add_compile_options(-fsanitize=thread)
-        link_libraries     (-fsanitize=thread)
-    endif()
-
-    if (LLAMA_SANITIZE_ADDRESS)
-        add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-        link_libraries     (-fsanitize=address)
-    endif()
-
-    if (LLAMA_SANITIZE_UNDEFINED)
-        add_compile_options(-fsanitize=undefined)
-        link_libraries     (-fsanitize=undefined)
-    endif()
-endif()
-
 function(llama_test target)
     include(CMakeParseArguments)
     set(options)
