@@ -1049,7 +1049,7 @@ static bool same_tensor_data(const struct ggml_context * orig, const struct ggml
         }
 
         t_orig = ggml_get_next_tensor(orig, t_orig);
-        t_read = ggml_get_next_tensor(orig, t_read);
+        t_read = ggml_get_next_tensor(read, t_read);
     }
     if (t_read) {
         ok = false;
