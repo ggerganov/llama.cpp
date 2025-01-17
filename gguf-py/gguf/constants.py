@@ -115,6 +115,7 @@ class Keys:
         TIME_DECAY_EXTRA_DIM              = "{arch}.time_decay_extra_dim"
         RESIDUAL_SCALE                    = "{arch}.residual_scale"
         EMBEDDING_SCALE                   = "{arch}.embedding_scale"
+        TOKEN_SHIFT_COUNT                 = "{arch}.token_shift_count"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -183,7 +184,6 @@ class Keys:
         UNK_ID               = "tokenizer.ggml.unknown_token_id"
         SEP_ID               = "tokenizer.ggml.seperator_token_id"
         PAD_ID               = "tokenizer.ggml.padding_token_id"
-        CLS_ID               = "tokenizer.ggml.cls_token_id"
         MASK_ID              = "tokenizer.ggml.mask_token_id"
         ADD_BOS              = "tokenizer.ggml.add_bos_token"
         ADD_EOS              = "tokenizer.ggml.add_eos_token"
@@ -255,6 +255,7 @@ class MODEL_ARCH(IntEnum):
     GEMMA2           = auto()
     STARCODER2       = auto()
     RWKV6            = auto()
+    RWKV6QWEN2       = auto()
     MAMBA            = auto()
     XVERSE           = auto()
     COMMAND_R        = auto()
@@ -334,6 +335,7 @@ class MODEL_TENSOR(IntEnum):
     TIME_MIX_LERP_V      = auto()
     TIME_MIX_LERP_R      = auto()
     TIME_MIX_LERP_G      = auto()
+    TIME_MIX_LERP_FUSED  = auto()
     TIME_MIX_LERP_W      = auto()
     TIME_MIX_FIRST       = auto()
     TIME_MIX_DECAY       = auto()
@@ -440,6 +442,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GEMMA2:           "gemma2",
     MODEL_ARCH.STARCODER2:       "starcoder2",
     MODEL_ARCH.RWKV6:            "rwkv6",
+    MODEL_ARCH.RWKV6QWEN2:       "rwkv6qwen2",
     MODEL_ARCH.MAMBA:            "mamba",
     MODEL_ARCH.XVERSE:           "xverse",
     MODEL_ARCH.COMMAND_R:        "command-r",
@@ -519,6 +522,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.TIME_MIX_LERP_V:           "blk.{bid}.time_mix_lerp_v",
     MODEL_TENSOR.TIME_MIX_LERP_R:           "blk.{bid}.time_mix_lerp_r",
     MODEL_TENSOR.TIME_MIX_LERP_G:           "blk.{bid}.time_mix_lerp_g",
+    MODEL_TENSOR.TIME_MIX_LERP_FUSED:       "blk.{bid}.time_mix_lerp_fused",
     MODEL_TENSOR.TIME_MIX_LERP_W:           "blk.{bid}.time_mix_lerp_w",
     MODEL_TENSOR.TIME_MIX_FIRST:            "blk.{bid}.time_mix_first",
     MODEL_TENSOR.TIME_MIX_DECAY:            "blk.{bid}.time_mix_decay",
@@ -1103,6 +1107,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.TIME_MIX_LERP_R,
         MODEL_TENSOR.TIME_MIX_LERP_G,
         MODEL_TENSOR.TIME_MIX_LERP_W,
+        MODEL_TENSOR.TIME_MIX_LERP_FUSED,
         MODEL_TENSOR.TIME_MIX_FIRST,
         MODEL_TENSOR.TIME_MIX_DECAY,
         MODEL_TENSOR.TIME_MIX_DECAY_W1,
@@ -1118,6 +1123,35 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.CHANNEL_MIX_KEY,
         MODEL_TENSOR.CHANNEL_MIX_RECEPTANCE,
         MODEL_TENSOR.CHANNEL_MIX_VALUE,
+    ],
+    MODEL_ARCH.RWKV6QWEN2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.TIME_MIX_W1,
+        MODEL_TENSOR.TIME_MIX_W2,
+        MODEL_TENSOR.TIME_MIX_LERP_X,
+        MODEL_TENSOR.TIME_MIX_LERP_K,
+        MODEL_TENSOR.TIME_MIX_LERP_V,
+        MODEL_TENSOR.TIME_MIX_LERP_R,
+        MODEL_TENSOR.TIME_MIX_LERP_G,
+        MODEL_TENSOR.TIME_MIX_LERP_W,
+        MODEL_TENSOR.TIME_MIX_LERP_FUSED,
+        MODEL_TENSOR.TIME_MIX_FIRST,
+        MODEL_TENSOR.TIME_MIX_DECAY,
+        MODEL_TENSOR.TIME_MIX_DECAY_W1,
+        MODEL_TENSOR.TIME_MIX_DECAY_W2,
+        MODEL_TENSOR.TIME_MIX_KEY,
+        MODEL_TENSOR.TIME_MIX_VALUE,
+        MODEL_TENSOR.TIME_MIX_RECEPTANCE,
+        MODEL_TENSOR.TIME_MIX_GATE,
+        MODEL_TENSOR.TIME_MIX_LN,
+        MODEL_TENSOR.TIME_MIX_OUTPUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
     ],
     MODEL_ARCH.MAMBA: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -1802,7 +1836,6 @@ KEY_TOKENIZER_EOM_ID     = Keys.Tokenizer.EOM_ID
 KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
 KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
 KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
-KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
 KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV

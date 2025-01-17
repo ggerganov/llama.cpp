@@ -235,7 +235,7 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, ggml_type new_t
         else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
                 use_more_bits(qs.i_attention_wv, qs.n_attention_wv)) new_type = GGML_TYPE_Q6_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && qs.i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
-        if (qs.model.type == MODEL_70B) {
+        if (qs.model.type == LLM_TYPE_70B) {
             // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
             // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
             // nearly negligible increase in model size by quantizing this tensor with more bits:
@@ -525,18 +525,21 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
         auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
-    llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
+
+    std::vector<std::string> splits = {};
+    llama_model_loader ml(fname_inp, splits, use_mmap, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
-    llama_model model;
-    llm_load_arch   (ml, model);
-    llm_load_hparams(ml, model);
-    llm_load_stats  (ml, model);
+    llama_model model(llama_model_default_params());
+
+    model.load_arch   (ml);
+    model.load_hparams(ml);
+    model.load_stats  (ml);
 
     struct quantize_state_impl qs(model, params);
 
     if (params->only_copy) {
-        ftype = model.ftype;
+        ftype = ml.ftype;
     }
     const std::unordered_map<std::string, std::vector<float>> * imatrix_data = nullptr;
     if (params->imatrix) {
@@ -620,7 +623,8 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
 
     qs.n_ffn_down = qs.n_ffn_gate = qs.n_ffn_up = (int)model.hparams.n_layer;
 
-    // sanity checks
+    // sanity checks for models that have attention layers
+    if (qs.n_attention_wv != 0)
     {
         const auto & n_head_kv_iter = model.hparams.n_head_kv_arr.begin();
         // attention layers have a non-zero number of kv heads
@@ -758,6 +762,7 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
         quantize &= name.find("time_mix_w2.weight") == std::string::npos;
         quantize &= name.find("time_mix_decay_w1.weight") == std::string::npos;
         quantize &= name.find("time_mix_decay_w2.weight") == std::string::npos;
+        quantize &= name.find("time_mix_lerp_fused.weight") == std::string::npos;
 
         // do not quantize relative position bias (T5)
         quantize &= name.find("attn_rel_b.weight") == std::string::npos;

@@ -37,7 +37,7 @@
           <div v-for="conv in conversations" :class="{
             'btn btn-ghost justify-start font-normal': true,
             'btn-active': conv.id === viewingConvId,
-          }" @click="setViewingConv(conv.id)">
+          }" @click="setViewingConv(conv.id)" dir="auto">
             <span class="truncate">{{ conv.messages[0].content }}</span>
           </div>
           <div class="text-center text-xs opacity-40 mt-auto mx-4">
@@ -156,6 +156,7 @@
             @keydown.enter.shift.exact.prevent="inputMsg += '\n'"
             :disabled="isGenerating"
             id="msg-input"
+            dir="auto"
           ></textarea>
           <button v-if="!isGenerating" class="btn btn-primary ml-2" @click="sendMessage" :disabled="inputMsg.length === 0">Send</button>
           <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">Stop</button>
@@ -248,6 +249,7 @@
         <!-- textarea for editing message -->
         <template v-if="editingContent !== null">
           <textarea
+            dir="auto"
             class="textarea textarea-bordered bg-base-100 text-base-content w-[calc(90vw-8em)] lg:w-96"
             v-model="editingContent"></textarea>
           <br/>
@@ -258,7 +260,9 @@
           <!-- show loading dots for pending message -->
           <span v-if="msg.content === null" class="loading loading-dots loading-md"></span>
           <!-- render message as markdown -->
-          <vue-markdown v-else :source="msg.content"></vue-markdown>
+          <div v-else dir="auto">
+            <vue-markdown :source="msg.content"></vue-markdown>
+          </div>
           <!-- render timings if enabled -->
           <div class="dropdown dropdown-hover dropdown-top mt-2" v-if="timings && config.showTokensPerSecond">
             <div tabindex="0" role="button" class="cursor-pointer font-semibold text-sm opacity-60">Speed: {{ timings.predicted_per_second.toFixed(1) }} t/s</div>

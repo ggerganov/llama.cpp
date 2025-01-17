@@ -501,6 +501,7 @@ extern "C" {
         GGML_OP_GET_REL_POS,
         GGML_OP_ADD_REL_POS,
         GGML_OP_RWKV_WKV6,
+        GGML_OP_GATED_LINEAR_ATTN,
 
         GGML_OP_UNARY,
 
@@ -1383,16 +1384,20 @@ extern "C" {
             float                 scale,
             float                 max_bias);
 
-    GGML_API struct ggml_tensor * ggml_soft_max_back(
+    GGML_API struct ggml_tensor * ggml_soft_max_ext_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            float                 scale,
+            float                 max_bias);
 
     // in-place, returns view(a)
-    GGML_API struct ggml_tensor * ggml_soft_max_back_inplace(
+    GGML_API struct ggml_tensor * ggml_soft_max_ext_back_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            float                 scale,
+            float                 max_bias);
 
     // rotary position embedding
     // if (mode & 1) - skip n_past elements (NOT SUPPORTED)
@@ -1499,7 +1504,7 @@ extern "C" {
 
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy
-    GGML_API struct ggml_tensor * ggml_rope_back(
+    GGML_API struct ggml_tensor * ggml_rope_ext_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a, // gradients of ggml_rope result
             struct ggml_tensor  * b, // positions
@@ -1513,6 +1518,23 @@ extern "C" {
             float                 attn_factor,
             float                 beta_fast,
             float                 beta_slow);
+
+    GGML_API struct ggml_tensor * ggml_rope_multi_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            struct ggml_tensor  * c,
+            int                   n_dims,
+            int                   sections[4],
+            int                   mode,
+            int                   n_ctx_orig,
+            float                 freq_base,
+            float                 freq_scale,
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            float                 beta_slow);
+
 
     // clamp
     // in-place, returns view(a)
@@ -1858,6 +1880,15 @@ extern "C" {
             struct ggml_tensor  * tf,
             struct ggml_tensor  * td,
             struct ggml_tensor  * state);
+
+    GGML_API struct ggml_tensor * ggml_gated_linear_attn(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * q,
+            struct ggml_tensor  * g,
+            struct ggml_tensor  * state,
+            float scale);
 
     // custom operators
 
