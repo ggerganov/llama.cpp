@@ -84,7 +84,10 @@ struct llama_context {
                 ggml_cgraph * graph,
                        bool   batched);
 
+    // max token position across all sequences in the current context
     llama_pos pos_max() const;
+
+    uint32_t get_ctx_padding(const llama_cparams & cparams) const;
 
     void reset();
 

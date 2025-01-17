@@ -7820,6 +7820,7 @@ static int llama_decode_impl(
     }
 
     // temporary allocate memory for the input batch if needed
+    // TODO: this is incorrect for multiple sequences because pos_max() is the maximum across all sequences
     llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.pos_max() + 1);
 
     const llama_batch & batch = batch_allocr.batch;
@@ -8154,6 +8155,7 @@ static int llama_encode_impl(
     }
 
     // temporary allocate memory for the input batch if needed
+    // TODO: this is incorrect for multiple sequences because pos_max() is the maximum across all sequences
     llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : lctx.pos_max() + 1);
 
     const llama_batch & batch = batch_allocr.batch;
@@ -8629,7 +8631,7 @@ struct llama_context * llama_init_from_model(
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;
 
     // this is necessary due to kv_self.n being padded later during inference
-    cparams.n_ctx            = GGML_PAD(cparams.n_ctx, ctx->kv_self.get_padding(cparams));
+    cparams.n_ctx            = GGML_PAD(cparams.n_ctx, ctx->get_ctx_padding(cparams));
 
     // with causal attention, the batch size is limited by the context size
     cparams.n_batch          = hparams.causal_attn ? std::min(cparams.n_ctx, params.n_batch) : params.n_batch;
