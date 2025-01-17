@@ -33,7 +33,7 @@
 
 using json = nlohmann::ordered_json;
 
-constexpr int HTTP_POOLING_SECONDS = 1;
+constexpr int HTTP_POLLING_SECONDS = 1;
 
 enum stop_type {
     STOP_TYPE_NONE,
@@ -2353,7 +2353,7 @@ struct server_context {
             const std::function<bool()> & is_connection_closed) {
         std::vector<server_task_result_ptr> results(id_tasks.size());
         for (size_t i = 0; i < id_tasks.size(); i++) {
-            server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POOLING_SECONDS);
+            server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POLLING_SECONDS);
 
             if (is_connection_closed()) {
                 cancel_tasks(id_tasks);
@@ -2391,7 +2391,7 @@ struct server_context {
             const std::function<bool()> & is_connection_closed) {
         size_t n_finished = 0;
         while (true) {
-            server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POOLING_SECONDS);
+            server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POLLING_SECONDS);
 
             if (is_connection_closed()) {
                 cancel_tasks(id_tasks);
