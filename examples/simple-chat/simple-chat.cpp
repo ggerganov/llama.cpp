@@ -95,11 +95,11 @@ int main(int argc, char ** argv) {
     llama_sampler_chain_add(smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
     // helper function to evaluate a prompt and generate a response
-    auto generate = [&](const std::string & prompt) {
+    auto generate = [&](const std::string & prompt, bool is_first) {
         std::string response;
 
         // tokenize the prompt
-        const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, true, true);
+        const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, is_first, true);
         std::vector<llama_token> prompt_tokens(n_prompt_tokens);
         if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), llama_get_kv_cache_used_cells(ctx) == 0, true) < 0) {
             GGML_ABORT("failed to tokenize the prompt\n");
@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
 
         // generate a response
         printf("\033[33m");
-        std::string response = generate(prompt);
+        std::string response = generate(prompt, prev_len == 0);
         printf("\n\033[0m");
 
         // add the response to the messages
