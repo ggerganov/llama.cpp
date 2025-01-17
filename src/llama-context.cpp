@@ -64,6 +64,10 @@ llama_pos llama_context::pos_max() const {
     return kv_self.pos_max();
 }
 
+uint32_t llama_context::get_ctx_padding(const llama_cparams & cparams) const {
+    return kv_self.get_padding(cparams);
+}
+
 // TODO: improve
 void llama_context::reset() {
     inp_tokens          = nullptr;
