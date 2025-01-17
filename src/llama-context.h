@@ -16,6 +16,20 @@
 
 using llama_loras = std::unordered_map<struct llama_adapter_lora *, float>;
 
+// TODO: this is very WIP - improve
+struct llama_batch_manager_i {
+    virtual ~llama_batch_manager_i() = default;
+
+    //bool is_done() const;
+
+    virtual llama_ubatch next() = 0;
+
+    virtual bool prepare() = 0;
+    virtual void restore() = 0;
+    virtual void update() = 0;
+    virtual void finalize() = 0;
+};
+
 struct llama_context {
     llama_context(const llama_model & model)
         : model(model)
@@ -80,6 +94,9 @@ struct llama_context {
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
 
+    // TODO: do not pass logits_all explicitly
+    std::unique_ptr<llama_batch_manager_i> prepare_batch(const llama_batch & batch, bool logits_all);
+
     // returns the result of ggml_backend_sched_graph_compute_async execution
     enum ggml_status compute_graph(
                 ggml_cgraph * graph,
@@ -95,7 +112,6 @@ struct llama_context {
 
     void prepare_k_shift();
     void prepare_defrag();
-    void prepare_decode(const llama_ubatch & ubatch);
 
     void set_inputs(const llama_ubatch & ubatch);
 

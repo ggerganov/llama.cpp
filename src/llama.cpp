@@ -7807,8 +7807,6 @@ static int llama_decode_impl(
     uint32_t n_outputs = 0;
     uint32_t n_outputs_prev = 0;
 
-    const auto n_ubatch = cparams.n_ubatch;
-
     // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
     const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
 
@@ -7832,27 +7830,19 @@ static int llama_decode_impl(
         return -2;
     };
 
-    auto & kv_self = lctx.kv_self;
-    llama_kv_slot_restorer kv_slot_restorer(kv_self);
+    const bool logits_all = n_outputs == n_tokens_all;
 
-    lctx.sbatch.from_batch(batch, n_embd,
-        /* simple_split */ !kv_self.recurrent,
-        /* logits_all   */ n_outputs == n_tokens_all);
+    //auto & kv_self = lctx.kv_self;
+    //llama_kv_slot_restorer kv_slot_restorer(kv_self);
+
+    //lctx.sbatch.from_batch(batch, n_embd,
+    //    /* simple_split */ !kv_self.recurrent,
+    //    /* logits_all   */ logits_all);
+
+    auto batch_manager = lctx.prepare_batch(batch, logits_all);
 
     while (lctx.sbatch.n_tokens > 0) {
-        llama_ubatch ubatch;
-        if (kv_self.recurrent) {
-            if (embd_pooled) {
-                // Pooled embeddings cannot be split across ubatches (yet)
-                ubatch = lctx.sbatch.split_seq(n_ubatch);
-            } else {
-                // recurrent model architectures are easier to implement
-                // with equal-length sequences
-                ubatch = lctx.sbatch.split_equal(n_ubatch);
-            }
-        } else {
-            ubatch = lctx.sbatch.split_simple(n_ubatch);
-        }
+        llama_ubatch ubatch = batch_manager->next();
 
         const uint32_t n_tokens = ubatch.n_tokens;
 
@@ -7873,32 +7863,10 @@ static int llama_decode_impl(
             lctx.n_outputs = n_outputs_new;
         }
 
-        lctx.prepare_decode(ubatch);
-
-        // non-causal masks do not use the KV cache
-        if (hparams.causal_attn) {
-            llama_kv_self_update(&lctx);
-
-            // if we have enough unused cells before the current head ->
-            //   better to start searching from the beginning of the cache, hoping to fill it
-            if (kv_self.head > kv_self.used + 2*n_tokens) {
-                kv_self.head = 0;
-            }
-
-            const auto slot_info = kv_self.find_slot(ubatch);
-            if (!slot_info) {
-                return 1;
-            }
-            kv_slot_restorer.save(slot_info);
-
-            if (!kv_self.recurrent) {
-                // a heuristic, to avoid attending the full cache if it is not yet utilized
-                // after enough generations, the benefit from this heuristic disappears
-                // if we start defragmenting the cache, the benefit from this will be more important
-                const uint32_t pad = kv_self.get_padding(cparams);
-                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(kv_self.cell_max(), pad)));
-                //kv_self.n = llama_kv_cache_cell_max(kv_self);
-            }
+        if (!batch_manager->prepare()) {
+            LLAMA_LOG_ERROR("%s: failed to prepare ubatch\n", __func__);
+            batch_manager->restore();
+            return -3;
         }
 
         // reserve a worst case graph if needed
@@ -7963,7 +7931,7 @@ static int llama_decode_impl(
 
         const auto compute_status = lctx.compute_graph(gf, n_tokens > 1);
         if (compute_status != GGML_STATUS_SUCCESS) {
-            kv_slot_restorer.restore(kv_self);
+            batch_manager->restore();
             switch (compute_status) {
                 case GGML_STATUS_ABORTED:
                     return 2;
@@ -7975,15 +7943,7 @@ static int llama_decode_impl(
             }
         }
 
-        // update the kv ring buffer
-        {
-            kv_self.head += n_tokens;
-
-            // Ensure kv cache head points to a valid index.
-            if (kv_self.head >= kv_self.size) {
-                kv_self.head = 0;
-            }
-        }
+        batch_manager->update();
 
         // plot the computation graph in dot format (for debugging purposes)
         //if (n_past%100 == 0) {
@@ -8061,6 +8021,7 @@ static int llama_decode_impl(
                     }
             }
         }
+
         n_outputs_prev += lctx.n_outputs;
     }
 
@@ -8089,17 +8050,7 @@ static int llama_decode_impl(
     // wait for the computation to finish (automatically done when obtaining the model output)
     //llama_synchronize(&lctx);
 
-    // decide if we need to defrag the kv cache
-    if (cparams.causal_attn && cparams.defrag_thold >= 0.0f) {
-        const float fragmentation = kv_self.n >= 128 ? 1.0f - float(kv_self.used)/float(kv_self.n) : 0.0f;
-
-        // queue defragmentation for next llama_kv_cache_update
-        if (fragmentation > cparams.defrag_thold) {
-            //LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
-
-            kv_self.defrag();
-        }
-    }
+    batch_manager->finalize();
 
     // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
     // overlap with device computation.
@@ -8178,7 +8129,7 @@ static int llama_encode_impl(
     lctx.inp_embd_enc = NULL;
     lctx.n_outputs = n_tokens;
 
-    lctx.prepare_decode(ubatch);
+    //batch_manager->prepare(ubatch);
 
     // reserve a worst case graph if needed
     // TODO: extract to a function
