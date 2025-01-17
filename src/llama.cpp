@@ -8322,40 +8322,6 @@ static int llama_encode_impl(
     return 0;
 }
 
-int32_t llama_set_adapter_lora(
-            struct llama_context * ctx,
-            struct llama_adapter_lora * adapter,
-            float scale) {
-    ctx->loras[adapter] = scale;
-    return 0;
-}
-
-int32_t llama_rm_adapter_lora(
-            struct llama_context * ctx,
-            struct llama_adapter_lora * adapter) {
-    auto pos = ctx->loras.find(adapter);
-    if (pos != ctx->loras.end()) {
-        ctx->loras.erase(pos);
-        return 0;
-    }
-
-    return -1;
-}
-
-void llama_clear_adapter_lora(struct llama_context * ctx) {
-    ctx->loras.clear();
-}
-
-int32_t llama_apply_adapter_cvec(
-        struct llama_context * ctx,
-                 const float * data,
-                      size_t   len,
-                     int32_t   n_embd,
-                     int32_t   il_start,
-                     int32_t   il_end) {
-    return ctx->cvec.apply(ctx->model, data, len, n_embd, il_start, il_end);
-}
-
 //
 // interface implementation
 //
@@ -8924,7 +8890,7 @@ struct llama_context * llama_new_context_with_model(
 }
 
 //
-// kv cache
+// kv cache view
 //
 
 struct llama_kv_cache_view llama_kv_cache_view_init(const llama_context * ctx, int32_t n_seq_max) {
@@ -8934,6 +8900,10 @@ struct llama_kv_cache_view llama_kv_cache_view_init(const llama_context * ctx, i
 void llama_kv_cache_view_update(const llama_context * ctx, llama_kv_cache_view * view) {
     llama_kv_cache_view_update(view, ctx->kv_self);
 }
+
+//
+// kv cache
+//
 
 // deprecated
 int32_t llama_get_kv_cache_token_count(const llama_context * ctx) {

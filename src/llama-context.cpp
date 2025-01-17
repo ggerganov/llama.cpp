@@ -1788,6 +1788,43 @@ float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id
     return it->second.data();
 }
 
+// llama adapter API
+
+int32_t llama_set_adapter_lora(
+            struct llama_context * ctx,
+            struct llama_adapter_lora * adapter,
+            float scale) {
+    ctx->loras[adapter] = scale;
+    return 0;
+}
+
+int32_t llama_rm_adapter_lora(
+            struct llama_context * ctx,
+            struct llama_adapter_lora * adapter) {
+    auto pos = ctx->loras.find(adapter);
+    if (pos != ctx->loras.end()) {
+        ctx->loras.erase(pos);
+        return 0;
+    }
+
+    return -1;
+}
+
+void llama_clear_adapter_lora(struct llama_context * ctx) {
+    ctx->loras.clear();
+}
+
+int32_t llama_apply_adapter_cvec(
+        struct llama_context * ctx,
+                 const float * data,
+                      size_t   len,
+                     int32_t   n_embd,
+                     int32_t   il_start,
+                     int32_t   il_end) {
+    return ctx->cvec.apply(ctx->model, data, len, n_embd, il_start, il_end);
+}
+
+
 // llama state API
 
 // deprecated
