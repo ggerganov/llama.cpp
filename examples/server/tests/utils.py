@@ -219,17 +219,18 @@ class ServerProcess:
         path: str,
         data: dict | Any | None = None,
         headers: dict | None = None,
+        timeout: float | None = None,
     ) -> ServerResponse:
         url = f"http://{self.server_host}:{self.server_port}{path}"
         parse_body = False
         if method == "GET":
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=timeout)
             parse_body = True
         elif method == "POST":
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(url, headers=headers, json=data, timeout=timeout)
             parse_body = True
         elif method == "OPTIONS":
-            response = requests.options(url, headers=headers)
+            response = requests.options(url, headers=headers, timeout=timeout)
         else:
             raise ValueError(f"Unimplemented method: {method}")
         result = ServerResponse()
