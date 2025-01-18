@@ -2352,7 +2352,7 @@ struct server_context {
             const std::function<void(json)> & error_handler,
             const std::function<bool()> & is_connection_closed) {
         std::vector<server_task_result_ptr> results(id_tasks.size());
-        for (size_t i = 0; i < id_tasks.size(); i++) {
+        for (int i = 0; i < (int)id_tasks.size(); i++) {
             server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POLLING_SECONDS);
 
             if (is_connection_closed()) {
