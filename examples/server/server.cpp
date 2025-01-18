@@ -1745,8 +1745,9 @@ struct server_context {
 
         if (use_jinja) {
             auto templates = llama_chat_templates_from_model(model, "");
+            GGML_ASSERT(templates.default_template);
             try {
-                templates.default_template.apply({{
+                templates.default_template->apply({{
                     {"role", "user"},
                     {"content", "test"},
                 }}, json(), true);
@@ -3630,6 +3631,7 @@ int main(int argc, char ** argv) {
         std::lock_guard<std::mutex> lock(chat_templates_mutex);
         if (!chat_templates) {
             chat_templates = llama_chat_templates_from_model(ctx_server.model, ctx_server.params_base.chat_template);
+            GGML_ASSERT(chat_templates->default_template);
         }
         return *chat_templates;
     };
@@ -3641,7 +3643,7 @@ int main(int argc, char ** argv) {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            { "chat_template",               templates.default_template.source() },
+            { "chat_template",               templates.default_template->source() },
             { "build_info",                  build_info },
         };
         if (ctx_server.params_base.use_jinja && templates.tool_use_template) {
@@ -3868,7 +3870,7 @@ int main(int argc, char ** argv) {
 
         auto body = json::parse(req.body);
         const auto & templates = get_chat_templates();
-        const auto & chat_template = body.contains("tools") && templates.tool_use_template ? *templates.tool_use_template : templates.default_template;
+        const auto & chat_template = body.contains("tools") && templates.tool_use_template ? *templates.tool_use_template : *templates.default_template;
         json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
 
         return handle_completions_impl(
@@ -4287,8 +4289,8 @@ int main(int argc, char ** argv) {
 
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
-        get_chat_templates().default_template.source().c_str(),
-        common_chat_format_example(get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
+        get_chat_templates().default_template->source().c_str(),
+        common_chat_format_example(*get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));

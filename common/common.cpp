@@ -12,6 +12,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "chat-template.hpp"
 
 #include <algorithm>
 #include <cinttypes>
@@ -1827,11 +1828,18 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
     auto eos_token = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     std::string default_template_src = chat_template_override;
     std::string tool_use_template_src = chat_template_override;
+    bool has_explicit_template = !chat_template_override.empty();
     if (chat_template_override.empty()) {
         auto str = llama_model_chat_template(model, /* name */ nullptr);
-        if (str) default_template_src = str;
+        if (str) {
+            default_template_src = str;
+            has_explicit_template = true;
+        }
         str = llama_model_chat_template(model, /* name */ "tool_use");
-        if (str) tool_use_template_src = str;
+        if (str) {
+            tool_use_template_src = str;
+            has_explicit_template = true;
+        }
     }
     if (default_template_src.empty() || default_template_src == "chatml") {
         if (!tool_use_template_src.empty()) {
@@ -1848,9 +1856,11 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
         }
     }
     return {
-        /* .default_template = */  { default_template_src, bos_token, eos_token },
-        /* .tool_use_template = */ tool_use_template_src.empty() ? std::nullopt
-            : std::optional<minja::chat_template>({ tool_use_template_src, bos_token, eos_token }),
+        has_explicit_template,
+        std::move(std::make_unique<minja::chat_template>(default_template_src, bos_token, eos_token)),
+        tool_use_template_src.empty()
+            ? nullptr
+            : std::move(std::make_unique<minja::chat_template>(tool_use_template_src, bos_token, eos_token))
     };
 }
 
