@@ -1305,12 +1305,10 @@ struct ArgumentsExpression {
 };
 
 static std::string strip(const std::string & s) {
-  static std::regex trailing_spaces_regex("^\\s+|\\s+$");
-  return std::regex_replace(s, trailing_spaces_regex, "");
-  // auto start = s.find_first_not_of(" \t\n\r");
-  // if (start == std::string::npos) return "";
-  // auto end = s.find_last_not_of(" \t\n\r");
-  // return s.substr(start, end - start + 1);
+  auto start = s.find_first_not_of(" \t\n\r");
+  if (start == std::string::npos) return "";
+  auto end = s.find_last_not_of(" \t\n\r");
+  return s.substr(start, end - start + 1);
 }
 
 static std::string html_escape(const std::string & s) {
