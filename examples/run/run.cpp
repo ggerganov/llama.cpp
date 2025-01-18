@@ -19,12 +19,14 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <list>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "common.h"
 #include "json.hpp"
+#include "linenoise.cpp/linenoise.h"
 #include "llama-cpp.h"
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(_WIN32)
@@ -536,7 +538,7 @@ class LlamaData {
     llama_sampler_ptr               sampler;
     llama_context_ptr               context;
     std::vector<llama_chat_message> messages;
-    std::vector<std::string>        msg_strs;
+    std::list<std::string>          msg_strs;
     std::vector<char>               fmtted;
 
     int init(Opt & opt) {
@@ -807,23 +809,43 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
         batch = llama_batch_get_one(&new_token_id, 1);
     }
 
+    printf("\033[0m");
     return 0;
 }
 
-static int read_user_input(std::string & user) {
-    std::getline(std::cin, user);
+static int read_user_input(std::string & user_input) {
+    static const char * prompt_prefix = "> ";
+#ifdef WIN32
+    printf(
+        "\r%*s"
+        "\r\033[0m%s",
+        get_terminal_width(), " ", prompt_prefix);
+
+    std::getline(std::cin, user_input);
     if (std::cin.eof()) {
         printf("\n");
         return 1;
     }
-
-    if (user == "/bye") {
+#else
+    std::unique_ptr<char, decltype(&std::free)> line(const_cast<char *>(linenoise(prompt_prefix)), free);
+    if (!line) {
         return 1;
     }
 
-    if (user.empty()) {
+    user_input = line.get();
+#endif
+
+    if (user_input == "/bye") {
+        return 1;
+    }
+
+    if (user_input.empty()) {
         return 2;
     }
+
+#ifndef WIN32
+    linenoiseHistoryAdd(line.get());
+#endif
 
     return 0;  // Should have data in happy path
 }
@@ -865,10 +887,6 @@ static int handle_user_input(std::string & user_input, const std::string & user)
         return 0;  // No need for interactive input
     }
 
-    printf(
-        "\r%*s"
-        "\r\033[32m> \033[0m",
-        get_terminal_width(), " ");
     return read_user_input(user_input);  // Returns true if input ends the loop
 }
 
