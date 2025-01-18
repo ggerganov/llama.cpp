@@ -202,6 +202,9 @@ class Keys:
         FIM_PAD_ID           = "tokenizer.ggml.fim_pad_token_id"
         FIM_REP_ID           = "tokenizer.ggml.fim_rep_token_id"
         FIM_SEP_ID           = "tokenizer.ggml.fim_sep_token_id"
+        # Vision models
+        IMAGE_START_ID       = "tokenizer.ggml.image_start_token_id"
+        IMAGE_END_ID         = "tokenizer.ggml.image_end_token_id"
         # deprecated:
         PREFIX_ID            = "tokenizer.ggml.prefix_token_id"
         SUFFIX_ID            = "tokenizer.ggml.suffix_token_id"
@@ -210,6 +213,31 @@ class Keys:
     class Adapter:
         TYPE       = "adapter.type"
         LORA_ALPHA = "adapter.lora.alpha"
+
+    class Vision:
+        # only support vision.type = "clip-vit" for now
+        TYPE                = "vision.type"
+        IMAGE_SIZE          = "vision.image_size"
+        PATCH_SIZE          = "vision.patch_size"
+        IMAGE_MEAN          = "vision.image_mean"
+        IMAGE_STD           = "vision.image_std"
+
+        class Clip:
+            ARCHITECTURE        = "vision.clip.architecture"
+            CONTEXT_LENGTH      = "vision.clip.context_length"
+            EMBEDDING_LENGTH    = "vision.clip.embedding_length"
+            BLOCK_COUNT         = "vision.clip.block_count"
+            FEED_FORWARD_LENGTH = "vision.clip.feed_forward_length"
+            PROJECTION_TYPE     = "vision.clip.projection_type"
+            PROJECTION_DIM      = "vision.clip.projection_dim"
+            USE_GELU            = "vision.clip.use_gelu"
+            MAX_POS_EMBEDDING   = "vision.clip.max_position_embeddings"
+            MAX_SLICES          = "vision.clip.max_slices"
+            PROJECTOR_TYPE      = "vision.clip.projector_type"
+            SELECT_LAYER        = "vision.clip.select_layer"
+            PATCH_MERGE_TYPE    = "vision.clip.patch_merge_type"
+            HEAD_COUNT          = "vision.clip.attention.head_count"
+            LAYERNORM_EPS       = "vision.clip.attention.layer_norm_epsilon"
 
 #
 # recommended mapping of model tensor names for storage in gguf
@@ -279,6 +307,8 @@ class MODEL_ARCH(IntEnum):
     GRANITE_MOE      = auto()
     CHAMELEON        = auto()
     WAVTOKENIZER_DEC = auto()
+    # vision models
+    LLAVA_VISION     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -390,6 +420,7 @@ class MODEL_TENSOR(IntEnum):
     ENC_OUTPUT_NORM      = auto()
     CLS                  = auto() # classifier
     CLS_OUT              = auto() # classifier output projection
+    # wavtokenizer
     CONV1D               = auto()
     CONVNEXT_DW          = auto()
     CONVNEXT_NORM        = auto()
@@ -406,6 +437,21 @@ class MODEL_TENSOR(IntEnum):
     POSNET_ATTN_K        = auto()
     POSNET_ATTN_V        = auto()
     POSNET_ATTN_OUT      = auto()
+    # vision
+    V_MMPROJ             = auto()
+    V_ENC_EMBD_CLS       = auto()
+    V_ENC_EMBD_PATCH     = auto()
+    V_ENC_EMBD_POS       = auto()
+    V_ENC_ATTN_Q         = auto()
+    V_ENC_ATTN_K         = auto()
+    V_ENC_ATTN_V         = auto()
+    V_ENC_INPUT_NORM     = auto()
+    V_ENC_OUTPUT         = auto()
+    V_ENC_OUTPUT_NORM    = auto()
+    V_ENC_FFN_UP         = auto()
+    V_ENC_FFN_DOWN       = auto()
+    V_PRE_NORM           = auto()
+    V_POST_NORM          = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -593,6 +639,21 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.POSNET_ATTN_K:             "posnet.{bid}.attn_k",
     MODEL_TENSOR.POSNET_ATTN_V:             "posnet.{bid}.attn_v",
     MODEL_TENSOR.POSNET_ATTN_OUT:           "posnet.{bid}.attn_output",
+    # vision
+    MODEL_TENSOR.V_MMPROJ:                  "v.mmproj_{bid}",
+    MODEL_TENSOR.V_ENC_EMBD_CLS:            "v.enc.embd.cls",
+    MODEL_TENSOR.V_ENC_EMBD_PATCH:          "v.enc.embd.patch",
+    MODEL_TENSOR.V_ENC_EMBD_POS:            "v.enc.embd.pos",
+    MODEL_TENSOR.V_ENC_ATTN_Q:              "v.enc.blk.{bid}.attn_q",
+    MODEL_TENSOR.V_ENC_ATTN_K:              "v.enc.blk.{bid}.attn_k",
+    MODEL_TENSOR.V_ENC_ATTN_V:              "v.enc.blk.{bid}.attn_v",
+    MODEL_TENSOR.V_ENC_INPUT_NORM:          "v.enc.blk.{bid}.input_norm",
+    MODEL_TENSOR.V_ENC_OUTPUT:              "v.enc.blk.{bid}.output",
+    MODEL_TENSOR.V_ENC_OUTPUT_NORM:         "v.enc.blk.{bid}.output_norm",
+    MODEL_TENSOR.V_ENC_FFN_UP:              "v.enc.blk.{bid}.ffn_up",
+    MODEL_TENSOR.V_ENC_FFN_DOWN:            "v.enc.blk.{bid}.ffn_down",
+    MODEL_TENSOR.V_PRE_NORM:                "v.pre_norm",
+    MODEL_TENSOR.V_POST_NORM:               "v.post_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -1534,6 +1595,22 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.POSNET_ATTN_V,
         MODEL_TENSOR.POSNET_ATTN_OUT,
     ],
+    MODEL_ARCH.LLAVA_VISION: [
+        MODEL_TENSOR.V_MMPROJ,
+        MODEL_TENSOR.V_ENC_EMBD_CLS,
+        MODEL_TENSOR.V_ENC_EMBD_PATCH,
+        MODEL_TENSOR.V_ENC_EMBD_POS,
+        MODEL_TENSOR.V_ENC_ATTN_Q,
+        MODEL_TENSOR.V_ENC_ATTN_K,
+        MODEL_TENSOR.V_ENC_ATTN_V,
+        MODEL_TENSOR.V_ENC_INPUT_NORM,
+        MODEL_TENSOR.V_ENC_OUTPUT,
+        MODEL_TENSOR.V_ENC_OUTPUT_NORM,
+        MODEL_TENSOR.V_ENC_FFN_UP,
+        MODEL_TENSOR.V_ENC_FFN_DOWN,
+        MODEL_TENSOR.V_PRE_NORM,
+        MODEL_TENSOR.V_POST_NORM,
+    ],
     # TODO
 }
 
@@ -1613,6 +1690,15 @@ class PoolingType(IntEnum):
     NONE = 0
     MEAN = 1
     CLS  = 2
+
+
+class CLIPProjectorType(Enum):
+    MLP = 'mlp'
+
+
+class CLIPPatchMergeType(Enum):
+    FLAT = 'flat'
+    SPATIAL_UNPAD = 'spatial_unpad'
 
 
 class GGMLQuantizationType(IntEnum):

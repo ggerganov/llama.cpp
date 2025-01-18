@@ -40,7 +40,7 @@ struct clip_hparams {
     std::array<float, 3> image_mean;
     std::array<float, 3> image_std;
 
-    std::array<int32_t, 32> image_grid_pinpoints;
+    std::array<int32_t, 32> image_grid_pinpoints; // TODO: should this be array of (x, y) pairs?
     int32_t image_crop_resolution;
 };
 

@@ -1292,7 +1292,7 @@ extern "C" {
 
     // Encode patches into embeddings
     LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, struct llama_vision_patches * p);
-    LLAMA_API struct ggml_tensor * llama_vision_get_output_tensor(llama_context * ctx);
+    LLAMA_API struct ggml_tensor * llama_vision_get_output_tensor(struct llama_context * ctx);
 
     //
     // Model split
