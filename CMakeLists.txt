@@ -132,7 +132,7 @@ if (NOT MSVC)
 endif()
 
 #
-# 3rd party
+# 3rd-party
 #
 
 if (NOT TARGET ggml)
