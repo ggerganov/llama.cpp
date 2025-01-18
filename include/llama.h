@@ -229,6 +229,16 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
+    // represent an RGB image
+    // size of data must be equal to 3*nx*ny
+    typedef struct llama_vision_bitmap {
+        uint32_t nx;
+        uint32_t ny;
+        unsigned char * data;
+    } llama_vision_bitmap;
+
+    struct llama_vision_patches;
+
     typedef bool (*llama_progress_callback)(float progress, void * user_data);
 
     // Input data for llama_decode
