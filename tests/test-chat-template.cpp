@@ -291,6 +291,7 @@ int main(void) {
             printf("Expected:\n%s\n", test_case.expected_output.c_str());
             printf("-------------------------\n");
             printf("Actual:\n%s\n", output.c_str());
+            fflush(stdout);
             assert(output == test_case.expected_output);
         }
     }
@@ -315,6 +316,7 @@ int main(void) {
                 printf("Expected:\n%s\n", expected_output.c_str());
                 printf("-------------------------\n");
                 printf("Actual:\n%s\n", output.c_str());
+                fflush(stdout);
                 assert(output == expected_output);
             }
         } catch (const std::exception & e) {
