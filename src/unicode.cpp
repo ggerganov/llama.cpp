@@ -12,16 +12,7 @@
 #include <cstdint>
 #include <locale>
 #include <map>
-
-// silence warnings triggered by a gcc bug when using sanitizers
-// ref: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105562#c21
-#pragma GCC diagnostic push
-#if defined __SANITIZE_ADDRESS__ && defined __OPTIMIZE__
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
 #include <regex>
-#pragma GCC diagnostic pop
-
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
