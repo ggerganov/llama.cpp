@@ -64,6 +64,33 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
     }
 }
 
+// return a list of splits for a given path
+// for example, given "<name>-00002-of-00004.gguf", returns list of all 4 splits
+static std::vector<std::string> llama_get_list_splits(const std::string & path, const int idx, const int n_split) {
+    std::vector<std::string> paths;
+    std::string split_prefix;
+    std::vector<char> buf(llama_path_max(), 0);
+
+    {
+        int ret = llama_split_prefix(buf.data(), buf.size(), path.c_str(), idx, n_split);
+        if (!ret) {
+            throw std::runtime_error(format("invalid split file name: %s", path.c_str()));
+        }
+        split_prefix = std::string(buf.data(), ret);
+    }
+
+    if (split_prefix.empty()) {
+        throw std::runtime_error(format("invalid split file: %s", path.c_str()));
+    }
+
+    for (int idx = 0; idx < n_split; ++idx) {
+        int ret = llama_split_path(buf.data(), buf.size(), split_prefix.c_str(), idx, n_split);
+        paths.push_back(std::string(buf.data(), ret));
+    }
+
+    return paths;
+}
+
 namespace GGUFMeta {
     template <typename T, gguf_type gt_, T (*gfun)(const gguf_context *, const int64_t)>
     struct GKV_Base_Type {
@@ -413,7 +440,12 @@ namespace GGUFMeta {
     template bool llama_model_loader::get_key_or_arr<std::array<int, 4>>(enum llm_kv kid, std::array<int, 4> & result, uint32_t n, bool required);
     template bool llama_model_loader::get_key_or_arr<std::array<uint32_t, 512>>(enum llm_kv kid, std::array<uint32_t, 512> & result, uint32_t n, bool required);
 
-llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
+llama_model_loader::llama_model_loader(
+        const std::string & fname,
+        std::vector<std::string> & splits,
+        bool use_mmap,
+        bool check_tensors,
+        const struct llama_model_kv_override * param_overrides_p) {
     int trace = 0;
     if (getenv("LLAMA_TRACE")) {
         trace = atoi(getenv("LLAMA_TRACE"));
@@ -425,6 +457,7 @@ llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap,
         }
     }
 
+    // Load the main GGUF
     struct ggml_context * ctx = NULL;
     struct gguf_init_params params = {
         /*.no_alloc = */ true,
@@ -460,35 +493,54 @@ llama_model_loader::llama_model_loader(const std::string & fname, bool use_mmap,
 
     // Load additional GGML contexts
     if (n_split > 1) {
+        // make sure the main file is loaded first
         uint16_t idx = 0;
-        get_key(llm_kv(LLM_KV_SPLIT_NO), idx);
+        const std::string kv_split_no = llm_kv(LLM_KV_SPLIT_NO);
+        get_key(kv_split_no, idx);
         if (idx != 0) {
-            throw std::runtime_error(format("illegal split file: %d, model must be loaded with the first split", idx));
+            throw std::runtime_error(format("illegal split file idx: %d (file: %s), model must be loaded with the first split", idx, fname.c_str()));
         }
 
-        std::vector<char> split_prefix(llama_path_max(), 0);
-        if (!llama_split_prefix(split_prefix.data(), split_prefix.size(), fname.c_str(), idx, n_split)) {
-            throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
+        // generate list of splits if needed
+        if (splits.empty()) {
+            splits = llama_get_list_splits(fname, idx, n_split);
+        }
+
+        // in case user give a custom list of splits, check if it matches the expected number
+        if (n_split != (uint16_t)splits.size()) {
+            throw std::runtime_error(format("invalid split count, given: %zu splits, but expected %d", splits.size(), n_split));
         }
 
         if (trace > 0) {
             LLAMA_LOG_INFO("%s: loading additional %d GGUFs\n", __func__, n_split);
         }
 
-        std::vector<char> split_path(llama_path_max(), 0);
+        // load other splits
         for (idx = 1; idx < n_split; idx++) {
-            llama_split_path(split_path.data(), split_path.size(), split_prefix.data(), idx, n_split);
+            const char * fname_split = splits[idx].c_str();
 
             struct gguf_init_params split_params = {
                 /*.no_alloc = */ true,
                 /*.ctx      = */ &ctx,
             };
-            gguf_context_ptr ctx_gguf { gguf_init_from_file(split_path.data(), split_params) };
+            gguf_context_ptr ctx_gguf { gguf_init_from_file(fname_split, split_params) };
             if (!ctx_gguf) {
-                throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, split_path.data()));
+                throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, fname_split));
             }
 
-            files.emplace_back(new llama_file(split_path.data(), "rb"));
+            // check idx
+            {
+                const int kid = gguf_find_key(ctx_gguf.get(), kv_split_no.c_str());
+                if (kid < 0) {
+                    throw std::runtime_error(format("missing key %s in GGUF split %s", kv_split_no.c_str(), fname_split));
+                }
+                int idx_gguf = gguf_get_val_u16(ctx_gguf.get(), kid);
+                if (idx_gguf != idx) {
+                    throw std::runtime_error(format("invalid split file idx: %d (file: %s), expected %d", idx_gguf, fname_split, idx));
+                }
+            }
+
+            files.emplace_back(new llama_file(fname_split, "rb"));
             contexts.emplace_back(ctx);
 
             // Save tensors data offset info of the shard.

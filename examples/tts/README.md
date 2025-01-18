@@ -78,3 +78,40 @@ play the audio:
 $ aplay output.wav
 ```
 
+### Running the example with llama-server
+Running this example with `llama-server` is also possible and requires two
+server instances to be started. One will serve the LLM model and the other
+will serve the voice decoder model.
+
+The LLM model server can be started with the following command:
+```console
+$ ./build/bin/llama-server -m ./models/outetts-0.2-0.5B-q8_0.gguf --port 8020
+```
+
+And the voice decoder model server can be started using:
+```console
+./build/bin/llama-server -m ./models/wavtokenizer-large-75-f16.gguf --port 8021 --embeddings --pooling none
+```
+
+Then we can run [tts-outetts.py](tts-outetts.py) to generate the audio.
+
+First create a virtual environment for python and install the required
+dependencies (this in only required to be done once):
+```console
+$ python3 -m venv venv
+$ source venv/bin/activate
+(venv) pip install requests numpy
+```
+
+And then run the python script using:
+```conole
+(venv) python ./examples/tts/tts-outetts.py http://localhost:8020 http://localhost:8021 "Hello world"
+spectrogram generated: n_codes: 90, n_embd: 1282
+converting to audio ...
+audio generated: 28800 samples
+audio written to file "output.wav"
+```
+And to play the audio we can again use aplay or any other media player:
+```console
+$ aplay output.wav
+```
