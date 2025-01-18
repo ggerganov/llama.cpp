@@ -76,6 +76,15 @@
 #endif
 #define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
 
+const std::string LLAMA_CHATML_TEMPLATE(R"(
+    {%- for message in messages -%}
+        {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
+    {%- endfor -%}
+    {%- if add_generation_prompt -%}
+        {{- "<|im_start|>assistant\n" -}}
+    {%- endif -%}
+)");
+
 //
 // CURL utils
 //
@@ -1082,7 +1091,6 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     if (params.n_gpu_layers != -1) {
         mparams.n_gpu_layers = params.n_gpu_layers;
     }
-    mparams.rpc_servers     = params.rpc_servers.c_str();
     mparams.main_gpu        = params.main_gpu;
     mparams.split_mode      = params.split_mode;
     mparams.tensor_split    = params.tensor_split;
@@ -1801,38 +1809,28 @@ std::string common_chat_apply_template(
     }
 
     int alloc_size = 0;
-    bool fallback = false; // indicate if we must fallback to default chatml
     std::vector<llama_chat_message> chat;
     for (const auto & msg : msgs) {
         chat.push_back({msg.role.c_str(), msg.content.c_str()});
         alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
     }
 
-    const char * ptr_tmpl = tmpl.source().c_str();
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    int32_t res = llama_chat_apply_template(tmpl.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
 
     // error: chat template is not supported
     if (res < 0) {
-        if (ptr_tmpl != nullptr) {
-            // if the custom "tmpl" is not supported, we throw an error
-            // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
-            throw std::runtime_error("this custom template is not supported");
-        }
-
-        // If the built-in template is not supported, we default to chatml
-        res = llama_chat_apply_template("chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
-        fallback = true;
+        // if the custom "tmpl" is not supported, we throw an error
+        // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
+        throw std::runtime_error("this custom template is not supported");
     }
 
     // if it turns out that our buffer is too small, we resize it
     if ((size_t) res > buf.size()) {
         buf.resize(res);
-        res = llama_chat_apply_template(
-            fallback ? "chatml" : ptr_tmpl,
-            chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+        res = llama_chat_apply_template(tmpl.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
     }
 
     std::string formatted_chat(buf.data(), res);
@@ -1887,14 +1885,7 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
         if (!tool_use_template_src.empty()) {
             default_template_src = tool_use_template_src;
         } else {
-            default_template_src = R"(
-                {%- for message in messages -%}
-                    {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
-                {%- endfor -%}
-                {%- if add_generation_prompt -%}
-                    {{- "<|im_start|>assistant\n" -}}
-                {%- endif -%}
-            )";
+            default_template_src = LLAMA_CHATML_TEMPLATE;
         }
     }
     return {

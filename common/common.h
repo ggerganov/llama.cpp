@@ -29,6 +29,8 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+extern const std::string LLAMA_CHATML_TEMPLATE;
+
 struct common_adapter_lora_info {
     std::string path;
     float scale;
@@ -252,7 +254,6 @@ struct common_params {
     std::string lookup_cache_static  = ""; // path of static ngram cache file for lookup decoding           // NOLINT
     std::string lookup_cache_dynamic = ""; // path of dynamic ngram cache file for lookup decoding          // NOLINT
     std::string logits_file          = ""; // file for saving *all* logits                                  // NOLINT
-    std::string rpc_servers          = ""; // comma separated list of RPC servers                           // NOLINT
 
     std::vector<std::string> in_files;   // all input files
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)

@@ -3969,7 +3969,7 @@ int main(int argc, char ** argv) {
         auto tool_call_style = llama_tool_call_style_detect(chat_template);
         LOG_INF("Tool call style: %s\n", llama_tool_call_style_name(tool_call_style).c_str());
 
-        json data = oaicompat_completion_params_parse(ctx_server.model, body, chat_template, tool_call_style, params.use_jinja);
+        json data = oaicompat_completion_params_parse(body, chat_template, tool_call_style, params.use_jinja);
 
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
