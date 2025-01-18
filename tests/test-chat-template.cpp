@@ -8,6 +8,7 @@
 #include "llama.h"
 #include "common.h"
 #include "chat-template.hpp"
+#include "llama-chat.h"
 
 int main(void) {
     std::vector<llama_chat_message> conversation {
@@ -319,9 +320,10 @@ int main(void) {
     std::vector<common_chat_msg> chat2;
     common_chat_msg sys_msg{"system", "You are a helpful assistant"};
 
-    auto fmt_sys = [&](std::string tmpl) {
-        auto output = common_chat_format_single(nullptr, tmpl, chat2, sys_msg, false);
-        printf("fmt_sys(%s) : %s\n", tmpl.c_str(), output.c_str());
+    auto fmt_sys = [&](std::string tmpl_str) {
+        minja::chat_template tmpl(tmpl_str, "", "");
+        auto output = common_chat_format_single(tmpl, chat2, sys_msg, false, /* use_jinja= */ false);
+        printf("fmt_sys(%s) : %s\n", tmpl_str.c_str(), output.c_str());
         printf("-------------------------\n");
         return output;
     };
@@ -345,9 +347,10 @@ int main(void) {
     chat2.push_back({"assistant", "I am assistant"});
     common_chat_msg new_msg{"user", "How are you"};
 
-    auto fmt_single = [&](std::string tmpl) {
-        auto output = common_chat_format_single(nullptr, tmpl, chat2, new_msg, true);
-        printf("fmt_single(%s) : %s\n", tmpl.c_str(), output.c_str());
+    auto fmt_single = [&](std::string tmpl_str) {
+        minja::chat_template tmpl(tmpl_str, "", "");
+        auto output = common_chat_format_single(tmpl, chat2, new_msg, true, /* use_jinja= */ false);
+        printf("fmt_single(%s) : %s\n", tmpl_str.c_str(), output.c_str());
         printf("-------------------------\n");
         return output;
     };
@@ -361,6 +364,8 @@ int main(void) {
     assert(fmt_single("gemma")  == "\n<start_of_turn>user\nHow are you<end_of_turn>\n<start_of_turn>model\n");
     assert(fmt_single("llama3") == "<|start_header_id|>user<|end_header_id|>\n\nHow are you<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n");
     assert(fmt_single("gigachat") == "user<|role_sep|>How are you<|message_sep|>available functions<|role_sep|>[]<|message_sep|>assistant<|role_sep|>");
+
+    assert(llm_chat_detect_template(LLAMA_CHATML_TEMPLATE) == LLM_CHAT_TEMPLATE_CHATML);
 
     return 0;
 }

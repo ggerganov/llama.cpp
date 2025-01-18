@@ -351,7 +351,7 @@ static llama_tokens format_infill(
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+inline std::string format_chat(const llama_chat_template & tmpl, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
@@ -379,7 +379,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat.push_back({role, content});
     }
 
-    const auto formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
+    const auto formatted_chat = common_chat_apply_template(tmpl, chat, true, /* use_jinja= */ false);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
@@ -579,9 +579,8 @@ static json oaicompat_completion_params_parse(const json & body) {
 }
 
 static json oaicompat_completion_params_parse(
-    const struct llama_model * model,
     const json & body, /* openai api json semantics */
-    const minja::chat_template & tmpl,
+    const llama_chat_template & tmpl,
     bool use_jinja)
 {
     json llama_params;
@@ -622,7 +621,7 @@ static json oaicompat_completion_params_parse(
     if (use_jinja) {
         llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
     } else {
-        llama_params["prompt"] = format_chat(model, tmpl.source(), body.at("messages"));
+        llama_params["prompt"] = format_chat(tmpl, body.at("messages"));
     }
 
     // Handle "n" field

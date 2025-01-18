@@ -3869,7 +3869,7 @@ int main(int argc, char ** argv) {
         auto body = json::parse(req.body);
         const auto & templates = get_chat_templates();
         const auto & chat_template = body.contains("tools") && templates.tool_use_template ? *templates.tool_use_template : templates.default_template;
-        json data = oaicompat_completion_params_parse(ctx_server.model, body, chat_template, params.use_jinja);
+        json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
 
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
@@ -4288,7 +4288,7 @@ int main(int argc, char ** argv) {
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
         get_chat_templates().default_template.source().c_str(),
-        common_chat_format_example(ctx_server.model, get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
+        common_chat_format_example(get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));
