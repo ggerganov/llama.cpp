@@ -15,7 +15,7 @@ struct llama_kv_cell {
 
     std::set<llama_seq_id> seq_id;
 
-    bool has_seq_id(const llama_seq_id & id) const {
+    bool has_seq_id(const llama_seq_id id) const {
         return seq_id.find(id) != seq_id.end();
     }
 

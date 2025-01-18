@@ -144,11 +144,12 @@ static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng)
 
         const llama_token_data * data;
 
-        bool operator==(const probs_iterator & other) const { return data == other.data; }
-        bool operator!=(const probs_iterator & other) const { return data != other.data; }
+        bool operator==(const probs_iterator other) const { return data == other.data; }
+        bool operator!=(const probs_iterator other) const { return data != other.data; }
         const float & operator*() const { return data->p; }
         probs_iterator & operator++() { ++data; return *this; }
-        probs_iterator operator++(int) { probs_iterator tmp = *this; ++data; return tmp; }
+        probs_iterator operator++(int) {
+            const probs_iterator tmp = *this; ++data; return tmp; }
     };
 
 #ifdef __GNUC__
@@ -239,7 +240,7 @@ static void llama_sampler_top_k_impl(llama_token_data_array * cur_p, int32_t k) 
 
     // Sort scores in descending order
     if (!cur_p->sorted) {
-        auto comp = [](const llama_token_data & a, const llama_token_data & b) {
+        auto comp = [](const llama_token_data a, const llama_token_data b) {
             return a.logit > b.logit;
         };
         if (k <= 128) {
