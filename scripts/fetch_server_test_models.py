@@ -86,7 +86,7 @@ if __name__ == '__main__':
             logging.warning(f'Skipping model at {m.hf_repo} / {m.hf_file} because it is a split file')
             continue
         logging.info(f'Using llama-cli to ensure model {m.hf_repo}/{m.hf_file} was fetched')
-        cmd = [cli_path, '-hfr', m.hf_repo, '-hff', m.hf_file, '-n', '1', '-p', 'Hey', '--no-warmup', '--log-disable']
+        cmd = [cli_path, '-hfr', m.hf_repo, '-hff', m.hf_file, '-n', '1', '-p', 'Hey', '--no-warmup', '--log-disable', '-no-cnv']
         if m.hf_file != 'tinyllamas/stories260K.gguf' and not m.hf_file.startswith('Mistral-Nemo'):
             cmd.append('-fa')
         try:
