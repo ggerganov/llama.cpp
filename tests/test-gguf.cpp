@@ -1031,6 +1031,12 @@ static bool same_tensor_data(const struct ggml_context * orig, const struct ggml
 
     struct ggml_tensor * t_orig = ggml_get_first_tensor(orig);
     struct ggml_tensor * t_read = ggml_get_first_tensor(read);
+
+    if (std::string(t_read->name) != "GGUF tensor data binary blob") {
+        return false;
+    }
+    t_read = ggml_get_next_tensor(read, t_read);
+
     while (t_orig) {
         if (!t_read) {
             ok = false;
