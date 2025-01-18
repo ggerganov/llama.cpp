@@ -229,6 +229,8 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
+    struct llama_vision_patches;
+
     // represent an RGB image
     // size of data must be equal to 3*nx*ny
     typedef struct llama_vision_bitmap {
@@ -236,8 +238,6 @@ extern "C" {
         uint32_t ny;
         unsigned char * data;
     } llama_vision_bitmap;
-
-    struct llama_vision_patches;
 
     typedef bool (*llama_progress_callback)(float progress, void * user_data);
 
@@ -263,6 +263,8 @@ extern "C" {
         int32_t      *  n_seq_id;
         llama_seq_id ** seq_id;
         int8_t       *  logits; // TODO: rename this to "output"
+
+        struct ggml_tensor *  embd_tensor;
     } llama_batch;
 
     enum llama_model_kv_override_type {
@@ -854,6 +856,10 @@ extern "C" {
             int32_t embd,
             int32_t n_seq_max);
 
+    // Allocates a batch based on a tensor, only used by vision API for now
+    // Unlike llama_batch_get_one, this will need to be freed after use
+    LLAMA_API struct llama_batch llama_batch_get_one_from_tensor(struct ggml_tensor * tensor, int32_t p0, int32_t seq_id);
+
     // Frees a batch of tokens allocated with llama_batch_init()
     LLAMA_API void llama_batch_free(struct llama_batch batch);
 
@@ -1271,6 +1277,22 @@ extern "C" {
 
     // TODO: extend in the future
     //LLAMA_API void llama_decode_with_sampler(struct llama_context * ctx, struct llama_sampler * smpl, struct llama_batch batch, ...);
+
+    //
+    // Vision API
+    //
+
+    // Container for RGB bitmap
+    LLAMA_API struct llama_vision_bitmap * llama_vision_bitmap_init(uint32_t nx, uint32_t ny);
+    LLAMA_API void llama_vision_bitmap_free(struct llama_vision_bitmap * bmp);
+
+    // Create patches from the RGB bitmap
+    LLAMA_API struct llama_vision_patches * llama_vision_patches_init(struct llama_context * ctx, llama_vision_bitmap * bmp);
+    LLAMA_API void llama_vision_patches_free(struct llama_vision_patches * p);
+
+    // Encode patches into embeddings
+    LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, struct llama_vision_patches * p);
+    LLAMA_API struct ggml_tensor * llama_vision_get_output_tensor(llama_context * ctx);
 
     //
     // Model split

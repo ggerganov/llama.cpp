@@ -1245,6 +1245,54 @@ void llama_model::load_hparams(llama_model_loader & ml) {
     }
 
     hparams.rope_type = llama_model_rope_type(this);
+
+    // vision model
+    auto & vparams = clip.hparams;
+    std::string vision_type;
+    ml.get_key(LLM_KV_VISION_TYPE, vision_type, false);
+    if (vision_type == "clip-vit") {
+        LLAMA_LOG_INFO("%s: loading clip-vit vision model\n", __func__);
+        has_vision = true;
+        ml.get_key(LLM_KV_VISION_IMAGE_SIZE,               vparams.image_size,     true);
+        ml.get_key(LLM_KV_VISION_PATCH_SIZE,               vparams.patch_size,     true);
+        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_MEAN,        vparams.image_mean, 3,  true);
+        ml.get_key_or_arr(LLM_KV_VISION_IMAGE_STD,         vparams.image_std,  3,  true);
+        ml.get_key(LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,    vparams.hidden_size,    true);
+        ml.get_key(LLM_KV_VISION_CLIP_BLOCK_COUNT,         vparams.n_layer,        true);
+        ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, vparams.n_intermediate, true);
+        ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          vparams.n_head,         true);
+        ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       vparams.eps,            true);
+        ml.get_key(LLM_KV_VISION_CLIP_SELECT_LAYER,        vparams.select_layer,   true);
+        {
+            std::string name;
+            ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE, name, true);
+            vparams.proj_type = clip_projector_type_from_name(name);
+            if (vparams.proj_type == CLIP_PROJECTOR_TYPE_UNKNOWN) {
+                throw std::runtime_error(format("unsupported clip projector type: %s", name.c_str()));
+            }
+        }
+        {
+            std::string name;
+            ml.get_key(LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE, name, false);
+            vparams.mm_patch_merge_type = mm_patch_merge_from_name(name);
+        }
+        {
+            std::string arch;
+            ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
+            vparams.arch = vision_arch_from_string(arch);
+        }
+    } else if (!vision_type.empty()) {
+        throw std::runtime_error(format("unsupported vision type: %s", vision_type.c_str()));
+    }
+
+    // arch-specific CLIP hparams
+    switch (vparams.arch) {
+        case VISION_ARCH_LLAVA:
+            {
+                ml.get_key(LLM_KV_VISION_CLIP_MAX_POS_EMBD, vparams.max_pos_embd, true);
+            } break;
+        default: (void)0;
+    }
 }
 
 void llama_model::load_vocab(llama_model_loader & ml) {
@@ -3356,6 +3404,72 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             LLAMA_LOG_DEBUG("%s: tensor '%s' (%s) (and %d others) cannot be used with preferred buffer type %s, using %s instead\n",
                 __func__, first_moved_tensor->name, ggml_type_name(first_moved_tensor->type), n_moved_tensors - 1,
                 ggml_backend_buft_name(first_moved_from_buft), ggml_backend_buft_name(first_moved_to_buft));
+        }
+    }
+
+    // load tensors for vision model
+    auto & vparams = clip.hparams;
+    if (has_vision) {
+        const int64_t n_layer      = vparams.n_layer;
+        const int64_t n_embd       = vparams.hidden_size;
+        const int64_t n_ff         = vparams.n_intermediate;
+        const int64_t max_pos_embd = vparams.max_pos_embd;
+        const int64_t n_channel    = 3; // always RGB
+        const int64_t patch_size   = vparams.patch_size;
+        const auto tn = VISION_TN(vparams.arch);
+
+        // clip is CPU-only for now
+        clip.buft = ggml_backend_cpu_buffer_type();
+        ggml_context * ctx_vision = ctx_map.at(clip.buft);
+        clip.layers.resize(n_layer);
+
+        switch (vparams.arch) {
+            case VISION_ARCH_LLAVA:
+                {
+                    clip.mm_1_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 1), {n_embd, n_ff});
+                    clip.mm_1_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 1), {n_ff});
+                    clip.mm_2_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "weight", 2), {n_ff,   n_ff});
+                    clip.mm_2_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_MMPROJ, "bias"  , 2), {n_ff});
+
+                    clip.class_embedding     = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_CLS            ), {n_embd});
+                    clip.patch_embeddings    = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_embd});
+                    clip.position_embeddings = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_EMBD_POS,   "weight"), {n_embd, max_pos_embd});
+
+                    clip.pre_norm_w          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "weight"), {n_embd});
+                    clip.pre_norm_b          = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_PRE_NORM,       "bias"  ), {n_embd});
+                    clip.post_norm_w         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "weight"), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    clip.post_norm_b         = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_POST_NORM,      "bias"  ), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        auto & layer = clip.layers[i];
+
+                        layer.k_w        = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_ATTN_K,      "weight", i), {n_embd, n_embd});
+                        layer.k_b        = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_ATTN_K,      "bias"  , i), {n_embd});
+                        layer.v_w        = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_ATTN_V,      "weight", i), {n_embd, n_embd});
+                        layer.v_b        = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_ATTN_V,      "bias"  , i), {n_embd});
+                        layer.q_w        = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_ATTN_Q,      "weight", i), {n_embd, n_embd});
+                        layer.q_b        = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_ATTN_Q,      "bias"  , i), {n_embd});
+
+                        layer.ffn_up_w   = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_FFN_UP,      "weight", i), {n_embd, n_ff});
+                        layer.ffn_up_b   = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_FFN_UP,      "bias"  , i), {n_ff});
+                        layer.ffn_down_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_FFN_DOWN,    "weight", i), {n_ff, n_embd});
+                        layer.ffn_down_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_FFN_DOWN,    "bias"  , i), {n_embd});
+
+                        layer.norm_in_w  = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_INPUT_NORM,  "weight", i), {n_embd});
+                        layer.norm_in_b  = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_INPUT_NORM,  "bias"  , i), {n_embd});
+                        layer.norm_out_w = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_OUTPUT_NORM, "weight", i), {n_embd});
+                        layer.norm_out_b = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_OUTPUT_NORM, "bias"  , i), {n_embd});
+
+                        layer.output_w   = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_OUTPUT,      "weight", i), {n_embd, n_embd});
+                        layer.output_b   = ml.create_tensor(ctx_vision, tn(VISION_TENSOR_ENC_OUTPUT,      "bias"  , i), {n_embd});
+                    }
+                } break;
+            default:
+                throw std::runtime_error("unknown vision architecture");
+        }
+
+        if (clip_n_mmproj_embd(clip) != hparams.n_embd) {
+            std::runtime_error("model has vision, but n_mmproj_embd != n_embd");
         }
     }
 

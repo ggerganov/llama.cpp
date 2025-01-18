@@ -69,6 +69,11 @@ enum llm_arch {
     LLM_ARCH_UNKNOWN,
 };
 
+enum vision_arch {
+    VISION_ARCH_UNKNOWN,
+    VISION_ARCH_LLAVA,
+};
+
 enum llm_kv {
     LLM_KV_GENERAL_TYPE,
     LLM_KV_GENERAL_ARCHITECTURE,
@@ -192,6 +197,27 @@ enum llm_kv {
 
     LLM_KV_CONVNEXT_EMBEDDING_LENGTH,
     LLM_KV_CONVNEXT_BLOCK_COUNT,
+
+    LLM_KV_VISION_TYPE,
+    LLM_KV_VISION_IMAGE_SIZE,
+    LLM_KV_VISION_PATCH_SIZE,
+    LLM_KV_VISION_IMAGE_MEAN,
+    LLM_KV_VISION_IMAGE_STD,
+    LLM_KV_VISION_CLIP_ARCHITECTURE,
+    LLM_KV_VISION_CLIP_CONTEXT_LENGTH,
+    LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,
+    LLM_KV_VISION_CLIP_BLOCK_COUNT,
+    LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH,
+    LLM_KV_VISION_CLIP_PROJECTION_TYPE,
+    LLM_KV_VISION_CLIP_PROJECTION_DIM,
+    LLM_KV_VISION_CLIP_USE_GELU,
+    LLM_KV_VISION_CLIP_MAX_POS_EMBD,
+    LLM_KV_VISION_CLIP_MAX_SLICES,
+    LLM_KV_VISION_CLIP_PROJECTOR_TYPE,
+    LLM_KV_VISION_CLIP_SELECT_LAYER,
+    LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE,
+    LLM_KV_VISION_CLIP_HEAD_COUNT,
+    LLM_KV_VISION_CLIP_LAYERNORM_EPS,
 
     // deprecated:
     LLM_KV_TOKENIZER_PREFIX_ID,
@@ -328,6 +354,23 @@ enum llm_tensor {
     LLM_TENSOR_POS_NET_ATTN_OUT,
 };
 
+enum vision_tensor {
+    VISION_TENSOR_MMPROJ,
+    VISION_TENSOR_ENC_EMBD_CLS,
+    VISION_TENSOR_ENC_EMBD_PATCH,
+    VISION_TENSOR_ENC_EMBD_POS,
+    VISION_TENSOR_ENC_ATTN_Q,
+    VISION_TENSOR_ENC_ATTN_K,
+    VISION_TENSOR_ENC_ATTN_V,
+    VISION_TENSOR_ENC_INPUT_NORM,
+    VISION_TENSOR_ENC_OUTPUT,
+    VISION_TENSOR_ENC_OUTPUT_NORM,
+    VISION_TENSOR_ENC_FFN_UP,
+    VISION_TENSOR_ENC_FFN_DOWN,
+    VISION_TENSOR_PRE_NORM,
+    VISION_TENSOR_POST_NORM,
+};
+
 enum llm_tensor_layer {
     LLM_TENSOR_LAYER_INPUT,
     LLM_TENSOR_LAYER_REPEATING,
@@ -351,9 +394,10 @@ struct LLM_KV {
 //   std::string name = tn(LLM_TENSOR_TOKEN_EMBD, "bias");         -> "token_embd.bias"
 //   std::string name = tn(LLM_TENSOR_ATTN_NORM, "weight", 3);     -> "blk.3.attn_norm.weight"
 //
-struct LLM_TN_IMPL {
-    const llm_arch arch;
-    const llm_tensor tensor;
+template<typename Tname, typename Ttensor>
+struct BASE_TN_IMPL {
+    const Tname arch;
+    const Ttensor tensor;
     const char * const suffix;
     const int bid;
     const int xid;
@@ -364,15 +408,16 @@ struct LLM_TN_IMPL {
         return str();
     }
 
-    friend bool operator==(const std::string & str, const LLM_TN_IMPL & tn) {
+    friend bool operator==(const std::string & str, const BASE_TN_IMPL & tn) {
         return str == tn.str();
     }
 
-    friend bool operator!=(const std::string & str, const LLM_TN_IMPL & tn) {
+    friend bool operator!=(const std::string & str, const BASE_TN_IMPL & tn) {
         return str != tn.str();
     }
 };
 
+using LLM_TN_IMPL = BASE_TN_IMPL<llm_arch, llm_tensor>;
 struct LLM_TN {
     LLM_TN(llm_arch arch) : arch(arch) {}
 
@@ -387,6 +432,20 @@ struct LLM_TN {
     }
 };
 
+struct VISION_TN {
+    VISION_TN(vision_arch arch) : arch(arch) {}
+
+    vision_arch arch;
+
+    BASE_TN_IMPL<vision_arch, vision_tensor> operator()(vision_tensor tensor, const char * suffix, int bid = -1, int xid = -1) const {
+        return { arch, tensor, suffix, bid, xid };
+    }
+
+    BASE_TN_IMPL<vision_arch, vision_tensor> operator()(vision_tensor tensor, int bid = -1, int xid = -1) const {
+        return { arch, tensor, nullptr, bid, xid };
+    }
+};
+
 
 struct llm_tensor_info {
     llm_tensor_layer layer;
@@ -396,5 +455,7 @@ struct llm_tensor_info {
 const char * llm_arch_name(llm_arch arch);
 
 llm_arch llm_arch_from_string(const std::string & name);
+
+vision_arch vision_arch_from_string(const std::string & name);
 
 const llm_tensor_info & llm_tensor_info_for(llm_tensor tensor);

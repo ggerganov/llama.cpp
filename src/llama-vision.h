@@ -2,14 +2,10 @@
 
 #include "ggml.h"
 #include "llama.h"
+#include "llama-arch.h"
 
 #include <vector>
 #include <array>
-
-enum vision_arch {
-    VISION_ARCH_UNKNOWN,
-    VISION_ARCH_LLAVA,
-};
 
 enum clip_projector_type {
     CLIP_PROJECTOR_TYPE_UNKNOWN,
@@ -50,72 +46,76 @@ struct clip_hparams {
 
 struct clip_layer {
     // attention
-    struct ggml_tensor * k_w = NULL;
-    struct ggml_tensor * k_b = NULL;
-    struct ggml_tensor * q_w = NULL;
-    struct ggml_tensor * q_b = NULL;
-    struct ggml_tensor * v_w = NULL;
-    struct ggml_tensor * v_b = NULL;
+    struct ggml_tensor * k_w = nullptr;
+    struct ggml_tensor * k_b = nullptr;
+    struct ggml_tensor * q_w = nullptr;
+    struct ggml_tensor * q_b = nullptr;
+    struct ggml_tensor * v_w = nullptr;
+    struct ggml_tensor * v_b = nullptr;
 
-    struct ggml_tensor * output_w = NULL;
-    struct ggml_tensor * output_b = NULL;
+    struct ggml_tensor * output_w = nullptr;
+    struct ggml_tensor * output_b = nullptr;
 
     // layernorm 1
-    struct ggml_tensor * norm_in_w = NULL;
-    struct ggml_tensor * norm_in_b = NULL;
+    struct ggml_tensor * norm_in_w = nullptr;
+    struct ggml_tensor * norm_in_b = nullptr;
 
     // ff
-    struct ggml_tensor * ffn_up_w = NULL;
-    struct ggml_tensor * ffn_up_b = NULL;
+    struct ggml_tensor * ffn_up_w = nullptr;
+    struct ggml_tensor * ffn_up_b = nullptr;
 
-    struct ggml_tensor * ffn_down_w = NULL;
-    struct ggml_tensor * ffn_down_b = NULL;
+    struct ggml_tensor * ffn_down_w = nullptr;
+    struct ggml_tensor * ffn_down_b = nullptr;
 
     // layernorm 2
-    struct ggml_tensor * norm_out_w = NULL;
-    struct ggml_tensor * norm_out_b = NULL;
+    struct ggml_tensor * norm_out_w = nullptr;
+    struct ggml_tensor * norm_out_b = nullptr;
 };
 
 struct clip_vision_model {
     struct clip_hparams hparams;
+    ggml_backend_buffer_type_t buft;
 
     // embeddings
-    struct ggml_tensor * class_embedding     = NULL;
-    struct ggml_tensor * patch_embeddings    = NULL;
-    struct ggml_tensor * patch_bias          = NULL;
-    struct ggml_tensor * position_embeddings = NULL;
+    struct ggml_tensor * class_embedding     = nullptr;
+    struct ggml_tensor * patch_embeddings    = nullptr;
+    struct ggml_tensor * patch_bias          = nullptr;
+    struct ggml_tensor * position_embeddings = nullptr;
 
-    struct ggml_tensor * pre_norm_w = NULL;
-    struct ggml_tensor * pre_norm_b = NULL;
+    struct ggml_tensor * pre_norm_w = nullptr;
+    struct ggml_tensor * pre_norm_b = nullptr;
 
     std::vector<clip_layer> layers;
 
-    struct ggml_tensor * post_norm_w = NULL;
-    struct ggml_tensor * post_norm_b = NULL;
+    struct ggml_tensor * post_norm_w = nullptr;
+    struct ggml_tensor * post_norm_b = nullptr;
 
-    struct ggml_tensor * projection = NULL;
+    struct ggml_tensor * projection = nullptr;
 
     // LLaVA projection
-    struct ggml_tensor * mm_1_w = NULL;
-    struct ggml_tensor * mm_1_b = NULL;
-    struct ggml_tensor * mm_2_w = NULL;
-    struct ggml_tensor * mm_2_b = NULL;
+    struct ggml_tensor * mm_1_w = nullptr;
+    struct ggml_tensor * mm_1_b = nullptr;
+    struct ggml_tensor * mm_2_w = nullptr;
+    struct ggml_tensor * mm_2_b = nullptr;
 
-    struct ggml_tensor * image_newline = NULL;
+    struct ggml_tensor * image_newline = nullptr;
 };
 
 struct clip_context {
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
+    struct ggml_context * ctx_ggml = nullptr;
 
     const clip_vision_model * model;
 
     // temporary output data, to be picked up by llama_decode()
-    std::vector<float>     out_embd;  // size == n_tokens * n_embd
-    std::vector<llama_pos> out_pos;   // position of each token
+    struct ggml_tensor * output;
 };
 
+// for now, this only contains:
+// - the instruction for ggml_conv_2d to break the image into patches
+// - the pre-processed image data in f32
 struct llama_vision_patches {
     uint32_t px; // size of patch
     uint32_t py; // size of patch
@@ -126,7 +126,7 @@ struct llama_vision_patches {
     std::vector<std::vector<float>> buf; // preprocessed image data
 };
 
-mm_patch_merge mm_patch_merge_from_name(std::string & name) {
+inline mm_patch_merge mm_patch_merge_from_name(std::string & name) {
     if (name == "flat") {
         return MM_PATCH_MERGE_FLAT;
     } else if (name == "spatial_unpad") {
@@ -135,17 +135,14 @@ mm_patch_merge mm_patch_merge_from_name(std::string & name) {
     return MM_PATCH_MERGE_UNKNOWN;
 }
 
-clip_projector_type clip_projector_type_from_name(std::string & name) {
+inline clip_projector_type clip_projector_type_from_name(std::string & name) {
     if (name == "mlp") {
         return CLIP_PROJECTOR_TYPE_MLP;
     }
     return CLIP_PROJECTOR_TYPE_UNKNOWN;
 }
 
-llama_vision_patches * llama_vision_patches_init(llama_vision_bitmap * bmp);
-void llama_vision_patches_free(llama_vision_patches * p);
+// only for sanity check: must be equal to n_embd of language model
+uint32_t clip_n_mmproj_embd(const clip_vision_model & clip_model);
 
-int32_t llama_vision_encode_impl(clip_context & ctx, llama_vision_patches * p);
-
-// dimension of the output embeddings, must be equal to n_embd of language model
-int clip_n_mmproj_embd(const clip_context & ctx);
+struct ggml_tensor * llama_vision_get_output_tensor(llama_context * ctx);
