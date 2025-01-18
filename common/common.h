@@ -3,7 +3,6 @@
 #pragma once
 
 #include "llama-cpp.h"
-#include "chat-template.hpp"
 
 #include <functional>
 #include <queue>
@@ -606,7 +605,17 @@ struct common_chat_msg {
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja);
 
+namespace minja {
+    class chat_template;
+}
+
 typedef minja::chat_template llama_chat_template;
+
+struct llama_chat_templates {
+    bool has_explicit_template; // Model had builtin template or template overridde was specified.
+    std::unique_ptr<llama_chat_template> default_template; // always set (defaults to chatml)
+    std::unique_ptr<llama_chat_template> tool_use_template;
+};
 
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
@@ -628,11 +637,6 @@ std::string common_chat_format_single(
 // Returns an example of formatted chat
 std::string common_chat_format_example(
     const llama_chat_template & tmpl, bool use_jinja);
-
-struct llama_chat_templates {
-    llama_chat_template default_template;
-    std::optional<llama_chat_template> tool_use_template;
-};
 
 llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 

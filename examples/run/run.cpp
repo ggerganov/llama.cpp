@@ -26,6 +26,7 @@
 #include "common.h"
 #include "json.hpp"
 #include "llama-cpp.h"
+#include "chat-template.hpp"
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(_WIN32)
 [[noreturn]] static void sigint_handler(int) {
@@ -936,6 +937,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
     int prev_len = 0;
     llama_data.fmtted.resize(llama_n_ctx(llama_data.context.get()));
     auto chat_templates = llama_chat_templates_from_model(llama_data.model.get(), "");
+    GGML_ASSERT(chat_templates.default_template);
     static const bool stdout_a_terminal = is_stdout_a_terminal();
     while (true) {
         // Get user input
@@ -946,7 +948,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
 
         add_message("user", user.empty() ? user_input : user, llama_data);
         int new_len;
-        if (apply_chat_template_with_error_handling(chat_templates.default_template, llama_data, true, new_len, use_jinja) < 0) {
+        if (apply_chat_template_with_error_handling(*chat_templates.default_template, llama_data, true, new_len, use_jinja) < 0) {
             return 1;
         }
 
@@ -961,7 +963,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
         }
 
         add_message("assistant", response, llama_data);
-        if (apply_chat_template_with_error_handling(chat_templates.default_template, llama_data, false, prev_len, use_jinja) < 0) {
+        if (apply_chat_template_with_error_handling(*chat_templates.default_template, llama_data, false, prev_len, use_jinja) < 0) {
             return 1;
         }
     }
