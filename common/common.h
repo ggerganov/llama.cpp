@@ -4,9 +4,6 @@
 
 #include "llama-cpp.h"
 
-#include <functional>
-#include <queue>
-#include <optional>
 #include <string>
 #include <vector>
 #include <sstream>
