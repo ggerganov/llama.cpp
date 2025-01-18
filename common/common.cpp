@@ -1857,10 +1857,10 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
     }
     return {
         has_explicit_template,
-        std::move(std::make_unique<minja::chat_template>(default_template_src, bos_token, eos_token)),
+        std::make_unique<minja::chat_template>(default_template_src, bos_token, eos_token),
         tool_use_template_src.empty()
             ? nullptr
-            : std::move(std::make_unique<minja::chat_template>(tool_use_template_src, bos_token, eos_token))
+            : std::make_unique<minja::chat_template>(tool_use_template_src, bos_token, eos_token)
     };
 }
 
