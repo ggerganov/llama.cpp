@@ -558,7 +558,7 @@ elif minicpmv_version == 3:
 elif minicpmv_version == 4:
     emb_dim = 3584
     block_count = 27
-    
+
 default_vision_config = {
         "hidden_size": 1152,
         "image_size": 980,
@@ -577,7 +577,7 @@ if minicpmv_version == 3:
 elif minicpmv_version == 4:
     vision_config = SiglipVisionConfig(**default_vision_config)
     model = SiglipVisionTransformer(vision_config)
-    
+
 processor = None
 # if model.attn_pool is not None:
 #     model.attn_pool = torch.nn.Identity()
