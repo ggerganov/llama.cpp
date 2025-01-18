@@ -25,6 +25,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <signal.h>
 #include <thread>
 #include <unordered_map>
