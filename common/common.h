@@ -607,34 +607,37 @@ struct common_chat_msg {
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja);
 
+typedef minja::chat_template llama_chat_template;
+
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
-std::string common_chat_apply_template(const struct llama_model * model,
-        const std::string & tmpl,
+std::string common_chat_apply_template(
+        const llama_chat_template & tmpl,
         const std::vector<common_chat_msg> & chat,
-        bool add_ass);
+        bool add_ass,
+        bool use_jinja);
 
 // Format single message, while taking into account the position of that message in chat history
-std::string common_chat_format_single(const struct llama_model * model,
-        const std::string & tmpl,
+std::string common_chat_format_single(
+        const llama_chat_template & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
-        bool add_ass);
+        bool add_ass,
+        bool use_jinja);
 
 // Returns an example of formatted chat
-std::string common_chat_format_example(const struct llama_model * model,
-    const minja::chat_template & tmpl, bool use_jinja);
-
+std::string common_chat_format_example(
+    const llama_chat_template & tmpl, bool use_jinja);
 
 struct llama_chat_templates {
-    minja::chat_template default_template;
-    std::optional<minja::chat_template> tool_use_template;
+    llama_chat_template default_template;
+    std::optional<llama_chat_template> tool_use_template;
 };
 
 llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 
-minja::chat_template llama_chat_template_from_model(
+llama_chat_template llama_chat_template_from_model(
         const struct llama_model * model,
         const std::string & chat_template_override = "",
         bool prefer_tool_use = false);

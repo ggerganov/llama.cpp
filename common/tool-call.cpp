@@ -74,7 +74,7 @@ std::string llama_tool_call_style_name(llama_tool_call_style style) {
     }
 }
 
-llama_tool_call_style llama_tool_call_style_detect(const minja::chat_template & chat_template) {
+llama_tool_call_style llama_tool_call_style_detect(const llama_chat_template & chat_template) {
     const auto & src = chat_template.source();
 
     if (src.find("<tool_call>") != std::string::npos) {
@@ -399,7 +399,7 @@ static nlohmann::ordered_json add_system(const nlohmann::ordered_json & messages
 
 llama_tool_call_handler llama_tool_call_handler_init(
     llama_tool_call_style style,
-    const minja::chat_template & tmpl,
+    const llama_chat_template & tmpl,
     bool allow_content,
     const nlohmann::ordered_json & parallel_tool_calls,
     const nlohmann::ordered_json & messages,

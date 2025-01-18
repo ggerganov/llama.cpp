@@ -4389,7 +4389,7 @@ int main(int argc, char ** argv) {
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
         get_chat_templates().default_template.source().c_str(),
-        common_chat_format_example(ctx_server.model, get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
+        common_chat_format_example(get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));

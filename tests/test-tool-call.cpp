@@ -311,7 +311,7 @@ static void test_parsing() {
 }
 
 static void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
-    const minja::chat_template tmpl(read_file(template_file), "<s>", "</s>");
+    const llama_chat_template tmpl(read_file(template_file), "<s>", "</s>");
     auto tool_call_style = llama_tool_call_style_detect(tmpl);
     std::cout << "# Testing tool call style of: " << template_file << std::endl << std::flush;
     assert_equals(expected, tool_call_style);
@@ -331,7 +331,7 @@ static void test_tool_call_style_detection() {
     test_tool_call_style("tests/chat/templates/google-gemma-7b-it.jinja", Generic);
 }
 
-static std::string get_message_prompt_delta(const minja::chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
+static std::string get_message_prompt_delta(const llama_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
   auto prefix = tmpl.apply(json::array({user_message}), tools, /* add_generation_prompt= */ true, json::object());
   auto full = tmpl.apply(json::array({user_message, delta_message}), tools, /* add_generation_prompt= */ false, json::object());
 
@@ -356,7 +356,7 @@ static std::string get_message_prompt_delta(const minja::chat_template & tmpl, c
 
 static void test_template(const std::string & template_file, const char * bos_token, const char * eos_token, const std::vector<std::string> & end_tokens, const json & tool_calling_message, const json & tools, bool skip_grammar_test = false) {
   std::cout << "# Testing template: " << template_file << std::endl << std::flush;
-  const minja::chat_template tmpl(read_file(template_file), bos_token, eos_token);
+  const llama_chat_template tmpl(read_file(template_file), bos_token, eos_token);
   auto tool_call_style = llama_tool_call_style_detect(tmpl);
   auto & tool_calls = tool_calling_message.at("tool_calls");
 
