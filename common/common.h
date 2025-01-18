@@ -26,8 +26,6 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
-extern const std::string LLAMA_CHATML_TEMPLATE;
-
 struct common_adapter_lora_info {
     std::string path;
     float scale;

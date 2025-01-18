@@ -74,15 +74,6 @@
 #endif
 #define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
 
-const std::string LLAMA_CHATML_TEMPLATE(R"(
-    {%- for message in messages -%}
-        {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
-    {%- endfor -%}
-    {%- if add_generation_prompt -%}
-        {{- "<|im_start|>assistant\n" -}}
-    {%- endif -%}
-)");
-
 //
 // CURL utils
 //
@@ -1846,7 +1837,14 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
         if (!tool_use_template_src.empty()) {
             default_template_src = tool_use_template_src;
         } else {
-            default_template_src = LLAMA_CHATML_TEMPLATE;
+            default_template_src = R"(
+                {%- for message in messages -%}
+                    {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
+                {%- endfor -%}
+                {%- if add_generation_prompt -%}
+                    {{- "<|im_start|>assistant\n" -}}
+                {%- endif -%}
+            )";
         }
     }
     return {
