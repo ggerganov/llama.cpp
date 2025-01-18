@@ -74,14 +74,14 @@
 #endif
 #define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
 
-const char * LLAMA_CHATML_TEMPLATE = R"(
+const std::string LLAMA_CHATML_TEMPLATE(R"(
     {%- for message in messages -%}
         {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
     {%- endfor -%}
     {%- if add_generation_prompt -%}
         {{- "<|im_start|>assistant\n" -}}
     {%- endif -%}
-)";
+)");
 
 //
 // CURL utils
