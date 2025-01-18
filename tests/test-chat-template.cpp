@@ -9,6 +9,15 @@
 #include "common.h"
 #include "chat-template.hpp"
 
+static std::string normalize_newlines(const std::string & s) {
+#ifdef _WIN32
+  static const std::regex nl_regex("\r\n");
+  return std::regex_replace(s, nl_regex, "\n");
+#else
+  return s;
+#endif
+}
+
 int main(void) {
     std::vector<llama_chat_message> conversation {
         {"system", "You are a helpful assistant"},
@@ -300,8 +309,8 @@ int main(void) {
         printf("\n\n=== %s (jinja) ===\n\n", test_case.name.c_str());
         try {
             minja::chat_template tmpl(test_case.template_str, test_case.bos_token, test_case.eos_token);
-            auto output = tmpl.apply(messages, json(), add_generation_prompt);
-            auto expected_output = test_case.expected_output_jinja.empty() ? test_case.expected_output : test_case.expected_output_jinja;
+            auto output = normalize_newlines(tmpl.apply(messages, json(), add_generation_prompt));
+            auto expected_output = normalize_newlines(test_case.expected_output_jinja.empty() ? test_case.expected_output : test_case.expected_output_jinja);
             if (output != expected_output) {
                 printf("Expected:\n%s\n", expected_output.c_str());
                 printf("-------------------------\n");
