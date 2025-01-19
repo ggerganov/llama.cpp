@@ -95,7 +95,7 @@ shared ACC_TYPE coopmat_stage[TM * TN * NUM_WARPS];
 #endif
 
 void main() {
-#if defined(DATA_A_IQ2_XXS) || defined(DATA_A_IQ2_XS) || defined(DATA_A_IQ3_XXS) || defined(DATA_A_IQ3_S) || defined(DATA_A_IQ4_NL)
+#if defined(DATA_A_IQ2_XXS) || defined(DATA_A_IQ2_XS) || defined(DATA_A_IQ2_S) || defined(DATA_A_IQ3_XXS) || defined(DATA_A_IQ3_S) || defined(DATA_A_IQ4_NL)
     init_iq_shmem();
 #endif
 
@@ -479,6 +479,28 @@ void main() {
             const i8vec2 sign01 = i8vec2(1 - (2 & i8vec2(int8_t(sign << 1), int8_t(sign))));
             const uint grid = iq2xs_grid[qs & 511][(idx % 4) / 2] >> (16 * (idx & 1));
             const vec2 v = db * vec2(sign01) * vec2(unpack8(grid).xy);
+
+            buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);
+#elif defined(DATA_A_IQ2_S)
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * SHMEM_STRIDE + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 128;        // 2 values per idx
+            const uint ib8 = (idx % 128) / 4; // 0..31
+            const uint ib32 = ib8 / 4;        // 0..7
+
+            const uint scale = (data_a[ib].scales[ib32] >> (2 * (ib8 & 2))) & 0xf;
+            const uint qs = data_a[ib].qs[ib8];
+            const uint qh = data_a[ib].qh[ib32];
+            const uint qhshift = 2 * (ib8 % 4);
+            const uint sign = data_a[ib].qs[QUANT_K / 8 + ib8] >> (2 * (idx % 4));
+
+            const float d = float(data_a[ib].d);
+            const float db = d * 0.25 * (0.5 + scale);
+            const i8vec2 sign01 = i8vec2(1 - (2 & i8vec2(int8_t(sign << 1), int8_t(sign))));
+            const uint16_t grid = unpack16(iq2s_grid[qs | ((qh << (8 - qhshift)) & 0x300)][(idx & 2) >> 1])[idx & 1];
+            const vec2 v = db * vec2(sign01) * vec2(unpack8(grid));
 
             buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
             buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);

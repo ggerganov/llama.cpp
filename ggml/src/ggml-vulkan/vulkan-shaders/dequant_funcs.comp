@@ -174,6 +174,51 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
 }
 #endif
 
+#if defined(DATA_A_IQ2_S)
+vec2 dequantize(uint ib, uint iqs, uint a_offset) {
+    const uint ib32 = iqs / 32;
+    const uint ib8 = iqs / 8;
+
+    const uint scale = (data_a[a_offset + ib].scales[ib32] >> (4 * ((iqs / 16) & 1))) & 0xf;
+    const uint qs = data_a[a_offset + ib].qs[ib8];
+    const uint qh = data_a[a_offset + ib].qh[ib32];
+    const uint qhshift = 2 * (ib8 % 4);
+    const uint sign = data_a[a_offset + ib].qs[QUANT_K / 8 + ib8] >> (iqs % 8);
+
+    const float db = 0.25 * (0.5 + scale);
+    const u8vec4 grid = unpack8(iq2s_grid[qs | ((qh << (8 - qhshift)) & 0x300)][(iqs % 8) / 4]);
+    bool sign0 = (sign & 1) != 0;
+    bool sign1 = (sign & 2) != 0;
+    return db * vec2(
+        grid[iqs % 4] * (sign0 ? -1.0 : 1.0),
+        grid[(iqs % 4) + 1] * (sign1 ? -1.0 : 1.0)
+    );
+}
+vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
+    const uint ib32 = iqs / 32;
+    const uint ib8 = iqs / 8;
+
+    const uint scale = (data_a[a_offset + ib].scales[ib32] >> (4 * ((iqs / 16) & 1))) & 0xf;
+    const uint qs = data_a[a_offset + ib].qs[ib8];
+    const uint qh = data_a[a_offset + ib].qh[ib32];
+    const uint qhshift = 2 * (ib8 % 4);
+    const uint sign = data_a[a_offset + ib].qs[QUANT_K / 8 + ib8] >> (iqs % 8);
+
+    const float db = 0.25 * (0.5 + scale);
+    const u8vec4 grid = unpack8(iq2s_grid[qs | ((qh << (8 - qhshift)) & 0x300)][(iqs % 8) / 4]);
+    bool sign0 = (sign & 1) != 0;
+    bool sign1 = (sign & 2) != 0;
+    bool sign2 = (sign & 4) != 0;
+    bool sign3 = (sign & 8) != 0;
+    return db * vec4(
+        grid.x * (sign0 ? -1.0 : 1.0),
+        grid.y * (sign1 ? -1.0 : 1.0),
+        grid.z * (sign2 ? -1.0 : 1.0),
+        grid.w * (sign3 ? -1.0 : 1.0)
+    );
+}
+#endif
+
 #if defined(DATA_A_IQ3_XXS)
 vec2 dequantize(uint ib, uint iqs, uint a_offset) {
     const uint ib4 = iqs / 4;
@@ -276,7 +321,7 @@ vec2 get_dm(uint ib, uint a_offset) {
 }
 #endif
 
-#if defined(DATA_A_Q4_0) || defined(DATA_A_Q5_0) || defined(DATA_A_Q8_0) || defined(DATA_A_IQ2_XXS) || defined(DATA_A_IQ2_XS) || defined(DATA_A_IQ3_XXS) || defined(DATA_A_IQ3_S) || defined(DATA_A_IQ4_NL)
+#if defined(DATA_A_Q4_0) || defined(DATA_A_Q5_0) || defined(DATA_A_Q8_0) || defined(DATA_A_IQ2_XXS) || defined(DATA_A_IQ2_XS) || defined(DATA_A_IQ2_S) || defined(DATA_A_IQ3_XXS) || defined(DATA_A_IQ3_S) || defined(DATA_A_IQ4_NL)
 vec2 get_dm(uint ib, uint a_offset) {
     return vec2(float(data_a[a_offset + ib].d), 0);
 }
