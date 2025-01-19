@@ -19,6 +19,8 @@ WORKDIR /app
 COPY . .
 
 RUN --mount=type=cache,target=/root/.ccache \
+    --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt \
     if [ "${CUDA_DOCKER_ARCH}" != "default" ]; then \
     export CMAKE_ARGS="-DCMAKE_CUDA_ARCHITECTURES=${CUDA_DOCKER_ARCH}"; \
     fi && \
