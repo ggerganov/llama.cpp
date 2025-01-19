@@ -601,7 +601,7 @@ std::string unicode_cpt_to_utf8(uint32_t cpt) {
 }
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
-    auto comp = [] (const uint32_t cpt, const range_nfd & range) {
+    auto comp = [] (const uint32_t cpt, const range_nfd range) {
         return cpt < range.first;
     };
     std::vector<uint32_t> result(cpts.size());
