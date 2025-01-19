@@ -12,7 +12,7 @@ void main() {
     // Each block contains 4 scale bytes (8 scales) for 256 output values.
     const uint ib = gl_WorkGroupID.x * 32 + gl_LocalInvocationID.x / 8;
 
-    init_iq3s_shmem();
+    init_iq_shmem();
 
     if (ib >= p.nel / 256) {
         return;

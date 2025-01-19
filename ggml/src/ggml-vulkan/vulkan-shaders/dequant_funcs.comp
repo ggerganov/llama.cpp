@@ -88,6 +88,53 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
 }
 #endif
 
+#if defined(DATA_A_IQ2_XXS)
+vec2 dequantize(uint ib, uint iqs, uint a_offset) {
+    const uint ib32 = iqs / 32;
+    const uint ib8 = (iqs / 8) % 4;
+    const uint qs = data_a[a_offset + ib].qs[8 * ib32 + ib8];
+    // Scales are stored as packed 7+7+7+7+4 bits (4 sign tuples and 1 int4 scale)
+    const uint signs = pack32(u16vec2(data_a_packed16[a_offset + ib].qs[4 * ib32 + 2],
+        data_a_packed16[a_offset + ib].qs[4 * ib32 + 3]));
+    const float db = 0.25 * (0.5 + (signs >> 28));
+    const uint sign7 = bitfieldExtract(signs, 7 * int(ib8), 7);
+    // Add parity bit
+    const uint sign8 = sign7 | (bitCount(sign7) << 7);
+    const uint sign = sign8 >> (iqs % 8);
+    const u8vec4 grid = unpack8(iq2xxs_grid[qs][(iqs % 8) / 4] >> (8 * (iqs % 4)));
+    bool sign0 = (sign & 1) != 0;
+    bool sign1 = (sign & 2) != 0;
+    return db * vec2(
+        grid.x * (sign0 ? -1.0 : 1.0),
+        grid.y * (sign1 ? -1.0 : 1.0)
+    );
+}
+vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
+    const uint ib32 = iqs / 32;
+    const uint ib8 = (iqs / 8) % 4;
+    const uint qs = data_a[a_offset + ib].qs[8 * ib32 + ib8];
+    // Scales are stored as packed 7+7+7+7+4 bits (4 sign tuples and 1 int4 scale)
+    const uint signs = pack32(u16vec2(data_a_packed16[a_offset + ib].qs[4 * ib32 + 2],
+        data_a_packed16[a_offset + ib].qs[4 * ib32 + 3]));
+    const float db = 0.25 * (0.5 + (signs >> 28));
+    const uint sign7 = bitfieldExtract(signs, 7 * int(ib8), 7);
+    // Add parity bit
+    const uint sign8 = sign7 | (bitCount(sign7) << 7);
+    const uint sign = sign8 >> (iqs % 8);
+    const u8vec4 grid = unpack8(iq2xxs_grid[qs][(iqs % 8) / 4] >> (8 * (iqs % 4)));
+    bool sign0 = (sign & 1) != 0;
+    bool sign1 = (sign & 2) != 0;
+    bool sign2 = (sign & 4) != 0;
+    bool sign3 = (sign & 8) != 0;
+    return db * vec4(
+        grid.x * (sign0 ? -1.0 : 1.0),
+        grid.y * (sign1 ? -1.0 : 1.0),
+        grid.z * (sign2 ? -1.0 : 1.0),
+        grid.w * (sign3 ? -1.0 : 1.0)
+    );
+}
+#endif
+
 #if defined(DATA_A_IQ3_XXS)
 vec2 dequantize(uint ib, uint iqs, uint a_offset) {
     const uint ib4 = iqs / 4;
@@ -190,7 +237,7 @@ vec2 get_dm(uint ib, uint a_offset) {
 }
 #endif
 
-#if defined(DATA_A_Q4_0) || defined(DATA_A_Q5_0) || defined(DATA_A_Q8_0) || defined(DATA_A_IQ3_XXS) || defined(DATA_A_IQ3_S) || defined(DATA_A_IQ4_NL)
+#if defined(DATA_A_Q4_0) || defined(DATA_A_Q5_0) || defined(DATA_A_Q8_0) || defined(DATA_A_IQ2_XXS) || defined(DATA_A_IQ3_XXS) || defined(DATA_A_IQ3_S) || defined(DATA_A_IQ4_NL)
 vec2 get_dm(uint ib, uint a_offset) {
     return vec2(float(data_a[a_offset + ib].d), 0);
 }
