@@ -55,6 +55,7 @@ const std::vector<std::string> type_names = {
     "q4_k",
     "q5_k",
     "q6_k",
+    "iq3_s",
     "iq4_nl"
 };
 
@@ -310,6 +311,7 @@ void matmul_shaders(bool fp16, bool matmul_id, bool coopmat, bool coopmat2, bool
     string_to_spv(shader_name + "_f16", source_name, merge_maps(base_dict, {{"DATA_A_F16", "1"}, {"B_TYPE", "float16_t"}, {"D_TYPE", "float"}}), fp16, coopmat, coopmat2, f16acc);
 
     for (const auto& tname : type_names) {
+        if (tname == "iq3_s" && coopmat2) continue;
         std::string data_a_key = "DATA_A_" + to_uppercase(tname);
         // For unaligned, load one at a time for f32/f16, or two at a time for quants
         std::string load_vec_a_unaligned = (coopmat2 || tname == "f32" || tname == "f16") ? "1" : "2";
@@ -363,6 +365,9 @@ void process_shaders() {
 
         for (const auto& tname : type_names) {
             if (tname == "f32") {
+                continue;
+            }
+            if (tname == "iq3_s") {
                 continue;
             }
 

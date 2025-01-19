@@ -106,7 +106,9 @@ D_TYPE perElemOpD(const in uint32_t r, const in uint32_t c, const in D_TYPE elem
 #endif
 
 void main() {
-#if defined(DATA_A_IQ4_NL)
+#if defined(DATA_A_IQ3_S)
+    init_iq3s_shmem();
+#elif defined(DATA_A_IQ4_NL)
     init_iq4nl_shmem();
 #endif
 
