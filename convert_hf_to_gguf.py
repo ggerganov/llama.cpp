@@ -17,7 +17,7 @@ from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Literal, Sequence, TypeVar, cast
 from itertools import chain
 
-from transformers import AutoConfig, AutoImageProcessor
+from transformers import AutoConfig
 import math
 import numpy as np
 import torch
@@ -133,6 +133,16 @@ class Model:
         if optional:
             return None
         raise KeyError(f"could not find any of: {keys}")
+
+    def find_vparams(self, keys: Iterable[str], optional: bool = False) -> Any:
+        if self.vparams is None:
+            raise ValueError("vision model parameters not set")
+        key = next((k for k in keys if k in self.vparams), None)
+        if key is not None:
+            return self.vparams[key]
+        if optional:
+            return None
+        raise KeyError(f"(vision) could not find any of: {keys}")
 
     def set_vocab(self):
         self._set_vocab_gpt2()
@@ -268,6 +278,20 @@ class Model:
         if (head_dim := self.hparams.get("head_dim")) is not None:
             self.gguf_writer.add_key_length(head_dim)
             self.gguf_writer.add_value_length(head_dim)
+
+        # Vision model parameters
+        if self.vparams is not None and self.preprocessor_config is not None and self.vision_arch is not None:
+            self.gguf_writer.add_vision_type("clip-vit")
+            self.gguf_writer.add_vision_image_size(self.vparams["image_size"])
+            self.gguf_writer.add_vision_patch_size(self.vparams["patch_size"])
+            self.gguf_writer.add_vision_clip_architecture(gguf.MODEL_ARCH_NAMES[self.vision_arch])
+            self.gguf_writer.add_vision_clip_block_count(self.vparams["num_hidden_layers"])
+            self.gguf_writer.add_vision_clip_embedding_length(self.vparams["hidden_size"])
+            self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
+            self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
+            self.gguf_writer.add_vision_clip_image_mean(self.preprocessor_config["image_mean"])
+            self.gguf_writer.add_vision_clip_image_std(self.preprocessor_config["image_std"])
+            self.gguf_writer.add_vision_clip_select_layer(self.find_hparam(["vision_feature_layer", "mm_vision_select_layer"]))
 
         self.gguf_writer.add_file_type(self.ftype)
         logger.info(f"gguf: file type = {self.ftype}")
@@ -488,17 +512,14 @@ class Model:
             return hparams
 
     @staticmethod
-    def load_preprocessor_config(dir_or_model_id: Path | str):
+    def load_preprocessor_config(dir_model: Path):
         # TODO: this varies vastly among models, need to handle more cases in the future
-        if isinstance(dir_or_model_id, Path):
-            file_path = dir_or_model_id / "preprocessor_config.json"
-            if os.path.exists(file_path):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            else:
-                raise Exception(f"Preprocessor config not found at {file_path}")
+        file_path = dir_model / "preprocessor_config.json"
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
         else:
-            return AutoImageProcessor.from_pretrained(dir_or_model_id).to_dict()
+            raise Exception(f"Preprocessor config not found at {file_path}")
 
     @classmethod
     def register(cls, *names: str) -> Callable[[AnyModel], AnyModel]:
@@ -551,7 +572,9 @@ class Model:
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(self.dir_model)
+        # DEBIAN_FRONTEND=noninteractive means that the script is running in a non-interactive environment (i.e. CI), so we cannot answer Y/N when it asks for user input
+        is_cli_non_interactive = os.environ.get("DEBIAN_FRONTEND", "") == "noninteractive"
+        tokenizer = AutoTokenizer.from_pretrained(self.dir_model, trust_remote_code=is_cli_non_interactive)
         vocab_size = self.hparams.get("vocab_size", len(tokenizer.vocab))
         assert max(tokenizer.vocab.values()) < vocab_size
 
@@ -1607,9 +1630,10 @@ class LlamaModel(Model):
 
         # only tested with https://huggingface.co/mtgv/MobileVLM_V2-1.7B
         if "mm_vision_tower" in self.hparams and model_type == "mobilevlm":
+            from transformers import AutoImageProcessor
             vision_model_id = self.hparams["mm_vision_tower"]
             self.vparams = AutoConfig.from_pretrained(vision_model_id).to_dict()["vision_config"]
-            self.preprocessor_config = self.load_preprocessor_config(vision_model_id)
+            self.preprocessor_config = AutoImageProcessor.from_pretrained(vision_model_id).to_dict()
             self.vision_arch = gguf.MODEL_ARCH.VISION_MOBILEVLM
 
         if self.vparams is not None and self.vision_arch is not None:
@@ -1648,34 +1672,6 @@ class LlamaModel(Model):
         if self.hparams.get("vocab_size", 32000) == 49152:
             self.gguf_writer.add_add_bos_token(False)
 
-                # For vision model
-        if self.vparams is not None and self.preprocessor_config is not None and self.vision_arch is not None:
-            self.gguf_writer.add_vision_type("clip-vit")
-            self.gguf_writer.add_vision_image_size(self.vparams["image_size"])
-            self.gguf_writer.add_vision_patch_size(self.vparams["patch_size"])
-            self.gguf_writer.add_vision_clip_architecture(gguf.MODEL_ARCH_NAMES[self.vision_arch])
-            self.gguf_writer.add_vision_clip_block_count(self.vparams["num_hidden_layers"])
-            self.gguf_writer.add_vision_clip_embedding_length(self.vparams["hidden_size"])
-            self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
-            self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
-            self.gguf_writer.add_vision_clip_image_mean(self.preprocessor_config["image_mean"])
-            self.gguf_writer.add_vision_clip_image_std(self.preprocessor_config["image_std"])
-            self.gguf_writer.add_vision_clip_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
-            max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
-            self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
-            if "vision_feature_layer" in self.hparams:
-                self.gguf_writer.add_vision_clip_select_layer(self.hparams["vision_feature_layer"])
-            elif "mm_vision_select_layer" in self.hparams:
-                self.gguf_writer.add_vision_clip_select_layer(self.hparams["mm_vision_select_layer"])
-            else:
-                raise ValueError("gguf: can not find vision_feature_layer parameter.")
-            # TODO: should not hardcode these, but they are currently missing from config.json
-            if self.vision_arch == gguf.MODEL_ARCH.VISION_LLAVA:
-                self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.MLP)
-            if self.vision_arch == gguf.MODEL_ARCH.VISION_MOBILEVLM:
-                self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.LDPV2)
-            self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-05)
-
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         hparams = self.hparams
@@ -1691,6 +1687,18 @@ class LlamaModel(Model):
             if self.hparams["rope_scaling"].get("type") == "linear":
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
+
+        # For vision model
+        if self.vparams is not None:
+            self.gguf_writer.add_vision_clip_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
+            # TODO: should not hardcode these, but they are currently missing from config.json
+            if self.vision_arch == gguf.MODEL_ARCH.VISION_LLAVA:
+                self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.MLP)
+            if self.vision_arch == gguf.MODEL_ARCH.VISION_MOBILEVLM:
+                self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.LDPV2)
+            self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-05)
+            max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
+            self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
 
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
@@ -2132,22 +2140,65 @@ class DbrxModel(Model):
 @Model.register("MiniCPMForCausalLM", "MiniCPMV")
 class MiniCPMModel(Model):
     model_arch = gguf.MODEL_ARCH.MINICPM
+    proj_type: gguf.constants.CLIPProjectorType | None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        model_type = self.hparams.get("model_type", None)
+
+        # only tested with https://huggingface.co/openbmb/MiniCPM-V-2_6
+        if "vision_config" in self.hparams and model_type == "minicpmv":
+            self.vparams = self.hparams["vision_config"]
+            self.preprocessor_config = self.load_preprocessor_config(self.dir_model)
+            self.vision_arch = gguf.MODEL_ARCH.VISION_MINICPMV
+            version = str(self.hparams.get("version", "unknown"))
+            if version == "2.5":
+                self.proj_type = gguf.constants.CLIPProjectorType.MINICPMV_2_5
+            elif version == "2.6":
+                self.proj_type = gguf.constants.CLIPProjectorType.MINICPMV_2_6
+            else:
+                raise ValueError(f"Unsupported MiniCPM-V version: {version}")
+
+        if self.vparams is not None and self.vision_arch is not None and self.preprocessor_config is not None:
+            self.preprocessor_config["image_mean"] = [0.5, 0.5, 0.5]
+            self.preprocessor_config["image_std"] = [0.5, 0.5, 0.5]
+            self.hparams["vision_feature_layer"] = 0
+            self.v_tensor_map = gguf.get_tensor_name_map(self.vision_arch, self.vparams["num_hidden_layers"])
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        embedding_scale = float(self.hparams["scale_emb"])
+        # scale_emb
+        embedding_scale = float(self.hparams.get("scale_emb", 1.0))
         self.gguf_writer.add_embedding_scale(embedding_scale)
         logger.info(f"gguf: (minicpm) embedding_scale = {embedding_scale}")
-        residual_scale = self.hparams["scale_depth"] / self.hparams["num_hidden_layers"] ** 0.5
+        # scale_depth
+        if "scale_depth" in self.hparams:
+            residual_scale = self.hparams["scale_depth"] / self.hparams["num_hidden_layers"] ** 0.5
+        else:
+            residual_scale = 1.0
         self.gguf_writer.add_residual_scale(residual_scale)
         logger.info(f"gguf: (minicpm) residual_scale = {residual_scale}")
-        logit_scale = self.hparams["hidden_size"] / self.hparams["dim_model_base"]
+        # logit_scale
+        if "dim_model_base" in self.hparams:
+            logit_scale = self.hparams["hidden_size"] / self.hparams["dim_model_base"]
+        else:
+            logit_scale = 1.0
         self.gguf_writer.add_logit_scale(logit_scale)
         logger.info(f"gguf: (minicpm) logit_scale = {logit_scale}")
         if self.hparams.get("rope_scaling") is not None:
             if self.hparams["rope_scaling"].get("type") == "longrope":
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LONGROPE)
                 logger.info(f"gguf: (minicpm) rope_scaling_type = {gguf.RopeScalingType.LONGROPE}")
+
+        # For vision model
+        if self.vparams is not None and self.proj_type is not None:
+            self.gguf_writer.add_vision_clip_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
+            self.gguf_writer.add_vision_clip_projector_type(self.proj_type)
+            self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-06)
+            max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2
+            self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
+
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         rope_dims = self.hparams["hidden_size"] // self.hparams["num_attention_heads"]
@@ -2167,18 +2218,33 @@ class MiniCPMModel(Model):
             yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype=torch.float32))
 
     def set_vocab(self):
-        self._set_vocab_sentencepiece()
+        if self.vision_arch == gguf.MODEL_ARCH.VISION_MINICPMV:
+            # undocumented anywhere, I only found this thanks to https://huggingface.co/openbmb/MiniCPM-V-2_6-gguf
+            self._set_vocab_gpt2()
+        else:
+            self._set_vocab_sentencepiece()
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
+
+        # For vision model
+        if name.startswith("llm."):
+            name = name.replace("llm.", "")
+        # attention, someone mess up and use underscore instead of dot
+        if name.endswith("in_proj_weight"):
+            name = name.replace("_weight", ".weight")
+        if name.endswith("in_proj_bias"):
+            name = name.replace("_bias", ".bias")
+        if "post_layernorm" in name:
+            return [] # skip post_layernorm
 
         n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
 
         # HF models permute some of the tensors, so we need to undo that
-        if name.endswith(("q_proj.weight")):
+        if not name.startswith("vpm") and name.endswith(("q_proj.weight")):
             data_torch = LlamaModel.permute(data_torch, n_head, n_head)
-        if name.endswith(("k_proj.weight")):
+        if not name.startswith("vpm") and name.endswith(("k_proj.weight")):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
         return [(self.map_tensor_name(name), data_torch)]
@@ -5064,7 +5130,7 @@ class LazyTorchTensor(gguf.LazyBase):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert a huggingface model to a GGML compatible file")
+        description="Convert a huggingface model to a GGML compatible file\n\nNote: When converting vision models, this script may use internet connection to download configuration files via Hugging Face.")
     parser.add_argument(
         "--vocab-only", action="store_true",
         help="extract only the vocab",

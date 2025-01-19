@@ -3,6 +3,7 @@
 #include "llama-impl.h"
 
 #include <map>
+#include <exception>
 
 static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_LLAMA,            "llama"            },
@@ -63,12 +64,6 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_CHAMELEON,        "chameleon"        },
     { LLM_ARCH_WAVTOKENIZER_DEC, "wavtokenizer-dec" },
     { LLM_ARCH_UNKNOWN,          "(unknown)"        },
-};
-
-static const std::map<vision_arch, const char *> VISION_ARCH_NAMES = {
-    { VISION_ARCH_LLAVA,        "llava"        },
-    { VISION_ARCH_MOBILEVLM,    "mobilevlm"    },
-    { VISION_ARCH_UNKNOWN,      "(unknown)"    },
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -1367,6 +1362,30 @@ static const std::map<vision_arch, std::map<vision_tensor, const char *>> VISION
             { VISION_TENSOR_POST_NORM,               "v.post_norm"                 },
         }
     },
+    {
+        VISION_ARCH_MINICPMV,
+        {
+            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { VISION_TENSOR_RESMPL_POS_EMBD_K,       "v.resmpl.pos_embd_k"         },
+            { VISION_TENSOR_RESMPL_ATTN_IN,          "v.resmpl.attn_in"            },
+            { VISION_TENSOR_RESMPL_ATTN_OUT,         "v.resmpl.attn_out"           },
+            { VISION_TENSOR_RESMPL_KV_PROJ,          "v.resmpl.kv_proj"            },
+            { VISION_TENSOR_RESMPL_NORM_POST,        "v.resmpl.norm_post"          },
+            { VISION_TENSOR_RESMPL_NORM_KV,          "v.resmpl.norm_kv"            },
+            { VISION_TENSOR_RESMPL_NORM_Q,           "v.resmpl.norm_q"             },
+            { VISION_TENSOR_RESMPL_PROJ,             "v.resmpl.proj"               },
+            { VISION_TENSOR_RESMPL_QUERY,            "v.resmpl.query"              },
+        }
+    },
 };
 
 static const std::map<llm_tensor, llm_tensor_info> LLM_TENSOR_INFOS = {
@@ -1574,16 +1593,6 @@ llm_arch llm_arch_from_string(const std::string & name) {
     }
 
     return LLM_ARCH_UNKNOWN;
-}
-
-vision_arch vision_arch_from_string(const std::string & name) {
-    for (const auto & kv : VISION_ARCH_NAMES) { // NOLINT
-        if (kv.second == name) {
-            return kv.first;
-        }
-    }
-
-    return VISION_ARCH_UNKNOWN;
 }
 
 const llm_tensor_info & llm_tensor_info_for(llm_tensor tensor) {

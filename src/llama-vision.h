@@ -11,6 +11,8 @@ enum clip_projector_type {
     CLIP_PROJECTOR_TYPE_UNKNOWN,
     CLIP_PROJECTOR_TYPE_MLP,
     CLIP_PROJECTOR_TYPE_LDPV2,
+    CLIP_PROJECTOR_TYPE_MINICPMV_2_5,
+    CLIP_PROJECTOR_TYPE_MINICPMV_2_6,
 };
 
 enum mm_patch_merge {
@@ -36,7 +38,7 @@ struct clip_hparams {
     float eps;
 
     clip_projector_type proj_type = CLIP_PROJECTOR_TYPE_UNKNOWN;
-    mm_patch_merge mm_patch_merge_type = MM_PATCH_MERGE_FLAT;
+    mm_patch_merge mm_patch_merge_type = MM_PATCH_MERGE_UNKNOWN;
 
     std::array<float, 3> image_mean;
     std::array<float, 3> image_std;
@@ -107,6 +109,26 @@ struct clip_vision_model {
     struct ggml_tensor * mm_model_peg_0_w = nullptr;
     struct ggml_tensor * mm_model_peg_0_b = nullptr;
 
+    // MINICPMV projection
+    struct ggml_tensor * mm_model_pos_embed_k;
+    struct ggml_tensor * mm_model_query;
+    struct ggml_tensor * mm_model_proj;
+    struct ggml_tensor * mm_model_kv_proj;
+    struct ggml_tensor * mm_model_attn_q_w;
+    struct ggml_tensor * mm_model_attn_q_b;
+    struct ggml_tensor * mm_model_attn_k_w;
+    struct ggml_tensor * mm_model_attn_k_b;
+    struct ggml_tensor * mm_model_attn_v_w;
+    struct ggml_tensor * mm_model_attn_v_b;
+    struct ggml_tensor * mm_model_attn_o_w;
+    struct ggml_tensor * mm_model_attn_o_b;
+    struct ggml_tensor * mm_model_ln_q_w;
+    struct ggml_tensor * mm_model_ln_q_b;
+    struct ggml_tensor * mm_model_ln_kv_w;
+    struct ggml_tensor * mm_model_ln_kv_b;
+    struct ggml_tensor * mm_model_ln_post_w;
+    struct ggml_tensor * mm_model_ln_post_b;
+
     struct ggml_tensor * image_newline = nullptr;
 };
 
@@ -135,6 +157,18 @@ struct llama_vision_patches {
     std::vector<std::vector<float>> buf; // preprocessed image data
 };
 
+inline vision_arch vision_arch_from_string(const std::string & name) {
+    if (name == "llava") {
+        return VISION_ARCH_LLAVA;
+    } else if (name == "mobilevlm") {
+        return VISION_ARCH_MOBILEVLM;
+    } else if (name == "minicpmv") {
+        return VISION_ARCH_MINICPMV;
+    }
+
+    return VISION_ARCH_UNKNOWN;
+}
+
 inline mm_patch_merge mm_patch_merge_from_name(std::string & name) {
     if (name == "flat") {
         return MM_PATCH_MERGE_FLAT;
@@ -149,6 +183,10 @@ inline clip_projector_type clip_projector_type_from_name(std::string & name) {
         return CLIP_PROJECTOR_TYPE_MLP;
     } else if (name == "ldpv2") {
         return CLIP_PROJECTOR_TYPE_LDPV2;
+    } else if (name == "minicpmv-2.5") {
+        return CLIP_PROJECTOR_TYPE_MINICPMV_2_5;
+    } else if (name == "minicpmv-2.6") {
+        return CLIP_PROJECTOR_TYPE_MINICPMV_2_6;
     }
     return CLIP_PROJECTOR_TYPE_UNKNOWN;
 }

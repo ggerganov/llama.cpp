@@ -63,6 +63,10 @@ uint32_t clip_n_mmproj_embd(const clip_vision_model & clip_model) {
         return clip_model.mm_2_b->ne[0];
     } else if (proj_type == CLIP_PROJECTOR_TYPE_LDPV2) {
         return clip_model.mm_model_peg_0_b->ne[0];
+    } else if (proj_type == CLIP_PROJECTOR_TYPE_MINICPMV_2_5) {
+        return 4096;
+    } else if (proj_type == CLIP_PROJECTOR_TYPE_MINICPMV_2_6) {
+        return 3584;
     } else {
         GGML_ASSERT(false && "invalid proj type");
     }
@@ -240,6 +244,173 @@ static void normalize_image_u8_to_f32(const clip_image_u8 & src, std::vector<flo
     for (size_t i = 0; i < src.buf.size(); ++i) {
         int c = i % 3; // rgb
         dst[i] = (static_cast<float>(src.buf[i]) / 255.0f - mean[c]) / std[c];
+    }
+}
+
+#define LLAMA_LOG_DEBUG LLAMA_LOG_INFO
+
+// minicpmv preprocessor
+struct minicpmv_preprocessor {
+    int ensure_divide(int length, int patch_size) {
+        return std::max(static_cast<int>(std::round(static_cast<float>(length) / patch_size) * patch_size), patch_size);
+    }
+
+    std::pair<int, int> uhd_find_best_resize(std::pair<int, int> original_size, int scale_resolution, int patch_size, bool allow_upscale = false) {
+        int width = original_size.first;
+        int height = original_size.second;
+        if ((width * height > scale_resolution * scale_resolution) || allow_upscale) {
+            float r = static_cast<float>(width) / height;
+            height = static_cast<int>(scale_resolution / std::sqrt(r));
+            width = static_cast<int>(height * r);
+        }
+        int best_width = ensure_divide(width, patch_size);
+        int best_height = ensure_divide(height, patch_size);
+        return std::make_pair(best_width, best_height);
+    }
+
+    std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size, std::pair<int, int> grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
+        int width, height;
+        std::tie(width, height) = original_size;
+        int grid_x, grid_y;
+        std::tie(grid_x, grid_y) = grid;
+
+        int refine_width = ensure_divide(width, grid_x);
+        int refine_height = ensure_divide(height, grid_y);
+
+        int grid_width = refine_width / grid_x;
+        int grid_height = refine_height / grid_y;
+
+        // auto best_grid_size = find_best_resize(std::make_tuple(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); (old line)
+        auto best_grid_size = uhd_find_best_resize(std::make_pair(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); // (new line) => fixes conversion for make_tuple to make_pair
+        int best_grid_width, best_grid_height;
+        std::tie(best_grid_width, best_grid_height) = best_grid_size;
+
+        // std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
+        std::pair<int, int> refine_size = std::make_pair(best_grid_width * grid_x, best_grid_height * grid_y); // (new line)
+        return refine_size;
+    }
+
+    std::pair<int, int> uhd_best_grid(const int max_slice_nums, const int multiple, const float log_ratio) {
+        std::vector<int> candidate_split_grids_nums;
+        for (int i : {multiple - 1, multiple, multiple + 1}) {
+            if (i == 1 || i > max_slice_nums) {
+                continue;
+            }
+            candidate_split_grids_nums.push_back(i);
+        }
+
+        std::vector<std::pair<int, int>> candidate_grids;
+        for (int split_grids_nums : candidate_split_grids_nums) {
+            int m = 1;
+            while (m <= split_grids_nums) {
+                if (split_grids_nums % m == 0) {
+                    candidate_grids.emplace_back(m, split_grids_nums / m);
+                }
+                ++m;
+            }
+        }
+
+        std::pair<int, int> best_grid{1, 1};
+        float min_error = std::numeric_limits<float>::infinity();
+        for (const auto& grid : candidate_grids) {
+            float error = std::abs(log_ratio - std::log(1.0 * grid.first / grid.second));
+            if (error < min_error) {
+                best_grid = grid;
+                min_error = error;
+            }
+        }
+        return best_grid;
+    }
+
+    std::vector<std::vector<clip_image_u8>> uhd_slice_image(
+            const clip_image_u8 & img,
+            const int max_slice_nums = 9,
+            const int scale_resolution = 448,
+            const int patch_size = 14) {
+        const std::pair<int, int> original_size={img.nx,img.ny};
+        const int original_width = img.nx;
+        const int original_height = img.ny;
+        const float log_ratio = log(1.0*original_width/original_height);
+        const float ratio = 1.0 * original_width * original_height/ (scale_resolution * scale_resolution);
+        const int multiple = fmin(ceil(ratio), max_slice_nums);
+
+        std::vector<std::vector<clip_image_u8>> images;
+        LLAMA_LOG_DEBUG("%s: multiple %d\n", __func__, multiple);
+        images.push_back(std::vector<clip_image_u8>());
+
+        if (multiple <= 1) {
+            auto best_size = uhd_find_best_resize(original_size, scale_resolution, patch_size, true);
+            clip_image_u8 source_image;
+            bicubic_resize(img, source_image, best_size.first, best_size.second);
+            // source_image = image.resize(best_size, Image.Resampling.BICUBIC)
+            images[images.size()-1].push_back(source_image);
+        }
+        else if (multiple > 1) {
+            auto best_size = uhd_find_best_resize(original_size, scale_resolution, patch_size);
+            clip_image_u8 source_image;
+            bicubic_resize(img, source_image, best_size.first, best_size.second);
+            // source_image = image.copy().resize(best_resize, Image.Resampling.BICUBIC)
+            LLAMA_LOG_DEBUG("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img.nx, img.ny, best_size.first, best_size.second);
+            images[images.size()-1].push_back(source_image);
+
+            std::pair<int, int> best_grid = uhd_best_grid(max_slice_nums, multiple, log_ratio);
+            LLAMA_LOG_DEBUG("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img.nx, img.ny, best_grid.first, best_grid.second);
+
+            auto refine_size = uhd_get_refine_size(original_size, best_grid, scale_resolution, patch_size, true);
+            clip_image_u8 refine_image;
+            bicubic_resize(img, refine_image, refine_size.first, refine_size.second);
+
+            LLAMA_LOG_DEBUG("%s: refine_image_size: %d %d; refine_size: %d %d\n", __func__, refine_image.nx, refine_image.ny, refine_size.first, refine_size.second);
+
+            // split_to_patches
+            int width = refine_image.nx;
+            int height = refine_image.ny;
+            int grid_x = int(width / best_grid.first);
+            int grid_y = int(height / best_grid.second);
+            for (int patches_i = 0, ic = 0; patches_i < height && ic < best_grid.second; patches_i += grid_y, ic += 1){
+                images.push_back(std::vector<clip_image_u8>());
+                for(int patches_j = 0, jc = 0; patches_j < width && jc < best_grid.first; patches_j += grid_x, jc += 1){
+                    clip_image_u8 patch;
+                    patch.nx = grid_x;
+                    patch.ny = grid_y;
+                    patch.buf.resize(3 * patch.nx * patch.ny);
+                    for (int y = patches_i; y < patches_i + grid_y; ++y) {
+                        for (int x = patches_j; x < patches_j + grid_x; ++x) {
+                            const int i = 3 * (y * refine_image.nx + x);
+                            const int j = 3 * ((y-patches_i) * patch.nx + (x-patches_j));
+                            patch.buf[j]   = refine_image.buf[i];
+                            patch.buf[j+1] = refine_image.buf[i+1];
+                            patch.buf[j+2] = refine_image.buf[i+2];
+                        }
+                    }
+                    images[images.size()-1].push_back(patch);
+                }
+            }
+        }
+        return images;
+    }
+};
+
+static llama_vision_patches clip_image_preprocess_minicpmv(const clip_context & ctx, const clip_image_u8 & img) {
+    auto & params = ctx.model->hparams;
+    GGML_ASSERT(params.arch == VISION_ARCH_MINICPMV);
+
+    static const int max_slice_nums = 9;
+    minicpmv_preprocessor preprocessor;
+    std::vector<std::vector<clip_image_u8>> imgs = preprocessor.uhd_slice_image(img, max_slice_nums);
+
+    llama_vision_patches output_patches;
+    output_patches.n_px = clip_n_patches_x(ctx);
+    output_patches.n_py = clip_n_patches_y(ctx);
+    output_patches.px = params.patch_size;
+    output_patches.py = params.patch_size;
+
+    for (size_t i = 0; i < imgs.size(); ++i) {
+        for (size_t j = 0; j < imgs[i].size(); ++j) {
+            std::vector<float> res;
+            normalize_image_u8_to_f32(imgs[i][j], res, params.image_mean, params.image_std);
+            output_patches.buf.push_back(res);
+        }
     }
 }
 
@@ -724,8 +895,10 @@ struct llama_vision_patches * llama_vision_patches_init(
         struct llama_context * ctx,
         llama_vision_bitmap * bmp) {
     clip_context & vctx = ctx->vctx;
-    llama_vision_patches p = clip_image_preprocess(vctx, *bmp);
-    return new llama_vision_patches(p);
+    if (vctx.model->hparams.arch == VISION_ARCH_MINICPMV) {
+        return new llama_vision_patches(clip_image_preprocess_minicpmv(vctx, *bmp));
+    }
+    return new llama_vision_patches(clip_image_preprocess(vctx, *bmp));
 }
 
 void llama_vision_patches_free(llama_vision_patches * p) {

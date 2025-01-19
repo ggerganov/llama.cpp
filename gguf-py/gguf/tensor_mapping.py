@@ -808,42 +808,52 @@ class TensorNameMap:
 
         MODEL_TENSOR.V_ENC_EMBD_PATCH: (
             "vision_tower.vision_model.embeddings.patch_embedding",
+            "vpm.embeddings.patch_embedding",
         ),
 
         MODEL_TENSOR.V_ENC_EMBD_POS: (
             "vision_tower.vision_model.embeddings.position_embedding",
+            "vpm.embeddings.position_embedding",
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_Q: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.q_proj",
+            "vpm.encoder.layers.{bid}.self_attn.q_proj",
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_K: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.k_proj",
+            "vpm.encoder.layers.{bid}.self_attn.k_proj",
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_V: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.v_proj",
+            "vpm.encoder.layers.{bid}.self_attn.v_proj",
         ),
 
         MODEL_TENSOR.V_ENC_INPUT_NORM: (
             "vision_tower.vision_model.encoder.layers.{bid}.layer_norm1",
+            "vpm.encoder.layers.{bid}.layer_norm1",
         ),
 
         MODEL_TENSOR.V_ENC_OUTPUT: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.out_proj",
+            "vpm.encoder.layers.{bid}.self_attn.out_proj",
         ),
 
         MODEL_TENSOR.V_ENC_OUTPUT_NORM: (
             "vision_tower.vision_model.encoder.layers.{bid}.layer_norm2",
+            "vpm.encoder.layers.{bid}.layer_norm2",
         ),
 
         MODEL_TENSOR.V_ENC_FFN_UP: (
             "vision_tower.vision_model.encoder.layers.{bid}.mlp.fc1",
+            "vpm.encoder.layers.{bid}.mlp.fc1",
         ),
 
         MODEL_TENSOR.V_ENC_FFN_DOWN: (
             "vision_tower.vision_model.encoder.layers.{bid}.mlp.fc2",
+            "vpm.encoder.layers.{bid}.mlp.fc2",
         ),
 
         MODEL_TENSOR.V_PRE_NORM: (
@@ -852,6 +862,42 @@ class TensorNameMap:
 
         MODEL_TENSOR.V_POST_NORM: (
             "vision_tower.vision_model.post_layernorm",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_POS_EMBD_K: (
+            "resampler.pos_embed_k",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_ATTN_IN: (
+            "resampler.attn.in_proj",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_ATTN_OUT: (
+            "resampler.attn.out_proj",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_KV_PROJ: (
+            "resampler.kv_proj",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_NORM_POST: (
+            "resampler.ln_post",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_NORM_KV: (
+            "resampler.ln_kv",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_NORM_Q: (
+            "resampler.ln_q",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_PROJ: (
+            "resampler.proj",
+        ),
+
+        MODEL_TENSOR.V_RESMPL_QUERY: (
+            "resampler.query",
         ),
     }
 
