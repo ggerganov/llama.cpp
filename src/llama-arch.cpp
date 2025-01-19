@@ -3,6 +3,7 @@
 #include "llama-impl.h"
 
 #include <map>
+#include <exception>
 
 static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_LLAMA,            "llama"            },
@@ -188,6 +189,27 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
 
     { LLM_KV_ADAPTER_TYPE,       "adapter.type"       },
     { LLM_KV_ADAPTER_LORA_ALPHA, "adapter.lora.alpha" },
+
+    { LLM_KV_VISION_TYPE,                     "vision.type"                              },
+    { LLM_KV_VISION_IMAGE_SIZE,               "vision.image_size"                        },
+    { LLM_KV_VISION_PATCH_SIZE,               "vision.patch_size"                        },
+    { LLM_KV_VISION_IMAGE_MEAN,               "vision.image_mean"                        },
+    { LLM_KV_VISION_IMAGE_STD,                "vision.image_std"                         },
+    { LLM_KV_VISION_CLIP_ARCHITECTURE,        "vision.clip.architecture"                 },
+    { LLM_KV_VISION_CLIP_CONTEXT_LENGTH,      "vision.clip.context_length"               },
+    { LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,    "vision.clip.embedding_length"             },
+    { LLM_KV_VISION_CLIP_BLOCK_COUNT,         "vision.clip.block_count"                  },
+    { LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, "vision.clip.feed_forward_length"          },
+    { LLM_KV_VISION_CLIP_PROJECTION_TYPE,     "vision.clip.projection_type"              },
+    { LLM_KV_VISION_CLIP_PROJECTION_DIM,      "vision.clip.projection_dim"               },
+    { LLM_KV_VISION_CLIP_USE_GELU,            "vision.clip.use_gelu"                     },
+    { LLM_KV_VISION_CLIP_MAX_POS_EMBD,        "vision.clip.max_position_embeddings"      },
+    { LLM_KV_VISION_CLIP_MAX_SLICES,          "vision.clip.max_slices"                   },
+    { LLM_KV_VISION_CLIP_PROJECTOR_TYPE,      "vision.clip.projector_type"               },
+    { LLM_KV_VISION_CLIP_SELECT_LAYER,        "vision.clip.select_layer"                 },
+    { LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE,    "vision.clip.patch_merge_type"             },
+    { LLM_KV_VISION_CLIP_HEAD_COUNT,          "vision.clip.attention.head_count"         },
+    { LLM_KV_VISION_CLIP_LAYERNORM_EPS,       "vision.clip.attention.layer_norm_epsilon" },
 
     // deprecated
     { LLM_KV_TOKENIZER_PREFIX_ID, "tokenizer.ggml.prefix_token_id" },
@@ -1300,6 +1322,72 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
     },
 };
 
+static const std::map<vision_arch, std::map<vision_tensor, const char *>> VISION_TENSOR_NAMES = {
+    {
+        VISION_ARCH_LLAVA,
+        {
+            { VISION_TENSOR_MMPROJ,                  "v.mmproj_%d"                 },
+            { VISION_TENSOR_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
+            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { VISION_TENSOR_PRE_NORM,                "v.pre_norm"                  },
+            { VISION_TENSOR_POST_NORM,               "v.post_norm"                 },
+        }
+    },
+    {
+        VISION_ARCH_MOBILEVLM,
+        {
+            { VISION_TENSOR_MMPROJ_MLP,              "v.mmproj.mlp.%d"             },
+            { VISION_TENSOR_MMPROJ_PEG,              "v.mmproj.peg.%d"             },
+            { VISION_TENSOR_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
+            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { VISION_TENSOR_PRE_NORM,                "v.pre_norm"                  },
+            { VISION_TENSOR_POST_NORM,               "v.post_norm"                 },
+        }
+    },
+    {
+        VISION_ARCH_MINICPMV,
+        {
+            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { VISION_TENSOR_RESMPL_POS_EMBD_K,       "v.resmpl.pos_embd_k"         },
+            { VISION_TENSOR_RESMPL_ATTN_IN,          "v.resmpl.attn_in"            },
+            { VISION_TENSOR_RESMPL_ATTN_OUT,         "v.resmpl.attn_out"           },
+            { VISION_TENSOR_RESMPL_KV_PROJ,          "v.resmpl.kv_proj"            },
+            { VISION_TENSOR_RESMPL_NORM_POST,        "v.resmpl.norm_post"          },
+            { VISION_TENSOR_RESMPL_NORM_KV,          "v.resmpl.norm_kv"            },
+            { VISION_TENSOR_RESMPL_NORM_Q,           "v.resmpl.norm_q"             },
+            { VISION_TENSOR_RESMPL_PROJ,             "v.resmpl.proj"               },
+            { VISION_TENSOR_RESMPL_QUERY,            "v.resmpl.query"              },
+        }
+    },
+};
+
 static const std::map<llm_tensor, llm_tensor_info> LLM_TENSOR_INFOS = {
     {LLM_TENSOR_TOKEN_EMBD,                 {LLM_TENSOR_LAYER_INPUT, GGML_OP_GET_ROWS}},
     {LLM_TENSOR_POS_EMBD,                   {LLM_TENSOR_LAYER_INPUT, GGML_OP_GET_ROWS}},
@@ -1449,12 +1537,37 @@ std::string LLM_KV::operator()(llm_kv kv) const {
     return ::format(LLM_KV_NAMES.at(kv), LLM_ARCH_NAMES.at(arch));
 }
 
-std::string LLM_TN_IMPL::str() const {
+template<>
+std::string BASE_TN_IMPL<llm_arch, llm_tensor>::str() const {
+    if (LLM_TENSOR_NAMES.find(arch) == LLM_TENSOR_NAMES.end()) {
+        throw std::runtime_error(format("Cannot find tensor name mapping for arch %d", arch));
+    }
+
     if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
         return "__missing__";
     }
 
     std::string name = ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid, xid);
+
+    if (suffix != nullptr) {
+        name += ".";
+        name += suffix;
+    }
+
+    return name;
+}
+
+template<>
+std::string BASE_TN_IMPL<vision_arch, vision_tensor>::str() const {
+    if (VISION_TENSOR_NAMES.find(arch) == VISION_TENSOR_NAMES.end()) {
+        throw std::runtime_error(format("Cannot find tensor name mapping for arch %d", arch));
+    }
+
+    if (VISION_TENSOR_NAMES.at(arch).find(tensor) == VISION_TENSOR_NAMES.at(arch).end()) {
+        return "__missing__";
+    }
+
+    std::string name = ::format(VISION_TENSOR_NAMES.at(arch).at(tensor), bid, xid);
 
     if (suffix != nullptr) {
         name += ".";
