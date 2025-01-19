@@ -454,6 +454,27 @@ float16_t dequantFuncIQ3_S(const in decodeBufIQ3_S bl, const in uint blockCoords
 }
 #endif
 
+#if defined(DATA_A_IQ4_XS)
+layout(buffer_reference, std430, buffer_reference_align = 2) buffer decodeBufIQ4_XS {
+   block_iq4_xs block;
+};
+
+float16_t dequantFuncIQ4_XS(const in decodeBufIQ4_XS bl, const in uint blockCoords[2], const in uint coordInBlock[2])
+{
+    const float16_t d = bl.block.d;
+    const uint idx = coordInBlock[1];
+
+    const uint ib32 = (idx & 0xE0) >> 5; // 0..7
+
+    const uint sl = (bl.block.scales_l[ib32/2] >> (4 * (ib32 & 1))) & 0xF;
+    const uint sh = ((bl.block.scales_h) >> (2 * ib32)) & 3;
+    const uint qshift = (idx & 16) >> 2;
+    const uint q = (bl.block.qs[16 * ib32 + (idx % 16)] >> qshift) & 0xF;
+
+    float16_t ret = d * float16_t(int(sl | (sh << 4)) - 32) * float16_t(kvalues_iq4nl[q]);
+    return ret;
+}
+#endif
 
 #if defined(DATA_A_IQ4_NL)
 layout(buffer_reference, std430, buffer_reference_align = 2) buffer decodeBufIQ4_NL {
@@ -504,6 +525,8 @@ float16_t dequantFuncIQ4_NL(const in decodeBufIQ4_NL bl, const in uint blockCoor
 #define dequantFuncA dequantFuncIQ3_XXS
 #elif defined(DATA_A_IQ3_S)
 #define dequantFuncA dequantFuncIQ3_S
+#elif defined(DATA_A_IQ4_XS)
+#define dequantFuncA dequantFuncIQ4_XS
 #elif defined(DATA_A_IQ4_NL)
 #define dequantFuncA dequantFuncIQ4_NL
 #endif
