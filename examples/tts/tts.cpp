@@ -523,7 +523,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> guide_tokens;
 
     //determine OuteTTS version and vocab code offset. v0.2 does not have <|space|>, but v0.3 does
-    const bool is_version_0_3 = common_tokenize(vocab,"<|space|>",false,true).size()==1;
+    const bool is_version_0_3 = (common_get_builtin_chat_template(model_ttc) == "outetts-0.3");
     //determine the offset of the first audio code token
     const int cts_offset = common_tokenize(vocab,"<|0|>",false,true)[0];
 
