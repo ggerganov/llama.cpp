@@ -55,6 +55,7 @@ const std::vector<std::string> type_names = {
     "q4_k",
     "q5_k",
     "q6_k",
+    "iq2_xs",
     "iq2_xxs",
     "iq3_xxs",
     "iq3_s",
@@ -313,6 +314,7 @@ void matmul_shaders(bool fp16, bool matmul_id, bool coopmat, bool coopmat2, bool
     string_to_spv(shader_name + "_f16", source_name, merge_maps(base_dict, {{"DATA_A_F16", "1"}, {"B_TYPE", "float16_t"}, {"D_TYPE", "float"}}), fp16, coopmat, coopmat2, f16acc);
 
     for (const auto& tname : type_names) {
+        if (tname == "iq2_xs" && coopmat2) continue;
         if (tname == "iq2_xxs" && coopmat2) continue;
         if (tname == "iq3_xxs" && coopmat2) continue;
         if (tname == "iq3_s" && coopmat2) continue;
@@ -371,7 +373,7 @@ void process_shaders() {
             if (tname == "f32") {
                 continue;
             }
-            if (tname == "iq3_s" || tname == "iq3_xxs" || tname == "iq2_xxs") {
+            if (tname == "iq3_s" || tname == "iq3_xxs" || tname == "iq2_xs" || tname == "iq2_xxs") {
                 continue;
             }
 
