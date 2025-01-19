@@ -510,7 +510,7 @@ extern "C" {
     LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
 
     // Get the default chat template. Returns nullptr if not available
-    LLAMA_API const char * llama_model_chat_template(const struct llama_model * model);
+    LLAMA_API const char * llama_model_chat_template(const struct llama_model * model, const char * name);
 
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
@@ -1103,6 +1103,7 @@ extern "C" {
     struct llama_sampler_i {
         const char *           (*name)  (const struct llama_sampler * smpl);                                 // can be NULL
         void                   (*accept)(      struct llama_sampler * smpl, llama_token token);              // can be NULL
+        void                   (*accept_str)(  struct llama_sampler * smpl, const char * text);              // can be NULL
         void                   (*apply) (      struct llama_sampler * smpl, llama_token_data_array * cur_p); // required
         void                   (*reset) (      struct llama_sampler * smpl);                                 // can be NULL
         struct llama_sampler * (*clone) (const struct llama_sampler * smpl);                                 // can be NULL if ctx is NULL
@@ -1120,6 +1121,7 @@ extern "C" {
     // mirror of llama_sampler_i:
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
+    LLAMA_API void                   llama_sampler_accept_str(  struct llama_sampler * smpl, const char * piece);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
     LLAMA_API void                   llama_sampler_reset (      struct llama_sampler * smpl);
     LLAMA_API struct llama_sampler * llama_sampler_clone (const struct llama_sampler * smpl);
@@ -1258,6 +1260,8 @@ extern "C" {
     //    return token;
     // Returns the sampled token
     LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx);
+
+    LLAMA_API bool llama_sampler_is_grammar_empty(struct llama_sampler * smpl);
 
     // TODO: extend in the future
     //LLAMA_API void llama_decode_with_sampler(struct llama_context * ctx, struct llama_sampler * smpl, struct llama_batch batch, ...);

@@ -126,7 +126,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--grammar GRAMMAR` | BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '') |
 | `--grammar-file FNAME` | file to read grammar from |
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
-
+| `--jinja` | Enable experimental Jinja templating engine (needed for tool use) |
 
 **Example-specific params**
 
@@ -1100,6 +1100,82 @@ curl http://localhost:8080/v1/chat/completions \
 ]
 }'
 ```
+
+... and even tool usage (needs `--jinja` flag):
+
+  ```shell
+  llama-server --jinja -hfr lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF -hff Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf -fa
+
+  # https://huggingface.co/meetkai/functionary-medium-v3.2
+  llama-server --jinja -hfr bartowski/functionary-medium-v3.2-GGUF -hff functionary-medium-v3.2-IQ4_XS.gguf -fa
+
+  # https://huggingface.co/meetkai/functionary-medium-v3.1
+  llama-server --jinja -hfr meetkai/functionary-medium-v3.1-GGUF -hff functionary-medium-llama-3.1.Q4_0.gguf -fa
+
+  curl http://localhost:8080/v1/chat/completions -d '{
+    "model": "gpt-3.5-turbo",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "ipython",
+          "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "The code to run in the ipython interpreter."
+              }
+            },
+            "required": ["code"]
+          }
+        }
+      }
+    ],
+    "messages": [
+      {
+        "role": "user",
+        "content": "Print a hello world message with python."
+      }
+    ]
+  }'
+  ```
+
+  <details>
+  <summary>Show output</summary>
+
+  ```json
+  {
+    "choices": [
+      {
+        "finish_reason": "tool",
+        "index": 0,
+        "message": {
+          "content": null,
+          "tool_calls": [
+            {
+              "name": "ipython",
+              "arguments": "{\"code\":\" \\nprint(\\\"Hello, World!\\\")\"}"
+            }
+          ],
+          "role": "assistant"
+        }
+      }
+    ],
+    "created": 1727287211,
+    "model": "gpt-3.5-turbo",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 16,
+      "prompt_tokens": 44,
+      "total_tokens": 60
+    },
+    "id": "chatcmpl-Htbgh9feMmGM0LEH2hmQvwsCxq3c6Ni8"
+  }
+  ```
+
+  </details>
 
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 

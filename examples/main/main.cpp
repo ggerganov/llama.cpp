@@ -4,6 +4,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "llama.h"
+#include "chat-template.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -37,7 +38,7 @@ static llama_model             ** g_model;
 static common_sampler          ** g_smpl;
 static common_params            * g_params;
 static std::vector<llama_token> * g_input_tokens;
-static std::ostringstream       * g_output_ss;
+static std::string              * g_output_s;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
 static bool need_insert_eot = false;
@@ -83,14 +84,6 @@ static void sigint_handler(int signo) {
     }
 }
 #endif
-
-static std::string chat_add_and_format(struct llama_model * model, std::vector<common_chat_msg> & chat_msgs, const std::string & role, const std::string & content) {
-    common_chat_msg new_msg{role, content};
-    auto formatted = common_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
-    chat_msgs.push_back({role, content});
-    LOG_DBG("formatted: '%s'\n", formatted.c_str());
-    return formatted;
-}
 
 int main(int argc, char ** argv) {
     common_params params;
@@ -165,6 +158,7 @@ int main(int argc, char ** argv) {
     }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
+    auto chat_templates = llama_chat_templates_from_model(model, params.chat_template);
 
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
 
@@ -207,7 +201,7 @@ int main(int argc, char ** argv) {
     }
 
     // auto enable conversation mode if chat template is available
-    const bool has_chat_template = !common_get_builtin_chat_template(model).empty() || !params.chat_template.empty();
+    const bool has_chat_template = chat_templates.has_explicit_template && chat_templates.default_template;
     if (params.conversation_mode == COMMON_CONVERSATION_MODE_AUTO) {
         if (has_chat_template) {
             LOG_INF("%s: chat template is available, enabling conversation mode (disable it with -no-cnv)\n", __func__);
@@ -225,7 +219,7 @@ int main(int argc, char ** argv) {
     // print chat template example in conversation mode
     if (params.conversation_mode) {
         if (params.enable_chat_template) {
-            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(model, params.chat_template).c_str());
+            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(*chat_templates.default_template, params.use_jinja).c_str());
         } else {
             LOG_INF("%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
         }
@@ -269,10 +263,18 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
+    auto chat_add_and_format = [&chat_msgs, &chat_templates](const std::string & role, const std::string & content) {
+        common_chat_msg new_msg{role, content};
+        auto formatted = common_chat_format_single(*chat_templates.default_template, chat_msgs, new_msg, role == "user", g_params->use_jinja);
+        chat_msgs.push_back({role, content});
+        LOG_DBG("formatted: '%s'\n", formatted.c_str());
+        return formatted;
+    };
+
     {
         auto prompt = (params.conversation_mode && params.enable_chat_template)
             // format the system prompt in conversation mode (fallback to default if empty)
-            ? chat_add_and_format(model, chat_msgs, "system", params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt)
+            ? chat_add_and_format("system", params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt)
             // otherwise use the prompt as is
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
@@ -492,7 +494,8 @@ int main(int argc, char ** argv) {
 
     std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
     std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
-    std::ostringstream output_ss;     g_output_ss     = &output_ss;
+    std::string        output_s;      g_output_s      = &output_s;
+    size_t last_partial_stop = std::string::npos;
     std::ostringstream assistant_ss; // for storing current assistant message, used in conversation mode
 
     // the first thing we will do is to output the prompt, so set color accordingly
@@ -501,13 +504,8 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    // tokenized antiprompts
-    std::vector<std::vector<llama_token>> antiprompt_ids;
-
-    antiprompt_ids.reserve(params.antiprompt.size());
-    for (const std::string & antiprompt : params.antiprompt) {
-        antiprompt_ids.emplace_back(::common_tokenize(ctx, antiprompt, false, true));
-    }
+    llama_antiprompts antiprompts;
+    antiprompts.build(ctx, params.antiprompt, {});
 
     if (llama_model_has_encoder(model)) {
         int enc_input_size = embd_inp.size();
@@ -712,7 +710,7 @@ int main(int argc, char ** argv) {
                 } else {
                     // Outgoing Generated Tokens
                     output_tokens.push_back(id);
-                    output_ss << token_str;
+                    output_s.append(token_str);
                 }
             }
         }
@@ -725,44 +723,34 @@ int main(int argc, char ** argv) {
 
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
-            // check for reverse prompt in the last n_prev tokens
-            if (!params.antiprompt.empty()) {
-                const int n_prev = 32;
-                const std::string last_output = common_sampler_prev_str(smpl, ctx, n_prev);
-
+            // check for reverse prompt
+            if (!antiprompts.empty()) {
                 is_antiprompt = false;
-                // Check if each of the reverse prompts appears at the end of the output.
-                // If we're not running interactively, the reverse prompt might be tokenized with some following characters
-                // so we'll compensate for that by widening the search window a bit.
-                for (std::string & antiprompt : params.antiprompt) {
-                    size_t extra_padding = params.interactive ? 0 : 2;
-                    size_t search_start_pos = last_output.length() > static_cast<size_t>(antiprompt.length() + extra_padding)
-                        ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
-                        : 0;
-
-                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos) {
-                        if (params.interactive) {
-                            is_interacting = true;
-                        }
-                        is_antiprompt = true;
-                        break;
-                    }
-                }
 
                 // check for reverse prompt using special tokens
                 llama_token last_token = common_sampler_last(smpl);
-                for (std::vector<llama_token> ids : antiprompt_ids) {
-                    if (ids.size() == 1 && last_token == ids[0]) {
-                        if (params.interactive) {
-                            is_interacting = true;
+                auto match = antiprompts.findSingleTokenMatch(last_token);
+                if (match.pos != std::string::npos) {
+                    if (params.interactive) {
+                        is_interacting = true;
+                    }
+                    is_antiprompt = true;
+                } else {
+                    match = antiprompts.findFirstMatch(output_s, last_partial_stop == std::string::npos ? 0 : last_partial_stop);
+                    if (match.pos != std::string::npos) {
+                        if (match.is_partial) {
+                            last_partial_stop = match.pos;
+                        } else {
+                            if (params.interactive) {
+                                is_interacting = true;
+                            }
+                            is_antiprompt = true;
                         }
-                        is_antiprompt = true;
-                        break;
                     }
                 }
 
                 if (is_antiprompt) {
-                    LOG_DBG("found antiprompt: %s\n", last_output.c_str());
+                    LOG_DBG("found antiprompt: %s\n", match.pattern.c_str());
                 }
             }
 
@@ -771,15 +759,15 @@ int main(int argc, char ** argv) {
                 LOG_DBG("found an EOG token\n");
 
                 if (params.interactive) {
-                    if (!params.antiprompt.empty()) {
+                    if (!antiprompts.stop_words.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = common_tokenize(ctx, params.antiprompt.front(), false, true);
+                        const auto first_antiprompt = common_tokenize(ctx, antiprompts.stop_words.front(), false, true);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
 
                     if (params.enable_chat_template) {
-                        chat_add_and_format(model, chat_msgs, "assistant", assistant_ss.str());
+                        chat_add_and_format("assistant", assistant_ss.str());
                     }
                     is_interacting = true;
                     LOG("\n");
@@ -844,7 +832,7 @@ int main(int argc, char ** argv) {
 
                     bool format_chat = params.conversation_mode && params.enable_chat_template;
                     std::string user_inp = format_chat
-                        ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
+                        ? chat_add_and_format("user", std::move(buffer))
                         : std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
                     const auto line_pfx = common_tokenize(ctx, params.input_prefix, false, true);
@@ -867,7 +855,7 @@ int main(int argc, char ** argv) {
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
                         const llama_token token = embd_inp[i];
                         output_tokens.push_back(token);
-                        output_ss << common_token_to_piece(ctx, token);
+                        output_s.append(common_token_to_piece(ctx, token));
                     }
 
                     // reset assistant message

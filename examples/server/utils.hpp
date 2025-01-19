@@ -16,6 +16,9 @@
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
+#include "minja.hpp"
+#include "chat-template.hpp"
+#include "tool-call.h"
 
 #include <random>
 #include <sstream>
@@ -349,7 +352,7 @@ static llama_tokens format_infill(
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+inline std::string format_chat(const llama_chat_template & tmpl, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
@@ -358,6 +361,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         std::string role = json_value(curr_msg, "role", std::string(""));
 
         std::string content;
+
         if (curr_msg.contains("content")) {
             if (curr_msg["content"].is_string()) {
                 content = curr_msg["content"].get<std::string>();
@@ -377,7 +381,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat.push_back({role, content});
     }
 
-    const auto formatted_chat = common_chat_apply_template(model, tmpl, chat, true);
+    const auto formatted_chat = common_chat_apply_template(tmpl, chat, true, /* use_jinja= */ false);
     LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
@@ -481,14 +485,13 @@ static bool ends_with(const std::string & str, const std::string & suffix) {
 
 static size_t find_partial_stop_string(const std::string &stop, const std::string &text) {
     if (!text.empty() && !stop.empty()) {
-        const char text_last_char = text.back();
-        for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
-            if (stop[char_index] == text_last_char) {
-                const std::string current_partial = stop.substr(0, char_index + 1);
-                if (ends_with(text, current_partial)) {
-                    return text.size() - char_index - 1;
-                }
+        auto it = std::find(stop.rbegin(), stop.rend(), text.back());
+        while (it != stop.rend()) {
+            size_t length = std::distance(it, stop.rend());
+            if (text.length() >= length && 0 == text.compare(text.length() - length, length, stop)) {
+                return text.length() - length;
             }
+            it = std::find(std::next(it), stop.rend(), text.back());
         }
     }
 
@@ -576,14 +579,30 @@ static json oaicompat_completion_params_parse(const json & body) {
     return llama_params;
 }
 
-static json oaicompat_chat_completion_params_parse(
-        const struct llama_model * model,
-        const json & body, /* openai api json semantics */
-        const std::string & chat_template) {
+static json oaicompat_completion_params_parse(
+    const json & body, /* openai api json semantics */
+    const llama_chat_template & tmpl,
+    llama_tool_call_style tool_call_style,
+    bool use_jinja)
+{
     json llama_params;
 
-    // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    auto tools = json_value(body, "tools", json());
+    auto has_tools = tools.is_array() && !tools.empty();
+    auto stream = json_value(body, "stream", false);
+
+    if (has_tools) {
+        if (stream) {
+            throw std::runtime_error("Cannot use tools with stream");
+        }
+        if (use_jinja) {
+            if (tool_call_style == llama_tool_call_style::UnknownToolCallStyle) {
+                throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");
+            }
+        } else {
+            throw std::runtime_error("tools param requires --jinja flag");
+        }
+    }
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
@@ -592,18 +611,68 @@ static json oaicompat_chat_completion_params_parse(
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
-    // Handle "response_format" field
+    // Handle "response_format" field (https://platform.openai.com/docs/api-reference/chat/create#chat-create-response_format)
+    auto tool_choice = json_value(body, "tool_choice", std::string("auto"));
     if (body.contains("response_format")) {
         json response_format      = json_value(body, "response_format", json::object());
         std::string response_type = json_value(response_format, "type", std::string());
         if (response_type == "json_object") {
+            // Legacy llama.cpp, llama-cpp-python and Together.ai format.
             llama_params["json_schema"] = json_value(response_format, "schema", json::object());
         } else if (response_type == "json_schema") {
-            json json_schema = json_value(response_format, "json_schema", json::object());
-            llama_params["json_schema"] = json_value(json_schema, "schema", json::object());
+            // OpenAI JSON schema format.
+            auto json_schema = json_value(response_format, "json_schema", json::object());
+            json schema = json_value(json_schema, "schema", json::object());
+            std::string description = json_value(json_schema, "description", std::string());
+            if (!description.empty()) {
+                if (schema.contains("description")) {
+                    throw std::runtime_error("Cannot have both a description in the json_schema object and inside its schema.");
+                }
+                schema["description"] = description;
+            }
+            bool strict = json_value(json_schema, "strict", false);
+            if (strict) {
+                llama_params["json_schema"] = schema;
+            }
         } else if (!response_type.empty() && response_type != "text") {
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
+    }
+
+    if (use_jinja) {
+        bool allow_content = tool_choice != "required";
+        if (tool_choice != "none" && has_tools) {
+            llama_params["tools"] = tools;
+            llama_params["tool_call_style"] = tool_call_style;
+
+            auto parallel_tool_calls = body.contains("parallel_tool_calls") ? body.at("parallel_tool_calls") : json();
+            llama_params["parallel_tool_calls"] = parallel_tool_calls;
+
+            auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools, llama_params["json_schema"]);
+            llama_params["prompt"] = handler.prompt;
+
+            for (const auto & stop : handler.additional_stops) {
+                llama_params["stop"].push_back(stop);
+            }
+            if (!handler.grammar_triggers.empty()) {
+                auto trigger_words = json::array();
+                for (const auto & word : handler.grammar_triggers) {
+                    trigger_words.push_back(word);
+
+                }
+                llama_params["grammar_trigger_words"] = trigger_words;
+            }
+            if (!handler.grammar.empty()) {
+                if (llama_params.contains("grammar")) {
+                    throw std::runtime_error("Cannot use custom grammar constraints with tools.");
+                }
+                llama_params["grammar"] = handler.grammar;
+            }
+        } else {
+            llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
+        }
+    } else {
+        llama_params["prompt"] = format_chat(tmpl, body.at("messages"));
     }
 
     // Handle "n" field
@@ -621,10 +690,12 @@ static json oaicompat_chat_completion_params_parse(
     }
 
     // Params supported by OAI but unsupported by llama.cpp
-    static const std::vector<std::string> unsupported_params { "tools", "tool_choice" };
-    for (const auto & param : unsupported_params) {
-        if (body.contains(param)) {
-            throw std::runtime_error("Unsupported param: " + param);
+    if (!use_jinja) {
+        static const std::vector<std::string> unsupported_params { "tool_choice" };
+        for (const auto & param : unsupported_params) {
+            if (body.contains(param)) {
+                throw std::runtime_error("Unsupported param: " + param);
+            }
         }
     }
 
