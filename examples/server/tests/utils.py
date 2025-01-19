@@ -89,6 +89,9 @@ class ServerProcess:
             self.server_port = int(os.environ["PORT"])
 
     def start(self, timeout_seconds: int = 10) -> None:
+        if "LLAMA_SANITIZE" in os.environ:
+            timeout_seconds = 30
+
         if "LLAMA_SERVER_BIN_PATH" in os.environ:
             server_path = os.environ["LLAMA_SERVER_BIN_PATH"]
         elif os.name == "nt":
