@@ -2254,6 +2254,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.vocoder.model = value;
         }
     ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
+     add_opt(common_arg(
+        {"--tts-use-guide-tokens"},
+        "Use guide tokens to improve TTS word recall",
+        [](common_params & params) {
+            params.vocoder.use_guide_tokens = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
 
     // model-specific
     add_opt(common_arg(

@@ -184,6 +184,8 @@ struct common_params_vocoder {
 
     std::string model     = ""; // model path                                                // NOLINT
     std::string model_url = ""; // model url to download                                     // NOLINT
+
+    bool use_guide_tokens = false; // enable guide tokens to improve TTS accuracy            // NOLINT
 };
 
 struct common_params {
