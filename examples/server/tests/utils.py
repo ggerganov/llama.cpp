@@ -26,6 +26,9 @@ from re import RegexFlag
 import wget
 
 
+DEFAULT_HTTP_TIMEOUT = 10 if "LLAMA_SANITIZE" not in os.environ else 30
+
+
 class ServerResponse:
     headers: dict
     status_code: int
@@ -88,7 +91,7 @@ class ServerProcess:
         if "PORT" in os.environ:
             self.server_port = int(os.environ["PORT"])
 
-    def start(self, timeout_seconds: int = 10) -> None:
+    def start(self, timeout_seconds: int | None = DEFAULT_HTTP_TIMEOUT) -> None:
         if "LLAMA_SERVER_BIN_PATH" in os.environ:
             server_path = os.environ["LLAMA_SERVER_BIN_PATH"]
         elif os.name == "nt":
