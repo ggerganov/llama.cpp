@@ -794,6 +794,14 @@ class TensorNameMap:
             "multi_modal_projector.linear_{bid}",
         ),
 
+        MODEL_TENSOR.V_MMPROJ_MLP: (
+            "model.mm_projector.mlp.mlp.{bid}",
+        ),
+
+        MODEL_TENSOR.V_MMPROJ_PEG: (
+            "model.mm_projector.peg.peg.{bid}",
+        ),
+
         MODEL_TENSOR.V_ENC_EMBD_CLS: (
             "vision_tower.vision_model.embeddings.class_embedding",
         ),

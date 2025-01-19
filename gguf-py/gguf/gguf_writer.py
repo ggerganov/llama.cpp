@@ -876,7 +876,7 @@ class GGUFWriter:
 
     def add_precompiled_charsmap(self, charsmap: Sequence[bytes]) -> None:
         self.add_array(Keys.Tokenizer.PRECOMPILED_CHARSMAP, charsmap)
-    
+
     def add_vision_type(self, value: str) -> None:
         self.add_string(Keys.Vision.TYPE, value)
 

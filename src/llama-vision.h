@@ -10,6 +10,7 @@
 enum clip_projector_type {
     CLIP_PROJECTOR_TYPE_UNKNOWN,
     CLIP_PROJECTOR_TYPE_MLP,
+    CLIP_PROJECTOR_TYPE_LDPV2,
 };
 
 enum mm_patch_merge {
@@ -98,6 +99,14 @@ struct clip_vision_model {
     struct ggml_tensor * mm_2_w = nullptr;
     struct ggml_tensor * mm_2_b = nullptr;
 
+    // MobileVLM_V2 projection
+    struct ggml_tensor * mm_model_mlp_0_w = nullptr;
+    struct ggml_tensor * mm_model_mlp_0_b = nullptr;
+    struct ggml_tensor * mm_model_mlp_2_w = nullptr;
+    struct ggml_tensor * mm_model_mlp_2_b = nullptr;
+    struct ggml_tensor * mm_model_peg_0_w = nullptr;
+    struct ggml_tensor * mm_model_peg_0_b = nullptr;
+
     struct ggml_tensor * image_newline = nullptr;
 };
 
@@ -138,6 +147,8 @@ inline mm_patch_merge mm_patch_merge_from_name(std::string & name) {
 inline clip_projector_type clip_projector_type_from_name(std::string & name) {
     if (name == "mlp") {
         return CLIP_PROJECTOR_TYPE_MLP;
+    } else if (name == "ldpv2") {
+        return CLIP_PROJECTOR_TYPE_LDPV2;
     }
     return CLIP_PROJECTOR_TYPE_UNKNOWN;
 }

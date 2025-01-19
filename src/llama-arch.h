@@ -72,6 +72,7 @@ enum llm_arch {
 enum vision_arch {
     VISION_ARCH_UNKNOWN,
     VISION_ARCH_LLAVA,
+    VISION_ARCH_MOBILEVLM,
 };
 
 enum llm_kv {
@@ -356,6 +357,8 @@ enum llm_tensor {
 
 enum vision_tensor {
     VISION_TENSOR_MMPROJ,
+    VISION_TENSOR_MMPROJ_MLP,
+    VISION_TENSOR_MMPROJ_PEG,
     VISION_TENSOR_ENC_EMBD_CLS,
     VISION_TENSOR_ENC_EMBD_PATCH,
     VISION_TENSOR_ENC_EMBD_POS,

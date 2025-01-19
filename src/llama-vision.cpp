@@ -58,8 +58,11 @@ static int clip_n_patches(const clip_context & ctx) {
 }
 
 uint32_t clip_n_mmproj_embd(const clip_vision_model & clip_model) {
-    if (clip_model.hparams.proj_type == CLIP_PROJECTOR_TYPE_MLP) {
+    auto & proj_type = clip_model.hparams.proj_type;
+    if (proj_type == CLIP_PROJECTOR_TYPE_MLP) {
         return clip_model.mm_2_b->ne[0];
+    } else if (proj_type == CLIP_PROJECTOR_TYPE_LDPV2) {
+        return clip_model.mm_model_peg_0_b->ne[0];
     } else {
         GGML_ASSERT(false && "invalid proj type");
     }
@@ -559,6 +562,30 @@ static ggml_cgraph * clip_image_build_graph(clip_context & ctx, int batch_size, 
             embeddings = ggml_gelu(ctx0, embeddings);
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
+
+        } else if (hparams.proj_type == CLIP_PROJECTOR_TYPE_LDPV2) {
+            int n_patch = 24;
+            struct ggml_tensor * mlp_0 = ggml_mul_mat(ctx0, model.mm_model_mlp_0_w, embeddings);
+            mlp_0 = ggml_add(ctx0, mlp_0, model.mm_model_mlp_0_b);
+            mlp_0 = ggml_gelu(ctx0, mlp_0);
+            struct ggml_tensor * mlp_2 = ggml_mul_mat(ctx0, model.mm_model_mlp_2_w, mlp_0);
+            mlp_2 = ggml_add(ctx0, mlp_2, model.mm_model_mlp_2_b);
+            // mlp_2 ne = [2048, 576, 1, 1]
+            // // AVG Pool Layer 2*2, strides = 2
+            mlp_2 = ggml_cont(ctx0, ggml_permute(ctx0, mlp_2, 1, 0, 2, 3));
+            // mlp_2 ne = [576, 2048, 1, 1]
+            mlp_2 = ggml_reshape_4d(ctx0, mlp_2, n_patch, n_patch, mlp_2->ne[1], mlp_2->ne[2]);
+            // mlp_2 ne [24, 24, 2048, 1]
+            mlp_2 = ggml_pool_2d(ctx0, mlp_2, GGML_OP_POOL_AVG, 2, 2, 2, 2, 0, 0);
+            // weight ne = [3, 3, 2048, 1]
+            struct ggml_tensor * peg_0 = ggml_conv_2d_dw(ctx0, model.mm_model_peg_0_w, mlp_2, 1, 1, 1, 1, 1, 1);
+            peg_0 = ggml_cont(ctx0, ggml_permute(ctx0, peg_0, 1, 2, 0, 3));
+            peg_0 = ggml_add(ctx0, peg_0, model.mm_model_peg_0_b);
+            mlp_2 = ggml_cont(ctx0, ggml_permute(ctx0, mlp_2, 1, 2, 0, 3));
+            peg_0 = ggml_add(ctx0, peg_0, mlp_2);
+            peg_0 = ggml_reshape_3d(ctx0, peg_0, peg_0->ne[0], peg_0->ne[1] * peg_0->ne[2], peg_0->ne[3]);
+            embeddings = peg_0;
+
         } else {
             GGML_ASSERT(false && "unsupported proj type");
         }

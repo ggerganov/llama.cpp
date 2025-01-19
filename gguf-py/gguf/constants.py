@@ -308,7 +308,8 @@ class MODEL_ARCH(IntEnum):
     CHAMELEON        = auto()
     WAVTOKENIZER_DEC = auto()
     # vision models
-    LLAVA_VISION     = auto()
+    VISION_LLAVA     = auto()
+    VISION_MOBILEVLM = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -439,6 +440,8 @@ class MODEL_TENSOR(IntEnum):
     POSNET_ATTN_OUT      = auto()
     # vision
     V_MMPROJ             = auto()
+    V_MMPROJ_MLP         = auto()
+    V_MMPROJ_PEG         = auto()
     V_ENC_EMBD_CLS       = auto()
     V_ENC_EMBD_PATCH     = auto()
     V_ENC_EMBD_POS       = auto()
@@ -512,6 +515,9 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GRANITE_MOE:      "granitemoe",
     MODEL_ARCH.CHAMELEON:        "chameleon",
     MODEL_ARCH.WAVTOKENIZER_DEC: "wavtokenizer-dec",
+    # vision
+    MODEL_ARCH.VISION_LLAVA:     "llava",
+    MODEL_ARCH.VISION_MOBILEVLM: "mobilevlm",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -641,6 +647,8 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.POSNET_ATTN_OUT:           "posnet.{bid}.attn_output",
     # vision
     MODEL_TENSOR.V_MMPROJ:                  "v.mmproj_{bid}",
+    MODEL_TENSOR.V_MMPROJ_MLP:              "v.mmproj.mlp.{bid}",
+    MODEL_TENSOR.V_MMPROJ_PEG:              "v.mmproj.peg.{bid}",
     MODEL_TENSOR.V_ENC_EMBD_CLS:            "v.enc.embd.cls",
     MODEL_TENSOR.V_ENC_EMBD_PATCH:          "v.enc.embd.patch",
     MODEL_TENSOR.V_ENC_EMBD_POS:            "v.enc.embd.pos",
@@ -1595,8 +1603,25 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.POSNET_ATTN_V,
         MODEL_TENSOR.POSNET_ATTN_OUT,
     ],
-    MODEL_ARCH.LLAVA_VISION: [
+    MODEL_ARCH.VISION_LLAVA: [
         MODEL_TENSOR.V_MMPROJ,
+        MODEL_TENSOR.V_ENC_EMBD_CLS,
+        MODEL_TENSOR.V_ENC_EMBD_PATCH,
+        MODEL_TENSOR.V_ENC_EMBD_POS,
+        MODEL_TENSOR.V_ENC_ATTN_Q,
+        MODEL_TENSOR.V_ENC_ATTN_K,
+        MODEL_TENSOR.V_ENC_ATTN_V,
+        MODEL_TENSOR.V_ENC_INPUT_NORM,
+        MODEL_TENSOR.V_ENC_OUTPUT,
+        MODEL_TENSOR.V_ENC_OUTPUT_NORM,
+        MODEL_TENSOR.V_ENC_FFN_UP,
+        MODEL_TENSOR.V_ENC_FFN_DOWN,
+        MODEL_TENSOR.V_PRE_NORM,
+        MODEL_TENSOR.V_POST_NORM,
+    ],
+    MODEL_ARCH.VISION_MOBILEVLM: [
+        MODEL_TENSOR.V_MMPROJ_MLP,
+        MODEL_TENSOR.V_MMPROJ_PEG,
         MODEL_TENSOR.V_ENC_EMBD_CLS,
         MODEL_TENSOR.V_ENC_EMBD_PATCH,
         MODEL_TENSOR.V_ENC_EMBD_POS,
@@ -1693,11 +1718,12 @@ class PoolingType(IntEnum):
 
 
 class CLIPProjectorType(Enum):
-    MLP = 'mlp'
+    MLP   = 'mlp'
+    LDPV2 = 'ldpv2'
 
 
 class CLIPPatchMergeType(Enum):
-    FLAT = 'flat'
+    FLAT          = 'flat'
     SPATIAL_UNPAD = 'spatial_unpad'
 
 
