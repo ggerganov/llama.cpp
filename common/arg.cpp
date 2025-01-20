@@ -914,7 +914,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
     add_opt(common_arg(
         {"--top-nsigma"}, "N",
-        string_format("top-n-sigma sampling (default: %d, -1 = disabled)", params.sampling.top_n_sigma),
+        string_format("top-n-sigma sampling (default: %.1f, -1.0 = disabled)", params.sampling.top_n_sigma),
         [](common_params & params, const std::string & value) {
             params.sampling.top_n_sigma = std::stof(value);
         }
