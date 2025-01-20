@@ -1459,6 +1459,9 @@ jobs:
 #          make
 
   openEuler-latest-cmake-cann:
+    defaults:
+      run:
+       shell: bash -el {0}
     runs-on: ubuntu-latest
 
     strategy:
@@ -1480,7 +1483,6 @@ jobs:
 
     - name: Build
       run: |
-          . /usr/local/Ascend/ascend-toolkit/set_env.sh
           export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/x86_64-linux/devlib/:${LD_LIBRARY_PATH}
           mkdir build
           cd build
