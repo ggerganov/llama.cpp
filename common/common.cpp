@@ -1821,11 +1821,11 @@ std::string common_chat_format_example(const llama_chat_template & tmpl, bool us
     return common_chat_apply_template(tmpl, msgs, true, use_jinja);
 }
 
-llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
+llama_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
-    auto bos_token = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
-    auto eos_token = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
+    auto token_bos = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
+    auto token_eos = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     std::string default_template_src = chat_template_override;
     std::string tool_use_template_src = chat_template_override;
     bool has_explicit_template = !chat_template_override.empty();
