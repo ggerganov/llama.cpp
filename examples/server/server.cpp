@@ -1771,6 +1771,7 @@ struct server_context {
         }
 
         chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        GGML_ASSERT(chat_templates.template_default.get() != nullptr);
 
         return true;
     }
