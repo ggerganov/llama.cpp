@@ -1749,7 +1749,7 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
 }
 
 std::string common_chat_apply_template(
-        const llama_chat_template & tmpl,
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass,
         bool use_jinja) {
@@ -1791,7 +1791,7 @@ std::string common_chat_apply_template(
 }
 
 std::string common_chat_format_single(
-        const llama_chat_template & tmpl,
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
@@ -1811,7 +1811,7 @@ std::string common_chat_format_single(
     return ss.str();
 }
 
-std::string common_chat_format_example(const llama_chat_template & tmpl, bool use_jinja) {
+std::string common_chat_format_example(const common_chat_template & tmpl, bool use_jinja) {
     std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant"},
         {"user",      "Hello"},
@@ -1821,7 +1821,7 @@ std::string common_chat_format_example(const llama_chat_template & tmpl, bool us
     return common_chat_apply_template(tmpl, msgs, true, use_jinja);
 }
 
-llama_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
+common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
     std::string default_template_src = chat_template_override;

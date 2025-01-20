@@ -1689,7 +1689,7 @@ struct server_context {
     // Necessary similarity of prompt for slot selection
     float slot_prompt_similarity = 0.0f;
 
-    llama_chat_templates chat_templates;
+    common_chat_templates chat_templates;
 
     ~server_context() {
         // Clear any sampling context
