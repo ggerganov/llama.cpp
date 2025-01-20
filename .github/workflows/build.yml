@@ -174,7 +174,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential curl libcurl4-openssl-dev
+          sudo apt-get install build-essential libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
@@ -868,7 +868,7 @@ jobs:
             DEBIAN_FRONTEND: noninteractive
           run: |
               apt update
-              apt install -y cmake build-essential ninja-build libgomp1 git
+              apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git
 
         - name: Build with CMake
           run: |
