@@ -781,7 +781,7 @@ endif # GGML_HIP_UMA
 
 	MK_LDFLAGS += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	MK_LDFLAGS += -L$(ROCM_PATH)/lib64 -Wl,-rpath=$(ROCM_PATH)/lib64
-	MK_LDFLAGS += -lhipblas -lamdhip64 -lrocblas
+	MK_LDFLAGS += -lhipblas -lamdhip64
 
 	HIPCC ?= $(CCACHE) $(ROCM_PATH)/bin/hipcc
 
