@@ -1824,9 +1824,6 @@ std::string common_chat_format_example(const llama_chat_template & tmpl, bool us
 llama_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
-    // TODO: consider detecting if the template needs bos / eos tokens and warn / error when missing.
-    auto token_bos = llama_vocab_bos(vocab) == LLAMA_TOKEN_NULL ? "" : common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
-    auto token_eos = llama_vocab_eos(vocab) == LLAMA_TOKEN_NULL ? "" : common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     std::string default_template_src = chat_template_override;
     std::string template_tool_use_src = chat_template_override;
     bool has_explicit_template = !chat_template_override.empty();
@@ -1856,6 +1853,19 @@ llama_chat_templates common_chat_templates_from_model(const struct llama_model *
             )";
         }
     }
+    const auto get_token = [&](llama_token token, const char * name, const char * jinja_variable_name) {
+        if (token == LLAMA_TOKEN_NULL) {
+            if (default_template_src.find(jinja_variable_name) != std::string::npos
+                || template_tool_use_src.find(jinja_variable_name) != std::string::npos) {
+                LOG_WRN("%s: warning: vocab does not have a %s token, jinja template won't work as intended.\n", __func__, name);
+            }
+            return std::string();
+        } else {
+            return common_token_to_piece(vocab, token, true);
+        }
+    };
+    auto token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
+    auto token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
     return {
         has_explicit_template,
         std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos),
