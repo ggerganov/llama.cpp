@@ -1824,8 +1824,9 @@ std::string common_chat_format_example(const llama_chat_template & tmpl, bool us
 llama_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
-    auto token_bos = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
-    auto token_eos = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
+    // TODO: consider detecting if the template needs bos / eos tokens and warn / error when missing.
+    auto token_bos = llama_vocab_bos(vocab) == LLAMA_TOKEN_NULL ? "" : common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
+    auto token_eos = llama_vocab_eos(vocab) == LLAMA_TOKEN_NULL ? "" : common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     std::string default_template_src = chat_template_override;
     std::string template_tool_use_src = chat_template_override;
     bool has_explicit_template = !chat_template_override.empty();
