@@ -175,7 +175,11 @@ struct common_params_speculative {
     struct cpu_params cpuparams;
     struct cpu_params cpuparams_batch;
 
-    std::string model = ""; // draft model for speculative decoding                          // NOLINT
+    std::string hf_repo = ""; // HF repo                                                     // NOLINT
+    std::string hf_file = ""; // HF file                                                     // NOLINT
+
+    std::string model = "";     // draft model for speculative decoding                      // NOLINT
+    std::string model_url = ""; // model url to download                                     // NOLINT
 };
 
 struct common_params_vocoder {
@@ -508,12 +512,14 @@ struct llama_model * common_load_model_from_url(
     const std::string & local_path,
     const std::string & hf_token,
     const struct llama_model_params & params);
+
 struct llama_model * common_load_model_from_hf(
     const std::string & repo,
     const std::string & remote_path,
     const std::string & local_path,
     const std::string & hf_token,
     const struct llama_model_params & params);
+
 std::pair<std::string, std::string> common_get_hf_file(
     const std::string & hf_repo_with_tag,
     const std::string & hf_token);
