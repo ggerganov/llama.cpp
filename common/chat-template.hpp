@@ -113,6 +113,8 @@ class chat_template {
     }
 
     const std::string & source() const { return source_; }
+    const std::string & bos_token() const { return bos_token_; }
+    const std::string & eos_token() const { return eos_token_; }
     bool supports_tools() const { return supports_tools_; }
     bool supports_parallel_tool_calls() const { return supports_parallel_tool_calls_; }
 

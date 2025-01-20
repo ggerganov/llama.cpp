@@ -366,13 +366,11 @@ public:
       throw std::runtime_error("contains can only be called on arrays and objects: " + dump());
     }
   }
-  void erase(size_t index) {
-    if (array_) throw std::runtime_error("Value is not an array: " + dump());
+  Value pop(size_t index) {
+    if (!array_) throw std::runtime_error("Value is not an array: " + dump());
+    auto value = array_->at(index);
     array_->erase(array_->begin() + index);
-  }
-  void erase(const std::string & key) {
-    if (object_) throw std::runtime_error("Value is not an object: " + dump());
-    object_->erase(key);
+    return value;
   }
   const Value& at(const Value & index) const {
     return const_cast<Value*>(this)->at(index);
@@ -1353,6 +1351,15 @@ public:
               if (index < 0 || index > (int64_t) obj.size()) throw std::runtime_error("Index out of range for insert method");
               obj.insert(index, vargs.args[1]);
               return Value();
+          } else if (method->get_name() == "pop") {
+              vargs.expectArgs("pop method", {0, 1}, {0, 0});
+              if (vargs.args.empty()) {
+                return obj.pop(obj.size() - 1);
+              } else {
+                auto index = vargs.args[0].get<int64_t>();
+                if (index < 0 || index >= (int64_t) obj.size()) throw std::runtime_error("Index out of range for pop method");
+                return obj.pop(index);
+              }
           }
         } else if (obj.is_object()) {
           if (method->get_name() == "items") {
@@ -2539,7 +2546,7 @@ inline std::shared_ptr<Context> Context::builtins() {
   }));
   globals.set("namespace", Value::callable([=](const std::shared_ptr<Context> &, ArgumentsValue & args) {
     auto ns = Value::object();
-    args.expectArgs("namespace", {0, 0}, {0, (std::numeric_limits<size_t>::max)()});
+    args.expectArgs("namespace", {0, 0}, {0, std::numeric_limits<size_t>::max()});
     for (auto & [name, value] : args.kwargs) {
       ns.set(name, value);
     }
@@ -2594,7 +2601,7 @@ inline std::shared_ptr<Context> Context::builtins() {
   };
   // https://jinja.palletsprojects.com/en/3.0.x/templates/#jinja-filters.reject
   globals.set("reject", Value::callable([=](const std::shared_ptr<Context> & context, ArgumentsValue & args) {
-    args.expectArgs("reject", {2, (std::numeric_limits<size_t>::max)()}, {0, 0});
+    args.expectArgs("reject", {2, std::numeric_limits<size_t>::max()}, {0, 0});
     auto & items = args.args[0];
     auto filter_fn = context->get(args.args[1]);
     if (filter_fn.is_null()) throw std::runtime_error("Undefined filter: " + args.args[1].dump());
@@ -2665,7 +2672,7 @@ inline std::shared_ptr<Context> Context::builtins() {
     return out;
   }));
   globals.set("selectattr", Value::callable([=](const std::shared_ptr<Context> & context, ArgumentsValue & args) {
-    args.expectArgs("selectattr", {2, (std::numeric_limits<size_t>::max)()}, {0, 0});
+    args.expectArgs("selectattr", {2, std::numeric_limits<size_t>::max()}, {0, 0});
     auto & items = args.args[0];
     if (items.is_null())
       return Value::array();
