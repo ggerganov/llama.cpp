@@ -936,8 +936,8 @@ static int get_user_input(std::string & user_input, const std::string & user) {
 static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_jinja) {
     int prev_len = 0;
     llama_data.fmtted.resize(llama_n_ctx(llama_data.context.get()));
-    auto chat_templates = llama_chat_templates_from_model(llama_data.model.get(), "");
-    GGML_ASSERT(chat_templates.default_template);
+    auto chat_templates = common_chat_templates_from_model(llama_data.model.get(), "");
+    GGML_ASSERT(chat_templates.template_default);
     static const bool stdout_a_terminal = is_stdout_a_terminal();
     while (true) {
         // Get user input
@@ -948,7 +948,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
 
         add_message("user", user.empty() ? user_input : user, llama_data);
         int new_len;
-        if (apply_chat_template_with_error_handling(*chat_templates.default_template, llama_data, true, new_len, use_jinja) < 0) {
+        if (apply_chat_template_with_error_handling(*chat_templates.template_default, llama_data, true, new_len, use_jinja) < 0) {
             return 1;
         }
 
@@ -963,7 +963,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
         }
 
         add_message("assistant", response, llama_data);
-        if (apply_chat_template_with_error_handling(*chat_templates.default_template, llama_data, false, prev_len, use_jinja) < 0) {
+        if (apply_chat_template_with_error_handling(*chat_templates.template_default, llama_data, false, prev_len, use_jinja) < 0) {
             return 1;
         }
     }

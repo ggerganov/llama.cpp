@@ -1827,7 +1827,7 @@ llama_chat_templates common_chat_templates_from_model(const struct llama_model *
     auto token_bos = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
     auto token_eos = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     std::string default_template_src = chat_template_override;
-    std::string tool_use_template_src = chat_template_override;
+    std::string template_tool_use_src = chat_template_override;
     bool has_explicit_template = !chat_template_override.empty();
     if (chat_template_override.empty()) {
         auto str = llama_model_chat_template(model, /* name */ nullptr);
@@ -1837,13 +1837,13 @@ llama_chat_templates common_chat_templates_from_model(const struct llama_model *
         }
         str = llama_model_chat_template(model, /* name */ "tool_use");
         if (str) {
-            tool_use_template_src = str;
+            template_tool_use_src = str;
             has_explicit_template = true;
         }
     }
     if (default_template_src.empty() || default_template_src == "chatml") {
-        if (!tool_use_template_src.empty()) {
-            default_template_src = tool_use_template_src;
+        if (!template_tool_use_src.empty()) {
+            default_template_src = template_tool_use_src;
         } else {
             default_template_src = R"(
                 {%- for message in messages -%}
@@ -1857,10 +1857,10 @@ llama_chat_templates common_chat_templates_from_model(const struct llama_model *
     }
     return {
         has_explicit_template,
-        std::make_unique<minja::chat_template>(default_template_src, bos_token, eos_token),
-        tool_use_template_src.empty()
+        std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos),
+        template_tool_use_src.empty()
             ? nullptr
-            : std::make_unique<minja::chat_template>(tool_use_template_src, bos_token, eos_token)
+            : std::make_unique<minja::chat_template>(template_tool_use_src, token_bos, token_eos)
     };
 }
 

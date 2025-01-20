@@ -632,7 +632,7 @@ std::string common_chat_format_single(
 std::string common_chat_format_example(
     const llama_chat_template & tmpl, bool use_jinja);
 
-llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
+llama_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 
 //
 // KV cache utils
