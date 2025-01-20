@@ -1662,6 +1662,8 @@ struct server_context {
     // Necessary similarity of prompt for slot selection
     float slot_prompt_similarity = 0.0f;
 
+    llama_chat_templates chat_templates;
+
     ~server_context() {
         // Clear any sampling context
         for (server_slot & slot : slots) {
@@ -1737,6 +1739,8 @@ struct server_context {
             cparams_dft.type_k = GGML_TYPE_F16;
             cparams_dft.type_v = GGML_TYPE_F16;
         }
+
+        chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
 
         return true;
     }
@@ -3625,30 +3629,17 @@ int main(int argc, char ** argv) {
         }
     };
 
-    std::mutex chat_templates_mutex;
-    std::optional<llama_chat_templates> chat_templates;
-
-    auto get_chat_templates = [&ctx_server, &chat_templates_mutex, &chat_templates]() -> const llama_chat_templates & {
-        std::lock_guard<std::mutex> lock(chat_templates_mutex);
-        if (!chat_templates) {
-            chat_templates = common_chat_templates_from_model(ctx_server.model, ctx_server.params_base.chat_template);
-            GGML_ASSERT(chat_templates->template_default);
-        }
-        return *chat_templates;
-    };
-
-    const auto handle_props = [&ctx_server, &res_ok, &get_chat_templates](const httplib::Request &, httplib::Response & res) {
+    const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
         // this endpoint is publicly available, please only return what is safe to be exposed
-        const auto & templates = get_chat_templates();
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            { "chat_template",               templates.template_default->source() },
+            { "chat_template",               ctx_server.chat_templates.template_default->source() },
             { "build_info",                  build_info },
         };
-        if (ctx_server.params_base.use_jinja && templates.template_tool_use) {
-            data["chat_template_tool_use"] = templates.template_tool_use->source();
+        if (ctx_server.params_base.use_jinja && ctx_server.chat_templates.template_tool_use) {
+            data["chat_template_tool_use"] = ctx_server.chat_templates.template_tool_use->source();
         }
 
         res_ok(res, data);
@@ -3863,15 +3854,14 @@ int main(int argc, char ** argv) {
             OAICOMPAT_TYPE_NONE); // infill is not OAI compatible
     };
 
-    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_impl, &get_chat_templates](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
         if (ctx_server.params_base.embedding) {
             res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
         auto body = json::parse(req.body);
-        const auto & templates = get_chat_templates();
-        const auto & chat_template = body.contains("tools") && templates.template_tool_use ? *templates.template_tool_use : *templates.template_default;
+        const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
         json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
 
         return handle_completions_impl(
@@ -4290,8 +4280,8 @@ int main(int argc, char ** argv) {
 
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
-        get_chat_templates().template_default->source().c_str(),
-        common_chat_format_example(*get_chat_templates().template_default, ctx_server.params_base.use_jinja).c_str());
+        ctx_server.chat_templates.template_default->source().c_str(),
+        common_chat_format_example(*ctx_server.chat_templates.template_default, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));
