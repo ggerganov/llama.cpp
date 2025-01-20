@@ -101,19 +101,25 @@ layout(buffer_reference, std430, buffer_reference_align = 4) buffer decodeBufQ2_
    block_q2_K block;
 };
 
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer decodeBufQ2_K_packed16 {
+   block_q2_K_packed16 block;
+};
+
 float16_t dequantFuncQ2_K(const in decodeBufQ2_K bl, const in uint blockCoords[2], const in uint coordInBlock[2])
 {
+    decodeBufQ2_K_packed16 bl16 = decodeBufQ2_K_packed16(bl);
     const f16vec2 d = bl.block.d;
     const uint idx = coordInBlock[1];
-    const uint iqs = idx;
 
-    const uint qsi = (iqs / 128) * 32 + (iqs % 32);     // 0..31
-    const uint scalesi = iqs / 16;                      // 0..15
-    const uint qsshift = ((iqs % 128) / 32) * 2;        // 0,2,4,6
+    const uint scalesi = (idx & 0xF0) >> 4;             // 0..15
+    const uint qsshift = (idx & 0x60) >> 4;             // 0,2,4,6
 
-    uint32_t qs = bl.block.qs[qsi];
+    uint qs = uint32_t(bl16.block.qs[((idx & 0x80) >> 3) + ((idx & 0x1E) >> 1)]);
+    qs = (qs >> qsshift) & 0x0303;
+    qs = unpack8(qs)[idx & 1];
+
     const uint scales = bl.block.scales[scalesi];
-    float16_t ret = d.x * float16_t(scales & 0xF) * float16_t((qs >> qsshift) & 3) - d.y * float16_t(scales >> 4);
+    float16_t ret = d.x * float16_t(scales & 0xF) * float16_t(qs) - d.y * float16_t(scales >> 4);
     return ret;
 }
 
@@ -157,39 +163,47 @@ layout(buffer_reference, std430, buffer_reference_align = 16) buffer decodeBufQ4
    block_q4_K_packed16 block;
 };
 
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer decodeBufQ4_K_packed128 {
+   block_q4_K_packed128 block;
+};
+
 float16_t dequantFuncQ4_K(const in decodeBufQ4_K bl, const in uint blockCoords[2], const in uint coordInBlock[2])
 {
     decodeBufQ4_K_packed16 bl16 = decodeBufQ4_K_packed16(bl);
+    decodeBufQ4_K_packed128 bl128 = decodeBufQ4_K_packed128(bl);
     const uint idx = coordInBlock[1];
 
     const uint b = (idx & 0x20) >> 5;            // 0,1
     const uint is = (idx & 0xE0) >> 5;         // 0..7
 
-    const f16vec2 loadd = bl.block.d;
+    uvec4 v = bl128.block.q4k[0];
+
+    const f16vec2 loadd = unpackFloat2x16(v.x);
 
     uint32_t sc;
     uint32_t mbyte;
 
-    uint32_t scidx0 = (is < 4) ? is : (is + 4);
-    uint32_t scidx1 = (is < 4) ? is : (is - 4);
-    uint32_t scidxmask1 = (is < 4) ? 0x30 : 0xC0;
-    uint32_t scidxshift1 = (is < 4) ? 0 : 2;
-    uint32_t mbidx0 = is + 4;
-    uint32_t mbidx1 = (is < 4) ? is + 4 : is;
-    uint32_t mbidxmask0 = (is < 4) ? 0xF : 0xF0;
-    uint32_t mbidxshift0 = (is < 4) ? 0 : 4;
-    uint32_t mbidxmask1 = (is < 4) ? 0x30 : 0xC0;
-    uint32_t mbidxshift1 = (is < 4) ? 0 : 2;
+    uint32_t scale0 = v.y;
+    uint32_t scale4 = v.z;
+    uint32_t scale8 = v.w;
 
-    sc    = uint8_t((bl.block.scales[scidx0] & 0xF)                         | ((bl.block.scales[scidx1] & scidxmask1) >> scidxshift1));
-    mbyte = uint8_t(((bl.block.scales[mbidx0] & mbidxmask0) >> mbidxshift0) | ((bl.block.scales[mbidx1] & mbidxmask1) >> mbidxshift1));
+    uint32_t sc_lo = scale0;
+    uint32_t mb_lo = scale4;
+    uint32_t sc_hi = (scale8 & 0x0F0F0F0F) | ((scale0 & 0xC0C0C0C0) >> 2);
+    uint32_t mb_hi = ((scale8 & 0xF0F0F0F0) >> 4) | ((scale4 & 0xC0C0C0C0) >> 2);
+
+    sc = is < 4 ? sc_lo : sc_hi;
+    mbyte = is < 4 ? mb_lo : mb_hi;
+    sc = sc >> (8 * (is & 3));
+    mbyte = mbyte >> (8 * (is & 3));
+    sc &= 0x3F;
+    mbyte &= 0x3F;
 
     const float16_t d = loadd.x * float16_t(sc);
     const float16_t m = loadd.y * float16_t(mbyte);
 
     uint qs = uint32_t(bl16.block.qs[((idx & 0xC0) >> 2) + ((idx & 0x1E) >> 1)]);
-    qs = (qs >> (b * 4)) & 0x0F0F;
-    qs = unpack8(qs)[idx & 1];
+    qs = (qs >> (b * 4 + 8 * (idx & 1))) & 0xF;
 
     float16_t ret = d * float16_t(qs) - m;
 
@@ -204,47 +218,53 @@ layout(buffer_reference, std430, buffer_reference_align = 16) buffer decodeBufQ5
    block_q5_K_packed16 block;
 };
 
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer decodeBufQ5_K_packed128 {
+   block_q5_K_packed128 block;
+};
+
 float16_t dequantFuncQ5_K(const in decodeBufQ5_K bl, const in uint blockCoords[2], const in uint coordInBlock[2])
 {
     decodeBufQ5_K_packed16 bl16 = decodeBufQ5_K_packed16(bl);
+    decodeBufQ5_K_packed128 bl128 = decodeBufQ5_K_packed128(bl);
     const uint idx = coordInBlock[1];
 
     const uint b = (idx & 0x20) >> 5;          // 0,1
     const uint is = (idx & 0xE0) >> 5;         // 0..7
 
-    const uint32_t hm = 0x0101 << is;
+    uvec4 v = bl128.block.q5k[0];
 
-    const f16vec2 loadd = bl.block.d;
+    const f16vec2 loadd = unpackFloat2x16(v.x);
 
     uint32_t sc;
     uint32_t mbyte;
 
-    uint32_t scidx0 = (is < 4) ? is : (is + 4);
-    uint32_t scidx1 = (is < 4) ? is : (is - 4);
-    uint32_t scidxmask1 = (is < 4) ? 0x30 : 0xC0;
-    uint32_t scidxshift1 = (is < 4) ? 0 : 2;
-    uint32_t mbidx0 = is + 4;
-    uint32_t mbidx1 = (is < 4) ? is + 4 : is;
-    uint32_t mbidxmask0 = (is < 4) ? 0xF : 0xF0;
-    uint32_t mbidxshift0 = (is < 4) ? 0 : 4;
-    uint32_t mbidxmask1 = (is < 4) ? 0x30 : 0xC0;
-    uint32_t mbidxshift1 = (is < 4) ? 0 : 2;
+    uint32_t scale0 = v.y;
+    uint32_t scale4 = v.z;
+    uint32_t scale8 = v.w;
 
-    sc    = uint8_t((bl.block.scales[scidx0] & 0xF)                         | ((bl.block.scales[scidx1] & scidxmask1) >> scidxshift1));
-    mbyte = uint8_t(((bl.block.scales[mbidx0] & mbidxmask0) >> mbidxshift0) | ((bl.block.scales[mbidx1] & mbidxmask1) >> mbidxshift1));
+    uint32_t sc_lo = scale0;
+    uint32_t mb_lo = scale4;
+    uint32_t sc_hi = (scale8 & 0x0F0F0F0F) | ((scale0 & 0xC0C0C0C0) >> 2);
+    uint32_t mb_hi = ((scale8 & 0xF0F0F0F0) >> 4) | ((scale4 & 0xC0C0C0C0) >> 2);
+
+    sc = is < 4 ? sc_lo : sc_hi;
+    mbyte = is < 4 ? mb_lo : mb_hi;
+    sc = sc >> (8 * (is & 3));
+    mbyte = mbyte >> (8 * (is & 3));
+    sc &= 0x3F;
+    mbyte &= 0x3F;
 
     const float16_t d = loadd.x * float16_t(sc);
     const float16_t m = loadd.y * float16_t(mbyte);
 
     uint qh = uint32_t(bl16.block.qh[(idx & 0x1E) >> 1]);
-    qh = qh & hm;
-    qh = unpack8(qh)[idx & 1];
+    qh = ((qh >> is) & 0x101) << 4;
 
     uint qs = uint32_t(bl16.block.qs[((idx & 0xC0) >> 2) + ((idx & 0x1E) >> 1)]);
     qs = (qs >> (b * 4)) & 0x0F0F;
-    qs = unpack8(qs)[idx & 1];
+    qs = unpack8(qs | qh)[idx & 1];
 
-    float16_t ret = d * (float16_t(qs) + (qh != 0 ? float16_t(16) : float16_t(0))) - m;
+    float16_t ret = d * (float16_t(qs)) - m;
 
     return ret;
 }

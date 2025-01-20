@@ -347,6 +347,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
         jlong context_pointer,
         jlong batch_pointer,
         jstring jtext,
+        jboolean format_chat,
         jint n_len
     ) {
 
@@ -356,7 +357,8 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     const auto context = reinterpret_cast<llama_context *>(context_pointer);
     const auto batch = reinterpret_cast<llama_batch *>(batch_pointer);
 
-    const auto tokens_list = common_tokenize(context, text, 1);
+    bool parse_special = (format_chat == JNI_TRUE);
+    const auto tokens_list = common_tokenize(context, text, true, parse_special);
 
     auto n_ctx = llama_n_ctx(context);
     auto n_kv_req = tokens_list.size() + (n_len - tokens_list.size());
@@ -368,7 +370,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     }
 
     for (auto id : tokens_list) {
-        LOGi("%s", common_token_to_piece(context, id).c_str());
+        LOGi("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
     }
 
     common_batch_clear(*batch);

@@ -526,7 +526,8 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
         kv_overrides = v->data();
     }
 
-    llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
+    std::vector<std::string> splits = {};
+    llama_model_loader ml(fname_inp, splits, use_mmap, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
     llama_model model(llama_model_default_params());
