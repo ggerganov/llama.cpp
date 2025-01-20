@@ -1,3 +1,5 @@
+llama_add_compile_flags()
+
 function(llama_test target)
     include(CMakeParseArguments)
     set(options)

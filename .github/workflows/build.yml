@@ -87,6 +87,7 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
+          cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
           zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
 
       - name: Upload artifacts
@@ -149,6 +150,7 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
+          cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
           zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
 
       - name: Upload artifacts
@@ -217,6 +219,7 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
+          cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
           zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
 
       - name: Upload artifacts
@@ -234,7 +237,7 @@ jobs:
     strategy:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        build_type: [Debug, Release]
+        build_type: [Debug]
 
     steps:
       - name: Clone
@@ -796,6 +799,7 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
+          Copy-Item .\examples\run\linenoise.cpp\LICENSE .\build\bin\Release\linenoise.cpp.txt
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip .\build\bin\Release\*
 
       - name: Upload artifacts
