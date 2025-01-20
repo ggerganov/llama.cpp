@@ -323,6 +323,14 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         throw std::invalid_argument("error: either --embedding or --reranking can be specified, but not both");
     }
 
+    if (!params.chat_template.empty() && !common_chat_verify_template(params.chat_template, params.use_jinja)) {
+        throw std::runtime_error(string_format(
+            "error: the supplied chat template is not supported: %s%s\n",
+            params.chat_template.c_str(),
+            params.use_jinja ? "" : "\nnote: llama.cpp was started without --jinja, we only support commonly used templates"
+        ));
+    }
+
     return true;
 }
 
@@ -1954,13 +1962,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             "list of built-in templates:\n%s", list_builtin_chat_templates().c_str()
         ),
         [](common_params & params, const std::string & value) {
-            if (!common_chat_verify_template(value, params.use_jinja)) {
-                throw std::runtime_error(string_format(
-                    "error: the supplied chat template is not supported: %s%s\n",
-                    value.c_str(),
-                    params.use_jinja ? "" : "\nnote: llama.cpp does not use jinja parser, we only support commonly used templates"
-                ));
-            }
             params.chat_template = value;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
@@ -1977,20 +1978,10 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             if (!file) {
                 throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
             }
-            std::string chat_template;
             std::copy(
                 std::istreambuf_iterator<char>(file),
                 std::istreambuf_iterator<char>(),
-                std::back_inserter(chat_template)
-            );
-            if (!common_chat_verify_template(chat_template, params.use_jinja)) {
-                throw std::runtime_error(string_format(
-                    "error: the supplied chat template is not supported: %s%s\n",
-                    value.c_str(),
-                    params.use_jinja ? "" : "\nnote: llama.cpp does not use jinja parser, we only support commonly used templates"
-                ));
-            }
-            params.chat_template = chat_template;
+                std::back_inserter(params.chat_template));
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE_FILE"));
     add_opt(common_arg(
