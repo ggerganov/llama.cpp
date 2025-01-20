@@ -41,13 +41,13 @@ struct llama_tool_call_handler {
 
 std::string llama_tool_call_style_name(llama_tool_call_style style);
 
-llama_tool_call_style llama_tool_call_style_detect(const llama_chat_template & chat_template);
+llama_tool_call_style llama_tool_call_style_detect(const common_chat_template & chat_template);
 
 llama_tool_calls parse_tool_calls(llama_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);
 
 llama_tool_call_handler llama_tool_call_handler_init(
     llama_tool_call_style style,
-    const llama_chat_template & tmpl,
+    const common_chat_template & tmpl,
     bool allow_content,
     const nlohmann::ordered_json & parallel_tool_calls,
     const nlohmann::ordered_json & messages,

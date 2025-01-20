@@ -1913,38 +1913,6 @@ common_chat_templates common_chat_templates_from_model(const struct llama_model 
     };
 }
 
-static std::string _llama_model_meta_val_str(const struct llama_model * model, const char * key) {
-    int32_t tlen = llama_model_meta_val_str(model, key, nullptr, 0);
-    if (tlen > 0) {
-        std::vector<char> curr_tmpl_buf(tlen + 1, 0);
-        if (llama_model_meta_val_str(model, key, curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
-            return std::string(curr_tmpl_buf.data(), tlen);
-        }
-    }
-    return "";
-}
-
-minja::chat_template llama_chat_template_from_model(
-    const struct llama_model * model,
-    const std::string & chat_template_override,
-    bool prefer_tool_use)
-{
-    // TODO: handle "chatml"?
-    std::string chat_template = chat_template_override;
-    if (chat_template.empty()) {
-        if (prefer_tool_use) {
-            chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template.tool_use");
-        }
-        if (chat_template.empty()) {
-            chat_template = _llama_model_meta_val_str(model, "tokenizer.chat_template");
-        }
-    }
-    const auto vocab = llama_model_get_vocab(model);
-    auto bos_token = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
-    auto eos_token = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
-    return {std::move(chat_template), bos_token, eos_token};
-}
-
 //
 // KV cache utils
 //

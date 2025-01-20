@@ -645,11 +645,6 @@ std::string common_chat_format_example(
 
 common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 
-llama_chat_template llama_chat_template_from_model(
-        const struct llama_model * model,
-        const std::string & chat_template_override = "",
-        bool prefer_tool_use = false);
-
 //
 // KV cache utils
 //
