@@ -862,6 +862,8 @@ jobs:
         - name: Clone
           id: checkout
           uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
 
         - name: Install dependencies
           env:
