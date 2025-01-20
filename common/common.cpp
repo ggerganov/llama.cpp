@@ -1855,13 +1855,12 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
             )";
         }
     }
-    return {
-        has_explicit_template,
-        std::make_unique<minja::chat_template>(default_template_src, bos_token, eos_token),
-        tool_use_template_src.empty()
-            ? nullptr
-            : std::make_unique<minja::chat_template>(tool_use_template_src, bos_token, eos_token)
-    };
+    llama_chat_templates ret(default_template_src, bos_token, eos_token);
+    ret.has_explicit_template = has_explicit_template;
+    ret.tool_use_template.reset(tool_use_template_src.empty()
+        ? nullptr
+        : new minja::chat_template(tool_use_template_src, bos_token, eos_token));
+    return ret;
 }
 
 //

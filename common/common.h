@@ -607,8 +607,13 @@ typedef minja::chat_template llama_chat_template;
 
 struct llama_chat_templates {
     bool has_explicit_template; // Model had builtin template or template overridde was specified.
-    std::unique_ptr<llama_chat_template> default_template; // always set (defaults to chatml)
+    llama_chat_template default_template; // always set (defaults to chatml)
     std::unique_ptr<llama_chat_template> tool_use_template;
+
+    llama_chat_templates(
+            const std::string & source,
+            const std::string & bos_token,
+            const std::string & eos_token) : default_template(source, bos_token, eos_token) {}
 };
 
 // CPP wrapper for llama_chat_apply_template
