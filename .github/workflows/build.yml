@@ -1461,3 +1461,37 @@ jobs:
 #          popd
 #          emcmake cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
 #          make
+
+  openEuler-latest-cmake-cann:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        cann: ['openeuler-python3.10-cann8.0.rc3.beta1']
+        build: ['Release']
+        device: ['ascend910b3']
+
+    steps:
+    - name: Clone
+      id: checkout
+      uses: actions/checkout@v4
+
+    - name: Dependencies & Build
+      uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: aarch64
+        distro: ubuntu22.04
+        base_image: --platform=linux/arm64 ascendai/cann:${{ matrix.cann }}
+        run: |
+          yum update -y
+          yum install git cmake gcc gcc-c++ make -y
+          export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/devlib/:${LD_LIBRARY_PATH}
+
+          mkdir build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build }}\
+            -DGGML_CANN=on\
+            -DGGML_NATIVE=OFF\
+            -DSOC_TYPE=${{ matrix.device }}
+          cmake --build .
