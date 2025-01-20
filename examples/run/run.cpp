@@ -19,12 +19,14 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <list>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "common.h"
 #include "json.hpp"
+#include "linenoise.cpp/linenoise.h"
 #include "llama-cpp.h"
 #include "chat-template.hpp"
 
@@ -540,7 +542,7 @@ class LlamaData {
     llama_sampler_ptr               sampler;
     llama_context_ptr               context;
     std::vector<llama_chat_message> messages;
-    std::vector<std::string>        msg_strs;
+    std::list<std::string>          msg_strs;
     std::vector<char>               fmtted;
 
     int init(Opt & opt) {
@@ -715,7 +717,7 @@ static void add_message(const char * role, const std::string & text, LlamaData &
 }
 
 // Function to apply the chat template and resize `formatted` if needed
-static int apply_chat_template(const llama_chat_template & tmpl, LlamaData & llama_data, const bool append, bool use_jinja) {
+static int apply_chat_template(const common_chat_template & tmpl, LlamaData & llama_data, const bool append, bool use_jinja) {
     if (use_jinja) {
         json messages = json::array();
         for (const auto & msg : llama_data.messages) {
@@ -749,10 +751,12 @@ static int apply_chat_template(const llama_chat_template & tmpl, LlamaData & lla
 
 // Function to tokenize the prompt
 static int tokenize_prompt(const llama_vocab * vocab, const std::string & prompt,
-                           std::vector<llama_token> & prompt_tokens) {
-    const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, true, true);
+                           std::vector<llama_token> & prompt_tokens, const LlamaData & llama_data) {
+    const bool is_first = llama_get_kv_cache_used_cells(llama_data.context.get()) == 0;
+
+    const int n_prompt_tokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, is_first, true);
     prompt_tokens.resize(n_prompt_tokens);
-    if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), true,
+    if (llama_tokenize(vocab, prompt.c_str(), prompt.size(), prompt_tokens.data(), prompt_tokens.size(), is_first,
                        true) < 0) {
         printe("failed to tokenize the prompt\n");
         return -1;
@@ -798,7 +802,7 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
     const llama_vocab * vocab = llama_model_get_vocab(llama_data.model.get());
 
     std::vector<llama_token> tokens;
-    if (tokenize_prompt(vocab, prompt, tokens) < 0) {
+    if (tokenize_prompt(vocab, prompt, tokens, llama_data) < 0) {
         return 1;
     }
 
@@ -829,23 +833,43 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
         batch = llama_batch_get_one(&new_token_id, 1);
     }
 
+    printf("\033[0m");
     return 0;
 }
 
-static int read_user_input(std::string & user) {
-    std::getline(std::cin, user);
+static int read_user_input(std::string & user_input) {
+    static const char * prompt_prefix = "> ";
+#ifdef WIN32
+    printf(
+        "\r%*s"
+        "\r\033[0m%s",
+        get_terminal_width(), " ", prompt_prefix);
+
+    std::getline(std::cin, user_input);
     if (std::cin.eof()) {
         printf("\n");
         return 1;
     }
-
-    if (user == "/bye") {
+#else
+    std::unique_ptr<char, decltype(&std::free)> line(const_cast<char *>(linenoise(prompt_prefix)), free);
+    if (!line) {
         return 1;
     }
 
-    if (user.empty()) {
+    user_input = line.get();
+#endif
+
+    if (user_input == "/bye") {
+        return 1;
+    }
+
+    if (user_input.empty()) {
         return 2;
     }
+
+#ifndef WIN32
+    linenoiseHistoryAdd(line.get());
+#endif
 
     return 0;  // Should have data in happy path
 }
@@ -869,7 +893,7 @@ static int generate_response(LlamaData & llama_data, const std::string & prompt,
 }
 
 // Helper function to apply the chat template and handle errors
-static int apply_chat_template_with_error_handling(const llama_chat_template & tmpl, LlamaData & llama_data, const bool append, int & output_length, bool use_jinja) {
+static int apply_chat_template_with_error_handling(const common_chat_template & tmpl, LlamaData & llama_data, const bool append, int & output_length, bool use_jinja) {
     const int new_len = apply_chat_template(tmpl, llama_data, append, use_jinja);
     if (new_len < 0) {
         printe("failed to apply the chat template\n");
@@ -887,10 +911,6 @@ static int handle_user_input(std::string & user_input, const std::string & user)
         return 0;  // No need for interactive input
     }
 
-    printf(
-        "\r%*s"
-        "\r\033[32m> \033[0m",
-        get_terminal_width(), " ");
     return read_user_input(user_input);  // Returns true if input ends the loop
 }
 
@@ -936,8 +956,8 @@ static int get_user_input(std::string & user_input, const std::string & user) {
 static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_jinja) {
     int prev_len = 0;
     llama_data.fmtted.resize(llama_n_ctx(llama_data.context.get()));
-    auto chat_templates = llama_chat_templates_from_model(llama_data.model.get(), "");
-    GGML_ASSERT(chat_templates.default_template);
+    auto chat_templates = common_chat_templates_from_model(llama_data.model.get(), "");
+    GGML_ASSERT(chat_templates.template_default);
     static const bool stdout_a_terminal = is_stdout_a_terminal();
     while (true) {
         // Get user input
@@ -948,7 +968,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
 
         add_message("user", user.empty() ? user_input : user, llama_data);
         int new_len;
-        if (apply_chat_template_with_error_handling(*chat_templates.default_template, llama_data, true, new_len, use_jinja) < 0) {
+        if (apply_chat_template_with_error_handling(*chat_templates.template_default, llama_data, true, new_len, use_jinja) < 0) {
             return 1;
         }
 
@@ -963,7 +983,7 @@ static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_
         }
 
         add_message("assistant", response, llama_data);
-        if (apply_chat_template_with_error_handling(*chat_templates.default_template, llama_data, false, prev_len, use_jinja) < 0) {
+        if (apply_chat_template_with_error_handling(*chat_templates.template_default, llama_data, false, prev_len, use_jinja) < 0) {
             return 1;
         }
     }

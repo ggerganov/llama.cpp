@@ -19,6 +19,7 @@
 #include "loading.html.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cinttypes>
@@ -32,6 +33,8 @@
 #include <unordered_set>
 
 using json = nlohmann::ordered_json;
+
+constexpr int HTTP_POLLING_SECONDS = 1;
 
 enum stop_type {
     STOP_TYPE_NONE,
@@ -1660,6 +1663,30 @@ struct server_response {
         // should never reach here
     }
 
+    // same as recv(), but have timeout in seconds
+    // if timeout is reached, nullptr is returned
+    server_task_result_ptr recv_with_timeout(const std::unordered_set<int> & id_tasks, int timeout) {
+        while (true) {
+            std::unique_lock<std::mutex> lock(mutex_results);
+            bool cr_res = condition_results.wait_for(lock, std::chrono::seconds(timeout), [&]{
+                return !queue_results.empty();
+            });
+            if (!cr_res) {
+                return nullptr;
+            }
+
+            for (int i = 0; i < (int) queue_results.size(); i++) {
+                if (id_tasks.find(queue_results[i]->id) != id_tasks.end()) {
+                    server_task_result_ptr res = std::move(queue_results[i]);
+                    queue_results.erase(queue_results.begin() + i);
+                    return res;
+                }
+            }
+        }
+
+        // should never reach here
+    }
+
     // single-task version of recv()
     server_task_result_ptr recv(int id_task) {
         std::unordered_set<int> id_tasks = {id_task};
@@ -1719,6 +1746,8 @@ struct server_context {
     // Necessary similarity of prompt for slot selection
     float slot_prompt_similarity = 0.0f;
 
+    common_chat_templates chat_templates;
+
     ~server_context() {
         // Clear any sampling context
         for (server_slot & slot : slots) {
@@ -1759,13 +1788,16 @@ struct server_context {
         add_bos_token = llama_vocab_get_add_bos(vocab);
         has_eos_token = llama_vocab_eos(vocab) != LLAMA_TOKEN_NULL;
 
-        if (!params_base.speculative.model.empty()) {
+        if (!params_base.speculative.model.empty() || !params_base.speculative.hf_repo.empty()) {
             SRV_INF("loading draft model '%s'\n", params_base.speculative.model.c_str());
 
             auto params_dft = params_base;
 
             params_dft.devices      = params_base.speculative.devices;
+            params_dft.hf_file      = params_base.speculative.hf_file;
+            params_dft.hf_repo      = params_base.speculative.hf_repo;
             params_dft.model        = params_base.speculative.model;
+            params_dft.model_url    = params_base.speculative.model_url;
             params_dft.n_ctx        = params_base.speculative.n_ctx == 0 ? params_base.n_ctx / params_base.n_parallel : params_base.speculative.n_ctx;
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
             params_dft.n_parallel   = 1;
@@ -1795,6 +1827,9 @@ struct server_context {
             cparams_dft.type_v = GGML_TYPE_F16;
         }
 
+        chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        GGML_ASSERT(chat_templates.template_default.get() != nullptr);
+
         return true;
     }
 
@@ -1802,15 +1837,15 @@ struct server_context {
         llama_chat_message chat[] = {{"user", "test"}};
 
         if (use_jinja) {
-            auto templates = llama_chat_templates_from_model(model, "");
-            GGML_ASSERT(templates.default_template);
+            auto templates = common_chat_templates_from_model(model, "");
+            GGML_ASSERT(templates.template_default);
             try {
-                templates.default_template->apply({{
+                templates.template_default->apply({{
                     {"role", "user"},
                     {"content", "test"},
                 }}, json(), true);
-                if (templates.tool_use_template) {
-                    templates.tool_use_template->apply({{
+                if (templates.template_tool_use) {
+                    templates.template_tool_use->apply({{
                         {"role", "user"},
                         {"content", "test"},
                     }}, json(), true);
@@ -2437,10 +2472,21 @@ struct server_context {
     void receive_multi_results(
             const std::unordered_set<int> & id_tasks,
             const std::function<void(std::vector<server_task_result_ptr>&)> & result_handler,
-            const std::function<void(json)> & error_handler) {
+            const std::function<void(json)> & error_handler,
+            const std::function<bool()> & is_connection_closed) {
         std::vector<server_task_result_ptr> results(id_tasks.size());
-        for (size_t i = 0; i < id_tasks.size(); i++) {
-            server_task_result_ptr result = queue_results.recv(id_tasks);
+        for (int i = 0; i < (int)id_tasks.size(); i++) {
+            server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POLLING_SECONDS);
+
+            if (is_connection_closed()) {
+                cancel_tasks(id_tasks);
+                return;
+            }
+
+            if (result == nullptr) {
+                i--; // retry
+                continue;
+            }
 
             if (result->is_error()) {
                 error_handler(result->to_json());
@@ -2464,10 +2510,20 @@ struct server_context {
     void receive_cmpl_results_stream(
             const std::unordered_set<int> & id_tasks,
             const std::function<bool(server_task_result_ptr&)> & result_handler,
-            const std::function<void(json)> & error_handler) {
+            const std::function<void(json)> & error_handler,
+            const std::function<bool()> & is_connection_closed) {
         size_t n_finished = 0;
         while (true) {
-            server_task_result_ptr result = queue_results.recv(id_tasks);
+            server_task_result_ptr result = queue_results.recv_with_timeout(id_tasks, HTTP_POLLING_SECONDS);
+
+            if (is_connection_closed()) {
+                cancel_tasks(id_tasks);
+                return;
+            }
+
+            if (result == nullptr) {
+                continue; // retry
+            }
 
             if (result->is_error()) {
                 error_handler(result->to_json());
@@ -3717,33 +3773,19 @@ int main(int argc, char ** argv) {
         }
     };
 
-    std::mutex chat_templates_mutex;
-    std::optional<llama_chat_templates> chat_templates;
-
-    auto get_chat_templates = [&ctx_server, &chat_templates_mutex, &chat_templates]() -> const llama_chat_templates & {
-        std::lock_guard<std::mutex> lock(chat_templates_mutex);
-        if (!chat_templates) {
-            chat_templates = llama_chat_templates_from_model(ctx_server.model, ctx_server.params_base.chat_template);
-            GGML_ASSERT(chat_templates->default_template);
-        }
-        return *chat_templates;
-    };
-
-    const auto handle_props = [&ctx_server, &res_ok, &get_chat_templates](const httplib::Request &, httplib::Response & res) {
+    const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
         // this endpoint is publicly available, please only return what is safe to be exposed
-        const auto & templates = get_chat_templates();
-        const auto vocab = llama_model_get_vocab(ctx_server.model);
         json data = {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            { "bos_token",                   common_token_to_piece(vocab, llama_vocab_bos(vocab), true) },
-            { "eos_token",                   common_token_to_piece(vocab, llama_vocab_eos(vocab), true) },
-            { "chat_template",               templates.default_template->source() },
+            { "bos_token",                   ctx_server.chat_templates.template_default->bos_token() },
+            { "eos_token",                   ctx_server.chat_templates.template_default->eos_token() },
+            { "chat_template",               ctx_server.chat_templates.template_default->source() },
             { "build_info",                  build_info },
         };
-        if (ctx_server.params_base.use_jinja && templates.tool_use_template) {
-            data["chat_template_tool_use"] = templates.tool_use_template->source();
+        if (ctx_server.params_base.use_jinja && ctx_server.chat_templates.template_tool_use) {
+            data["chat_template_tool_use"] = ctx_server.chat_templates.template_tool_use->source();
         }
         res_ok(res, data);
     };
@@ -3766,6 +3808,7 @@ int main(int argc, char ** argv) {
     const auto handle_completions_impl = [&ctx_server, &res_error, &res_ok](
             server_task_type type,
             json & data,
+            std::function<bool()> is_connection_closed,
             httplib::Response & res,
             oaicompat_type oaicompat,
             llama_tool_call_style tool_call_style = llama_tool_call_style::None) {
@@ -3830,7 +3873,7 @@ int main(int argc, char ** argv) {
                 }
             }, [&](const json & error_data) {
                 res_error(res, error_data);
-            });
+            }, is_connection_closed);
 
             ctx_server.queue_results.remove_waiting_task_ids(task_ids);
         } else {
@@ -3840,6 +3883,7 @@ int main(int argc, char ** argv) {
                     if (res_json.is_array()) {
                         for (const auto & res : res_json) {
                             if (!server_sent_event(sink, "data", res)) {
+                                // sending failed (HTTP connection closed), cancel the generation
                                 return false;
                             }
                         }
@@ -3849,6 +3893,9 @@ int main(int argc, char ** argv) {
                     }
                 }, [&](const json & error_data) {
                     server_sent_event(sink, "error", error_data);
+                }, [&sink]() {
+                    // note: do not use req.is_connection_closed here because req is already destroyed
+                    return !sink.is_writable();
                 });
                 if (oaicompat != OAICOMPAT_TYPE_NONE) {
                     static const std::string ev_done = "data: [DONE]\n\n";
@@ -3871,6 +3918,7 @@ int main(int argc, char ** argv) {
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
+            req.is_connection_closed,
             res,
             OAICOMPAT_TYPE_NONE);
     };
@@ -3880,6 +3928,7 @@ int main(int argc, char ** argv) {
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
+            req.is_connection_closed,
             res,
             OAICOMPAT_TYPE_COMPLETION);
     };
@@ -3956,19 +4005,19 @@ int main(int argc, char ** argv) {
         return handle_completions_impl(
             SERVER_TASK_TYPE_INFILL,
             data,
+            req.is_connection_closed,
             res,
             OAICOMPAT_TYPE_NONE); // infill is not OAI compatible
     };
 
-    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_impl, &get_chat_templates](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
         if (ctx_server.params_base.embedding) {
             res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
 
         auto body = json::parse(req.body);
-        const auto & templates = get_chat_templates();
-        const auto & chat_template = body.contains("tools") && templates.tool_use_template ? *templates.tool_use_template : *templates.default_template;
+        const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
         auto tool_call_style = llama_tool_call_style_detect(chat_template);
         LOG_INF("Tool call style: %s\n", llama_tool_call_style_name(tool_call_style).c_str());
 
@@ -3977,6 +4026,7 @@ int main(int argc, char ** argv) {
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
+            req.is_connection_closed,
             res,
             OAICOMPAT_TYPE_CHAT,
             tool_call_style);
@@ -4124,7 +4174,7 @@ int main(int argc, char ** argv) {
             }, [&](const json & error_data) {
                 res_error(res, error_data);
                 error = true;
-            });
+            }, req.is_connection_closed);
 
             ctx_server.queue_results.remove_waiting_task_ids(task_ids);
         }
@@ -4214,7 +4264,7 @@ int main(int argc, char ** argv) {
             }, [&](const json & error_data) {
                 res_error(res, error_data);
                 error = true;
-            });
+            }, req.is_connection_closed);
         }
 
         if (error) {
@@ -4391,8 +4441,8 @@ int main(int argc, char ** argv) {
 
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
-        get_chat_templates().default_template->source().c_str(),
-        common_chat_format_example(*get_chat_templates().default_template, ctx_server.params_base.use_jinja).c_str());
+        ctx_server.chat_templates.template_default->source().c_str(),
+        common_chat_format_example(*ctx_server.chat_templates.template_default, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));

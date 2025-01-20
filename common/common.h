@@ -177,7 +177,11 @@ struct common_params_speculative {
     struct cpu_params cpuparams;
     struct cpu_params cpuparams_batch;
 
-    std::string model = ""; // draft model for speculative decoding                          // NOLINT
+    std::string hf_repo = ""; // HF repo                                                     // NOLINT
+    std::string hf_file = ""; // HF file                                                     // NOLINT
+
+    std::string model = "";     // draft model for speculative decoding                      // NOLINT
+    std::string model_url = ""; // model url to download                                     // NOLINT
 };
 
 struct common_params_vocoder {
@@ -186,6 +190,8 @@ struct common_params_vocoder {
 
     std::string model     = ""; // model path                                                // NOLINT
     std::string model_url = ""; // model url to download                                     // NOLINT
+
+    bool use_guide_tokens = false; // enable guide tokens to improve TTS accuracy            // NOLINT
 };
 
 struct common_params {
@@ -510,12 +516,14 @@ struct llama_model * common_load_model_from_url(
     const std::string & local_path,
     const std::string & hf_token,
     const struct llama_model_params & params);
+
 struct llama_model * common_load_model_from_hf(
     const std::string & repo,
     const std::string & remote_path,
     const std::string & local_path,
     const std::string & hf_token,
     const struct llama_model_params & params);
+
 std::pair<std::string, std::string> common_get_hf_file(
     const std::string & hf_repo_with_tag,
     const std::string & hf_token);
@@ -606,26 +614,26 @@ namespace minja {
     class chat_template;
 }
 
-typedef minja::chat_template llama_chat_template;
+typedef minja::chat_template common_chat_template;
 
-struct llama_chat_templates {
+struct common_chat_templates {
     bool has_explicit_template; // Model had builtin template or template overridde was specified.
-    std::unique_ptr<llama_chat_template> default_template; // always set (defaults to chatml)
-    std::unique_ptr<llama_chat_template> tool_use_template;
+    std::unique_ptr<common_chat_template> template_default; // always set (defaults to chatml)
+    std::unique_ptr<common_chat_template> template_tool_use;
 };
 
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
 std::string common_chat_apply_template(
-        const llama_chat_template & tmpl,
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & chat,
         bool add_ass,
         bool use_jinja);
 
 // Format single message, while taking into account the position of that message in chat history
 std::string common_chat_format_single(
-        const llama_chat_template & tmpl,
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
@@ -633,9 +641,9 @@ std::string common_chat_format_single(
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(
-    const llama_chat_template & tmpl, bool use_jinja);
+    const common_chat_template & tmpl, bool use_jinja);
 
-llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
+common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 
 llama_chat_template llama_chat_template_from_model(
         const struct llama_model * model,

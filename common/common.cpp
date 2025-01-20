@@ -1787,7 +1787,7 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
 }
 
 std::string common_chat_apply_template(
-        const llama_chat_template & tmpl,
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass,
         bool use_jinja) {
@@ -1829,7 +1829,7 @@ std::string common_chat_apply_template(
 }
 
 std::string common_chat_format_single(
-        const llama_chat_template & tmpl,
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
@@ -1849,7 +1849,7 @@ std::string common_chat_format_single(
     return ss.str();
 }
 
-std::string common_chat_format_example(const llama_chat_template & tmpl, bool use_jinja) {
+std::string common_chat_format_example(const common_chat_template & tmpl, bool use_jinja) {
     std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant"},
         {"user",      "Hello"},
@@ -1859,13 +1859,11 @@ std::string common_chat_format_example(const llama_chat_template & tmpl, bool us
     return common_chat_apply_template(tmpl, msgs, true, use_jinja);
 }
 
-llama_chat_templates llama_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
+common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
-    auto bos_token = common_token_to_piece(vocab, llama_vocab_bos(vocab), true);
-    auto eos_token = common_token_to_piece(vocab, llama_vocab_eos(vocab), true);
     std::string default_template_src = chat_template_override;
-    std::string tool_use_template_src = chat_template_override;
+    std::string template_tool_use_src = chat_template_override;
     bool has_explicit_template = !chat_template_override.empty();
     if (chat_template_override.empty()) {
         auto str = llama_model_chat_template(model, /* name */ nullptr);
@@ -1875,13 +1873,13 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
         }
         str = llama_model_chat_template(model, /* name */ "tool_use");
         if (str) {
-            tool_use_template_src = str;
+            template_tool_use_src = str;
             has_explicit_template = true;
         }
     }
     if (default_template_src.empty() || default_template_src == "chatml") {
-        if (!tool_use_template_src.empty()) {
-            default_template_src = tool_use_template_src;
+        if (!template_tool_use_src.empty()) {
+            default_template_src = template_tool_use_src;
         } else {
             default_template_src = R"(
                 {%- for message in messages -%}
@@ -1893,12 +1891,25 @@ llama_chat_templates llama_chat_templates_from_model(const struct llama_model * 
             )";
         }
     }
+    const auto get_token = [&](llama_token token, const char * name, const char * jinja_variable_name) {
+        if (token == LLAMA_TOKEN_NULL) {
+            if (default_template_src.find(jinja_variable_name) != std::string::npos
+                || template_tool_use_src.find(jinja_variable_name) != std::string::npos) {
+                LOG_WRN("%s: warning: vocab does not have a %s token, jinja template won't work as intended.\n", __func__, name);
+            }
+            return std::string();
+        } else {
+            return common_token_to_piece(vocab, token, true);
+        }
+    };
+    auto token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
+    auto token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
     return {
         has_explicit_template,
-        std::make_unique<minja::chat_template>(default_template_src, bos_token, eos_token),
-        tool_use_template_src.empty()
+        std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos),
+        template_tool_use_src.empty()
             ? nullptr
-            : std::make_unique<minja::chat_template>(tool_use_template_src, bos_token, eos_token)
+            : std::make_unique<minja::chat_template>(template_tool_use_src, token_bos, token_eos)
     };
 }
 

@@ -352,7 +352,7 @@ static llama_tokens format_infill(
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const llama_chat_template & tmpl, const std::vector<json> & messages) {
+inline std::string format_chat(const common_chat_template & tmpl, const std::vector<json> & messages) {
     std::vector<common_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
@@ -581,7 +581,7 @@ static json oaicompat_completion_params_parse(const json & body) {
 
 static json oaicompat_completion_params_parse(
     const json & body, /* openai api json semantics */
-    const llama_chat_template & tmpl,
+    const common_chat_template & tmpl,
     llama_tool_call_style tool_call_style,
     bool use_jinja)
 {
