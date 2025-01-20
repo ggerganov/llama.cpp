@@ -868,7 +868,7 @@ jobs:
             DEBIAN_FRONTEND: noninteractive
           run: |
               apt update
-              apt install -y cmake build-essential ninja-build libgomp1 git libcurl4-openssl-dev
+              apt install -y cmake build-essential ninja-build libgomp1 git
 
         - name: Build with CMake
           run: |
@@ -895,21 +895,21 @@ jobs:
               SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
               echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
             fi
-            echo "cuda_name=cuda-${{ matrix.cuda.short_version }}-cap-${{ matrix.cuda.cap }}" >> $GITHUB_OUTPUT
+            echo "cuda_name=cu${{ matrix.cuda.short_version }}-cap${{ matrix.cuda.cap }}" >> $GITHUB_OUTPUT
 
         - name: Pack artifacts
           id: pack_artifacts
           if: ${{ matrix.cuda.package && (( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true') }}
           run: |
             cp LICENSE ./build/bin/
-            zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64-${{ steps.tag.outputs.cuda_name }}.zip ./build/bin/*
+            zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip ./build/bin/*
 
         - name: Upload artifacts
           if: ${{ matrix.cuda.package && (( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true') }}
           uses: actions/upload-artifact@v4
           with:
-            path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64-${{ steps.tag.outputs.cuda_name }}.zip
-            name: llama-bin-ubuntu-x64.zip
+            path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip
+            name: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip
 
   windows-2019-cmake-cuda:
     runs-on: windows-2019
