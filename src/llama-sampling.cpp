@@ -1651,7 +1651,7 @@ struct llama_sampler * llama_sampler_init_penalties(
 // top-n-sigma
 
 struct llama_sampler_top_n_sigma {
-    const int32_t n;
+    const float n;
 };
 
 static const char * llama_sampler_top_n_sigma_name(const struct llama_sampler * /*smpl*/) {
@@ -1681,7 +1681,7 @@ static void llama_sampler_top_n_sigma_apply(struct llama_sampler * smpl, llama_t
 
     //apply mask
     for(size_t i = 0; i < cur_p->size; ++i){
-        if(cur_p->data[i].logit < max - ctx->n * std) {
+        if(cur_p->data[i].logit < max - (ctx->n * std)) {
             cur_p->data[i].logit = -INFINITY;
         }
     }
@@ -1706,7 +1706,7 @@ static struct llama_sampler_i llama_sampler_top_n_sigma_i = {
     /* .free   = */ llama_sampler_top_n_sigma_free,
 };
 
-struct llama_sampler * llama_sampler_init_top_n_sigma(int32_t n) {
+struct llama_sampler * llama_sampler_init_top_n_sigma(float n) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_top_n_sigma_i,
         /* .ctx   = */ new llama_sampler_top_n_sigma {
