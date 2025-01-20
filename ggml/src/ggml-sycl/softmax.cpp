@@ -249,12 +249,12 @@ void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     dpct::queue_ptr main_stream = ctx.stream();
 
     if (dst->src[1] && dst->src[1]->type == GGML_TYPE_F16) {
-        //printf("%s: fp16 mask\n", __func__);
+        GGML_SYCL_DEBUG("%s: fp16 mask\n", __func__);
         const sycl::half * src1_dd = static_cast<sycl::half *>(dst->src[1]->data);
         soft_max_f32_sycl<sycl::half>(src0_dd, src1_dd, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias,
                           main_stream, ctx.device);
     } else if (dst->src[1] && dst->src[1]->type == GGML_TYPE_F32) {
-        //printf("%s: fp32 mask\n", __func__);
+        GGML_SYCL_DEBUG("%s: fp32 mask\n", __func__);
         const float * src1_dd = static_cast<const float *>(dst->src[1]->data);
         soft_max_f32_sycl<float>(src0_dd, src1_dd, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias, main_stream, ctx.device);
     } else {
