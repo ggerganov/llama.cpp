@@ -79,7 +79,7 @@ void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
     float * src0_ddf = (float *) src0->data;
     float * src1_ddf = use_src1 ? (float *) src1->data : nullptr;
     float *  dst_ddf = (float *) dst->data;
- /* These are never used */
+
     ggml_sycl_pool_alloc<float> src0_f(ctx.pool());
     ggml_sycl_pool_alloc<float> src1_f(ctx.pool());
     ggml_sycl_pool_alloc<float>  dst_f(ctx.pool());

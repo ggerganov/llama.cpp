@@ -2,7 +2,6 @@
 #include "dmmv.hpp"
 #include "dequantize.hpp"
 #include "presets.hpp"
-#include "ggml-impl.h"
 
 
 static void convert_f16(const void * vx, const int64_t ib, const int iqs, dfloat2 & v){
@@ -974,7 +973,6 @@ void ggml_sycl_op_dequantize_mul_mat_vec(
     }
 #else
     const dfloat * src1_dfloat = (const dfloat *) src1_ddf_i; // dfloat == float, no conversion
-    GGML_UNUSED(ctx);
 #endif // GGML_SYCL_F16
 
     switch (src0->type) {
@@ -1012,7 +1010,7 @@ void ggml_sycl_op_dequantize_mul_mat_vec(
             convert_mul_mat_vec_f16_sycl(src0_dd_i, src1_dfloat, dst_dd_i, ne00, row_diff, stream);
             break;
         default:
-            GGML_LOG_ERROR("ggml_sycl_op_dequantize_mul_mat_vec unsupported GGML_TYPE %d\n", src0->type);
+            printf("ggml_sycl_op_dequantize_mul_mat_vec unsupported GGML_TYPE %d\n", src0->type);
             GGML_ABORT("fatal error");
             break;
     }
