@@ -1477,6 +1477,7 @@ jobs:
       run: |
           yum update -y
           yum install git cmake gcc gcc-c++ make -y
+          . /usr/local/Ascend/ascend-toolkit/set_env.sh
           export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/x86_64-linux/devlib/:${LD_LIBRARY_PATH}
 
     - name: Build
