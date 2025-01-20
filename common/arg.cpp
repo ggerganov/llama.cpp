@@ -133,7 +133,8 @@ static void common_params_handle_model_default(
         const std::string & model_url,
         std::string & hf_repo,
         std::string & hf_file,
-        const std::string & hf_token) {
+        const std::string & hf_token,
+        const std::string & model_default) {
     if (!hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
         if (hf_file.empty()) {
@@ -163,7 +164,7 @@ static void common_params_handle_model_default(
             model = fs_get_cache_file(string_split<std::string>(f, '/').back());
         }
     } else if (model.empty()) {
-        model = DEFAULT_MODEL_PATH;
+        model = model_default;
     }
 }
 
@@ -299,8 +300,9 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
     }
 
     // TODO: refactor model params in a common struct
-    common_params_handle_model_default(params.model,         params.model_url,         params.hf_repo,         params.hf_file,         params.hf_token);
-    common_params_handle_model_default(params.vocoder.model, params.vocoder.model_url, params.vocoder.hf_repo, params.vocoder.hf_file, params.hf_token);
+    common_params_handle_model_default(params.model,             params.model_url,             params.hf_repo,             params.hf_file,             params.hf_token, DEFAULT_MODEL_PATH);
+    common_params_handle_model_default(params.speculative.model, params.speculative.model_url, params.speculative.hf_repo, params.speculative.hf_file, params.hf_token, "");
+    common_params_handle_model_default(params.vocoder.model,     params.vocoder.model_url,     params.vocoder.hf_repo,     params.vocoder.hf_file,     params.hf_token, "");
 
     if (params.escape) {
         string_process_escapes(params.prompt);
@@ -1629,6 +1631,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.hf_repo = value;
         }
     ).set_env("LLAMA_ARG_HF_REPO"));
+    add_opt(common_arg(
+        {"-hfd", "-hfrd", "--hf-repo-draft"}, "<user>/<model>[:quant]",
+        "Same as --hf-repo, but for the draft model (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.speculative.hf_repo = value;
+        }
+    ).set_env("LLAMA_ARG_HFD_REPO"));
     add_opt(common_arg(
         {"-hff", "--hf-file"}, "FILE",
         "Hugging Face model file. If specified, it will override the quant in --hf-repo (default: unused)",
