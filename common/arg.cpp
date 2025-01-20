@@ -1966,10 +1966,12 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
     add_opt(common_arg(
         {"--chat-template-file"}, "JINJA_TEMPLATE_FILE",
-        "set custom jinja chat template file (default: template taken from model's metadata)\n"
-        "if suffix/prefix are specified, template will be disabled\n"
-        "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
-        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
+        string_format(
+            "set custom jinja chat template file (default: template taken from model's metadata)\n"
+            "if suffix/prefix are specified, template will be disabled\n"
+            "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
+            "list of built-in templates:\n%s", list_builtin_chat_templates().c_str()
+        ),
         [](common_params & params, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
