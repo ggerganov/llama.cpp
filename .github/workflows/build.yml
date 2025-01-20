@@ -901,17 +901,17 @@ jobs:
 
         - name: Pack artifacts
           id: pack_artifacts
-          if: ${{ matrix.cuda.package && (( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true') }}
+          # if: ${{ matrix.cuda.package && (( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true') }}
           run: |
             cp LICENSE ./build/bin/
             zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip ./build/bin/*
 
         - name: Upload artifacts
-          if: ${{ matrix.cuda.package && (( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true') }}
+          # if: ${{ matrix.cuda.package && (( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true') }}
           uses: actions/upload-artifact@v4
           with:
             path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip
-            name: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip
+            name: llama-bin-ubuntu-cuda-${{ steps.tag.outputs.cuda_name }}-x64.zip
 
   windows-2019-cmake-cuda:
     runs-on: windows-2019
