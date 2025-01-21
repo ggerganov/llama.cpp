@@ -63,6 +63,9 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_GRANITE_MOE,      "granitemoe"       },
     { LLM_ARCH_CHAMELEON,        "chameleon"        },
     { LLM_ARCH_WAVTOKENIZER_DEC, "wavtokenizer-dec" },
+    { LLM_ARCH_VISION_LLAVA,     "llava"            },
+    { LLM_ARCH_VISION_MOBILEVLM, "mobilevlm"        },
+    { LLM_ARCH_VISION_MINICPMV,  "minicpmv"         },
     { LLM_ARCH_UNKNOWN,          "(unknown)"        },
 };
 
@@ -1314,77 +1317,75 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_POS_NET_ATTN_OUT,  "posnet.%d.attn_output" },
         },
     },
+    // vision
+    {
+        LLM_ARCH_VISION_LLAVA,
+        {
+            { LLM_TENSOR_V_MMPROJ,                  "v.mmproj_%d"                 },
+            { LLM_TENSOR_V_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
+            { LLM_TENSOR_V_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { LLM_TENSOR_V_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { LLM_TENSOR_V_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { LLM_TENSOR_V_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { LLM_TENSOR_V_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { LLM_TENSOR_V_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { LLM_TENSOR_V_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { LLM_TENSOR_V_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { LLM_TENSOR_V_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { LLM_TENSOR_V_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { LLM_TENSOR_V_PRE_NORM,                "v.pre_norm"                  },
+            { LLM_TENSOR_V_POST_NORM,               "v.post_norm"                 },
+        }
+    },
+    {
+        LLM_ARCH_VISION_MOBILEVLM,
+        {
+            { LLM_TENSOR_V_MMPROJ_MLP,              "v.mmproj.mlp.%d"             },
+            { LLM_TENSOR_V_MMPROJ_PEG,              "v.mmproj.peg.%d"             },
+            { LLM_TENSOR_V_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
+            { LLM_TENSOR_V_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { LLM_TENSOR_V_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { LLM_TENSOR_V_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { LLM_TENSOR_V_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { LLM_TENSOR_V_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { LLM_TENSOR_V_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { LLM_TENSOR_V_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { LLM_TENSOR_V_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { LLM_TENSOR_V_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { LLM_TENSOR_V_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { LLM_TENSOR_V_PRE_NORM,                "v.pre_norm"                  },
+            { LLM_TENSOR_V_POST_NORM,               "v.post_norm"                 },
+        }
+    },
+    {
+        LLM_ARCH_VISION_MINICPMV,
+        {
+            { LLM_TENSOR_V_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { LLM_TENSOR_V_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { LLM_TENSOR_V_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { LLM_TENSOR_V_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { LLM_TENSOR_V_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { LLM_TENSOR_V_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { LLM_TENSOR_V_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { LLM_TENSOR_V_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { LLM_TENSOR_V_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { LLM_TENSOR_V_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { LLM_TENSOR_V_RESMPL_POS_EMBD_K,       "v.resmpl.pos_embd_k"         },
+            { LLM_TENSOR_V_RESMPL_ATTN_IN,          "v.resmpl.attn_in"            },
+            { LLM_TENSOR_V_RESMPL_ATTN_OUT,         "v.resmpl.attn_out"           },
+            { LLM_TENSOR_V_RESMPL_KV_PROJ,          "v.resmpl.kv_proj"            },
+            { LLM_TENSOR_V_RESMPL_NORM_POST,        "v.resmpl.norm_post"          },
+            { LLM_TENSOR_V_RESMPL_NORM_KV,          "v.resmpl.norm_kv"            },
+            { LLM_TENSOR_V_RESMPL_NORM_Q,           "v.resmpl.norm_q"             },
+            { LLM_TENSOR_V_RESMPL_PROJ,             "v.resmpl.proj"               },
+            { LLM_TENSOR_V_RESMPL_QUERY,            "v.resmpl.query"              },
+        }
+    },
     {
         LLM_ARCH_UNKNOWN,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
         },
-    },
-};
-
-static const std::map<vision_arch, std::map<vision_tensor, const char *>> VISION_TENSOR_NAMES = {
-    {
-        VISION_ARCH_LLAVA,
-        {
-            { VISION_TENSOR_MMPROJ,                  "v.mmproj_%d"                 },
-            { VISION_TENSOR_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
-            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
-            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
-            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
-            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
-            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
-            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
-            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
-            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
-            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
-            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
-            { VISION_TENSOR_PRE_NORM,                "v.pre_norm"                  },
-            { VISION_TENSOR_POST_NORM,               "v.post_norm"                 },
-        }
-    },
-    {
-        VISION_ARCH_MOBILEVLM,
-        {
-            { VISION_TENSOR_MMPROJ_MLP,              "v.mmproj.mlp.%d"             },
-            { VISION_TENSOR_MMPROJ_PEG,              "v.mmproj.peg.%d"             },
-            { VISION_TENSOR_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
-            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
-            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
-            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
-            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
-            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
-            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
-            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
-            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
-            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
-            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
-            { VISION_TENSOR_PRE_NORM,                "v.pre_norm"                  },
-            { VISION_TENSOR_POST_NORM,               "v.post_norm"                 },
-        }
-    },
-    {
-        VISION_ARCH_MINICPMV,
-        {
-            { VISION_TENSOR_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
-            { VISION_TENSOR_ENC_EMBD_POS,            "v.enc.embd.pos"              },
-            { VISION_TENSOR_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
-            { VISION_TENSOR_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
-            { VISION_TENSOR_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
-            { VISION_TENSOR_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
-            { VISION_TENSOR_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
-            { VISION_TENSOR_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
-            { VISION_TENSOR_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
-            { VISION_TENSOR_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
-            { VISION_TENSOR_RESMPL_POS_EMBD_K,       "v.resmpl.pos_embd_k"         },
-            { VISION_TENSOR_RESMPL_ATTN_IN,          "v.resmpl.attn_in"            },
-            { VISION_TENSOR_RESMPL_ATTN_OUT,         "v.resmpl.attn_out"           },
-            { VISION_TENSOR_RESMPL_KV_PROJ,          "v.resmpl.kv_proj"            },
-            { VISION_TENSOR_RESMPL_NORM_POST,        "v.resmpl.norm_post"          },
-            { VISION_TENSOR_RESMPL_NORM_KV,          "v.resmpl.norm_kv"            },
-            { VISION_TENSOR_RESMPL_NORM_Q,           "v.resmpl.norm_q"             },
-            { VISION_TENSOR_RESMPL_PROJ,             "v.resmpl.proj"               },
-            { VISION_TENSOR_RESMPL_QUERY,            "v.resmpl.query"              },
-        }
     },
 };
 
@@ -1537,37 +1538,12 @@ std::string LLM_KV::operator()(llm_kv kv) const {
     return ::format(LLM_KV_NAMES.at(kv), LLM_ARCH_NAMES.at(arch));
 }
 
-template<>
-std::string BASE_TN_IMPL<llm_arch, llm_tensor>::str() const {
-    if (LLM_TENSOR_NAMES.find(arch) == LLM_TENSOR_NAMES.end()) {
-        throw std::runtime_error(format("Cannot find tensor name mapping for arch %d", arch));
-    }
-
+std::string LLM_TN_IMPL::str() const {
     if (LLM_TENSOR_NAMES.at(arch).find(tensor) == LLM_TENSOR_NAMES.at(arch).end()) {
         return "__missing__";
     }
 
     std::string name = ::format(LLM_TENSOR_NAMES.at(arch).at(tensor), bid, xid);
-
-    if (suffix != nullptr) {
-        name += ".";
-        name += suffix;
-    }
-
-    return name;
-}
-
-template<>
-std::string BASE_TN_IMPL<vision_arch, vision_tensor>::str() const {
-    if (VISION_TENSOR_NAMES.find(arch) == VISION_TENSOR_NAMES.end()) {
-        throw std::runtime_error(format("Cannot find tensor name mapping for arch %d", arch));
-    }
-
-    if (VISION_TENSOR_NAMES.at(arch).find(tensor) == VISION_TENSOR_NAMES.at(arch).end()) {
-        return "__missing__";
-    }
-
-    std::string name = ::format(VISION_TENSOR_NAMES.at(arch).at(tensor), bid, xid);
 
     if (suffix != nullptr) {
         name += ".";

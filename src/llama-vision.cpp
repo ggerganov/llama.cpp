@@ -393,7 +393,7 @@ struct minicpmv_preprocessor {
 
 static llama_vision_patches clip_image_preprocess_minicpmv(const clip_context & ctx, const clip_image_u8 & img) {
     auto & params = ctx.model->hparams;
-    GGML_ASSERT(params.arch == VISION_ARCH_MINICPMV);
+    GGML_ASSERT(params.arch == LLM_ARCH_VISION_MINICPMV);
 
     static const int max_slice_nums = 9;
     minicpmv_preprocessor preprocessor;
@@ -775,7 +775,7 @@ static int32_t clip_image_encode(clip_context & ctx, const llama_vision_patches 
     auto & model = *ctx.model;
     auto & hparams = ctx.model->hparams;
 
-    if (hparams.arch == VISION_ARCH_LLAVA) {
+    if (hparams.arch == LLM_ARCH_VISION_LLAVA) {
         GGML_ASSERT(batch_size == 1); // TODO: support multiple images
     }
 
@@ -895,7 +895,7 @@ struct llama_vision_patches * llama_vision_patches_init(
         struct llama_context * ctx,
         llama_vision_bitmap * bmp) {
     clip_context & vctx = ctx->vctx;
-    if (vctx.model->hparams.arch == VISION_ARCH_MINICPMV) {
+    if (vctx.model->hparams.arch == LLM_ARCH_VISION_MINICPMV) {
         return new llama_vision_patches(clip_image_preprocess_minicpmv(vctx, *bmp));
     }
     return new llama_vision_patches(clip_image_preprocess(vctx, *bmp));

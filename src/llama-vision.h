@@ -22,7 +22,7 @@ enum mm_patch_merge {
 };
 
 struct clip_hparams {
-    vision_arch arch = VISION_ARCH_UNKNOWN;
+    llm_arch arch = LLM_ARCH_UNKNOWN;
 
     uint32_t image_size;
     uint32_t patch_size;
@@ -156,18 +156,6 @@ struct llama_vision_patches {
     // Memory layout: RGBRGBRGB...
     std::vector<std::vector<float>> buf; // preprocessed image data
 };
-
-inline vision_arch vision_arch_from_string(const std::string & name) {
-    if (name == "llava") {
-        return VISION_ARCH_LLAVA;
-    } else if (name == "mobilevlm") {
-        return VISION_ARCH_MOBILEVLM;
-    } else if (name == "minicpmv") {
-        return VISION_ARCH_MINICPMV;
-    }
-
-    return VISION_ARCH_UNKNOWN;
-}
 
 inline mm_patch_merge mm_patch_merge_from_name(std::string & name) {
     if (name == "flat") {

@@ -66,14 +66,11 @@ enum llm_arch {
     LLM_ARCH_GRANITE_MOE,
     LLM_ARCH_CHAMELEON,
     LLM_ARCH_WAVTOKENIZER_DEC,
+    // vision
+    LLM_ARCH_VISION_LLAVA,
+    LLM_ARCH_VISION_MOBILEVLM,
+    LLM_ARCH_VISION_MINICPMV,
     LLM_ARCH_UNKNOWN,
-};
-
-enum vision_arch {
-    VISION_ARCH_UNKNOWN,
-    VISION_ARCH_LLAVA,
-    VISION_ARCH_MOBILEVLM,
-    VISION_ARCH_MINICPMV,
 };
 
 enum llm_kv {
@@ -354,35 +351,33 @@ enum llm_tensor {
     LLM_TENSOR_POS_NET_ATTN_K,
     LLM_TENSOR_POS_NET_ATTN_V,
     LLM_TENSOR_POS_NET_ATTN_OUT,
-};
-
-enum vision_tensor {
-    VISION_TENSOR_MMPROJ,
-    VISION_TENSOR_MMPROJ_MLP,
-    VISION_TENSOR_MMPROJ_PEG,
-    VISION_TENSOR_ENC_EMBD_CLS,
-    VISION_TENSOR_ENC_EMBD_PATCH,
-    VISION_TENSOR_ENC_EMBD_POS,
-    VISION_TENSOR_ENC_ATTN_Q,
-    VISION_TENSOR_ENC_ATTN_K,
-    VISION_TENSOR_ENC_ATTN_V,
-    VISION_TENSOR_ENC_INPUT_NORM,
-    VISION_TENSOR_ENC_OUTPUT,
-    VISION_TENSOR_ENC_OUTPUT_NORM,
-    VISION_TENSOR_ENC_FFN_UP,
-    VISION_TENSOR_ENC_FFN_DOWN,
-    VISION_TENSOR_PRE_NORM,
-    VISION_TENSOR_POST_NORM,
-    // minicpmv
-    VISION_TENSOR_RESMPL_POS_EMBD_K,
-    VISION_TENSOR_RESMPL_ATTN_IN,
-    VISION_TENSOR_RESMPL_ATTN_OUT,
-    VISION_TENSOR_RESMPL_KV_PROJ,
-    VISION_TENSOR_RESMPL_NORM_POST,
-    VISION_TENSOR_RESMPL_NORM_KV,
-    VISION_TENSOR_RESMPL_NORM_Q,
-    VISION_TENSOR_RESMPL_PROJ,
-    VISION_TENSOR_RESMPL_QUERY,
+    // vision
+    LLM_TENSOR_V_MMPROJ,
+    LLM_TENSOR_V_MMPROJ_MLP,
+    LLM_TENSOR_V_MMPROJ_PEG,
+    LLM_TENSOR_V_ENC_EMBD_CLS,
+    LLM_TENSOR_V_ENC_EMBD_PATCH,
+    LLM_TENSOR_V_ENC_EMBD_POS,
+    LLM_TENSOR_V_ENC_ATTN_Q,
+    LLM_TENSOR_V_ENC_ATTN_K,
+    LLM_TENSOR_V_ENC_ATTN_V,
+    LLM_TENSOR_V_ENC_INPUT_NORM,
+    LLM_TENSOR_V_ENC_OUTPUT,
+    LLM_TENSOR_V_ENC_OUTPUT_NORM,
+    LLM_TENSOR_V_ENC_FFN_UP,
+    LLM_TENSOR_V_ENC_FFN_DOWN,
+    LLM_TENSOR_V_PRE_NORM,
+    LLM_TENSOR_V_POST_NORM,
+    // vision - minicpmv
+    LLM_TENSOR_V_RESMPL_POS_EMBD_K,
+    LLM_TENSOR_V_RESMPL_ATTN_IN,
+    LLM_TENSOR_V_RESMPL_ATTN_OUT,
+    LLM_TENSOR_V_RESMPL_KV_PROJ,
+    LLM_TENSOR_V_RESMPL_NORM_POST,
+    LLM_TENSOR_V_RESMPL_NORM_KV,
+    LLM_TENSOR_V_RESMPL_NORM_Q,
+    LLM_TENSOR_V_RESMPL_PROJ,
+    LLM_TENSOR_V_RESMPL_QUERY,
 };
 
 enum llm_tensor_layer {
@@ -408,10 +403,9 @@ struct LLM_KV {
 //   std::string name = tn(LLM_TENSOR_TOKEN_EMBD, "bias");         -> "token_embd.bias"
 //   std::string name = tn(LLM_TENSOR_ATTN_NORM, "weight", 3);     -> "blk.3.attn_norm.weight"
 //
-template<typename Tname, typename Ttensor>
-struct BASE_TN_IMPL {
-    const Tname arch;
-    const Ttensor tensor;
+struct LLM_TN_IMPL {
+    const llm_arch arch;
+    const llm_tensor tensor;
     const char * const suffix;
     const int bid;
     const int xid;
@@ -422,16 +416,15 @@ struct BASE_TN_IMPL {
         return str();
     }
 
-    friend bool operator==(const std::string & str, const BASE_TN_IMPL & tn) {
+    friend bool operator==(const std::string & str, const LLM_TN_IMPL & tn) {
         return str == tn.str();
     }
 
-    friend bool operator!=(const std::string & str, const BASE_TN_IMPL & tn) {
+    friend bool operator!=(const std::string & str, const LLM_TN_IMPL & tn) {
         return str != tn.str();
     }
 };
 
-using LLM_TN_IMPL = BASE_TN_IMPL<llm_arch, llm_tensor>;
 struct LLM_TN {
     LLM_TN(llm_arch arch) : arch(arch) {}
 
@@ -446,20 +439,6 @@ struct LLM_TN {
     }
 };
 
-struct VISION_TN {
-    VISION_TN(vision_arch arch) : arch(arch) {}
-
-    vision_arch arch;
-
-    BASE_TN_IMPL<vision_arch, vision_tensor> operator()(vision_tensor tensor, const char * suffix, int bid = -1, int xid = -1) const {
-        return { arch, tensor, suffix, bid, xid };
-    }
-
-    BASE_TN_IMPL<vision_arch, vision_tensor> operator()(vision_tensor tensor, int bid = -1, int xid = -1) const {
-        return { arch, tensor, nullptr, bid, xid };
-    }
-};
-
 
 struct llm_tensor_info {
     llm_tensor_layer layer;
@@ -469,7 +448,5 @@ struct llm_tensor_info {
 const char * llm_arch_name(llm_arch arch);
 
 llm_arch llm_arch_from_string(const std::string & name);
-
-vision_arch vision_arch_from_string(const std::string & name);
 
 const llm_tensor_info & llm_tensor_info_for(llm_tensor tensor);
