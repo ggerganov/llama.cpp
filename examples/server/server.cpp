@@ -3779,9 +3779,9 @@ int main(int argc, char ** argv) {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
+            { "chat_template",               ctx_server.chat_templates.template_default->source() },
             { "bos_token",                   ctx_server.chat_templates.template_default->bos_token() },
             { "eos_token",                   ctx_server.chat_templates.template_default->eos_token() },
-            { "chat_template",               ctx_server.chat_templates.template_default->source() },
             { "build_info",                  build_info },
         };
         if (ctx_server.params_base.use_jinja && ctx_server.chat_templates.template_tool_use) {
