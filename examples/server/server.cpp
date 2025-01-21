@@ -1688,6 +1688,8 @@ struct server_context {
     // Necessary similarity of prompt for slot selection
     float slot_prompt_similarity = 0.0f;
 
+    common_chat_templates chat_templates;
+
     ~server_context() {
         // Clear any sampling context
         for (server_slot & slot : slots) {
@@ -1728,13 +1730,16 @@ struct server_context {
         add_bos_token = llama_vocab_get_add_bos(vocab);
         has_eos_token = llama_vocab_eos(vocab) != LLAMA_TOKEN_NULL;
 
-        if (!params_base.speculative.model.empty()) {
+        if (!params_base.speculative.model.empty() || !params_base.speculative.hf_repo.empty()) {
             SRV_INF("loading draft model '%s'\n", params_base.speculative.model.c_str());
 
             auto params_dft = params_base;
 
             params_dft.devices      = params_base.speculative.devices;
+            params_dft.hf_file      = params_base.speculative.hf_file;
+            params_dft.hf_repo      = params_base.speculative.hf_repo;
             params_dft.model        = params_base.speculative.model;
+            params_dft.model_url    = params_base.speculative.model_url;
             params_dft.n_ctx        = params_base.speculative.n_ctx == 0 ? params_base.n_ctx / params_base.n_parallel : params_base.speculative.n_ctx;
             params_dft.n_gpu_layers = params_base.speculative.n_gpu_layers;
             params_dft.n_parallel   = 1;
@@ -1764,14 +1769,39 @@ struct server_context {
             cparams_dft.type_v = GGML_TYPE_F16;
         }
 
+        chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        GGML_ASSERT(chat_templates.template_default.get() != nullptr);
+
         return true;
     }
 
-    bool validate_builtin_chat_template() const {
+    bool validate_builtin_chat_template(bool use_jinja) const {
         llama_chat_message chat[] = {{"user", "test"}};
-        const char * tmpl = llama_model_chat_template(model);
-        const int32_t chat_res = llama_chat_apply_template(tmpl, chat, 1, true, nullptr, 0);
-        return chat_res > 0;
+
+        if (use_jinja) {
+            auto templates = common_chat_templates_from_model(model, "");
+            GGML_ASSERT(templates.template_default);
+            try {
+                templates.template_default->apply({{
+                    {"role", "user"},
+                    {"content", "test"},
+                }}, json(), true);
+                if (templates.template_tool_use) {
+                    templates.template_tool_use->apply({{
+                        {"role", "user"},
+                        {"content", "test"},
+                    }}, json(), true);
+                }
+                return true;
+            } catch (const std::exception & e) {
+                SRV_ERR("failed to apply template: %s\n", e.what());
+                return false;
+            }
+        } else {
+            const char * tmpl = llama_model_chat_template(model, /* name */ nullptr);
+            const int32_t chat_res = llama_chat_apply_template(tmpl, chat, 1, true, nullptr, 0);
+            return chat_res > 0;
+        }
     }
 
     void init() {
@@ -3656,9 +3686,12 @@ int main(int argc, char ** argv) {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            { "chat_template",               common_get_builtin_chat_template(ctx_server.model) },
+            { "chat_template",               ctx_server.chat_templates.template_default->source() },
             { "build_info",                  build_info },
         };
+        if (ctx_server.params_base.use_jinja && ctx_server.chat_templates.template_tool_use) {
+            data["chat_template_tool_use"] = ctx_server.chat_templates.template_tool_use->source();
+        }
 
         res_ok(res, data);
     };
@@ -3886,7 +3919,10 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        json data = oaicompat_chat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
+        auto body = json::parse(req.body);
+        const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
+        json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
+
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
             data,
@@ -4296,7 +4332,7 @@ int main(int argc, char ** argv) {
 
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
-        if (!ctx_server.validate_builtin_chat_template()) {
+        if (!ctx_server.validate_builtin_chat_template(params.use_jinja)) {
             LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             params.chat_template = "chatml";
         }
@@ -4304,8 +4340,8 @@ int main(int argc, char ** argv) {
 
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
-        params.chat_template.empty() ? "(built-in)" : params.chat_template.c_str(),
-        common_chat_format_example(ctx_server.model, params.chat_template).c_str());
+        ctx_server.chat_templates.template_default->source().c_str(),
+        common_chat_format_example(*ctx_server.chat_templates.template_default, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task(std::bind(
                 &server_context::process_single_task, &ctx_server, std::placeholders::_1));
