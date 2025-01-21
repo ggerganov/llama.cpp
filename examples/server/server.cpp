@@ -885,46 +885,6 @@ struct server_task_result_cmpl_partial : server_task_result {
         std::time_t t = std::time(0);
         json choices;
 
-
-        // auto chat_template = json_value(request, "chat_template", std::string());
-        // llama_tool_calls parsed_tool_calls;
-        // auto tools = json_value(request, "tools", json::array());
-        // json tool_calls;
-        // json message_content;
-        // if (json_value(request, "parse_tool_calls", false)) {
-        //     parsed_tool_calls = parse_tool_calls(tool_call_style, tools, content);
-        //     if (!parsed_tool_calls.tool_calls.empty()) {
-        //         finish_reason = "tool_calls";
-        //         message_content = parsed_tool_calls.content;
-        //         tool_calls = json::array();
-        //         for (const auto & tc : parsed_tool_calls.tool_calls) {
-        //             tool_calls.push_back({
-        //                 {"type", "function"},
-        //                 {"function", {
-        //                     {"name", tc.name},
-        //                     {"arguments", tc.arguments},
-        //                 }},
-        //                 {"id", tc.id.empty() ? json() : json(tc.id)},
-        //             });
-        //         }
-        //     } else {
-        //         message_content = parsed_tool_calls.content;
-        //     }
-        // } else {
-        //     message_content = content;
-        // }
-
-        // json choices =
-        //     streaming ? json::array({json{{"finish_reason", finish_reason},
-        //                                     {"index", 0},
-        //                                     {"delta", json::object()}}})
-        //             : json::array({json{{"finish_reason", finish_reason},
-        //                                     {"index", 0},
-        //                                     {"message", json{{"content", message_content},
-        //                                                     {"tool_calls", tool_calls},
-        //                                                     {"role", "assistant"}}}}});
-
-
         if (first) {
             if (content.empty()) {
                 choices = json::array({json{{"finish_reason", nullptr},
