@@ -18,12 +18,6 @@
 #include <unordered_set>
 #include <json.hpp>
 
-#ifdef _WIN32
-#define ENDL "\r\n"
-#else
-#define ENDL "\n"
-#endif
-
 using json = nlohmann::ordered_json;
 
 namespace minja {
@@ -38,7 +32,7 @@ struct Options {
 
 struct ArgumentsValue;
 
-static std::string normalize_newlines(const std::string & s) {
+inline std::string normalize_newlines(const std::string & s) {
 #ifdef _WIN32
   static const std::regex nl_regex("\r\n");
   return std::regex_replace(s, nl_regex, "\n");
@@ -91,7 +85,7 @@ private:
   void dump(std::ostringstream & out, int indent = -1, int level = 0, bool to_json = false) const {
     auto print_indent = [&](int level) {
       if (indent > 0) {
-          out << ENDL;
+          out << "\n";
           for (int i = 0, n = level * indent; i < n; ++i) out << ' ';
       }
     };
@@ -594,11 +588,11 @@ static std::string error_location_suffix(const std::string & source, size_t pos)
   auto max_line = std::count(start, end, '\n') + 1;
   auto col = pos - std::string(start, it).rfind('\n');
   std::ostringstream out;
-  out << " at row " << line << ", column " << col << ":" ENDL;
-  if (line > 1) out << get_line(line - 1) << ENDL;
-  out << get_line(line) << ENDL;
-  out << std::string(col - 1, ' ') << "^" << ENDL;
-  if (line < max_line) out << get_line(line + 1) << ENDL;
+  out << " at row " << line << ", column " << col << ":\n";
+  if (line > 1) out << get_line(line - 1) << "\n";
+  out << get_line(line) << "\n";
+  out << std::string(col - 1, ' ') << "^\n";
+  if (line < max_line) out << get_line(line + 1) << "\n";
 
   return out.str();
 }
@@ -833,7 +827,7 @@ public:
     std::string render(const std::shared_ptr<Context> & context) const {
         std::ostringstream out;
         render(out, context);
-        return normalize_newlines(out.str());
+        return out.str();
     }
 };
 
@@ -2695,11 +2689,11 @@ inline std::shared_ptr<Context> Context::builtins() {
     while (std::getline(iss, line, '\n')) {
       auto needs_indent = !is_first || first;
       if (is_first) is_first = false;
-      else out += ENDL;
+      else out += "\n";
       if (needs_indent) out += indent;
       out += line;
     }
-    if (!text.empty() && text.back() == '\n') out += ENDL;
+    if (!text.empty() && text.back() == '\n') out += "\n";
     return out;
   }));
   globals.set("selectattr", Value::callable([=](const std::shared_ptr<Context> & context, ArgumentsValue & args) {
