@@ -215,29 +215,29 @@ class Keys:
         LORA_ALPHA = "adapter.lora.alpha"
 
     class Vision:
-        # only support vision.type = "clip-vit" for now
+        # only support vision.type = "vit" for now
         TYPE                = "vision.type"
         IMAGE_SIZE          = "vision.image_size"
         PATCH_SIZE          = "vision.patch_size"
         IMAGE_MEAN          = "vision.image_mean"
         IMAGE_STD           = "vision.image_std"
 
-        class Clip:
-            ARCHITECTURE        = "vision.clip.architecture"
-            CONTEXT_LENGTH      = "vision.clip.context_length"
-            EMBEDDING_LENGTH    = "vision.clip.embedding_length"
-            BLOCK_COUNT         = "vision.clip.block_count"
-            FEED_FORWARD_LENGTH = "vision.clip.feed_forward_length"
-            PROJECTION_TYPE     = "vision.clip.projection_type"
-            PROJECTION_DIM      = "vision.clip.projection_dim"
-            USE_GELU            = "vision.clip.use_gelu"
-            MAX_POS_EMBEDDING   = "vision.clip.max_position_embeddings"
-            MAX_SLICES          = "vision.clip.max_slices"
-            PROJECTOR_TYPE      = "vision.clip.projector_type"
-            SELECT_LAYER        = "vision.clip.select_layer"
-            PATCH_MERGE_TYPE    = "vision.clip.patch_merge_type"
-            HEAD_COUNT          = "vision.clip.attention.head_count"
-            LAYERNORM_EPS       = "vision.clip.attention.layer_norm_epsilon"
+        class Vit:
+            ARCHITECTURE        = "vision.vit.architecture"
+            CONTEXT_LENGTH      = "vision.vit.context_length"
+            EMBEDDING_LENGTH    = "vision.vit.embedding_length"
+            BLOCK_COUNT         = "vision.vit.block_count"
+            FEED_FORWARD_LENGTH = "vision.vit.feed_forward_length"
+            PROJECTION_TYPE     = "vision.vit.projection_type"
+            PROJECTION_DIM      = "vision.vit.projection_dim"
+            USE_GELU            = "vision.vit.use_gelu"
+            MAX_POS_EMBEDDING   = "vision.vit.max_position_embeddings"
+            MAX_SLICES          = "vision.vit.max_slices"
+            PROJECTOR_TYPE      = "vision.vit.projector_type"
+            SELECT_LAYER        = "vision.vit.select_layer"
+            PATCH_MERGE_TYPE    = "vision.vit.patch_merge_type"
+            HEAD_COUNT          = "vision.vit.attention.head_count"
+            LAYERNORM_EPS       = "vision.vit.attention.layer_norm_epsilon"
 
 #
 # recommended mapping of model tensor names for storage in gguf

@@ -281,17 +281,17 @@ class Model:
 
         # Vision model parameters
         if self.vparams is not None and self.preprocessor_config is not None and self.vision_arch is not None:
-            self.gguf_writer.add_vision_type("clip-vit")
+            self.gguf_writer.add_vision_type("vit")
             self.gguf_writer.add_vision_image_size(self.vparams["image_size"])
             self.gguf_writer.add_vision_patch_size(self.vparams["patch_size"])
-            self.gguf_writer.add_vision_clip_architecture(gguf.MODEL_ARCH_NAMES[self.vision_arch])
-            self.gguf_writer.add_vision_clip_block_count(self.vparams["num_hidden_layers"])
-            self.gguf_writer.add_vision_clip_embedding_length(self.vparams["hidden_size"])
-            self.gguf_writer.add_vision_clip_feed_forward_length(self.vparams["intermediate_size"])
-            self.gguf_writer.add_vision_clip_head_count(self.vparams["num_attention_heads"])
-            self.gguf_writer.add_vision_clip_image_mean(self.preprocessor_config["image_mean"])
-            self.gguf_writer.add_vision_clip_image_std(self.preprocessor_config["image_std"])
-            self.gguf_writer.add_vision_clip_select_layer(self.find_hparam(["vision_feature_layer", "mm_vision_select_layer"]))
+            self.gguf_writer.add_vision_vit_architecture(gguf.MODEL_ARCH_NAMES[self.vision_arch])
+            self.gguf_writer.add_vision_vit_block_count(self.vparams["num_hidden_layers"])
+            self.gguf_writer.add_vision_vit_embedding_length(self.vparams["hidden_size"])
+            self.gguf_writer.add_vision_vit_feed_forward_length(self.vparams["intermediate_size"])
+            self.gguf_writer.add_vision_vit_head_count(self.vparams["num_attention_heads"])
+            self.gguf_writer.add_vision_vit_image_mean(self.preprocessor_config["image_mean"])
+            self.gguf_writer.add_vision_vit_image_std(self.preprocessor_config["image_std"])
+            self.gguf_writer.add_vision_vit_select_layer(self.find_hparam(["vision_feature_layer", "mm_vision_select_layer"]))
 
         self.gguf_writer.add_file_type(self.ftype)
         logger.info(f"gguf: file type = {self.ftype}")
@@ -1690,15 +1690,15 @@ class LlamaModel(Model):
 
         # For vision model
         if self.vparams is not None:
-            self.gguf_writer.add_vision_clip_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
+            self.gguf_writer.add_vision_vit_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
             # TODO: should not hardcode these, but they are currently missing from config.json
             if self.vision_arch == gguf.MODEL_ARCH.VISION_LLAVA:
-                self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.MLP)
+                self.gguf_writer.add_vision_vit_projector_type(gguf.constants.CLIPProjectorType.MLP)
             if self.vision_arch == gguf.MODEL_ARCH.VISION_MOBILEVLM:
-                self.gguf_writer.add_vision_clip_projector_type(gguf.constants.CLIPProjectorType.LDPV2)
-            self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-05)
+                self.gguf_writer.add_vision_vit_projector_type(gguf.constants.CLIPProjectorType.LDPV2)
+            self.gguf_writer.add_vision_vit_layer_norm_epsilon(1e-05)
             max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
-            self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
+            self.gguf_writer.add_vision_vit_max_position_embeddings(max_pos_embd)
 
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
@@ -2193,11 +2193,11 @@ class MiniCPMModel(Model):
 
         # For vision model
         if self.vparams is not None and self.proj_type is not None:
-            self.gguf_writer.add_vision_clip_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
-            self.gguf_writer.add_vision_clip_projector_type(self.proj_type)
-            self.gguf_writer.add_vision_clip_layer_norm_epsilon(1e-06)
+            self.gguf_writer.add_vision_vit_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
+            self.gguf_writer.add_vision_vit_projector_type(self.proj_type)
+            self.gguf_writer.add_vision_vit_layer_norm_epsilon(1e-06)
             max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2
-            self.gguf_writer.add_vision_clip_max_position_embeddings(max_pos_embd)
+            self.gguf_writer.add_vision_vit_max_position_embeddings(max_pos_embd)
 
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:

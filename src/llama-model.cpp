@@ -1251,23 +1251,23 @@ void llama_model::load_hparams(llama_model_loader & ml) {
     auto & vparams = clip.hparams;
     std::string vision_type;
     ml.get_key(LLM_KV_VISION_TYPE, vision_type, false);
-    if (vision_type == "clip-vit") {
-        LLAMA_LOG_INFO("%s: loading clip-vit vision model\n", __func__);
+    if (vision_type == "vit") {
+        LLAMA_LOG_INFO("%s: loading ViT vision model\n", __func__);
         has_vision = true;
         ml.get_key(LLM_KV_VISION_IMAGE_SIZE,               vparams.image_size,     true);
         ml.get_key(LLM_KV_VISION_PATCH_SIZE,               vparams.patch_size,     true);
         ml.get_key_or_arr(LLM_KV_VISION_IMAGE_MEAN,        vparams.image_mean, 3,  true);
         ml.get_key_or_arr(LLM_KV_VISION_IMAGE_STD,         vparams.image_std,  3,  true);
-        ml.get_key(LLM_KV_VISION_CLIP_EMBEDDING_LENGTH,    vparams.hidden_size,    true);
-        ml.get_key(LLM_KV_VISION_CLIP_BLOCK_COUNT,         vparams.n_layer,        true);
-        ml.get_key(LLM_KV_VISION_CLIP_FEED_FORWARD_LENGTH, vparams.n_intermediate, true);
-        ml.get_key(LLM_KV_VISION_CLIP_HEAD_COUNT,          vparams.n_head,         true);
-        ml.get_key(LLM_KV_VISION_CLIP_LAYERNORM_EPS,       vparams.eps,            true);
-        ml.get_key(LLM_KV_VISION_CLIP_SELECT_LAYER,        vparams.select_layer,   true);
-        ml.get_key(LLM_KV_VISION_CLIP_MAX_POS_EMBD,        vparams.max_pos_embd,   true);
+        ml.get_key(LLM_KV_VISION_VIT_EMBEDDING_LENGTH,    vparams.hidden_size,    true);
+        ml.get_key(LLM_KV_VISION_VIT_BLOCK_COUNT,         vparams.n_layer,        true);
+        ml.get_key(LLM_KV_VISION_VIT_FEED_FORWARD_LENGTH, vparams.n_intermediate, true);
+        ml.get_key(LLM_KV_VISION_VIT_HEAD_COUNT,          vparams.n_head,         true);
+        ml.get_key(LLM_KV_VISION_VIT_LAYERNORM_EPS,       vparams.eps,            true);
+        ml.get_key(LLM_KV_VISION_VIT_SELECT_LAYER,        vparams.select_layer,   true);
+        ml.get_key(LLM_KV_VISION_VIT_MAX_POS_EMBD,        vparams.max_pos_embd,   true);
         {
             std::string name;
-            ml.get_key(LLM_KV_VISION_CLIP_PROJECTOR_TYPE, name, true);
+            ml.get_key(LLM_KV_VISION_VIT_PROJECTOR_TYPE, name, true);
             vparams.proj_type = clip_projector_type_from_name(name);
             if (vparams.proj_type == CLIP_PROJECTOR_TYPE_UNKNOWN) {
                 throw std::runtime_error(format("unsupported clip projector type: %s", name.c_str()));
@@ -1275,12 +1275,12 @@ void llama_model::load_hparams(llama_model_loader & ml) {
         }
         {
             std::string name;
-            ml.get_key(LLM_KV_VISION_CLIP_PATCH_MERGE_TYPE, name, false);
+            ml.get_key(LLM_KV_VISION_VIT_PATCH_MERGE_TYPE, name, false);
             vparams.mm_patch_merge_type = mm_patch_merge_from_name(name);
         }
         {
             std::string arch;
-            ml.get_key(LLM_KV_VISION_CLIP_ARCHITECTURE, arch, true);
+            ml.get_key(LLM_KV_VISION_VIT_ARCHITECTURE, arch, true);
             vparams.arch = vision_arch_from_string(arch);
             if (vparams.arch == VISION_ARCH_UNKNOWN) {
                 throw std::runtime_error(format("unsupported vision arch: %s", arch.c_str()));
