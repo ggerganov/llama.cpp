@@ -32,7 +32,6 @@ static void soft_max_f32(const float * x, const T * mask, float * dst, const int
     float *vals = vals_smem ? buf + sycl::max(nwarps, WARP_SIZE) : dst + rowx * ncols;
     float max_val = -INFINITY;
 
-#pragma unroll
     for (int col0 = 0; col0 < ncols; col0 += block_size) {
         const int col = col0 + tid;
 
