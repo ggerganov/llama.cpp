@@ -229,7 +229,9 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    struct llama_vision_patches;
+    // Structure represents the basic input unit of vision model
+    // This can be a processed image or slices of images under the hood
+    struct llama_vision_tokens;
 
     // represent an RGB image
     // size of data must be equal to 3*nx*ny
@@ -1286,12 +1288,15 @@ extern "C" {
     LLAMA_API struct llama_vision_bitmap * llama_vision_bitmap_init(uint32_t nx, uint32_t ny);
     LLAMA_API void llama_vision_bitmap_free(struct llama_vision_bitmap * bmp);
 
-    // Create patches from the RGB bitmap
-    LLAMA_API struct llama_vision_patches * llama_vision_patches_init(struct llama_context * ctx, llama_vision_bitmap * bmp);
-    LLAMA_API void llama_vision_patches_free(struct llama_vision_patches * p);
+    // Create image tokens from the RGB bitmap
+    LLAMA_API struct llama_vision_tokens * llama_vision_tokenize(struct llama_context * ctx, llama_vision_bitmap * bmp);
+    LLAMA_API void llama_vision_tokens_free(struct llama_vision_tokens * img_tokens);
+
+    // User must reserve N number of tokens in tokenized text prompt for each image
+    // LLAMA_API int32_t llama_vision_get_n_tokens(const llama_vision_img_tokens * img_tokens);
 
     // Encode patches into embeddings
-    LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, struct llama_vision_patches * p);
+    LLAMA_API int32_t llama_vision_encode(struct llama_context * ctx, struct llama_vision_tokens * img_tokens);
     LLAMA_API struct ggml_tensor * llama_vision_get_output_tensor(struct llama_context * ctx);
 
     //

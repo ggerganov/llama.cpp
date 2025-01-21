@@ -1268,8 +1268,8 @@ void llama_model::load_hparams(llama_model_loader & ml) {
         {
             std::string name;
             ml.get_key(LLM_KV_VISION_VIT_PROJECTOR_TYPE, name, true);
-            vparams.proj_type = clip_projector_type_from_name(name);
-            if (vparams.proj_type == CLIP_PROJECTOR_TYPE_UNKNOWN) {
+            vparams.proj_type = vision_projector_type_from_name(name);
+            if (vparams.proj_type == VISION_PROJECTOR_TYPE_UNKNOWN) {
                 throw std::runtime_error(format("unsupported clip projector type: %s", name.c_str()));
             }
         }
@@ -3514,7 +3514,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                 throw std::runtime_error("unknown vision architecture");
         }
 
-        if (clip_n_mmproj_embd(clip) != hparams.n_embd) {
+        if (llama_vision_n_mmproj_embd(clip) != hparams.n_embd) {
             std::runtime_error("model has vision, but n_mmproj_embd != n_embd");
         }
     }

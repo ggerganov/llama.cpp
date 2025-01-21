@@ -122,7 +122,7 @@ int main(int argc, char ** argv) {
     int n_prompt = 0;
 
     // process image
-    llama_vision_patches * img_patches = nullptr;
+    llama_vision_tokens * img_tokens = nullptr;
     {
         const char * img_path = params.image[0].c_str();
         if (params.image[0].empty()) {
@@ -131,12 +131,12 @@ int main(int argc, char ** argv) {
         }
         llama_vision_bitmap * img = load_image_from_file(img_path);
         LOG_INF("loaded image %s, size = %d x %d\n", img_path, img->nx, img->ny);
-        img_patches = llama_vision_patches_init(ctx, img);
-        if (!img_patches) {
-            LOG_ERR("failed to create image patches\n");
+        img_tokens = llama_vision_tokenize(ctx, img);
+        if (!img_tokens) {
+            LOG_ERR("failed to create image tokens\n");
             return 1;
         }
-        if (llama_vision_encode(ctx, img_patches)) {
+        if (llama_vision_encode(ctx, img_tokens)) {
             LOG_ERR("failed to encode image\n");
             return 1;
         }

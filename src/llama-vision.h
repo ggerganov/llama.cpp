@@ -7,12 +7,12 @@
 #include <vector>
 #include <array>
 
-enum clip_projector_type {
-    CLIP_PROJECTOR_TYPE_UNKNOWN,
-    CLIP_PROJECTOR_TYPE_MLP,
-    CLIP_PROJECTOR_TYPE_LDPV2,
-    CLIP_PROJECTOR_TYPE_MINICPMV_2_5,
-    CLIP_PROJECTOR_TYPE_MINICPMV_2_6,
+enum vision_projector_type {
+    VISION_PROJECTOR_TYPE_UNKNOWN,
+    VISION_PROJECTOR_TYPE_MLP,
+    VISION_PROJECTOR_TYPE_LDPV2,
+    VISION_PROJECTOR_TYPE_MINICPMV_2_5,
+    VISION_PROJECTOR_TYPE_MINICPMV_2_6,
 };
 
 enum mm_patch_merge {
@@ -21,62 +21,33 @@ enum mm_patch_merge {
     MM_PATCH_MERGE_SPATIAL_UNPAD,
 };
 
-struct clip_hparams {
-    llm_arch arch = LLM_ARCH_UNKNOWN;
+struct llama_vision_model {
+    struct vision_hparams {
+        llm_arch arch = LLM_ARCH_UNKNOWN;
 
-    uint32_t image_size;
-    uint32_t patch_size;
-    uint32_t hidden_size;
-    uint32_t n_intermediate;
-    uint32_t projection_dim;
-    uint32_t n_head;
-    uint32_t n_layer;
-    uint32_t max_pos_embd;
-    int32_t select_layer = 0;
-    bool use_gelu = false;
+        uint32_t image_size;
+        uint32_t patch_size;
+        uint32_t hidden_size;
+        uint32_t n_intermediate;
+        uint32_t projection_dim;
+        uint32_t n_head;
+        uint32_t n_layer;
+        uint32_t max_pos_embd;
+        int32_t select_layer = 0;
+        bool use_gelu = false;
 
-    float eps;
+        float eps;
 
-    clip_projector_type proj_type = CLIP_PROJECTOR_TYPE_UNKNOWN;
-    mm_patch_merge mm_patch_merge_type = MM_PATCH_MERGE_UNKNOWN;
+        vision_projector_type proj_type = VISION_PROJECTOR_TYPE_UNKNOWN;
+        mm_patch_merge mm_patch_merge_type = MM_PATCH_MERGE_UNKNOWN;
 
-    std::array<float, 3> image_mean;
-    std::array<float, 3> image_std;
+        std::array<float, 3> image_mean;
+        std::array<float, 3> image_std;
 
-    std::array<int32_t, 32> image_grid_pinpoints; // TODO: should this be array of (x, y) pairs?
-    int32_t image_crop_resolution;
-};
-
-struct clip_layer {
-    // attention
-    struct ggml_tensor * k_w = nullptr;
-    struct ggml_tensor * k_b = nullptr;
-    struct ggml_tensor * q_w = nullptr;
-    struct ggml_tensor * q_b = nullptr;
-    struct ggml_tensor * v_w = nullptr;
-    struct ggml_tensor * v_b = nullptr;
-
-    struct ggml_tensor * output_w = nullptr;
-    struct ggml_tensor * output_b = nullptr;
-
-    // layernorm 1
-    struct ggml_tensor * norm_in_w = nullptr;
-    struct ggml_tensor * norm_in_b = nullptr;
-
-    // ff
-    struct ggml_tensor * ffn_up_w = nullptr;
-    struct ggml_tensor * ffn_up_b = nullptr;
-
-    struct ggml_tensor * ffn_down_w = nullptr;
-    struct ggml_tensor * ffn_down_b = nullptr;
-
-    // layernorm 2
-    struct ggml_tensor * norm_out_w = nullptr;
-    struct ggml_tensor * norm_out_b = nullptr;
-};
-
-struct clip_vision_model {
-    struct clip_hparams hparams;
+        std::array<int32_t, 32> image_grid_pinpoints; // TODO: should this be array of (x, y) pairs?
+        int32_t image_crop_resolution;
+    };
+    struct vision_hparams hparams;
     ggml_backend_buffer_type_t buft;
 
     // embeddings
@@ -88,7 +59,34 @@ struct clip_vision_model {
     struct ggml_tensor * pre_norm_w = nullptr;
     struct ggml_tensor * pre_norm_b = nullptr;
 
-    std::vector<clip_layer> layers;
+    struct vision_layer {
+        // attention
+        struct ggml_tensor * k_w = nullptr;
+        struct ggml_tensor * k_b = nullptr;
+        struct ggml_tensor * q_w = nullptr;
+        struct ggml_tensor * q_b = nullptr;
+        struct ggml_tensor * v_w = nullptr;
+        struct ggml_tensor * v_b = nullptr;
+
+        struct ggml_tensor * output_w = nullptr;
+        struct ggml_tensor * output_b = nullptr;
+
+        // layernorm 1
+        struct ggml_tensor * norm_in_w = nullptr;
+        struct ggml_tensor * norm_in_b = nullptr;
+
+        // ff
+        struct ggml_tensor * ffn_up_w = nullptr;
+        struct ggml_tensor * ffn_up_b = nullptr;
+
+        struct ggml_tensor * ffn_down_w = nullptr;
+        struct ggml_tensor * ffn_down_b = nullptr;
+
+        // layernorm 2
+        struct ggml_tensor * norm_out_w = nullptr;
+        struct ggml_tensor * norm_out_b = nullptr;
+    };
+    std::vector<vision_layer> layers;
 
     struct ggml_tensor * post_norm_w = nullptr;
     struct ggml_tensor * post_norm_b = nullptr;
@@ -132,13 +130,13 @@ struct clip_vision_model {
     struct ggml_tensor * image_newline = nullptr;
 };
 
-struct clip_context {
+struct llama_vision_context {
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
     struct ggml_context * ctx_ggml = nullptr;
 
-    const clip_vision_model * model;
+    const llama_vision_model * model;
 
     // temporary output data, to be picked up by llama_decode()
     struct ggml_tensor * output;
@@ -147,7 +145,7 @@ struct clip_context {
 // for now, this only contains:
 // - the instruction for ggml_conv_2d to break the image into patches
 // - the pre-processed image data in f32
-struct llama_vision_patches {
+struct llama_vision_tokens {
     uint32_t px; // size of patch
     uint32_t py; // size of patch
     size_t n_px; // number of patches in x direction
@@ -166,20 +164,20 @@ inline mm_patch_merge mm_patch_merge_from_name(std::string & name) {
     return MM_PATCH_MERGE_UNKNOWN;
 }
 
-inline clip_projector_type clip_projector_type_from_name(std::string & name) {
+inline vision_projector_type vision_projector_type_from_name(std::string & name) {
     if (name == "mlp") {
-        return CLIP_PROJECTOR_TYPE_MLP;
+        return VISION_PROJECTOR_TYPE_MLP;
     } else if (name == "ldpv2") {
-        return CLIP_PROJECTOR_TYPE_LDPV2;
+        return VISION_PROJECTOR_TYPE_LDPV2;
     } else if (name == "minicpmv-2.5") {
-        return CLIP_PROJECTOR_TYPE_MINICPMV_2_5;
+        return VISION_PROJECTOR_TYPE_MINICPMV_2_5;
     } else if (name == "minicpmv-2.6") {
-        return CLIP_PROJECTOR_TYPE_MINICPMV_2_6;
+        return VISION_PROJECTOR_TYPE_MINICPMV_2_6;
     }
-    return CLIP_PROJECTOR_TYPE_UNKNOWN;
+    return VISION_PROJECTOR_TYPE_UNKNOWN;
 }
 
 // only for sanity check: must be equal to n_embd of language model
-uint32_t clip_n_mmproj_embd(const clip_vision_model & clip_model);
+uint32_t llama_vision_n_mmproj_embd(const llama_vision_model & vmodel);
 
 struct ggml_tensor * llama_vision_get_output_tensor(llama_context * ctx);

@@ -365,7 +365,7 @@ struct llama_model {
 
     // vision
     bool has_vision = false;
-    clip_vision_model clip;
+    llama_vision_model clip;
 
 private:
     struct impl;

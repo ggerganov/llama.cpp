@@ -110,7 +110,7 @@ struct llama_context {
     struct ggml_tensor * inp_KQ_mask_cross; // F32 [n_outputs_enc, n_batch]
 
     // vision
-    clip_context vctx;
+    llama_vision_context vctx;
 };
 
 // TODO: make these methods of llama_context
