@@ -1459,6 +1459,7 @@ jobs:
 #          make
 
   openEuler-latest-cmake-cann:
+    if: contains(github.event.pull_request.labels.*.name, 'Ascend NPU')
     defaults:
       run:
        shell: bash -el {0}
@@ -1466,8 +1467,8 @@ jobs:
 
     strategy:
       matrix:
-        cann: ['openeuler-python3.10-cann8.0.rc3.beta1']
         build: ['Release']
+        cann: ['openeuler-python3.10-cann8.0.rc3.beta1']
         device: ['ascend910b3']
     container:
         image: ascendai/cann:${{ matrix.cann }}
