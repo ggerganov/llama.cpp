@@ -872,6 +872,7 @@ jobs:
           uses: actions/checkout@v4
           with:
             fetch-depth: 0
+            set-safe-directory: .
 
         - name: Build with CMake
           run: |
