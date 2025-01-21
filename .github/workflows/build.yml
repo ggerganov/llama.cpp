@@ -859,6 +859,12 @@ jobs:
     name: ubuntu-22-cuda (${{ matrix.cuda.version }} cap ${{ matrix.cuda.cap }}, e.g. ${{ matrix.cuda.example }})
 
     steps:
+        - name: Clone
+          id: checkout
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
         - name: Dependencies
           id: depends
           env:
@@ -866,13 +872,6 @@ jobs:
           run: |
             apt-get update
             apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git
-
-        - name: Clone
-          id: checkout
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-            set-safe-directory: .
 
         - name: Build with CMake
           run: |
