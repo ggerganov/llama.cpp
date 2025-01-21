@@ -859,6 +859,11 @@ jobs:
     name: ubuntu-22-cuda (${{ matrix.cuda.version }} cap ${{ matrix.cuda.cap }}, e.g. ${{ matrix.cuda.example }})
 
     steps:
+        - name: ccache
+          uses: hendrikmuhs/ccache-action@v1.2.11
+          with:
+            key: ubuntu-22-cuda-${{ matrix.cuda.version }}-${{ matrix.cuda.cap }}
+
         - name: Dependencies
           id: depends
           env:
