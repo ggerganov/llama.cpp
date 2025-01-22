@@ -25,6 +25,7 @@ class chat_template {
     // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
     bool requires_object_arguments_ = false;
+    bool requires_typed_content_ = false;
     bool supports_system_role_ = true;
     bool supports_parallel_tool_calls_ = false;
     std::string source_;
@@ -32,14 +33,14 @@ class chat_template {
     std::string eos_token_;
     std::shared_ptr<minja::TemplateNode> template_root_;
 
-    std::string try_render(
+    std::string try_raw_render(
         const nlohmann::ordered_json & messages,
         const nlohmann::ordered_json & tools,
         bool add_generation_prompt,
         const nlohmann::ordered_json & extra_context = nlohmann::ordered_json()) const
     {
         try {
-            auto prompt = apply(messages, tools, add_generation_prompt, extra_context);
+            auto prompt = apply(messages, tools, add_generation_prompt, extra_context, /* adjust_inputs= */ false);
             // fprintf(stderr, "Prompt: %s\n", prompt.c_str());
             return prompt;
         } catch (const std::exception & e) {
@@ -60,7 +61,7 @@ class chat_template {
         supports_tools_ = source.find("tools") != std::string::npos;
 
         auto renders_string_arguments =
-            try_render({
+            try_raw_render({
                 {
                     {"role", "user"},
                     {"content", "Hey"}
@@ -81,7 +82,7 @@ class chat_template {
             }, {}, false).find("{\"code\": \"print") != std::string::npos;
         if (!renders_string_arguments) {
             auto renders_object_arguments =
-                try_render({
+                try_raw_render({
                     {
                         {"role", "user"},
                         {"content", "Hey"}
@@ -106,10 +107,13 @@ class chat_template {
         }
         supports_parallel_tool_calls_ = source.find("tool_call_id") != std::string::npos;
 
-        supports_system_role_ = try_render({
+        supports_system_role_ = try_raw_render({
             {{"role", "system"}, {"content", "<System Needle>"}},
             {{"role", "user"},   {"content", "Hey"}}
         }, {}, false).find("<System Needle>") != std::string::npos;
+
+        requires_typed_content_ = try_raw_render({{{"role", "user"},   {"content", "Hey"}}}, {}, false).find("Hey") == std::string::npos
+            && try_raw_render({{{"role", "user"},   {"content", {{{"type", "text"}, {"text", "Hey"}}}}}}, {}, false).find("Hey") != std::string::npos;
     }
 
     const std::string & source() const { return source_; }
@@ -122,19 +126,34 @@ class chat_template {
         const nlohmann::ordered_json & messages,
         const nlohmann::ordered_json & tools,
         bool add_generation_prompt,
-        const nlohmann::ordered_json & extra_context = nlohmann::ordered_json()) const
+        const nlohmann::ordered_json & extra_context = nlohmann::ordered_json(),
+        bool adjust_inputs = true) const
     {
         json actual_messages;
 
         // First, "fix" messages so they have a chance to be rendered correctly by the template
 
-        if (requires_object_arguments_ || !supports_system_role_ || !supports_tools_) {
+        if (adjust_inputs && (requires_object_arguments_ || !supports_system_role_ || !supports_tools_ || requires_typed_content_)) {
             actual_messages = json::array();
+
+            auto add_message = [&](const json & msg) {
+                if (requires_typed_content_ && msg.contains("content") && !msg.at("content").is_null() && msg.at("content").is_string()) {
+                    actual_messages.push_back({
+                        {"role", msg.at("role")},
+                        {"content", {{
+                            {"type", "text"},
+                            {"text", msg.at("content")},
+                        }}},
+                    });
+                } else {
+                    actual_messages.push_back(msg);
+                }
+            };
 
             std::string pending_system;
             auto flush_sys = [&]() {
                 if (!pending_system.empty()) {
-                    actual_messages.push_back({
+                    add_message({
                         {"role", "user"},
                         {"content", pending_system},
                     });
@@ -217,7 +236,7 @@ class chat_template {
                         }
                     }
                 }
-                actual_messages.push_back(message);
+                add_message(message);
             }
             flush_sys();
         } else {
