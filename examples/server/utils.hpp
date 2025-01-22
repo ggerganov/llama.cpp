@@ -595,7 +595,7 @@ static json oaicompat_completion_params_parse(
             throw std::runtime_error("Cannot use tools with stream");
         }
         if (use_jinja) {
-            if (tool_call_style == common_tool_call_style::UnknownToolCallStyle) {
+            if (tool_call_style == common_tool_call_style::COMMON_TOOL_CALL_STYLE_UNKNOWN) {
                 throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");
             }
         } else {

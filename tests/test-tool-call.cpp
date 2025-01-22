@@ -146,21 +146,21 @@ static void test_parsing() {
       }}
     };
 
-    test_parse_tool_call(common_tool_call_style::Generic, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_GENERIC, tools,
       "{\"tool_call\": {\"name\": \"foo\", \"arguments\": {\"bar\": 1}}}",
       "",
       json::array({fooBarCall}));
-    test_parse_tool_call(common_tool_call_style::Generic, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_GENERIC, tools,
       "{\"tool_calls\": [{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}]}",
       "",
       json::array({fooBarCall}));
 
-    test_parse_tool_call(common_tool_call_style::Hermes2Pro, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_HERMES_2_PRO, tools,
       "<tool_call>{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}</tool_call>",
       "",
       json::array({fooBarCall}));
 
-    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama3, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3, tools,
       ">>>python\n{\"code\": \"print('Hello, world!')\"}",
       "",
       json {{
@@ -172,7 +172,7 @@ static void test_parsing() {
           })}
         }}
       }});
-    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama3, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3, tools,
       ">>>special_function\n{\"arg1\": 1}\n ",
       "",
       json {{
@@ -185,7 +185,7 @@ static void test_parsing() {
         }}
       }});
 
-    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1, tools,
       "Hell<function=foo>{\"arg1\": 1}</function>o, world<function=bar>{\"arg2\": 2}</function>!",
       "Hello, world!",
       json {
@@ -208,7 +208,7 @@ static void test_parsing() {
           }}
         },
       });
-    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1, tools,
       "<function=test>{ } </function> ",
       " ",
       json {{
@@ -219,7 +219,7 @@ static void test_parsing() {
         }}
       }});
 
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "<|python_tag|>this could be anything",
       "",
       json {{
@@ -231,7 +231,7 @@ static void test_parsing() {
           })}
         }}
       }});
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "I'm thinking<|python_tag|>",
       "I'm thinking",
       json {{
@@ -253,7 +253,7 @@ static void test_parsing() {
 
     auto no_function_call = json::array();
 
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\"name\": \"python\", \"parameters\": {\"code\": \"print('Hey')\"}}",
       "",
       json::array({{
@@ -263,48 +263,48 @@ static void test_parsing() {
           {"name", "python"},
         }}
       }}));
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\n  \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\n\t\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\n    \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\"type\": \"function\", \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
 
     // No match: function unknown
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
     // No match: bad indentation
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\n\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\n\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
-    test_parse_tool_call(common_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1, tools,
       "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
 
-    test_parse_tool_call(common_tool_call_style::MistralNemo, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO, tools,
       "Bleh[TOOL_CALLS][{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\", \"id\": \"123456789\"}]",
       "Bleh",
       json::array({special_function_call_with_id}));
 
-    test_parse_tool_call(common_tool_call_style::FirefunctionV2, tools,
+    test_parse_tool_call(common_tool_call_style::COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2, tools,
       "Bleh functools[{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\"}]",
       "Bleh",
       json::array({special_function_call}));
@@ -318,17 +318,17 @@ static void test_tool_call_style(const std::string & template_file, common_tool_
 }
 
 static void test_tool_call_style_detection() {
-    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", FunctionaryV3Llama31);
-    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", FunctionaryV3Llama3);
-    test_tool_call_style("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja", FirefunctionV2);
-    test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", Llama31);
-    test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", Llama32);
-    test_tool_call_style("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja", Hermes2Pro);
-    test_tool_call_style("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja", Hermes2Pro);
-    test_tool_call_style("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja", Hermes2Pro);
-    test_tool_call_style("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja", CommandRPlus);
-    test_tool_call_style("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja", MistralNemo);
-    test_tool_call_style("tests/chat/templates/google-gemma-7b-it.jinja", Generic);
+    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1);
+    test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3);
+    test_tool_call_style("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja", COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2);
+    test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", COMMON_TOOL_CALL_STYLE_LLAMA_3_1);
+    test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", COMMON_TOOL_CALL_STYLE_LLAMA_3_2);
+    test_tool_call_style("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja", COMMON_TOOL_CALL_STYLE_HERMES_2_PRO);
+    test_tool_call_style("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja", COMMON_TOOL_CALL_STYLE_HERMES_2_PRO);
+    test_tool_call_style("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja", COMMON_TOOL_CALL_STYLE_HERMES_2_PRO);
+    test_tool_call_style("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja", COMMON_TOOL_CALL_STYLE_COMMAND_R_PLUS);
+    test_tool_call_style("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja", COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO);
+    test_tool_call_style("tests/chat/templates/google-gemma-7b-it.jinja", COMMON_TOOL_CALL_STYLE_GENERIC);
 }
 
 static std::string get_message_prompt_delta(const common_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {

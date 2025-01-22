@@ -8,17 +8,17 @@
 #include "json.hpp"
 
 enum common_tool_call_style {
-    UnknownToolCallStyle,
-    None,
-    Generic,
-    Llama31,
-    Llama32,
-    FunctionaryV3Llama3,
-    FunctionaryV3Llama31,
-    Hermes2Pro,
-    CommandRPlus,
-    MistralNemo,
-    FirefunctionV2,
+    COMMON_TOOL_CALL_STYLE_UNKNOWN,
+    COMMON_TOOL_CALL_STYLE_NONE,
+    COMMON_TOOL_CALL_STYLE_GENERIC,
+    COMMON_TOOL_CALL_STYLE_LLAMA_3_1,
+    COMMON_TOOL_CALL_STYLE_LLAMA_3_2,
+    COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3,
+    COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1,
+    COMMON_TOOL_CALL_STYLE_HERMES_2_PRO,
+    COMMON_TOOL_CALL_STYLE_COMMAND_R_PLUS,
+    COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO,
+    COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2,
 };
 
 struct common_tool_call {

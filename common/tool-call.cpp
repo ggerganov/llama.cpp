@@ -49,25 +49,25 @@ static json normalize_tools(const json & tools) {
 
 std::string common_tool_call_style_name(common_tool_call_style style) {
     switch (style) {
-        case common_tool_call_style::None:
+        case COMMON_TOOL_CALL_STYLE_NONE:
             return "None";
-        case common_tool_call_style::Generic:
+        case COMMON_TOOL_CALL_STYLE_GENERIC:
             return "Generic";
-        case common_tool_call_style::Llama31:
+        case COMMON_TOOL_CALL_STYLE_LLAMA_3_1:
             return "Llama-3.1";
-        case common_tool_call_style::Llama32:
+        case COMMON_TOOL_CALL_STYLE_LLAMA_3_2:
             return "Llama-3.2";
-        case common_tool_call_style::FunctionaryV3Llama3:
+        case COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3:
             return "FunctionaryV3Llama3";
-        case common_tool_call_style::FunctionaryV3Llama31:
+        case COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1:
             return "FunctionaryV3Llama3.1";
-        case common_tool_call_style::Hermes2Pro:
+        case COMMON_TOOL_CALL_STYLE_HERMES_2_PRO:
             return "Hermes2Pro";
-        case common_tool_call_style::CommandRPlus:
+        case COMMON_TOOL_CALL_STYLE_COMMAND_R_PLUS:
             return "CommandRPlus";
-        case common_tool_call_style::MistralNemo:
+        case COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO:
             return "MistralNemo";
-        case common_tool_call_style::FirefunctionV2:
+        case COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2:
             return "FirefunctionV2";
         default:
             return "Unknown";
@@ -78,26 +78,26 @@ common_tool_call_style common_tool_call_style_detect(const common_chat_template 
     const auto & src = chat_template.source();
 
     if (src.find("<tool_call>") != std::string::npos) {
-        return Hermes2Pro;
+        return COMMON_TOOL_CALL_STYLE_HERMES_2_PRO;
     } else if (src.find(">>>all") != std::string::npos) {
-        return FunctionaryV3Llama3;
+        return COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3;
     } else if (src.find("<|start_header_id|>") != std::string::npos
         && src.find("<function=") != std::string::npos) {
-        return FunctionaryV3Llama31;
+        return COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1;
     } else if (src.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
         if (src.find("<|python_tag|>") != std::string::npos) {
-            return Llama31;
+            return COMMON_TOOL_CALL_STYLE_LLAMA_3_1;
         } else {
-            return Llama32;
+            return COMMON_TOOL_CALL_STYLE_LLAMA_3_2;
         }
     } else if (src.find("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>") != std::string::npos) {
-        return CommandRPlus;
+        return COMMON_TOOL_CALL_STYLE_COMMAND_R_PLUS;
     } else if (src.find("[TOOL_CALLS]") != std::string::npos) {
-        return MistralNemo;
+        return COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO;
     } else if (src.find(" functools[") != std::string::npos) {
-        return FirefunctionV2;
+        return COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2;
     } else {
-        return Generic;
+        return COMMON_TOOL_CALL_STYLE_GENERIC;
     }
 }
 
@@ -356,23 +356,23 @@ static common_tool_calls parse_firefunction_v2_tool_calls(const std::string& inp
 common_tool_calls parse_tool_calls(common_tool_call_style style, const json & tools, const std::string& input) {
     fprintf(stderr, "# parse_tool_calls(%s):\n\n%s\n\n", common_tool_call_style_name(style).c_str(), input.c_str());
     switch (style) {
-        case common_tool_call_style::None:
+        case COMMON_TOOL_CALL_STYLE_NONE:
             return {input, {}};
-        case common_tool_call_style::Generic:
+        case COMMON_TOOL_CALL_STYLE_GENERIC:
             return parse_generic_tool_calls(input);
-        case common_tool_call_style::Llama31:
+        case COMMON_TOOL_CALL_STYLE_LLAMA_3_1:
             return parse_llama_3_tool_calls(tools, input, /* parse_llama_3_tool_calls= */ true);
-        case common_tool_call_style::Llama32:
+        case COMMON_TOOL_CALL_STYLE_LLAMA_3_2:
             return parse_llama_3_tool_calls(tools, input, /* parse_llama_3_tool_calls= */ false);
-        case common_tool_call_style::FunctionaryV3Llama3:
+        case COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3:
             return parse_functionary_v3_tool_calls(tools, input);
-        case common_tool_call_style::FunctionaryV3Llama31:
+        case COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1:
             return parse_functionary_v3_llama_3_1_tool_calls(tools, input);
-        case common_tool_call_style::Hermes2Pro:
+        case COMMON_TOOL_CALL_STYLE_HERMES_2_PRO:
             return parse_hermes_tool_calls(input);
-        case common_tool_call_style::MistralNemo:
+        case COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO:
             return parse_mistral_nemo_tool_calls(input);
-        case common_tool_call_style::FirefunctionV2:
+        case COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2:
             return parse_firefunction_v2_tool_calls(input);
         default:
             throw std::runtime_error("Unsupported tool call style");
@@ -410,10 +410,10 @@ common_tool_call_handler common_tool_call_handler_init(
     auto parallel = parallel_tool_calls.is_null() ? tmpl.supports_parallel_tool_calls() : parallel_tool_calls.get<bool>();
 
     switch (style) {
-        case common_tool_call_style::None:
+        case COMMON_TOOL_CALL_STYLE_NONE:
             handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             break;
-        case common_tool_call_style::Generic: {
+        case COMMON_TOOL_CALL_STYLE_GENERIC: {
             auto actual_tools = normalize_tools(tools);
             auto tool_call_schemas = json::array();
             for (const auto & tool : actual_tools) {
@@ -493,7 +493,7 @@ common_tool_call_handler common_tool_call_handler_init(
             handler.prompt = tmpl.apply(tweaked_messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
-        case common_tool_call_style::MistralNemo: {
+        case COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO: {
             auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 auto schemas = json::array();
@@ -534,7 +534,7 @@ common_tool_call_handler common_tool_call_handler_init(
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
-        case common_tool_call_style::FirefunctionV2: {
+        case COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2: {
             auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 auto schemas = json::array();
@@ -568,8 +568,8 @@ common_tool_call_handler common_tool_call_handler_init(
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
-        case common_tool_call_style::Llama31:
-        case common_tool_call_style::Llama32: {
+        case COMMON_TOOL_CALL_STYLE_LLAMA_3_1:
+        case COMMON_TOOL_CALL_STYLE_LLAMA_3_2: {
             auto builtin_tools = json {"wolfram_alpha", "brave_search"};
             for (const auto & tool : tools) {
                 if (!tool.contains("type")) {
@@ -582,13 +582,13 @@ common_tool_call_handler common_tool_call_handler_init(
             }
             auto actual_tools = normalize_tools(tools);
 
-            auto uses_python_tag = style == common_tool_call_style::Llama31;
+            auto uses_python_tag = style == common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_1;
 
             // Technically we should only trigger on `"\n{\"name\": \"" + name + "\""` for each tool name,
             // but Llama-3.2-3B (and 1B) struggles to output valid tool calls so we're "guiding" it strongly as soon
             // as it seems to be outputting some JSON.
             // TODO: make this conditional on a very small model (e.g. 1B / 3B).
-            auto eagerly_match_any_json = style == common_tool_call_style::Llama32;
+            auto eagerly_match_any_json = style == common_tool_call_style::COMMON_TOOL_CALL_STYLE_LLAMA_3_2;
 
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;
@@ -639,7 +639,7 @@ common_tool_call_handler common_tool_call_handler_init(
             });
             break;
         }
-        case common_tool_call_style::FunctionaryV3Llama3: {
+        case COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3: {
             // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
             // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
             auto actual_tools = normalize_tools(tools);
@@ -670,7 +670,7 @@ common_tool_call_handler common_tool_call_handler_init(
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
-        case common_tool_call_style::FunctionaryV3Llama31: {
+        case COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1: {
             // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
             // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
             // TODO: handle tool {type: code_interpreter} as python
@@ -700,7 +700,7 @@ common_tool_call_handler common_tool_call_handler_init(
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
-        case common_tool_call_style::Hermes2Pro: {
+        case COMMON_TOOL_CALL_STYLE_HERMES_2_PRO: {
             // NousResearchHermesPro_2
             // (content)?(<tool_call>{"name": "foo", "arguments": {"a": 1}}</tool_call>)*
             auto actual_tools = normalize_tools(tools);
