@@ -1158,20 +1158,21 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
     if (grammar.awaiting_trigger) {
         if (std::find(grammar.trigger_tokens.begin(), grammar.trigger_tokens.end(), token) != grammar.trigger_tokens.end()) {
             grammar.awaiting_trigger = false;
+            grammar.trigger_buffer.clear();
             llama_grammar_accept_str(grammar, grammar.vocab->token_to_piece(token));
             return;
         } else {
+            // TODO: consider a smarter incremental substring search algorithm (store last position to search from).
             grammar.trigger_buffer += grammar.vocab->token_to_piece(token);
             for (const auto & word : grammar.trigger_words) {
                 auto pos = grammar.trigger_buffer.find(word);
-                if (pos == std::string::npos) {
-                    continue;
+                if (pos != std::string::npos) {
+                    grammar.awaiting_trigger = false;
+                    auto constrained_str = grammar.trigger_buffer.substr(pos);
+                    grammar.trigger_buffer.clear();
+                    llama_grammar_accept_str(grammar, constrained_str);
+                    return;
                 }
-                grammar.awaiting_trigger = false;
-                auto constrained_str = grammar.trigger_buffer.substr(pos);
-                llama_grammar_accept_str(grammar, constrained_str);
-                grammar.trigger_buffer.clear();
-                return;
             }
             return;
         }

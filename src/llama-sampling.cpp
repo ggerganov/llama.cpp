@@ -1443,14 +1443,9 @@ static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
     for (auto & word : ctx->grammar->trigger_words) {
         trigger_words.push_back(word.c_str());
     }
-    auto * grammar_new = llama_grammar_init_impl(
-        ctx->grammar->vocab,
-        ctx->grammar_str.c_str(),
-        ctx->grammar_root.c_str(),
-        trigger_words.data(),
-        trigger_words.size(),
-        ctx->grammar->trigger_tokens.data(),
-        ctx->grammar->trigger_tokens.size());
+    auto * grammar_new = llama_grammar_init_impl(ctx->grammar->vocab, ctx->grammar_str.c_str(), ctx->grammar_root.c_str(),
+                                                 trigger_words.data(), trigger_words.size(),
+                                                 ctx->grammar->trigger_tokens.data(), ctx->grammar->trigger_tokens.size());
 
     llama_grammar_free_impl(ctx->grammar);
     ctx->grammar = grammar_new;
