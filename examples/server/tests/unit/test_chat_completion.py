@@ -273,12 +273,12 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
 
 
 @pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
-    ("meetkai-functionary-medium-v3.1",               32,  [],            None),
-    ("meetkai-functionary-medium-v3.1",               32,  [TEST_TOOL],   None),
-    ("meetkai-functionary-medium-v3.1",               32,  [PYTHON_TOOL], 'none'),
-    ("meetkai-functionary-medium-v3.2",               32,  [],            None),
-    ("meetkai-functionary-medium-v3.2",               32,  [TEST_TOOL],   None),
-    ("meetkai-functionary-medium-v3.2",               32,  [PYTHON_TOOL], 'none'),
+    ("meetkai-functionary-medium-v3.1",               128, [],            None),
+    ("meetkai-functionary-medium-v3.1",               128, [TEST_TOOL],   None),
+    ("meetkai-functionary-medium-v3.1",               128, [PYTHON_TOOL], 'none'),
+    ("meetkai-functionary-medium-v3.2",               128, [],            None),
+    ("meetkai-functionary-medium-v3.2",               128, [TEST_TOOL],   None),
+    ("meetkai-functionary-medium-v3.2",               128, [PYTHON_TOOL], 'none'),
     ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, [],            None),
     ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, [TEST_TOOL],   None),
     ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, [PYTHON_TOOL], 'none'),

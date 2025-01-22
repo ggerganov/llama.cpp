@@ -402,8 +402,7 @@ struct server_task {
         {
             const auto grammar_trigger_words = data.find("grammar_trigger_words");
             if (grammar_trigger_words != data.end()) {
-                auto words = to_string_vec(*grammar_trigger_words);
-                for (const auto & word : params.sampling.grammar_trigger_words) {
+                for (const auto & word : to_string_vec(*grammar_trigger_words)) {
                     auto ids = common_tokenize(vocab, word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
                         params.sampling.grammar_trigger_tokens.push_back(ids[0]);
