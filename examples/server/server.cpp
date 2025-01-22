@@ -1554,8 +1554,12 @@ private:
         auto rm_func = [id_task](const server_task & task) {
             return task.id_target == id_task;
         };
-        std::remove_if(queue_tasks.begin(),          queue_tasks.end(),          rm_func);
-        std::remove_if(queue_tasks_deferred.begin(), queue_tasks_deferred.end(), rm_func);
+        queue_tasks.erase(
+            std::remove_if(queue_tasks.begin(),          queue_tasks.end(),          rm_func),
+            queue_tasks.end());
+        queue_tasks_deferred.erase(
+            std::remove_if(queue_tasks_deferred.begin(), queue_tasks_deferred.end(), rm_func),
+            queue_tasks_deferred.end());
     }
 };
 
@@ -1593,13 +1597,11 @@ struct server_response {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(id_task);
         // make sure to clean up all pending results
-        std::remove_if(
-            queue_results.begin(),
-            queue_results.end(),
-            [id_task](const server_task_result_ptr & res) {
+        queue_results.erase(
+            std::remove_if(queue_results.begin(), queue_results.end(), [id_task](const server_task_result_ptr & res) {
                 return res->id == id_task;
-            }
-        );
+            }),
+            queue_results.end());
     }
 
     void remove_waiting_task_ids(const std::unordered_set<int> & id_tasks) {
