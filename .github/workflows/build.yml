@@ -1459,7 +1459,7 @@ jobs:
 #          make
 
   openEuler-latest-cmake-cann:
-    if: contains(github.event.pull_request.labels.*.name, 'Ascend NPU')
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'Ascend NPU') }}
     defaults:
       run:
        shell: bash -el {0}
