@@ -444,10 +444,10 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
         backend_ctx->adreno_gen = get_adreno_gpu_gen(default_device->name);
 
         // Default wave size is 128, A8x uses 64.
-        if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A8X) {
+        if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A7X ||
+            backend_ctx->adreno_gen == ADRENO_GPU_GEN::A8X) {
             backend_ctx->adreno_wave_size = 64;
-        } else if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A7X ||
-                   backend_ctx->adreno_gen == ADRENO_GPU_GEN::X1E) {
+        } else if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::X1E) {
             backend_ctx->adreno_wave_size = 128;
         } else {
             backend_ctx->adreno_wave_size = 128;
@@ -3002,11 +3002,12 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
         }
 
         if (N == 1) {
-            local_work_size[0] = backend_ctx->adreno_wave_size; // localsize
+            size_t wavesize = backend_ctx->adreno_wave_size;
+            local_work_size[0] = wavesize; // localsize
             local_work_size[1] = 4; // reduce factor
             local_work_size[2] = 1;
 
-            global_work_size[0] = M / 2;
+            global_work_size[0] = (((M / 2) + wavesize - 1) / wavesize) * wavesize;
             global_work_size[1] = 4; // reduce factor
             global_work_size[2] = 1;
         }
