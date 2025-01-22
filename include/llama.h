@@ -1266,8 +1266,6 @@ extern "C" {
     // Returns the sampled token
     LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx);
 
-    LLAMA_API bool llama_sampler_is_grammar_empty(struct llama_sampler * smpl);
-
     // TODO: extend in the future
     //LLAMA_API void llama_decode_with_sampler(struct llama_context * ctx, struct llama_sampler * smpl, struct llama_batch batch, ...);
 

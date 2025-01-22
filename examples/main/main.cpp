@@ -504,13 +504,12 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
 
     // single-token antiprompts
-    std::vector<llama_token> antiprompt_single_token;
+    std::vector<llama_token> antiprompt_token;
 
-    antiprompt_single_token.reserve(params.antiprompt.size());
     for (const std::string & antiprompt : params.antiprompt) {
         auto ids = ::common_tokenize(ctx, antiprompt, false, true);
         if (ids.size() == 1) {
-            antiprompt_single_token.push_back(ids[0]);
+            antiprompt_token.push_back(ids[0]);
         }
     }
 
@@ -756,7 +755,7 @@ int main(int argc, char ** argv) {
 
                 // check for reverse prompt using special tokens
                 llama_token last_token = common_sampler_last(smpl);
-                if (std::find(antiprompt_single_token.begin(), antiprompt_single_token.end(), last_token) != antiprompt_single_token.end()) {
+                if (std::find(antiprompt_token.begin(), antiprompt_token.end(), last_token) != antiprompt_token.end()) {
                     if (params.interactive) {
                         is_interacting = true;
                     }

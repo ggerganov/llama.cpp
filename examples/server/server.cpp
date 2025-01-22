@@ -26,7 +26,6 @@
 #include <deque>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <signal.h>
 #include <thread>
 #include <unordered_map>
@@ -168,6 +167,7 @@ struct slot_params {
             {"min_keep",                  sampling.min_keep},
             {"grammar",                   sampling.grammar},
             {"grammar_trigger_words",     sampling.grammar_trigger_words},
+            {"grammar_trigger_tokens",    sampling.grammar_trigger_tokens},
             {"samplers",                  samplers},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
@@ -387,6 +387,14 @@ struct server_task {
         };
 
         {
+            params.antiprompt.clear();
+            const auto stop = data.find("stop");
+            if (stop != data.end()) {
+                params.antiprompt = to_string_vec(*stop);
+            }
+        }
+
+        {
             const auto grammar_trigger_words = data.find("grammar_trigger_words");
             if (grammar_trigger_words != data.end()) {
                 auto words = to_string_vec(*grammar_trigger_words);
@@ -398,13 +406,6 @@ struct server_task {
                     }
                     params.sampling.grammar_trigger_words.push_back(word);
                 }
-            }
-        }
-
-        {
-            const auto stop = data.find("stop");
-            if (stop != data.end()) {
-                params.antiprompt = to_string_vec(*stop);
             }
         }
 
@@ -730,7 +731,7 @@ struct server_task_result_cmpl_final : server_task_result {
 
         std::time_t t = std::time(0);
 
-        json res {
+        json res = json {
             {"choices",            json::array({choice})},
             {"created",            t},
             {"model",              oaicompat_model},
@@ -762,13 +763,13 @@ struct server_task_result_cmpl_final : server_task_result {
             finish_reason = "stop";
         }
 
-        json choice {
+        json choice = json {
             {"finish_reason", finish_reason},
             {"index", 0},
             {"delta", json::object()}
         };
 
-        json ret {
+        json ret = json {
             {"choices",            json::array({choice})},
             {"created",            t},
             {"id",                 oaicompat_cmpl_id},
@@ -804,12 +805,10 @@ struct server_task_result_cmpl_partial : server_task_result {
     result_timings timings;
 
     // OAI-compat fields
-    bool                  verbose                   = false;
-    oaicompat_type        oaicompat                 = OAICOMPAT_TYPE_NONE;
-    std::string           oaicompat_model;
-    std::string           oaicompat_cmpl_id;
-    json                  oaicompat_tools;
-    llama_tool_call_style oaicompat_tool_call_style = llama_tool_call_style::None;
+    bool           verbose   = false;
+    oaicompat_type oaicompat = OAICOMPAT_TYPE_NONE;
+    std::string    oaicompat_model;
+    std::string    oaicompat_cmpl_id;
 
     virtual int get_index() override {
         return index;
@@ -2048,9 +2047,6 @@ struct server_context {
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
         const std::string token_str = result.text_to_send;
-        // TODO:
-        // const std::string token_str = result.text_to_send;
-        // const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special || (match.pos != std::string::npos && match.is_grammar_trigger));
         slot.sampled = result.tok;
 
         slot.generated_text += token_str;
@@ -2276,8 +2272,6 @@ struct server_context {
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
-        // res->oaicompat_tools   = slot.params.oaicompat_tools;
-        // res->oaicompat_tool_call_style = slot.params.oaicompat_tool_call_style;
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {

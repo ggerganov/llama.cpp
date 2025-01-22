@@ -3,7 +3,6 @@
 #include "llama.h"
 
 #include <map>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -116,6 +115,7 @@ struct llama_grammar {
     // buffer for partially generated UTF-8 sequence from accepted tokens
     llama_partial_utf8 partial_utf8;
 
+    // lazy grammars wait for trigger words or tokens before constraining the sampling.
     bool                     awaiting_trigger;
     std::string              trigger_buffer;
     std::vector<llama_token> trigger_tokens;

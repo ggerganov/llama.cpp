@@ -1536,10 +1536,10 @@ struct llama_sampler * llama_sampler_init_grammar(
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
         *ctx = {
-            /* .vocab        = */     vocab,
-            /* .grammar_str  = */     grammar_str,
-            /* .grammar_root = */     grammar_root,
-            /* .grammar      = */     llama_grammar_init_impl(vocab, grammar_str, grammar_root, trigger_words, num_trigger_words, trigger_tokens, num_trigger_tokens),
+            /* .vocab        = */ vocab,
+            /* .grammar_str  = */ grammar_str,
+            /* .grammar_root = */ grammar_root,
+            /* .grammar      = */ llama_grammar_init_impl(vocab, grammar_str, grammar_root, trigger_words, num_trigger_words, trigger_tokens, num_trigger_tokens),
         };
     } else {
         *ctx = {
@@ -2421,11 +2421,6 @@ uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl) {
     }
 
     return LLAMA_DEFAULT_SEED;
-}
-
-bool llama_sampler_is_grammar_empty(struct llama_sampler * smpl) {
-    struct llama_sampler_grammar * ctx = (struct llama_sampler_grammar *) smpl->ctx;
-    return ctx->grammar == nullptr;
 }
 
 // perf

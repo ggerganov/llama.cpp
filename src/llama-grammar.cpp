@@ -1067,7 +1067,6 @@ struct llama_grammar * llama_grammar_init_impl(
     // then the pointers would be invalidated when the local vec_rules goes out of scope.
     return new llama_grammar {
         vocab,
-        
         std::move(vec_rules),
         std::move(stacks),
         /* .partial_utf8 = */ {},

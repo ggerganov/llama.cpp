@@ -4,12 +4,9 @@
 
 #include "llama-cpp.h"
 
-#include <functional>
-#include <queue>
 #include <string>
 #include <vector>
 #include <sstream>
-#include <unordered_map>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
