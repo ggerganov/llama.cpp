@@ -6,7 +6,7 @@ import re
 import torch
 import numpy as np
 from gguf import *
-from transformers import CLIPModel, CLIPProcessor, CLIPVisionModel, SiglipModel, SiglipProcessor, SiglipVisionModel
+from transformers import CLIPModel, CLIPProcessor, CLIPVisionModel, SiglipVisionModel
 
 TEXT = "clip.text"
 VISION = "clip.vision"
@@ -208,6 +208,15 @@ if has_text_encoder:
     fout.add_token_list(tokens)
 
 if has_vision_encoder:
+    # vision feature layer may be an integer or an array.
+    # TODO - it seems like llama cpp may not handle this correctly
+    # normally; check if HF llava next models can run through this converter...
+    if "vision_feature_layer" in v_hparams:
+        feature_layers = v_hparams["vision_feature_layer"]
+        if isinstance(feature_layers, int):
+            feature_layers = [feature_layers]
+        fout.add_array("clip.vision.feature_layer", feature_layers)
+
     if args.clip_model_is_siglip:
         visual_projection_dim = 0
     else:
