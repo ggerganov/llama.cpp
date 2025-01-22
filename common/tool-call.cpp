@@ -254,7 +254,7 @@ static common_chat_msg parse_llama_3_tool_calls(const json & tools, const std::s
         std::smatch match;
         if (std::regex_search(input, match, python_tag_regex)) {
             return {
-                /* .role = */ "assistant", 
+                /* .role = */ "assistant",
                 /* .content = */ match.prefix().str(),
                 /* .tool_calls = */ {
                     {
