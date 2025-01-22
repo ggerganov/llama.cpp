@@ -1104,7 +1104,6 @@ extern "C" {
     struct llama_sampler_i {
         const char *           (*name)  (const struct llama_sampler * smpl);                                 // can be NULL
         void                   (*accept)(      struct llama_sampler * smpl, llama_token token);              // can be NULL
-        void                   (*accept_str)(  struct llama_sampler * smpl, const char * text);              // can be NULL
         void                   (*apply) (      struct llama_sampler * smpl, llama_token_data_array * cur_p); // required
         void                   (*reset) (      struct llama_sampler * smpl);                                 // can be NULL
         struct llama_sampler * (*clone) (const struct llama_sampler * smpl);                                 // can be NULL if ctx is NULL
@@ -1122,7 +1121,6 @@ extern "C" {
     // mirror of llama_sampler_i:
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
-    LLAMA_API void                   llama_sampler_accept_str(  struct llama_sampler * smpl, const char * piece);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
     LLAMA_API void                   llama_sampler_reset (      struct llama_sampler * smpl);
     LLAMA_API struct llama_sampler * llama_sampler_clone (const struct llama_sampler * smpl);

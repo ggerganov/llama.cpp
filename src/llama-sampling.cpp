@@ -330,12 +330,6 @@ void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
     }
 }
 
-void llama_sampler_accept_str(struct llama_sampler * smpl, const char * piece) {
-    if (smpl->iface->accept_str) {
-        smpl->iface->accept_str(smpl, piece);
-    }
-}
-
 void llama_sampler_apply(struct llama_sampler * smpl, struct llama_token_data_array * cur_p) {
     GGML_ASSERT(smpl->iface->apply);
     smpl->iface->apply(smpl, cur_p);
@@ -471,7 +465,6 @@ static void llama_sampler_chain_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_chain_i = {
     /* .name   = */ llama_sampler_chain_name,
     /* .accept = */ llama_sampler_chain_accept,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_chain_apply,
     /* .reset  = */ llama_sampler_chain_reset,
     /* .clone  = */ llama_sampler_chain_clone,
@@ -546,7 +539,6 @@ static void llama_sampler_greedy_apply(struct llama_sampler * /*smpl*/, llama_to
 static struct llama_sampler_i llama_sampler_greedy_i = {
     /* .name   = */ llama_sampler_greedy_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_greedy_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ nullptr,
@@ -608,7 +600,6 @@ static void llama_sampler_dist_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_dist_i = {
     /* .name   = */ llama_sampler_dist_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_dist_apply,
     /* .reset  = */ llama_sampler_dist_reset,
     /* .clone  = */ llama_sampler_dist_clone,
@@ -640,7 +631,6 @@ static void llama_sampler_softmax_apply(struct llama_sampler * /*smpl*/, llama_t
 static struct llama_sampler_i llama_sampler_softmax_i = {
     /* .name   = */ llama_sampler_softmax_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_softmax_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ nullptr,
@@ -681,7 +671,6 @@ static void llama_sampler_top_k_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_top_k_i = {
     /* .name   = */ llama_sampler_top_k_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_top_k_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_top_k_clone,
@@ -748,7 +737,6 @@ static void llama_sampler_top_p_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_top_p_i = {
     /* .name   = */ llama_sampler_top_p_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_top_p_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_top_p_clone,
@@ -845,7 +833,6 @@ static void llama_sampler_min_p_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_min_p_i = {
     /* .name   = */ llama_sampler_min_p_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_min_p_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_min_p_clone,
@@ -945,7 +932,6 @@ static void llama_sampler_typical_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_typical_i = {
     /* .name   = */ llama_sampler_typical_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_typical_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_typical_clone,
@@ -990,7 +976,6 @@ static void llama_sampler_temp_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_temp_i = {
     /* .name   = */ llama_sampler_temp_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_temp_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_temp_clone,
@@ -1101,7 +1086,6 @@ static void llama_sampler_temp_ext_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_temp_ext_i = {
     /* .name   = */ llama_sampler_temp_ext_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_temp_ext_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_temp_ext_clone,
@@ -1193,7 +1177,6 @@ static void llama_sampler_xtc_reset(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_xtc_i = {
     /* .name   = */ llama_sampler_xtc_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sample_xtc_apply,
     /* .reset  = */ llama_sampler_xtc_reset,
     /* .clone  = */ llama_sampler_xtc_clone,
@@ -1301,7 +1284,6 @@ static void llama_sampler_mirostat_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_mirostat_i = {
     /* .name   = */ llama_sampler_mirostat_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_mirostat_apply,
     /* .reset  = */ llama_sampler_mirostat_reset,
     /* .clone  = */ llama_sampler_mirostat_clone,
@@ -1401,7 +1383,6 @@ static void llama_sampler_mirostat_v2_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_mirostat_v2_i = {
     /* .name   = */ llama_sampler_mirostat_v2_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_mirostat_v2_apply,
     /* .reset  = */ llama_sampler_mirostat_v2_reset,
     /* .clone  = */ llama_sampler_mirostat_v2_clone,
@@ -1442,13 +1423,6 @@ static void llama_sampler_grammar_accept_impl(struct llama_sampler * smpl, llama
     auto * ctx = (llama_sampler_grammar *) smpl->ctx;
     if (ctx->grammar) {
         llama_grammar_accept_impl(*ctx->grammar, token);
-    }
-}
-
-static void llama_sampler_grammar_accept_str(struct llama_sampler * smpl, const char * piece) {
-    auto * ctx = (llama_sampler_grammar *) smpl->ctx;
-    if (ctx->grammar) {
-        llama_grammar_accept_str(*ctx->grammar, piece);
     }
 }
 
@@ -1515,7 +1489,6 @@ static void llama_sampler_grammar_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_grammar_i = {
     /* .name   = */ llama_sampler_grammar_name,
     /* .accept = */ llama_sampler_grammar_accept_impl,
-    /* .accept_str = */ llama_sampler_grammar_accept_str,
     /* .apply  = */ llama_sampler_grammar_apply,
     /* .reset  = */ llama_sampler_grammar_reset,
     /* .clone  = */ llama_sampler_grammar_clone,
@@ -1669,7 +1642,6 @@ static void llama_sampler_penalties_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_penalties_i = {
     /* .name   = */ llama_sampler_penalties_name,
     /* .accept = */ llama_sampler_penalties_accept,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_penalties_apply,
     /* .reset  = */ llama_sampler_penalties_reset,
     /* .clone  = */ llama_sampler_penalties_clone,
@@ -2009,7 +1981,6 @@ static void llama_sampler_dry_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_dry_i = {
     /* .name   = */ llama_sampler_dry_name,
     /* .accept = */ llama_sampler_dry_accept,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_dry_apply,
     /* .reset  = */ llama_sampler_dry_reset,
     /* .clone  = */ llama_sampler_dry_clone,
@@ -2151,7 +2122,6 @@ static void llama_sampler_logit_bias_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_logit_bias_i = {
     /* .name   = */ llama_sampler_logit_bias_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_logit_bias_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_logit_bias_clone,
@@ -2377,7 +2347,6 @@ static void llama_sampler_infill_free(struct llama_sampler * smpl) {
 static struct llama_sampler_i llama_sampler_infill_i = {
     /* .name   = */ llama_sampler_infill_name,
     /* .accept = */ nullptr,
-    /* .accept_str = */ nullptr,
     /* .apply  = */ llama_sampler_infill_apply,
     /* .reset  = */ nullptr,
     /* .clone  = */ llama_sampler_infill_clone,
