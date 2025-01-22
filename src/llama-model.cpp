@@ -4056,6 +4056,11 @@ enum llama_rope_type llama_model_rope_type(const struct llama_model * model) {
         case LLM_ARCH_QWEN2VL:
             return LLAMA_ROPE_TYPE_MROPE;
 
+        case LLM_ARCH_VISION_LLAVA:
+        case LLM_ARCH_VISION_MOBILEVLM:
+        case LLM_ARCH_VISION_MINICPMV:
+            GGML_ABORT("vision arch does not use RoPE");
+
         // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:
             GGML_ABORT("unknown architecture");

@@ -50,7 +50,7 @@ static llama_vision_bitmap * load_image_from_file(const char * fname) {
 }
 
 // split string by a `std::string delim` instead of `char delim`
-static std::vector<std::string> string_split(std::string s, const std::string & delimiter) {
+static std::vector<std::string> string_split_str(std::string s, const std::string & delimiter) {
     std::vector<std::string> tokens;
     size_t pos = 0;
     std::string token;
@@ -76,7 +76,7 @@ static std::vector<tokenized_part> tokenize_with_img_placement(
         const std::string & text,
         bool   add_special,
         bool   parse_special) {
-    std::vector<std::string> parts = string_split(text, IMG_PLACEMENT);
+    std::vector<std::string> parts = string_split_str(text, IMG_PLACEMENT);
     std::vector<tokenized_part> output;
     for (const auto & part : parts) {
         //printf("tokenizing part: %s\n", part.c_str());
@@ -114,6 +114,10 @@ int main(int argc, char ** argv) {
     llama_context * ctx = llama_init.context.get();
     const llama_model * model = llama_init.model.get();
     const llama_vocab * vocab = llama_model_get_vocab(model);
+    if (!model) {
+        LOG_ERR("failed to load model\n");
+        return 1;
+    }
 
     struct common_sampler * smpl = common_sampler_init(model, params.sampling);
 
