@@ -1551,18 +1551,11 @@ struct server_queue {
 private:
     void cleanup_pending_task(int id_task) {
         // no need lock because this is called exclusively by post()
-        for (size_t i = 0; i < queue_tasks.size(); i++) {
-            if (queue_tasks[i].id == id_task) {
-                queue_tasks.erase(queue_tasks.begin() + i);
-                break;
-            }
-        }
-        for (size_t i = 0; i < queue_tasks_deferred.size(); i++) {
-            if (queue_tasks_deferred[i].id == id_task) {
-                queue_tasks_deferred.erase(queue_tasks_deferred.begin() + i);
-                break;
-            }
-        }
+        auto rm_func = [id_task](const server_task & task) {
+            return task.id_target == id_task;
+        };
+        std::remove_if(queue_tasks.begin(),          queue_tasks.end(),          rm_func);
+        std::remove_if(queue_tasks_deferred.begin(), queue_tasks_deferred.end(), rm_func);
     }
 };
 
@@ -1600,12 +1593,13 @@ struct server_response {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(id_task);
         // make sure to clean up all pending results
-        for (size_t i = 0; i < queue_results.size(); i++) {
-            if (queue_results[i]->id == id_task) {
-                queue_results.erase(queue_results.begin() + i);
-                i--;
+        std::remove_if(
+            queue_results.begin(),
+            queue_results.end(),
+            [id_task](const server_task_result_ptr & res) {
+                return res->id == id_task;
             }
-        }
+        );
     }
 
     void remove_waiting_task_ids(const std::unordered_set<int> & id_tasks) {
