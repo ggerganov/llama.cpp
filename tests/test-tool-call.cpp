@@ -70,7 +70,7 @@ static std::string dump(const json & j) {
   return minja::Value(j).dump(-1, /* to_json= */ true);
 }
 
-static void test_parse_tool_call(llama_tool_call_style style, const json & tools, const std::string & input, const std::string & expected_content, const json & expected_tool_calls) {
+static void test_parse_tool_call(common_tool_call_style style, const json & tools, const std::string & input, const std::string & expected_content, const json & expected_tool_calls) {
     std::cout << "# Testing: " << input << std::endl << std::flush;
     auto result = parse_tool_calls(style, tools, input);
     assert_equals(expected_content, result.content);
@@ -146,21 +146,21 @@ static void test_parsing() {
       }}
     };
 
-    test_parse_tool_call(llama_tool_call_style::Generic, tools,
+    test_parse_tool_call(common_tool_call_style::Generic, tools,
       "{\"tool_call\": {\"name\": \"foo\", \"arguments\": {\"bar\": 1}}}",
       "",
       json::array({fooBarCall}));
-    test_parse_tool_call(llama_tool_call_style::Generic, tools,
+    test_parse_tool_call(common_tool_call_style::Generic, tools,
       "{\"tool_calls\": [{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}]}",
       "",
       json::array({fooBarCall}));
 
-    test_parse_tool_call(llama_tool_call_style::Hermes2Pro, tools,
+    test_parse_tool_call(common_tool_call_style::Hermes2Pro, tools,
       "<tool_call>{\"name\": \"foo\", \"arguments\": {\"bar\": 1}}</tool_call>",
       "",
       json::array({fooBarCall}));
 
-    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
+    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama3, tools,
       ">>>python\n{\"code\": \"print('Hello, world!')\"}",
       "",
       json {{
@@ -172,7 +172,7 @@ static void test_parsing() {
           })}
         }}
       }});
-    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama3, tools,
+    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama3, tools,
       ">>>special_function\n{\"arg1\": 1}\n ",
       "",
       json {{
@@ -185,7 +185,7 @@ static void test_parsing() {
         }}
       }});
 
-    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama31, tools,
       "Hell<function=foo>{\"arg1\": 1}</function>o, world<function=bar>{\"arg2\": 2}</function>!",
       "Hello, world!",
       json {
@@ -208,7 +208,7 @@ static void test_parsing() {
           }}
         },
       });
-    test_parse_tool_call(llama_tool_call_style::FunctionaryV3Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::FunctionaryV3Llama31, tools,
       "<function=test>{ } </function> ",
       " ",
       json {{
@@ -219,7 +219,7 @@ static void test_parsing() {
         }}
       }});
 
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "<|python_tag|>this could be anything",
       "",
       json {{
@@ -231,7 +231,7 @@ static void test_parsing() {
           })}
         }}
       }});
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "I'm thinking<|python_tag|>",
       "I'm thinking",
       json {{
@@ -253,7 +253,7 @@ static void test_parsing() {
 
     auto no_function_call = json::array();
 
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\"name\": \"python\", \"parameters\": {\"code\": \"print('Hey')\"}}",
       "",
       json::array({{
@@ -263,56 +263,56 @@ static void test_parsing() {
           {"name", "python"},
         }}
       }}));
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\n  \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\n\t\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\n    \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\"type\": \"function\", \"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
       "",
       json::array({special_function_call}));
 
     // No match: function unknown
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
     // No match: bad indentation
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\n\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\n\"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
-    test_parse_tool_call(llama_tool_call_style::Llama31, tools,
+    test_parse_tool_call(common_tool_call_style::Llama31, tools,
       "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       "{\n \"name\": \"unknown_function\", \"arguments\": {\"arg1\": 1}}",
       no_function_call);
 
-    test_parse_tool_call(llama_tool_call_style::MistralNemo, tools,
+    test_parse_tool_call(common_tool_call_style::MistralNemo, tools,
       "Bleh[TOOL_CALLS][{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\", \"id\": \"123456789\"}]",
       "Bleh",
       json::array({special_function_call_with_id}));
 
-    test_parse_tool_call(llama_tool_call_style::FirefunctionV2, tools,
+    test_parse_tool_call(common_tool_call_style::FirefunctionV2, tools,
       "Bleh functools[{\"arguments\": {\"arg1\": 1}, \"name\": \"special_function\"}]",
       "Bleh",
       json::array({special_function_call}));
 }
 
-static void test_tool_call_style(const std::string & template_file, llama_tool_call_style expected) {
+static void test_tool_call_style(const std::string & template_file, common_tool_call_style expected) {
     const common_chat_template tmpl(read_file(template_file), "<s>", "</s>");
-    auto tool_call_style = llama_tool_call_style_detect(tmpl);
+    auto tool_call_style = common_tool_call_style_detect(tmpl);
     std::cout << "# Testing tool call style of: " << template_file << std::endl << std::flush;
     assert_equals(expected, tool_call_style);
 }
@@ -357,7 +357,7 @@ static std::string get_message_prompt_delta(const common_chat_template & tmpl, c
 static void test_template(const std::string & template_file, const char * bos_token, const char * eos_token, const std::vector<std::string> & end_tokens, const json & tool_calling_message, const json & tools, bool skip_grammar_test = false) {
   std::cout << "# Testing template: " << template_file << std::endl << std::flush;
   const common_chat_template tmpl(read_file(template_file), bos_token, eos_token);
-  auto tool_call_style = llama_tool_call_style_detect(tmpl);
+  auto tool_call_style = common_tool_call_style_detect(tmpl);
   auto & tool_calls = tool_calling_message.at("tool_calls");
 
   // Format the message: apply the template to 1 user message w/ add_generation_prompt=true, then w/ the extra message w/ add_generation_prompt=false,
@@ -367,7 +367,7 @@ static void test_template(const std::string & template_file, const char * bos_to
       {"content", "Hello, world!"}
   };
 
-  auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, /* allow_content= */ true, /* parallel_tool_calls= */ true, {user_message, tool_calling_message}, tools);
+  auto handler = common_tool_call_handler_init(tool_call_style, tmpl, /* allow_content= */ true, /* parallel_tool_calls= */ true, {user_message, tool_calling_message}, tools);
   auto grammar = build_grammar(handler.grammar);
   if (!grammar) {
     throw std::runtime_error("Failed to build grammar");

@@ -7,7 +7,7 @@
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 
-enum llama_tool_call_style {
+enum common_tool_call_style {
     UnknownToolCallStyle,
     None,
     Generic,
@@ -21,32 +21,32 @@ enum llama_tool_call_style {
     FirefunctionV2,
 };
 
-struct llama_tool_call {
+struct common_tool_call {
     std::string name;
     std::string arguments;
     std::string id;
 };
 
-struct llama_tool_calls {
+struct common_tool_calls {
     std::string content;
-    std::vector<llama_tool_call> tool_calls;
+    std::vector<common_tool_call> tool_calls;
 };
 
-struct llama_tool_call_handler {
+struct common_tool_call_handler {
     std::string prompt;
     std::string grammar;
     std::vector<std::string> grammar_triggers;
     std::vector<std::string> additional_stops;
 };
 
-std::string llama_tool_call_style_name(llama_tool_call_style style);
+std::string common_tool_call_style_name(common_tool_call_style style);
 
-llama_tool_call_style llama_tool_call_style_detect(const common_chat_template & chat_template);
+common_tool_call_style common_tool_call_style_detect(const common_chat_template & chat_template);
 
-llama_tool_calls parse_tool_calls(llama_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);
+common_tool_calls parse_tool_calls(common_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);
 
-llama_tool_call_handler llama_tool_call_handler_init(
-    llama_tool_call_style style,
+common_tool_call_handler common_tool_call_handler_init(
+    common_tool_call_style style,
     const common_chat_template & tmpl,
     bool allow_content,
     const nlohmann::ordered_json & parallel_tool_calls,

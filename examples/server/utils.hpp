@@ -581,7 +581,7 @@ static json oaicompat_completion_params_parse(const json & body) {
 static json oaicompat_completion_params_parse(
     const json & body, /* openai api json semantics */
     const common_chat_template & tmpl,
-    llama_tool_call_style tool_call_style,
+    common_tool_call_style tool_call_style,
     bool use_jinja)
 {
     json llama_params;
@@ -595,7 +595,7 @@ static json oaicompat_completion_params_parse(
             throw std::runtime_error("Cannot use tools with stream");
         }
         if (use_jinja) {
-            if (tool_call_style == llama_tool_call_style::UnknownToolCallStyle) {
+            if (tool_call_style == common_tool_call_style::UnknownToolCallStyle) {
                 throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");
             }
         } else {
@@ -634,7 +634,7 @@ static json oaicompat_completion_params_parse(
             auto parallel_tool_calls = body.contains("parallel_tool_calls") ? body.at("parallel_tool_calls") : json();
             llama_params["parallel_tool_calls"] = parallel_tool_calls;
 
-            auto handler = llama_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools, llama_params["json_schema"]);
+            auto handler = common_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools, llama_params["json_schema"]);
             llama_params["prompt"] = handler.prompt;
 
             for (const auto & stop : handler.additional_stops) {

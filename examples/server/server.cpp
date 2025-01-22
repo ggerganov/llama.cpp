@@ -118,7 +118,7 @@ struct slot_params {
     std::string           oaicompat_model;
     std::string           oaicompat_cmpl_id;
     json                  oaicompat_tools;
-    llama_tool_call_style oaicompat_tool_call_style = llama_tool_call_style::None;
+    common_tool_call_style oaicompat_tool_call_style = common_tool_call_style::None;
 
     json to_json() const {
         std::vector<std::string> samplers;
@@ -589,7 +589,7 @@ struct server_task_result_cmpl_final : server_task_result {
     std::string           oaicompat_model;
     std::string           oaicompat_cmpl_id;
     json                  oaicompat_tools;
-    llama_tool_call_style oaicompat_tool_call_style = llama_tool_call_style::None;
+    common_tool_call_style oaicompat_tool_call_style = common_tool_call_style::None;
 
     virtual int get_index() override {
         return index;
@@ -687,10 +687,10 @@ struct server_task_result_cmpl_final : server_task_result {
             finish_reason = "stop";
         }
 
-        llama_tool_calls parsed_tool_calls;
+        common_tool_calls parsed_tool_calls;
         json tool_calls;
         json message_content;
-        if (oaicompat_tool_call_style != llama_tool_call_style::None && !oaicompat_tools.is_null()) {
+        if (oaicompat_tool_call_style != common_tool_call_style::None && !oaicompat_tools.is_null()) {
             parsed_tool_calls = parse_tool_calls(oaicompat_tool_call_style, oaicompat_tools, content);
             if (!parsed_tool_calls.tool_calls.empty()) {
                 finish_reason = "tool_calls";
@@ -3772,7 +3772,7 @@ int main(int argc, char ** argv) {
             std::function<bool()> is_connection_closed,
             httplib::Response & res,
             oaicompat_type oaicompat,
-            llama_tool_call_style tool_call_style = llama_tool_call_style::None) {
+            common_tool_call_style tool_call_style = common_tool_call_style::None) {
         GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
 
         if (ctx_server.params_base.embedding) {
@@ -3979,8 +3979,8 @@ int main(int argc, char ** argv) {
 
         auto body = json::parse(req.body);
         const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
-        auto tool_call_style = llama_tool_call_style_detect(chat_template);
-        LOG_INF("Tool call style: %s\n", llama_tool_call_style_name(tool_call_style).c_str());
+        auto tool_call_style = common_tool_call_style_detect(chat_template);
+        LOG_INF("Tool call style: %s\n", common_tool_call_style_name(tool_call_style).c_str());
 
         json data = oaicompat_completion_params_parse(body, chat_template, tool_call_style, params.use_jinja);
 

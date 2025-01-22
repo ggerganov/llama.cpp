@@ -47,34 +47,34 @@ static json normalize_tools(const json & tools) {
     return results;
 }
 
-std::string llama_tool_call_style_name(llama_tool_call_style style) {
+std::string common_tool_call_style_name(common_tool_call_style style) {
     switch (style) {
-        case llama_tool_call_style::None:
+        case common_tool_call_style::None:
             return "None";
-        case llama_tool_call_style::Generic:
+        case common_tool_call_style::Generic:
             return "Generic";
-        case llama_tool_call_style::Llama31:
+        case common_tool_call_style::Llama31:
             return "Llama-3.1";
-        case llama_tool_call_style::Llama32:
+        case common_tool_call_style::Llama32:
             return "Llama-3.2";
-        case llama_tool_call_style::FunctionaryV3Llama3:
+        case common_tool_call_style::FunctionaryV3Llama3:
             return "FunctionaryV3Llama3";
-        case llama_tool_call_style::FunctionaryV3Llama31:
+        case common_tool_call_style::FunctionaryV3Llama31:
             return "FunctionaryV3Llama3.1";
-        case llama_tool_call_style::Hermes2Pro:
+        case common_tool_call_style::Hermes2Pro:
             return "Hermes2Pro";
-        case llama_tool_call_style::CommandRPlus:
+        case common_tool_call_style::CommandRPlus:
             return "CommandRPlus";
-        case llama_tool_call_style::MistralNemo:
+        case common_tool_call_style::MistralNemo:
             return "MistralNemo";
-        case llama_tool_call_style::FirefunctionV2:
+        case common_tool_call_style::FirefunctionV2:
             return "FirefunctionV2";
         default:
             return "Unknown";
     }
 }
 
-llama_tool_call_style llama_tool_call_style_detect(const common_chat_template & chat_template) {
+common_tool_call_style common_tool_call_style_detect(const common_chat_template & chat_template) {
     const auto & src = chat_template.source();
 
     if (src.find("<tool_call>") != std::string::npos) {
@@ -150,10 +150,10 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
  * Takes a prefix regex that must have 1 group to capture the function name, a closing suffix, and expects json parameters in between.
  * Aggregates the prefix, suffix and in-between text into the content.
  */
-static llama_tool_calls parse_json_tool_calls(const json & tools, const std::string& input, const std::regex & function_regex, const std::regex & close_regex, bool check_names) {
+static common_tool_calls parse_json_tool_calls(const json & tools, const std::string& input, const std::regex & function_regex, const std::regex & close_regex, bool check_names) {
     std::smatch match;
 
-    llama_tool_calls result;
+    common_tool_calls result;
     auto end = input.end();
     auto it = input.begin();
 
@@ -202,7 +202,7 @@ static llama_tool_calls parse_json_tool_calls(const json & tools, const std::str
     return result;
 }
 
-static llama_tool_calls parse_hermes_tool_calls(const std::string& input) {
+static common_tool_calls parse_hermes_tool_calls(const std::string& input) {
     try {
         std::regex start_pattern(R"([\n\s]*<tool_call>)");
         std::regex middle_pattern(R"([\n\s]*</tool_call>[\n\s]*<tool_call>)");
@@ -215,7 +215,7 @@ static llama_tool_calls parse_hermes_tool_calls(const std::string& input) {
             return {input, {}};
         }
 
-        llama_tool_calls result;
+        common_tool_calls result;
         result.content = rit->prefix();
 
         auto it = rit->suffix().first;
@@ -246,7 +246,7 @@ static llama_tool_calls parse_hermes_tool_calls(const std::string& input) {
     }
 }
 
-static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::string& input, bool allow_python_tag) {
+static common_tool_calls parse_llama_3_tool_calls(const json & tools, const std::string& input, bool allow_python_tag) {
     if (allow_python_tag) {
         static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
         std::smatch match;
@@ -268,7 +268,7 @@ static llama_tool_calls parse_llama_3_tool_calls(const json & tools, const std::
     return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ true);
 }
 
-static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & tools, const std::string& input) {
+static common_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & tools, const std::string& input) {
     // This version of Functionary still supports the llama 3.1 tool call format for the python tool.
     static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
     std::smatch match;
@@ -289,15 +289,15 @@ static llama_tool_calls parse_functionary_v3_llama_3_1_tool_calls(const json & t
     return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ false);
 }
 
-static llama_tool_calls parse_functionary_v3_tool_calls(const json & tools, const std::string& input) {
+static common_tool_calls parse_functionary_v3_tool_calls(const json & tools, const std::string& input) {
     static std::regex function_regex(R"((?:>>>)?(\w+)\n)");
     static std::regex close_regex(R"($|(?=>>>))");
     return parse_json_tool_calls(tools, input, function_regex, close_regex, /* check_names= */ true);
 }
 
-static llama_tool_calls parse_generic_tool_calls(const std::string& input) {
+static common_tool_calls parse_generic_tool_calls(const std::string& input) {
     json data = json::parse(input);
-    llama_tool_calls result;
+    common_tool_calls result;
     if (data.contains("tool_calls")) {
         for (const auto & tool_call : data["tool_calls"]) {
             result.tool_calls.push_back({
@@ -319,11 +319,11 @@ static llama_tool_calls parse_generic_tool_calls(const std::string& input) {
     return result;
 }
 
-static llama_tool_calls parse_prefixed_json_tool_call_array(const std::string& input, const std::string & prefix, size_t rstrip_prefix = 0) {
+static common_tool_calls parse_prefixed_json_tool_call_array(const std::string& input, const std::string & prefix, size_t rstrip_prefix = 0) {
     auto content_end = input.find(prefix);
     size_t tc_start = std::string::npos;
 
-    llama_tool_calls result;
+    common_tool_calls result;
     const auto process_tool_calls = [&](const json & tool_calls) {
         for (const auto & tool_call : tool_calls) {
             const auto & arguments = tool_call["arguments"];
@@ -345,34 +345,34 @@ static llama_tool_calls parse_prefixed_json_tool_call_array(const std::string& i
     return result;
 }
 
-static llama_tool_calls parse_mistral_nemo_tool_calls(const std::string& input) {
+static common_tool_calls parse_mistral_nemo_tool_calls(const std::string& input) {
     return parse_prefixed_json_tool_call_array(input, "[TOOL_CALLS]");
 }
 
-static llama_tool_calls parse_firefunction_v2_tool_calls(const std::string& input) {
+static common_tool_calls parse_firefunction_v2_tool_calls(const std::string& input) {
     return parse_prefixed_json_tool_call_array(input, " functools[", /* rstrip_prefix= */ 1);
 }
 
-llama_tool_calls parse_tool_calls(llama_tool_call_style style, const json & tools, const std::string& input) {
-    fprintf(stderr, "# parse_tool_calls(%s):\n\n%s\n\n", llama_tool_call_style_name(style).c_str(), input.c_str());
+common_tool_calls parse_tool_calls(common_tool_call_style style, const json & tools, const std::string& input) {
+    fprintf(stderr, "# parse_tool_calls(%s):\n\n%s\n\n", common_tool_call_style_name(style).c_str(), input.c_str());
     switch (style) {
-        case llama_tool_call_style::None:
+        case common_tool_call_style::None:
             return {input, {}};
-        case llama_tool_call_style::Generic:
+        case common_tool_call_style::Generic:
             return parse_generic_tool_calls(input);
-        case llama_tool_call_style::Llama31:
+        case common_tool_call_style::Llama31:
             return parse_llama_3_tool_calls(tools, input, /* parse_llama_3_tool_calls= */ true);
-        case llama_tool_call_style::Llama32:
+        case common_tool_call_style::Llama32:
             return parse_llama_3_tool_calls(tools, input, /* parse_llama_3_tool_calls= */ false);
-        case llama_tool_call_style::FunctionaryV3Llama3:
+        case common_tool_call_style::FunctionaryV3Llama3:
             return parse_functionary_v3_tool_calls(tools, input);
-        case llama_tool_call_style::FunctionaryV3Llama31:
+        case common_tool_call_style::FunctionaryV3Llama31:
             return parse_functionary_v3_llama_3_1_tool_calls(tools, input);
-        case llama_tool_call_style::Hermes2Pro:
+        case common_tool_call_style::Hermes2Pro:
             return parse_hermes_tool_calls(input);
-        case llama_tool_call_style::MistralNemo:
+        case common_tool_call_style::MistralNemo:
             return parse_mistral_nemo_tool_calls(input);
-        case llama_tool_call_style::FirefunctionV2:
+        case common_tool_call_style::FirefunctionV2:
             return parse_firefunction_v2_tool_calls(input);
         default:
             throw std::runtime_error("Unsupported tool call style");
@@ -397,8 +397,8 @@ static nlohmann::ordered_json add_system(const nlohmann::ordered_json & messages
     return messages_with_system;
 }
 
-llama_tool_call_handler llama_tool_call_handler_init(
-    llama_tool_call_style style,
+common_tool_call_handler common_tool_call_handler_init(
+    common_tool_call_style style,
     const common_chat_template & tmpl,
     bool allow_content,
     const nlohmann::ordered_json & parallel_tool_calls,
@@ -406,14 +406,14 @@ llama_tool_call_handler llama_tool_call_handler_init(
     const nlohmann::ordered_json & tools,
     const nlohmann::ordered_json & json_schema)
 {
-    llama_tool_call_handler handler;
+    common_tool_call_handler handler;
     auto parallel = parallel_tool_calls.is_null() ? tmpl.supports_parallel_tool_calls() : parallel_tool_calls.get<bool>();
 
     switch (style) {
-        case llama_tool_call_style::None:
+        case common_tool_call_style::None:
             handler.prompt = tmpl.apply(messages, tools, /* add_generation_prompt= */ true);
             break;
-        case llama_tool_call_style::Generic: {
+        case common_tool_call_style::Generic: {
             auto actual_tools = normalize_tools(tools);
             auto tool_call_schemas = json::array();
             for (const auto & tool : actual_tools) {
@@ -493,7 +493,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             handler.prompt = tmpl.apply(tweaked_messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
-        case llama_tool_call_style::MistralNemo: {
+        case common_tool_call_style::MistralNemo: {
             auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 auto schemas = json::array();
@@ -534,7 +534,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
-        case llama_tool_call_style::FirefunctionV2: {
+        case common_tool_call_style::FirefunctionV2: {
             auto actual_tools = normalize_tools(tools);
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 auto schemas = json::array();
@@ -568,8 +568,8 @@ llama_tool_call_handler llama_tool_call_handler_init(
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true);
             break;
         }
-        case llama_tool_call_style::Llama31:
-        case llama_tool_call_style::Llama32: {
+        case common_tool_call_style::Llama31:
+        case common_tool_call_style::Llama32: {
             auto builtin_tools = json {"wolfram_alpha", "brave_search"};
             for (const auto & tool : tools) {
                 if (!tool.contains("type")) {
@@ -582,13 +582,13 @@ llama_tool_call_handler llama_tool_call_handler_init(
             }
             auto actual_tools = normalize_tools(tools);
 
-            auto uses_python_tag = style == llama_tool_call_style::Llama31;
+            auto uses_python_tag = style == common_tool_call_style::Llama31;
 
             // Technically we should only trigger on `"\n{\"name\": \"" + name + "\""` for each tool name,
             // but Llama-3.2-3B (and 1B) struggles to output valid tool calls so we're "guiding" it strongly as soon
             // as it seems to be outputting some JSON.
             // TODO: make this conditional on a very small model (e.g. 1B / 3B).
-            auto eagerly_match_any_json = style == llama_tool_call_style::Llama32;
+            auto eagerly_match_any_json = style == common_tool_call_style::Llama32;
 
             handler.grammar = build_grammar([&](const llama_grammar_builder & builder) {
                 std::vector<std::string> tool_rules;
@@ -639,7 +639,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             });
             break;
         }
-        case llama_tool_call_style::FunctionaryV3Llama3: {
+        case common_tool_call_style::FunctionaryV3Llama3: {
             // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
             // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
             auto actual_tools = normalize_tools(tools);
@@ -670,7 +670,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
-        case llama_tool_call_style::FunctionaryV3Llama31: {
+        case common_tool_call_style::FunctionaryV3Llama31: {
             // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
             // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
             // TODO: handle tool {type: code_interpreter} as python
@@ -700,7 +700,7 @@ llama_tool_call_handler llama_tool_call_handler_init(
             // handler.parser = parse_functionary_3_2_tool_calls;
             break;
         }
-        case llama_tool_call_style::Hermes2Pro: {
+        case common_tool_call_style::Hermes2Pro: {
             // NousResearchHermesPro_2
             // (content)?(<tool_call>{"name": "foo", "arguments": {"a": 1}}</tool_call>)*
             auto actual_tools = normalize_tools(tools);
