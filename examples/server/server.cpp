@@ -687,11 +687,10 @@ struct server_task_result_cmpl_final : server_task_result {
             finish_reason = "stop";
         }
 
-        common_chat_msg parsed_tool_calls;
         json tool_calls;
         json message_content;
         if (oaicompat_tool_call_style != common_tool_call_style::COMMON_TOOL_CALL_STYLE_NONE && !oaicompat_tools.is_null()) {
-            parsed_tool_calls = parse_tool_calls(oaicompat_tool_call_style, oaicompat_tools, content);
+            auto parsed_tool_calls = parse_tool_calls(oaicompat_tool_call_style, oaicompat_tools, content);
             if (!parsed_tool_calls.tool_calls.empty()) {
                 finish_reason = "tool_calls";
                 message_content = parsed_tool_calls.content;
@@ -716,7 +715,7 @@ struct server_task_result_cmpl_final : server_task_result {
         json choice {
             {"finish_reason", finish_reason},
             {"index", 0},
-            {"message", {
+            {"message", json {
                 {"content", message_content},
                 {"tool_calls", tool_calls},
                 {"role", "assistant"},
