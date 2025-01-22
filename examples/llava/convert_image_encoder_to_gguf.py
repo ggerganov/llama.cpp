@@ -37,6 +37,18 @@ def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: b
 
 
 def get_tensor_name(name: str) -> str:
+    # Standardize the transformers llava next keys for
+    # image newline / mm projector with the classes in haotian-liu LLaVA
+    if name == "image_newline":
+        return "model.image_newline"
+    if name.startswith("multi_modal_projector"):
+        name = name.replace("multi_modal_projector", "mm")
+        if name.endswith("linear_1"):
+            name = name.replace("linear_1", "0")
+        if name.endswith("linear_2"):
+            name = name.replace("linear_2", "1")
+        return name
+
     if "projection" in name:
         return name
     if "mm_projector" in name:
