@@ -1504,7 +1504,6 @@ struct llama_sampler * llama_sampler_init_grammar(
                             size_t num_trigger_words,
                const llama_token * trigger_tokens,
                             size_t num_trigger_tokens) {
-// struct llama_sampler * llama_sampler_init_grammar(const struct llama_vocab * vocab, const char * grammar_str, const char * grammar_root) {
     auto * ctx = new llama_sampler_grammar;
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
