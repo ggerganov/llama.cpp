@@ -267,6 +267,11 @@ struct server_task {
         params.speculative.n_min = std::max(params.speculative.n_min, 2);
         params.speculative.n_max = std::max(params.speculative.n_max, 0);
 
+        // Use OpenAI API logprobs only if n_probs wasn't provided
+        if (data.contains("logprobs") && params.sampling.n_probs == defaults.sampling.n_probs){
+            params.sampling.n_probs = json_value(data, "logprobs", defaults.sampling.n_probs);
+        }
+
         if (data.contains("lora")) {
             if (data.at("lora").is_array()) {
                 params.lora = parse_lora_request(params_base.lora_adapters, data.at("lora"));
