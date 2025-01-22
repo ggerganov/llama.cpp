@@ -693,7 +693,7 @@ enum SpaceHandling { Keep, Strip, StripSpaces, StripNewline };
 
 class TemplateToken {
 public:
-    enum class Type { Text, Expression, If, Else, Elif, EndIf, For, EndFor, Set, EndSet, Comment, Macro, EndMacro, Filter, EndFilter };
+    enum class Type { Text, Expression, If, Else, Elif, EndIf, For, EndFor, Generation, EndGeneration, Set, EndSet, Comment, Macro, EndMacro, Filter, EndFilter };
 
     static std::string typeToString(Type t) {
         switch (t) {
@@ -712,6 +712,8 @@ public:
             case Type::EndMacro: return "endmacro";
             case Type::Filter: return "filter";
             case Type::EndFilter: return "endfilter";
+            case Type::Generation: return "generation";
+            case Type::EndGeneration: return "endgeneration";
         }
         return "Unknown";
     }
@@ -786,6 +788,14 @@ struct ForTemplateToken : public TemplateToken {
 
 struct EndForTemplateToken : public TemplateToken {
     EndForTemplateToken(const Location & location, SpaceHandling pre, SpaceHandling post) : TemplateToken(Type::EndFor, location, pre, post) {}
+};
+
+struct GenerationTemplateToken : public TemplateToken {
+    GenerationTemplateToken(const Location & location, SpaceHandling pre, SpaceHandling post) : TemplateToken(Type::Generation, location, pre, post) {}
+};
+
+struct EndGenerationTemplateToken : public TemplateToken {
+    EndGenerationTemplateToken(const Location & location, SpaceHandling pre, SpaceHandling post) : TemplateToken(Type::EndGeneration, location, pre, post) {}
 };
 
 struct SetTemplateToken : public TemplateToken {
@@ -2149,7 +2159,7 @@ private:
       static std::regex comment_tok(R"(\{#([-~]?)(.*?)([-~]?)#\})");
       static std::regex expr_open_regex(R"(\{\{([-~])?)");
       static std::regex block_open_regex(R"(^\{%([-~])?[\s\n\r]*)");
-      static std::regex block_keyword_tok(R"((if|else|elif|endif|for|endfor|set|endset|block|endblock|macro|endmacro|filter|endfilter)\b)");
+      static std::regex block_keyword_tok(R"((if|else|elif|endif|for|endfor|generation|endgeneration|set|endset|block|endblock|macro|endmacro|filter|endfilter)\b)");
       static std::regex non_text_open_regex(R"(\{\{|\{%|\{#)");
       static std::regex expr_close_regex(R"([\s\n\r]*([-~])?\}\})");
       static std::regex block_close_regex(R"([\s\n\r]*([-~])?%\})");
@@ -2229,6 +2239,12 @@ private:
             } else if (keyword == "endfor") {
               auto post_space = parseBlockClose();
               tokens.push_back(std::make_unique<EndForTemplateToken>(location, pre_space, post_space));
+            } else if (keyword == "generation") {
+              auto post_space = parseBlockClose();
+              tokens.push_back(std::make_unique<GenerationTemplateToken>(location, pre_space, post_space));
+            } else if (keyword == "endgeneration") {
+              auto post_space = parseBlockClose();
+              tokens.push_back(std::make_unique<EndGenerationTemplateToken>(location, pre_space, post_space));
             } else if (keyword == "set") {
               static std::regex namespaced_var_regex(R"((\w+)[\s\n\r]*\.[\s\n\r]*(\w+))");
 
@@ -2330,6 +2346,13 @@ private:
                   throw unterminated(**start);
               }
               children.emplace_back(std::make_shared<ForNode>(token->location, std::move(for_token->var_names), std::move(for_token->iterable), std::move(for_token->condition), std::move(body), for_token->recursive, std::move(else_body)));
+          } else if (dynamic_cast<GenerationTemplateToken*>(token.get())) {
+              auto body = parseTemplate(begin, it, end);
+              if (it == end || (*(it++))->type != TemplateToken::Type::EndGeneration) {
+                  throw unterminated(**start);
+              }
+              // Treat as a no-op, as our scope is templates for inference, not training (`{% generation %}` wraps generated tokens for masking).
+              children.emplace_back(std::move(body));
           } else if (auto text_token = dynamic_cast<TextTemplateToken*>(token.get())) {
               SpaceHandling pre_space = (it - 1) != begin ? (*(it - 2))->post_space : SpaceHandling::Keep;
               SpaceHandling post_space = it != end ? (*it)->pre_space : SpaceHandling::Keep;
@@ -2397,6 +2420,7 @@ private:
                   || dynamic_cast<EndFilterTemplateToken*>(token.get())
                   || dynamic_cast<EndIfTemplateToken*>(token.get())
                   || dynamic_cast<ElseTemplateToken*>(token.get())
+                  || dynamic_cast<EndGenerationTemplateToken*>(token.get())
                   || dynamic_cast<ElifTemplateToken*>(token.get())) {
               it--;  // unconsume the token
               break;  // exit the loop
