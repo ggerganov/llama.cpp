@@ -618,13 +618,14 @@ static json oaicompat_completion_params_parse(
         if (response_type == "json_object") {
             llama_params["json_schema"] = json_value(response_format, "schema", json::object());
         } else if (response_type == "json_schema") {
-            auto json_schema = json_value(response_format, "json_schema", json::object());
+            json json_schema = json_value(response_format, "json_schema", json::object());
             llama_params["json_schema"] = json_value(json_schema, "schema", json::object());
         } else if (!response_type.empty() && response_type != "text") {
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
     }
 
+    // Apply chat template to the list of messages
     if (use_jinja) {
         bool allow_content = tool_choice != "required";
         if (tool_choice != "none" && has_tools) {
@@ -641,12 +642,7 @@ static json oaicompat_completion_params_parse(
                 llama_params["stop"].push_back(stop);
             }
             if (!handler.grammar_triggers.empty()) {
-                auto trigger_words = json::array();
-                for (const auto & word : handler.grammar_triggers) {
-                    trigger_words.push_back(word);
-
-                }
-                llama_params["grammar_trigger_words"] = trigger_words;
+                llama_params["grammar_trigger_words"] = handler.grammar_triggers;
             }
             if (!handler.grammar.empty()) {
                 if (llama_params.contains("grammar")) {

@@ -3748,6 +3748,7 @@ int main(int argc, char ** argv) {
         if (ctx_server.params_base.use_jinja && ctx_server.chat_templates.template_tool_use) {
             data["chat_template_tool_use"] = ctx_server.chat_templates.template_tool_use->source();
         }
+
         res_ok(res, data);
     };
 
