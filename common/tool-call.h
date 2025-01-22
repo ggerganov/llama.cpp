@@ -21,17 +21,6 @@ enum common_tool_call_style {
     COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2,
 };
 
-struct common_tool_call {
-    std::string name;
-    std::string arguments;
-    std::string id;
-};
-
-struct common_tool_calls {
-    std::string content;
-    std::vector<common_tool_call> tool_calls;
-};
-
 struct common_tool_call_handler {
     std::string prompt;
     std::string grammar;
@@ -43,7 +32,7 @@ std::string common_tool_call_style_name(common_tool_call_style style);
 
 common_tool_call_style common_tool_call_style_detect(const common_chat_template & chat_template);
 
-common_tool_calls parse_tool_calls(common_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);
+common_chat_msg parse_tool_calls(common_tool_call_style style, const nlohmann::ordered_json & tools, const std::string& input);
 
 common_tool_call_handler common_tool_call_handler_init(
     common_tool_call_style style,

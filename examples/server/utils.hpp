@@ -377,7 +377,7 @@ inline std::string format_chat(const common_chat_template & tmpl, const std::vec
             throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
         }
 
-        chat.push_back({role, content});
+        chat.push_back({role, content, /* tool_calls= */ {}});
     }
 
     const auto formatted_chat = common_chat_apply_template(tmpl, chat, true, /* use_jinja= */ false);

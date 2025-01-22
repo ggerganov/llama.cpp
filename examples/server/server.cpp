@@ -687,7 +687,7 @@ struct server_task_result_cmpl_final : server_task_result {
             finish_reason = "stop";
         }
 
-        common_tool_calls parsed_tool_calls;
+        common_chat_msg parsed_tool_calls;
         json tool_calls;
         json message_content;
         if (oaicompat_tool_call_style != common_tool_call_style::COMMON_TOOL_CALL_STYLE_NONE && !oaicompat_tools.is_null()) {

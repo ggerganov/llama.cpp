@@ -1015,4 +1015,3 @@ std::string build_grammar(const std::function<void(const llama_grammar_builder &
     converter.check_errors();
     return converter.format_grammar();
 }
-
