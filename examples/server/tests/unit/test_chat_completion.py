@@ -195,7 +195,10 @@ TEST_TOOL = {
         "description": "",
         "parameters": {
             "type": "object",
-            "properties": {}
+            "properties": {
+                "success": {"type": "boolean", "const": True},
+            },
+            "required": ["success"]
         }
     }
 }
@@ -224,23 +227,24 @@ CODE_INTEPRETER_TOOL = {
 
 
 @pytest.mark.parametrize("template_name,n_predict,tool,expected_arguments", [
-    ("meetkai-functionary-medium-v3.1",               32,  TEST_TOOL,   {}                                                                ),
-    ("meetkai-functionary-medium-v3.1",               32,  PYTHON_TOOL, {"code": ". She was so excited to go to the park and c"}          ),
-    ("meetkai-functionary-medium-v3.2",               128, TEST_TOOL,   {}                                                                ),
+    ("meetkai-functionary-medium-v3.1",               128, TEST_TOOL,   {"success": True}                                                 ),
+    ("meetkai-functionary-medium-v3.1",               128, PYTHON_TOOL, {"code": ". She was so excited to go to the park and climble agace. She was so excited to go to the park and play with her friends.\nThey played together and had lots of fun. They were very happy. At the park, they found the park and had a great time. After a while, they found"} ),
+    ("meetkai-functionary-medium-v3.2",               128, TEST_TOOL,   {"success": True}                                                 ),
     ("meetkai-functionary-medium-v3.2",               128, PYTHON_TOOL, {"code": "It's a spector."}                                       ),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, TEST_TOOL,   {}                                                                ),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, TEST_TOOL,   {"success": True}                                                 ),
     ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, PYTHON_TOOL, {"code": "Yes, you can."}                                         ),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, TEST_TOOL,   {}                                                                ),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, TEST_TOOL,   {"success": True}                                                 ),
     ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, PYTHON_TOOL, {"code": "Yes, you can."}                                         ),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, TEST_TOOL,   {}                                                                ),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, TEST_TOOL,   {"success": True}                                                 ),
     ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, PYTHON_TOOL, {"code": "It's a spector."}                                       ),
-    ("meta-llama-Llama-3.2-3B-Instruct",              128, TEST_TOOL,   {}                                                                ),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, TEST_TOOL,   {"success": True}                                                 ),
     ("meta-llama-Llama-3.2-3B-Instruct",              128, PYTHON_TOOL, {"code": "It's a spectork."}                                      ),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          128, TEST_TOOL,   {}                                                                ),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          128, TEST_TOOL,   {"success": True}                                                 ),
     ("mistralai-Mistral-Nemo-Instruct-2407",          128, PYTHON_TOOL, {"code": "It's a speciachy!"}                                     ),
 ])
 def test_completion_with_required_tool(template_name: str, n_predict: int, tool: dict, expected_arguments: dict):
     global server
+    # server = ServerPreset.stories15m_moe()
     server.jinja = True
     server.n_predict = n_predict
     server.chat_template_file = f'../../../tests/chat/templates/{template_name}.jinja'
@@ -304,25 +308,25 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("tool,expected_arguments,hf_repo,hf_file,template_override", [
-    (PYTHON_TOOL,          {"code": "print('Hello, world!')"}, "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print(\"Hello World!\")"}, "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print('Hello, World!')"}, "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print('Hello, world!')"}, "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (PYTHON_TOOL,          {"code": "print('hello world')"},   "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
-    (PYTHON_TOOL,          {"code": "print('Hello, world!'}"}, "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    (PYTHON_TOOL,          {"code": "print("},                 "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    (PYTHON_TOOL,          {"code": "print("},                 "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, world!')"}, "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print(\"Hello World!\")"}, "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"}, "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, world!')"}, "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch-Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (CODE_INTEPRETER_TOOL, {"code": "print('hello world')"},   "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"}, "lmstudio-community/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    (CODE_INTEPRETER_TOOL, {"code": "print("},                 "lmstudio-community/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    (CODE_INTEPRETER_TOOL, {"code": "print("},                 "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    # TODO: fix tool call handling of these models
-    # (PYTHON_TOOL,          {"code": "print('Hello, World!')"}, "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
-    # (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"}, "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
+    (PYTHON_TOOL,          {"code": "print('Hello, world!')"},  "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, world!')"},  "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          {"code": "print('Hello World!')"},   "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello World!')"},   "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          {"code": "print('Hello, World!')"},  "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"},  "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          {"code": "print('Hello, world!')"},  "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, world!')"},  "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch-Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (PYTHON_TOOL,          {"code": "print('Hello World!')"},   "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello World!')"},   "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (PYTHON_TOOL,          {"code": "print('Hello, World!'}"},  "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!'}"},  "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (PYTHON_TOOL,          {"code": "print("},                  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (CODE_INTEPRETER_TOOL, {"code": "print("},                  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (PYTHON_TOOL,          {"code": "print("},                  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    (CODE_INTEPRETER_TOOL, {"code": "print("},                  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          {"code": "print('Hello, World!')"},  "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
+    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"},  "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
+    # TODO: fix this model
     # (PYTHON_TOOL,          {"code": "print('Hello, World!')"}, "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
     # (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"}, "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", ("mistralai-Mistral-Nemo-Instruct-2407", None)),
 ])
