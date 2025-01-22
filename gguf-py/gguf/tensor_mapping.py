@@ -868,27 +868,35 @@ class TensorNameMap:
             "resampler.pos_embed_k",
         ),
 
-        MODEL_TENSOR.V_RESMPL_ATTN_IN: (
-            "resampler.attn.in_proj",
+        MODEL_TENSOR.V_RESMPL_ATTN_Q: (
+            "resampler.attn.in_proj_q", # tensor generated from resampler.attn.in_proj
+        ),
+
+        MODEL_TENSOR.V_RESMPL_ATTN_K: (
+            "resampler.attn.in_proj_k", # tensor generated from resampler.attn.in_proj
+        ),
+
+        MODEL_TENSOR.V_RESMPL_ATTN_V: (
+            "resampler.attn.in_proj_v", # tensor generated from resampler.attn.in_proj
         ),
 
         MODEL_TENSOR.V_RESMPL_ATTN_OUT: (
             "resampler.attn.out_proj",
         ),
 
-        MODEL_TENSOR.V_RESMPL_KV_PROJ: (
+        MODEL_TENSOR.V_RESMPL_KV: (
             "resampler.kv_proj",
         ),
 
-        MODEL_TENSOR.V_RESMPL_NORM_POST: (
+        MODEL_TENSOR.V_RESMPL_POST_NORM: (
             "resampler.ln_post",
         ),
 
-        MODEL_TENSOR.V_RESMPL_NORM_KV: (
+        MODEL_TENSOR.V_RESMPL_KV_NORM: (
             "resampler.ln_kv",
         ),
 
-        MODEL_TENSOR.V_RESMPL_NORM_Q: (
+        MODEL_TENSOR.V_RESMPL_Q_NORM: (
             "resampler.ln_q",
         ),
 

@@ -9838,9 +9838,9 @@ struct llama_context * llama_init_from_model(
     }
 
     if (model->has_vision) {
-        ctx->vctx.model = &model->clip;
+        ctx->vctx.model = &model->vit;
         ctx->vctx.sched = ctx->sched.get();
-        const size_t max_nodes = 1024;
+        const size_t max_nodes = VISION_GRAPH_MAX_NODE; // TODO: make it dynamic
         ctx->vctx.buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
     }
 

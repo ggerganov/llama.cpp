@@ -7,6 +7,8 @@
 #include <vector>
 #include <array>
 
+#define VISION_GRAPH_MAX_NODE 2048
+
 enum vision_projector_type {
     VISION_PROJECTOR_TYPE_UNKNOWN,
     VISION_PROJECTOR_TYPE_MLP,
@@ -108,24 +110,24 @@ struct llama_vision_model {
     struct ggml_tensor * mm_model_peg_0_b = nullptr;
 
     // MINICPMV projection
-    struct ggml_tensor * mm_model_pos_embed_k;
-    struct ggml_tensor * mm_model_query;
-    struct ggml_tensor * mm_model_proj;
-    struct ggml_tensor * mm_model_kv_proj;
-    struct ggml_tensor * mm_model_attn_q_w;
-    struct ggml_tensor * mm_model_attn_q_b;
-    struct ggml_tensor * mm_model_attn_k_w;
-    struct ggml_tensor * mm_model_attn_k_b;
-    struct ggml_tensor * mm_model_attn_v_w;
-    struct ggml_tensor * mm_model_attn_v_b;
-    struct ggml_tensor * mm_model_attn_o_w;
-    struct ggml_tensor * mm_model_attn_o_b;
-    struct ggml_tensor * mm_model_ln_q_w;
-    struct ggml_tensor * mm_model_ln_q_b;
-    struct ggml_tensor * mm_model_ln_kv_w;
-    struct ggml_tensor * mm_model_ln_kv_b;
-    struct ggml_tensor * mm_model_ln_post_w;
-    struct ggml_tensor * mm_model_ln_post_b;
+    struct ggml_tensor * mm_model_pos_embed_k = nullptr;
+    struct ggml_tensor * mm_model_query       = nullptr;
+    struct ggml_tensor * mm_model_proj        = nullptr;
+    struct ggml_tensor * mm_model_kv_proj     = nullptr;
+    struct ggml_tensor * mm_model_attn_q_w    = nullptr;
+    struct ggml_tensor * mm_model_attn_q_b    = nullptr;
+    struct ggml_tensor * mm_model_attn_k_w    = nullptr;
+    struct ggml_tensor * mm_model_attn_k_b    = nullptr;
+    struct ggml_tensor * mm_model_attn_v_w    = nullptr;
+    struct ggml_tensor * mm_model_attn_v_b    = nullptr;
+    struct ggml_tensor * mm_model_attn_o_w    = nullptr;
+    struct ggml_tensor * mm_model_attn_o_b    = nullptr;
+    struct ggml_tensor * mm_model_ln_q_w      = nullptr;
+    struct ggml_tensor * mm_model_ln_q_b      = nullptr;
+    struct ggml_tensor * mm_model_ln_kv_w     = nullptr;
+    struct ggml_tensor * mm_model_ln_kv_b     = nullptr;
+    struct ggml_tensor * mm_model_ln_post_w   = nullptr;
+    struct ggml_tensor * mm_model_ln_post_b   = nullptr;
 
     struct ggml_tensor * image_newline = nullptr;
 };

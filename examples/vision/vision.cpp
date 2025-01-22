@@ -98,8 +98,9 @@ int main(int argc, char ** argv) {
     common_params params;
 
     // default prompt for llava 1.5
-    params.prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\n"
-        "USER:<img_placement>\nwhat did you see?\nASSISTANT:";
+    //params.prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:<img_placement>\nwhat did you see?\nASSISTANT:";
+    // default prompt for minicpmv 2.6
+    params.prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nwhat did you see?\n<image><img_placement></image><|im_end|>\n<|im_start|>assistant\n";
     params.n_predict = 64;
     params.n_batch = 2048;
     params.n_ubatch = 1024;

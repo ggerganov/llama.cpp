@@ -457,12 +457,14 @@ class MODEL_TENSOR(IntEnum):
     V_PRE_NORM           = auto()
     V_POST_NORM          = auto()
     V_RESMPL_POS_EMBD_K  = auto() # minicpmv
-    V_RESMPL_ATTN_IN     = auto() # minicpmv
+    V_RESMPL_ATTN_Q      = auto() # minicpmv
+    V_RESMPL_ATTN_K      = auto() # minicpmv
+    V_RESMPL_ATTN_V      = auto() # minicpmv
     V_RESMPL_ATTN_OUT    = auto() # minicpmv
-    V_RESMPL_KV_PROJ     = auto() # minicpmv
-    V_RESMPL_NORM_POST   = auto() # minicpmv
-    V_RESMPL_NORM_KV     = auto() # minicpmv
-    V_RESMPL_NORM_Q      = auto() # minicpmv
+    V_RESMPL_KV          = auto() # minicpmv
+    V_RESMPL_KV_NORM     = auto() # minicpmv
+    V_RESMPL_POST_NORM   = auto() # minicpmv
+    V_RESMPL_Q_NORM      = auto() # minicpmv
     V_RESMPL_PROJ        = auto() # minicpmv
     V_RESMPL_QUERY       = auto() # minicpmv
 
@@ -674,12 +676,14 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.V_PRE_NORM:                "v.pre_norm",
     MODEL_TENSOR.V_POST_NORM:               "v.post_norm",
     MODEL_TENSOR.V_RESMPL_POS_EMBD_K:       "v.resmpl.pos_embd_k",
-    MODEL_TENSOR.V_RESMPL_ATTN_IN:          "v.resmpl.attn_in",
+    MODEL_TENSOR.V_RESMPL_ATTN_Q:           "v.resmpl.attn_q",
+    MODEL_TENSOR.V_RESMPL_ATTN_K:           "v.resmpl.attn_k",
+    MODEL_TENSOR.V_RESMPL_ATTN_V:           "v.resmpl.attn_v",
     MODEL_TENSOR.V_RESMPL_ATTN_OUT:         "v.resmpl.attn_out",
-    MODEL_TENSOR.V_RESMPL_KV_PROJ:          "v.resmpl.kv_proj",
-    MODEL_TENSOR.V_RESMPL_NORM_POST:        "v.resmpl.norm_post",
-    MODEL_TENSOR.V_RESMPL_NORM_KV:          "v.resmpl.norm_kv",
-    MODEL_TENSOR.V_RESMPL_NORM_Q:           "v.resmpl.norm_q",
+    MODEL_TENSOR.V_RESMPL_KV:               "v.resmpl.kv",
+    MODEL_TENSOR.V_RESMPL_KV_NORM:          "v.resmpl.kv_norm",
+    MODEL_TENSOR.V_RESMPL_POST_NORM:        "v.resmpl.post_norm",
+    MODEL_TENSOR.V_RESMPL_Q_NORM:           "v.resmpl.q_norm",
     MODEL_TENSOR.V_RESMPL_PROJ:             "v.resmpl.proj",
     MODEL_TENSOR.V_RESMPL_QUERY:            "v.resmpl.query",
 }
@@ -1667,12 +1671,15 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.V_ENC_OUTPUT_NORM,
         MODEL_TENSOR.V_ENC_FFN_UP,
         MODEL_TENSOR.V_ENC_FFN_DOWN,
-        MODEL_TENSOR.V_RESMPL_ATTN_IN,
+        MODEL_TENSOR.V_RESMPL_POS_EMBD_K,
+        MODEL_TENSOR.V_RESMPL_ATTN_Q,
+        MODEL_TENSOR.V_RESMPL_ATTN_K,
+        MODEL_TENSOR.V_RESMPL_ATTN_V,
         MODEL_TENSOR.V_RESMPL_ATTN_OUT,
-        MODEL_TENSOR.V_RESMPL_KV_PROJ,
-        MODEL_TENSOR.V_RESMPL_NORM_POST,
-        MODEL_TENSOR.V_RESMPL_NORM_KV,
-        MODEL_TENSOR.V_RESMPL_NORM_Q,
+        MODEL_TENSOR.V_RESMPL_KV,
+        MODEL_TENSOR.V_RESMPL_KV_NORM,
+        MODEL_TENSOR.V_RESMPL_POST_NORM,
+        MODEL_TENSOR.V_RESMPL_Q_NORM,
         MODEL_TENSOR.V_RESMPL_PROJ,
         MODEL_TENSOR.V_RESMPL_QUERY,
     ],

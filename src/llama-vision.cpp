@@ -19,8 +19,6 @@ struct img_size;
 static int bmp_export(const struct llama_image_u8 &img, const std::string &location);
 #endif
 
-#define VISION_GRAPH_MAX_NODE 1024
-
 struct img_size {
     int width;
     int height;
@@ -48,9 +46,9 @@ uint32_t llama_vision_n_mmproj_embd(const llama_vision_model & vmodel) {
     } else if (proj_type == VISION_PROJECTOR_TYPE_LDPV2) {
         return vmodel.mm_model_peg_0_b->ne[0];
     } else if (proj_type == VISION_PROJECTOR_TYPE_MINICPMV_2_5) {
-        return 4096;
+        return 4096; // resampler
     } else if (proj_type == VISION_PROJECTOR_TYPE_MINICPMV_2_6) {
-        return 3584;
+        return 3584; // resampler
     } else {
         GGML_ASSERT(false && "invalid proj type");
     }
@@ -761,16 +759,21 @@ struct llama_vision_graph_builder {
         return cur;
     }
 
-    // graph for each vision arch
-
-    struct ggml_cgraph * build_llava() {
-        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, VISION_GRAPH_MAX_NODE, false);
+    struct ggml_tensor * build_vit() {
         struct ggml_tensor * cur = build_inp();
         cur = build_pre_norm(cur);
         for (int il = 0; il < n_layers; il++) {
             cur = build_layer(cur, il);
         }
         cur = build_post_norm(cur);
+        return cur;
+    }
+
+    // graph for each vision arch
+
+    struct ggml_cgraph * build_llava() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, VISION_GRAPH_MAX_NODE, false);
+        struct ggml_tensor * cur = build_vit();
 
         // llava projector
         {
@@ -825,6 +828,78 @@ struct llama_vision_graph_builder {
 
         return gf;
     }
+
+    struct ggml_cgraph * build_minicpmv() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, VISION_GRAPH_MAX_NODE, false);
+        struct ggml_tensor * cur = build_vit();
+
+        // minicpmv resampler projector
+        {
+            int hidden_size = llama_vision_n_mmproj_embd(*ctx.model);
+            struct ggml_tensor * q = model.mm_model_query;
+            // layernorm
+            {
+                q = ggml_norm(ctx0, q, eps);
+                q = ggml_add(ctx0, ggml_mul(ctx0, q, model.mm_model_ln_q_w), model.mm_model_ln_q_b);
+            }
+
+            struct ggml_tensor * v = ggml_mul_mat(ctx0, model.mm_model_kv_proj, cur);
+            // layernorm
+            {
+                v = ggml_norm(ctx0, v, eps);
+                v = ggml_add(ctx0, ggml_mul(ctx0, v, model.mm_model_ln_kv_w), model.mm_model_ln_kv_b);
+            }
+
+            // position
+            struct ggml_tensor * k = ggml_add(ctx0, v, model.mm_model_pos_embed_k);
+
+            // attention
+            {
+                const int d_head = 128;
+                int n_head = hidden_size/d_head;
+                int num_query = -1;
+                if (model.hparams.proj_type == VISION_PROJECTOR_TYPE_MINICPMV_2_5) {
+                    num_query = 96;
+                } else if (model.hparams.proj_type == VISION_PROJECTOR_TYPE_MINICPMV_2_6) {
+                    num_query = 64;
+                }
+
+                struct ggml_tensor * Q = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_q_w, q), model.mm_model_attn_q_b);
+                Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
+                struct ggml_tensor * K = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_k_w, k), model.mm_model_attn_k_b);
+                struct ggml_tensor * V = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_v_w, v), model.mm_model_attn_v_b);
+                // permute
+                Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_query, batch_size);
+                Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3)); // TODO: do this when converting the model
+                Q = ggml_reshape_3d(ctx0, Q, d_head, num_query, n_head * batch_size);
+                K = ggml_reshape_4d(ctx0, K, d_head, n_head, num_positions, batch_size);
+                K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3)); // TODO: do this when converting the model
+                K = ggml_reshape_3d(ctx0, K, d_head, num_positions, n_head * batch_size);
+                V = ggml_reshape_4d(ctx0, V, d_head, n_head, num_positions, batch_size);
+                V = ggml_cont(ctx0, ggml_permute(ctx0, V, 1, 2, 0, 3)); // TODO: do this when converting the model
+                V = ggml_reshape_3d(ctx0, V, num_positions, d_head, n_head * batch_size);
+                struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
+                KQ = ggml_soft_max_inplace(ctx0, KQ);
+                struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ);
+                KQV = ggml_reshape_4d(ctx0, KQV, d_head, num_query, n_head, batch_size);
+                KQV = ggml_permute(ctx0, KQV, 0, 2, 1, 3); // TODO: do this when converting the model
+                KQV = ggml_cont_3d(ctx0, KQV, hidden_size, num_query, batch_size);
+
+                cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_o_w, KQV), model.mm_model_attn_o_b);
+            }
+            // layernorm
+            {
+                cur = ggml_norm(ctx0, cur, eps);
+                cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.mm_model_ln_post_w), model.mm_model_ln_post_b);
+            }
+            cur = ggml_mul_mat(ctx0, model.mm_model_proj, cur);
+        }
+
+        ggml_set_name(cur, "output");
+        ggml_build_forward_expand(gf, cur);
+
+        return gf;
+    }
 };
 
 static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_vision_tokens & inp) {
@@ -852,8 +927,11 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
         case LLM_ARCH_VISION_MOBILEVLM:
             gf = builder.build_llava();
             break;
+        case LLM_ARCH_VISION_MINICPMV:
+            gf = builder.build_minicpmv();
+            break;
         default:
-            GGML_ASSERT(false && "unsupported arch");
+            GGML_ASSERT(false && "unsupported vision arch");
     }
 
     // alloc memory for graph
@@ -903,8 +981,8 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
         free(positions_data);
     }
 
-    {
-        struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "inp_patches");
+    struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "inp_patches");
+    if (patches) {
         int* patches_data = (int*)malloc(ggml_nbytes(patches));
         for (int i = 0; i < num_patches; i++) {
             patches_data[i] = i + 1;
@@ -962,7 +1040,8 @@ struct llama_vision_tokens * llama_vision_tokenize(
         case LLM_ARCH_VISION_MOBILEVLM:
             return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
         case LLM_ARCH_VISION_MINICPMV:
-            return new llama_vision_tokens(llama_vision_processor_uhd(vctx).tokenize(*bmp));
+            //return new llama_vision_tokens(llama_vision_processor_uhd(vctx).tokenize(*bmp));
+            return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
         default:
             GGML_ASSERT(false && "unsupported arch");
     }
