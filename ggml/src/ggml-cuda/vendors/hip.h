@@ -81,6 +81,28 @@
 #define cudaStreamPerThread hipStreamPerThread
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaStreamWaitEvent(stream, event, flags) hipStreamWaitEvent(stream, event, flags)
+#define cudaGraphExec_t hipGraphExec_t
+#define cudaGraphNode_t hipGraphNode_t
+#define cudaKernelNodeParams hipKernelNodeParams
+#define cudaKernelNodeParams hipKernelNodeParams
+#define cudaGraphExecDestroy hipGraphExecDestroy
+#define cudaGraphLaunch hipGraphLaunch
+#define cudaErrorGraphExecUpdateFailure hipErrorGraphExecUpdateFailure
+#define cudaGraphExecUpdateResultInfo hipGraphExecUpdateResult
+#define cudaGraphNodeType hipGraphNodeType
+#define cudaGraphNodeTypeKernel hipGraphNodeTypeKernel
+#define cudaGraphInstantiate hipGraphInstantiate
+#define cudaStreamEndCapture hipStreamEndCapture
+#define cudaGraphDestroy hipGraphDestroy
+#define cudaGraphKernelNodeSetParams hipGraphKernelNodeSetParams
+#define cudaErrorInvalidDeviceFunction hipErrorInvalidDeviceFunction
+#define cudaGraphKernelNodeGetParams hipGraphKernelNodeGetParams
+#define cudaGraphNodeGetType hipGraphNodeGetType
+#define cudaGraphGetNodes hipGraphGetNodes
+#define cudaGraphExecUpdate hipGraphExecUpdate
+#define cudaStreamCaptureModeRelaxed hipStreamCaptureModeRelaxed
+#define cudaStreamBeginCapture hipStreamBeginCapture
+#define cudaGraph_t hipGraph_t
 #define cudaStream_t hipStream_t
 #define cudaSuccess hipSuccess
 #define __trap() do { abort(); __builtin_unreachable(); } while(0)

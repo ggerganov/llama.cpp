@@ -2493,11 +2493,17 @@ static bool is_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, 
 static void update_cuda_graph_executable(ggml_backend_cuda_context * cuda_ctx) {
 
     cudaGraphExecUpdateResultInfo result_info;
+#ifdef __HIP_PLATFORM_AMD__
+    hipGraphNode_t errorNode;
+    hipError_t stat = hipGraphExecUpdate(cuda_ctx->cuda_graph->instance, cuda_ctx->cuda_graph->graph, &errorNode, &result_info);
+#else
     cudaError_t stat = cudaGraphExecUpdate(cuda_ctx->cuda_graph->instance, cuda_ctx->cuda_graph->graph, &result_info);
+#endif
     if (stat == cudaErrorGraphExecUpdateFailure) {
 #ifndef NDEBUG
         GGML_LOG_DEBUG("%s: CUDA graph update failed\n", __func__);
 #endif
+
         // The pre-existing graph exec cannot be updated due to violated constraints
         // so instead clear error and re-instantiate
         cudaGetLastError();
