@@ -1855,10 +1855,10 @@ std::string common_chat_format_single(
 
 std::string common_chat_format_example(const common_chat_template & tmpl, bool use_jinja) {
     std::vector<common_chat_msg> msgs = {
-        {"system",    "You are a helpful assistant"},
-        {"user",      "Hello"},
-        {"assistant", "Hi there"},
-        {"user",      "How are you?"},
+        {"system",    "You are a helpful assistant", {}},
+        {"user",      "Hello", {}},
+        {"assistant", "Hi there", {}},
+        {"user",      "How are you?", {}},
     };
     return common_chat_apply_template(tmpl, msgs, true, use_jinja);
 }
