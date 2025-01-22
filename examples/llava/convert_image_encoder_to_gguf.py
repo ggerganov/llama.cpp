@@ -95,10 +95,14 @@ ap.add_argument("--vision-only", action="store_true", required=False,
                 help="Save a vision-only model. It can't be used to encode texts")
 ap.add_argument("--clip-model-is-vision", action="store_true", required=False,
                 help="The clip model is a pure vision model (ShareGPT4V vision extract for example)")
-ap.add_argument("--clip-model-is-openclip", action="store_true", required=False,
+
+# Selectable visual encoders that are compatible with this script
+encoder_group = ap.add_mutually_exclusive_group()
+encoder_group.add_argument("--clip-model-is-openclip", action="store_true", required=False,
                 help="The clip model is from openclip (for ViT-SO400M type))")
-ap.add_argument("--clip-model-is-siglip", action="store_true", required=False,
+encoder_group.add_argument("--clip-model-is-siglip", action="store_true", required=False,
                 help="the visual encoder is Siglip.")
+
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
 ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp, ldpv2", choices=["mlp", "ldp", "ldpv2"], default="mlp")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
@@ -123,7 +127,12 @@ if args.use_f32:
 # output in the same directory as the model if output_dir is None
 dir_model = args.model_dir
 
-if args.clip_model_is_vision or not os.path.exists(dir_model + "/vocab.json") or args.clip_model_is_openclip or args.clip_model_is_siglip:
+if (
+    args.clip_model_is_vision or
+    not os.path.exists(dir_model + "/vocab.json") or
+    args.clip_model_is_openclip or
+    args.clip_model_is_siglip
+):
     vocab = None
     tokens = None
 else:
@@ -151,10 +160,9 @@ ftype = 1
 if args.use_f32:
     ftype = 0
 
-# HACK - not sure if we need the vision model of the model + processor; check the difference
-if args.clip_model_is_vision or args.clip_model_is_siglip:
+if args.clip_model_is_siglip:
     model = SiglipVisionModel.from_pretrained(dir_model)
-    processor = None
+    processor = None # TODO - optionally handle processor to correctly extract image stats etc
 elif args.clip_model_is_vision or args.clip_model_is_openclip:
     model = CLIPVisionModel.from_pretrained(dir_model)
     processor = None
@@ -229,10 +237,12 @@ if has_vision_encoder:
             feature_layers = [feature_layers]
         fout.add_array("clip.vision.feature_layer", feature_layers)
 
+    # Siglip does not have a visual projector; set projection dim to 0
     if args.clip_model_is_siglip:
         visual_projection_dim = 0
     else:
         visual_projection_dim = v_hparams.get("projection_dim", config["projection_dim"])
+
     # vision_model hparams
     fout.add_uint32("clip.vision.image_size", v_hparams["image_size"])
     fout.add_uint32("clip.vision.patch_size", v_hparams["patch_size"])
