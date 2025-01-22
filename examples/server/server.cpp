@@ -1642,10 +1642,6 @@ struct server_response {
     server_task_result_ptr recv_with_timeout(const std::unordered_set<int> & id_tasks, int timeout) {
         while (true) {
             std::unique_lock<std::mutex> lock(mutex_results);
-            std::cv_status cr_res = condition_results.wait_for(lock, std::chrono::seconds(timeout));
-            if (cr_res == std::cv_status::timeout) {
-                return nullptr;
-            }
 
             for (int i = 0; i < (int) queue_results.size(); i++) {
                 if (id_tasks.find(queue_results[i]->id) != id_tasks.end()) {
@@ -1653,6 +1649,11 @@ struct server_response {
                     queue_results.erase(queue_results.begin() + i);
                     return res;
                 }
+            }
+
+            std::cv_status cr_res = condition_results.wait_for(lock, std::chrono::seconds(timeout));
+            if (cr_res == std::cv_status::timeout) {
+                return nullptr;
             }
         }
 
