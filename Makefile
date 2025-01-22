@@ -58,7 +58,6 @@ TEST_TARGETS = \
 	tests/test-grammar-integration \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
-	tests/test-minja \
 	tests/test-llama-grammar \
 	tests/test-log \
 	tests/test-model-load-cancel \

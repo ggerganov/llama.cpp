@@ -389,7 +389,15 @@ struct server_task {
         {
             const auto grammar_trigger_words = data.find("grammar_trigger_words");
             if (grammar_trigger_words != data.end()) {
-                params.sampling.grammar_trigger_words = to_string_vec(*grammar_trigger_words);
+                auto words = to_string_vec(*grammar_trigger_words);
+                for (const auto & word : params.sampling.grammar_trigger_words) {
+                    auto ids = common_tokenize(vocab, word, /* add_special= */ false, /* parse_special= */ true);
+                    if (ids.size() == 1) {
+                        params.sampling.grammar_trigger_tokens.push_back(ids[0]);
+                        continue;
+                    }
+                    params.sampling.grammar_trigger_words.push_back(word);
+                }
             }
         }
 
@@ -1224,8 +1232,6 @@ struct server_slot {
 
     std::string stopping_word;
 
-    llama_antiprompts antiprompts;
-
     // sampling
     json json_schema;
 
@@ -1327,6 +1333,35 @@ struct server_slot {
         timings.predicted_per_second = 1e3 / t_token_generation * n_decoded;
 
         return timings;
+    }
+
+    size_t find_stopping_strings(const std::string & text, const size_t last_token_size, bool is_full_stop) {
+        size_t stop_pos = std::string::npos;
+
+        for (const std::string & word : params.antiprompt) {
+            size_t pos;
+
+            if (is_full_stop) {
+                const size_t tmp      = word.size() + last_token_size;
+                const size_t from_pos = text.size() > tmp ? text.size() - tmp : 0;
+
+                pos = text.find(word, from_pos);
+            } else {
+                // otherwise, partial stop
+                pos = find_partial_stop_string(word, text);
+            }
+
+            if (pos != std::string::npos && (stop_pos == std::string::npos || pos < stop_pos)) {
+                if (is_full_stop) {
+                    stop           = STOP_TYPE_WORD;
+                    stopping_word  = word;
+                    has_next_token = false;
+                }
+                stop_pos = pos;
+            }
+        }
+
+        return stop_pos;
     }
 
     void print_timings() const {
@@ -1977,11 +2012,6 @@ struct server_context {
         }
 
         {
-            slot.antiprompts.clear();
-            slot.antiprompts.build(ctx, slot.params.antiprompt, slot.params.sampling.grammar_trigger_words);
-        }
-
-        {
             if (slot.smpl != nullptr) {
                 common_sampler_free(slot.smpl);
             }
@@ -2016,25 +2046,13 @@ struct server_context {
     }
 
     bool process_token(completion_token_output & result, server_slot & slot) {
-        auto match = slot.antiprompts.findSingleTokenMatch(result.tok);
-
         // remember which tokens were sampled - used for repetition penalties during sampling
+        const std::string token_str = result.text_to_send;
+        // TODO:
         // const std::string token_str = result.text_to_send;
-        const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special || (match.pos != std::string::npos && match.is_grammar_trigger));
+        // const std::string token_str = common_token_to_piece(ctx, result.tok, params_base.special || (match.pos != std::string::npos && match.is_grammar_trigger));
         slot.sampled = result.tok;
 
-        if (match.pos != std::string::npos && !match.is_partial) {
-            if (match.is_grammar_trigger) {
-                common_sampler_trigger_grammar(vocab, slot.smpl, token_str);
-            } else {
-                // slot.stopped_word   = true;
-                slot.stopping_word  = match.pattern;
-                slot.has_next_token = false;
-                return false;
-            }
-        }
-
-        // search stop word and delete it
         slot.generated_text += token_str;
         if (slot.params.return_tokens) {
             slot.generated_tokens.push_back(result.tok);
@@ -2048,33 +2066,22 @@ struct server_context {
         if (!incomplete) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
-            match = slot.antiprompts.findFirstMatch(slot.generated_text, pos);
+            const std::string str_test = slot.generated_text.substr(pos);
+            bool send_text = true;
 
-            bool is_stop_full = false;
-            bool is_grammar_trigger = false;
-            size_t length = slot.generated_text.size();
-
-            // If there is a lazy grammar trigger word at stop_pos, enable the lazy grammar
-            if (match.is_grammar_trigger && common_sampler_trigger_grammar(vocab, slot.smpl, match.pattern)) {
-                is_grammar_trigger = true;
-                length = match.pos + match.matchLength;
-            } else if (!match.is_grammar_trigger && match.pos != std::string::npos && !match.is_partial) {
-                // slot.stopped_word   = true;
-                slot.stopping_word  = match.pattern;
-                slot.has_next_token = false;
-
-                is_stop_full = true;
-                // length = pos + match.pos;
-                length = match.pos;
+            size_t stop_pos = slot.find_stopping_strings(str_test, token_str.size(), true);
+            if (stop_pos != std::string::npos) {
+                slot.generated_text.erase(
+                    slot.generated_text.begin() + pos + stop_pos,
+                    slot.generated_text.end());
+                pos = std::min(slot.n_sent_text, slot.generated_text.size());
+            } else if (slot.has_next_token) {
+                stop_pos = slot.find_stopping_strings(str_test, token_str.size(), false);
+                send_text = stop_pos == std::string::npos;
             }
 
-            slot.generated_text.erase(
-                slot.generated_text.begin() + length,
-                slot.generated_text.end());
-            pos = std::min(slot.n_sent_text, length);
-
             // check if there is any token to predict
-            if (match.pos == std::string::npos || (!slot.has_next_token && !is_grammar_trigger && !is_stop_full && match.pos > 0)) {
+            if (send_text) {
                 // no send the stop word in the response
                 result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
                 slot.n_sent_text += result.text_to_send.size();

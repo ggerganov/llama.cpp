@@ -38,7 +38,7 @@ static llama_model             ** g_model;
 static common_sampler          ** g_smpl;
 static common_params            * g_params;
 static std::vector<llama_token> * g_input_tokens;
-static std::string              * g_output_s;
+static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
 static bool need_insert_eot = false;
@@ -494,8 +494,7 @@ int main(int argc, char ** argv) {
 
     std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
     std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
-    std::string        output_s;      g_output_s      = &output_s;
-    size_t last_partial_stop = std::string::npos;
+    std::ostringstream output_ss;     g_output_ss     = &output_ss;
     std::ostringstream assistant_ss; // for storing current assistant message, used in conversation mode
 
     // the first thing we will do is to output the prompt, so set color accordingly
@@ -504,8 +503,16 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    llama_antiprompts antiprompts;
-    antiprompts.build(ctx, params.antiprompt, {});
+    // single-token antiprompts
+    std::vector<llama_token> antiprompt_single_token;
+
+    antiprompt_single_token.reserve(params.antiprompt.size());
+    for (const std::string & antiprompt : params.antiprompt) {
+        auto ids = ::common_tokenize(ctx, antiprompt, false, true);
+        if (ids.size() == 1) {
+            antiprompt_single_token.push_back(ids[0]);
+        }
+    }
 
     if (llama_model_has_encoder(model)) {
         int enc_input_size = embd_inp.size();
@@ -710,7 +717,7 @@ int main(int argc, char ** argv) {
                 } else {
                     // Outgoing Generated Tokens
                     output_tokens.push_back(id);
-                    output_s.append(token_str);
+                    output_ss << token_str;
                 }
             }
         }
@@ -723,34 +730,41 @@ int main(int argc, char ** argv) {
 
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
-            // check for reverse prompt
-            if (!antiprompts.empty()) {
+            // check for reverse prompt in the last n_prev tokens
+            if (!params.antiprompt.empty()) {
+                const int n_prev = 32;
+                const std::string last_output = common_sampler_prev_str(smpl, ctx, n_prev);
+
                 is_antiprompt = false;
+                // Check if each of the reverse prompts appears at the end of the output.
+                // If we're not running interactively, the reverse prompt might be tokenized with some following characters
+                // so we'll compensate for that by widening the search window a bit.
+                for (std::string & antiprompt : params.antiprompt) {
+                    size_t extra_padding = params.interactive ? 0 : 2;
+                    size_t search_start_pos = last_output.length() > static_cast<size_t>(antiprompt.length() + extra_padding)
+                        ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
+                        : 0;
+
+                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos) {
+                        if (params.interactive) {
+                            is_interacting = true;
+                        }
+                        is_antiprompt = true;
+                        break;
+                    }
+                }
 
                 // check for reverse prompt using special tokens
                 llama_token last_token = common_sampler_last(smpl);
-                auto match = antiprompts.findSingleTokenMatch(last_token);
-                if (match.pos != std::string::npos) {
+                if (std::find(antiprompt_single_token.begin(), antiprompt_single_token.end(), last_token) != antiprompt_single_token.end()) {
                     if (params.interactive) {
                         is_interacting = true;
                     }
                     is_antiprompt = true;
-                } else {
-                    match = antiprompts.findFirstMatch(output_s, last_partial_stop == std::string::npos ? 0 : last_partial_stop);
-                    if (match.pos != std::string::npos) {
-                        if (match.is_partial) {
-                            last_partial_stop = match.pos;
-                        } else {
-                            if (params.interactive) {
-                                is_interacting = true;
-                            }
-                            is_antiprompt = true;
-                        }
-                    }
                 }
 
                 if (is_antiprompt) {
-                    LOG_DBG("found antiprompt: %s\n", match.pattern.c_str());
+                    LOG_DBG("found antiprompt: %s\n", last_output.c_str());
                 }
             }
 
@@ -759,9 +773,9 @@ int main(int argc, char ** argv) {
                 LOG_DBG("found an EOG token\n");
 
                 if (params.interactive) {
-                    if (!antiprompts.stop_words.empty()) {
+                    if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = common_tokenize(ctx, antiprompts.stop_words.front(), false, true);
+                        const auto first_antiprompt = common_tokenize(ctx, params.antiprompt.front(), false, true);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
@@ -855,7 +869,7 @@ int main(int argc, char ** argv) {
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
                         const llama_token token = embd_inp[i];
                         output_tokens.push_back(token);
-                        output_s.append(common_token_to_piece(ctx, token));
+                        output_ss << common_token_to_piece(ctx, token);
                     }
 
                     // reset assistant message

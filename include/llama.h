@@ -1199,7 +1199,11 @@ extern "C" {
     LLAMA_API struct llama_sampler * llama_sampler_init_grammar(
             const struct llama_vocab * vocab,
                           const char * grammar_str,
-                          const char * grammar_root);
+                          const char * grammar_root,
+                         const char ** trigger_words,
+                                size_t num_trigger_words,
+                   const llama_token * trigger_tokens,
+                                size_t num_trigger_tokens);
 
     /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(

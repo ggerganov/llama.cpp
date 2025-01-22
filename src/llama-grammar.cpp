@@ -960,10 +960,26 @@ struct llama_grammar * llama_grammar_init_impl(
     // Important: vec_rules has to be moved here, not copied, because stacks contains
     // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
     // then the pointers would be invalidated when the local vec_rules goes out of scope.
-    return new llama_grammar { vocab, std::move(vec_rules), std::move(stacks), {}, };
+    return new llama_grammar {
+        vocab,
+        std::move(vec_rules),
+        std::move(stacks),
+        /* .partial_utf8 = */ {},
+        /* .awaiting_trigger = */ false,
+        /* .trigger_buffer = */   "",
+        /* .trigger_tokens   = */ {},
+        /* .trigger_words    = */ {},
+    };
 }
 
-struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab, const char * grammar_str, const char * grammar_root) {
+struct llama_grammar * llama_grammar_init_impl(
+        const struct llama_vocab * vocab,
+                      const char * grammar_str,
+                      const char * grammar_root,
+                     const char ** trigger_words,
+                            size_t num_trigger_words,
+               const llama_token * trigger_tokens,
+                            size_t num_trigger_tokens) {
     llama_grammar_parser parser;
 
     // if there is a grammar, parse it
@@ -1035,10 +1051,31 @@ struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab,
         }
     } while (true);
 
+    std::vector<llama_token>    vec_trigger_tokens;
+    std::vector<std::string> vec_trigger_words;
+    for (size_t i = 0; i < num_trigger_tokens; i++) {
+        GGML_ASSERT(trigger_tokens != nullptr);
+        vec_trigger_tokens.push_back(trigger_tokens[i]);
+    }
+    for (size_t i = 0; i < num_trigger_words; i++) {
+        GGML_ASSERT(trigger_words != nullptr);
+        vec_trigger_words.push_back(trigger_words[i]);
+    }
+
     // Important: vec_rules has to be moved here, not copied, because stacks contains
     // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
     // then the pointers would be invalidated when the local vec_rules goes out of scope.
-    return new llama_grammar { vocab, std::move(vec_rules), std::move(stacks), {}, };
+    return new llama_grammar {
+        vocab,
+        
+        std::move(vec_rules),
+        std::move(stacks),
+        /* .partial_utf8 = */ {},
+        /* .awaiting_trigger = */ vec_trigger_tokens.size() > 0 || vec_trigger_words.size() > 0,
+        /* .trigger_buffer = */   "",
+        std::move(vec_trigger_tokens),
+        std::move(vec_trigger_words),
+    };
 }
 
 void llama_grammar_free_impl(struct llama_grammar * grammar) {
@@ -1055,6 +1092,10 @@ struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & gra
         grammar.rules,
         grammar.stacks,
         grammar.partial_utf8,
+        grammar.awaiting_trigger,
+        grammar.trigger_buffer,
+        grammar.trigger_tokens,
+        grammar.trigger_words,
     };
 
     // redirect elements in stacks to point to new rules
@@ -1114,6 +1155,28 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
 
 void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token) {
     GGML_ASSERT(grammar.vocab != nullptr);
+
+    if (grammar.awaiting_trigger) {
+        if (std::find(grammar.trigger_tokens.begin(), grammar.trigger_tokens.end(), token) != grammar.trigger_tokens.end()) {
+            grammar.awaiting_trigger = false;
+            llama_grammar_accept_str(grammar, grammar.vocab->token_to_piece(token));
+            return;
+        } else {
+            grammar.trigger_buffer += grammar.vocab->token_to_piece(token);
+            for (const auto & word : grammar.trigger_words) {
+                auto pos = grammar.trigger_buffer.find(word);
+                if (pos == std::string::npos) {
+                    continue;
+                }
+                grammar.awaiting_trigger = false;
+                auto constrained_str = grammar.trigger_buffer.substr(pos);
+                llama_grammar_accept_str(grammar, constrained_str);
+                grammar.trigger_buffer.clear();
+                return;
+            }
+            return;
+        }
+    }
 
     if (grammar.vocab->is_eog(token)) {
         for (const auto & stack : grammar.stacks) {
