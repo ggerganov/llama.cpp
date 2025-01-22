@@ -991,10 +991,27 @@ public:
 };
 
 std::string json_schema_to_grammar(const json & schema) {
-    SchemaConverter converter([](const std::string &) { return json::object(); }, /* dotall= */ false);
-    auto copy = schema;
-    converter.resolve_refs(copy, "input");
-    converter.visit(copy, "");
+    return build_grammar([&](const llama_grammar_builder & callbacks) {
+        auto copy = schema;
+        callbacks.resolve_refs(copy);
+        callbacks.add_schema("", copy);
+    });
+}
+
+std::string build_grammar(const std::function<void(const llama_grammar_builder &)> & cb) {
+    SchemaConverter converter([&](const std::string &) { return json(); }, /* dotall= */ false);
+    llama_grammar_builder builder {
+        /* .add_rule = */ [&](const std::string & name, const std::string & rule) {
+            return converter._add_rule(name, rule);
+        },
+        /* .add_schema = */ [&](const std::string & name, const nlohmann::ordered_json & schema) {
+            return converter.visit(schema, name == "root" ? "" : name);
+        },
+        /* .resolve_refs = */ [&](nlohmann::ordered_json & schema) {
+            converter.resolve_refs(schema, "");
+        }
+    };
+    cb(builder);
     converter.check_errors();
     return converter.format_grammar();
 }
