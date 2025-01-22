@@ -1772,6 +1772,9 @@ struct server_context {
             // force F16 KV cache for the draft model for extra performance
             cparams_dft.type_k = GGML_TYPE_F16;
             cparams_dft.type_v = GGML_TYPE_F16;
+
+            // the context is not needed - we will create one for each slot
+            llama_init_dft.context.reset();
         }
 
         chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
