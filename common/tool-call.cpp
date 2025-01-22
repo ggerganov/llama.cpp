@@ -631,7 +631,7 @@ common_tool_call_handler common_tool_call_handler_init(
                     handler.grammar_triggers.push_back("{\n    \"");
                 }
 
-                builder.add_rule("root", join(tool_rules.begin(), tool_rules.end(), " | "));
+                builder.add_rule("root", string_join(tool_rules, " | "));
             });
             handler.additional_stops.push_back("<|eom_id|>");
             handler.prompt = tmpl.apply(messages, actual_tools.empty() ? json() : actual_tools, /* add_generation_prompt= */ true, {
@@ -658,9 +658,9 @@ common_tool_call_handler common_tool_call_handler_init(
                         handler.grammar_triggers.push_back("\n>>>" + name + "\n");
                     }
                 }
-                auto first_rule = builder.add_rule("first_tool_call", join(first_tool_rules.begin(), first_tool_rules.end(), " | ")) + " space";
+                auto first_rule = builder.add_rule("first_tool_call", string_join(first_tool_rules, " | ")) + " space";
                 if (parallel) {
-                    auto subsequent_rule = builder.add_rule("subsequent_tool_call", join(subsequent_tool_rules.begin(), subsequent_tool_rules.end(), " | ")) + " space";
+                    auto subsequent_rule = builder.add_rule("subsequent_tool_call", string_join(subsequent_tool_rules, " | ")) + " space";
                     builder.add_rule("root", first_rule + " (" + subsequent_rule + ")*");
                 } else {
                     builder.add_rule("root", first_rule);
@@ -690,7 +690,7 @@ common_tool_call_handler common_tool_call_handler_init(
                         tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
                     }
                 }
-                auto tool_call = builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " space";
+                auto tool_call = builder.add_rule("tool_call", string_join(tool_rules, " | ")) + " space";
                 builder.add_rule("root", parallel ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
                     handler.grammar_triggers.push_back("<function=");
@@ -721,7 +721,7 @@ common_tool_call_handler common_tool_call_handler_init(
                     }));
                 }
 
-                auto tool_call = "\"<tool_call>\" space " + builder.add_rule("tool_call", join(tool_rules.begin(), tool_rules.end(), " | ")) + " \"</tool_call>\" space";
+                auto tool_call = "\"<tool_call>\" space " + builder.add_rule("tool_call", string_join(tool_rules, " | ")) + " \"</tool_call>\" space";
                 builder.add_rule("root", parallel ? "(" + tool_call + ")+" : tool_call);
                 if (allow_content) {
                     handler.grammar_triggers.push_back("<tool_call>");

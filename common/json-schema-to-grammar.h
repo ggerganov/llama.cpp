@@ -5,9 +5,6 @@
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 
-template <typename Iterator>
-std::string join(Iterator begin, Iterator end, const std::string & separator);
-
 std::string json_schema_to_grammar(const nlohmann::ordered_json & schema);
 
 struct llama_grammar_builder {
