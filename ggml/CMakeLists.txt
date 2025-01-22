@@ -264,3 +264,35 @@ if (GGML_STANDALONE)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ggml.pc
         DESTINATION share/pkgconfig)
 endif()
+
+#
+# Create CMake package
+#
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(GGML_BUILD_NUMBER        ${BUILD_NUMBER})
+set(GGML_BUILD_COMMIT        ${BUILD_COMMIT})
+set(GGML_INSTALL_VERSION 0.0.${BUILD_NUMBER})
+
+set(GGML_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header  files")
+set(GGML_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
+set(GGML_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
+
+configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ggml-config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/ggml-config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ggml
+    PATH_VARS GGML_INCLUDE_INSTALL_DIR
+              GGML_LIB_INSTALL_DIR
+              GGML_BIN_INSTALL_DIR)
+
+write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/ggml-version.cmake
+    VERSION ${GGML_INSTALL_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ggml-config.cmake
+              ${CMAKE_CURRENT_BINARY_DIR}/ggml-version.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ggml)
